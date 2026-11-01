@@ -92,3 +92,34 @@ def test_restricted_scope_blocks_parent_and_symlink_escape(tmp_path):
     assert error.value.status == 403
     full = build_workspace_scope(project, "full")
     assert read_workspace_file("../outside.txt", scope=full)["content"] == "outside"
+
+
+def test_simultaneous_browser_saves_reject_the_losing_revision(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from cirno.webui import workspace_files
+
+    scope = build_workspace_scope(tmp_path, "restricted")
+    path = tmp_path / "shared.md"
+    path.write_text("original")
+    revision = read_workspace_file(str(path), scope=scope)["revision"]
+    writing, release = Event(), Event()
+    write = workspace_files.write_text_atomic
+
+    def delayed_write(target, content):
+        if content == "first edit":
+            writing.set()
+            assert release.wait(3)
+        write(target, content)
+
+    monkeypatch.setattr(workspace_files, "write_text_atomic", delayed_write)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(save_workspace_file, str(path), "first edit", revision, scope=scope)
+        assert writing.wait(3)
+        second = pool.submit(save_workspace_file, str(path), "second edit", revision, scope=scope)
+        release.set()
+        assert first.result()["content"] == "first edit"
+        with pytest.raises(WebUIFilePreviewError) as error:
+            second.result()
+        assert error.value.status == 409
+    assert path.read_text() == "first edit"

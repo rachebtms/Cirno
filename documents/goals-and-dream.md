@@ -10,7 +10,7 @@ Logical names below use dots. Native calls use double underscores, such as `goal
 | `goals.get` | Read the objective, state and continuation count |
 | `goals.update` | `continue`, `wait`, `complete`, `block`, `pause`, `resume`, `stop`, `cancel`, `replace` or `delete` |
 
-The instance continuation limit is configured under Settings → Advanced. Zero means unlimited and is the default. `/goal` does not require a limit. Counts persist across waiting, pauses and gateway restarts. Creating or replacing a Goal starts a new count. Reaching a finite limit pauses it and preserves progress.
+The instance continuation limit is configured under Settings → Goals & execution. Zero means unlimited and is the default. `/goal` does not require a limit. Counts persist across waiting, pauses and gateway restarts. Creating or replacing a Goal starts a new count. Reaching a finite limit pauses it and preserves progress.
 
 A running Goal continues between execution segments until it completes, waits, blocks or is paused/stopped. `wait` saves progress and a `wake_after_seconds` deadline. Due work resumes through its conversation queue; incoming conversation input also wakes a waiting Goal. Deadlines require the gateway to run; overdue work is handled after restart. Interrupted tools follow the existing recovery process rather than being blindly repeated.
 
@@ -28,11 +28,11 @@ Coordination messages are journaled before delivery and deduplicated by stable I
 
 ## Heartbeat
 
-When enabled under Settings → System, the protected heartbeat job queues active `Home/HEARTBEAT.md` instructions into Cirno. Pending checks survive restart and use the normal conversation queue. Cirno is instructed to notify only when something needs attention. Use Automations for an explicit time or interval; heartbeat is for flexible background checks.
+When enabled under Settings → Server & heartbeat, the protected heartbeat job queues active `Home/HEARTBEAT.md` instructions into Cirno. Pending checks survive restart and use the normal conversation queue. Cirno is instructed to notify only when something needs attention. Use Automations for an explicit time or interval; heartbeat is for flexible background checks.
 
 ## Memory and learned Skills
 
-Memory, profiles and Skills belong to Home rather than workspaces. See [memory architecture](architecture/memory.md) for bounded profile injection, task checkpoints, evidence, scopes and Dream's per-input confirmations. Settings → Memory manages recall and consolidation; Settings → Personality edits shared profile files.
+Memory, profiles and Skills belong to Home rather than workspaces. See [memory architecture](architecture/memory.md) for bounded profile injection, task checkpoints, evidence, scopes and Dream's per-input confirmations. Settings → Memory retrieval manages recall, and Dream consolidation manages background consolidation; Settings → Personality edits shared profile files.
 
 Dream can extract or improve a reusable workflow under `Home/skills/<name>/`. Its restricted file tools cannot modify application code. Home Skills are checked for identity metadata and Python/shell syntax before being offered as available. Syntax validation does not execute scripts or prove behavior.
 

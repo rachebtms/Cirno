@@ -14,7 +14,7 @@ from cirno.channels.registry import channel_default_enabled, discover_plugins
 
 EXPECTED_CHANNELS = {'websocket', 'telegram'}
 
-INTERNAL_CHANNEL_FIELDS = {'websocket': {'tokenIssueSecret', 'tokenTtlS', 'tokenIssuePath', 'sslCertfile', 'maxMessageBytes', 'host', 'publicWsUrl', 'allowFrom', 'sslKeyfile', 'trustedProxyAuth', 'pingTimeoutS', 'streaming', 'port', 'unixSocketPath', 'websocketRequiresToken', 'pingIntervalS', 'path', 'token'}}
+INTERNAL_CHANNEL_FIELDS = {'websocket': {'browserSetup', 'tokenIssueSecret', 'tokenTtlS', 'tokenIssuePath', 'sslCertfile', 'maxMessageBytes', 'host', 'publicWsUrl', 'allowFrom', 'sslKeyfile', 'trustedProxyAuth', 'pingTimeoutS', 'streaming', 'port', 'unixSocketPath', 'websocketRequiresToken', 'pingIntervalS', 'path', 'token'}}
 
 
 def _flatten_channel_fields(value: object, prefix: str = "") -> set[str]:

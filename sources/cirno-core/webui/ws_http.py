@@ -107,6 +107,7 @@ from cirno.webui.session_list_index import (
     list_webui_sessions,
 )
 from cirno.webui.sidebar_state import (
+    normalize_webui_sidebar_state,
     read_webui_sidebar_state,
     write_webui_sidebar_state,
 )
@@ -387,6 +388,13 @@ class GatewayHTTPHandler:
         self.ingress = ingress
         self.workspaces = workspaces
         self.settings = settings
+        from cirno.webui.auth.routes import BrowserAuth
+        from cirno.webui.auth.store import AccountStore
+
+        self.auth = BrowserAuth(
+            AccountStore(settings.config.path.parent / "webui-auth.sqlite3"),
+            enabled=config.browser_setup,
+        )
         self.skills_workspace_path = skills_workspace_path
         self.disabled_skills: set[str] = (
             disabled_skills if disabled_skills is not None else set()
@@ -452,7 +460,7 @@ class GatewayHTTPHandler:
         setattr(
             request,
             "_cirno_trusted_proxy_authenticated",
-            _is_trusted_proxy_authenticated_request(connection, request.headers, self.config),
+            not self.auth.enabled and _is_trusted_proxy_authenticated_request(connection, request.headers, self.config),
         )
 
         try:
@@ -564,10 +572,17 @@ class GatewayHTTPHandler:
         request: WsRequest,
         got: str,
     ) -> Any | None:
+        if got == "/api/auth/status":
+            status = await asyncio.to_thread(self.auth.status, request.headers)
+            return _http_json_response(status, extra_headers=_NO_STORE_HEADERS)
+        if got.startswith("/api/auth/"):
+            return _http_error(405, "Authentication changes require POST")
         # Token issue endpoint
         if self.config.token_issue_path:
             issue_expected = _normalize_config_path(self.config.token_issue_path)
             if got == issue_expected:
+                if self.auth.enabled:
+                    return _http_error(403, "Use browser login to obtain WebUI tokens")
                 return self._handle_token_issue(connection, request)
 
         # Bootstrap
@@ -687,13 +702,19 @@ class GatewayHTTPHandler:
         self, connection: Any, request: Any, *, terminal_probe: bool = False,
     ) -> Response:
         secret = self.config.token_issue_secret.strip() or self.config.token.strip()
+        owner = self.auth.store.owner() if self.auth.enabled else None
+        if self.auth.enabled:
+            if owner is None:
+                return _http_json_response({"error": "registration_required"}, status=428, extra_headers=_NO_STORE_HEADERS)
+            if not self.auth.authenticated(request.headers):
+                return _http_json_response({"error": "login_required"}, status=401, extra_headers=_NO_STORE_HEADERS)
         is_local_browser = _is_local_browser_request(connection, request.headers)
         is_proxy_authenticated = _is_trusted_proxy_authenticated_request(
             connection,
             request.headers,
             self.config,
         )
-        if not is_proxy_authenticated:
+        if not self.auth.enabled and not is_proxy_authenticated:
             if secret:
                 if not _issue_route_secret_matches(request.headers, secret):
                     return _http_error(401, "Unauthorized")
@@ -707,7 +728,7 @@ class GatewayHTTPHandler:
             # Capability probing does not allocate credentials or acquire client leases.
             return _http_json_response(terminal, extra_headers=_NO_STORE_HEADERS)
 
-        if is_proxy_authenticated:
+        if is_proxy_authenticated and not self.auth.enabled:
             payload = {
                 "ws_path": _normalize_config_path(self.config.path),
                 "ws_url": self._bootstrap_ws_url(request),
@@ -724,7 +745,7 @@ class GatewayHTTPHandler:
             }
             return _http_json_response(payload, extra_headers=_NO_STORE_HEADERS)
 
-        api_token_allowed = bool(secret) or is_local_browser
+        api_token_allowed = self.auth.enabled or bool(secret) or is_local_browser
         if not self.tokens.can_issue(include_api_token=api_token_allowed):
             return _http_response(
                 json.dumps({"error": "too many outstanding tokens"}).encode("utf-8"),
@@ -743,6 +764,8 @@ class GatewayHTTPHandler:
         expected_path = _normalize_config_path(self.config.path)
         payload = {
             "token": token,
+            "browser_auth": self.auth.enabled,
+            "onboarding_required": bool(owner and not owner[1]),
             "terminal": terminal,
             "ws_path": expected_path,
             "ws_url": ws_url,
@@ -1684,7 +1707,7 @@ class GatewayHTTPHandler:
         if got == "/api/webui/sidebar-state":
             return self._handle_webui_sidebar_state(request)
         if got == "/api/webui/sidebar-state/update":
-            return self._handle_webui_sidebar_state_update(request)
+            return await self._handle_webui_sidebar_state_update(request)
         return None
 
     def _handle_commands(self, request: WsRequest) -> Response:
@@ -2000,7 +2023,7 @@ class GatewayHTTPHandler:
             return _http_error(401, "Unauthorized")
         return _http_json_response(read_webui_sidebar_state())
 
-    def _handle_webui_sidebar_state_update(self, request: WsRequest) -> Response:
+    async def _handle_webui_sidebar_state_update(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
         payload = _mutation_payload(request)
@@ -2009,8 +2032,26 @@ class GatewayHTTPHandler:
             return _http_error(400, "missing state")
         if not isinstance(state_value, dict):
             return _http_error(400, "state must be an object")
+        from cirno.session.keys import CIRNO_SESSION_KEY
+        from cirno.session.sqlite_store import SessionConflictError
+
+        state = normalize_webui_sidebar_state(state_value)
+        state["title_overrides"].pop(CIRNO_SESSION_KEY, None)
         try:
-            state = write_webui_sidebar_state(cast(dict[str, Any], state_value))
+            if self.session_manager is not None:
+                for key, title in state["title_overrides"].items():
+                    header = await self.session_manager.state.read_header(key)
+                    if header is None or header.metadata.get("is_global"):
+                        continue
+                    if header.metadata.get("title") == title and header.metadata.get("title_user_edited"):
+                        continue
+                    await self.session_manager.state.update_metadata(
+                        key, {"title": title, "title_user_edited": True},
+                        expected_generation=header.generation,
+                    )
+            state = write_webui_sidebar_state(state)
+        except SessionConflictError:
+            return _http_error(409, "conversation changed while saving its title; reload and try again")
         except ValueError as e:
             return _http_error(400, str(e))
         except OSError:

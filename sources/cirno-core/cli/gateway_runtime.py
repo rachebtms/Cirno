@@ -38,6 +38,7 @@ from cirno.config.schema import Config
 from cirno.gateway.runtime import GatewayHealthIdentity, GatewayInstance, GatewayRuntime
 from cirno.security.network import is_loopback_host
 from cirno.session.keys import (
+    CIRNO_SESSION_KEY,
     session_key_for_channel,
 )
 from cirno.session.manager import SessionManager
@@ -104,6 +105,15 @@ async def _deliver_to_channel(
             key, msg.content, extra, expected_generation=expected_generation,
         )
     await bus.publish_outbound(msg)
+    if record and key == CIRNO_SESSION_KEY and msg.channel == "websocket" and not metadata.get("_agent_ui"):
+        from cirno.channels.telegram.binding import TelegramBinding
+        binding = TelegramBinding().destination("cirno")
+        if binding is not None:
+            await bus.publish_outbound(replace(
+                msg, channel="telegram", chat_id=binding["chat_id"], delivery=None, delivery_id=None,
+                metadata={**{k: v for k, v in metadata.items() if k != "_telegram_reply_to"},
+                          "_telegram_binding": binding["id"], "_telegram_category": "cirno"},
+            ))
 
 
 class _MCPReadinessHook(AgentHook):

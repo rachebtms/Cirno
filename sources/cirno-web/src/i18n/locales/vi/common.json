@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "Tổng quan",
       "appearance": "Giao diện",
-      "notifications": "Thông báo",
+      "notifications": "Thông báo trình duyệt",
       "models": "Mô hình",
       "providers": "Nhà cung cấp",
       "voice": "Giọng nói",
-      "browser": "Trang web",
-      "channels": "Channels",
-      "runtime": "Hệ thống",
-      "advanced": "Nâng cao",
-      "memory": "Bộ nhớ",
+      "browser": "Tìm kiếm web",
+      "channels": "Thiết lập kênh",
+      "runtime": "Máy chủ và nhịp tim",
+      "advanced": "Quyền truy cập",
+      "memory": "Thư viện bộ nhớ",
       "cliApps": "Ứng dụng CLI",
       "mcp": "MCP",
-      "apps": "Công cụ",
+      "apps": "Công cụ và CLI Apps",
       "automations": "Tự động hóa",
       "skills": "Skills",
       "ssh": "SSH",
       "personality": "Tính cách",
-      "nodes": "Nút"
+      "nodes": "Nút",
+      "reading": "Văn bản và đọc",
+      "activity": "Hiển thị thực thi",
+      "context": "Nén ngữ cảnh",
+      "dream": "Hợp nhất Dream",
+      "memory-search": "Tìm kiếm bộ nhớ",
+      "execution": "Mục tiêu và thực thi",
+      "shell": "Thực thi Shell",
+      "network": "Mạng và thử lại",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "Giao diện",
@@ -628,7 +637,9 @@
       "logs": "Nhật ký",
       "diagnostics": "Chẩn đoán",
       "contextWindow": "Cửa sổ ngữ cảnh",
-      "voiceLimits": "Giới hạn"
+      "voiceLimits": "Giới hạn",
+      "reasoningDetailMode": "Chi tiết suy luận",
+      "toolDetailMode": "Chi tiết công cụ"
     },
     "help": {
       "theme": "Chuyển giữa giao diện sáng và tối.",
@@ -689,7 +700,8 @@
       "restartingEngine": "Đang khởi động lại",
       "checking": "Đang kiểm tra",
       "running": "Đang chạy",
-      "needsSetup": "Cần thiết lập"
+      "needsSetup": "Cần thiết lập",
+      "detailed": "Chi tiết"
     },
     "status": {
       "loading": "Đang tải cài đặt...",
@@ -1524,6 +1536,34 @@
       "instructions": "Instructions",
       "memory": "Long-term memory",
       "heartbeat": "Heartbeat instructions"
+    },
+    "categories": {
+      "interface": "Giao diện",
+      "agent": "Tác nhân",
+      "connections": "Kết nối",
+      "system": "Hệ thống"
+    },
+    "telegram": {
+      "account": "Personal account",
+      "configureBot": "Configure bot",
+      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
+      "unbound": "Not connected",
+      "boundHelp": "Only this Telegram account can access your personal Cirno.",
+      "pinHelp": "Generate a PIN here, then send it to your bot.",
+      "unbind": "Disconnect",
+      "generatePin": "Generate PIN",
+      "pin": "Pairing PIN",
+      "copyPin": "Copy binding command",
+      "refreshPin": "Refresh PIN",
+      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
+      "sendPin": "Send {{command}} to your Telegram bot.",
+      "delivery": "Messages and notifications",
+      "enabled": "Enable Telegram",
+      "cirno": "Cirno messages",
+      "actionLinks": "Action links",
+      "webuiUrl": "Web UI address (optional)",
+      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
+      "settingsLink": "Configure Telegram notifications"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "Không có tin nhắn phù hợp.",
       "jumpTo": "Đến tin nhắn: {{label}}",
       "railAria": "Điều hướng tin nhắn của tôi"
+    },
+    "clear": {
+      "title": "Xóa cuộc trò chuyện Cirno",
+      "description": "Dừng tác vụ hiện tại và xóa tin nhắn cùng ngữ cảnh của cuộc trò chuyện này. Bộ nhớ đã lưu và các cuộc trò chuyện khác được giữ lại.",
+      "confirm": "Xóa cuộc trò chuyện"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
     "cliRunRan": "Đã dùng",
     "cliRunFailed": "Thất bại",
     "automationSourceFallback": "Tự động hóa",
-    "automationTriggered": "Tự động kích hoạt"
+    "automationTriggered": "Tự động kích hoạt",
+    "expandStep": "Mở rộng bước",
+    "collapseStep": "Thu gọn bước"
   },
   "recovery": {
     "actionFailed": "Khôi phục thất bại. Hãy thử lại.",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "Tất cả",
       "operations": "Thao tác",
-      "conversations": "Cuộc trò chuyện",
+      "conversations": "Báo cáo",
       "system": "Hệ thống"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "Có thao tác cần bạn xử lý.",
-      "conversations": "Cuộc trò chuyện có thông tin mới.",
+      "conversations": "Có báo cáo tác vụ mới.",
       "system": "Cirno có thông tin hệ thống mới."
     },
     "conversationUnavailable": "Cuộc trò chuyện này đã bị xóa hoặc đặt lại."
+  },
+  "setup": {
+    "step": "Bước {{current}} / {{total}}",
+    "registerTitle": "Chào mừng đến với Cirno",
+    "loginTitle": "Đăng nhập Cirno",
+    "registerDescription": "Tạo tài khoản để bắt đầu.",
+    "loginDescription": "Đăng nhập để tiếp tục sử dụng phiên bản của bạn.",
+    "username": "Tên người dùng",
+    "password": "Mật khẩu",
+    "confirmPassword": "Xác nhận mật khẩu",
+    "passwordHint": "Sử dụng ít nhất 10 ký tự, bao gồm một chữ cái viết hoa và một ký hiệu.",
+    "createAccount": "Tạo tài khoản",
+    "signIn": "Đăng nhập",
+    "instanceOwner": "Tài khoản này quản lý phiên bản Cirno của bạn. Đăng ký sẽ đóng sau khi tạo tài khoản.",
+    "modelTitle": "Kết nối mô hình",
+    "modelDescription": "Thêm nhà cung cấp và cấu hình mô hình. Bạn có thể thay đổi trong phần Cài đặt.",
+    "configureLater": "Thiết lập sau",
+    "startChatting": "Bắt đầu",
+    "errors": {
+      "invalid_username": "Nhập tên người dùng từ 1–64 ký tự.",
+      "invalid_password": "Sử dụng ít nhất 10 ký tự, bao gồm một chữ cái viết hoa và một ký hiệu.",
+      "invalid_credentials": "Tên người dùng hoặc mật khẩu không đúng.",
+      "registration_closed": "Tài khoản đã tồn tại. Tải lại trang để đăng nhập.",
+      "registration_required": "Hãy tạo tài khoản trước. Tải lại trang để tiếp tục.",
+      "too_many_attempts": "Quá nhiều lần thử. Vui lòng chờ một phút.",
+      "storage_failed": "Không thể lưu tài khoản. Kiểm tra bộ nhớ máy chủ.",
+      "password_mismatch": "Mật khẩu không khớp.",
+      "connection_failed": "Không thể kết nối Cirno. Kiểm tra mạng và thử lại.",
+      "request_failed": "Yêu cầu thất bại. Vui lòng thử lại."
+    }
   }
 }

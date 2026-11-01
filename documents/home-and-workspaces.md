@@ -5,6 +5,7 @@ Home owns durable assistant state. It defaults to `~/.cirno/`; select another in
 | Path inside Home | Purpose |
 | --- | --- |
 | `config.json` | Instance configuration |
+| `webui-auth.sqlite3` | Instance owner password hash, browser sessions and setup progress |
 | `AGENTS.md` | Agent-wide workflow instructions |
 | `SOUL.md` | Personality and communication style |
 | `USER.md` | Durable user preferences |

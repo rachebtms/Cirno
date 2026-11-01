@@ -8,15 +8,15 @@ import {
   AdvancedIcon,
   ModelsIcon,
 } from "@/components/icons/product-icons";
-import { useRef, useState } from "react";
-import { BookOpen, Brain, UserRound, Wrench, Server, MessagesSquare, Bell, Check, ChevronDown, ChevronLeft, LogOut, Loader2, type LucideIcon } from "lucide-react";
+import { Fragment, useRef, useState } from "react";
+import { BookOpen, Brain, UserRound, Wrench, Server, MessagesSquare, Bell, BookOpenText, Activity, Archive, Moon, Search, Play, Terminal, Network, Link, Check, ChevronDown, ChevronLeft, LogOut, Loader2, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
   SIDEBAR_SELECTION_ITEM_CLASS,
   SidebarSelectionHighlight,
 } from "@/components/SidebarSelectionHighlight";
-import { isCapabilitySection, type SettingsSectionKey } from "@/components/settings/contracts";
+import { type SettingsSectionKey } from "@/components/settings/contracts";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,22 +28,31 @@ import {
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
-const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string }> = [
-  { key: "overview", icon: OverviewIcon, fallback: "Overview" },
-  { key: "appearance", icon: AppearanceIcon, fallback: "Appearance" },
-  { key: "notifications", icon: Bell, fallback: "Notifications" },
-  { key: "models", icon: ModelsIcon, fallback: "Models" },
-  { key: "capabilities", icon: CapabilitiesIcon, fallback: "Capabilities" },
-  { key: "memory", icon: Brain, fallback: "Memory" },
-  { key: "personality", icon: UserRound, fallback: "Personality" },
-  { key: "apps", icon: Wrench, fallback: "Tools" },
-  { key: "nodes", icon: Server, fallback: "Nodes" },
-  { key: "mcp", icon: Server, fallback: "MCP" },
-  { key: "skills", icon: BookOpen, fallback: "Skills" },
-  { key: "channels", icon: MessagesSquare, fallback: "Channels" },
-  { key: "runtime", icon: SystemIcon, fallback: "System" },
-  { key: "advanced", icon: AdvancedIcon, fallback: "Advanced" },
-  { key: "about", icon: AboutIcon, fallback: "About" },
+const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string; group: string }> = [
+  { key: "overview", icon: OverviewIcon, fallback: "Overview", group: "general" },
+  { key: "appearance", icon: AppearanceIcon, fallback: "Appearance", group: "interface" },
+  { key: "reading", icon: BookOpenText, fallback: "Text & reading", group: "interface" },
+  { key: "activity", icon: Activity, fallback: "Execution display", group: "interface" },
+  { key: "notifications", icon: Bell, fallback: "Browser notifications", group: "interface" },
+  { key: "personality", icon: UserRound, fallback: "Personality", group: "agent" },
+  { key: "models", icon: ModelsIcon, fallback: "Models", group: "agent" },
+  { key: "memory", icon: Brain, fallback: "Memory library", group: "agent" },
+  { key: "context", icon: Archive, fallback: "Context compaction", group: "agent" },
+  { key: "dream", icon: Moon, fallback: "Dream consolidation", group: "agent" },
+  { key: "memory-search", icon: Search, fallback: "Memory retrieval", group: "agent" },
+  { key: "execution", icon: Play, fallback: "Goals & execution", group: "agent" },
+  { key: "apps", icon: Wrench, fallback: "Tools & CLI Apps", group: "agent" },
+  { key: "shell", icon: Terminal, fallback: "Shell execution", group: "agent" },
+  { key: "skills", icon: BookOpen, fallback: "Skills", group: "agent" },
+  { key: "browser", icon: CapabilitiesIcon, fallback: "Web search", group: "connections" },
+  { key: "nodes", icon: Server, fallback: "Nodes", group: "connections" },
+  { key: "mcp", icon: Server, fallback: "MCP", group: "connections" },
+  { key: "telegram", icon: Link, fallback: "Telegram", group: "connections" },
+  { key: "channels", icon: MessagesSquare, fallback: "Channel setup", group: "connections" },
+  { key: "network", icon: Network, fallback: "Network & retries", group: "system" },
+  { key: "advanced", icon: AdvancedIcon, fallback: "Permissions", group: "system" },
+  { key: "runtime", icon: SystemIcon, fallback: "Server & heartbeat", group: "system" },
+  { key: "about", icon: AboutIcon, fallback: "About", group: "system" },
 ];
 
 export function standaloneSectionTitle(section: SettingsSectionKey): string {
@@ -83,7 +92,7 @@ export function SettingsSidebar(props: SettingsSidebarProps) {
   const restartLabel = isRestarting
     ? t(isNativeHost ? "app.system.restartingEngine" : "app.system.restarting")
     : t("app.system.restartAction");
-  const navSection = activeSection === "memory" ? "memory" : isCapabilitySection(activeSection) ? "capabilities" : activeSection;
+  const navSection = activeSection === "capabilities" ? "browser" : activeSection;
   const activeNavItemRef = useRef<HTMLButtonElement>(null);
   const activeItem = SETTINGS_NAV_ITEMS.find((item) => item.key === navSection)
     ?? SETTINGS_NAV_ITEMS[0];
@@ -99,7 +108,7 @@ export function SettingsSidebar(props: SettingsSidebarProps) {
   return (
     <aside
       className={cn(
-        "flex w-full shrink-0 select-none flex-col bg-settings-surface px-3 pb-2 lg:w-48 lg:px-3 lg:pb-4",
+        "flex w-full shrink-0 select-none flex-col bg-settings-surface px-3 pb-2 lg:w-56 lg:px-3 lg:pb-4",
         hostChromeInset ? "pt-10 lg:pt-10" : "pt-4 lg:pt-4",
       )}
     >
@@ -117,7 +126,7 @@ export function SettingsSidebar(props: SettingsSidebarProps) {
 
       <nav
         aria-label={t("settings.sidebar.ariaLabel")}
-        className="w-full"
+        className="min-h-0 w-full flex-1 overflow-y-auto"
       >
         <SidebarSelectionHighlight
           targetRef={activeNavItemRef}
@@ -125,9 +134,11 @@ export function SettingsSidebar(props: SettingsSidebarProps) {
           scope="settings"
           className="relative hidden space-y-1 lg:block"
         >
-          {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
+          {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback, group }, index) => {
             const active = key === navSection;
             return (
+              <Fragment key={key}>
+              {index > 0 && SETTINGS_NAV_ITEMS[index - 1].group !== group && <p className="px-2.5 pb-1 pt-4 text-xs text-muted-foreground">{t(`settings.categories.${group}`)}</p>}
               <button
                 ref={active ? activeNavItemRef : undefined}
                 key={key}
@@ -147,6 +158,7 @@ export function SettingsSidebar(props: SettingsSidebarProps) {
                   {t(`settings.nav.${key}`, { defaultValue: fallback })}
                 </span>
               </button>
+              </Fragment>
             );
           })}
         </SidebarSelectionHighlight>
@@ -250,11 +262,13 @@ function MobileSettingsNavigation({
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="center" sideOffset={6} collisionPadding={12}
             aria-label={t("settings.sidebar.ariaLabel")} aria-labelledby={undefined}
-            className="w-60 max-w-[calc(100vw-1.5rem)] data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1 data-[state=open]:duration-150 data-[state=closed]:duration-100 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none"
+            className="max-h-[70vh] w-60 max-w-[calc(100vw-1.5rem)] overflow-y-auto data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1 data-[state=open]:duration-150 data-[state=closed]:duration-100 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none"
           >
-            {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
+            {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback, group }, index) => {
               const active = key === navSection;
               return (
+                <Fragment key={key}>
+                {index > 0 && SETTINGS_NAV_ITEMS[index - 1].group !== group && <p className="px-2 py-2 text-xs text-muted-foreground">{t(`settings.categories.${group}`)}</p>}
                 <DropdownMenuItem key={key}
                   aria-current={active ? "page" : undefined}
                   onSelect={() => onSelectSection(key)}
@@ -267,6 +281,7 @@ function MobileSettingsNavigation({
                   </span>
                   {active ? <Check aria-hidden /> : null}
                 </DropdownMenuItem>
+                </Fragment>
               );
             })}
             {onRestart ? <>

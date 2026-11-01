@@ -13,7 +13,6 @@ from cirno.cli.runtime_config import (
 )
 from cirno.cli.webui_support import (
     _attach_to_background_gateway,
-    _confirm_webui_action,
     _ensure_local_webui_channel,
     _gateway_health_ready,
     _host_for_local_browser,
@@ -122,9 +121,6 @@ def webui(
         )
         raise typer.Exit(1)
     created_config = not config_path.exists()
-    if created_config:
-        _confirm_webui_action("Set up cirno and open WebUI on this device?", yes=yes)
-
     setup_config = _load_webui_setup_config(config_path)
     if workspace:
         setup_config.agents.defaults.workspace = workspace

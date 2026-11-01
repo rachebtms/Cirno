@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "Ringkasan",
       "appearance": "Tampilan",
-      "notifications": "Notifikasi",
+      "notifications": "Notifikasi peramban",
       "models": "Model",
       "providers": "Penyedia",
       "voice": "Suara",
-      "browser": "Internet",
-      "channels": "Channels",
-      "runtime": "Sistem",
-      "advanced": "Lanjutan",
-      "memory": "Memori",
+      "browser": "Pencarian web",
+      "channels": "Pengaturan kanal",
+      "runtime": "Server dan heartbeat",
+      "advanced": "Izin",
+      "memory": "Pustaka memori",
       "cliApps": "Aplikasi CLI",
       "mcp": "MCP",
-      "apps": "Alat",
+      "apps": "Alat dan CLI Apps",
       "automations": "Otomasi",
       "skills": "Skills",
       "ssh": "SSH",
       "personality": "Kepribadian",
-      "nodes": "Node"
+      "nodes": "Node",
+      "reading": "Teks dan bacaan",
+      "activity": "Tampilan eksekusi",
+      "context": "Pemadatan konteks",
+      "dream": "Konsolidasi Dream",
+      "memory-search": "Pencarian memori",
+      "execution": "Tujuan dan eksekusi",
+      "shell": "Eksekusi Shell",
+      "network": "Jaringan dan percobaan ulang",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "Antarmuka",
@@ -628,7 +637,9 @@
       "logs": "Log",
       "diagnostics": "Diagnostik",
       "contextWindow": "Jendela konteks",
-      "voiceLimits": "Batas"
+      "voiceLimits": "Batas",
+      "reasoningDetailMode": "Detail penalaran",
+      "toolDetailMode": "Detail aktivitas alat"
     },
     "help": {
       "theme": "Beralih antara tampilan terang dan gelap.",
@@ -689,7 +700,8 @@
       "restartingEngine": "Memulai ulang",
       "checking": "Memeriksa",
       "running": "Berjalan",
-      "needsSetup": "Perlu penyiapan"
+      "needsSetup": "Perlu penyiapan",
+      "detailed": "Terperinci"
     },
     "status": {
       "loading": "Memuat pengaturan...",
@@ -1524,6 +1536,34 @@
       "instructions": "Instructions",
       "memory": "Long-term memory",
       "heartbeat": "Heartbeat instructions"
+    },
+    "categories": {
+      "interface": "Antarmuka",
+      "agent": "Agen",
+      "connections": "Koneksi",
+      "system": "Sistem"
+    },
+    "telegram": {
+      "account": "Personal account",
+      "configureBot": "Configure bot",
+      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
+      "unbound": "Not connected",
+      "boundHelp": "Only this Telegram account can access your personal Cirno.",
+      "pinHelp": "Generate a PIN here, then send it to your bot.",
+      "unbind": "Disconnect",
+      "generatePin": "Generate PIN",
+      "pin": "Pairing PIN",
+      "copyPin": "Copy binding command",
+      "refreshPin": "Refresh PIN",
+      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
+      "sendPin": "Send {{command}} to your Telegram bot.",
+      "delivery": "Messages and notifications",
+      "enabled": "Enable Telegram",
+      "cirno": "Cirno messages",
+      "actionLinks": "Action links",
+      "webuiUrl": "Web UI address (optional)",
+      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
+      "settingsLink": "Configure Telegram notifications"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "Tidak ada pesan yang cocok.",
       "jumpTo": "Ke pesan: {{label}}",
       "railAria": "Navigasi pesan saya"
+    },
+    "clear": {
+      "title": "Kosongkan percakapan Cirno",
+      "description": "Hentikan proses saat ini dan hapus pesan serta konteks percakapan ini. Memori tersimpan dan percakapan lain tetap disimpan.",
+      "confirm": "Kosongkan percakapan"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
     "cliRunRan": "Digunakan",
     "cliRunFailed": "Gagal",
     "automationSourceFallback": "Otomatisasi",
-    "automationTriggered": "Dipicu otomatis"
+    "automationTriggered": "Dipicu otomatis",
+    "expandStep": "Buka detail langkah",
+    "collapseStep": "Tutup detail langkah"
   },
   "recovery": {
     "actionFailed": "Pemulihan gagal. Coba lagi.",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "Semua",
       "operations": "Tindakan",
-      "conversations": "Percakapan",
+      "conversations": "Laporan",
       "system": "Sistem"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "Ada tindakan yang memerlukan perhatian Anda.",
-      "conversations": "Ada kabar baru dalam percakapan.",
+      "conversations": "Laporan tugas tersedia.",
       "system": "Ada pembaruan sistem Cirno."
     },
     "conversationUnavailable": "Percakapan ini telah dihapus atau diatur ulang."
+  },
+  "setup": {
+    "step": "Langkah {{current}} dari {{total}}",
+    "registerTitle": "Selamat datang di Cirno",
+    "loginTitle": "Masuk ke Cirno",
+    "registerDescription": "Buat akun untuk memulai.",
+    "loginDescription": "Masuk untuk melanjutkan ke instans Anda.",
+    "username": "Nama pengguna",
+    "password": "Kata sandi",
+    "confirmPassword": "Konfirmasi kata sandi",
+    "passwordHint": "Gunakan setidaknya 10 karakter, termasuk huruf besar dan simbol.",
+    "createAccount": "Buat akun",
+    "signIn": "Masuk",
+    "instanceOwner": "Akun ini mengelola instans Cirno Anda. Pendaftaran ditutup setelah akun dibuat.",
+    "modelTitle": "Hubungkan model",
+    "modelDescription": "Tambahkan penyedia dan konfigurasi model. Anda dapat mengubahnya nanti di Pengaturan.",
+    "configureLater": "Atur nanti",
+    "startChatting": "Mulai",
+    "errors": {
+      "invalid_username": "Masukkan nama pengguna sepanjang 1–64 karakter.",
+      "invalid_password": "Gunakan setidaknya 10 karakter, termasuk huruf besar dan simbol.",
+      "invalid_credentials": "Nama pengguna atau kata sandi salah.",
+      "registration_closed": "Akun sudah ada. Muat ulang halaman untuk masuk.",
+      "registration_required": "Buat akun terlebih dahulu. Muat ulang halaman untuk melanjutkan.",
+      "too_many_attempts": "Terlalu banyak percobaan. Tunggu satu menit lalu coba lagi.",
+      "storage_failed": "Akun tidak dapat disimpan. Periksa penyimpanan server.",
+      "password_mismatch": "Kata sandi tidak cocok.",
+      "connection_failed": "Tidak dapat terhubung ke Cirno. Periksa jaringan Anda.",
+      "request_failed": "Permintaan gagal. Silakan coba lagi."
+    }
   }
 }

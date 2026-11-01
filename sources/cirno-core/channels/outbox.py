@@ -62,7 +62,7 @@ class DeliveryOutbox:
         finally:
             db.close()
 
-    def record(self, msg: OutboundMessage) -> None:
+    def record(self, msg: OutboundMessage, *, deduplicate: bool = False) -> None:
         """Commit before queue acceptance. Do not store runtime events or empty replies."""
         if msg.delivery is None or msg.event is not None or not (msg.content.strip() or msg.media):
             return
@@ -80,6 +80,11 @@ class DeliveryOutbox:
         now = time.time()
         with self._connect() as db:
             self._prune(db, now)
+            if deduplicate:
+                previous = db.execute("SELECT id FROM deliveries WHERE run_id=? AND channel=? AND chat_id=?", (msg.delivery.run_id, msg.channel, msg.chat_id)).fetchone()
+                if previous is not None:
+                    msg.delivery_id = previous["id"]
+                    return
             count = db.execute(
                 "SELECT count(*) FROM deliveries WHERE status IN ('pending','sending')",
             ).fetchone()[0]

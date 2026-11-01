@@ -14,14 +14,6 @@
         "label": "允許使用者",
         "placeholder": "* 或 Telegram 使用者 ID"
       },
-      "groupPolicy": {
-        "label": "群聊規則",
-        "choices": {
-          "mention": "提及回覆",
-          "open": "全部訊息",
-          "allowlist": "允許清單"
-        }
-      },
       "mode": {
         "label": "連接方式",
         "choices": {

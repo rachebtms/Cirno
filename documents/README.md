@@ -26,3 +26,7 @@ These guides describe the current Cirno implementation. The Python gateway owns 
 - [Example configuration](examples/config.json)
 
 Historical reviews, benchmark runs and earlier implementations are local archive material under ignored `references/`. They are not current product documentation or bundled Agent guidance. Third-party license text remains in its original form.
+
+## Release notes
+
+- [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.

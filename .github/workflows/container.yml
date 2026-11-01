@@ -82,11 +82,26 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Verify container startup and Web UI
         run: |
-          docker run -d --name cirno-smoke --memory=400m -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 -e CIRNO_WEB_TOKEN=ci-smoke-only cirno:smoke gateway --foreground
+          docker run -d --name cirno-smoke --memory=400m -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke gateway --foreground
           trap 'docker logs cirno-smoke; docker rm -f cirno-smoke' EXIT
           curl --fail --retry 30 --retry-delay 2 --retry-all-errors --retry-max-time 90 --connect-timeout 2 --max-time 5 http://127.0.0.1:18790/health
           curl --fail --output /tmp/cirno-smoke.html http://127.0.0.1:8765/
           grep -q '<html' /tmp/cirno-smoke.html
+          python3 - <<'PY'
+          import http.cookiejar
+          import json
+          import urllib.request
+          base = "http://127.0.0.1:8765"
+          client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+          assert json.load(client.open(base + "/api/auth/status"))["registration_required"]
+          request = urllib.request.Request(base + "/api/auth/register", data=json.dumps({
+              "username": "ci-owner", "password": "Ci-container-smoke-password!",
+          }).encode(), headers={"Content-Type": "application/json"})
+          assert client.open(request).status == 201
+          bootstrap = json.load(client.open(base + "/webui/bootstrap"))
+          assert bootstrap["browser_auth"] and bootstrap["onboarding_required"]
+          assert bootstrap["token"] and bootstrap["api_token"]
+          PY
           docker exec cirno-smoke grep -Eq '^Uid:[[:space:]]+1000[[:space:]]' /proc/1/status
       - name: Sign in to GitHub Container Registry
         if: github.event_name != 'pull_request'

@@ -6,6 +6,8 @@ export type FileEditDisplayMode = "summary" | "diff" | "collapsed_diff";
 
 export interface LocalPreferences {
   activityMode: LocalActivityMode;
+  reasoningDetailMode?: "brief" | "detailed";
+  toolDetailMode?: "brief" | "detailed";
   readingTextSize: ReadingTextSize;
   customReadingTextSize: number;
   codeWrap: boolean;
@@ -26,6 +28,8 @@ type PersistedLocalPreferences = Partial<LocalPreferences> & {
 
 export const DEFAULT_LOCAL_PREFS: LocalPreferences = {
   activityMode: "auto",
+  reasoningDetailMode: "brief",
+  toolDetailMode: "brief",
   readingTextSize: "standard",
   customReadingTextSize: 16,
   codeWrap: true,
@@ -47,6 +51,8 @@ export function readLocalPreferences(): LocalPreferences {
     const parsed = JSON.parse(raw) as PersistedLocalPreferences;
     return {
       activityMode: parsed.activityMode === "expanded" ? "expanded" : "auto",
+      reasoningDetailMode: parsed.reasoningDetailMode === "detailed" ? "detailed" : "brief",
+      toolDetailMode: parsed.toolDetailMode === "detailed" ? "detailed" : "brief",
       readingTextSize: parsed.readingTextSize === "small" || parsed.readingTextSize === "large" || parsed.readingTextSize === "custom"
         ? parsed.readingTextSize : "standard",
       customReadingTextSize: typeof parsed.customReadingTextSize === "number" && Number.isFinite(parsed.customReadingTextSize)

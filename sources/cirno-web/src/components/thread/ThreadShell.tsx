@@ -35,6 +35,7 @@ import {
   modelPresetOptionsFromSettings,
   toModelBadgeInfo,
 } from "@/components/thread/model-preset";
+import { ClearConversationButton } from "@/components/thread/ClearConversationButton";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { ThreadLoadingSkeleton } from "@/components/thread/ThreadLoadingSkeleton";
 import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
@@ -1510,7 +1511,7 @@ export function ThreadShell({
       hideSidebarToggle={hideSidebarToggle}
       hideThemeButton={hideThemeButton}
       hideTitle={hideHeaderTitle}
-      actions={<>{headerActions}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="host-no-drag h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
+      actions={<>{headerActions}{session?.key === "websocket:global" && <ClearConversationButton client={client} chatId={session.chatId} onCleared={refreshHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="host-no-drag h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
         onClick={() => guardPreview(() => { cancelPreviewClose(); openBrowser(); })}><FolderOpen className="h-4 w-4" /></Button></HoverHint></>}
       minimal={!session && !loading}
       promptNavigatorAction={promptNavigatorAction}

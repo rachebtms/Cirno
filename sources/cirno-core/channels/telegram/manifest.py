@@ -1,6 +1,6 @@
 """Telegram management contract."""
 
-from cirno.channels._manifest import GROUP_POLICIES, field, required
+from cirno.channels._manifest import field, required
 from cirno.channels.contracts import ChannelSetupSpec
 from cirno.channels.plugin import ChannelPlugin
 from cirno.channels.telegram.validation import validate
@@ -10,7 +10,6 @@ SETUP_SPEC = ChannelSetupSpec(
         "token": field("secret"),
         "useProxy": field("bool", default=False),
         "allowFrom": field("list"),
-        "groupPolicy": field("enum", choices=GROUP_POLICIES, default="mention"),
         "mode": field("enum", choices={"polling", "webhook"}, default="polling"),
         "replyToMessage": field("bool", default=False),
         "reactEmoji": field(default="👀"),

@@ -14,14 +14,6 @@
         "label": "Allowed users",
         "placeholder": "* or Telegram user IDs"
       },
-      "groupPolicy": {
-        "label": "Group rules",
-        "choices": {
-          "mention": "Mentions only",
-          "open": "All messages",
-          "allowlist": "Allowlist"
-        }
-      },
       "mode": {
         "label": "Connection mode",
         "choices": {

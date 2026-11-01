@@ -12,7 +12,8 @@ import type { FileEditDisplayMode, LocalActivityMode, LocalPreferences } from "@
 import { ReadingSettings } from "./ReadingSettings";
 import "./appearance-settings.css";
 
-export function AppearanceSettingsView({ themePreference, onChangeTheme, localPrefs, onChangeLocalPrefs }: {
+export function AppearanceSettingsView({ themePreference, onChangeTheme, localPrefs, onChangeLocalPrefs, section = "all" }: {
+  section?: "all" | "appearance" | "reading" | "activity";
   themePreference: ThemePreference;
   onChangeTheme: (preference: ThemePreference) => void;
   localPrefs: LocalPreferences;
@@ -28,7 +29,7 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, localPr
   const editHelp = { summary: "summaryHelp", diff: "diffHelp", collapsed_diff: "collapsedHelp" } as const;
 
   return <div className="settings-stack appearance-page">
-    <section>
+    {(section === "all" || section === "appearance") && <section>
       <SettingsSectionTitle>{t("settings.rows.theme")}</SettingsSectionTitle>
       <fieldset>
         <legend className="sr-only">{t("settings.rows.theme")}</legend>
@@ -49,9 +50,9 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, localPr
           </label>)}
         </div>
       </fieldset>
-    </section>
+    </section>}
 
-    <section>
+    {(section === "all" || section === "reading") && <section>
       <SettingsSectionTitle>{t("settings.appearance.reading")}</SettingsSectionTitle>
       <ReadingSettings preferences={localPrefs} onChange={onChangeLocalPrefs} />
       <div className="mt-2">
@@ -64,9 +65,9 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, localPr
           </SettingsRow>
         </SettingsGroup>
       </div>
-    </section>
+    </section>}
 
-    <section>
+    {(section === "all" || section === "activity") && <section>
       <SettingsSectionTitle>
         <SettingsHint description={t("settings.appearance.processHelp")}>{t("settings.appearance.process")}</SettingsHint>
       </SettingsSectionTitle>
@@ -78,6 +79,14 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, localPr
             options={[{ value: "auto", label: t("settings.values.auto") }, { value: "expanded", label: t("settings.values.expanded") }]}
             onChange={(activityMode) => onChangeLocalPrefs((previous) => ({ ...previous, activityMode }))} />
         </SettingsRow>
+        {(["reasoningDetailMode", "toolDetailMode"] as const).map((mode) => <div key={mode} className="settings-group-divider">
+          <SettingsRow title={t(`settings.rows.${mode}`)}>
+            <SegmentedControl<"brief" | "detailed"> value={localPrefs[mode] ?? "brief"}
+              ariaLabel={t(`settings.rows.${mode}`)}
+              options={[{ value: "brief", label: t("settings.values.summary") }, { value: "detailed", label: t("settings.values.detailed") }]}
+              onChange={(value) => onChangeLocalPrefs((previous) => ({ ...previous, [mode]: value }))} />
+          </SettingsRow>
+        </div>)}
         <div className="settings-group-divider">
           <SettingsRow title={t("settings.rows.fileEditDisplay")}
             description={t(`settings.appearance.${editHelp[localPrefs.fileEditDisplayMode]}`)}>
@@ -92,9 +101,9 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, localPr
           </SettingsRow>
         </div>
       </SettingsGroup>
-    </section>
+    </section>}
 
-    <section>
+    {(section === "all" || section === "appearance") && <section>
       <SettingsSectionTitle>{t("settings.sections.interface")}</SettingsSectionTitle>
       <SettingsGroup>
         <SettingsRow title={t("settings.rows.language")}><LanguageSwitcher /></SettingsRow>
@@ -105,6 +114,6 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, localPr
             label={t(localPrefs.brandLogos ? "settings.values.on" : "settings.values.off")} />
         </SettingsRow>
       </SettingsGroup>
-    </section>
+    </section>}
   </div>;
 }

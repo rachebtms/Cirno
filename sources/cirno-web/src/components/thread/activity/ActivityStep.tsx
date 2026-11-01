@@ -1,6 +1,8 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ChevronDown, type LucideIcon } from "lucide-react";
 
+import { useTranslation } from "react-i18next";
+import { useLocalPreferences } from "@/hooks/useLocalPreferences";
 import { StreamingLabelSheen } from "@/components/ui/streaming-label-sheen";
 import { formControlFocusClassName } from "@/components/ui/form-control";
 import { HoverHint, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -26,6 +28,8 @@ export interface ActivityStepProps {
   labelClassName?: string;
   markerClassName?: string;
   style?: CSSProperties;
+  detailsText?: string;
+  defaultExpanded?: boolean;
 }
 
 export function ActivityStep({
@@ -46,10 +50,21 @@ export function ActivityStep({
   labelClassName,
   markerClassName,
   style,
+  detailsText,
+  defaultExpanded,
 }: ActivityStepProps) {
+  const { t } = useTranslation();
+  const { toolDetailMode } = useLocalPreferences();
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const detailsId = useId();
+  const expandedByDefault = defaultExpanded ?? toolDetailMode === "detailed";
+  const expanded = manualExpanded ?? expandedByDefault;
+  useEffect(() => setManualExpanded(null), [expandedByDefault]);
   const lineRef = useRef<HTMLDivElement>(null);
   const [hintOpen, setHintOpen] = useState(false);
   const textLabel = typeof label === "string" ? [label, detail].filter(Boolean).join("\n") : undefined;
+  const fullText = detailsText ?? (typeof tooltipContent === "string" ? tooltipContent : textLabel);
+  const canExpand = !!fullText && (!!detailsText || fullText.includes("\n") || fullText.length > 100);
   const activityMarker = (
     <span
       className={cn(
@@ -122,6 +137,7 @@ export function ActivityStep({
         <HoverHint content={markerLabel}>{activityMarker}</HoverHint>
       ) : activityMarker : null}
       <div className={cn("min-w-0", contentClassName)}>
+        <div className="flex min-w-0 items-start gap-1 overflow-hidden whitespace-nowrap"><div className="min-w-0 flex-1">
         {typeof label === "string" ? (
           <TooltipProvider>
             <Tooltip open={hintOpen} onOpenChange={(open) => {
@@ -136,6 +152,12 @@ export function ActivityStep({
             </Tooltip>
           </TooltipProvider>
         ) : line}
+        </div>{canExpand && <button type="button" className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-ring"
+          aria-label={t(expanded ? "message.collapseStep" : "message.expandStep")}
+          aria-expanded={expanded} aria-controls={detailsId} onClick={() => setManualExpanded(!expanded)}>
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+        </button>}</div>
+        {canExpand && expanded && <div id={detailsId} data-testid="activity-step-details" className="mt-1 whitespace-pre-wrap break-words text-[13px] font-normal leading-6 text-muted-foreground [overflow-wrap:anywhere]">{fullText}</div>}
       </div>
     </div>
   );

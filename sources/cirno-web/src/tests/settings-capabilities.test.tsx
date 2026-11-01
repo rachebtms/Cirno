@@ -93,7 +93,7 @@ describe("Settings capabilities", () => {
     );
   });
 
-  it("saves the web proxy switch separately from the shared address in Advanced", async () => {
+  it("saves the web proxy switch separately from the shared address in Network & retries", async () => {
     let payload = { ...settingsPayload(), runtime_config: {
       "tools.web.enable": false, "tools.web.use_proxy": false,
       "network.proxy": "http://old-proxy.example:8080", "tools.web.user_agent": null,
@@ -122,7 +122,7 @@ describe("Settings capabilities", () => {
     ));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Web access" })).getByRole("button", { name: "Close" }));
     expect(screen.getByRole("switch", { name: "Web access" })).not.toBeChecked();
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
     const proxy = screen.getByRole("textbox", { name: "Shared proxy" });
     expect(proxy).toHaveAttribute("type", "text");
     expect(proxy).toHaveValue("http://old-proxy.example:8080");
@@ -135,8 +135,8 @@ describe("Settings capabilities", () => {
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.runtime_config.update", { values: { "network.proxy": address } }, 20_000,
     ));
-    fireEvent.click(screen.getByRole("button", { name: "System" }));
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    fireEvent.click(screen.getByRole("button", { name: "Server & heartbeat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
     expect(screen.getByLabelText("Shared proxy", { selector: "input" })).toHaveValue("http://new-proxy.example:7890");
     expect(screen.getByLabelText("Username")).toHaveValue("user");
     expect(screen.getByLabelText("Password")).toHaveValue("secret");

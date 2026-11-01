@@ -164,3 +164,24 @@ async def test_question_survives_metadata_cache_eviction(inbox, tmp_path):
     finally:
         await manager.stop_all()
         await sessions.state.aclose()
+
+
+def test_ordinary_replies_and_successful_turns_do_not_enter_inbox(inbox):
+    from cirno.bus.outbound_events import TurnEndEvent
+    for chat_id in ("global", "worker"):
+        inbox.capture(OutboundMessage(channel="websocket", chat_id=chat_id, content="Hello"))
+        inbox.capture(OutboundMessage(channel="websocket", chat_id=chat_id, content="", metadata={"webui_turn_id": "done"},
+                                      event=TurnEndEvent(outcome="completed")))
+    assert inbox.list()["items"] == []
+    inbox.record("report:ready", "conversations", "report", status="ready", body="Task verified")
+    assert inbox.list()["items"][0]["body"] == "Task verified"
+
+
+def test_existing_ordinary_notifications_are_removed_without_deleting_reports(inbox):
+    inbox.record("reply", "conversations", "message", body="Hello")
+    inbox.record("done", "conversations", "turn", status="completed")
+    inbox.record("failed", "conversations", "turn", status="failed")
+    inbox.record("report", "conversations", "report", status="ready")
+    with inbox.connect() as db:
+        db.execute("PRAGMA user_version=0")
+    assert {item["id"] for item in inbox.list()["items"]} == {"report", "failed"}

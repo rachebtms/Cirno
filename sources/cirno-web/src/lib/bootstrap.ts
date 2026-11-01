@@ -5,7 +5,7 @@ const SECRET_STORAGE_KEY = "cirno-webui.bootstrap-secret";
 const URL_SECRET_PARAM = "bootstrapSecret";
 
 export class BootstrapAuthRequiredError extends Error {
-  constructor(message = "bootstrap authentication required") {
+  constructor(message = "bootstrap authentication required", public accountMode?: "register" | "login") {
     super(message);
     this.name = "BootstrapAuthRequiredError";
   }
@@ -81,8 +81,17 @@ export async function fetchBootstrap(
     headers,
   }, timeoutMs);
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      throw new BootstrapAuthRequiredError(`bootstrap failed: HTTP ${res.status}`);
+    if (res.status === 401 || res.status === 403 || res.status === 428) {
+      const detail = await res.text();
+      // Older gateways return plain text; account-enabled gateways return JSON.
+      let code = "";
+      if (detail.startsWith("{")) {
+        const parsed = JSON.parse(detail) as { error?: string };
+        code = parsed.error ?? "";
+      }
+      const mode = code === "registration_required" ? "register"
+        : code === "login_required" ? "login" : undefined;
+      throw new BootstrapAuthRequiredError(`bootstrap failed: HTTP ${res.status}`, mode);
     }
     throw new Error(`bootstrap failed: HTTP ${res.status}`);
   }

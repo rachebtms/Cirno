@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useClient } from "@/providers/ClientProvider";
 import { useCirnoStream } from "@/hooks/useCirnoStream";
 import {
-  ApiError,
   deleteSession as apiDeleteSession,
   fetchSessionAutomations,
   listSessions,
@@ -86,9 +85,7 @@ export function useSessions(): {
             }
             setError(null);
           } catch (e) {
-            const msg =
-              e instanceof ApiError ? `HTTP ${e.status}` : (e as Error).message;
-            setError(msg);
+            setError(e instanceof Error ? e.message : String(e));
           }
         }
       } finally {

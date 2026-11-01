@@ -661,7 +661,7 @@ describe("webui i18n", () => {
   it("keeps Simplified Chinese settings overview copy localized", () => {
     const settings = resources["zh-CN"].common.settings;
 
-    expect(settings.nav.browser).toBe("网络");
+    expect(settings.nav.browser).toBe("网络搜索");
     expect(settings.sections.webSearch).toBe("网络搜索");
     expect(settings.byok.tabs.webSearch).toBe("网络搜索");
     expect(settings.overview.webSearch).toBe("网络搜索");
@@ -705,7 +705,7 @@ describe("webui i18n", () => {
 
     expect(sidebar.settings).toBe("Configurações");
     expect(chat.newChat).toBe("Novo tópico");
-    expect(settings.nav.browser).toBe("Web");
+    expect(settings.nav.browser).toBe("Pesquisa web");
     expect(settings.sections.webSearch).toBe("Busca na web");
     expect(settings.byok.tabs.webSearch).toBe("Busca na web");
     expect(settings.overview.webSearch).toBe("Busca na web");

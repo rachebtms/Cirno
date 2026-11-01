@@ -12,6 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal, TypeAlias, TypeVar, cast
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from pydantic import Field, field_validator, model_validator
 from telegram import (
@@ -19,7 +20,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
-    MessageEntity,
     ReactionTypeEmoji,
     ReplyParameters,
     Update,
@@ -30,10 +30,12 @@ from telegram.ext import Application, CallbackQueryHandler, ContextTypes, Messag
 from telegram.request import BaseRequest, HTTPXRequest
 
 from cirno.bus.delivery import ChannelNotReadyError, DeliveryRejectedError
-from cirno.bus.events import OutboundMessage
+from cirno.session.keys import CIRNO_SESSION_KEY
+from cirno.bus.events import INBOUND_META_LOCAL_MEDIA, INBOUND_META_TURN_ID, OutboundMessage
 from cirno.bus.outbound_events import ProgressEvent
 from cirno.bus.queue import MessageBus
 from cirno.channels.base import BaseChannel
+from cirno.channels.telegram.binding import TelegramBinding
 from cirno.command.builtin import build_help_text
 from cirno.config.network import NetworkConfig
 from cirno.config.paths import get_media_dir
@@ -498,7 +500,6 @@ class TelegramConfig(Base):
     use_proxy: bool = False
     reply_to_message: bool = False
     react_emoji: str = "👀"
-    group_policy: Literal["open", "mention"] = "mention"
     connection_pool_size: int = 32
     pool_timeout: float = 5.0
     streaming: bool = True
@@ -634,7 +635,6 @@ class TelegramChannel(BaseChannel):
         self._typing_tasks: dict[str, asyncio.Task[None]] = {}  # chat_id -> typing loop task
         self._media_group_buffers: dict[str, dict[str, Any]] = {}
         self._media_group_tasks: dict[str, asyncio.Task[None]] = {}
-        self._message_threads: dict[tuple[str, int], int] = {}
         self._bot_user_id: int | None = None
         self._bot_username: str | None = None
         self._stream_bufs: dict[str, _StreamBuf] = {}  # chat_id -> streaming state
@@ -653,6 +653,11 @@ class TelegramChannel(BaseChannel):
 
     def is_allowed(self, sender_id: str) -> bool:
         """Preserve Telegram's legacy id|username allowlist matching."""
+        binding = TelegramBinding().status()
+        if binding["bound"]:
+            return binding["enabled"] and str(sender_id).split("|", 1)[0] == binding["user_id"]
+        if binding.get("requires_pin"):
+            return False
         if super().is_allowed(sender_id):
             return True
 
@@ -1145,6 +1150,13 @@ class TelegramChannel(BaseChannel):
             msg.event.notify or self.show_compaction_notices
         ):
             return
+        binding = TelegramBinding().status()
+        if binding["bound"] and (not binding["enabled"] or binding["chat_id"] != msg.chat_id):
+            raise DeliveryRejectedError("Telegram delivery must target the enabled personal account")
+        if binding_id := msg.metadata.get("_telegram_binding"):
+            if (not binding["bound"] or binding["id"] != binding_id
+                    or msg.metadata["_telegram_category"] not in binding["notifications"]):
+                raise DeliveryRejectedError("Telegram binding or notification preference changed")
         app = await self._wait_for_app()
         if app is None:
             raise ChannelNotReadyError("Telegram bot not running")
@@ -1162,10 +1174,10 @@ class TelegramChannel(BaseChannel):
             chat_id = int(msg.chat_id)
         except ValueError:
             raise DeliveryRejectedError("Invalid Telegram chat_id") from None
+        if chat_id <= 0:
+            raise DeliveryRejectedError("Telegram supports private chats only")
         reply_to_message_id = msg.metadata.get("message_id")
         message_thread_id = msg.metadata.get("message_thread_id")
-        if message_thread_id is None and reply_to_message_id is not None:
-            message_thread_id = self._message_threads.get((msg.chat_id, reply_to_message_id))
         thread_kwargs: dict[str, int] = {}
         if message_thread_id is not None:
             thread_kwargs["message_thread_id"] = message_thread_id
@@ -1246,7 +1258,9 @@ class TelegramChannel(BaseChannel):
         if msg.content and msg.content != "[empty message]":
             render_as_blockquote = bool(progress_event and progress_event.tool_hint)
             buttons = cast(list[list[str]], getattr(msg, "buttons", None) or [])
-            reply_markup = self._build_keyboard(buttons) if buttons else None
+            action_url = msg.metadata.get("_telegram_action_url")
+            reply_markup = (InlineKeyboardMarkup([[InlineKeyboardButton(msg.metadata.get("_telegram_action_label", "Open Cirno Inbox"), url=action_url)]])
+                            if action_url else self._build_keyboard(buttons) if buttons else None)
             text = msg.content
             if msg.metadata.get("render_as") == "text":
                 text = _telegram_command_text(text)
@@ -1702,11 +1716,13 @@ class TelegramChannel(BaseChannel):
 
     async def _on_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
-        if not update.message or not update.effective_user:
+        if not update.message or update.message.chat.type != "private" or not update.effective_user:
             return
 
         user = update.effective_user
         sender_id = self._sender_id(user)
+        if await self._try_bind(message=update.message, user=user):
+            return
         if not self.is_allowed(sender_id):
             await self._send_pairing_code_if_private(sender_id, update.message, user)
             return
@@ -1718,10 +1734,12 @@ class TelegramChannel(BaseChannel):
 
     async def _on_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /help command for allowed users only."""
-        if not update.message or not update.effective_user:
+        if not update.message or update.message.chat.type != "private" or not update.effective_user:
             return
         user = update.effective_user
         sender_id = self._sender_id(user)
+        if await self._try_bind(message=update.message, user=user):
+            return
         if not self.is_allowed(sender_id):
             await self._send_pairing_code_if_private(sender_id, update.message, user)
             return
@@ -1733,10 +1751,32 @@ class TelegramChannel(BaseChannel):
         sid = str(user.id)
         return f"{sid}|{user.username}" if user.username else sid
 
+    async def _try_bind(self, *, message: Message, user: User) -> bool:
+        text = (message.text or "").strip()
+        if not text.startswith("/bind") and TelegramBinding().status()["bound"]:
+            return False
+        match = re.fullmatch(r"(?:/bind(?:@\w+)?\s+)?(\d{8})", text)
+        if match is None:
+            if text.startswith("/bind"):
+                await message.reply_text("Send /bind followed by the eight-digit PIN from Cirno Settings → Telegram.")
+                return True
+            return False
+        verified = TelegramBinding().verify(match[1], user_id=user.id, chat_id=message.chat_id,
+                                            username=user.username or "", language=getattr(user, "language_code", None) or "en")
+        if verified:
+            from cirno.notifications.inbox import NotificationInbox
+            NotificationInbox().queue_pending_actions()
+        await message.reply_text("Connected to your personal Cirno." if verified else
+                                 "Invalid or expired PIN. Generate a new PIN in Cirno Settings → Telegram.")
+        return True
+
     async def _send_pairing_code_if_private(
         self, sender_id: str, message: Message, user: User
     ) -> None:
         if message.chat.type != "private":
+            return
+        if TelegramBinding().status().get("requires_pin"):
+            await message.reply_text("This is a personal Cirno bot. Get a PIN from Cirno Settings → Telegram, then send /bind PIN here.")
             return
         await self._handle_message(
             sender_id=sender_id,
@@ -1744,28 +1784,20 @@ class TelegramChannel(BaseChannel):
             content="",
             metadata=self._build_message_metadata(message, user),
             is_dm=True,
+            session_key=CIRNO_SESSION_KEY,
         )
-
-    @staticmethod
-    def _derive_topic_session_key(message: Message) -> str | None:
-        """Derive topic-scoped session key for Telegram chats with threads."""
-        message_thread_id = getattr(message, "message_thread_id", None)
-        if message_thread_id is None:
-            return None
-        return f"telegram:{message.chat_id}:topic:{message_thread_id}"
 
     @staticmethod
     def _build_message_metadata(message: Message, user: User) -> dict[str, Any]:
         """Build common Telegram inbound metadata payload."""
         reply_to = getattr(message, "reply_to_message", None)
         return {
+            INBOUND_META_TURN_ID: f"telegram:{uuid4().hex}",
             "message_id": message.message_id,
             "user_id": user.id,
             "username": user.username,
             "first_name": user.first_name,
-            "is_group": message.chat.type != "private",
-            "message_thread_id": getattr(message, "message_thread_id", None),
-            "is_forum": bool(getattr(message.chat, "is_forum", False)),
+            "is_group": False,
             "reply_to_message_id": getattr(reply_to, "message_id", None) if reply_to else None,
         }
 
@@ -1855,72 +1887,9 @@ class TelegramChannel(BaseChannel):
         return self._bot_user_id, self._bot_username
 
     @staticmethod
-    def _has_mention_entity(
-        text: str,
-        entities: list[MessageEntity] | None,
-        bot_username: str,
-        bot_id: int | None,
-    ) -> bool:
-        """Check Telegram mention entities against the bot username."""
-        handle = f"@{bot_username}".lower()
-        for entity in entities or []:
-            entity_type = getattr(entity, "type", None)
-            if entity_type == "text_mention":
-                user = getattr(entity, "user", None)
-                if user is not None and bot_id is not None and getattr(user, "id", None) == bot_id:
-                    return True
-                continue
-            if entity_type != "mention":
-                continue
-            offset = getattr(entity, "offset", None)
-            length = getattr(entity, "length", None)
-            if offset is None or length is None:
-                continue
-            if text[offset : offset + length].lower() == handle:
-                return True
-        return handle in text.lower()
-
-    async def _is_group_message_for_bot(self, message: Message) -> bool:
-        """Allow group messages when policy is open, @mentioned, or replying to the bot."""
-        if message.chat.type == "private" or self.config.group_policy == "open":
-            return True
-
-        bot_id, bot_username = await self._ensure_bot_identity()
-        if bot_username:
-            text = message.text or ""
-            caption = message.caption or ""
-            if self._has_mention_entity(
-                text,
-                getattr(message, "entities", None),
-                bot_username,
-                bot_id,
-            ):
-                return True
-            if self._has_mention_entity(
-                caption,
-                getattr(message, "caption_entities", None),
-                bot_username,
-                bot_id,
-            ):
-                return True
-
-        reply_user = getattr(getattr(message, "reply_to_message", None), "from_user", None)
-        return bool(bot_id and reply_user and reply_user.id == bot_id)
-
-    def _remember_thread_context(self, message: Message) -> None:
-        """Cache Telegram thread context by chat/message id for follow-up replies."""
-        message_thread_id = getattr(message, "message_thread_id", None)
-        if message_thread_id is None:
-            return
-        key = (str(message.chat_id), message.message_id)
-        self._message_threads[key] = message_thread_id
-        if len(self._message_threads) > 1000:
-            self._message_threads.pop(next(iter(self._message_threads)))
-
-    @staticmethod
     def _queue_key_for_message(message: Message) -> str:
-        """Return the final cirno session key used for ordered Telegram ingress."""
-        return TelegramChannel._derive_topic_session_key(message) or f"telegram:{message.chat_id}"
+        """Order the owner's private messages before forwarding to Cirno."""
+        return f"telegram:{message.chat_id}"
 
     @staticmethod
     def _sort_key_for_update(update: Update) -> tuple[int, int]:
@@ -1987,7 +1956,7 @@ class TelegramChannel(BaseChannel):
 
     async def _forward_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Forward slash commands to the bus for unified handling in AgentLoop."""
-        if not update.message or not update.effective_user:
+        if not update.message or update.message.chat.type != "private" or not update.effective_user:
             return
         if not self._running:
             await self._process_forward_command(update)
@@ -1998,13 +1967,14 @@ class TelegramChannel(BaseChannel):
         """Process a queued slash command."""
         message = update.message
         user = update.effective_user
-        if message is None or user is None:
+        if message is None or message.chat.type != "private" or user is None:
             return
         sender_id = self._sender_id(user)
+        if await self._try_bind(message=message, user=user):
+            return
         if not self.is_allowed(sender_id):
             await self._send_pairing_code_if_private(sender_id, message, user)
             return
-        self._remember_thread_context(message)
 
         # Strip @bot_username suffix if present
         content = message.text or ""
@@ -2018,13 +1988,13 @@ class TelegramChannel(BaseChannel):
             chat_id=str(message.chat_id),
             content=content,
             metadata=self._build_message_metadata(message, user),
-            session_key=self._derive_topic_session_key(message),
+            session_key=CIRNO_SESSION_KEY,
             is_dm=message.chat.type == "private",
         )
 
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle incoming messages (text, photos, voice, documents)."""
-        if not update.message or not update.effective_user:
+        if not update.message or update.message.chat.type != "private" or not update.effective_user:
             return
         if not self._running:
             await self._process_message_update(update)
@@ -2036,16 +2006,14 @@ class TelegramChannel(BaseChannel):
 
         message = update.message
         user = update.effective_user
-        if message is None or user is None:
+        if message is None or message.chat.type != "private" or user is None:
             return
         chat_id = message.chat_id
         sender_id = self._sender_id(user)
+        if await self._try_bind(message=message, user=user):
+            return
         if not self.is_allowed(sender_id):
             await self._send_pairing_code_if_private(sender_id, message, user)
-            return
-        self._remember_thread_context(message)
-
-        if not await self._is_group_message_for_bot(message):
             return
 
         # Build content from text and/or media
@@ -2090,7 +2058,8 @@ class TelegramChannel(BaseChannel):
 
         str_chat_id = str(chat_id)
         metadata = self._build_message_metadata(message, user)
-        session_key = self._derive_topic_session_key(message)
+        metadata[INBOUND_META_LOCAL_MEDIA] = media_paths
+        session_key = CIRNO_SESSION_KEY
 
         # Telegram media groups: buffer briefly, forward as one aggregated turn.
         if media_group_id := getattr(message, "media_group_id", None):
@@ -2124,6 +2093,7 @@ class TelegramChannel(BaseChannel):
             media=media_paths,
             metadata=metadata,
             session_key=session_key,
+            is_dm=True,
         )
 
     async def _flush_media_group(self, key: str) -> None:
@@ -2136,8 +2106,9 @@ class TelegramChannel(BaseChannel):
             await self._handle_message(
                 sender_id=buf["sender_id"], chat_id=buf["chat_id"],
                 content=content, media=list(dict.fromkeys(buf["media"])),
-                metadata=buf["metadata"],
+                metadata={**buf["metadata"], INBOUND_META_LOCAL_MEDIA: list(dict.fromkeys(buf["media"]))},
                 session_key=buf.get("session_key"),
+                is_dm=True,
             )
         finally:
             self._media_group_tasks.pop(key, None)
@@ -2282,7 +2253,7 @@ class TelegramChannel(BaseChannel):
         query_message = query.message
         chat_id = query_message.chat.id if query_message else None
         sender_id = self._sender_id(user)
-        if not chat_id:
+        if not chat_id or query_message.chat.type != "private":
             self.logger.warning("Callback query without chat_id")
             return
         if not self.is_allowed(sender_id):
@@ -2305,5 +2276,8 @@ class TelegramChannel(BaseChannel):
                 "username": user.username,
                 "first_name": user.first_name,
                 "is_callback": True,
+                INBOUND_META_TURN_ID: f"telegram:{uuid4().hex}",
             },
+            session_key=CIRNO_SESSION_KEY,
+            is_dm=True,
         )

@@ -167,6 +167,9 @@ class WebSocketConfig(Base):
       blocking ``urllib`` or synchronous ``httpx`` from inside a coroutine.
     - ``token_issue_secret``: If non-empty, token requests must send ``Authorization: Bearer <secret>`` or
       ``X-Cirno-Auth: <secret>``.
+    - ``browser_setup``: Enable first-owner browser registration and account login.
+      Before registration, only the setup entry surface is available. Account sessions
+      authorize WebUI bootstrap; issued tokens still authenticate WebSocket upgrades.
     - ``public_ws_url``: Optional public WebSocket endpoint returned by WebUI bootstrap instead of
       deriving one from proxy request headers. Its path must match ``path``.
     - ``websocket_requires_token``: If True, the handshake must include a valid token (static or issued and not expired).
@@ -184,6 +187,7 @@ class WebSocketConfig(Base):
     token: str = ""
     token_issue_path: str = ""
     token_issue_secret: str = ""
+    browser_setup: bool = False
     trusted_proxy_auth: TrustedProxyAuthConfig | None = None
     token_ttl_s: int = Field(default=300, ge=30, le=86_400)
     websocket_requires_token: bool = True
@@ -265,10 +269,10 @@ class WebSocketConfig(Base):
     def wildcard_host_requires_auth(self) -> Self:
         if self.host not in ("0.0.0.0", "::"):
             return self
-        if self.token.strip() or self.token_issue_secret.strip() or self.trusted_proxy_auth is not None:
+        if self.browser_setup or self.token.strip() or self.token_issue_secret.strip() or self.trusted_proxy_auth is not None:
             return self
         raise ValueError(
-            "host is 0.0.0.0 (all interfaces) but neither token, token_issue_secret, "
+            "host is 0.0.0.0 (all interfaces) but neither browser_setup, token, token_issue_secret, "
             "nor trusted_proxy_auth is set — set one to prevent unauthenticated access"
         )
 
@@ -692,6 +696,8 @@ class WebSocketChannel(BaseChannel):
         async def handle_binary(request: web.BaseRequest) -> web.StreamResponse:
             try:
                 with self.bus.admission.activity():
+                    if request.path.startswith("/api/auth/"):
+                        return await self.gateway.http.auth.handle(request)
                     return await self._uploads.handle(request)
             except RuntimeMaintenanceError:
                 return web.json_response({"error": "Gateway update is being verified"}, status=503)

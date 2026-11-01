@@ -20,7 +20,7 @@ function setup(minutes = 720) {
       runtime_config: { ...persisted.runtime_config, ...values } };
     return persisted;
   });
-  renderSettingsView({ initialSection: "memory", initialSettings: persisted, onRestart: vi.fn() });
+  renderSettingsView({ initialSection: "context", initialSettings: persisted, onRestart: vi.fn() });
   return () => persisted;
 }
 
@@ -41,9 +41,9 @@ function expectSaved(minutes: number) {
 describe("Idle compaction settings", () => {
   installSettingsViewTestHooks();
 
-  it.each([15, 720, 0])("reads %i minutes in Memory & personality", (minutes) => {
+  it.each([15, 720, 0])("reads %i minutes in Context compaction", (minutes) => {
     setup(minutes);
-    const sessions = within(screen.getByRole("region", { name: "Memory" }));
+    const sessions = within(screen.getByRole("region", { name: "Context compaction" }));
     expect(sessions.getByRole("switch", { name: "Auto-compact idle sessions" })).toHaveAttribute(
       "aria-checked", String(minutes > 0),
     );
@@ -63,7 +63,7 @@ describe("Idle compaction settings", () => {
     await waitFor(() => expect(input()).toBeEnabled());
     expect(screen.getAllByText("Saved. Restart to apply changes.").length).toBeGreaterThan(0);
     cleanup();
-    renderSettingsView({ initialSection: "memory", initialSettings: persisted() });
+    renderSettingsView({ initialSection: "context", initialSettings: persisted() });
     expect(input()).toHaveValue("721");
   });
 
@@ -76,7 +76,7 @@ describe("Idle compaction settings", () => {
     await user.tab();
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
     expect(requestMutationMock).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("heading", { name: "Memory" }));
+    await user.click(screen.getByRole("heading", { name: "Context compaction" }));
     await waitFor(() => expectSaved(37));
   });
 

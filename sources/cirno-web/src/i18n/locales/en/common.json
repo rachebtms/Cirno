@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "Overview",
       "appearance": "Appearance",
-      "notifications": "Notifications",
+      "notifications": "Browser notifications",
       "models": "Models",
       "providers": "Providers",
       "voice": "Voice",
-      "browser": "Web",
-      "channels": "Channels",
+      "browser": "Web search",
+      "channels": "Channel setup",
       "cliApps": "CLI apps",
       "mcp": "MCP",
-      "runtime": "System",
-      "advanced": "Advanced",
-      "apps": "Tools",
+      "runtime": "Server & heartbeat",
+      "advanced": "Permissions",
+      "apps": "Tools & CLI Apps",
       "automations": "Automations",
       "skills": "Skills",
-      "memory": "Memory",
+      "memory": "Memory library",
       "ssh": "SSH",
       "nodes": "Nodes",
-      "personality": "Personality"
+      "personality": "Personality",
+      "reading": "Text & reading",
+      "activity": "Execution display",
+      "context": "Context compaction",
+      "dream": "Dream consolidation",
+      "memory-search": "Memory retrieval",
+      "execution": "Goals & execution",
+      "shell": "Shell execution",
+      "network": "Network & retries",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "Interface",
@@ -686,7 +695,9 @@
       "logs": "Logs",
       "diagnostics": "Diagnostics",
       "contextWindow": "Context window",
-      "voiceLimits": "Limits"
+      "voiceLimits": "Limits",
+      "reasoningDetailMode": "Reasoning detail",
+      "toolDetailMode": "Tool activity detail"
     },
     "help": {
       "theme": "Switch between light and dark appearance.",
@@ -900,7 +911,8 @@
       "restartingEngine": "Restarting",
       "checking": "Checking",
       "running": "Running",
-      "needsSetup": "Needs setup"
+      "needsSetup": "Needs setup",
+      "detailed": "Detailed"
     },
     "status": {
       "loading": "Loading settings...",
@@ -1524,6 +1536,34 @@
       "instructions": "Instructions",
       "memory": "Long-term memory",
       "heartbeat": "Heartbeat instructions"
+    },
+    "categories": {
+      "interface": "Interface",
+      "agent": "Agent",
+      "connections": "Connections",
+      "system": "System"
+    },
+    "telegram": {
+      "account": "Personal account",
+      "configureBot": "Configure bot",
+      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
+      "unbound": "Not connected",
+      "boundHelp": "Only this Telegram account can access your personal Cirno.",
+      "pinHelp": "Generate a PIN here, then send it to your bot.",
+      "unbind": "Disconnect",
+      "generatePin": "Generate PIN",
+      "pin": "Pairing PIN",
+      "copyPin": "Copy binding command",
+      "refreshPin": "Refresh PIN",
+      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
+      "sendPin": "Send {{command}} to your Telegram bot.",
+      "delivery": "Messages and notifications",
+      "enabled": "Enable Telegram",
+      "cirno": "Cirno messages",
+      "actionLinks": "Action links",
+      "webuiUrl": "Web UI address (optional)",
+      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
+      "settingsLink": "Configure Telegram notifications"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "No matching messages.",
       "jumpTo": "Jump to message: {{label}}",
       "railAria": "My message navigation"
+    },
+    "clear": {
+      "title": "Clear Cirno conversation",
+      "description": "Stop the current run and clear this conversation’s messages and context. Saved memories and other conversations are kept.",
+      "confirm": "Clear conversation"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
       "context": "Context now: {{tokens}}{{capacity}}",
       "requests": "{{count}} calls this turn",
       "estimated": "Includes estimated usage"
-    }
+    },
+    "expandStep": "Expand step",
+    "collapseStep": "Collapse step"
   },
   "recovery": {
     "actionFailed": "Recovery action failed. Try again.",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "All",
       "operations": "Actions",
-      "conversations": "Conversations",
+      "conversations": "Reports",
       "system": "System"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "An action needs your attention.",
-      "conversations": "A conversation has an update.",
+      "conversations": "A task report is available.",
       "system": "Cirno has a system update."
     },
     "conversationUnavailable": "This conversation is no longer available."
+  },
+  "setup": {
+    "step": "Step {{current}} of {{total}}",
+    "registerTitle": "Welcome to Cirno",
+    "loginTitle": "Sign in to Cirno",
+    "registerDescription": "Create your account to get started.",
+    "loginDescription": "Sign in to continue to your instance.",
+    "username": "Username",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "passwordHint": "Use at least 10 characters, including an uppercase letter and a symbol.",
+    "createAccount": "Create account",
+    "signIn": "Sign in",
+    "instanceOwner": "This account manages your Cirno instance. Registration closes once it is created.",
+    "modelTitle": "Connect a model",
+    "modelDescription": "Add a provider and a model configuration. You can change these later in Settings.",
+    "configureLater": "Configure later",
+    "startChatting": "Start chatting",
+    "errors": {
+      "invalid_username": "Enter a username with 1–64 characters.",
+      "invalid_password": "Use at least 10 characters, including an uppercase letter and a symbol.",
+      "invalid_credentials": "Incorrect username or password.",
+      "registration_closed": "An account already exists. Refresh this page to sign in.",
+      "registration_required": "Create an account first. Refresh this page to continue.",
+      "too_many_attempts": "Too many attempts. Wait a minute and try again.",
+      "storage_failed": "Could not save account data. Check the server storage and try again.",
+      "password_mismatch": "Passwords do not match.",
+      "connection_failed": "Could not reach Cirno. Check your connection and try again.",
+      "request_failed": "The request failed. Please try again."
+    }
   }
 }

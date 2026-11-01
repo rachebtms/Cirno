@@ -217,13 +217,17 @@ class Nodes:
         )
 
         try:
-            pid = await self.execute(node_id, script, include_stderr=False)
-        except Exception as exc:
-            self.data.save("node_jobs", {**job, "state": "submission_unknown", "error": str(exc)})
+            pid = int((await self.execute(node_id, script, include_stderr=False)).strip())
+            if pid <= 0:
+                raise ValueError("SSH returned an invalid job PID")
+        except (Exception, asyncio.CancelledError) as exc:
+            self.data.save("node_jobs", {**job, "state": "submission_unknown", "error": str(exc) or type(exc).__name__})
+            if isinstance(exc, asyncio.CancelledError):
+                raise
             raise RuntimeError(
                 f"Job {job_id} submission unconfirmed; inspect it before submitting again: {exc}"
             ) from exc
-        return self.data.save("node_jobs", {**job, "pid": int(pid.strip()), "state": "running"})
+        return self.data.save("node_jobs", {**job, "pid": pid, "state": "running"})
 
     async def inspect_job(self, job_id: str, *, stop=False) -> dict:
         job = self.data.get("node_jobs", job_id)

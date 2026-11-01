@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, CircleDashed } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { useLocalPreferences } from "@/hooks/useLocalPreferences";
 import { cn } from "@/lib/utils";
 
 import { ActivityStep } from "./ActivityStep";
@@ -17,6 +18,7 @@ export function ReasoningRow({
   className?: string;
 }) {
   const { t } = useTranslation();
+  const { reasoningDetailMode } = useLocalPreferences();
   const fallback = streaming
     ? t("message.reasoningStreaming", { defaultValue: "Thinking…" })
     : t("message.reasoning", { defaultValue: "Thinking" });
@@ -34,6 +36,8 @@ export function ReasoningRow({
       tone={streaming ? "active" : "success"}
       label={label}
       tooltipContent={preview}
+      detailsText={text}
+      defaultExpanded={reasoningDetailMode === "detailed"}
       labelClassName="italic text-muted-foreground/78"
       contentClassName="overflow-hidden"
       className={className}

@@ -14,14 +14,6 @@
         "label": "허용 사용자",
         "placeholder": "* 또는 Telegram 사용자 ID"
       },
-      "groupPolicy": {
-        "label": "그룹 규칙",
-        "choices": {
-          "mention": "멘션만",
-          "open": "모든 메시지",
-          "allowlist": "허용 목록"
-        }
-      },
       "mode": {
         "label": "연결 모드",
         "choices": {

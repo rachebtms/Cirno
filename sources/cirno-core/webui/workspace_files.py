@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import heapq
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from cirno.webui.file_preview import (
 )
 
 MAX_DIRECTORY_ENTRIES = 500
+_EDIT_LOCK = threading.Lock()
 
 
 def _resolve(path: str, scope: WorkspaceScope, *, strict: bool = True) -> Path:
@@ -56,14 +58,17 @@ def read_workspace_file(path: str, *, scope: WorkspaceScope) -> dict[str, Any]:
 def save_workspace_file(path: str, content: str, revision: str, *, scope: WorkspaceScope) -> dict[str, Any]:
     if len(content.encode("utf-8")) > MAX_FILE_PREVIEW_BYTES:
         raise WebUIFilePreviewError(413, "Text files larger than 384 KiB cannot be edited")
-    current = read_workspace_file(path, scope=scope)
-    if not current["editable"]:
-        raise WebUIFilePreviewError(415, "This file is available for preview only")
-    if current["revision"] != revision:
-        raise WebUIFilePreviewError(409, "The file changed. Reload it before saving your edits.")
-    resolved = _resolve(path, scope)
-    write_text_atomic(resolved, content)
-    return read_workspace_file(str(resolved), scope=scope)
+    # HTTP file operations run in worker threads. Serialize compare-and-save so
+    # two browser edits with the same revision cannot both overwrite the file.
+    with _EDIT_LOCK:
+        current = read_workspace_file(path, scope=scope)
+        if not current["editable"]:
+            raise WebUIFilePreviewError(415, "This file is available for preview only")
+        if current["revision"] != revision:
+            raise WebUIFilePreviewError(409, "The file changed. Reload it before saving your edits.")
+        resolved = _resolve(path, scope)
+        write_text_atomic(resolved, content)
+        return read_workspace_file(str(resolved), scope=scope)
 
 
 def create_workspace_entry(path: str, kind: str, *, scope: WorkspaceScope) -> dict[str, str]:

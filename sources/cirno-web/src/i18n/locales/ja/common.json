@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "概要",
       "appearance": "外観",
-      "notifications": "通知",
+      "notifications": "ブラウザー通知",
       "models": "モデル",
       "providers": "プロバイダー",
       "voice": "音声",
-      "browser": "ウェブ",
-      "channels": "Channels",
-      "runtime": "システム",
-      "advanced": "詳細設定",
-      "memory": "メモリ",
+      "browser": "ウェブ検索",
+      "channels": "チャネル設定",
+      "runtime": "サーバーとハートビート",
+      "advanced": "権限と安全性",
+      "memory": "記憶ライブラリ",
       "cliApps": "CLI アプリ",
       "mcp": "MCP",
-      "apps": "ツール",
+      "apps": "ツールと CLI Apps",
       "automations": "自動タスク",
       "skills": "Skills",
       "ssh": "SSH",
       "personality": "パーソナリティ",
-      "nodes": "ノード"
+      "nodes": "ノード",
+      "reading": "文字と閲覧",
+      "activity": "実行過程の表示",
+      "context": "コンテキスト圧縮",
+      "dream": "Dream 記憶統合",
+      "memory-search": "記憶検索",
+      "execution": "Goal と実行",
+      "shell": "Shell 実行",
+      "network": "ネットワークと再試行",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "インターフェース",
@@ -628,7 +637,9 @@
       "logs": "ログ",
       "diagnostics": "診断",
       "contextWindow": "コンテキストウィンドウ",
-      "voiceLimits": "制限"
+      "voiceLimits": "制限",
+      "reasoningDetailMode": "思考過程の表示",
+      "toolDetailMode": "ツール実行の表示"
     },
     "help": {
       "theme": "ライトとダークの表示を切り替えます。",
@@ -689,7 +700,8 @@
       "restartingEngine": "再起動中",
       "checking": "確認中",
       "running": "実行中",
-      "needsSetup": "設定が必要"
+      "needsSetup": "設定が必要",
+      "detailed": "詳細"
     },
     "status": {
       "loading": "設定を読み込んでいます...",
@@ -1524,6 +1536,34 @@
       "instructions": "Instructions",
       "memory": "Long-term memory",
       "heartbeat": "Heartbeat instructions"
+    },
+    "categories": {
+      "interface": "画面",
+      "agent": "エージェント",
+      "connections": "接続",
+      "system": "システム"
+    },
+    "telegram": {
+      "account": "Personal account",
+      "configureBot": "Configure bot",
+      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
+      "unbound": "Not connected",
+      "boundHelp": "Only this Telegram account can access your personal Cirno.",
+      "pinHelp": "Generate a PIN here, then send it to your bot.",
+      "unbind": "Disconnect",
+      "generatePin": "Generate PIN",
+      "pin": "Pairing PIN",
+      "copyPin": "Copy binding command",
+      "refreshPin": "Refresh PIN",
+      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
+      "sendPin": "Send {{command}} to your Telegram bot.",
+      "delivery": "Messages and notifications",
+      "enabled": "Enable Telegram",
+      "cirno": "Cirno messages",
+      "actionLinks": "Action links",
+      "webuiUrl": "Web UI address (optional)",
+      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
+      "settingsLink": "Configure Telegram notifications"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "一致するメッセージはありません。",
       "jumpTo": "メッセージへ移動：{{label}}",
       "railAria": "自分のメッセージのナビゲーション"
+    },
+    "clear": {
+      "title": "Cirno の会話を消去",
+      "description": "現在の実行を停止し、この会話のメッセージとコンテキストを消去します。保存済みの記憶と他の会話は保持されます。",
+      "confirm": "会話を消去"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
     "cliRunRan": "使用済み",
     "cliRunFailed": "失敗",
     "automationSourceFallback": "自動化",
-    "automationTriggered": "自動実行"
+    "automationTriggered": "自動実行",
+    "expandStep": "詳細を展開",
+    "collapseStep": "詳細を折りたたむ"
   },
   "recovery": {
     "actionFailed": "復元操作に失敗しました。もう一度お試しください。",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "すべて",
       "operations": "要対応",
-      "conversations": "会話",
+      "conversations": "タスク報告",
       "system": "システム"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "対応が必要な操作があります。",
-      "conversations": "会話に新しい情報があります。",
+      "conversations": "タスクの報告があります。",
       "system": "Cirno のシステム情報が更新されました。"
     },
     "conversationUnavailable": "この会話は削除またはリセットされています。"
+  },
+  "setup": {
+    "step": "ステップ {{current}} / {{total}}",
+    "registerTitle": "Cirno へようこそ",
+    "loginTitle": "Cirno にログイン",
+    "registerDescription": "アカウントを作成して使い始めましょう。",
+    "loginDescription": "ログインして続行してください。",
+    "username": "ユーザー名",
+    "password": "パスワード",
+    "confirmPassword": "パスワードの確認",
+    "passwordHint": "10 文字以上で、大文字の英字と記号を含めてください。",
+    "createAccount": "アカウントを作成",
+    "signIn": "ログイン",
+    "instanceOwner": "このアカウントで Cirno を管理します。作成後は新規登録できません。",
+    "modelTitle": "モデルに接続",
+    "modelDescription": "プロバイダーとモデル設定を追加してください。後から設定で変更できます。",
+    "configureLater": "後で設定",
+    "startChatting": "使い始める",
+    "errors": {
+      "invalid_username": "ユーザー名は 1〜64 文字で入力してください。",
+      "invalid_password": "10 文字以上で、大文字の英字と記号を含めてください。",
+      "invalid_credentials": "ユーザー名またはパスワードが違います。",
+      "registration_closed": "アカウントは作成済みです。再読み込みしてログインしてください。",
+      "registration_required": "先にアカウントを作成してください。ページを再読み込みしてください。",
+      "too_many_attempts": "試行回数が多すぎます。1 分後に再試行してください。",
+      "storage_failed": "アカウントを保存できません。サーバーのストレージを確認してください。",
+      "password_mismatch": "パスワードが一致しません。",
+      "connection_failed": "Cirno に接続できません。ネットワークを確認してください。",
+      "request_failed": "リクエストに失敗しました。再試行してください。"
+    }
   }
 }

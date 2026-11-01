@@ -55,12 +55,10 @@ if TYPE_CHECKING:
 
 def _default_webui_dist() -> Path | None:
     """Return the absolute path to the bundled webui dist directory if it exists."""
-    try:
-        import cirno.web as web_pkg  # type: ignore[import-not-found]
-    except ImportError:
-        return None
-    candidate = Path(web_pkg.__file__).resolve().parent / "dist"
-    return candidate if candidate.is_dir() else None
+    from cirno.webui.build import default_webui_dist_dir
+
+    candidate = default_webui_dist_dir()
+    return candidate if (candidate / "index.html").is_file() else None
 
 
 # Upper bounds for local equal-jitter send backoff (1s, 2s, then 4s).
@@ -776,7 +774,7 @@ class ChannelManager:
     def _record_scheduled(self, msg: OutboundMessage) -> None:
         if msg.delivery is not None:
             with self.bus.admission.activity():
-                self._outbox.record(msg)
+                self._outbox.record(msg, deduplicate=bool(msg.metadata.get("_inbox_notice")))
 
     async def _record_notification(self, msg: OutboundMessage) -> None:
         notice = self._notification_inbox.prepare(msg)
@@ -796,8 +794,9 @@ class ChannelManager:
                 elif msg.channel == "websocket":
                     return
             await asyncio.to_thread(self._notification_inbox.record, **notice)
-        except (OSError, ValueError, sqlite3.Error):
-            logger.exception("Could not record notification; channel delivery continues")
+            await self._queue_telegram_notifications()
+        except (OSError, ValueError, sqlite3.Error, RuntimeError):
+            logger.exception("Could not persist or forward Inbox notification; channel delivery continues")
 
     async def _record_inbox_answer(self, event) -> None:
         if event.context.channel != "websocket" or event.context.metadata.get("_session_message"):
@@ -914,6 +913,25 @@ class ChannelManager:
         else:
             self._outbox.finish(msg, "sent")
 
+    async def _queue_telegram_notifications(self) -> None:
+        if "telegram" not in self.channels:
+            return
+        from cirno.channels.telegram.binding import TelegramBinding
+        from cirno.channels.telegram.notifications import notification_message
+        state = await asyncio.to_thread(TelegramBinding(self._config_path.parent).status)
+        if not state["bound"]:
+            return
+        for notice in await asyncio.to_thread(self._notification_inbox.telegram_pending, state["bound_at"]):
+            should_send = (state["enabled"] and notice["category"] in state["notifications"]
+                and notice["kind"] != "pairing"
+                and (notice["created_at"] >= state["bound_at"] or notice["status"] == "pending")
+                and (notice["category"] != "operations" or notice["status"] == "pending"))
+            if should_send:
+                # Record in the existing durable outbox before acknowledging the
+                # Inbox queue. A restart cannot lose an admitted notification.
+                await self.bus.publish_outbound(notification_message(notice, state))
+            await asyncio.to_thread(self._notification_inbox.telegram_queued, notice["id"], notice["revision"])
+
     async def _recover_scheduled(self) -> None:
         with self.bus.admission.activity():
             for msg in self._outbox.ready():
@@ -923,6 +941,9 @@ class ChannelManager:
                 else:
                     await self._record_notification(msg)
                     await self._queue_outbound(channel, msg)
+            # Recover accepted messages first: a full queue must be able to
+            # drain before admitting more Inbox notifications.
+            await self._queue_telegram_notifications()
 
     async def _dispatch_outbound(self) -> None:
         try:

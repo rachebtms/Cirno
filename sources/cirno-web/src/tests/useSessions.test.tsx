@@ -64,6 +64,12 @@ function wrap(
 }
 
 describe("useSessions", () => {
+  it("preserves the server's session-list failure reason", async () => {
+    vi.mocked(api.listSessions).mockRejectedValueOnce(new api.ApiError(500, "Session database is locked"));
+    const { result } = renderHook(() => useSessions(), { wrapper: wrap(fakeClient()) });
+    await waitFor(() => expect(result.current.error).toBe("Session database is locked"));
+  });
+
   it("creates a project conversation with its assignment in the same request", async () => {
     vi.mocked(api.listSessions).mockResolvedValue([]);
     const client = fakeClient();

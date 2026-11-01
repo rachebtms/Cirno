@@ -28,8 +28,10 @@ def test_first_boot_generates_valid_container_config(tmp_path):
     ws = WebSocketConfig.model_validate(config.channels.model_dump()["websocket"])
     assert config.gateway.host == ws.host == "0.0.0.0"
     assert ws.enabled and ws.websocket_requires_token
-    assert len(ws.token_issue_secret) == 32
-    assert ws.token_issue_secret in result.stdout
+    assert ws.browser_setup
+    assert not ws.token_issue_secret
+    assert "complete setup in your browser" in result.stdout
+    assert "password:" not in result.stdout
 
 
 @pytest.mark.parametrize("secret", ['review&secret', 'review|secret', 'review"secret', r'review\secret'])
@@ -40,6 +42,8 @@ def test_custom_secrets_survive_json_serialization(tmp_path, secret):
     config = resolve_config_env_vars(load_config(path))
     ws = WebSocketConfig.model_validate(config.channels.model_dump()["websocket"])
     assert ws.token_issue_secret == secret
+    assert not ws.browser_setup
+    assert secret not in result.stdout
 
 
 def test_restart_preserves_user_settings_and_credentials(tmp_path):

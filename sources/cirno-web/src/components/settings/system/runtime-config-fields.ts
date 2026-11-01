@@ -9,23 +9,23 @@ export interface RuntimeConfigField {
   max?: number;
 }
 
-export type RuntimeConfigPage = "memory" | "runtime" | "advanced" | "browser" | "network" | "tools";
+export type RuntimeConfigPage = "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
 
 export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabledBy?: string }[] = [
   { id: "identity", page: "runtime" },
   { id: "heartbeat", page: "runtime" },
-  { id: "requests", page: "runtime" },
+  { id: "requests", page: "network" },
   { id: "memory", page: "memory" },
   { id: "chat", page: "advanced" },
-  { id: "execution", page: "advanced" },
+  { id: "execution", page: "execution" },
   { id: "sessions", page: "runtime" },
   { id: "tools", page: "tools" },
   { id: "web", page: "browser" },
-  { id: "shell", page: "advanced", enabledBy: "tools.exec.enable" },
-  { id: "network", page: "network" },
-  { id: "proxy", page: "advanced" },
+  { id: "shell", page: "shell", enabledBy: "tools.exec.enable" },
+  { id: "network", page: "web-network" },
+  { id: "proxy", page: "network" },
   { id: "safety", page: "advanced" },
-  { id: "cli", page: "advanced", enabledBy: "tools.cli_apps.enable" },
+  { id: "cli", page: "tools", enabledBy: "tools.cli_apps.enable" },
   { id: "gateway", page: "advanced" },
 ];
 

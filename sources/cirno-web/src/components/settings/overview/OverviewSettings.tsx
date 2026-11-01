@@ -119,13 +119,14 @@ export function AboutSettings({ settings }: { settings: SettingsPayload; onReque
     />;
 }
 
-export function AppearanceSettings({ themePreference, onChangeTheme, localPrefs, onChangeLocalPrefs }: {
+export function AppearanceSettings({ themePreference, onChangeTheme, localPrefs, onChangeLocalPrefs, section }: {
+  section?: "all" | "appearance" | "reading" | "activity";
   themePreference: ThemePreference;
   onChangeTheme: (value: ThemePreference) => void;
   localPrefs: LocalPreferences;
   onChangeLocalPrefs: Dispatch<SetStateAction<LocalPreferences>>;
 }) {
-  return <AppearanceSettingsView themePreference={themePreference} onChangeTheme={onChangeTheme}
+  return <AppearanceSettingsView section={section} themePreference={themePreference} onChangeTheme={onChangeTheme}
     localPrefs={localPrefs} onChangeLocalPrefs={onChangeLocalPrefs} />;
 }
 

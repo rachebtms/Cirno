@@ -565,6 +565,8 @@ export interface SidebarStatePayload {
 }
 
 export interface BootstrapResponse {
+  browser_auth?: boolean;
+  onboarding_required?: boolean;
   terminal?: {
     webui?: { capabilities?: string[] };
   };

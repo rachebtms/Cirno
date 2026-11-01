@@ -532,7 +532,10 @@ export function useCirnoStream(
     if (transcriptRef.current === pending.owner) publishHistory();
   }, [publishHistory]);
   const latestReadOwnerRef = useRef<ThreadTranscript>();
-  const detailRequestsRef = useRef(new Map<string, Promise<{ ref: string; events: ThreadProjectionEvent[] } | null>>());
+  const detailRequestsRef = useRef(new Map<string, {
+    owner: ThreadTranscript;
+    promise: Promise<{ ref: string; events: ThreadProjectionEvent[] } | null>;
+  }>());
 
   useEffect(() => {
     if (!historyKey) return;
@@ -619,15 +622,17 @@ export function useCirnoStream(
     const details = await Promise.all(refs.map((ref) => {
       const id = `${historyKey}:${ref}`;
       const existing = detailRequestsRef.current.get(id);
-      if (existing) return existing;
+      if (existing?.owner === owner) return existing.promise;
       const request = fetchWebuiThreadTraceDetail(getToken(), historyKey, ref).then((detail) => {
         if (transcriptRef.current !== owner) return null;
         flushPendingStreamEvents();
         owner.expandDetail(ref, detail.events);
         setMessages(owner.messages);
         return { ref, events: detail.events };
-      }).finally(() => detailRequestsRef.current.delete(id));
-      detailRequestsRef.current.set(id, request);
+      }).finally(() => {
+        if (detailRequestsRef.current.get(id)?.promise === request) detailRequestsRef.current.delete(id);
+      });
+      detailRequestsRef.current.set(id, { owner, promise: request });
       return request;
     }));
     return details.filter((detail) => detail !== null);

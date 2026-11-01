@@ -8,13 +8,16 @@ from websockets.http11 import Request
 
 from cirno.channels.websocket.runtime import WebSocketConfig
 from cirno.webui.client_contract import gateway_identity
+from cirno.webui.auth.routes import BrowserAuth
+from cirno.webui.auth.store import AccountStore
 from cirno.webui.gateway_tokens import GatewayTokenStore
 from cirno.webui.ws_http import GatewayHTTPHandler
 
 
-def test_terminal_probe_is_private_stable_and_does_not_issue_credentials():
+def test_terminal_probe_is_private_stable_and_does_not_issue_credentials(tmp_path):
     handler = object.__new__(GatewayHTTPHandler)
     handler.config = WebSocketConfig(token_issue_secret="fixture-secret")
+    handler.auth = BrowserAuth(AccountStore(tmp_path / "webui-auth.sqlite3"), enabled=False)
     handler.tokens = GatewayTokenStore(max_tokens=0)
     connection = SimpleNamespace(remote_address=("127.0.0.1", 10000))
     request = Request("/webui/terminal", Headers({"Host": "127.0.0.1:8765"}))

@@ -4,6 +4,8 @@ import os
 from contextlib import nullcontext
 from pathlib import Path
 
+import pytest
+
 from cirno.webui.build import (
     ensure_webui_bundle,
     inspect_webui_bundle,
@@ -12,6 +14,26 @@ from cirno.webui.build import (
 
 _MTIME_BASE_NS = 1_700_000_000_000_000_000
 _MTIME_STEP_NS = 5_000_000_000
+
+
+@pytest.mark.parametrize("checkout", [True, False])
+def test_channel_serves_the_build_resolver_bundle(tmp_path, monkeypatch, checkout):
+    from cirno.channels.manager import _default_webui_dist
+
+    core = tmp_path / "sources" / "cirno-core"
+    core.mkdir(parents=True)
+    if checkout:
+        frontend = tmp_path / "sources" / "cirno-web"
+        frontend.mkdir()
+        (frontend / "package.json").write_text("{}")
+        bundle = tmp_path / "build" / "webui"
+    else:
+        bundle = core / "web" / "dist"
+    monkeypatch.setattr("cirno.webui.build.default_project_root", lambda: core)
+    assert _default_webui_dist() is None
+    bundle.mkdir(parents=True)
+    (bundle / "index.html").write_text("<html>Cirno setup</html>")
+    assert _default_webui_dist() == bundle
 
 
 def _touch(path: Path, *, mtime_ns: int) -> None:

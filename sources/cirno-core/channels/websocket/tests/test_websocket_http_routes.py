@@ -2047,6 +2047,24 @@ async def test_webui_sidebar_state_routes_are_config_dir_scoped(
         assert body["pinned_keys"] == ["websocket:sidebar"]
         assert body["session_order"] == ["websocket:old", "websocket:sidebar"]
         assert body["title_overrides"] == {"websocket:sidebar": "Pinned work"}
+        metadata = (await sm.state.read_metadata("websocket:sidebar"))["metadata"]
+        assert metadata["title"] == "Pinned work"
+        assert metadata["title_user_edited"] is True
+        from cirno.agent.tools.context import RequestContext, request_context
+        from cirno.agent.tools.coordination import SetSessionTitleTool
+        with request_context(RequestContext(channel="websocket", chat_id="sidebar", session_key="websocket:sidebar")):
+            result = await SetSessionTitleTool(sm, bus).execute(title="Model title")
+        assert not getattr(result, "is_error", False)
+        assert (await sm.state.read_metadata("websocket:sidebar"))["metadata"]["title"] == "Pinned work"
+
+        # A stale sidebar snapshot must not recreate deleted conversations or rename Cirno.
+        await sm.state.get("websocket:global")
+        payload["title_overrides"].update({"websocket:missing": "Deleted", "websocket:global": "Wrong name"})
+        again = await _webui_mutate(channel, "sidebar.update", {"state": payload})
+        assert again.status_code == 200
+        assert "websocket:global" not in again.json()["title_overrides"]
+        assert await sm.state.read_header("websocket:missing") is None
+        assert "title" not in (await sm.state.read_metadata("websocket:global"))["metadata"]
         assert body["view"]["density"] == "compact"
 
         state_path = tmp_path / "webui" / "sidebar-state.json"

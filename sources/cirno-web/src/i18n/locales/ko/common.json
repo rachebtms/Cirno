@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "개요",
       "appearance": "외관",
-      "notifications": "알림",
+      "notifications": "브라우저 알림",
       "models": "모델",
       "providers": "제공업체",
       "voice": "음성",
-      "browser": "웹",
-      "channels": "Channels",
-      "runtime": "시스템",
-      "advanced": "고급",
-      "memory": "기억",
+      "browser": "웹 검색",
+      "channels": "채널 설정",
+      "runtime": "서버 및 하트비트",
+      "advanced": "권한 및 보안",
+      "memory": "메모리 라이브러리",
       "cliApps": "CLI 앱",
       "mcp": "MCP",
-      "apps": "도구",
+      "apps": "도구 및 CLI Apps",
       "automations": "자동화",
       "skills": "Skills",
       "ssh": "SSH",
       "personality": "개성",
-      "nodes": "노드"
+      "nodes": "노드",
+      "reading": "텍스트 및 읽기",
+      "activity": "실행 과정 표시",
+      "context": "컨텍스트 압축",
+      "dream": "Dream 메모리 통합",
+      "memory-search": "메모리 검색",
+      "execution": "목표 및 실행",
+      "shell": "Shell 실행",
+      "network": "네트워크 및 재시도",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "인터페이스",
@@ -628,7 +637,9 @@
       "logs": "로그",
       "diagnostics": "진단",
       "contextWindow": "컨텍스트 창",
-      "voiceLimits": "제한"
+      "voiceLimits": "제한",
+      "reasoningDetailMode": "생각 과정 표시",
+      "toolDetailMode": "도구 실행 표시"
     },
     "help": {
       "theme": "밝은 화면과 어두운 화면을 전환하세요.",
@@ -689,7 +700,8 @@
       "restartingEngine": "다시 시작 중",
       "checking": "확인 중",
       "running": "실행 중",
-      "needsSetup": "설정 필요"
+      "needsSetup": "설정 필요",
+      "detailed": "자세히"
     },
     "status": {
       "loading": "설정을 불러오는 중...",
@@ -1524,6 +1536,34 @@
       "instructions": "Instructions",
       "memory": "Long-term memory",
       "heartbeat": "Heartbeat instructions"
+    },
+    "categories": {
+      "interface": "인터페이스",
+      "agent": "에이전트",
+      "connections": "연결",
+      "system": "시스템"
+    },
+    "telegram": {
+      "account": "Personal account",
+      "configureBot": "Configure bot",
+      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
+      "unbound": "Not connected",
+      "boundHelp": "Only this Telegram account can access your personal Cirno.",
+      "pinHelp": "Generate a PIN here, then send it to your bot.",
+      "unbind": "Disconnect",
+      "generatePin": "Generate PIN",
+      "pin": "Pairing PIN",
+      "copyPin": "Copy binding command",
+      "refreshPin": "Refresh PIN",
+      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
+      "sendPin": "Send {{command}} to your Telegram bot.",
+      "delivery": "Messages and notifications",
+      "enabled": "Enable Telegram",
+      "cirno": "Cirno messages",
+      "actionLinks": "Action links",
+      "webuiUrl": "Web UI address (optional)",
+      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
+      "settingsLink": "Configure Telegram notifications"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "일치하는 메시지가 없습니다.",
       "jumpTo": "메시지로 이동: {{label}}",
       "railAria": "내 메시지 탐색"
+    },
+    "clear": {
+      "title": "Cirno 대화 지우기",
+      "description": "현재 실행을 중지하고 이 대화의 메시지와 컨텍스트를 지웁니다. 저장된 기억과 다른 대화는 유지됩니다.",
+      "confirm": "대화 지우기"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
     "cliRunRan": "사용함",
     "cliRunFailed": "실패",
     "automationSourceFallback": "자동화",
-    "automationTriggered": "자동 실행됨"
+    "automationTriggered": "자동 실행됨",
+    "expandStep": "단계 펼치기",
+    "collapseStep": "단계 접기"
   },
   "recovery": {
     "actionFailed": "복구 작업에 실패했습니다. 다시 시도하세요.",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "전체",
       "operations": "처리할 작업",
-      "conversations": "대화 정보",
+      "conversations": "작업 보고",
       "system": "시스템 정보"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "처리해야 할 작업이 있습니다.",
-      "conversations": "대화에 새로운 정보가 있습니다.",
+      "conversations": "새 작업 보고가 있습니다.",
       "system": "Cirno 시스템 정보가 있습니다."
     },
     "conversationUnavailable": "이 대화는 삭제되었거나 초기화되었습니다."
+  },
+  "setup": {
+    "step": "{{total}}단계 중 {{current}}단계",
+    "registerTitle": "Cirno에 오신 것을 환영합니다",
+    "loginTitle": "Cirno 로그인",
+    "registerDescription": "계정을 만들어 시작하세요.",
+    "loginDescription": "인스턴스에 로그인하여 계속하세요.",
+    "username": "사용자 이름",
+    "password": "비밀번호",
+    "confirmPassword": "비밀번호 확인",
+    "passwordHint": "10자 이상이며 영문 대문자와 기호를 포함해야 합니다.",
+    "createAccount": "계정 만들기",
+    "signIn": "로그인",
+    "instanceOwner": "이 계정으로 Cirno 인스턴스를 관리합니다. 계정 생성 후 가입이 닫힙니다.",
+    "modelTitle": "모델 연결",
+    "modelDescription": "제공업체와 모델 구성을 추가하세요. 나중에 설정에서 변경할 수 있습니다.",
+    "configureLater": "나중에 설정",
+    "startChatting": "시작하기",
+    "errors": {
+      "invalid_username": "사용자 이름은 1~64자로 입력하세요.",
+      "invalid_password": "10자 이상이며 영문 대문자와 기호를 포함해야 합니다.",
+      "invalid_credentials": "사용자 이름 또는 비밀번호가 올바르지 않습니다.",
+      "registration_closed": "이미 계정이 있습니다. 새로고침 후 로그인하세요.",
+      "registration_required": "먼저 계정을 만드세요. 새로고침하여 계속하세요.",
+      "too_many_attempts": "시도 횟수가 너무 많습니다. 1분 후 다시 시도하세요.",
+      "storage_failed": "계정을 저장할 수 없습니다. 서버 저장소를 확인하세요.",
+      "password_mismatch": "비밀번호가 일치하지 않습니다.",
+      "connection_failed": "Cirno에 연결할 수 없습니다. 네트워크를 확인하세요.",
+      "request_failed": "요청에 실패했습니다. 다시 시도하세요."
+    }
   }
 }

@@ -28,7 +28,7 @@ docker compose up -d --build
 docker compose logs cirno-gateway
 ```
 
-Open `http://localhost:8765`. On a new Home, the first-start password is printed in the logs. Configuration and durable state persist in the mounted `~/.cirno`. The Compose memory limit defaults to `400M`; optional embeddings are disabled.
+Open `http://localhost:8765`. On a new Home, register your instance owner in the browser, then configure a model. No generated password or setup code needs to be copied from logs. Configuration and durable state persist in the mounted `~/.cirno`. The Compose memory limit defaults to `400M`; optional embeddings are disabled.
 
 The [GitHub Actions workflow](.github/workflows/container.yml) is configured to verify, build and publish Linux AMD64/ARM64 images to `ghcr.io/rachebtms/cirno`. Publication requires committed code, a pushed trigger and a successful workflow. After an image is published, deployments can pull it instead of building locally. See [container deployment and publishing](documents/docker.md).
 

@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "总览",
       "appearance": "外观",
-      "notifications": "通知",
+      "notifications": "浏览器通知",
       "models": "模型",
       "providers": "提供商",
       "voice": "语音",
-      "browser": "网络",
-      "channels": "消息通道",
+      "browser": "网络搜索",
+      "channels": "通道配置",
       "cliApps": "CLI 应用",
       "mcp": "MCP",
-      "runtime": "系统",
-      "advanced": "高级",
-      "apps": "工具",
+      "runtime": "服务与心跳",
+      "advanced": "权限与安全",
+      "apps": "工具与 CLI Apps",
       "automations": "自动任务",
       "skills": "Skills",
-      "memory": "记忆",
+      "memory": "记忆库",
       "ssh": "SSH",
       "nodes": "Nodes",
-      "personality": "个性"
+      "personality": "个性",
+      "reading": "文字与阅读",
+      "activity": "执行过程显示",
+      "context": "上下文压缩",
+      "dream": "Dream 记忆整合",
+      "memory-search": "记忆检索",
+      "execution": "Goal 与执行",
+      "shell": "Shell 执行",
+      "network": "网络与重试",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "界面",
@@ -686,7 +695,9 @@
       "logs": "日志",
       "diagnostics": "诊断",
       "contextWindow": "上下文窗口",
-      "voiceLimits": "限制"
+      "voiceLimits": "限制",
+      "reasoningDetailMode": "思考过程详略",
+      "toolDetailMode": "工具调用详略"
     },
     "help": {
       "theme": "切换浅色或深色外观",
@@ -900,7 +911,8 @@
       "restartingEngine": "正在重启",
       "checking": "检查中",
       "running": "运行中",
-      "needsSetup": "需要设置"
+      "needsSetup": "需要设置",
+      "detailed": "详细"
     },
     "status": {
       "loading": "正在加载设置...",
@@ -1524,6 +1536,34 @@
       "instructions": "工作指令",
       "memory": "长期记忆",
       "heartbeat": "心跳指令"
+    },
+    "categories": {
+      "interface": "界面",
+      "agent": "Agent",
+      "connections": "连接",
+      "system": "系统"
+    },
+    "telegram": {
+      "account": "个人账号",
+      "configureBot": "配置 Bot",
+      "help": "将你的 Telegram 私聊绑定到 Cirno，不支持群聊。请先在通道配置中填写 Bot Token。",
+      "unbound": "尚未绑定",
+      "boundHelp": "只有这个 Telegram 账号可以访问你的个人 Cirno。",
+      "pinHelp": "在此生成 PIN，然后发给你的 Bot 验证。",
+      "unbind": "解除绑定",
+      "generatePin": "生成 PIN",
+      "pin": "绑定 PIN",
+      "copyPin": "复制绑定命令",
+      "refreshPin": "刷新 PIN",
+      "expires": "{{seconds}} 秒后过期，到期自动刷新。",
+      "sendPin": "向 Telegram Bot 发送 {{command}}。",
+      "delivery": "消息与通知",
+      "enabled": "启用 Telegram",
+      "cirno": "Cirno 消息",
+      "actionLinks": "操作链接",
+      "webuiUrl": "Web UI 地址（可选）",
+      "urlHelp": "填写手机可以打开的地址。通知会附带按钮，打开收件箱中的对应事项。",
+      "settingsLink": "配置 Telegram 通知"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "没有匹配的消息。",
       "jumpTo": "跳转到消息：{{label}}",
       "railAria": "我的消息导航"
+    },
+    "clear": {
+      "title": "清空 Cirno 会话",
+      "description": "停止当前执行并清空本会话的消息与上下文。已保存的记忆和其他会话会保留。",
+      "confirm": "清空会话"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
       "context": "当前上下文：{{tokens}}{{capacity}}",
       "requests": "本轮 {{count}} 次模型调用",
       "estimated": "包含估算用量"
-    }
+    },
+    "expandStep": "展开详情",
+    "collapseStep": "收起详情"
   },
   "recovery": {
     "actionFailed": "恢复操作失败，请重试。",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "全部",
       "operations": "待处理操作",
-      "conversations": "会话信息",
+      "conversations": "任务报告",
       "system": "系统信息"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "有操作需要你处理。",
-      "conversations": "会话有新的重要信息。",
+      "conversations": "有新的任务报告。",
       "system": "Cirno 有新的系统信息。"
     },
     "conversationUnavailable": "该会话已不存在或已被重置。"
+  },
+  "setup": {
+    "step": "第 {{current}} 步，共 {{total}} 步",
+    "registerTitle": "欢迎使用 Cirno",
+    "loginTitle": "登录 Cirno",
+    "registerDescription": "创建账号，开始使用你的 Cirno。",
+    "loginDescription": "登录后继续使用你的 Cirno。",
+    "username": "用户名",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "passwordHint": "至少 10 位，包含大写字母和符号。",
+    "createAccount": "创建账号",
+    "signIn": "登录",
+    "instanceOwner": "此账号用于管理当前 Cirno 实例，创建后将关闭注册入口。",
+    "modelTitle": "连接模型",
+    "modelDescription": "添加模型提供商和模型配置，之后也可以在设置中修改。",
+    "configureLater": "稍后配置",
+    "startChatting": "开始使用",
+    "errors": {
+      "invalid_username": "用户名需要包含 1–64 个字符。",
+      "invalid_password": "至少 10 位，包含大写字母和符号。",
+      "invalid_credentials": "用户名或密码不正确。",
+      "registration_closed": "账号已经存在，请刷新页面后登录。",
+      "registration_required": "请先创建账号，刷新页面后继续。",
+      "too_many_attempts": "尝试次数过多，请等待一分钟后再试。",
+      "storage_failed": "无法保存账号数据，请检查服务端存储后重试。",
+      "password_mismatch": "两次输入的密码不一致。",
+      "connection_failed": "无法连接 Cirno，请检查网络后重试。",
+      "request_failed": "请求失败，请重试。"
+    }
   }
 }

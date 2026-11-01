@@ -2013,7 +2013,7 @@ def _patch_cli_command_runtime(
 
 
 @pytest.mark.parametrize("yes", [True, False])
-def test_webui_creates_config_and_enables_local_websocket_with_one_confirmation(
+def test_webui_creates_config_for_browser_setup_without_terminal_confirmation(
     monkeypatch,
     tmp_path: Path,
     yes: bool,
@@ -2023,7 +2023,7 @@ def test_webui_creates_config_and_enables_local_websocket_with_one_confirmation(
     seen: dict[str, object] = {}
     _patch_webui_provider_ready(monkeypatch)
     _patch_gateway_ports_free(monkeypatch)
-    monkeypatch.setattr(cli_webui_support, "_cli_can_prompt", lambda: True)
+    monkeypatch.setattr(cli_webui_support, "_cli_can_prompt", lambda: False)
     monkeypatch.setattr(
         "cirno.cli.webui.sync_workspace_templates",
         lambda path, **kwargs: seen.update(templates=path, templates_options=kwargs),
@@ -2046,11 +2046,11 @@ def test_webui_creates_config_and_enables_local_websocket_with_one_confirmation(
             *(["--yes"] if yes else []),
             "--no-open",
         ],
-        input="y\n" if not yes else None,
+        input="",
     )
 
     assert result.exit_code == 0, result.output
-    assert result.stdout.count("[Y/n]") == (0 if yes else 1)
+    assert "[Y/n]" not in result.stdout
     assert result.stdout.count("Config:") == 1
     data = json.loads(config_file.read_text(encoding="utf-8"))
     websocket = data["channels"]["websocket"]
@@ -2058,7 +2058,8 @@ def test_webui_creates_config_and_enables_local_websocket_with_one_confirmation(
     assert websocket["host"] == "127.0.0.1"
     assert websocket["port"] == 8899
     assert websocket["websocketRequiresToken"] is True
-    assert len(websocket["tokenIssueSecret"]) >= 32
+    assert websocket["browserSetup"] is True
+    assert not websocket["tokenIssueSecret"]
     assert data["agents"]["defaults"]["workspace"] == str(workspace)
     assert seen["templates"] == workspace
     assert seen["templates_options"] == {"silent": True}
@@ -2068,7 +2069,7 @@ def test_webui_creates_config_and_enables_local_websocket_with_one_confirmation(
     assert options.workspace == str(workspace.resolve(strict=False))
     compact_output = re.sub(r"\s+", " ", _strip_ansi(result.stdout))
     assert "WebUI ready" in compact_output
-    assert f"http://127.0.0.1:8899/#/?bootstrapSecret={websocket['tokenIssueSecret']}" in result.stdout.splitlines()
+    assert "http://127.0.0.1:8899" in result.stdout.splitlines()
     assert "Open in your browser:" in compact_output
     assert "Ctrl+C" in compact_output
     assert seen["lease_release_wait_for_stop"] is False
@@ -2231,8 +2232,8 @@ def test_webui_dev_starts_vite_sidecar_and_gateway(monkeypatch, tmp_path: Path) 
     assert isinstance(dev_kwargs, dict)
     assert dev_kwargs["target_url"] == "http://127.0.0.1:8899"
     saved = json.loads(config_file.read_text(encoding="utf-8"))
-    secret = saved["channels"]["websocket"]["tokenIssueSecret"]
-    browser_url = f"http://127.0.0.1:5173/#/?bootstrapSecret={secret}"
+    assert saved["channels"]["websocket"]["browserSetup"] is True
+    browser_url = "http://127.0.0.1:5173"
     assert seen["start_options"].port == 18888
     assert seen["attached_while_dev_running"] is True
     assert seen["attach_kwargs"]["poll_hook"] == seen["dev_server"].ensure_running
@@ -2362,7 +2363,8 @@ def test_webui_resumes_first_run_without_provider_setup(
     assert "Quick Start" not in resumed.stdout
     assert json.loads(config_file.read_text(encoding="utf-8")) == saved_config
     assert saved_config["channels"]["websocket"]["host"] == "127.0.0.1"
-    assert saved_config["channels"]["websocket"]["tokenIssueSecret"]
+    assert saved_config["channels"]["websocket"]["browserSetup"] is True
+    assert not saved_config["channels"]["websocket"]["tokenIssueSecret"]
 
 
 def test_webui_missing_runtime_env_fails_before_starting_gateway(
@@ -2618,7 +2620,7 @@ def test_webui_foreground_attaches_to_existing_managed_gateway(monkeypatch, tmp_
     assert isinstance(opened_url, str)
     parsed = urlparse(opened_url)
     assert f"{parsed.scheme}://{parsed.netloc}" == "http://127.0.0.1:8765"
-    assert parsed.fragment.startswith("/?bootstrapSecret=")
+    assert not parsed.fragment
     assert seen["open_kwargs"] == {"wait": False}
     assert seen["lease_release_wait_for_stop"] is False
 

@@ -30,6 +30,7 @@ from cirno.session.goal_state import (
     parse_goal_state,
     sustained_goal_active,
 )
+from cirno.session.sqlite_store import SessionConflictError
 from cirno.session.turn_continuation import reset_goal_continuation_rounds
 from cirno.utils.cancellation import shield_and_drain
 from cirno.utils.prompt_templates import render_template
@@ -71,7 +72,13 @@ class _GoalToolsMixin:
         key = request_ctx.session_key
         if not key:
             return None
-        return await self._sessions.state.get_header(key)
+        if request_ctx.session_generation is None:
+            # Direct SDK/tool callers may create a conversation on first use.
+            return await self._sessions.state.get_header(key)
+        session = await self._sessions.state.read_header(key)
+        if session is None or session.generation != request_ctx.session_generation:
+            return None
+        return session
 
     def _goal_mutation_allowed(self) -> bool:
         return current_request_context() is not None and goal_mutation_allowed()
@@ -85,10 +92,13 @@ class _GoalToolsMixin:
         revoke_permission: bool = False,
     ) -> None:
         saved = False
+        expected_goal = deepcopy(goal_state_raw(sess.metadata))
 
         async def save_and_publish() -> None:
             nonlocal saved
             def change(metadata: dict[str, Any]) -> None:
+                if goal_state_raw(metadata) != expected_goal:
+                    raise SessionConflictError("The Goal changed during this operation; read its current state before retrying.")
                 if blob is None:
                     metadata.pop(GOAL_STATE_KEY, None)
                 else:
@@ -222,7 +232,7 @@ class CreateGoalTool(Tool, _GoalToolsMixin):
         sess = await self._session()
         if sess is None:
             return ToolResult.error(
-                "Error: create_goal requires an active chat session (missing routing context)."
+                "Error: create_goal requires an active chat session (missing routing context or deleted/replaced conversation)."
             )
         if not self._goal_mutation_allowed():
             return ToolResult.error(_CREATE_UNAVAILABLE_ERROR)

@@ -401,7 +401,7 @@ def _ensure_local_webui_channel(
 
     needs_enable = not model.enabled
     needs_port = port is not None and model.port != port
-    needs_secret = not model.token_issue_secret.strip() and not model.token.strip()
+    needs_secret = not model.browser_setup and not model.token_issue_secret.strip() and not model.token.strip()
     if not needs_enable and not needs_port and not needs_secret:
         return False
 
@@ -420,9 +420,7 @@ def _ensure_local_webui_channel(
         model.websocket_requires_token = True
         changed = True
     if needs_secret:
-        import secrets
-
-        model.token_issue_secret = secrets.token_urlsafe(32)
+        model.browser_setup = True
         changed = True
 
     setattr(config.channels, "websocket", model.model_dump(by_alias=True, exclude_none=True))

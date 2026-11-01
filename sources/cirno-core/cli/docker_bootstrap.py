@@ -1,7 +1,6 @@
 """Initialize a local Docker instance without replacing existing settings."""
 
 import os
-import secrets
 import sys
 from pathlib import Path
 
@@ -16,13 +15,13 @@ def initialize_config(path: Path) -> None:
     with FileLock(path.parent / ".docker-bootstrap.lock"):
         if path.exists():
             print(f"[entrypoint] existing {path} found — leaving it in place")
-            print(f"[entrypoint] WebUI password: {path} (channels.websocket.tokenIssueSecret)")
+            print("[entrypoint] Open the WebUI to sign in or complete setup")
             return
 
-        web_token = os.environ.get("CIRNO_WEB_TOKEN") or secrets.token_hex(16)
+        web_token = os.environ.get("CIRNO_WEB_TOKEN") or ""
         websocket = WebSocketConfig(
             enabled=True, host="0.0.0.0", token_issue_secret=web_token,
-            websocket_requires_token=True,
+            websocket_requires_token=True, browser_setup=not bool(web_token),
         )
         config = Config.model_validate({
             "gateway": {"host": "0.0.0.0"},
@@ -30,7 +29,7 @@ def initialize_config(path: Path) -> None:
         })
         save_config(config, path)
         print(f"[entrypoint] initialized {path}")
-        print(f"[entrypoint] WebUI: http://localhost:8765 — password: {web_token}")
+        print("[entrypoint] WebUI: http://localhost:8765 — complete setup in your browser")
 
 
 if __name__ == "__main__":

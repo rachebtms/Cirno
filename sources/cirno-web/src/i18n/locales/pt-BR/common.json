@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "Visão geral",
       "appearance": "Aparência",
-      "notifications": "Notificações",
+      "notifications": "Notificações do navegador",
       "models": "Modelos",
       "providers": "Provedores",
       "voice": "Voz",
-      "browser": "Web",
-      "channels": "Channels",
+      "browser": "Pesquisa web",
+      "channels": "Configurar canais",
       "cliApps": "Apps CLI",
       "mcp": "MCP",
-      "runtime": "Sistema",
-      "advanced": "Avançado",
-      "memory": "Memória",
-      "apps": "Ferramentas",
+      "runtime": "Servidor e heartbeat",
+      "advanced": "Permissões",
+      "memory": "Biblioteca de memória",
+      "apps": "Ferramentas e CLI Apps",
       "automations": "Automações",
       "skills": "Skills",
       "ssh": "SSH",
       "personality": "Personalidade",
-      "nodes": "Nós"
+      "nodes": "Nós",
+      "reading": "Texto e leitura",
+      "activity": "Exibição de execução",
+      "context": "Compactação do contexto",
+      "dream": "Consolidação Dream",
+      "memory-search": "Busca de memória",
+      "execution": "Objetivos e execução",
+      "shell": "Execução Shell",
+      "network": "Rede e tentativas",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "Interface do usuário",
@@ -686,7 +695,9 @@
       "logs": "Logs",
       "diagnostics": "Diagnóstico",
       "contextWindow": "Janela de contexto",
-      "voiceLimits": "Limites"
+      "voiceLimits": "Limites",
+      "reasoningDetailMode": "Detalhes do raciocínio",
+      "toolDetailMode": "Detalhes das ferramentas"
     },
     "help": {
       "theme": "Alterne entre aparência clara e escura.",
@@ -900,7 +911,8 @@
       "restartingEngine": "Reiniciando",
       "checking": "Verificando",
       "running": "Em execução",
-      "needsSetup": "Requer configuração"
+      "needsSetup": "Requer configuração",
+      "detailed": "Detalhado"
     },
     "status": {
       "loading": "Carregando configurações...",
@@ -1524,6 +1536,34 @@
       "instructions": "Instructions",
       "memory": "Long-term memory",
       "heartbeat": "Heartbeat instructions"
+    },
+    "categories": {
+      "interface": "Interface",
+      "agent": "Agente",
+      "connections": "Conexões",
+      "system": "Sistema"
+    },
+    "telegram": {
+      "account": "Personal account",
+      "configureBot": "Configure bot",
+      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
+      "unbound": "Not connected",
+      "boundHelp": "Only this Telegram account can access your personal Cirno.",
+      "pinHelp": "Generate a PIN here, then send it to your bot.",
+      "unbind": "Disconnect",
+      "generatePin": "Generate PIN",
+      "pin": "Pairing PIN",
+      "copyPin": "Copy binding command",
+      "refreshPin": "Refresh PIN",
+      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
+      "sendPin": "Send {{command}} to your Telegram bot.",
+      "delivery": "Messages and notifications",
+      "enabled": "Enable Telegram",
+      "cirno": "Cirno messages",
+      "actionLinks": "Action links",
+      "webuiUrl": "Web UI address (optional)",
+      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
+      "settingsLink": "Configure Telegram notifications"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "Nenhuma mensagem correspondente.",
       "jumpTo": "Ir à mensagem: {{label}}",
       "railAria": "Navegação das minhas mensagens"
+    },
+    "clear": {
+      "title": "Limpar conversa do Cirno",
+      "description": "Interrompe a execução e limpa as mensagens e o contexto desta conversa. As memórias salvas e as outras conversas são mantidas.",
+      "confirm": "Limpar conversa"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
       "context": "Contexto atual: {{tokens}}{{capacity}}",
       "requests": "{{count}} chamadas nesta rodada",
       "estimated": "Inclui uso estimado"
-    }
+    },
+    "expandStep": "Expandir etapa",
+    "collapseStep": "Recolher etapa"
   },
   "recovery": {
     "actionFailed": "A recuperação falhou. Tente novamente.",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "Todas",
       "operations": "Ações",
-      "conversations": "Conversas",
+      "conversations": "Relatórios",
       "system": "Sistema"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "Uma ação precisa da sua atenção.",
-      "conversations": "Uma conversa tem novidades.",
+      "conversations": "Um relatório de tarefa está disponível.",
       "system": "Cirno tem uma atualização do sistema."
     },
     "conversationUnavailable": "Esta conversa foi excluída ou redefinida."
+  },
+  "setup": {
+    "step": "Etapa {{current}} de {{total}}",
+    "registerTitle": "Boas-vindas ao Cirno",
+    "loginTitle": "Entrar no Cirno",
+    "registerDescription": "Crie sua conta para começar.",
+    "loginDescription": "Entre para acessar sua instância.",
+    "username": "Nome de usuário",
+    "password": "Senha",
+    "confirmPassword": "Confirmar senha",
+    "passwordHint": "Use pelo menos 10 caracteres, incluindo uma letra maiúscula e um símbolo.",
+    "createAccount": "Criar conta",
+    "signIn": "Entrar",
+    "instanceOwner": "Esta conta administra sua instância do Cirno. O cadastro é fechado após sua criação.",
+    "modelTitle": "Conectar um modelo",
+    "modelDescription": "Adicione um provedor e uma configuração de modelo. Você pode alterá-los nas configurações.",
+    "configureLater": "Configurar depois",
+    "startChatting": "Começar",
+    "errors": {
+      "invalid_username": "Digite um nome de usuário de 1 a 64 caracteres.",
+      "invalid_password": "Use pelo menos 10 caracteres, incluindo uma letra maiúscula e um símbolo.",
+      "invalid_credentials": "Usuário ou senha incorretos.",
+      "registration_closed": "Já existe uma conta. Atualize a página para entrar.",
+      "registration_required": "Crie uma conta primeiro. Atualize a página para continuar.",
+      "too_many_attempts": "Muitas tentativas. Aguarde um minuto e tente novamente.",
+      "storage_failed": "Não foi possível salvar a conta. Verifique o armazenamento do servidor.",
+      "password_mismatch": "As senhas não coincidem.",
+      "connection_failed": "Não foi possível conectar ao Cirno. Verifique sua conexão.",
+      "request_failed": "A solicitação falhou. Tente novamente."
+    }
   }
 }

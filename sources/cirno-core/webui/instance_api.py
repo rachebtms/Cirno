@@ -26,6 +26,18 @@ async def instance_action(
     data = InstanceData()
     action = payload.get("action", "")
     values = payload.get("values") or {}
+    if action.startswith("telegram."):
+        from cirno.channels.telegram.binding import TelegramBinding
+        binding = TelegramBinding()
+        if action == "telegram.status":
+            return binding.status()
+        if action == "telegram.pin":
+            return binding.issue_pin()
+        if action == "telegram.settings":
+            return binding.update(values)
+        if action == "telegram.unbind":
+            return binding.unbind()
+        raise ValueError("Unknown Telegram binding action")
     if action.startswith("inbox."):
         from cirno.notifications.inbox import NotificationInbox
         inbox = NotificationInbox()

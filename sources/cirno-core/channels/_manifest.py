@@ -7,9 +7,6 @@ from typing import Any
 
 from cirno.channels.contracts import ChannelFieldSpec, FieldKind, SetupRequirement
 
-GROUP_POLICIES = frozenset({"mention", "open", "allowlist"})
-DIRECT_GROUP_POLICIES = frozenset({"mention", "open"})
-
 
 def field(
     kind: FieldKind = "string",

@@ -11,7 +11,7 @@ vi.mock("@/lib/browser-notifications", () => ({ showBrowserNotification: vi.fn()
 vi.mock("@/lib/notification-sound", () => ({ playTurnCompleteSound: vi.fn() }));
 let rows: InboxNotice[];
 let fail = false;
-const requestMutation = vi.fn(async (_action: string, payload: Record<string, unknown>) => {
+const requestMutation = vi.fn(async (_action: string, payload: Record<string, unknown>): Promise<unknown> => {
   const values = payload.values as { category?: string; ids?: string[]; id?: string };
   if (payload.action === "inbox.open") return { session_key: rows.find((item) => item.id === values.id)?.session_key ?? null };
   if (payload.action === "inbox.read") {
@@ -87,4 +87,28 @@ it("waits for the authenticated connection before loading and refreshes immediat
   rows.unshift(notice(4, "system", "dream", "New memory results"));
   act(() => statusChanged("open"));
   expect(await screen.findByText("New memory results")).toBeInTheDocument();
+});
+
+it("discards an old pagination response after changing notification category", async () => {
+  const implementation = requestMutation.getMockImplementation()!;
+  let release: (value: unknown) => void = () => {};
+  requestMutation.mockImplementation(async (action, payload) => {
+    const values = payload.values as { before?: number; category?: string };
+    if (payload.action === "inbox.list" && values.before) {
+      return await new Promise<unknown>((resolve) => { release = resolve; });
+    }
+    const result = await implementation(action, payload) as Record<string, unknown>;
+    return payload.action === "inbox.list" ? { ...result, next_before: 1 } : result;
+  });
+  try {
+    view();
+    await screen.findByText("Result available");
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    fireEvent.click(screen.getByRole("tab", { name: /System/ }));
+    await waitFor(() => expect(screen.queryByText("Result available")).not.toBeInTheDocument());
+    await act(async () => release({ items: [notice(0, "operations", "question", "Old category page")],
+      unread: { operations: 1, conversations: 0, system: 0 }, latest_seq: 3, next_before: null }));
+    expect(screen.queryByText("Old category page")).not.toBeInTheDocument();
+    expect(screen.getByText("Provider timeout")).toBeInTheDocument();
+  } finally { requestMutation.mockImplementation(implementation); }
 });

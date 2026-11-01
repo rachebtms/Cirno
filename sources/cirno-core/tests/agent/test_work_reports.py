@@ -8,7 +8,7 @@ import pytest
 
 from cirno.agent.goals.scheduler import wake_due_goals
 from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.coordination import CreateSessionTool, ReportWorkTool
+from cirno.agent.tools.coordination import CreateSessionTool, ReportWorkTool, SetSessionTitleTool
 from cirno.agent.tools.long_task import UpdateGoalTool
 from cirno.agent.tools.registry import ToolRegistry
 from cirno.agent.tools.selection import conversation_tools
@@ -167,15 +167,18 @@ async def test_router_and_ptc_cannot_execute_worker_tools(setup):
     from cirno.agent.tools.message import MessageTool
     _, manager, bus = setup
     registry = ToolRegistry()
-    for tool in (ReadFileTool(), WriteFileTool(), MessageTool(), ReportWorkTool(manager, bus)):
+    for tool in (ReadFileTool(), WriteFileTool(), MessageTool(), ReportWorkTool(manager, bus), SetSessionTitleTool(manager, bus)):
         registry.register(tool)
     router = conversation_tools(registry, "websocket:global")
     regular = conversation_tools(registry, "websocket:worker")
     assert router.has("user__message") and router.has("files__read")
+    assert not router.has("conversations__set_title")
+    assert regular.has("conversations__set_title")
     assert not router.has("files__write") and not router.has("conversations__report")
     assert regular.has("files__write") and regular.has("conversations__report") and not regular.has("user__message")
     ptc = conversation_tools(registry, "websocket:global", ptc_mode=True)
     assert "tools.files.write(" not in ptc.sdk_prompt()
+    assert "tools.conversations.set_title(" not in ptc.sdk_prompt()
     with request_context(RequestContext(channel="websocket", chat_id="global", session_key="websocket:global")):
         result = await ReportWorkTool(manager, bus).execute(state="ready", summary="Wrong role")
     assert result.is_error
@@ -308,3 +311,42 @@ async def test_full_worker_report_to_cirno_user_message_pipeline(setup):
         assert not pending_followups(await manager.state.read("websocket:global"))
     finally:
         await loop.aclose()
+
+
+async def test_deleted_goal_during_scheduler_tick_does_not_block_other_goals(setup, monkeypatch):
+    _, manager, _ = setup
+    await manager.state.update_metadata("websocket:global", {"goal_state": {
+        "goal_id": "global-work", "status": "active", "objective": "Coordinate work",
+    }})
+    original = manager.state.mutate_metadata
+    deleted = False
+
+    async def delete_before_wake(key, change, **kwargs):
+        nonlocal deleted
+        if key == "websocket:global" and not deleted:
+            deleted = True
+            await manager.state.delete(key)
+        return await original(key, change, **kwargs)
+
+    monkeypatch.setattr(manager.state, "mutate_metadata", delete_before_wake)
+    enqueue = AsyncMock()
+    loop = SimpleNamespace(sessions=manager, tools=ToolRegistry(), _pending_queues={},
+                           _discarding_sessions=set(), goal_continuation_limit=0, _enqueue_session_message=enqueue)
+    await wake_due_goals(loop)
+    assert deleted
+    assert await manager.state.read_header("websocket:global") is None
+    assert enqueue.await_count == 1
+    assert enqueue.call_args.args[0].session_key == "websocket:worker"
+
+
+async def test_delegated_instruction_is_saved_and_marked_with_its_source(setup):
+    _, manager, _ = setup
+    with request_context(RequestContext(channel="websocket", chat_id="global", session_key="websocket:global")):
+        created = json.loads(await CreateSessionTool(manager).execute(title="Read a document", objective="Read the document and verify its claims"))
+    session = await manager.state.read(created["session_key"])
+    assert session.messages[0]["role"] == "user"
+    assert session.messages[0]["content"] == "Read the document and verify its claims"
+    facts = await manager.state.project_history(session.key, lambda history: history.all_facts())
+    from cirno.session.session_handles import SessionHandleResolver
+    source = await SessionHandleResolver(manager).ahandle_for_session("websocket:global")
+    assert facts[0].content["session_message"]["session"] == source.public_payload()

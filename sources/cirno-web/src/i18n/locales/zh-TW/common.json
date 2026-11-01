@@ -501,23 +501,32 @@
       "byok": "BYOK",
       "overview": "總覽",
       "appearance": "外觀",
-      "notifications": "通知",
+      "notifications": "瀏覽器通知",
       "models": "模型",
       "providers": "供應商",
       "voice": "語音",
-      "browser": "網路",
-      "channels": "消息通道",
-      "runtime": "系統",
-      "advanced": "進階",
-      "memory": "記憶",
+      "browser": "網路搜尋",
+      "channels": "通道設定",
+      "runtime": "服務與心跳",
+      "advanced": "權限與安全",
+      "memory": "記憶庫",
       "cliApps": "CLI 應用",
       "mcp": "MCP",
-      "apps": "工具",
+      "apps": "工具與 CLI Apps",
       "automations": "自動任務",
       "skills": "Skills",
       "ssh": "SSH",
       "personality": "個性",
-      "nodes": "Nodes"
+      "nodes": "Nodes",
+      "reading": "文字與閱讀",
+      "activity": "執行過程顯示",
+      "context": "上下文壓縮",
+      "dream": "Dream 記憶整合",
+      "memory-search": "記憶檢索",
+      "execution": "Goal 與執行",
+      "shell": "Shell 執行",
+      "network": "網路與重試",
+      "telegram": "Telegram"
     },
     "sections": {
       "interface": "介面",
@@ -628,7 +637,9 @@
       "logs": "日誌",
       "diagnostics": "診斷",
       "contextWindow": "上下文視窗",
-      "voiceLimits": "限制"
+      "voiceLimits": "限制",
+      "reasoningDetailMode": "思考過程詳略",
+      "toolDetailMode": "工具呼叫詳略"
     },
     "help": {
       "theme": "切換淺色或深色外觀",
@@ -689,7 +700,8 @@
       "restartingEngine": "正在重新啟動",
       "checking": "檢查中",
       "running": "執行中",
-      "needsSetup": "需要設定"
+      "needsSetup": "需要設定",
+      "detailed": "詳細"
     },
     "status": {
       "loading": "正在載入設定…",
@@ -1524,6 +1536,34 @@
       "instructions": "工作指令",
       "memory": "长期记忆",
       "heartbeat": "心跳指令"
+    },
+    "categories": {
+      "interface": "介面",
+      "agent": "Agent",
+      "connections": "連線",
+      "system": "系統"
+    },
+    "telegram": {
+      "account": "個人帳號",
+      "configureBot": "設定 Bot",
+      "help": "將你的 Telegram 私聊綁定到 Cirno，不支援群聊。請先在通道設定中填寫 Bot Token。",
+      "unbound": "尚未綁定",
+      "boundHelp": "只有這個 Telegram 帳號可以存取你的個人 Cirno。",
+      "pinHelp": "在此產生 PIN，然後傳給你的 Bot 驗證。",
+      "unbind": "解除綁定",
+      "generatePin": "產生 PIN",
+      "pin": "綁定 PIN",
+      "copyPin": "複製綁定命令",
+      "refreshPin": "重新產生 PIN",
+      "expires": "{{seconds}} 秒後過期，到期自動更新。",
+      "sendPin": "向 Telegram Bot 傳送 {{command}}。",
+      "delivery": "訊息與通知",
+      "enabled": "啟用 Telegram",
+      "cirno": "Cirno 訊息",
+      "actionLinks": "操作連結",
+      "webuiUrl": "Web UI 位址（選填）",
+      "urlHelp": "填寫手機可以開啟的位址。通知會附帶按鈕，開啟收件匣中的對應事項。",
+      "settingsLink": "設定 Telegram 通知"
     }
   },
   "chat": {
@@ -1955,6 +1995,11 @@
       "noResults": "沒有匹配的訊息。",
       "jumpTo": "跳轉到訊息：{{label}}",
       "railAria": "我的訊息導航"
+    },
+    "clear": {
+      "title": "清空 Cirno 對話",
+      "description": "停止目前執行並清空此對話的訊息與上下文。已儲存的記憶和其他對話會保留。",
+      "confirm": "清空對話"
     }
   },
   "message": {
@@ -2180,7 +2225,9 @@
     "cliRunFailed": "失敗",
     "automationSourceFallback": "自動化",
     "automationTriggered": "已自動觸發",
-    "askAboutSelection": "詢問選文"
+    "askAboutSelection": "詢問選文",
+    "expandStep": "展開詳情",
+    "collapseStep": "收合詳情"
   },
   "recovery": {
     "actionFailed": "復原操作失敗，請再試一次。",
@@ -2539,7 +2586,7 @@
     "category": {
       "all": "全部",
       "operations": "待處理操作",
-      "conversations": "對話資訊",
+      "conversations": "任務報告",
       "system": "系統資訊"
     },
     "kind": {
@@ -2571,9 +2618,39 @@
     },
     "browser": {
       "operations": "有操作需要你處理。",
-      "conversations": "對話有新的重要資訊。",
+      "conversations": "有新的任務報告。",
       "system": "Cirno 有新的系統資訊。"
     },
     "conversationUnavailable": "此對話已不存在或已被重設。"
+  },
+  "setup": {
+    "step": "第 {{current}} 步，共 {{total}} 步",
+    "registerTitle": "歡迎使用 Cirno",
+    "loginTitle": "登入 Cirno",
+    "registerDescription": "建立帳號，開始使用你的 Cirno。",
+    "loginDescription": "登入後繼續使用你的 Cirno。",
+    "username": "使用者名稱",
+    "password": "密碼",
+    "confirmPassword": "確認密碼",
+    "passwordHint": "至少 10 個字元，包含大寫字母和符號。",
+    "createAccount": "建立帳號",
+    "signIn": "登入",
+    "instanceOwner": "此帳號用於管理目前的 Cirno 執行個體，建立後將關閉註冊入口。",
+    "modelTitle": "連接模型",
+    "modelDescription": "新增模型供應商及模型設定，之後也可以在設定中修改。",
+    "configureLater": "稍後設定",
+    "startChatting": "開始使用",
+    "errors": {
+      "invalid_username": "使用者名稱需要包含 1–64 個字元。",
+      "invalid_password": "至少 10 個字元，包含大寫字母和符號。",
+      "invalid_credentials": "使用者名稱或密碼不正確。",
+      "registration_closed": "帳號已經存在，請重新整理頁面後登入。",
+      "registration_required": "請先建立帳號，重新整理頁面後繼續。",
+      "too_many_attempts": "嘗試次數過多，請等待一分鐘後再試。",
+      "storage_failed": "無法儲存帳號資料，請檢查伺服器儲存空間後重試。",
+      "password_mismatch": "兩次輸入的密碼不一致。",
+      "connection_failed": "無法連線至 Cirno，請檢查網路後重試。",
+      "request_failed": "請求失敗，請重試。"
+    }
   }
 }

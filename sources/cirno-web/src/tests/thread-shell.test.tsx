@@ -878,6 +878,37 @@ describe("ThreadShell", () => {
     expect(screen.queryByText("old answer")).not.toBeInTheDocument();
   });
 
+  it("loads fresh trace details when returning to a session with an old request in flight", async () => {
+    const client = makeClient();
+    const resolvers: ((value: Response) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/trace-detail?")) return new Promise<Response>((resolve) => resolvers.push(resolve));
+      if (url.includes("websocket%3Areturn-a/webui-thread")) return Promise.resolve(httpJson(traceDetailThread(true, "return-a answer")));
+      if (url.includes("websocket%3Areturn-b/webui-thread")) return Promise.resolve(httpJson(traceDetailThread(false, "return-b answer", "b")));
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    }));
+    const view = (id: string) => wrap(client, <ThreadShell session={session(id)} title={id} onToggleSidebar={() => {}} />);
+    const { rerender } = render(view("return-a"));
+    fireEvent.click(within(await openMessageActions("return-a answer")).getByRole("button", { name: /Worked/ }));
+    await waitFor(() => expect(resolvers).toHaveLength(1));
+    rerender(view("return-b"));
+    await screen.findByText("return-b answer");
+    rerender(view("return-a"));
+    const menu = await openMessageActions("return-a answer");
+    const worked = within(menu).getByRole("button", { name: /Worked/ });
+    if (worked.getAttribute("aria-expanded") !== "true") fireEvent.click(worked);
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+    await act(async () => {
+      resolvers[0](httpJson({ message_id: "history-aaaaaaaaaaaaaaaaaaaa", events: [] }));
+      resolvers[1](httpJson({ message_id: "history-aaaaaaaaaaaaaaaaaaaa", events: [{
+        event: "message", chat_id: "return-a", projection_id: "fresh-detail", kind: "progress",
+        text: 'exec({"command":"echo fresh-detail"})',
+      }] }));
+    });
+    await waitFor(() => expect(document.body).toHaveTextContent("fresh-detail"));
+  });
+
   it("ignores a deferred trace-detail failure after switching sessions", async () => {
     const client = makeClient();
     const detailUrls: string[] = [];

@@ -829,8 +829,8 @@ export class CirnoClient {
     const normalized = command.trim();
     // Cancellation must reach the current connection; replaying it after a
     // reconnect could cancel a different turn submitted in the meantime.
-    if (normalized === "/stop" && this.socket?.readyState !== WS_OPEN) {
-      return Promise.reject(new Error("Connection unavailable; reconnect to stop the task"));
+    if ((normalized === "/stop" || normalized === "/new") && this.socket?.readyState !== WS_OPEN) {
+      return Promise.reject(new Error("Connection unavailable; reconnect before stopping or clearing the conversation"));
     }
     const turnId = `${SYSTEM_COMMAND_TURN_PREFIX}${crypto.randomUUID()}`;
     return new Promise<void>((resolve, reject) => {

@@ -4,7 +4,7 @@ Cirno defaults to files and SQLite FTS5/BM25. It does not load an embedding mode
 
 ## Recall and editing
 
-Settings → Memory controls Dream, compaction, context budgets and long-term memory. Settings → Personality edits personality, user preferences, workflow instructions and heartbeat instructions. The memory library and Agent tools share `memory/search.py`: BM25 is the default, with optional semantic and hybrid modes. Filters include layer, scope, tags and dates. The interface reports the actual engine, fallback reason and unfinished vector-index coverage.
+Settings separates Memory library, Context compaction, Dream consolidation and Memory retrieval. Settings → Personality edits personality, user preferences, workflow instructions and heartbeat instructions. The memory library and Agent tools share `memory/search.py`: BM25 is the default, with optional semantic and hybrid modes. Filters include layer, scope, tags and dates. The interface reports the actual engine, fallback reason and unfinished vector-index coverage.
 
 An empty query browses records without launching an embedding worker. Evidence, task state and searches including historical records use BM25 because optional vectors do not cover all those records. Expand a result to read its body, versions and original evidence. Index rebuilding is incremental and can be stopped and resumed. Dream failures expose their reasons and can be retried.
 
@@ -74,7 +74,7 @@ Back up the entire Home while the service is stopped. Catalog and Dream database
 
 ## Optional CPU embeddings
 
-Install the `memory-embedding` extra, then configure a local BGE-small INT8 ONNX model and matching `tokenizer.json` in Settings → Memory. Model files are not downloaded automatically. The worker uses normalized CLS vectors and one CPU thread. ONNX Runtime, NumPy and tokenizers stay out of the default gateway process.
+Install the `memory-embedding` extra, then configure a local BGE-small INT8 ONNX model and matching `tokenizer.json` in Settings → Memory retrieval. Model files are not downloaded automatically. The worker uses normalized CLS vectors and one CPU thread. ONNX Runtime, NumPy and tokenizers stay out of the default gateway process.
 
 Explicit semantic/hybrid retrieval launches a disposable worker. Vectors are cached on disk by model and content fingerprints; similarity scoring streams stored vectors. Only distilled knowledge and shared profiles are embedded. Long records use 224-token windows with a 192-token stride and retain character offsets. Each search generates at most 32 chunks, with at most eight per worker response. Remaining progress is persisted for the next explicit search. A record ranks by its best matching chunk. Hybrid retrieval uses reciprocal-rank fusion.
 

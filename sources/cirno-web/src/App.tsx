@@ -20,6 +20,8 @@ import { matchSidebarShortcut } from "@/lib/sidebar-shortcuts";
 import type { SidebarDeleteDecision, SidebarDeleteItem } from "@/components/ChatList";
 import type { SettingsSectionKey } from "@/components/settings/SettingsView";
 import { StartupShell } from "@/components/StartupShell";
+import { AccountForm } from "@/components/setup/AccountForm";
+import { accountRequest } from "@/lib/account";
 import { ComposerDraftStore, clearStoredComposerDrafts } from "@/lib/composer-draft";
 import { activateReloadCache, clearReloadCache } from "@/lib/reload-cache";
 import { webuiThreadCache } from "@/lib/webui-thread-cache";
@@ -109,7 +111,7 @@ import {
 type BootState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "auth"; failed?: boolean }
+  | { status: "auth"; failed?: boolean; accountMode?: "register" | "login" }
   | {
       status: "ready";
       client: CirnoClient;
@@ -119,6 +121,8 @@ type BootState =
       ingressLimits: BootstrapResponse["limits"] | null;
       runtimeSurface: RuntimeSurface;
       webuiCapabilities: string[];
+      accountAuth?: boolean;
+      onboardingRequired?: boolean;
     };
 
 function bootstrapCapabilities(boot: BootstrapResponse): string[] {
@@ -149,6 +153,7 @@ type ShellRoute = {
   temporary?: boolean;
 };
 const InboxView = lazy(() => import("@/components/InboxView").then((module) => ({ default: module.InboxView })));
+const ModelSetup = lazy(() => import("@/components/setup/ModelSetup").then((module) => ({ default: module.ModelSetup })));
 const loadThreadShell = () => import("@/components/thread/ThreadShell");
 const ThreadShell = lazy(() => loadThreadShell().then(
   (module) => ({ default: module.ThreadShell }),
@@ -172,6 +177,7 @@ const RenameDialog = lazy(async () => {
 });
 
 const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
+  "reading", "activity", "context", "dream", "memory-search", "execution", "shell", "network", "telegram",
   "capabilities",
   "overview",
   "about",
@@ -1018,6 +1024,8 @@ export default function App() {
             ingressLimits: boot.limits ?? null,
             runtimeSurface,
             webuiCapabilities: bootstrapCapabilities(boot),
+            accountAuth: boot.browser_auth === true,
+            onboardingRequired: boot.onboarding_required === true,
           });
         } catch (e) {
           if (cancelled) return;
@@ -1025,7 +1033,7 @@ export default function App() {
             clearReloadCache();
             clearStoredComposerDrafts();
             webuiThreadCache.clear();
-            setState({ status: "auth", failed: !!secret });
+            setState({ status: "auth", failed: !!secret, accountMode: e instanceof BootstrapAuthRequiredError ? e.accountMode : undefined });
           } else {
             setState({
               status: "error",
@@ -1052,7 +1060,8 @@ export default function App() {
           clearReloadCache();
           clearStoredComposerDrafts();
           webuiThreadCache.clear();
-          setState({ status: "auth", failed: !!bootstrapSecretRef.current });
+          client.close();
+          setState({ status: "auth", failed: !!bootstrapSecretRef.current, accountMode: e instanceof BootstrapAuthRequiredError ? e.accountMode : undefined });
         }
       }
     }, tokenRefreshDelayMs(state.tokenExpiresAt));
@@ -1068,6 +1077,10 @@ export default function App() {
     return <StartupShell />;
   }
   if (state.status === "auth") {
+    if (state.accountMode) return <AccountForm key={state.accountMode} mode={state.accountMode} onSuccess={() => {
+      clearSavedSecret();
+      bootstrapWithSecret("");
+    }} />;
     return (
       <AuthForm
         failed={!!state.failed}
@@ -1095,7 +1108,16 @@ export default function App() {
     );
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (state.accountAuth) {
+      try {
+        await accountRequest("logout");
+      } catch (error) {
+        setState({ status: "error", message: error instanceof Error ? error.message : String(error) });
+        state.client.close();
+        return;
+      }
+    }
     if (state.status === "ready") {
       state.client.close();
     }
@@ -1103,7 +1125,7 @@ export default function App() {
     clearReloadCache();
     clearStoredComposerDrafts();
     webuiThreadCache.clear();
-    setState({ status: "auth" });
+    setState({ status: "auth", accountMode: state.accountAuth ? "login" : undefined });
   };
 
   const handleNativeEngineRestart = async (): Promise<string> => {
@@ -1139,7 +1161,10 @@ export default function App() {
       ingressLimits={state.ingressLimits}
       webuiCapabilities={state.webuiCapabilities}
     >
-      <InboxProvider>
+      {state.onboardingRequired ? <Suspense fallback={<StartupShell />}><ModelSetup
+        onModelNameChange={handleModelNameChange}
+        onComplete={() => setState((current) => current.status === "ready" ? { ...current, onboardingRequired: false } : current)}
+      /></Suspense> : <InboxProvider>
       <BrowserNotifications client={state.client} />
       <Shell
         runtimeSurface={state.runtimeSurface}
@@ -1147,7 +1172,7 @@ export default function App() {
         onLogout={handleLogout}
         onNativeEngineRestart={handleNativeEngineRestart}
       />
-      </InboxProvider>
+      </InboxProvider>}
     </ClientProvider>
   );
 }
@@ -3101,7 +3126,6 @@ function Shell({
                           composerInputAriaLabel={t("workbench.composerAria", {
                             title: pane.title,
                           })}
-                          emptyComposerVariant="thread"
                           workspaceScope={paneScope}
                           workspaceDefaultScope={workspaces?.default_scope ?? null}
                           workspaceControls={workspaces?.controls ?? null}

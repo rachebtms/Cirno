@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+from loguru import logger
+
 from cirno.agent.tools.base import Tool, ToolResult
 from cirno.agent.tools.context import ContextAware, current_request_context
 from cirno.agent.tools.naming import definitions
@@ -235,6 +237,7 @@ class ToolRegistry:
                 return ToolResult.error(with_tool_error_hint(str(result)))
             return result
         except Exception as e:
+            logger.error("Tool execution failed: {} ({})", name, type(e).__name__)
             return ToolResult.error(with_tool_error_hint(f"Error executing {name}: {str(e)}"))
 
     @property

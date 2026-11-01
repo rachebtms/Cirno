@@ -14,14 +14,6 @@
         "label": "Người dùng được phép",
         "placeholder": "* hoặc ID người dùng Telegram"
       },
-      "groupPolicy": {
-        "label": "Quy tắc nhóm",
-        "choices": {
-          "mention": "Chỉ khi được nhắc",
-          "open": "Mọi tin nhắn",
-          "allowlist": "Danh sách cho phép"
-        }
-      },
       "mode": {
         "label": "Chế độ kết nối",
         "choices": {

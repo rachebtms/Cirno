@@ -119,22 +119,22 @@ describe("channelSetup", () => {
       webui: "webui/index.ts",
       setup: {
         fields: [{
-          key: "channels.telegram.groupPolicy",
-          field: "groupPolicy",
+          key: "channels.telegram.mode",
+          field: "mode",
           kind: "enum",
-          choices: ["open"],
+          choices: ["polling"],
           required: false,
-          default_value: "open",
+          default_value: "polling",
         }],
       },
     }));
 
     expect(setup.fields).toEqual([
       expect.objectContaining({
-        key: "channels.telegram.groupPolicy",
-        label: "Group rules",
-        defaultValue: "open",
-        options: [{ value: "open", label: "All messages" }],
+        key: "channels.telegram.mode",
+        label: "Connection mode",
+        defaultValue: "polling",
+        options: [{ value: "polling", label: "Long polling" }],
       }),
     ]);
   });

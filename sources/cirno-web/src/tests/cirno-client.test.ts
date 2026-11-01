@@ -2214,13 +2214,13 @@ describe("CirnoClient", () => {
     await expect(interrupted).rejects.toThrow("socket closed");
   });
 
-  it("rejects an offline Stop without replaying it after reconnect", async () => {
+  it.each(["/stop", "/new"])("rejects offline %s without replaying it after reconnect", async (command) => {
     const client = new CirnoClient({ url: "ws://test", reconnect: false,
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket });
-    await expect(client.sendSystemCommand("chat-a", "/stop")).rejects.toThrow("Connection unavailable");
+    await expect(client.sendSystemCommand("chat-a", command)).rejects.toThrow("Connection unavailable");
     client.connect();
     lastSocket().fakeOpen();
-    expect(lastSocket().sent.some((raw) => JSON.parse(raw).content === "/stop")).toBe(false);
+    expect(lastSocket().sent.some((raw) => JSON.parse(raw).content === command)).toBe(false);
     client.close();
   });
 

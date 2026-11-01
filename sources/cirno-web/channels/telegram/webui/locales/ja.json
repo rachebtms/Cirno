@@ -14,14 +14,6 @@
         "label": "許可ユーザー",
         "placeholder": "* または Telegram ユーザー ID"
       },
-      "groupPolicy": {
-        "label": "グループのルール",
-        "choices": {
-          "mention": "メンションのみ",
-          "open": "全メッセージ",
-          "allowlist": "許可リスト"
-        }
-      },
       "mode": {
         "label": "接続モード",
         "choices": {

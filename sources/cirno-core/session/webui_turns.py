@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from cirno.agent.tools.context import current_request_context
 from cirno.agent.turn_delivery import TurnRoute
-from cirno.bus.events import InboundMessage
+from cirno.bus.events import INBOUND_META_LOCAL_MEDIA, InboundMessage
 from cirno.bus.outbound_events import (
     GoalStateSyncEvent,
     GoalStatusEvent,
@@ -42,6 +42,7 @@ from cirno.runtime.context import public_history_message
 from cirno.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno.session.goal_state import goal_state_ws_blob
 from cirno.session.history_visibility import is_hidden_history_message
+from cirno.session.keys import CIRNO_SESSION_KEY
 from cirno.session.manager import Session, SessionManager
 from cirno.session.session_handles import session_handle_for_name
 from cirno.session.session_messages import (
@@ -57,7 +58,7 @@ from cirno.webui.metadata import (
 )
 from cirno.webui.recovery import RecoveryCoordinator
 from cirno.webui.session_identity import is_webui_session_key, webui_session_key
-from cirno.webui.transcript import append_session_message_input
+from cirno.webui.transcript import WebUITranscriptRecorder, append_session_message_input
 from loguru import logger
 
 WEBUI_SESSION_METADATA_KEY = "webui"
@@ -210,6 +211,8 @@ async def maybe_generate_webui_title(
     so pass ``target_session_key`` to project the title onto that per-chat
     session instead of storing it on the shared one.
     """
+    if (target_session_key or session_key) == CIRNO_SESSION_KEY:
+        return False
     routed_session = await sessions.state.read(session_key)
     if routed_session is None:
         return False
@@ -479,6 +482,17 @@ class WebuiTurnRoutePolicy:
     ) -> TurnRoute:
         """Make an independently dispatched agent turn visible in WebUI."""
         routed = route
+        if msg.channel == "telegram" and session_key == CIRNO_SESSION_KEY:
+            # Telegram is another private entrance to the same personal agent.
+            # Keep model activity on Cirno; only explicit replies go back to Telegram.
+            metadata = dict(route.metadata)
+            metadata.update({
+                WEBUI_SESSION_METADATA_KEY: True,
+                "_wants_stream": True,
+                WEBUI_TURN_METADATA_KEY: metadata.get(WEBUI_TURN_METADATA_KEY) or f"telegram:{uuid4().hex}",
+                "_telegram_reply_to": msg.chat_id,
+            })
+            routed = TurnRoute("websocket", "global", metadata, publish_lifecycle=True)
         internal_user_input = msg.channel == "system" and msg.is_user_input
         if (
             (
@@ -489,6 +503,7 @@ class WebuiTurnRoutePolicy:
                 )
                 or internal_user_input
                 or msg.metadata.get("_heartbeat") is True
+                or msg.metadata.get("_internal_continuation") is True
             )
             and route.channel == "websocket"
         ):
@@ -657,6 +672,23 @@ class WebuiTurnCoordinator:
         return ctx.channel == "websocket"
 
     async def _handle_user_input_accepted(self, event: UserInputAccepted) -> None:
+        ctx = event.context
+        if ctx.channel == "telegram" and ctx.session_key == CIRNO_SESSION_KEY:
+            from cirno.webui.instance_api import ensure_global_session
+
+            await ensure_global_session(self.sessions)
+            session = await self.sessions.state.get_header(CIRNO_SESSION_KEY)
+            metadata = {**ctx.metadata, HISTORY_GENERATION_METADATA_KEY: session.generation}
+            recorder = WebUITranscriptRecorder(self.sessions)
+            if await recorder.append_user_message("global", event.content, metadata=metadata,
+                                                  media_paths=metadata.get(INBOUND_META_LOCAL_MEDIA)):
+                await self.bus.publish_outbound(outbound_message_for_event(
+                    channel="websocket", chat_id="global",
+                    event=UserInputEvent(content=event.content, created_at_ms=int(time.time() * 1000),
+                                         provenance={"channel": "telegram"}),
+                    metadata=metadata,
+                ))
+            return
         envelope = session_message_envelope(event.context.metadata)
         session_key = event.context.session_key
         if (

@@ -245,7 +245,7 @@ describe("durable run recovery", () => {
         reads[1].resolve(response(completed));
         reads[2].resolve(new Response("unavailable", { status: 503 }));
       });
-      expect(mounted.result.current.history.error).toBe("HTTP 503");
+      expect(mounted.result.current.history.error).toBe("unavailable");
       expect(mounted.result.current.history.loading).toBe(false);
       expect(mounted.result.current.stream.messages.at(-1)?.content).toBe("The complete answer");
     } else {

@@ -247,3 +247,177 @@ async def test_project_is_bound_before_chat_attach(setup):
     transport.webui_attach.reset_mock()
     await router.dispatch(object(), 'test-client', {'type':'new_chat','project_id':'missing'})
     transport.webui_attach.assert_not_called()
+
+
+async def test_fixed_cirno_name_and_role_prompt_use_session_identity(setup):
+    from cirno.agent.tools.coordination import CreateSessionTool
+
+    _, sessions, bus = setup
+    await sessions.state.get("websocket:global")  # No is_global flag is needed.
+    context = RequestContext(channel="websocket", chat_id="global", session_key="websocket:global")
+    with request_context(context):
+        result = await SetSessionTitleTool(sessions, bus).execute(title="Wrong title")
+    assert not getattr(result, "is_error", False)
+    assert "title" not in (await sessions.state.read_metadata(context.session_key))["metadata"]
+    assert bus.outbound_size == 0
+    provider = CreateSessionTool(sessions)
+    block = await provider._provide_runtime_context(context)
+    assert "Cirno (coordination)" in block.content
+    assert "conversations__set_title" not in block.content
+    ordinary = await provider._provide_runtime_context(RequestContext(
+        channel="websocket", chat_id="work", session_key="websocket:work",
+    ))
+    assert "Use conversations__set_title early" in ordinary.content
+    from cirno.session.webui_turns import maybe_generate_webui_title
+    provider = AsyncMock()
+    await sessions.state.update_metadata(context.session_key, {"webui": True})
+    assert not await maybe_generate_webui_title(
+        sessions=sessions, session_key=context.session_key, provider=provider, model="test",
+    )
+    provider.chat_stream_with_retry.assert_not_called()
+
+
+@pytest.mark.parametrize("recreate", [False, True])
+async def test_old_turn_cannot_rename_deleted_or_replaced_conversation(setup, recreate):
+    _, sessions, bus = setup
+    header = await sessions.state.read_header("websocket:work")
+    await sessions.state.delete(header.key)
+    if recreate:
+        await sessions.state.get(header.key)
+        await sessions.state.update_metadata(header.key, {"title": "Replacement"})
+    with request_context(RequestContext(
+        channel="websocket", chat_id="work", session_key=header.key,
+        session_generation=header.generation,
+    )):
+        result = await SetSessionTitleTool(sessions, bus).execute(title="Stale title")
+    assert result.is_error
+    assert bus.outbound_size == 0
+    current = await sessions.state.read_header(header.key)
+    if recreate:
+        assert current.metadata["title"] == "Replacement"
+    else:
+        assert current is None
+
+
+async def test_manual_rename_wins_when_tool_is_already_in_flight(setup, monkeypatch):
+    _, sessions, bus = setup
+    original = sessions.state.mutate_metadata
+    async def concurrent_rename(key, change, **kwargs):
+        await original(key, lambda metadata: metadata.update(title="User choice", title_user_edited=True))
+        return await original(key, change, **kwargs)
+    monkeypatch.setattr(sessions.state, "mutate_metadata", concurrent_rename)
+    with request_context(RequestContext(channel="websocket", chat_id="work", session_key="websocket:work")):
+        result = await SetSessionTitleTool(sessions, bus).execute(title="Model choice")
+    assert "chosen by the user" in result
+    assert (await sessions.state.read_header("websocket:work")).metadata["title"] == "User choice"
+    assert bus.outbound_size == 0
+
+
+@pytest.mark.parametrize("recreate", [False, True])
+async def test_stale_goal_tools_cannot_recreate_or_mutate_conversation(setup, recreate):
+    from cirno.agent.goals.permission import goal_mutation_permission
+    from cirno.agent.tools.long_task import CreateGoalTool, GetGoalTool, UpdateGoalTool
+
+    _, sessions, _ = setup
+    header = await sessions.state.read_header("websocket:work")
+    await sessions.state.delete(header.key)
+    if recreate:
+        await sessions.state.get(header.key)
+        await sessions.state.update_metadata(header.key, {"goal_state": {
+            "goal_id": "replacement", "status": "active", "objective": "New work",
+        }})
+    with request_context(RequestContext(
+        channel="websocket", chat_id="work", session_key=header.key,
+        session_generation=header.generation,
+    )), goal_mutation_permission(True):
+        assert (await CreateGoalTool(sessions).execute(objective="Old work")).is_error
+        assert (await UpdateGoalTool(sessions).execute(action="complete")).is_error
+        assert (await GetGoalTool(sessions).execute()).is_error
+    current = await sessions.state.read_header(header.key)
+    if recreate:
+        assert current.metadata["goal_state"]["status"] == "active"
+        assert current.metadata["goal_state"]["goal_id"] == "replacement"
+    else:
+        assert current is None
+
+
+@pytest.mark.parametrize("failure", ["invalid-pid", "cancelled"])
+async def test_interrupted_node_submission_records_unknown_outcome(setup, monkeypatch, failure):
+    import asyncio
+
+    home, _, _ = setup
+    nodes = Nodes(InstanceData(home))
+    execute = AsyncMock(return_value="SSH login banner\n42")
+    if failure == "cancelled":
+        execute.side_effect = asyncio.CancelledError()
+    monkeypatch.setattr(nodes, "execute", execute)
+    with pytest.raises(asyncio.CancelledError if failure == "cancelled" else RuntimeError):
+        await nodes.start_job("test-node", "run-task")
+    jobs = nodes.data.list("node_jobs")
+    assert len(jobs) == 1
+    assert jobs[0]["state"] == "submission_unknown"
+    assert jobs[0]["error"]
+
+
+async def test_inflight_goal_completion_cannot_overwrite_user_pause(setup, monkeypatch):
+    from cirno.agent.tools.long_task import UpdateGoalTool
+    from cirno.agent.tools.registry import ToolRegistry
+
+    _, sessions, bus = setup
+    header = await sessions.state.read_header("websocket:work")
+    await sessions.state.update_metadata(header.key, {"goal_state": {
+        "goal_id": "work-goal", "status": "active", "objective": "Finish work",
+    }})
+    original = sessions.state.mutate_metadata
+
+    async def user_pauses_first(key, change, **kwargs):
+        def pause(metadata):
+            metadata["goal_state"] = {**metadata["goal_state"], "status": "paused", "recap": "User paused"}
+        await original(key, pause)
+        return await original(key, change, **kwargs)
+
+    monkeypatch.setattr(sessions.state, "mutate_metadata", user_pauses_first)
+    registry = ToolRegistry()
+    registry.register(UpdateGoalTool(sessions, bus))
+    with request_context(RequestContext(
+        channel="websocket", chat_id="work", session_key=header.key, session_generation=header.generation,
+    )):
+        result = await registry.execute("goals__update", {"action": "complete"})
+    assert result.is_error and "Goal changed" in result
+    goal = (await sessions.state.read_header(header.key)).metadata["goal_state"]
+    assert goal["status"] == "paused" and goal["recap"] == "User paused"
+    assert bus.outbound_size == 0
+
+
+async def test_reset_keeps_cirno_identity_but_discards_old_goal_and_reports(setup):
+    _, sessions, _ = setup
+    key = "websocket:global"
+    before = await sessions.state.get_header(key)
+    await sessions.state.update_metadata(key, {
+        "title": "Cirno", "is_global": True,
+        "goal_state": {"status": "active", "objective": "Old task"},
+        "_sustained_goal_continuation_rounds": 7,
+        "work_report": {"id": "old"}, "work_report_pending": [{"id": "old"}],
+    })
+    await sessions.state.reset(key)
+    after = await sessions.state.read_header(key)
+    assert after.generation != before.generation
+    assert after.metadata == {"title": "Cirno", "is_global": True}
+
+
+async def test_goal_continuation_enables_webui_execution_stream(setup):
+    from cirno.agent.turn_delivery import TurnDeliveryFactory
+    from cirno.bus.events import InboundMessage
+    from cirno.session.webui_turns import WebuiTurnRoutePolicy
+
+    _, sessions, bus = setup
+    await sessions.state.update_metadata("websocket:work", {"webui": True})
+    delivery = TurnDeliveryFactory(bus, route_policy=WebuiTurnRoutePolicy(sessions)).create(
+        InboundMessage(channel="websocket", chat_id="work", sender_id="system:goal", content="Continue",
+                       metadata={"_internal_continuation": True, "_skip_user_persist": True}),
+        "websocket:work", enable_stream=True,
+    )
+    assert delivery.streaming
+    assert delivery.route.metadata["webui"] is True
+    assert delivery.route.metadata["_wants_stream"] is True
+    assert delivery.route.turn_id

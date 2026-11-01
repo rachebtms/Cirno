@@ -180,7 +180,15 @@ export function RuntimeConfigSettings({
     <p className="settings-editor text-[13px] leading-5 text-muted-foreground">{tr("unavailable")}</p>
     {children}
   </div>;
-  const groups = RUNTIME_CONFIG_GROUPS.filter((group) => group.page === page);
+  const memoryPage = ["memory", "context", "dream", "memory-search"].includes(page);
+  const memoryField = (field: RuntimeConfigField) => {
+    if (!memoryPage || page === "memory") return true;
+    if (page === "dream") return field.path.includes(".dream.");
+    const context = field.path.includes("idle_compact") || field.path.endsWith("session_ttl_minutes")
+      || field.path.endsWith("checkpoint_tokens");
+    return page === "context" ? context : !context && !field.path.includes(".dream.");
+  };
+  const groups = RUNTIME_CONFIG_GROUPS.filter((group) => group.page === page || (memoryPage && group.id === "memory"));
   const restartPending = settings.restart_required_sections?.includes("runtime")
     || (settings.requires_restart && Object.values(state.saved).some(Boolean));
   return (
@@ -190,9 +198,10 @@ export function RuntimeConfigSettings({
       {groups.map((group) => {
         if (group.enabledBy && state.value(group.enabledBy) === false) return null;
         if (group.id === "chat") return <div key={group.id}>{children}</div>;
-        const fields = RUNTIME_CONFIG_FIELDS.filter((field) => field.group === group.id);
+        const fields = RUNTIME_CONFIG_FIELDS.filter((field) => field.group === group.id && memoryField(field));
+        if (fields.length === 0) return null;
         const dirty = fields.filter(state.visible).some(state.dirty);
-        const title = tr(`groups.${group.id}.title`);
+        const title = group.id === "memory" && page !== "memory" ? t(`settings.nav.${page}`) : tr(`groups.${group.id}.title`);
         const errorId = `runtime-error-${group.id}`;
         const inlineError = fields.some((field) => field.kind === "duration" && state.invalidField === field.path);
         const section = (

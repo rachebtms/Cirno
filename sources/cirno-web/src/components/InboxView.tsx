@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bell, CheckCheck, CircleHelp, ExternalLink, Inbox, Loader2, MessageCircle, RefreshCw, Settings2, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ export function InboxView({ onBack, onSelect, onSettings, returnKey }: {
   const { client } = useClient();
   const { snapshot, load, markRead, refresh, connected, error: inboxError } = useInbox();
   const [category, setCategory] = useState(currentCategory);
+  const categoryRef = useRef(category);
+  categoryRef.current = category;
   const [page, setPage] = useState<InboxPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -108,7 +110,16 @@ export function InboxView({ onBack, onSelect, onSettings, returnKey }: {
             </div>
           </div>
         </article>)}</div>
-        {page?.next_before && <Button variant="ghost" className="w-full" disabled={!!busy} onClick={() => void run("more", async () => { const next = await load(category, page.next_before!); setPage({ ...next, items: [...page.items, ...next.items] }); })}>{t("inbox.loadMore")}</Button>}
+        {page?.next_before && <Button variant="ghost" className="w-full" disabled={!!busy} onClick={() => void run("more", async () => {
+          const requestedCategory = category;
+          const next = await load(requestedCategory, page.next_before!);
+          if (categoryRef.current !== requestedCategory) return;
+          setPage((current) => {
+            if (!current) return current;
+            const existing = new Set(current.items.map((item) => item.id));
+            return { ...next, items: [...current.items, ...next.items.filter((item) => !existing.has(item.id))] };
+          });
+        })}>{t("inbox.loadMore")}</Button>}
       </div>
     </div>
   </section>;

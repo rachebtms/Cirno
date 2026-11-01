@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias
 
 from loguru import logger
 
-from cirno.bus.events import INBOUND_META_USER_SHELL, OUTBOUND_META_AGENT_UI, OutboundMessage
+from cirno.bus.events import INBOUND_META_LOCAL_MEDIA, INBOUND_META_USER_SHELL, OUTBOUND_META_AGENT_UI, OutboundMessage
 from cirno.bus.outbound_events import (
     ContextCompactionEvent,
     GoalStateSyncEvent,
@@ -174,6 +174,10 @@ class WebUIOutboundDelivery:
                     "event": "user_message", "chat_id": msg.chat_id, "text": event.content,
                     "created_at_ms": event.created_at_ms, "starts_turn": False,
                 }
+                if turn_id := msg.metadata.get(WEBUI_TURN_METADATA_KEY):
+                    body["turn_id"] = turn_id
+                if paths := msg.metadata.get(INBOUND_META_LOCAL_MEDIA):
+                    body["media_urls"] = self._media.augment_transcript_user_media(paths, paths, session_key=webui_session_key(msg.chat_id))
                 if event.provenance:
                     body["provenance"] = event.provenance
                 await self._fanout(recipients, body, label=" user_message ")

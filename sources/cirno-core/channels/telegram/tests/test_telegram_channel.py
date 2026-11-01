@@ -174,7 +174,7 @@ def _install_ready_app(channel: TelegramChannel) -> _FakeApp:
 
 def _make_telegram_update(
     *,
-    chat_type: str = "group",
+    chat_type: str = "private",
     text: str | None = None,
     caption: str | None = None,
     entities=None,
@@ -185,7 +185,7 @@ def _make_telegram_update(
     user = SimpleNamespace(id=12345, username="alice", first_name="Alice")
     message = SimpleNamespace(
         chat=SimpleNamespace(type=chat_type, is_forum=False),
-        chat_id=-100123,
+        chat_id=12345 if chat_type == "private" else -100123,
         text=text,
         caption=caption,
         entities=entities or [],
@@ -1834,37 +1834,6 @@ async def test_send_delta_initial_send_keeps_message_in_thread() -> None:
     assert channel._app.bot.sent_messages[0]["message_thread_id"] == 42
 
 
-def test_derive_topic_session_key_uses_thread_id() -> None:
-    message = SimpleNamespace(
-        chat=SimpleNamespace(type="supergroup"),
-        chat_id=-100123,
-        message_thread_id=42,
-    )
-
-    assert TelegramChannel._derive_topic_session_key(message) == "telegram:-100123:topic:42"
-
-
-def test_derive_topic_session_key_private_dm_thread() -> None:
-    """Private DM threads (Telegram Threaded Mode) must get their own session key."""
-    message = SimpleNamespace(
-        chat=SimpleNamespace(type="private"),
-        chat_id=999,
-        message_thread_id=7,
-    )
-    assert TelegramChannel._derive_topic_session_key(message) == "telegram:999:topic:7"
-
-
-def test_derive_topic_session_key_none_without_thread() -> None:
-    """No thread id → no topic session key, regardless of chat type."""
-    for chat_type in ("private", "supergroup", "group"):
-        message = SimpleNamespace(
-            chat=SimpleNamespace(type=chat_type),
-            chat_id=123,
-            message_thread_id=None,
-        )
-        assert TelegramChannel._derive_topic_session_key(message) is None
-
-
 def test_get_extension_falls_back_to_original_filename() -> None:
     channel = TelegramChannel(TelegramConfig(), MessageBus())
 
@@ -1872,8 +1841,8 @@ def test_get_extension_falls_back_to_original_filename() -> None:
     assert channel._get_extension("file", None, "archive.tar.gz") == ".tar.gz"
 
 
-def test_telegram_group_policy_defaults_to_mention() -> None:
-    assert TelegramConfig().group_policy == "mention"
+def test_telegram_has_no_group_policy_setting() -> None:
+    assert "group_policy" not in TelegramConfig.model_fields
 
 
 def test_is_allowed_accepts_legacy_telegram_id_username_formats() -> None:
@@ -1939,26 +1908,6 @@ async def test_structured_tool_start_sends_quote_in_topic() -> None:
     assert sent["reply_parameters"].message_id == 10
     assert msg.content == ""
     assert msg.event.content == ""
-
-
-@pytest.mark.asyncio
-async def test_send_reply_infers_topic_from_message_id_cache() -> None:
-    config = TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], reply_to_message=True)
-    channel = TelegramChannel(config, MessageBus())
-    _install_ready_app(channel)
-    channel._message_threads[("123", 10)] = 42
-
-    await channel.send(
-        OutboundMessage(
-            channel="telegram",
-            chat_id="123",
-            content="hello",
-            metadata={"message_id": 10},
-        )
-    )
-
-    assert channel._app.bot.sent_messages[0]["message_thread_id"] == 42
-    assert channel._app.bot.sent_messages[0]["reply_parameters"].message_id == 10
 
 
 @pytest.mark.asyncio
@@ -2056,119 +2005,32 @@ async def test_send_blocks_unsafe_remote_media_url(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_group_policy_mention_ignores_unmentioned_group_message() -> None:
-    channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="mention"),
-        MessageBus(),
-    )
-    _install_ready_app(channel)
-
-    handled = []
-
-    async def capture_handle(**kwargs) -> None:
-        handled.append(kwargs)
-
-    channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
-
-    await channel._on_message(_make_telegram_update(text="hello everyone"), None)
-
-    assert handled == []
-    assert channel._app.bot.get_me_calls == 1
+@pytest.mark.parametrize("chat_type", ["group", "supergroup", "channel"])
+@pytest.mark.parametrize("handler", ["_on_message", "_forward_command", "_on_start", "_on_help"])
+async def test_non_private_updates_are_rejected_before_side_effects(chat_type, handler) -> None:
+    channel = TelegramChannel(TelegramConfig(allow_from=["*"]), MessageBus())
+    app = _install_ready_app(channel)
+    channel._handle_message = AsyncMock()
+    channel._download_message_media = AsyncMock()
+    await getattr(channel, handler)(_make_telegram_update(chat_type=chat_type, text="@cirno /stop"), None)
+    channel._handle_message.assert_not_awaited()
+    channel._download_message_media.assert_not_awaited()
+    assert app.bot.get_me_calls == 0
 
 
 @pytest.mark.asyncio
-async def test_group_policy_mention_accepts_text_mention_and_caches_bot_identity() -> None:
-    channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="mention"),
-        MessageBus(),
-    )
+async def test_private_message_uses_cirno_session() -> None:
+    bus = MessageBus()
+    channel = TelegramChannel(TelegramConfig(allow_from=["*"]), bus)
     _install_ready_app(channel)
-
-    handled = []
-
-    async def capture_handle(**kwargs) -> None:
-        handled.append(kwargs)
-
-    channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
-
-    mention = SimpleNamespace(type="mention", offset=0, length=13)
-    await channel._on_message(_make_telegram_update(text="@cirno_test hi", entities=[mention]), None)
-    await channel._on_message(_make_telegram_update(text="@cirno_test again", entities=[mention]), None)
-
-    assert len(handled) == 2
-    assert channel._app.bot.get_me_calls == 1
-
-
-@pytest.mark.asyncio
-async def test_group_policy_mention_accepts_caption_mention() -> None:
-    channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="mention"),
-        MessageBus(),
-    )
-    _install_ready_app(channel)
-
-    handled = []
-
-    async def capture_handle(**kwargs) -> None:
-        handled.append(kwargs)
-
-    channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
-
-    mention = SimpleNamespace(type="mention", offset=0, length=13)
-    await channel._on_message(
-        _make_telegram_update(caption="@cirno_test photo", caption_entities=[mention]),
-        None,
-    )
-
-    assert len(handled) == 1
-    assert handled[0]["content"] == "@cirno_test photo"
-
-
-@pytest.mark.asyncio
-async def test_group_policy_mention_accepts_reply_to_bot() -> None:
-    channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="mention"),
-        MessageBus(),
-    )
-    _install_ready_app(channel)
-
-    handled = []
-
-    async def capture_handle(**kwargs) -> None:
-        handled.append(kwargs)
-
-    channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
-
-    reply = SimpleNamespace(from_user=SimpleNamespace(id=999))
-    await channel._on_message(_make_telegram_update(text="reply", reply_to_message=reply), None)
-
-    assert len(handled) == 1
-
-
-@pytest.mark.asyncio
-async def test_group_policy_open_accepts_plain_group_message() -> None:
-    channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
-        MessageBus(),
-    )
-    _install_ready_app(channel)
-
-    handled = []
-
-    async def capture_handle(**kwargs) -> None:
-        handled.append(kwargs)
-
-    channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
-
-    await channel._on_message(_make_telegram_update(text="hello group"), None)
-
-    assert len(handled) == 1
-    assert channel._app.bot.get_me_calls == 0
+    channel._start_typing = lambda _: None
+    channel._add_reaction = AsyncMock()
+    await channel._on_message(_make_telegram_update(text="Hello Cirno"), None)
+    msg = await bus.consume_inbound()
+    assert msg.session_key == "websocket:global"
+    assert msg.channel == "telegram"
+    assert msg.chat_id == "12345"
+    assert msg.metadata["webui_turn_id"].startswith("telegram:")
 
 
 @pytest.mark.asyncio
@@ -2227,7 +2089,7 @@ async def test_extract_reply_context_no_text_returns_none() -> None:
 async def test_on_message_includes_reply_context() -> None:
     """When user replies to a message, content passed to bus starts with reply context."""
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2344,7 +2206,7 @@ async def test_on_message_attaches_reply_to_media_when_available(monkeypatch, tm
     )
 
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     app = _FakeApp(lambda: None)
@@ -2386,7 +2248,7 @@ async def test_on_message_attaches_reply_to_media_when_available(monkeypatch, tm
 async def test_on_message_reply_to_media_fallback_when_download_fails() -> None:
     """When reply has media but download fails, no media attached and no reply tag."""
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2427,7 +2289,7 @@ async def test_on_message_reply_to_caption_and_media(monkeypatch, tmp_path) -> N
     )
 
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     app = _FakeApp(lambda: None)
@@ -2469,7 +2331,7 @@ async def test_on_message_reply_to_caption_and_media(monkeypatch, tmp_path) -> N
 async def test_forward_command_does_not_inject_reply_context() -> None:
     """Slash commands forwarded via _forward_command must not include reply context."""
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2489,7 +2351,7 @@ async def test_forward_command_does_not_inject_reply_context() -> None:
 @pytest.mark.asyncio
 async def test_forward_command_pairs_unauthorized_private_user(monkeypatch) -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2508,7 +2370,7 @@ async def test_forward_command_pairs_unauthorized_private_user(monkeypatch) -> N
 @pytest.mark.parametrize("suffix", ["", "@cirno_test"])
 async def test_forward_command_preserves_whitespace_and_argument_mentions(separator, suffix) -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2533,7 +2395,7 @@ def test_bus_command_regex_accepts_multiline_arguments(text) -> None:
 @pytest.mark.asyncio
 async def test_forward_command_preserves_dream_log_args_and_strips_bot_suffix() -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2554,7 +2416,7 @@ async def test_forward_command_preserves_dream_log_args_and_strips_bot_suffix() 
 @pytest.mark.asyncio
 async def test_forward_command_normalizes_telegram_safe_dream_aliases() -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2612,7 +2474,7 @@ def test_telegram_bus_slash_command_regex_matches_agent_loop_commands() -> None:
 @pytest.mark.asyncio
 async def test_on_help_includes_restart_command() -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     update = _make_telegram_update(text="/help", chat_type="private")
@@ -2714,7 +2576,7 @@ async def test_send_adapts_command_references_only_in_control_replies(control_re
 @pytest.mark.asyncio
 async def test_on_start_sends_pairing_code_to_unauthorized_private_user(monkeypatch) -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2734,7 +2596,7 @@ async def test_on_start_sends_pairing_code_to_unauthorized_private_user(monkeypa
 @pytest.mark.asyncio
 async def test_on_help_sends_pairing_code_to_unauthorized_private_user(monkeypatch) -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2756,7 +2618,7 @@ async def test_on_message_pairs_unauthorized_private_user_before_side_effects(
     monkeypatch,
 ) -> None:
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["999"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2781,7 +2643,7 @@ async def test_on_message_pairs_unauthorized_private_user_before_side_effects(
 async def test_on_message_location_content() -> None:
     """Location messages are forwarded as [location: lat, lon] content."""
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -2803,7 +2665,7 @@ async def test_on_message_location_content() -> None:
 async def test_on_message_location_with_text() -> None:
     """Location messages with accompanying text include both in content."""
     channel = TelegramChannel(
-        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"]),
         MessageBus(),
     )
     _install_ready_app(channel)
@@ -3349,7 +3211,7 @@ async def test_callback_query_ignores_unauthorized_user_before_side_effects() ->
         data="Yes",
         answer=AsyncMock(),
         message=SimpleNamespace(
-            chat=SimpleNamespace(id=123),
+            chat=SimpleNamespace(id=123, type="private"),
             edit_reply_markup=AsyncMock(),
         ),
     )

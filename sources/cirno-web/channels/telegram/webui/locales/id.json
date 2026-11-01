@@ -14,14 +14,6 @@
         "label": "Pengguna diizinkan",
         "placeholder": "* atau ID pengguna Telegram"
       },
-      "groupPolicy": {
-        "label": "Aturan grup",
-        "choices": {
-          "mention": "Hanya mention",
-          "open": "Semua pesan",
-          "allowlist": "Daftar izin"
-        }
-      },
       "mode": {
         "label": "Modus koneksi",
         "choices": {

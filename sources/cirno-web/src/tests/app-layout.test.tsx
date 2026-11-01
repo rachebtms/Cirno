@@ -2751,14 +2751,14 @@ describe("App layout", () => {
     expect(settingsHighlight).toHaveAttribute("data-active-id", "models");
 
     const voiceButton = within(settingsNav).getByRole("button", {
-      name: "Capabilities",
+      name: "Web search",
     });
     fireEvent.click(voiceButton);
 
-    expect(screen.getByTestId("settings-section-transition")).toHaveAttribute("data-settings-section", "capabilities");
-    expect(window.location.hash).toBe("#/settings?section=capabilities");
+    expect(screen.getByTestId("settings-section-transition")).toHaveAttribute("data-settings-section", "browser");
+    expect(window.location.hash).toBe("#/settings?section=browser");
     expect(voiceButton).toHaveAttribute("aria-current", "page");
-    expect(settingsHighlight).toHaveAttribute("data-active-id", "capabilities");
+    expect(settingsHighlight).toHaveAttribute("data-active-id", "browser");
   });
 
   it("filters sessions in the centered search dialog", async () => {
@@ -3167,7 +3167,7 @@ describe("App layout", () => {
     const paneInput = within(activeComposer).getByRole("textbox", {
       name: "Message New conversation",
     });
-    expect(paneInput).toHaveClass("min-h-[50px]");
+    expect(paneInput).toHaveClass("min-h-[78px]");
     fireEvent.change(paneInput, { target: { value: "route this to the new pane" } });
     fireEvent.keyDown(paneInput, { key: "Enter" });
     await waitFor(() => expect(sendMessageSpy).toHaveBeenCalled());

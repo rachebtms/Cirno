@@ -78,7 +78,7 @@ describe("catalog loading", () => {
     fireEvent.change(screen.getByPlaceholderText("Search tools"), { target: { value: "AnyGen" } });
     expect(screen.getByText("No tools match your search.")).toBeInTheDocument();
     expect(screen.queryByRole("status", { name: "Loading apps…" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tools & CLI Apps" }));
     expect(screen.getByRole("status", { name: "Loading apps…" })).toBeInTheDocument();
     expect(screen.queryByText("No tools match your search.")).not.toBeInTheDocument();
     await act(async () => { cli.resolve(jsonResponse({ apps: [app], installed_count: 1 })); });

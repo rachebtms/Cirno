@@ -87,6 +87,11 @@ class WebUIGatewayEndpoint:
         headers: Any = None,
     ) -> Any:
         """Authorize a WebSocket upgrade and remember trusted WebUI connections."""
+        if self._http.auth.enabled:
+            supplied = query_first(query, "token")
+            if supplied and self.consume_issued_token(connection, supplied):
+                return None
+            return connection.respond(401, "Unauthorized")
         if is_trusted_proxy_authenticated_request(connection, headers or {}, self._config):
             self.webui_connections.add(connection)
             return None

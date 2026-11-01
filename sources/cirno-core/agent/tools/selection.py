@@ -5,7 +5,7 @@ from cirno.agent.tools.registry import ToolRegistry
 
 # Coordination retains references, memory and lifecycle controls; execution is delegated.
 _CIRNO_TOOLS = frozenset({
-    "message", "ask_user", "create_session", "set_session_title", "search_sessions",
+    "message", "ask_user", "create_session", "search_sessions",
     "read_session", "send_session_message", "create_goal", "update_goal", "get_goal",
     "memory", "read_file", "inspect_skill", "cron", "my",
 })

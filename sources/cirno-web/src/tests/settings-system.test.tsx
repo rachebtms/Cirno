@@ -98,7 +98,7 @@ describe("Settings system domains", () => {
     });
     const sidebar = screen.getByRole("complementary");
     const restart = within(sidebar).getByRole("button", { name: "Restart" });
-    for (const section of ["Capabilities", "Models", "Advanced", "System"]) {
+    for (const section of ["Web search", "Models", "Permissions", "Server & heartbeat"]) {
       fireEvent.click(within(sidebar).getByRole("button", { name: section }));
       await waitFor(() => {
         expect(screen.getAllByRole("button", { name: "Restart" })).toEqual([restart]);
@@ -574,7 +574,7 @@ describe("Settings system domains", () => {
     renderSettingsView({ initialSection: "apps" });
 
     expect(await screen.findByText("AnyGen")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tools" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Tools & CLI Apps" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "MCP" })).toBeInTheDocument();
   });
 });

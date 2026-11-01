@@ -25,6 +25,7 @@ import {
 } from "@/components/settings/models/ProviderSettings";
 import { providerFormFromRow } from "@/components/settings/models/providerForm";
 import { AboutSettings, AppearanceSettings, OverviewSettings } from "@/components/settings/overview/OverviewSettings";
+import { TelegramBindingSettings } from "@/components/settings/channels/TelegramBindingSettings";
 import { NotificationSettings } from "@/components/settings/notifications/NotificationSettings";
 import { SettingsSidebar, standaloneSectionTitle } from "@/components/settings/SettingsSidebar";
 import {
@@ -51,6 +52,7 @@ import type { ChatSummary, SessionAutomationJob, SkillSummary } from "@/lib/type
 import { cn } from "@/lib/utils";
 
 interface SettingsPageProps {
+  hideHeader?: boolean;
   registerExitGuard?: (guard: SettingsExitGuard | null) => void;
   controller: SettingsController;
   themePreference: ThemePreference;
@@ -79,6 +81,7 @@ export function SettingsPage({
   controller,
   themePreference,
   showSidebar,
+  hideHeader = false,
   mainNavigationExpanded,
   onChangeTheme,
   onBackToChat,
@@ -387,7 +390,7 @@ export function SettingsPage({
               olostepInstalling={systemState.cirnoFeatureAction === "enable:olostep"}
               capabilityError={systemState.cirnoFeaturesError}
             >
-              {settings.runtime_config ? runtimeConfiguration("network") : null}
+              {settings.runtime_config ? runtimeConfiguration("web-network") : null}
             </WebSettings>
           </div>
         );
@@ -406,8 +409,15 @@ export function SettingsPage({
         );
       case "nodes":
         return <NodesSettings client={controller.client} />;
+      case "context":
+      case "dream":
+      case "memory-search":
+      case "execution":
+      case "shell":
+      case "network":
+        return runtimeConfiguration(section);
       case "memory":
-        return <div className="settings-stack">{runtimeConfiguration("memory")}<HomeFilesSettings client={controller.client} section="memory" /><MemorySourcesSettings client={controller.client} /></div>;
+        return <div className="settings-stack"><HomeFilesSettings client={controller.client} section="memory" /><MemorySourcesSettings client={controller.client} /></div>;
       case "personality":
         return <HomeFilesSettings client={controller.client} section="personality" />;
       case "advanced":
@@ -419,8 +429,12 @@ export function SettingsPage({
 
   const renderSection = (section: SettingsSectionKey, embedded = false): ReactNode => {
     switch (section) {
+      case "telegram":
+        return <TelegramBindingSettings client={controller.client} onConfigure={() => selectSection("channels")} />;
       case "appearance":
-        return <AppearanceSettings themePreference={themePreference} onChangeTheme={onChangeTheme}
+      case "reading":
+      case "activity":
+        return <AppearanceSettings section={section} themePreference={themePreference} onChangeTheme={onChangeTheme}
           localPrefs={localPrefs} onChangeLocalPrefs={setLocalPrefs} />;
       case "channels":
         return (
@@ -555,9 +569,9 @@ export function SettingsPage({
     }
   };
   // Appearance reads only browser-local preferences, not the gateway settings snapshot.
-  const localSection = activeSection === "appearance";
+  const localSection = ["appearance", "reading", "activity"].includes(activeSection);
   const sectionReady = localSection || settings !== null || activeSection === "skills" || activeSection === "apps"
-    || activeSection === "channels" || activeSection === "automations";
+    || activeSection === "channels" || activeSection === "telegram" || activeSection === "automations";
 
   return (
     <DialogLayoutContext.Provider value={dialogLayoutAnchor}>
@@ -688,7 +702,7 @@ export function SettingsPage({
             hostChromeInset && "pt-[4.25rem] sm:pt-[4.25rem] lg:pt-[4.75rem]",
           )}
         >
-          {!showSidebar ? (
+          {!showSidebar && !hideHeader ? (
             <div className={activeSection === "automations" ? "lg:hidden" : "settings-feature-header mb-7"}>
               <button
                 type="button"
@@ -728,7 +742,7 @@ export function SettingsPage({
                   {error}
                 </div>
               ) : null}
-              {renderSection(isCapabilitySection(activeSection) ? "capabilities" : activeSection)}
+              {renderSection(activeSection)}
             </div>
           ) : null}
         </div>

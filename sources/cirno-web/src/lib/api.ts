@@ -80,6 +80,23 @@ export class ApiError extends Error {
   }
 }
 
+async function responseError(res: Response): Promise<ApiError> {
+  const text = typeof res.text === "function" ? (await res.text()).trim() : "";
+  let message = text;
+  if (text.startsWith("{")) {
+    try {
+      const payload: unknown = JSON.parse(text);
+      if (payload && typeof payload === "object") {
+        const error = (payload as { error?: unknown }).error;
+        if (typeof error === "string" && error.trim()) message = error.trim();
+      }
+    } catch {
+      // Preserve non-JSON error bodies exactly as returned by the gateway.
+    }
+  }
+  return new ApiError(res.status, message || `HTTP ${res.status}`);
+}
+
 export interface WebUIMutationTransport {
   requestMutation<T>(
     action: string,
@@ -106,22 +123,7 @@ async function request<T>(
     },
     timeoutMs,
   );
-  if (!res.ok) {
-    const text = typeof res.text === "function" ? (await res.text()).trim() : "";
-    let message = text;
-    if (text.startsWith("{")) {
-      try {
-        const payload: unknown = JSON.parse(text);
-        if (payload && typeof payload === "object") {
-          const error = (payload as { error?: unknown }).error;
-          if (typeof error === "string" && error.trim()) message = error.trim();
-        }
-      } catch {
-        // Preserve non-JSON error bodies exactly as returned by the gateway.
-      }
-    }
-    throw new ApiError(res.status, message || `HTTP ${res.status}`);
-  }
+  if (!res.ok) throw await responseError(res);
   const contentType = res.headers?.get?.("content-type") ?? "";
   if (contentType && !contentType.toLowerCase().includes("application/json")) {
     const text = typeof res.text === "function" ? await res.text() : "";
@@ -452,7 +454,7 @@ export async function fetchWebuiThread(
   });
   if (res.status === 304 && options?.cached) return options.cached;
   if (res.status === 404) return null;
-  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  if (!res.ok) throw await responseError(res);
   return parseWebuiThreadPayload(await res.json());
 }
 
@@ -464,7 +466,7 @@ export async function fetchPromptIndex(token: string, key: string, signal: Abort
     headers, credentials: "same-origin", cache: "no-store", signal,
   });
   if (res.status === 304 && cached) return cached;
-  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  if (!res.ok) throw await responseError(res);
   const body: unknown = await res.json();
   if (!isRecord(body) || !Array.isArray(body.prompts)) throw new Error("Invalid prompt index");
   const replaceFrom = body.replaceFrom ?? 0;
@@ -497,7 +499,7 @@ export async function fetchWebuiThreadTraceDetail(
     credentials: "same-origin",
     cache: "no-store",
   });
-  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  if (!res.ok) throw await responseError(res);
   return parseWebuiThreadTraceDetailPayload(await res.json());
 }
 

@@ -65,12 +65,12 @@ describe("Settings navigation on mobile", () => {
     expect(back).toHaveBeenCalledOnce();
   });
 
-  it("treats capability subpages as the same navigation section", async () => {
+  it("treats web search as its own navigation section", async () => {
     mockMobileMedia();
     const user = userEvent.setup();
     render(<Sidebar activeSection="browser" />);
-    await user.click(screen.getByRole("button", { name: "Settings: Capabilities" }));
-    expect(screen.getByRole("menuitem", { name: "Capabilities" }))
+    await user.click(screen.getByRole("button", { name: "Settings: Web search" }));
+    expect(screen.getByRole("menuitem", { name: "Web search" }))
       .toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("menuitem", { name: "Restart" })).not.toBeInTheDocument();
   });
@@ -123,9 +123,9 @@ describe("Settings navigation on mobile", () => {
       { keys: "[TouchA>]", target }, { keys: "[/TouchA]", target },
     ]);
     await tap(screen.getByRole("button", { name: "Settings: Models" }));
-    await tap(screen.getByRole("menuitem", { name: "System" }));
+    await tap(screen.getByRole("menuitem", { name: "Server & heartbeat" }));
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Settings: System" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Settings: Server & heartbeat" })).toBeVisible();
   });
 
   it("keeps manual restart in the menu and closes it on selection", async () => {
@@ -203,8 +203,8 @@ it("offers separate Memory and Personality entries on desktop", async () => {
   render(<SettingsSidebar activeSection="personality" onSelectSection={select} onBackToChat={() => {}} />);
   const personality = screen.getByRole("button", { name: "Personality" });
   expect(personality).toHaveAttribute("aria-current", "page");
-  expect(screen.getByRole("button", { name: "Memory" })).not.toHaveAttribute("aria-current");
-  await userEvent.setup().click(screen.getByRole("button", { name: "Memory" }));
+  expect(screen.getByRole("button", { name: "Memory library" })).not.toHaveAttribute("aria-current");
+  await userEvent.setup().click(screen.getByRole("button", { name: "Memory library" }));
   expect(select).toHaveBeenCalledWith("memory");
 });
 
@@ -216,6 +216,6 @@ it("switches independently between Memory and Personality on mobile", async () =
   await user.click(screen.getByRole("menuitem", { name: "Personality" }));
   await user.click(screen.getByRole("button", { name: "Settings: Personality" }));
   expect(screen.getByRole("menuitem", { name: "Personality" })).toHaveAttribute("aria-current", "page");
-  await user.click(screen.getByRole("menuitem", { name: "Memory" }));
-  expect(screen.getByRole("button", { name: "Settings: Memory" })).toBeVisible();
+  await user.click(screen.getByRole("menuitem", { name: "Memory library" }));
+  expect(screen.getByRole("button", { name: "Settings: Memory library" })).toBeVisible();
 });

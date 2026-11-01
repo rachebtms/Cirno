@@ -14,14 +14,6 @@
         "label": "Utilisateurs autorisés",
         "placeholder": "* ou ID utilisateur Telegram"
       },
-      "groupPolicy": {
-        "label": "Règles des groupes",
-        "choices": {
-          "mention": "Mentions uniquement",
-          "open": "Tous les messages",
-          "allowlist": "Liste d’autorisation"
-        }
-      },
       "mode": {
         "label": "Mode de connexion",
         "choices": {

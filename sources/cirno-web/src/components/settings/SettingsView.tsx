@@ -13,6 +13,7 @@ interface SettingsViewProps {
   initialSection?: SettingsSectionKey;
   initialSettings?: SettingsPayload | null;
   showSidebar?: boolean;
+  hideHeader?: boolean;
   mainNavigationExpanded?: boolean;
   onChangeTheme: (value: ThemePreference) => void;
   onBackToChat: () => void;
@@ -43,6 +44,7 @@ export function SettingsView({
   initialSection = "overview",
   initialSettings = null,
   showSidebar = true,
+  hideHeader = false,
   mainNavigationExpanded = false,
   onChangeTheme,
   onBackToChat,
@@ -77,6 +79,7 @@ export function SettingsView({
       controller={controller}
       themePreference={themePreference}
       showSidebar={showSidebar}
+      hideHeader={hideHeader}
       mainNavigationExpanded={mainNavigationExpanded}
       onChangeTheme={onChangeTheme}
       onBackToChat={onBackToChat}
