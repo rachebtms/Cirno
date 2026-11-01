@@ -84,8 +84,9 @@ jobs:
         run: |
           docker run -d --name cirno-smoke --memory=400m -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 -e CIRNO_WEB_TOKEN=ci-smoke-only cirno:smoke gateway --foreground
           trap 'docker logs cirno-smoke; docker rm -f cirno-smoke' EXIT
-          curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:18790/health
-          curl --fail http://127.0.0.1:8765/ | grep -q '<html'
+          curl --fail --retry 30 --retry-delay 2 --retry-all-errors --retry-max-time 90 --connect-timeout 2 --max-time 5 http://127.0.0.1:18790/health
+          curl --fail --output /tmp/cirno-smoke.html http://127.0.0.1:8765/
+          grep -q '<html' /tmp/cirno-smoke.html
           docker exec cirno-smoke grep -Eq '^Uid:[[:space:]]+1000[[:space:]]' /proc/1/status
       - name: Sign in to GitHub Container Registry
         if: github.event_name != 'pull_request'
