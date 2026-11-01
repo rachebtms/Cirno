@@ -9,7 +9,6 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
-from types import EllipsisType
 from typing import Any, Callable, Coroutine, Literal
 
 from filelock import FileLock
@@ -116,31 +115,6 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
                 raise ValueError(f"unknown timezone '{schedule.tz}'") from None
 
 
-def _has_legacy_delivery_context(payload: CronPayload) -> bool:
-    return bool(payload.deliver or payload.channel or payload.to or payload.channel_meta)
-
-
-def _legacy_session_key(payload: CronPayload) -> str | None:
-    if payload.session_key:
-        return payload.session_key
-    if payload.channel and payload.to:
-        return f"{payload.channel}:{payload.to}"
-    return None
-
-
-def _disable_malformed_legacy_job(job: CronJob) -> None:
-    reason = "legacy cron payload is missing channel/to; recreate it from a chat session"
-    job.payload.deliver = False
-    job.payload.channel = None
-    job.payload.to = None
-    job.payload.channel_meta = {}
-    job.enabled = False
-    job.state.next_run_at_ms = None
-    job.state.last_status = "error"
-    job.state.last_error = reason
-    logger.warning("Cron: disabled malformed legacy job '{}' ({}): {}", job.name, job.id, reason)
-
-
 def _persistable_origin_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """Return a detached JSON-safe routing snapshot for a cron payload."""
     snapshot: dict[str, Any] = {}
@@ -155,38 +129,11 @@ def _persistable_origin_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_agent_turn_job(job: CronJob) -> bool:
-    """Make routing metadata persistable and migrate legacy user cron payloads.
-
-    Pre-bound user cron jobs stored their delivery target in ``channel``/``to``.
-    Normal user-created legacy jobs always have those fields; if they are
-    missing, keep the record for inspection but disable it instead of preserving
-    a runtime legacy execution path.
-    """
-    payload = job.payload
-    origin_metadata = _persistable_origin_metadata(payload.origin_metadata)
-    changed = origin_metadata != payload.origin_metadata
-    payload.origin_metadata = origin_metadata
-
-    if payload.kind != "agent_turn" or not _has_legacy_delivery_context(payload):
-        return changed
-
-    if not payload.channel or not payload.to:
-        _disable_malformed_legacy_job(job)
-        return True
-
-    payload.session_key = _legacy_session_key(payload)
-    payload.origin_channel = payload.origin_channel or payload.channel
-    payload.origin_chat_id = payload.origin_chat_id or payload.to
-    if not payload.origin_metadata:
-        payload.origin_metadata = _persistable_origin_metadata(payload.channel_meta or {})
-
-    payload.deliver = False
-    payload.channel = None
-    payload.to = None
-    payload.channel_meta = {}
-    job.updated_at_ms = max(job.updated_at_ms, _now_ms())
-    logger.info("Cron: migrated legacy job '{}' ({}) to session-bound payload", job.name, job.id)
-    return True
+    """Snapshot current routing metadata for persistence."""
+    metadata = _persistable_origin_metadata(job.payload.origin_metadata)
+    changed = metadata != job.payload.origin_metadata
+    job.payload.origin_metadata = metadata
+    return changed
 
 
 class CronService:
@@ -431,10 +378,6 @@ class CronService:
                     "payload": {
                         "kind": j.payload.kind,
                         "message": j.payload.message,
-                        "deliver": j.payload.deliver,
-                        "channel": j.payload.channel,
-                        "to": j.payload.to,
-                        "channelMeta": j.payload.channel_meta,
                         "sessionKey": j.payload.session_key,
                         "originChannel": j.payload.origin_channel,
                         "originChatId": j.payload.origin_chat_id,
@@ -601,7 +544,7 @@ class CronService:
             # A load/persist failure must not kill the scheduler: keep the
             # in-memory store and retry on the next tick.  This mirrors the
             # read-path defense in ``_load_jobs`` (``.corrupt-<ts>`` backups);
-            # ``_load_store`` may also persist (agent-binding migrations).
+            # ``_load_store`` may also persist (routing metadata normalization).
             logger.exception(
                 "Cron: tick failed ({}); "
                 "keeping in-memory state and retrying on next tick",
@@ -757,11 +700,7 @@ class CronService:
         name: str,
         schedule: CronSchedule,
         message: str,
-        deliver: bool = False,
-        channel: str | None = None,
-        to: str | None = None,
         delete_after_run: bool = False,
-        channel_meta: dict[str, Any] | None = None,
         session_key: str | None = None,
         origin_channel: str | None = None,
         origin_chat_id: str | None = None,
@@ -779,10 +718,6 @@ class CronService:
             payload=CronPayload(
                 kind="agent_turn",
                 message=message,
-                deliver=deliver,
-                channel=channel,
-                to=to,
-                channel_meta=channel_meta or {},
                 session_key=session_key,
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
@@ -890,9 +825,6 @@ class CronService:
         name: str | None = None,
         schedule: CronSchedule | None = None,
         message: str | None = None,
-        deliver: bool | None = None,
-        channel: str | None | EllipsisType = ...,
-        to: str | None | EllipsisType = ...,
         delete_after_run: bool | None = None,
     ) -> CronJob | Literal["not_found", "protected"]:
         """Update mutable fields of an existing job. System jobs cannot be updated.
@@ -917,12 +849,6 @@ class CronService:
             job.name = name
         if message is not None:
             job.payload.message = message
-        if deliver is not None:
-            job.payload.deliver = deliver
-        if channel is not ...:
-            job.payload.channel = channel
-        if to is not ...:
-            job.payload.to = to
         if delete_after_run is not None:
             job.delete_after_run = delete_after_run
         _normalize_agent_turn_job(job)

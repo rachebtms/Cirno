@@ -14,7 +14,6 @@ export default {
         { key: "channels.telegram.token", section: "credentials" },
         { key: "channels.telegram.mode", section: "connection" },
         { key: "channels.telegram.useProxy", section: "connection", control: "switch" },
-        { key: "channels.telegram.allowFrom", section: "access" },
       ],
     },
   },

@@ -67,7 +67,6 @@ def _isolate_runtime_stores(
         return path
 
     monkeypatch.setattr(session_location, "get_runtime_subdir", runtime_subdir)
-    monkeypatch.setattr("cirno.webui.history.get_webui_dir", lambda: runtime_subdir("webui"))
     monkeypatch.setattr(pairing_store, "_store_path", lambda: data_dir() / "pairing.json")
     monkeypatch.setattr(llm_usage, "get_data_dir", data_dir)
     stores: dict[Path, llm_usage.LLMUsageStore] = {}

@@ -27,7 +27,6 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
     config.providers.custom.api_key = "test-key"
     update_runtime_config(config, {
         "agents.defaults.dream.interval_h": 6,
-        "agents.defaults.dream.cron": "0 3 * * *",
         "gateway.heartbeat.enabled": False,
         "gateway.heartbeat.interval_s": 3600,
         "network.request_timeout_s": 180,
@@ -38,15 +37,12 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
     assert provider.request_timeout_s == 180
     assert provider.stream_idle_timeout_s == 150
     assert len(provider._CHAT_RETRY_DELAYS) == 4
-    assert config.agents.defaults.dream.build_schedule("UTC").expr == "0 3 * * *"
+    assert config.agents.defaults.dream.build_schedule("UTC").every_ms == 6 * 3_600_000
     assert not config.gateway.heartbeat.enabled
 
 
 def test_invalid_maintenance_settings_do_not_change_saved_values():
     config = Config()
-    with pytest.raises(WebUISettingsError, match="cron"):
-        update_runtime_config(config, {"agents.defaults.dream.cron": "not a schedule"}, local_browser=True)
-    assert config.agents.defaults.dream.cron is None
     with pytest.raises(WebUISettingsError):
         update_runtime_config(config, {"network.provider_max_retries": 2}, local_browser=True)
     assert config.network.provider_max_retries == 3

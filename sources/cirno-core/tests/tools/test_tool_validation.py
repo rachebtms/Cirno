@@ -7,7 +7,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import ValidationError
 
 from cirno.agent.tools import (
     ArraySchema,
@@ -1017,19 +1016,6 @@ async def test_exec_runtime_aliases_are_mutually_exclusive(monkeypatch) -> None:
     assert "max_runtime" in result
     assert "timeout" in result
     spawn.assert_not_called()
-
-
-def test_exec_config_runtime_defaults_and_timeout_alias() -> None:
-    cfg = ExecToolConfig()
-    assert cfg.max_runtime == 3600
-    assert cfg.max_runtime_limit == 86400
-    assert cfg.idle_timeout == 300
-    assert cfg.idle_action == "report"
-    assert ExecToolConfig(timeout=5).max_runtime == 5
-    assert ExecToolConfig(timeout=3600).max_runtime == 3600
-    assert ExecToolConfig(timeout=0).max_runtime == 0
-    with pytest.raises(ValidationError):
-        ExecToolConfig(timeout=-1)
 
 
 def test_exec_config_accepts_bwrap_bind_aliases() -> None:

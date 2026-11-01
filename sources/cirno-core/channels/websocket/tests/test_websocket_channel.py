@@ -17,6 +17,7 @@ from websockets.datastructures import Headers
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
 
+from cirno.session.automation_turns import AUTOMATION_HISTORY_META
 from cirno.bus.events import (
     INBOUND_META_RUNTIME_CONTROL,
     INBOUND_META_USER_SHELL,
@@ -47,9 +48,8 @@ from cirno.channels.websocket.runtime import (
     WebSocketConfig,
     _is_valid_chat_id,
     _parse_envelope,
-    _parse_inbound_payload,
 )
-from cirno.config.loader import load_config, save_config
+from cirno.config.loader import save_config
 from cirno.config.schema import Config, ModelAPIConfig
 from cirno.pairing.events import PairingChanged
 from cirno.providers.base import LLMUsage
@@ -85,7 +85,7 @@ from cirno.webui.metadata import (
     WEBUI_SYSTEM_COMMAND_TURN_PREFIX,
     WEBUI_TURN_METADATA_KEY,
 )
-from cirno.webui.settings.api import settings_payload, update_provider_settings
+from cirno.webui.settings.api import settings_payload
 
 from .ws_test_client import http_get as _http_get
 
@@ -862,40 +862,6 @@ def test_parse_query_extracts_token_and_client_id() -> None:
     query = _parse_query("/?token=secret&client_id=u1")
     assert query.get("token") == ["secret"]
     assert query.get("client_id") == ["u1"]
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("plain", "plain"),
-        ('{"content": "hi"}', "hi"),
-        ('{"text": "there"}', "there"),
-        ('{"message": "x"}', "x"),
-        ("  ", None),
-        ("{}", None),
-    ],
-)
-def test_parse_inbound_payload(raw: str, expected: str | None) -> None:
-    assert _parse_inbound_payload(raw) == expected
-
-
-def test_parse_inbound_invalid_json_falls_back_to_raw_string() -> None:
-    assert _parse_inbound_payload("{not json") == "{not json"
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ('{"content": ""}', None),           # empty string content
-        ('{"content": 123}', None),          # non-string content
-        ('{"content": "  "}', None),         # whitespace-only content
-        ('["hello"]', '["hello"]'),           # JSON array: not a dict, treated as plain text
-        ('{"unknown_key": "val"}', None),    # unrecognized key
-        ('{"content": null}', None),         # null content
-    ],
-)
-def test_parse_inbound_payload_edge_cases(raw: str, expected: str | None) -> None:
-    assert _parse_inbound_payload(raw) == expected
 
 
 def test_web_socket_config_path_must_start_with_slash() -> None:
@@ -4367,7 +4333,7 @@ async def test_end_to_end_client_receives_ready_and_agent_sees_inbound(bus: Magi
             assert ready["client_id"] == "tester"
             chat_id = ready["chat_id"]
 
-            await client.send(json.dumps({"content": "ping from client"}))
+            await client.send(json.dumps({"type": "message", "chat_id": chat_id, "content": "ping from client"}))
             await asyncio.sleep(0.08)
 
             bus.publish_inbound.assert_awaited()
@@ -4377,11 +4343,11 @@ async def test_end_to_end_client_receives_ready_and_agent_sees_inbound(bus: Magi
             assert inbound.chat_id == chat_id
             assert inbound.content == "ping from client"
 
-            await client.send("plain text frame")
+            await client.send(json.dumps({"type": "message", "chat_id": chat_id, "content": "second typed frame"}))
             await asyncio.sleep(0.08)
             assert bus.publish_inbound.await_count >= 2
             second = [c[0][0] for c in bus.publish_inbound.call_args_list][-1]
-            assert second.content == "plain text frame"
+            assert second.content == "second typed frame"
     finally:
         await channel.stop()
         await server_task
@@ -4470,12 +4436,6 @@ async def test_http_route_issues_token_then_websocket_requires_it(bus: MagicMock
     finally:
         await channel.stop()
         await server_task
-
-
-
-
-
-
 
 
 @pytest.mark.asyncio
@@ -4588,7 +4548,7 @@ def test_settings_payload_reports_workspace_sandbox(monkeypatch, tmp_path) -> No
     config.tools.restrict_to_workspace = True
     save_config(config, config_path)
     monkeypatch.setattr("cirno.config.loader._current_config_path", config_path)
-    monkeypatch.setenv("CIRNO_SANDBOX_ENFORCED", "macos_app_sandbox")
+    monkeypatch.setenv("CIRNO_WORKSPACE_SANDBOX_ENFORCED", "macos_app_sandbox")
 
     body = settings_payload()
     sandbox = body["advanced"]["workspace_sandbox"]
@@ -4618,23 +4578,6 @@ def test_settings_payload_includes_native_runtime_surface(monkeypatch, tmp_path)
     assert body["restart_behavior_by_section"]["runtime"] == "engineRestart"
     assert body["requires_restart"] is True
     assert body["apply_state"] == {"status": "pending", "sections": ["runtime"]}
-
-
-def test_update_provider_settings_ignores_api_type_for_non_openai(monkeypatch, tmp_path) -> None:
-    config_path = tmp_path / "config.json"
-    save_config(Config(), config_path)
-    monkeypatch.setattr("cirno.config.loader._current_config_path", config_path)
-
-    body = update_provider_settings({
-        "provider": ["custom"],
-        "api_base": ["https://example.test/v1"],
-        "api_type": ["responses"],
-    })
-
-    assert body["providers"]
-    config = load_config(config_path)
-    assert config.providers.custom.api_base == "https://example.test/v1"
-    assert config.providers.custom.api is None
 
 
 @pytest.mark.asyncio
@@ -5073,43 +5016,6 @@ async def test_websocket_requires_token_without_issue_path(bus: MagicMock, start
 
 
 @pytest.mark.asyncio
-async def test_multiplex_legacy_still_works(bus: MagicMock, start_listener) -> None:
-    port = 0
-    channel = _ch(bus, port=port)
-    port, server_task = await start_listener(channel)
-
-    try:
-        async with websockets.connect(f"ws://127.0.0.1:{port}/ws?client_id=legacy") as client:
-            ready = json.loads(await client.recv())
-            default_chat = ready["chat_id"]
-
-            # Plain text frame routes to default chat_id
-            await client.send("hello from legacy")
-            await asyncio.sleep(0.1)
-            inbound = bus.publish_inbound.call_args[0][0]
-            assert inbound.chat_id == default_chat
-            assert inbound.content == "hello from legacy"
-
-            # {"content": ...} frame routes to default chat_id
-            await client.send(json.dumps({"content": "structured legacy"}))
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].chat_id == default_chat
-            assert bus.publish_inbound.call_args[0][0].content == "structured legacy"
-
-            # Outbound still reaches the legacy client, with chat_id annotated
-            await channel.send(
-                OutboundMessage(channel="websocket", chat_id=default_chat, content="reply")
-            )
-            reply = json.loads(await client.recv())
-            assert reply["event"] == "message"
-            assert reply["chat_id"] == default_chat
-            assert reply["text"] == "reply"
-    finally:
-        await channel.stop()
-        await server_task
-
-
-@pytest.mark.asyncio
 async def test_multiplex_new_chat_roundtrip(bus: MagicMock, start_listener) -> None:
     port = 0
     channel = _ch(bus, port=port)
@@ -5305,8 +5211,14 @@ async def test_multiplex_invalid_frames_return_error(bus: MagicMock, start_liste
             err3 = json.loads(await client.recv())
             assert err3["event"] == "error"
 
-            # Connection survives: legacy frame still works.
-            await client.send("still-alive")
+            # Untyped frames cannot fall back to an implicit conversation.
+            await client.send("untyped input")
+            rejected = json.loads(await client.recv())
+            assert rejected["event"] == "error"
+            assert rejected["detail"] == "Expected a typed WebSocket envelope"
+            bus.publish_inbound.assert_not_awaited()
+            # The same connection still accepts the current routed protocol.
+            await client.send(json.dumps({"type": "message", "chat_id": "abc", "content": "still-alive"}))
             await asyncio.sleep(0.1)
             bus.publish_inbound.assert_awaited()
             assert bus.publish_inbound.call_args[0][0].content == "still-alive"
@@ -5455,7 +5367,6 @@ async def test_handle_webui_thread_get_returns_json(history, tmp_path, monkeypat
 
     from websockets.datastructures import Headers
     from websockets.http11 import Request
-
 
 
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
@@ -5607,7 +5518,6 @@ async def test_handle_webui_thread_get_reports_registered_turn_as_pending(histor
 
     from websockets.datastructures import Headers
     from websockets.http11 import Request
-
 
 
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
@@ -5796,7 +5706,6 @@ async def test_handle_webui_thread_get_reconciles_registered_turn_with_turn_end(
     from websockets.http11 import Request
 
 
-
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
     monkeypatch.setattr(
         "cirno.session.webui_turns.websocket_turn_wall_started_at",
@@ -5856,7 +5765,6 @@ async def test_handle_webui_thread_get_accepts_pagination_query(history, tmp_pat
     from websockets.http11 import Request
 
 
-
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:paged-route"
     for idx in range(1, 4):
@@ -5905,7 +5813,6 @@ async def test_handle_webui_thread_get_returns_canonical_events_by_default(histo
 
     from websockets.datastructures import Headers
     from websockets.http11 import Request
-
 
 
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
@@ -6164,7 +6071,6 @@ async def test_handle_webui_thread_get_backfills_legacy_missing_user_rows(histor
     from websockets.http11 import Request
 
 
-
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
     workspace = tmp_path / "workspace"
     sessions = history.sessions
@@ -6210,8 +6116,6 @@ async def test_handle_webui_thread_get_does_not_backfill_cron_internal_prompt(hi
     from websockets.datastructures import Headers
     from websockets.http11 import Request
 
-    from cirno.cron.session_turns import CRON_HISTORY_META
-
 
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
     workspace = tmp_path / "workspace"
@@ -6221,7 +6125,7 @@ async def test_handle_webui_thread_get_does_not_backfill_cron_internal_prompt(hi
     session.add_message(
         "user",
         "Scheduled cron job triggered: 30s-test\n\nInternal reminder prompt",
-        **{CRON_HISTORY_META: True},
+        **{AUTOMATION_HISTORY_META: {"kind": "cron"}},
     )
     session.add_message("assistant", "提醒已经到期。")
     sessions.save(session)

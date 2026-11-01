@@ -12,7 +12,6 @@ def test_dream_config_defaults_to_interval_hours() -> None:
     cfg = DreamConfig()
 
     assert cfg.interval_h == 2
-    assert cfg.cron is None
 
 
 def test_dream_config_builds_every_schedule_from_interval() -> None:
@@ -25,34 +24,14 @@ def test_dream_config_builds_every_schedule_from_interval() -> None:
     assert schedule.expr is None
 
 
-def test_dream_config_honors_legacy_cron_override() -> None:
-    cfg = DreamConfig.model_validate({"cron": "0 */4 * * *", "mode": "interval"})
-
-    schedule = cfg.build_schedule("UTC")
-
-    assert schedule.kind == "cron"
-    assert schedule.expr == "0 */4 * * *"
-    assert schedule.tz == "UTC"
-    assert cfg.describe_schedule() == "cron 0 */4 * * * (legacy)"
-
-
-def test_dream_config_dump_preserves_legacy_cron_override() -> None:
-    cfg = DreamConfig.model_validate({"intervalH": 5, "cron": "0 */4 * * *"})
-
-    dumped = cfg.model_dump(by_alias=True)
-
-    assert dumped["intervalH"] == 5
-    assert dumped["cron"] == "0 */4 * * *"
-
-
 def test_dream_config_dump_omits_empty_legacy_cron() -> None:
     dumped = DreamConfig().model_dump(by_alias=True)
 
     assert "cron" not in dumped
 
 
-def test_dream_config_uses_model_override_name_and_accepts_legacy_model() -> None:
-    cfg = DreamConfig.model_validate({"model": "openrouter/sonnet"})
+def test_dream_config_uses_model_override_name() -> None:
+    cfg = DreamConfig.model_validate({"modelOverride": "openrouter/sonnet"})
 
     dumped = cfg.model_dump(by_alias=True)
 

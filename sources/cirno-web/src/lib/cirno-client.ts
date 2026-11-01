@@ -149,13 +149,7 @@ interface PendingChatRequest extends PendingRequest<string> {
 }
 
 const SYSTEM_COMMAND_TURN_PREFIX = "webui-system:";
-const TURN_REJECTION_DETAILS = new Set([
-  "access_denied",
-  "attachment_rejected",
-  "message_rejected",
-  "missing content",
-  "workspace_scope_rejected",
-]);
+
 
 export function isSystemCommandTurnId(value: string | null | undefined): value is string {
   return typeof value === "string" && value.startsWith(SYSTEM_COMMAND_TURN_PREFIX);
@@ -449,19 +443,6 @@ export class CirnoClient {
   /** Last ``goal_state`` payload for *chatId*, if any frame has arrived this connection. */
   getGoalState(chatId: string): GoalStateWsPayload | undefined {
     return this.goalStateByChatId.get(chatId);
-  }
-
-  private legacyRejectionTarget(ev: Extract<InboundEvent, { event: "error" }>): {
-    chatId: string;
-    turnId: string;
-  } | null {
-    if (!ev.detail || !TURN_REJECTION_DETAILS.has(ev.detail)) return null;
-    if (
-      ev.detail === "workspace_scope_rejected"
-      && ev.chat_id === undefined
-      && this.pendingNewChat
-    ) return null;
-    return this.runs.soleSentTurn(this.lastSocketMessageSend, ev.chat_id);
   }
 
   private applyRunEffects(effects: readonly RunEffect[]): void {
@@ -917,24 +898,6 @@ export class CirnoClient {
       return;
     }
 
-    if (parsed.event === "error" && !parsed.turn_id) {
-      const fallback = this.legacyRejectionTarget(parsed);
-      if (fallback) {
-        parsed = {
-          ...parsed,
-          chat_id: parsed.chat_id ?? fallback.chatId,
-          turn_id: fallback.turnId,
-        };
-      }
-    }
-    if (
-      (parsed.event === "goal_status" || parsed.event === "turn_end")
-      && !parsed.turn_id
-    ) {
-      const fallbackTurnId = this.runs.soleUnsettledTurn(parsed.chat_id);
-      if (fallbackTurnId) parsed = { ...parsed, turn_id: fallbackTurnId };
-    }
-
     this.receipts.event(parsed);
     const turnId = "turn_id" in parsed && typeof parsed.turn_id === "string"
       ? parsed.turn_id
@@ -1021,7 +984,6 @@ export class CirnoClient {
       this.emitRuntimeModelUpdate(parsed.model_name || null, parsed.model_preset ?? null);
       return;
     }
-
 
 
     if (parsed.event === "session_updated") {

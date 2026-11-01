@@ -611,29 +611,10 @@ function AutomationDetailPanel({
 }
 
 function AutomationError({ message }: { message: string }) {
-  const { t } = useTranslation();
-  const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
   return <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg bg-destructive/5 px-3 py-2.5 text-[13px] leading-5 text-destructive">
     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-      {localizedAutomationError(message, tx)}
-    </span>
+    <span className="min-w-0 break-words [overflow-wrap:anywhere]">{message}</span>
   </div>;
-}
-
-const LEGACY_AUTOMATION_DESTINATION_ERROR = "legacy cron payload is missing channel/to";
-
-function localizedAutomationError(
-  message: string,
-  tx: (key: string, fallback: string) => string,
-): string {
-  if (message.toLowerCase().includes(LEGACY_AUTOMATION_DESTINATION_ERROR)) {
-    return tx(
-      "settings.automations.errors.legacyMissingDestination",
-      "This older automation is missing its delivery destination. Recreate it from the linked chat to continue.",
-    );
-  }
-  return message;
 }
 
 function automationMessageNeedsExpansion(message: string): boolean {

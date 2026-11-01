@@ -52,11 +52,6 @@ class CronPayload:
     """What to do when the job runs."""
     kind: Literal["system_event", "agent_turn"] = "agent_turn"
     message: str = ""
-    # Legacy delivery fields used by pre-session-bound cron jobs.
-    deliver: bool = False
-    channel: str | None = None  # e.g. "whatsapp"
-    to: str | None = None  # e.g. phone number
-    channel_meta: dict[str, Any] = field(default_factory=dict)
     session_key: str | None = None  # original session key for correct session recording
     origin_channel: str | None = None
     origin_chat_id: str | None = None
@@ -68,12 +63,6 @@ class CronPayload:
         return cls(
             kind=data.get("kind", "agent_turn"),
             message=data.get("message", ""),
-            deliver=data.get("deliver", False),
-            channel=data.get("channel"),
-            to=data.get("to"),
-            channel_meta=dict(
-                get_camel_snake(data, "channelMeta", "channel_meta", {}) or {}
-            ),
             session_key=get_camel_snake(data, "sessionKey", "session_key"),
             origin_channel=get_camel_snake(data, "originChannel", "origin_channel"),
             origin_chat_id=get_camel_snake(data, "originChatId", "origin_chat_id"),

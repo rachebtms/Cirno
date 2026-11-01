@@ -398,9 +398,8 @@ def _env_system_provider(environ: dict[str, str] | None = None) -> str | None:
     env = environ if environ is not None else os.environ
     explicit_provider = env.get("CIRNO_WORKSPACE_SANDBOX_PROVIDER")
     enforced = env.get("CIRNO_WORKSPACE_SANDBOX_ENFORCED")
-    compatibility = env.get("CIRNO_SANDBOX_ENFORCED")
 
-    marker = enforced if enforced is not None else compatibility
+    marker = enforced
     if marker is None:
         return None
 

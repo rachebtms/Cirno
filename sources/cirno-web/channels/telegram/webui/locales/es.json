@@ -10,10 +10,6 @@
       "useProxy": {
         "label": "Usar proxy"
       },
-      "allowFrom": {
-        "label": "Usuarios permitidos",
-        "placeholder": "* o ID de usuario de Telegram"
-      },
       "mode": {
         "label": "Modo de conexión",
         "choices": {

@@ -125,28 +125,10 @@ async def test_json_content_field(bus: MagicMock) -> None:
     t = asyncio.create_task(ch.start())
     try:
         async with WsTestClient("ws://127.0.0.1:29905/", client_id="j") as c:
-            await c.recv_ready()
-            await c.send_json({"content": "structured"})
+            ready = await c.recv_ready()
+            await c.send_json({"type": "message", "chat_id": ready.chat_id, "content": "structured"})
             await asyncio.sleep(0.1)
             assert bus.publish_inbound.call_args[0][0].content == "structured"
-    finally:
-        await ch.stop()
-        await t
-
-
-@pytest.mark.asyncio
-async def test_json_text_and_message_fields(bus: MagicMock) -> None:
-    ch = _ch(bus, 29906)
-    t = asyncio.create_task(ch.start())
-    try:
-        async with WsTestClient("ws://127.0.0.1:29906/", client_id="x") as c:
-            await c.recv_ready()
-            await c.send_json({"text": "via text"})
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "via text"
-            await c.send_json({"message": "via message"})
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "via message"
     finally:
         await ch.stop()
         await t
@@ -535,7 +517,7 @@ async def test_large_message(bus: MagicMock) -> None:
     try:
         async with WsTestClient("ws://127.0.0.1:29921/", client_id="big") as c:
             await c.recv_ready()
-            big = "x" * 100_000
+            big = "x" * 64_000
             await c.send_text(big)
             await asyncio.sleep(0.2)
             assert bus.publish_inbound.call_args[0][0].content == big

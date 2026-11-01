@@ -277,27 +277,6 @@ class WebSocketConfig(Base):
         )
 
 
-def _parse_inbound_payload(raw: str) -> str | None:
-    """Parse a client frame into text; return None for empty or unrecognized content."""
-    text = raw.strip()
-    if not text:
-        return None
-    if text.startswith("{"):
-        try:
-            data = cast(object, json.loads(text))
-        except json.JSONDecodeError:
-            return text
-        if isinstance(data, dict):
-            payload = cast(dict[str, Any], data)
-            for key in ("content", "text", "message"):
-                value = payload.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value
-            return None
-        return None
-    return text
-
-
 def _is_valid_chat_id(value: Any) -> TypeGuard[str]:  # pyright: ignore[reportUnusedFunction]
     return is_valid_webui_chat_id(value)
 
@@ -306,8 +285,7 @@ def _parse_envelope(raw: str) -> dict[str, Any] | None:
     """Return a typed envelope dict if the frame is a new-style JSON envelope, else None.
 
     A frame qualifies when it parses as a JSON object with a string ``type`` field.
-    Legacy frames (plain text, or ``{"content": ...}`` without ``type``) return None;
-    callers should fall back to :func:`_parse_inbound_payload` for those.
+    Untyped or malformed frames return None and are rejected by the caller.
     """
     text = raw.strip()
     if not text.startswith("{"):
@@ -365,7 +343,7 @@ class WebSocketChannel(BaseChannel):
         self._subs: dict[str, set[ServerConnection]] = {}
         # connection -> chat_ids it is subscribed to (O(1) cleanup on disconnect).
         self._conn_chats: dict[ServerConnection, set[str]] = {}
-        # connection -> default chat_id for legacy frames that omit routing.
+        # connection -> chat_id selected when establishing the connection.
         self._conn_default: dict[ServerConnection, str] = {}
         # Connections authenticated with a one-time token from /webui/bootstrap.
         self._webui_connections = gateway.endpoint.webui_connections
@@ -656,7 +634,6 @@ class WebSocketChannel(BaseChannel):
             )
 
     async def start(self) -> None:
-        await self._outbound.initialize()
         from cirno.utils.logging_bridge import redirect_lib_logging
 
         redirect_lib_logging("websockets", level="WARNING")
@@ -868,19 +845,7 @@ class WebSocketChannel(BaseChannel):
                     await self._dispatch_envelope(connection, client_id, envelope)
                     continue
 
-                content = _parse_inbound_payload(raw)
-                if content is None:
-                    continue
-                # WebSocket already authenticates at handshake time (token),
-                # so pairing is not applicable. Treat as non-DM to avoid
-                # sending pairing codes to an already-authenticated client.
-                await self._handle_message(
-                    sender_id=client_id,
-                    chat_id=default_chat_id,
-                    content=content,
-                    metadata={"remote": getattr(connection, "remote_address", None)},
-                    is_dm=False,
-                )
+                await self.webui_send_event(connection, "error", detail="Expected a typed WebSocket envelope")
         except Exception as e:
             self.logger.debug("connection ended: {}", e)
         finally:

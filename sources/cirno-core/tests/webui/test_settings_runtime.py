@@ -55,13 +55,13 @@ def test_runtime_patch_persists_and_preserves_other_domains(tmp_path):
         "agents.defaults.max_tool_iterations": 71,
         "agents.defaults.timezone_mode": "manual",
         "agents.defaults.timezone": "Asia/Shanghai",
-        "tools.exec.timeout": 0,
+        "tools.exec.max_runtime": 0,
         "tools.exec.allowed_env_keys": ["MY_TOKEN"],
     }, local_browser=True, config_path=path)
     saved = load_config(path)
     assert saved.agents.defaults.max_tool_iterations == 71
     assert saved.agents.defaults.timezone == "Asia/Shanghai"
-    assert saved.tools.exec.timeout == 0
+    assert saved.tools.exec.max_runtime == 0
     assert saved.tools.exec.allowed_env_keys == ["MY_TOKEN"]
     assert saved.providers.openai.api_key == "${PRIVATE_API_KEY}"
     assert saved.channels.telegram == {"token": "keep-me", "streaming": False}
@@ -86,9 +86,9 @@ def test_runtime_patch_persists_and_preserves_other_domains(tmp_path):
     {"agents.defaults.session_ttl_minutes": True},
     {"agents.defaults.session_ttl_minutes": False},
     {"agents.defaults.session_ttl_minutes": None},
-    {"tools.exec.timeout": -1},
-    {"tools.exec.timeout": 86401},
-    {"tools.exec.timeout": "60"},
+    {"tools.exec.max_runtime": -1},
+    {"tools.exec.max_runtime": 86401},
+    {"tools.exec.max_runtime": "60"},
     {"tools.exec.enable": "false"},
     {"tools.exec.allowed_env_keys": "TOKEN"},
     {"tools.exec.allowed_env_keys": [3]},
@@ -122,12 +122,12 @@ def test_shell_runtime_editor_uses_the_configured_limit(tmp_path, limit):
     before = path.read_bytes()
 
     with pytest.raises(WebUISettingsError, match=f"1–{limit} seconds"):
-        update_runtime_config_settings({"tools.exec.timeout": limit + 1}, config_path=path)
+        update_runtime_config_settings({"tools.exec.max_runtime": limit + 1}, config_path=path)
     assert path.read_bytes() == before
 
-    payload = update_runtime_config_settings({"tools.exec.timeout": limit}, config_path=path)
+    payload = update_runtime_config_settings({"tools.exec.max_runtime": limit}, config_path=path)
     assert payload["advanced"]["exec_max_runtime_limit"] == limit
-    assert payload["runtime_config"]["tools.exec.timeout"] == limit
+    assert payload["runtime_config"]["tools.exec.max_runtime"] == limit
     saved = load_config(path).tools.exec
     assert saved.max_runtime == limit
     assert saved.max_runtime_limit == limit
@@ -169,10 +169,7 @@ def test_timezone_auto_and_nullable_fields():
         "network.proxy": None,
     }, local_browser=True)
     assert config.agents.defaults.timezone_mode == "auto"
-    assert config.agents.defaults.dream.cron == "0 2 * * *"
     assert not update_runtime_config(config, {}, local_browser=True)
-
-
 
 
 def test_runtime_payload_matches_shared_catalogue_contract():
@@ -234,10 +231,10 @@ def test_idle_compaction_settings_roundtrip_and_restart_contract(tmp_path):
         assert unchanged["requires_restart"] is False
 
 
-def test_idle_compaction_legacy_config_can_be_read_and_updated(tmp_path):
+def test_idle_compaction_config_can_be_read_and_updated(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"agents": {"defaults": {
-        "sessionTtlMinutes": 720, "idleCompactCheckIntervalSeconds": 91,
+        "idleCompactAfterMinutes": 720, "idleCompactCheckIntervalSeconds": 91,
     }}}), encoding="utf-8")
     key = "agents.defaults.session_ttl_minutes"
     assert runtime_config_payload(load_config(path))[key] == 720

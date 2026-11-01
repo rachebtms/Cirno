@@ -92,7 +92,7 @@ async def test_compaction_waits_for_active_sdk_turn_and_preserves_reply(
             return await idle_archive
         if trigger == "compact_session":
             return await bot.runtime.compact_session(key)
-        return await bot.runtime.compact_idle_session(key, max_suffix=4)
+        return await bot.runtime.compact_idle_session(key)
 
     turn = asyncio.create_task(bot.run("new question", session_key=key))
     tasks = [turn]

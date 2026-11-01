@@ -9,7 +9,6 @@ SETUP_SPEC = ChannelSetupSpec(
     fields={
         "token": field("secret"),
         "useProxy": field("bool", default=False),
-        "allowFrom": field("list"),
         "mode": field("enum", choices={"polling", "webhook"}, default="polling"),
         "replyToMessage": field("bool", default=False),
         "reactEmoji": field(default="👀"),

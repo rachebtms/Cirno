@@ -144,14 +144,14 @@ describe("channelSetup", () => {
       name: "telegram",
       display_name: "Telegram",
       webui: "webui/index.ts",
-      setup: { fields: [{ key: "channels.telegram.allowFrom", field: "allowFrom", kind: "list", choices: [], required: false }], official_url: "https://t.me/BotFather" },
+      setup: { fields: [{ key: "channels.telegram.token", field: "token", kind: "string", choices: [], required: false }], official_url: "https://t.me/BotFather" },
     }), "zh-CN");
 
     expect(setup.docsLabel).toBe("打开 Telegram 配置指南");
     expect(setup.officialLabel).toBe("打开 BotFather");
     expect(setup.fields).toContainEqual(expect.objectContaining({
-      key: "channels.telegram.allowFrom",
-      label: "允许用户",
+      key: "channels.telegram.token",
+      label: "机器人令牌",
     }));
   });
 });

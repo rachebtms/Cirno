@@ -485,7 +485,6 @@ class GatewayRuntime(ManagedProcessRuntime[GatewayStartOptions]):
                     }
                 )
                 state.pop("pending_pid_handoff", None)
-                state.pop("stable_identity", None)
                 state.update(self.process_identity_record(pid))
                 state.pop("shutdown_token", None)
                 if self._shutdown_signal is not None:
@@ -703,7 +702,7 @@ class GatewayClientLease:
             "pid": self.pid,
             "kind": self.kind,
         }
-        record.update(process_identity_record(self._process_identity(self.pid), lease=True))
+        record.update(process_identity_record(self._process_identity(self.pid)))
         clients[self.token] = record
         self._write_state(state)
         self._acquired = True
@@ -724,9 +723,7 @@ class GatewayClientLease:
                 continue
             record = cast(dict[str, object], value)
             pid = record.get("pid")
-            identity = record.get("stable_identity")
-            if identity is None:
-                identity = record.get("identity")
+            identity = record.get("identity")
             if not isinstance(pid, int) or not self._process_is_running(pid):
                 stale.append(token)
                 continue

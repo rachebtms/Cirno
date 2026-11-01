@@ -17,7 +17,6 @@ def test_opencode_config_fields_exist() -> None:
     config = ProvidersConfig()
 
     assert hasattr(config, "opencode")
-    assert hasattr(config, "opencode_zen")
     assert hasattr(config, "opencode_go")
 
 
@@ -33,10 +32,6 @@ def test_opencode_specs_use_openai_compatible_gateways() -> None:
     assert zen.default_api_base == "https://opencode.ai/zen/v1"
     assert "opencode" in zen.strip_model_prefixes
 
-    zen_compat = specs["opencode_zen"]
-    assert zen_compat.env_key == "OPENCODE_API_KEY"
-    assert zen_compat.default_api_base == zen.default_api_base
-
     go = specs["opencode_go"]
     assert go.backend == "openai_compat"
     assert go.env_key == "OPENCODE_API_KEY"
@@ -51,10 +46,6 @@ def test_find_by_name_opencode_providers() -> None:
     canonical = find_by_name("opencode")
     assert canonical is not None
     assert canonical.name == "opencode"
-
-    zen = find_by_name("opencode_zen")
-    assert zen is not None
-    assert zen.name == "opencode_zen"
 
     go = find_by_name("opencode-go")
     assert go is not None
@@ -72,17 +63,6 @@ def test_opencode_forced_providers_use_default_api_base() -> None:
     assert zen_config.get_provider_name() == "opencode"
     assert zen_config.get_api_key() == "opencode-key"
     assert zen_config.get_api_base() == "https://opencode.ai/zen/v1"
-
-    legacy_zen_config = Config.model_validate(
-        {
-            "providers": {"opencodeZen": {"apiKey": "opencode-key"}},
-            "agents": {"defaults": {"provider": "opencode_zen", "model": "opencode/o3"}},
-        }
-    )
-
-    assert legacy_zen_config.get_provider_name() == "opencode_zen"
-    assert legacy_zen_config.get_api_key() == "opencode-key"
-    assert legacy_zen_config.get_api_base() == "https://opencode.ai/zen/v1"
 
     go_config = Config.model_validate(
         {
@@ -161,7 +141,7 @@ def _affinity_provider(name: str) -> OpenAICompatProvider:
 def test_opencode_affinity_headers_enabled():
     ctx = ProviderCallContext(session_id="s-1")
     expected = {"x-opencode-session": hashlib.sha256(b"s-1").hexdigest()}
-    for name in ("opencode", "opencode_go", "opencode_zen"):
+    for name in ("opencode", "opencode_go"):
         assert _affinity_provider(name)._opencode_affinity_headers(ctx) == expected
     relayed = OpenAICompatProvider(api_key=None, default_model="o3", api_base="https://opencode.ai/zen/v1")
     assert relayed._opencode_affinity_headers(ctx) == expected

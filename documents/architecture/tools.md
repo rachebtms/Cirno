@@ -61,7 +61,7 @@ Delegation keeps the source conversation, turn/message identifiers and a bounded
 verbatim original-request excerpt. Workers read the source when it is incomplete;
 neither routing notes nor reports grant new user authorization.
 
-Stable Python implementation identifiers are retained for existing integrations
-and historical calls. They are not advertised as a second set of model tools.
+Python implementation identifiers connect tool classes to the shared namespace
+catalog. They are internal dispatch details, not a second advertised tool API.
 When adding or renaming an operation, update the shared catalog and its schema,
 then check native execution, PTC dispatch and activity rendering together.

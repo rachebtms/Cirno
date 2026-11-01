@@ -33,7 +33,7 @@ def test_workspace_sandbox_system_provider_from_compact_env(tmp_path: Path) -> N
     status = workspace_sandbox_status(
         restrict_to_workspace=True,
         workspace=tmp_path,
-        environ={"CIRNO_SANDBOX_ENFORCED": "macos_app_sandbox"},
+        environ={"CIRNO_WORKSPACE_SANDBOX_ENFORCED": "macos_app_sandbox"},
     )
 
     assert status.level == "system"

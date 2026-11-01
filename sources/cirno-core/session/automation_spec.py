@@ -15,7 +15,6 @@ class AutomationTurnSpec:
 
     kind: str
     trigger_meta_key: str
-    legacy_history_meta_key: str | None = None
     history_fields: Mapping[str, str] = field(default_factory=dict[str, str])
     text_builder: Callable[[Mapping[str, Any]], str | None] | None = None
 
@@ -40,8 +39,6 @@ def automation_history_overrides_for_spec(
 
     details: dict[str, Any] = {"kind": spec.kind}
     extra: dict[str, Any] = {AUTOMATION_HISTORY_META: details}
-    if spec.legacy_history_meta_key:
-        extra[spec.legacy_history_meta_key] = True
     for history_key, trigger_key in spec.history_fields.items():
         value = trigger.get(trigger_key)
         extra[history_key] = value

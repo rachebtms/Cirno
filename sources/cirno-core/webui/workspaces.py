@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 WEBUI_WORKSPACE_STATE_SCHEMA_VERSION = 1
 _MAX_STATE_FILE_BYTES = 128 * 1024
 _DEFAULT_ACCESS_MODES = {"default", "full"}
-_LEGACY_RESTRICTED_DEFAULT_ACCESS_MODE = "restricted"
 _WEBUI_SCOPE_CHANNEL = "websocket"
 _MAX_DRAFT_SCOPES = 128
 
@@ -148,8 +147,6 @@ def read_webui_default_access_mode() -> str:
 
 
 def write_webui_default_access_mode(mode: str) -> bool:
-    if mode == _LEGACY_RESTRICTED_DEFAULT_ACCESS_MODE:
-        mode = "default"
     if mode not in _DEFAULT_ACCESS_MODES:
         raise ValueError("default access mode must be default or full")
     state = read_webui_workspace_state()

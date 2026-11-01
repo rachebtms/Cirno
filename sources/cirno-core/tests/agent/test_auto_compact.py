@@ -240,8 +240,6 @@ async def test_idle_compaction_skips_subagent_sessions(tmp_path, monkeypatch, re
         await loop.aclose()
 
 
-
-
 @pytest.mark.parametrize("compaction", ["idle", "compact_session", "compact_idle_session"])
 async def test_turn_resuming_during_archive_commits_reply(tmp_path, monkeypatch, compaction):
     monkeypatch.setattr("cirno.config.home._home_path", tmp_path / "home")
@@ -332,10 +330,6 @@ class TestSessionTTLConfig:
         defaults = AgentDefaults.model_validate({"idleCompactAfterMinutes": 30})
         assert defaults.session_ttl_minutes == 30
 
-    def test_legacy_alias_is_still_supported(self):
-        """Config should still accept the old sessionTtlMinutes key for compatibility."""
-        defaults = AgentDefaults.model_validate({"sessionTtlMinutes": 30})
-        assert defaults.session_ttl_minutes == 30
 
     def test_serializes_with_user_friendly_alias(self):
         """Config dumps should use idleCompactAfterMinutes for JSON output."""
@@ -1036,7 +1030,7 @@ class TestProactiveAutoCompact:
         started = asyncio.Event()
         block_forever = asyncio.Event()
 
-        async def _slow_compact(key, *, runtime, max_suffix=8, **_kwargs):
+        async def _slow_compact(key, *, runtime, **_kwargs):
             nonlocal archive_count
             archive_count += 1
             started.set()
@@ -1068,7 +1062,7 @@ class TestProactiveAutoCompact:
         session.updated_at = datetime.now() - timedelta(minutes=20)
         loop.sessions.save(session)
 
-        async def _failing_compact(key, *, runtime, max_suffix=8, **_kwargs):
+        async def _failing_compact(key, *, runtime, **_kwargs):
             raise RuntimeError("LLM down")
 
         loop.consolidator.compact_idle_session = _failing_compact

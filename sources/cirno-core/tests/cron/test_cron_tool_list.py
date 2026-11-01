@@ -416,8 +416,6 @@ def test_add_job_binds_current_session_key(tmp_path) -> None:
     assert job.payload.origin_channel == "telegram"
     assert job.payload.origin_chat_id == "chat-1"
     assert job.payload.origin_metadata == {}
-    assert job.payload.channel is None
-    assert job.payload.to is None
 
 
 def test_add_job_requires_session_key(tmp_path) -> None:
@@ -488,9 +486,6 @@ def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_pa
     assert jobs[0].payload.origin_channel == "slack"
     assert jobs[0].payload.origin_chat_id == "C99"
     assert jobs[0].payload.origin_metadata == meta
-    assert jobs[0].payload.channel is None
-    assert jobs[0].payload.to is None
-    assert jobs[0].payload.channel_meta == {}
 
 
 def test_list_excludes_disabled_jobs(tmp_path) -> None:

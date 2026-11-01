@@ -212,16 +212,10 @@ def _as_object_dict(value: object) -> dict[str, Any] | None:
     return cast(dict[str, Any], value) if isinstance(value, dict) else None
 
 
-def _skill_name(name: str, *, legacy: bool = False) -> str:
+def _skill_name(name: str) -> str:
     clean = _SAFE_NAME_RE.sub("-", name.lower()).strip("-")
-    if not legacy:
-        clean = clean.replace("_", "-")
+    clean = clean.replace("_", "-")
     return f"cli-app-{clean or 'app'}"
-
-
-def _plugin_skill_relative_path(name: str) -> str:
-    skill_name = _skill_name(name)
-    return f"plugins/{skill_name}/skills/{skill_name}/SKILL.md"
 
 
 def cli_app_skill_path(name: str) -> Path:
@@ -470,15 +464,6 @@ class CliAppManager:
         """Return registry names explicitly installed through CLI Apps."""
         return sorted(str(name) for name in self._load_installed())
 
-    def installed_skill_aliases(self) -> dict[str, str]:
-        """Map pre-plugin CLI App skill names to their portable identities."""
-        aliases: dict[str, str] = {}
-        for name in self.installed_names():
-            legacy = _skill_name(name, legacy=True)
-            canonical = _skill_name(name)
-            if legacy != canonical:
-                aliases[legacy] = canonical
-        return aliases
 
     def _fetch_registry(
         self,
@@ -1153,13 +1138,6 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
                     return "".join(lines[: index + 1]) + "\n" + note + "\n" + "".join(lines[index + 1 :])
         return note + "\n" + content
 
-    def _remove_legacy_skill(self, name: str) -> None:
-        plugin_root = (self.workspace / _plugin_skill_relative_path(name)).parents[2]
-        if plugin_root.is_dir():
-            shutil.rmtree(plugin_root)
-        legacy_dir = get_home_path() / "skills" / _skill_name(name, legacy=True)
-        if legacy_dir != cli_app_skill_path(name).parent and legacy_dir.is_dir():
-            shutil.rmtree(legacy_dir)
 
     def install_skill(self, app: dict[str, Any]) -> Path:
         name = str(app["name"])
@@ -1167,14 +1145,12 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
         path.parent.mkdir(parents=True, exist_ok=True)
         content = self._fetch_skill_content(app) or self._fallback_skill(app)
         path.write_text(self._with_cirno_skill_note(content, app), encoding="utf-8")
-        self._remove_legacy_skill(name)
         return path
 
     def remove_skill(self, name: str) -> None:
         directory = cli_app_skill_path(name).parent
         if directory.is_dir():
             shutil.rmtree(directory)
-        self._remove_legacy_skill(name)
 
     def _record_installed(self, app: dict[str, Any]) -> dict[str, Any]:
         installed = self._load_installed()

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 from loguru import logger
 
 from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.context import ContextAware, current_request_context
 from cirno.agent.tools.naming import definitions
 
 if TYPE_CHECKING:
@@ -152,12 +151,6 @@ class ToolRegistry:
                     f"Error: Tool '{name}' not found.{hint} Available: {', '.join(self._public_calls)}"
                 )
             )
-        # Compatibility for external tools that still implement the legacy
-        # setter protocol. Built-ins read the authoritative ContextVar
-        # directly and never copy routing state.
-        if isinstance(tool, ContextAware) and (ctx := current_request_context()) is not None:
-            tool.set_context(ctx)
-
         try:
             params = self._coerce_params(tool, params)
         except json.JSONDecodeError as exc:

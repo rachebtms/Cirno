@@ -104,7 +104,7 @@ function baseSettingsPayload() {
     },
     model_presets: [{
       name: "default",
-      label: "Default",
+
       active: true,
       is_default: true,
       model: "openai/gpt-4o",

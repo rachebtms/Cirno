@@ -30,7 +30,6 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.memory.embedding_timeout_seconds",
 
     'agents.defaults.dream.interval_h',
-    'agents.defaults.dream.cron',
     'agents.defaults.dream.model_override',
     'agents.defaults.idle_compact_check_interval_seconds',
     'agents.defaults.idle_compact_percent',
@@ -54,7 +53,7 @@ RUNTIME_CONFIG_PATHS = (
     "gateway.port",
     "gateway.restart_mode",
     "tools.exec.enable",
-    "tools.exec.timeout",
+    "tools.exec.max_runtime",
     "tools.exec.path_prepend",
     "tools.exec.path_append",
     "tools.exec.sandbox",
@@ -82,9 +81,6 @@ RUNTIME_CONFIG_PATHS = (
 
 
 def _parent(config: Config, path: str) -> tuple[BaseModel, str]:
-    # Keep the existing WebUI editor on the canonical hard-runtime field.
-    if path == "tools.exec.timeout":
-        path = "tools.exec.max_runtime"
     parent: BaseModel = config
     *parts, leaf = path.split(".")
     for part in parts:
@@ -129,7 +125,7 @@ def update_runtime_config(
             raise WebUISettingsError(f"{path}: {message}") from None
         setattr(parent, leaf, parsed)
     try:
-        # Dump aliases so legacy field names and timezone/model validators are
+        # Dump public field names so timezone/model validators are
         # handled by the same schema as a normal configuration-file load.
         validated = Config.model_validate(candidate.model_dump(by_alias=True), strict=True)
     except ValidationError as exc:
@@ -138,11 +134,6 @@ def update_runtime_config(
         location = ".".join(str(part) for part in error["loc"])
         raise WebUISettingsError(f"{location}: {error['msg']}") from None
 
-    if "agents.defaults.dream.cron" in values and validated.agents.defaults.dream.cron:
-        from croniter import croniter
-
-        if not croniter.is_valid(validated.agents.defaults.dream.cron):
-            raise WebUISettingsError("agents.defaults.dream.cron: enter a valid cron expression")
     if "agents.defaults.dream.model_override" in values:
         model = validated.agents.defaults.dream.model_override
         if model and model != "default" and model not in validated.model_presets:
@@ -160,11 +151,11 @@ def update_runtime_config(
                 raise WebUISettingsError(f"{path}: must be at least {minimum}")
     if "gateway.port" in values and validated.gateway.port > 65535:
         raise WebUISettingsError("gateway.port: must be at most 65535")
-    if "tools.exec.timeout" in values:
+    if "tools.exec.max_runtime" in values:
         limit = validated.tools.exec.max_runtime_limit
         if validated.tools.exec.max_runtime > limit:
             raise WebUISettingsError(
-                f"tools.exec.timeout: enter 1–{limit} seconds, or 0 for no time limit"
+                f"tools.exec.max_runtime: enter 1–{limit} seconds, or 0 for no time limit"
             )
         if path in values:
             parent, leaf = _parent(validated, path)

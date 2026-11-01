@@ -84,9 +84,7 @@ class RecoveryCoordinator:
 
     async def scan(self) -> None:
         """Recover every interrupted WebUI session once at gateway startup."""
-        from cirno.webui.history import initialize_history
 
-        await initialize_history(self.sessions)
         for key in await self._recovery_candidates():
             metadata_payload = await self.sessions.state.read_metadata(key)
             raw_metadata = metadata_payload.get("metadata") if metadata_payload else None
@@ -116,7 +114,7 @@ class RecoveryCoordinator:
                 await self._publish(route[1], failed)
 
     async def _recovery_candidates(self) -> list[str]:
-        """Legacy display-only sessions have canonical headers after import."""
+        """Return conversation keys owned by the current session store."""
         return [item["key"] for item in await self.sessions.state.list_sessions()]
 
     @staticmethod

@@ -10,7 +10,7 @@ import pytest
 from agent.session_helpers import save_completed_subagent
 from cirno.agent.loop import AgentLoop
 from cirno.agent.turn_delivery import TurnDeliveryFactory
-from cirno.bus.events import InboundMessage, OutboundMessage
+from cirno.bus.events import InboundMessage
 from cirno.bus.queue import MessageBus
 from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
 from cirno.session.manager import SessionManager
@@ -20,7 +20,6 @@ from cirno.session.recovery import (
     REQUEST_ORIGIN_METADATA_KEY,
     RUNTIME_CHECKPOINT_KEY,
 )
-from cirno.session.turn_continuation import INTERNAL_CONTINUATION_META
 from cirno.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
 from cirno.webui.recovery import RecoveryCoordinator
 from cirno.webui.transcript import WebUITranscriptRecorder
@@ -93,14 +92,11 @@ async def test_committed_model_failure_continues_with_tool_results_without_resen
         await loop.aclose()
 
 
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("late_result", [False, True], ids=["user_request", "late_subagent_result"])
 async def test_recovery_preserves_turn_origin_until_the_next_user_turn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, late_result: bool,
 ) -> None:
-    monkeypatch.setattr("cirno.webui.history.get_webui_dir", lambda: tmp_path / "webui")
     bus = MessageBus()
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"

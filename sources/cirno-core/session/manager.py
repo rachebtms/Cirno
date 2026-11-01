@@ -147,8 +147,8 @@ class Session:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
-    # Keep the legacy storage name while persisted sessions and SDK callers migrate.
-    last_consolidated: int = 0
+    # Archive cursor for messages already summarized by memory consolidation.
+    last_archived: int = 0
     provider_state: ProviderConversationState | None = field(default=None, repr=False)
     policy: SessionPolicy = field(default_factory=SessionPolicy, repr=False, compare=False)
 
@@ -166,22 +166,14 @@ class Session:
         if not isinstance(cast(object, self.provider_state), ProviderConversationState):
             self.provider_state = None
         # An out-of-range offset (corrupt metadata) would hide all history; reset it.
-        last_consolidated = cast(object, self.last_consolidated)
+        last_archived = cast(object, self.last_archived)
         if (
-            isinstance(last_consolidated, bool)
-            or not isinstance(last_consolidated, int)
-            or not 0 <= last_consolidated <= len(self.messages)
+            isinstance(last_archived, bool)
+            or not isinstance(last_archived, int)
+            or not 0 <= last_archived <= len(self.messages)
         ):
-            self.last_consolidated = 0
+            self.last_archived = 0
 
-    @property
-    def last_archived(self) -> int:
-        """End of the latest committed Memory checkpoint."""
-        return self.last_consolidated
-
-    @last_archived.setter
-    def last_archived(self, value: int) -> None:
-        self.last_consolidated = value
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Add a message to the session."""
@@ -405,10 +397,10 @@ def fork_session(source: Session, target_key: str, before_user_index: int) -> Se
     for key in _FORK_VOLATILE_METADATA_KEYS:
         metadata.pop(key, None)
 
-    last_consolidated = min(source.last_archived, len(copied))
+    last_archived = min(source.last_archived, len(copied))
     if source.last_archived > len(copied):
         metadata.pop("_last_summary", None)
-        last_consolidated = 0
+        last_archived = 0
 
     now = datetime.now()
     target = Session(
@@ -417,7 +409,7 @@ def fork_session(source: Session, target_key: str, before_user_index: int) -> Se
         created_at=now,
         updated_at=now,
         metadata=metadata,
-        last_consolidated=last_consolidated,
+        last_archived=last_archived,
     )
     return target
 
@@ -437,7 +429,7 @@ class SessionManager:
         self.location = SessionLocation(workspace, sessions_root=sessions_root)
         self.sessions_dir = self.location.sessions_dir
         self._store = SqliteSessionStore(self.sessions_dir)
-        self._store.initialize(workspace)
+        self._store.initialize()
         self._delete_observer: Callable[[str], None] | None = None
         self.types = SessionTypes()
         self._state: SessionState | None = None

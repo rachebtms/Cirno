@@ -3,7 +3,6 @@ from pathlib import Path
 from cirno.config.paths import (
     get_cron_dir,
     get_data_dir,
-    get_legacy_sessions_dir,
     get_logs_dir,
     get_media_dir,
     get_runtime_subdir,
@@ -28,10 +27,6 @@ def test_media_dir_supports_channel_namespace(monkeypatch, tmp_path: Path) -> No
 
     assert get_media_dir() == config_file.parent / "media"
     assert get_media_dir("telegram") == config_file.parent / "media" / "telegram"
-
-
-def test_shared_and_legacy_paths_remain_global() -> None:
-    assert get_legacy_sessions_dir() == Path.home() / ".cirno" / "sessions"
 
 
 def test_workspace_path_is_explicitly_resolved() -> None:

@@ -11,7 +11,7 @@ from cirno.session.manager import SessionManager
 from cirno.session.session_handles import (
     SESSION_HANDLE_METADATA_KEY,
     SessionHandleResolver,
-    _allocate_name,
+    allocate_session_handle_name,
     _tier_size,
     normalize_session_handle,
 )
@@ -57,7 +57,7 @@ def test_pronounceable_tiers_have_millions_of_candidates() -> None:
 def test_allocator_produces_distinct_short_names() -> None:
     used: set[str] = set()
     for _ in range(100):
-        name = _allocate_name(used)
+        name = allocate_session_handle_name(used)
         assert name not in used
         assert name.isalpha()
         assert len(name) == 4

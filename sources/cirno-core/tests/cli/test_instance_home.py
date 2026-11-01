@@ -10,7 +10,7 @@ from cirno.cli.commands import app
 from cirno.config import home as instance_home
 from cirno.config import loader
 from cirno.config.schema import Config
-from cirno.config.paths import get_legacy_sessions_dir, get_media_dir
+from cirno.config.paths import get_media_dir
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +53,6 @@ def test_home_paths_and_saved_workspace(tmp_path):
     assert loader.get_config_path() == tmp_path / "config.json"
     assert Config().workspace_path == tmp_path / "workspace"
     assert get_media_dir() == tmp_path / "media"
-    assert get_legacy_sessions_dir() == tmp_path / "sessions"
     config = Config()
     config.agents.defaults.workspace = str(tmp_path / "custom")
     loader.save_config(config)
@@ -79,7 +78,6 @@ def test_home_rejects_file(tmp_path):
 
 
 def test_home_bare_command_opens_webui_and_restores_selection(monkeypatch, tmp_path):
-    from cirno.cli import entry
 
     selected = tmp_path / "selected"
     observed = []

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from cirno.utils.llm_runtime import LLMRuntime
 
 from cirno.agent.runner import AgentRunResult
 from cirno.bus.events import InboundMessage
@@ -20,7 +21,6 @@ from cirno.runtime.admission import RuntimeBusyError, RuntimeMaintenanceError
 from cirno.session.sqlite_store import SessionConflictError
 from cirno.triggers.local_runner import run_local_trigger_queue
 from cirno.triggers.local_store import LocalTriggerStore
-from cirno.utils.llm_runtime import LLMRuntime
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ async def test_idle_maintenance_refuses_new_work_and_abort_restores_it(agent):
             with pytest.raises(RuntimeMaintenanceError):
                 await agent.submit_local_trigger_turn(message(kind="trigger"))
             with pytest.raises(RuntimeMaintenanceError):
-                await agent.subagents.spawn("not accepted")
+                await agent.subagents.spawn("not accepted", runtime=LLMRuntime.capture(agent.provider, agent.model, context_window_tokens=agent.context_window_tokens))
             with pytest.raises(RuntimeMaintenanceError):
                 agent.schedule_background(background)
             assert inspect.getcoroutinestate(background) == inspect.CORO_CLOSED

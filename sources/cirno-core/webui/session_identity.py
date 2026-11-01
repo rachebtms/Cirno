@@ -15,7 +15,7 @@ def is_valid_webui_chat_id(value: Any) -> TypeGuard[str]:
 
 
 def webui_session_key(chat_id: str) -> str:
-    """Return the backward-compatible persisted key for a WebUI chat."""
+    """Return the canonical persisted key for a WebUI chat."""
     return f"{WEBUI_SESSION_STORAGE_PREFIX}{chat_id}"
 
 

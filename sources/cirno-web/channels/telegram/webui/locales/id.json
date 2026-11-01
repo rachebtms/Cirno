@@ -10,10 +10,6 @@
       "useProxy": {
         "label": "Gunakan proxy"
       },
-      "allowFrom": {
-        "label": "Pengguna diizinkan",
-        "placeholder": "* atau ID pengguna Telegram"
-      },
       "mode": {
         "label": "Modus koneksi",
         "choices": {

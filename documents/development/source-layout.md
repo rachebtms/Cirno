@@ -32,7 +32,7 @@ The `cirno-core` directory maps directly to the installed `cirno` package. Only 
 | `notifications/` | Durable notification inbox |
 | `storage/` | Small shared instance records such as Projects and Nodes |
 | `features/` | Optional dependency installation and feature activation |
-| `config/` | Schema, lightweight DTO base, paths, loading and migrations |
+| `config/` | Schema, lightweight DTO base, paths and configuration loading |
 | `webui/settings/` | Settings requests, validation, models, capabilities and system operations |
 | `webui/mcp/` | MCP presets, configuration endpoints and OAuth adapter |
 

@@ -118,8 +118,6 @@ def test_from_config_composes_configured_mcp_outside_agent_loop(tmp_path):
     assert bot._mcp_provider._registry is bot._loop.tools
 
 
-
-
 def test_from_config_accepts_default_model_override(tmp_path):
     config_path = _write_config(tmp_path)
 
@@ -1710,12 +1708,12 @@ async def test_runtime_helpers_expose_model_workspace_and_compact(tmp_path):
     assert bot.runtime.workspace == tmp_path
 
     bot._loop.consolidator.compact_idle_session = AsyncMock(return_value="Summary.")
-    summary = await bot.runtime.compact_idle_session("sdk:history", max_suffix=4)
+    summary = await bot.runtime.compact_idle_session("sdk:history")
     assert summary == "Summary."
     bot._loop.consolidator.compact_idle_session.assert_awaited_once_with(
         "sdk:history",
         runtime=runtime,
-        max_suffix=4,
+
     )
 
 

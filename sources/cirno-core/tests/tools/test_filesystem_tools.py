@@ -443,22 +443,6 @@ class TestWorkspaceRestriction:
         assert "outside" in result.lower()
         assert not (media_dir / "hack.txt").exists()
 
-    @pytest.mark.asyncio
-    async def test_legacy_extra_allowed_dirs_does_not_widen_write(self, tmp_path):
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        skills_dir = tmp_path / "skills"
-        skills_dir.mkdir()
-
-        tool = WriteFileTool(
-            workspace=workspace,
-            allowed_dir=workspace,
-            extra_allowed_dirs=[skills_dir],
-        )
-        result = await tool.execute(path=str(skills_dir / "hack.txt"), content="pwned")
-        assert "Error" in result
-        assert "outside" in result.lower()
-        assert not (skills_dir / "hack.txt").exists()
 
     @pytest.mark.asyncio
     async def test_write_allowed_with_extra_write_dir(self, tmp_path):
@@ -513,7 +497,7 @@ class TestWorkspaceRestriction:
 
         tool = ReadFileTool(
             workspace=workspace, allowed_dir=workspace,
-            extra_allowed_dirs=[skills_dir],
+            extra_read_allowed_dirs=[skills_dir],
         )
         result = await tool.execute(path=str(secret))
         assert "Error" in result
@@ -531,7 +515,7 @@ class TestWorkspaceRestriction:
 
         tool = ReadFileTool(
             workspace=workspace, allowed_dir=workspace,
-            extra_allowed_dirs=[skills_dir],
+            extra_read_allowed_dirs=[skills_dir],
         )
         result = await tool.execute(path=str(ws_file))
         assert "hello from workspace" in result
@@ -551,7 +535,7 @@ class TestWorkspaceRestriction:
         tool = EditFileTool(
             workspace=workspace,
             allowed_dir=workspace,
-            extra_allowed_dirs=[skills_dir],
+            extra_read_allowed_dirs=[skills_dir],
         )
         result = await tool.execute(
             path=str(skill_file),

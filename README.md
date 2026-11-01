@@ -15,22 +15,22 @@ python -m pip install -e .
 cirno webui --port 8000
 ```
 
-Open `http://localhost:8000` and configure a provider under Settings → Models. The initial local launch may ask to initialize configuration. Data defaults to `~/.cirno/`; use `cirno --home /path/to/instance webui` for a separate instance. See [configuration](documents/configuration.md).
+Open `http://localhost:8000` and configure a provider under Settings → Models. On first launch, register the instance owner and configure a model in the browser. Data defaults to `~/.cirno/`; use `cirno --home /path/to/instance webui` for a separate instance. See [configuration](documents/configuration.md).
 
 The new-conversation header offers optional [PTC mode](documents/architecture/ptc.md), which lets the model compose tool calls inside a bounded Python program. It is off by default and saved per conversation.
 
 ## Docker
 
-Build the checkout locally:
+Run the published image:
 
 ```sh
-docker compose up -d --build
+docker compose up -d
 docker compose logs cirno-gateway
 ```
 
-Open `http://localhost:8765`. On a new Home, register your instance owner in the browser, then configure a model. No generated password or setup code needs to be copied from logs. Configuration and durable state persist in the mounted `~/.cirno`. The Compose memory limit defaults to `400M`; optional embeddings are disabled.
+Open `http://localhost:8765`. On a new Home, register your instance owner in the browser, then configure a model. No generated password or setup code needs to be copied from logs. Configuration and durable state persist in the mounted `~/.cirno`. Optional embeddings are disabled by default.
 
-The [GitHub Actions workflow](.github/workflows/container.yml) is configured to verify, build and publish Linux AMD64/ARM64 images to `ghcr.io/rachebtms/cirno`. Publication requires committed code, a pushed trigger and a successful workflow. After an image is published, deployments can pull it instead of building locally. See [container deployment and publishing](documents/docker.md).
+The [GitHub Actions workflow](.github/workflows/container.yml) is configured to verify, build and publish Linux AMD64/ARM64 images to `ghcr.io/rachebtms/cirno`. Publication requires committed code, a pushed trigger and a successful workflow. Compose uses the published image without a local build. See [container deployment and publishing](documents/docker.md).
 
 ## Repository and documentation
 
@@ -40,6 +40,10 @@ The [GitHub Actions workflow](.github/workflows/container.yml) is configured to 
 - `references/`: ignored local references, archived implementations and verification records.
 
 Start with the [documentation index](documents/README.md). It covers [memory](documents/architecture/memory.md), [Goals and coordination](documents/goals-and-dream.md), [routing and Stop](documents/development/conversation-routing.md) and the [source layout](documents/development/source-layout.md).
+
+## Releases
+
+The current version is **0.1.2**. See the [release notes](documents/releases/0.1.2.md). This unstable release targets fresh deployments; automatic migration of older data and configuration formats is not supported.
 
 ## Attribution and updates
 

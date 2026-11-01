@@ -259,7 +259,7 @@ class ChannelManager:
         channel.show_reasoning = self._resolve_bool_override(
             section, "show_reasoning", self.config.channels.show_reasoning,
         )
-        # Retain adapter-validated legacy values (QQ already owned this option).
+        # Respect the channel adapter’s default for compaction notices.
         notice_default = self._resolve_bool_override(
             channel.config, "show_compaction_notices", self.config.channels.show_compaction_notices,
         )

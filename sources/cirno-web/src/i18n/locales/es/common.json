@@ -198,10 +198,6 @@
           "label": "Editar configuración",
           "help": "Permite al agente cambiar su configuración.\n\nPermite que la herramienta de autogestión modifique la configuración."
         },
-        "tools_exec_timeout": {
-          "label": "Duración de los comandos",
-          "help": "Límite de duración predeterminado para los comandos de shell.\n\nLa salida y la espera no amplían este límite. Elige Sin límite de tiempo para eliminar el límite de duración."
-        },
         "tools_exec_path_prepend": {
           "label": "Prioridad de PATH",
           "help": "Busca primero en estos directorios.\n\nDirectorios que se añaden al inicio de PATH. Sepáralos con punto y coma en Windows o con dos puntos en macOS y Linux."
@@ -284,10 +280,6 @@
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
-        },
-        "agents_defaults_dream_cron": {
-          "label": "Dream cron expression (optional)",
           "help": "Restart to apply. A cron expression overrides the interval."
         },
         "agents_defaults_dream_model_override": {
@@ -377,6 +369,10 @@
         "agents_defaults_goal_continuation_limit": {
           "label": "Límite predeterminado de continuación de objetivos",
           "help": "0 significa ilimitado. El contador persiste y cada objetivo puede definir su límite."
+        },
+        "tools_exec_max_runtime": {
+          "label": "Duración de los comandos",
+          "help": "Límite de duración predeterminado para los comandos de shell.\n\nLa salida y la espera no amplían este límite. Elige Sin límite de tiempo para eliminar el límite de duración."
         }
       },
       "groups": {
@@ -782,7 +778,18 @@
       "configuredCount": "{{count}} configurados",
       "totalProviders": "{{count}} disponibles",
       "webSearch": "Búsqueda web",
-      "workspace": "Directorio de trabajo"
+      "workspace": "Directorio de trabajo",
+      "shortcutsTitle": "Ajustes rápidos",
+      "shortcuts": {
+        "memory": "Busca conocimientos guardados y consulta sus fuentes",
+        "context": "Ajusta cuándo compactar y cuánto contexto conservar",
+        "execution": "Define límites de continuación y opciones de ejecución",
+        "personality": "Edita la personalidad, las preferencias y las instrucciones",
+        "telegram": "Vincula tu chat privado y elige las notificaciones",
+        "nodes": "Conecta servidores SSH y ejecuta comandos remotos",
+        "mcp": "Conecta herramientas y servicios externos",
+        "apps": "Gestiona herramientas y amplía las capacidades del agente"
+      }
     },
     "usage": {
       "shortTitle": "Uso de tokens",
@@ -898,10 +905,6 @@
       "maxTokens": "Máx. tokens de salida",
       "temperature": "Temperatura",
       "reasoningEffort": "Esfuerzo de razonamiento",
-      "convertTitle": "Convertir ajustes",
-      "convertHelp": "Convierte los modelos principal y de respaldo en preajustes.",
-      "converting": "Convirtiendo...",
-      "convertAction": "Convertir en preajustes",
       "dragToReorder": "Arrastrar para reordenar",
       "removeFromOrder": "Desactivar preajuste",
       "disabled": "Desactivado",
@@ -1260,9 +1263,7 @@
       "create": "Nueva tarea",
       "createPrompt": "¿Qué quieres que cirno automatice?",
       "createInput": "Describe una automatización",
-      "errors": {
-        "legacyMissingDestination": "Esta automatización antigua no tiene un destino de entrega. Vuelve a crearla desde el chat vinculado para continuar."
-      },
+      "errors": {},
       "calendar": {
         "previousMonth": "Mes anterior",
         "nextMonth": "Mes siguiente",

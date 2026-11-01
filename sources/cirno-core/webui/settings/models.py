@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING, Any, Callable, NotRequired, TypedDict, cast
 import httpx
 
 from cirno.config.loader import resolve_config_env_vars
-from cirno.config.provider_api_migration import migrate_legacy_provider_api
 from cirno.config.schema import (
     Config,
     FallbackCandidate,
@@ -80,7 +79,6 @@ class ModelSettingsOperations:
     create_model: SettingsOperation
     update_model: SettingsOperation
     delete_model: SettingsOperation
-    migrate_models: SettingsOperation
     update_call_order: SettingsOperation
     update_provider: SettingsOperation
     create_provider: SettingsOperation
@@ -96,7 +94,6 @@ class ModelSettingsPayload(TypedDict):
     model_presets: list[dict[str, Any]]
     model_call_order: list[str]
     model_call_order_editable: bool
-    model_configuration_migratable: bool
     model_api_resolution_supported: bool
     provider_api_configuration_supported: bool
     model_request_overrides_supported: bool
@@ -364,35 +361,12 @@ def _provider_settings_rows(
     selected_provider: str | None,
     oauth_status: OAuthStatusReader,
 ) -> list[dict[str, Any]]:
-    """Return one Settings row per provider family while preserving legacy configs."""
-    aliases: dict[str, list[Any]] = {}
-    for spec in PROVIDERS:
-        if spec.settings_alias_for:
-            aliases.setdefault(spec.settings_alias_for, []).append(spec)
-
-    rows: list[dict[str, Any]] = []
-    for canonical in PROVIDERS:
-        if canonical.settings_alias_for:
-            continue
-        candidates = [canonical, *aliases.get(canonical.name, [])]
-        chosen = next((spec for spec in candidates if spec.name == selected_provider), None)
-        if chosen is None:
-            chosen = next(
-                (
-                    spec
-                    for spec in candidates
-                    if (provider_config := getattr(config.providers, spec.name, None)) is not None
-                    and provider_configured_for_settings(spec, provider_config, oauth_status)
-                ),
-                canonical,
-            )
-        provider_config = getattr(config.providers, chosen.name, None)
-        if provider_config is None:
-            continue
-        row = _provider_settings_row(chosen.name, chosen, provider_config, oauth_status)
-        row["label"] = canonical.label
-        rows.append(row)
-    return rows
+    """Return one Settings row per built-in provider."""
+    return [
+        _provider_settings_row(spec.name, spec, provider, oauth_status)
+        for spec in PROVIDERS
+        if (provider := getattr(config.providers, spec.name, None)) is not None
+    ]
 
 
 def model_catalog_kind(spec: Any) -> str:
@@ -772,18 +746,6 @@ def _parse_temperature(value: str | None) -> float | None:
     return parsed
 
 
-def _model_configuration_slug(label: str) -> str:
-    normalized = _MODEL_CONFIGURATION_SLUG_RE.sub("-", label.strip().lower())
-    normalized = normalized.strip("-_")
-    if not normalized:
-        raise WebUISettingsError("configuration name is required")
-    if normalized == "default":
-        raise WebUISettingsError("configuration name is reserved")
-    if len(normalized) > 48:
-        normalized = normalized[:48].rstrip("-_")
-    return normalized
-
-
 def _model_configuration_name(value: str) -> str:
     """Validate a user-facing preset name without inventing a second identity."""
     name = value.strip()
@@ -872,24 +834,6 @@ def _provider_display_name_exists(
     return False
 
 
-def _unique_model_configuration_name(config: Config, label: str) -> str:
-    """Return a stable, unused preset name for a migrated model configuration."""
-    try:
-        base = _model_configuration_slug(label)
-    except WebUISettingsError:
-        base = "model"
-    candidate = base
-    suffix = 2
-    while _model_configuration_name_exists(config, candidate):
-        candidate = f"{base}-{suffix}"
-        suffix += 1
-    return candidate
-
-
-def _model_configuration_label(model: str) -> str:
-    return model.rsplit("/", 1)[-1] or model
-
-
 def _model_call_order_state(config: Config) -> tuple[list[str], bool]:
     defaults = config.agents.defaults
     primary = defaults.model_preset
@@ -901,48 +845,6 @@ def _model_call_order_state(config: Config) -> tuple[list[str], bool]:
             return [], False
         order.append(fallback)
     return order, True
-
-
-def _legacy_model_configuration_migratable(
-    config: Config,
-    oauth_status: OAuthStatusReader,
-) -> bool:
-    """Return whether the implicit default represents usable legacy configuration.
-
-    A pristine config still carries schema defaults for backwards compatibility.
-    Those defaults are not user configuration and must not be materialized as a
-    preset. Inline fallbacks, or a default whose matching provider is configured,
-    are evidence that there is real legacy state to preserve.
-    """
-    _, editable = _model_call_order_state(config)
-    if editable:
-        return False
-
-    defaults = config.agents.defaults
-    if defaults.fallback_models:
-        return True
-
-    provider_name = defaults.provider
-    if provider_name == "auto":
-        model_prefix = defaults.model.split("/", 1)[0] if "/" in defaults.model else ""
-        if model_prefix and resolve_settings_provider(config, model_prefix) is not None:
-            provider_name = model_prefix
-        else:
-            provider_name = (
-                config.get_provider_name(
-                    defaults.model,
-                    preset=config.resolve_default_preset(),
-                )
-                or ""
-            )
-    if not provider_name or provider_name == "auto":
-        return False
-
-    resolved_provider = resolve_settings_provider(config, provider_name)
-    if resolved_provider is None:
-        return False
-    spec, _, provider_config = resolved_provider
-    return provider_configured_for_settings(spec, provider_config, oauth_status)
 
 
 def _validate_configured_provider(
@@ -1131,10 +1033,6 @@ def model_settings_payload(
         "model_request_overrides_supported": True,
         "model_call_order": model_call_order,
         "model_call_order_editable": model_call_order_editable,
-        "model_configuration_migratable": _legacy_model_configuration_migratable(
-            config,
-            oauth_status,
-        ),
         "providers": providers,
     }
 
@@ -1275,7 +1173,6 @@ def create_model_configuration(
     oauth_status: OAuthStatusReader,
 ) -> str:
     raw_name = query_first(query, "name")
-    legacy_label = query_first_alias(query, "label", "displayName")
     model = (query_first(query, "model") or "").strip()
     provider = (query_first(query, "provider") or "").strip()
 
@@ -1284,20 +1181,12 @@ def create_model_configuration(
     if not provider:
         raise WebUISettingsError("provider is required")
 
-    # Old clients only sent `label`; preserve their slugging behaviour while
-    # new clients provide the one canonical, user-visible name directly.
-    name = (
-        _model_configuration_name(raw_name)
-        if raw_name is not None
-        else _model_configuration_slug(legacy_label or "")
-    )
+    name = _model_configuration_name(raw_name or "")
     if _model_configuration_name_exists(config, name):
         raise WebUISettingsError("configuration already exists", status=409)
     _validate_configured_provider(config, provider, oauth_status)
 
-    activate_as_primary = not config.model_presets and not _legacy_model_configuration_migratable(
-        config, oauth_status
-    )
+    activate_as_primary = not config.model_presets
 
     base = config.resolve_preset()
     max_tokens = _parse_positive_int(
@@ -1463,13 +1352,6 @@ def update_model_call_order(
     if unknown:
         raise WebUISettingsError(f"unknown model preset: {unknown[0]}")
 
-    _, editable = _model_call_order_state(config)
-    if not editable and _legacy_model_configuration_migratable(config, oauth_status):
-        raise WebUISettingsError(
-            "convert the existing model configuration to presets first",
-            status=409,
-        )
-
     defaults = config.agents.defaults
     fallback_models: list[FallbackCandidate] = list(normalized_order[1:])
     changed = (
@@ -1480,74 +1362,6 @@ def update_model_call_order(
         defaults.model_preset = normalized_order[0]
         defaults.fallback_models = fallback_models
     return changed
-
-
-def migrate_model_configurations(
-    config: Config,
-    *,
-    oauth_status: OAuthStatusReader,
-) -> bool:
-    """Materialize legacy primary/inline model settings as named presets."""
-    _, editable = _model_call_order_state(config)
-    if editable:
-        return False
-    if not _legacy_model_configuration_migratable(config, oauth_status):
-        raise WebUISettingsError("there is no legacy model configuration to convert", status=409)
-
-    defaults = config.agents.defaults
-    primary = config.resolve_preset()
-    created: list[str] = []
-
-    if not defaults.model_preset or defaults.model_preset == "default":
-        label = _model_configuration_label(primary.model)
-        name = _unique_model_configuration_name(config, label)
-        config.model_presets[name] = ModelPresetConfig(
-            model=primary.model,
-            provider=primary.provider,
-            max_tokens=primary.max_tokens,
-            context_window_tokens=primary.context_window_tokens,
-            temperature=primary.temperature,
-            reasoning_effort=primary.reasoning_effort,
-            api=primary.api,
-        )
-        defaults.model_preset = name
-        created.append(name)
-
-    fallback_models: list[FallbackCandidate] = []
-    for fallback in defaults.fallback_models:
-        if isinstance(fallback, str):
-            fallback_models.append(fallback)
-            continue
-        label = _model_configuration_label(fallback.model)
-        name = _unique_model_configuration_name(config, label)
-        config.model_presets[name] = ModelPresetConfig(
-            model=fallback.model,
-            provider=fallback.provider,
-            max_tokens=(
-                fallback.max_tokens if fallback.max_tokens is not None else primary.max_tokens
-            ),
-            context_window_tokens=(
-                fallback.context_window_tokens
-                if fallback.context_window_tokens is not None
-                else primary.context_window_tokens
-            ),
-            temperature=(
-                fallback.temperature
-                if fallback.temperature is not None
-                else primary.temperature
-            ),
-            reasoning_effort=fallback.reasoning_effort,
-            api=fallback.api,
-            extra_headers=fallback.extra_headers,
-            extra_query=fallback.extra_query,
-            extra_body=fallback.extra_body,
-        )
-        fallback_models.append(name)
-        created.append(name)
-
-    if created:
-        defaults.fallback_models = fallback_models
-    return bool(created)
 
 
 def delete_model_configuration(config: Config, query: QueryParams) -> None:
@@ -1624,12 +1438,6 @@ def update_provider_settings(
             config.network.resolve_proxy(True)
         except ValueError as exc:
             raise WebUISettingsError(str(exc)) from None
-    if not spec.is_oauth and spec.name != "openai":
-        updates.pop("api_type", None)
-    try:
-        updates = migrate_legacy_provider_api(updates, provider_name=provider_key)
-    except ValueError as exc:
-        raise WebUISettingsError(str(exc)) from None
     if spec.is_oauth:
         if spec.name not in _OAUTH_PROXY_PROVIDERS:
             raise WebUISettingsError("unknown provider")
@@ -1972,7 +1780,6 @@ class ModelSettingsHandler:
             mutation = {
                 "model-create": operations.create_model,
                 "model-delete": operations.delete_model,
-                "models-migrate": operations.migrate_models,
                 "call-order-update": operations.update_call_order,
                 "provider-create": operations.create_provider,
             }.get(action)

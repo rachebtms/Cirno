@@ -1,38 +1,29 @@
 """Session metadata helpers for explicit sustained goals.
 
-Tools set ``metadata[GOAL_STATE_KEY]``. Reads accept the legacy session key ``thread_goal``
-for older sessions. Callers use ``goal_state_runtime_lines`` and ``goal_state_ws_blob`` without
+Tools set ``metadata[GOAL_STATE_KEY]``. Callers use
+``goal_state_runtime_lines`` and ``goal_state_ws_blob`` without
 importing tool implementations.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping, MutableMapping, cast
+from typing import Any, Mapping, cast
 
 GOAL_STATE_KEY = "goal_state"
 GOAL_COMMAND = "/goal"
 MAX_GOAL_OBJECTIVE_CHARS = 4000
-# Older builds stored the same JSON blob under this key.
-_LEGACY_GOAL_STATE_SESSION_KEY = "thread_goal"
 _MAX_OBJECTIVE_WS = 600
 
 
 def _session_goal_raw(metadata: Mapping[str, Any] | None) -> Any:
     if not metadata:
         return None
-    if GOAL_STATE_KEY in metadata:
-        return metadata.get(GOAL_STATE_KEY)
-    return metadata.get(_LEGACY_GOAL_STATE_SESSION_KEY)
-
-
-def discard_legacy_goal_state_key(metadata: MutableMapping[str, Any]) -> None:
-    """Remove legacy metadata key after migrating writes to :data:`GOAL_STATE_KEY`."""
-    metadata.pop(_LEGACY_GOAL_STATE_SESSION_KEY, None)
+    return metadata.get(GOAL_STATE_KEY)
 
 
 def goal_state_raw(metadata: Mapping[str, Any] | None) -> Any:
-    """Return the session goal blob under :data:`GOAL_STATE_KEY` or the legacy key."""
+    """Return the session goal blob under :data:`GOAL_STATE_KEY`."""
     return _session_goal_raw(metadata)
 
 

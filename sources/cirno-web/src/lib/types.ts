@@ -722,8 +722,6 @@ export interface SettingsPayload {
   };
   model_presets: Array<{
     name: string;
-    /** @deprecated Compatibility alias. New clients must use `name`. */
-    label?: string;
     active: boolean;
     is_default: boolean;
     model: string;
@@ -743,8 +741,6 @@ export interface SettingsPayload {
   }>;
   model_call_order: string[];
   model_call_order_editable: boolean;
-  /** Whether an actual legacy model configuration is available to convert. */
-  model_configuration_migratable?: boolean;
   /** Host can resolve the default request API for an unsaved model configuration. */
   model_api_resolution_supported?: boolean;
   provider_api_configuration_supported?: boolean;

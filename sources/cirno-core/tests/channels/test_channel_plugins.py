@@ -264,14 +264,12 @@ def test_channels_config_keeps_shared_delivery_defaults():
     cfg = ChannelsConfig()
     assert cfg.send_progress is True
     assert cfg.send_tool_hints is True
-    assert cfg.extract_document_text is True
 
     opted_out = ChannelsConfig.model_validate({
         "sendToolHints": False,
         "extractDocumentText": False,
     })
     assert opted_out.send_tool_hints is False
-    assert opted_out.extract_document_text is False
 
 
 @pytest.mark.parametrize(
@@ -288,10 +286,6 @@ def test_special_setup_validation_is_owned_by_channel_package(name: str):
     assert plugin.setup is not None
     assert plugin.setup.validator is not None
     assert plugin.setup.validator.__module__ == f"cirno.channels.{name}.validation"
-
-
-
-
 
 
 def test_channel_manager_delegates_instance_expansion_to_channel(monkeypatch: pytest.MonkeyPatch):
@@ -720,8 +714,6 @@ def test_generic_plugin_validation_enforces_composite_requirements(
     assert complete["can_enable"] is True
 
 
-
-
 def test_discover_plugins_skips_names_outside_enabled_set():
     from cirno.channels.registry import discover_plugins
 
@@ -973,12 +965,6 @@ def test_manager_respects_explicitly_disabled_websocket_config():
     assert "websocket" not in mgr.channels
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Transcription provider HTTP tests
 # ---------------------------------------------------------------------------
@@ -1008,10 +994,6 @@ def _stub_async_client(captured: dict[str, object]):
             return _StubResponse()
 
     return _AsyncClient()
-
-
-
-
 
 
 def test_channels_login_uses_discovered_plugin_class(monkeypatch):
@@ -1093,8 +1075,6 @@ def test_channels_status_sets_custom_config_path(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     assert seen["config_path"] == config_path.resolve()
-
-
 
 
 def test_plugins_list_reads_multi_instance_state_without_runtime(monkeypatch):
@@ -1495,10 +1475,6 @@ def test_repository_dependency_installer_propagates_install_failure(monkeypatch,
     assert "demo: dependency install failed" in capsys.readouterr().err
 
 
-
-
-
-
 def test_enable_optional_feature_blocks_install_when_disallowed(monkeypatch, tmp_path):
     from cirno.features.service import OptionalFeatureError, enable_optional_feature
 
@@ -1648,10 +1624,6 @@ def test_install_only_adds_channel_support_without_enabling_it(monkeypatch, tmp_
     assert payload["requires_restart"] is True
 
 
-
-
-
-
 def test_disable_multi_instance_channel_without_importing_runtime(monkeypatch, tmp_path):
     from cirno.features.service import disable_optional_feature
 
@@ -1694,10 +1666,6 @@ def test_disable_multi_instance_channel_without_importing_runtime(monkeypatch, t
     feature = payload["features"][0]
     assert feature["enabled"] is True
     assert [item["enabled"] for item in feature["instances"]] == [True, False]
-
-
-
-
 
 
 def test_live_runtime_status_overrides_enabled_configuration_for_webui():
@@ -1774,26 +1742,6 @@ def test_package_manifest_metadata_drives_optional_feature_payload(monkeypatch):
     assert demo["display_name"] == "Demo Chat"
     assert demo["capabilities"] == ["custom_ui"]
     assert demo["webui"] == "webui/entry.tsx"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @pytest.mark.parametrize(
@@ -2130,9 +2078,6 @@ async def test_manager_skips_disabled_channel_package(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 def test_channels_config_send_max_retries_default():
     """ChannelsConfig should have send_max_retries with default value of 3."""
     cfg = ChannelsConfig()
@@ -2162,8 +2107,6 @@ def test_channels_config_send_max_retries_upper_bound():
     # Value above upper bound should be rejected
     with pytest.raises(ValidationError):
         ChannelsConfig(send_max_retries=11)
-
-
 
 
 # ---------------------------------------------------------------------------

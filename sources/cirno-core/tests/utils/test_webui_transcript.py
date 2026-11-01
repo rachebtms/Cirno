@@ -7,7 +7,6 @@ import json
 import pytest
 
 import cirno.webui.transcript as transcript_module
-from cirno.session.history_visibility import HIDDEN_HISTORY_META
 from cirno.webui.history import fact_from_record
 from cirno.webui.transcript import WEBUI_TRANSCRIPT_SCHEMA_VERSION, TranscriptReplayStats
 
@@ -275,55 +274,6 @@ def test_thread_response_preserves_optional_stream_ids(history, delta_event, end
     assert all("stream_id" not in event for event in stream_events[-2:])
     assert all("projection_receipts" not in event for event in stream_events)
     assert history.read(key) == original_rows
-
-
-@pytest.mark.parametrize(
-    ("delta_event", "end_event", "phase"),
-    [("delta", "stream_end", "answer"), ("reasoning_delta", "reasoning_end", "reasoning")],
-)
-@pytest.mark.parametrize("completed_text", [None, "canonical text"])
-def test_thread_response_receipts_for_folded_legacy_deltas(
-    history, delta_event, end_event, phase, completed_text,
-) -> None:
-    key = "websocket:folded-receipts"
-    primary_text = completed_text or "first second last"
-    rows = [
-        {"event": "user", "text": "question", "turn_phase": "user", "turn_seq": 1},
-        {"event": delta_event, "text": "first ", "stream_id": "primary", "turn_seq": 3},
-        {"event": delta_event, "text": "second", "stream_id": "primary", "turn_seq": 4},
-        {"event": "message", "kind": "progress", "text": "tool()", "turn_phase": "activity", "turn_seq": 5},
-        {"event": delta_event, "text": "other", "stream_id": "secondary", "turn_seq": 6},
-        {"event": delta_event, "text": " last", "stream_id": "primary", "turn_seq": 8},
-        {"event": end_event, "stream_id": "primary", "turn_seq": 9,
-         **({"text": completed_text} if completed_text is not None else {})},
-        {"event": end_event, "stream_id": "secondary", "turn_seq": 10},
-        {"event": "turn_end", "turn_phase": "complete", "turn_seq": 11},
-    ]
-    for row in rows:
-        history.append(key, {"turn_id": "turn-folded", "turn_phase": phase, **row})
-    original_rows = history.read(key)
-    stats = TranscriptReplayStats()
-
-    payload = history.build(key, stats=stats)
-
-    assert payload is not None
-    assert stats.compacted_delta_records == 4
-    ends = [event for event in payload["events"] if event["event"] == end_event]
-    assert [(event["stream_id"], event["turn_seq"], event["text"]) for event in ends] == [
-        ("primary", 9, primary_text), ("secondary", 10, "other"),
-    ]
-    assert [event["projection_receipts"] for event in ends] == [
-        [{"turn_id": "turn-folded", "ranges": [[3, 4], [8, 9]]}],
-        [{"turn_id": "turn-folded", "ranges": [[6, 6], [10, 10]]}],
-    ]
-    assert history.read(key) == original_rows
-    # Migration compaction retains its existing record format, without HTTP metadata.
-    assert transcript_module.compact_legacy_records(original_rows) == [
-        original_rows[0], original_rows[3],
-        {**original_rows[6], "text": primary_text},
-        {**original_rows[7], "text": "other"},
-        original_rows[8],
-    ]
 
 
 def test_event_projection_defers_trace_details_without_legacy_fallback(history,
@@ -1138,50 +1088,6 @@ def test_backfill_does_not_misalign_when_session_only_has_transcript_tail(histor
     ]
 
 
-def test_backfill_skips_internal_subagent_results(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
-    key = "websocket:t-subagent"
-    for ev in (
-        {"event": "message", "chat_id": "t-subagent", "text": "summary one"},
-        {"event": "turn_end", "chat_id": "t-subagent"},
-        {"event": "message", "chat_id": "t-subagent", "text": "summary two"},
-        {"event": "turn_end", "chat_id": "t-subagent"},
-    ):
-        history.append(key, ev)
-
-    legacy_raw = (
-        "[Subagent 'legacy' completed successfully]\n\n"
-        "Task: t\n\n"
-        "Result:\nr\n\n"
-        "Summarize this naturally for the user."
-    )
-    out = history.build(
-        key,
-        session_messages=[
-            {"role": "user", "content": legacy_raw},
-            {"role": "assistant", "content": "summary one"},
-            {
-                "role": "user",
-                "content": "marked result",
-                HIDDEN_HISTORY_META: {
-                    "kind": "subagent_result",
-                    "subagent_task_id": "sub-1",
-                },
-            },
-            {"role": "assistant", "content": "summary two"},
-        ],
-    )
-
-    assert out is not None
-    assert [
-        (message["role"], message["content"])
-        for message in _conversation_events(out)
-    ] == [
-        ("assistant", "summary one"),
-        ("assistant", "summary two"),
-    ]
-
-
 def test_build_response_schema(history, monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t3"
@@ -1229,7 +1135,8 @@ def test_existing_shell_output_uses_canonical_command_identity_not_bang_text(his
     key = "websocket:existing-shell-output"
     output = "Path\n----\n__pycache__"
     history.append(key, {"event": "user", "text": "!pwd", "turn_id": "shell-turn"})
-    history.append(key, {"event": "message", "text": output, "turn_id": "shell-turn"})
+    history.append(key, {"event": "message", "text": output, "turn_id": "shell-turn",
+                         **({"render_as": "text"} if command else {})})
     history.append(key, {"event": "turn_end", "turn_id": "shell-turn"})
     messages = [
         {"role": "user", "content": "/__shell pwd" if command else "!pwd",
@@ -1242,22 +1149,6 @@ def test_existing_shell_output_uses_canonical_command_identity_not_bang_text(his
     assert answer.get("render_as") == ("text" if command else None)
     assert history.read(key)[1]["text"] == output
     assert messages[1]["content"] == output
-
-
-def test_history_hides_only_confirmed_message_tool_terminal_echo():
-    from cirno.webui.transcript import _without_legacy_message_echoes
-    rows = [
-        {"event": "user", "turn_id": "one", "text": "hi"},
-        {"event": "message", "turn_id": "one", "kind": "tool_hint", "tool_events": [{"name": "message", "arguments": {"content": "hello"}}]},
-        {"event": "message", "turn_id": "one", "text": "hello"},
-        {"event": "stream_end", "turn_id": "one", "text": "hello"},
-        {"event": "user", "turn_id": "two", "text": "again"},
-        {"event": "stream_end", "turn_id": "two", "text": "hello"},
-    ]
-    result = _without_legacy_message_echoes(rows)
-    assert result[3]["text"] == ""
-    assert result[5]["text"] == "hello"
-    assert rows[3]["text"] == "hello"  # durable evidence is not rewritten
 
 
 def test_deferred_structured_tools_keep_a_visible_summary_without_text(history):

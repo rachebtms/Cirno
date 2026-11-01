@@ -16,8 +16,7 @@ from cirno.agent.tools.web_config import (
 )
 from cirno.agent.tools.web_config import WebToolsConfig
 from cirno.config.home import get_default_workspace
-from cirno.config.network import NetworkConfig, migrate_legacy_proxy_config
-from cirno.config.provider_api_migration import migrate_legacy_provider_api
+from cirno.config.network import NetworkConfig
 from cirno.config.timezone import detect_system_timezone
 from cirno.config.base import Base
 from cirno.cron.types import CronSchedule
@@ -42,7 +41,6 @@ class ChannelsConfig(Base):
     send_tool_hints: bool = True  # stream tool-call hints (e.g. read_file("…"))
     show_reasoning: bool = True  # surface model reasoning when channel implements it
     show_compaction_notices: bool = False  # automatic compaction chat notices, not UI lifecycle events
-    extract_document_text: bool = True  # Deprecated and ignored; documents are read on demand
     send_max_retries: int = Field(default=3, ge=0, le=10)  # Max delivery attempts (initial send included)
 
 
@@ -58,27 +56,19 @@ class DreamConfig(Base):
     batch_entries: int = Field(default=8, ge=1, le=50)
     batch_chars: int = Field(default=16000, ge=2000, le=64000)
     interval_h: int = Field(default=2, ge=1)  # Every 2 hours by default
-    cron: str | None = Field(
-        default=None,
-        exclude_if=lambda value: value is None,
-    )  # Legacy cron expression override
     model_override: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("modelOverride", "model", "model_override"),
+        validation_alias=AliasChoices("modelOverride", "model_override"),
     )  # Model preset name for Dream sessions
 
     def build_schedule(self, timezone: str) -> CronSchedule:
-        """Build the runtime schedule, preferring the legacy cron override if present."""
-        if self.cron:
-            return CronSchedule(kind="cron", expr=self.cron, tz=timezone)
+        """Build the interval schedule used outside idle mode."""
         return CronSchedule(kind="every", every_ms=self.interval_h * self._HOUR_MS)
 
     def describe_schedule(self) -> str:
         """Return a human-readable summary for logs and startup output."""
         if self.mode == "idle":
             return f"when idle for {self.idle_after_seconds}s with pending memory"
-        if self.cron:
-            return f"cron {self.cron} (legacy)"
         hours = self.interval_h
         return f"every {hours}h"
 
@@ -207,7 +197,7 @@ class AgentDefaults(Base):
     session_ttl_minutes: int = Field(
         default=15,
         ge=0,
-        validation_alias=AliasChoices("idleCompactAfterMinutes", "sessionTtlMinutes"),
+        validation_alias="idleCompactAfterMinutes",
         serialization_alias="idleCompactAfterMinutes",
     )  # Auto-compact idle threshold in minutes (0 = disabled)
     idle_compact_check_interval_seconds: int = Field(
@@ -284,7 +274,7 @@ class ProviderConfig(Base):
     @field_validator("thinking_style")
     @classmethod
     def _validate_thinking_style(cls, v: str | None) -> str | None:
-        if not v:  # None or "" -> no injection, valid (backwards compatible)
+        if not v:  # None or "" means no provider-specific injection
             return v
         if v not in cls._VALID_THINKING_STYLES:
             raise ValueError(
@@ -354,7 +344,6 @@ class ProvidersConfig(Base):
     qianfan: ProviderConfig = Field(default_factory=ProviderConfig)  # Qianfan (百度千帆)
     nvidia: ProviderConfig = Field(default_factory=ProviderConfig)  # NVIDIA NIM (nvapi- keys)
     opencode: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenCode Zen (canonical provider id)
-    opencode_zen: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenCode Zen (curated coding models)
     opencode_go: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenCode Go (low-cost coding models)
 
     @model_validator(mode="after")
@@ -372,19 +361,6 @@ class ProvidersConfig(Base):
                 if isinstance(value, dict):
                     self.model_extra[key] = ProviderConfig.model_validate(value)
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_legacy_api_type(cls, value: Any) -> Any:
-        # Temporary for two releases; remove with provider_api_migration.py.
-        if not isinstance(value, dict):
-            return value
-        providers = cast(dict[str, Any], value)
-        return {
-            name: migrate_legacy_provider_api(cast(dict[str, Any], provider), provider_name=name)
-            if isinstance(provider, dict) else provider
-            for name, provider in providers.items()
-        }
 
 
 class HeartbeatConfig(Base):
@@ -434,10 +410,8 @@ class ToolsConfig(Base):
         validation_alias=AliasChoices(
             "webuiAllowLocalServiceAccess",
             "webui_allow_local_service_access",
-            "allowLocalPreviewAccess",
-            "allow_local_preview_access",
         ),
-    )  # allow WebUI Full Access shell checks against localhost services; legacy allowLocalPreviewAccess still reads
+    )  # allow WebUI Full Access shell checks against localhost services
     webui_allow_remote_package_install: bool = Field(
         default=False,
         validation_alias=AliasChoices(
@@ -469,10 +443,7 @@ class _ExecRuntimeConfigSource(PydanticBaseSettingsSource):
         if not isinstance(execution, dict):
             return data
         execution = cast(dict[str, Any], execution)
-        if "timeout" in execution and ("maxRuntime" in execution or "max_runtime" in execution):
-            # Preserve same-source conflicts for the configuration model to reject.
-            return data
-        aliases = ("maxRuntime", "max_runtime", "timeout")
+        aliases = ("maxRuntime", "max_runtime")
         previous_tools: object = self.current_state.get("tools")
         if not any(name in execution for name in aliases) or not isinstance(previous_tools, dict):
             return data
@@ -504,10 +475,6 @@ class Config(BaseSettings):
         serialization_alias="modelPresets",
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_proxy_config(cls, value: Any) -> Any:
-        return migrate_legacy_proxy_config(value)
 
     @classmethod
     def settings_customise_sources(

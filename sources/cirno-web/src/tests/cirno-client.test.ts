@@ -1342,69 +1342,6 @@ describe("CirnoClient", () => {
     expect(client.hasUnsettledRun("chat-stale-idle")).toBe(true);
   });
 
-  it("correlates a legacy rejection only to one currently sent turn", () => {
-    const client = new CirnoClient({
-      url: "ws://test",
-      reconnect: false,
-      socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
-    });
-    const errors: Array<{ kind: string; chatId?: string; turnId?: string }> = [];
-    client.onError((error) => errors.push(error));
-    client.connect();
-    lastSocket().fakeOpen();
-    client.sendMessage("chat-legacy-reject", "question", undefined, {
-      turnId: "turn-legacy-reject",
-    });
-
-    lastSocket().fakeMessage({
-      event: "error",
-      chat_id: "chat-legacy-reject",
-      detail: "message_rejected",
-      reason: "text_too_large",
-    });
-
-    expect(client.hasUnsettledRun("chat-legacy-reject")).toBe(false);
-    expect(errors).toEqual([expect.objectContaining({
-      kind: "turn_rejected",
-      chatId: "chat-legacy-reject",
-      turnId: "turn-legacy-reject",
-    })]);
-  });
-
-  it("correlates legacy lifecycle completion when exactly one turn is unsettled", () => {
-    const client = new CirnoClient({
-      url: "ws://test",
-      reconnect: false,
-      socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
-    });
-    const handler = vi.fn();
-    client.onChat("chat-legacy-idle", handler);
-    client.connect();
-    lastSocket().fakeOpen();
-    client.sendMessage("chat-legacy-idle", "question", undefined, {
-      turnId: "turn-legacy-idle",
-    });
-    lastSocket().fakeMessage({
-      event: "goal_status",
-      chat_id: "chat-legacy-idle",
-      status: "running",
-      started_at: 4321,
-    });
-
-    lastSocket().fakeMessage({
-      event: "goal_status",
-      chat_id: "chat-legacy-idle",
-      status: "idle",
-    });
-
-    expect(client.hasUnsettledRun("chat-legacy-idle")).toBe(false);
-    expect(client.getRunStartedAt("chat-legacy-idle")).toBeNull();
-    expect(handler).toHaveBeenLastCalledWith(expect.objectContaining({
-      event: "goal_status",
-      status: "idle",
-      turn_id: "turn-legacy-idle",
-    }));
-  });
 
   it("does not apply an uncorrelated legacy idle to multiple unsettled turns", () => {
     const client = new CirnoClient({

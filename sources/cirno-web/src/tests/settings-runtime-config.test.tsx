@@ -17,7 +17,7 @@ function runtimeSettings() {
     "agents.defaults.dream.enabled": true,
     "agents.defaults.session_ttl_minutes": 15,
     "gateway.heartbeat.enabled": true,
-    "tools.exec.timeout": 60,
+    "tools.exec.max_runtime": 60,
     "tools.exec.allowed_env_keys": ["TERM"],
     "tools.exec.allow_patterns": [],
     "tools.exec.deny_patterns": [],
@@ -140,11 +140,11 @@ describe("Runtime configuration settings", () => {
   it("saves only edited fields using the existing settings footer", async () => {
     const payload = runtimeSettings();
     requestMutationMock.mockResolvedValue({ ...payload, requires_restart: true,
-      runtime_config: { ...payload.runtime_config, "tools.exec.timeout": 90 } });
+      runtime_config: { ...payload.runtime_config, "tools.exec.max_runtime": 90 } });
     renderSettingsView({ initialSection: "shell", initialSettings: payload });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" }), { target: { value: "90" } });
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.timeout": 90 } }, 20_000,
+      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 90 } }, 20_000,
     ));
     expect(await screen.findByText("Saved. Restart to apply changes.")).toBeInTheDocument();
   });
@@ -152,7 +152,7 @@ describe("Runtime configuration settings", () => {
   it("keeps a loaded custom runtime editable when typing through a preset", async () => {
     const payload = runtimeSettings();
     requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.timeout": 9000,
+      ...payload.runtime_config, "tools.exec.max_runtime": 9000,
     } });
     const user = userEvent.setup();
     renderSettingsView({ initialSection: "shell", initialSettings: payload });
@@ -167,7 +167,7 @@ describe("Runtime configuration settings", () => {
     expect(field).toHaveValue(9000);
 
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.timeout": 9000 } }, 20_000,
+      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 9000 } }, 20_000,
     ));
   });
 
@@ -189,9 +189,9 @@ describe("Runtime configuration settings", () => {
     ["No time limit", 0],
   ])("saves the %s command runtime preset in seconds", async (label, seconds) => {
     const payload = runtimeSettings();
-    payload.runtime_config["tools.exec.timeout"] = 3600;
+    payload.runtime_config["tools.exec.max_runtime"] = 3600;
     requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.timeout": seconds,
+      ...payload.runtime_config, "tools.exec.max_runtime": seconds,
     } });
     renderSettingsView({ initialSection: "shell", initialSettings: payload });
 
@@ -202,15 +202,15 @@ describe("Runtime configuration settings", () => {
     fireEvent.click(screen.getByRole("option", { name: label }));
 
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.timeout": seconds } }, 20_000,
+      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": seconds } }, 20_000,
     ));
   });
 
   it("rejects over-limit custom input without clamping or saving it", async () => {
     const payload = runtimeSettings();
-    payload.runtime_config["tools.exec.timeout"] = 3600;
+    payload.runtime_config["tools.exec.max_runtime"] = 3600;
     requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.timeout": 86400,
+      ...payload.runtime_config, "tools.exec.max_runtime": 86400,
     } });
     renderSettingsView({ initialSection: "shell", initialSettings: payload });
     fireEvent.click(screen.getByRole("combobox", { name: "Command runtime" }));
@@ -226,7 +226,7 @@ describe("Runtime configuration settings", () => {
 
     fireEvent.change(field, { target: { value: "86400" } });
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.timeout": 86400 } }, 20_000,
+      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 86400 } }, 20_000,
     ));
     await screen.findByText("Saved.", { exact: true });
     fireEvent.change(field, { target: { value: "86401" } });
@@ -241,9 +241,9 @@ describe("Runtime configuration settings", () => {
 
   it("starts a custom duration from No time limit without saving an empty value", async () => {
     const payload = runtimeSettings();
-    payload.runtime_config["tools.exec.timeout"] = 0;
+    payload.runtime_config["tools.exec.max_runtime"] = 0;
     requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.timeout": 120,
+      ...payload.runtime_config, "tools.exec.max_runtime": 120,
     } });
     renderSettingsView({ initialSection: "shell", initialSettings: payload });
     fireEvent.click(screen.getByRole("combobox", { name: "Command runtime" }));
@@ -253,7 +253,7 @@ describe("Runtime configuration settings", () => {
     expect(requestMutationMock).not.toHaveBeenCalled();
     fireEvent.change(field, { target: { value: "120" } });
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.timeout": 120 } }, 20_000,
+      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 120 } }, 20_000,
     ));
   });
 
@@ -271,14 +271,14 @@ describe("Runtime configuration settings", () => {
   it("keeps runtime editing available on a host without limit metadata", async () => {
     const payload = runtimeSettings();
     requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.timeout": 90,
+      ...payload.runtime_config, "tools.exec.max_runtime": 90,
     } });
     renderSettingsView({ initialSection: "shell", initialSettings: {
       ...payload, advanced: settingsPayload().advanced,
     } });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" }), { target: { value: "90" } });
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.timeout": 90 } }, 20_000,
+      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 90 } }, 20_000,
     ));
   });
 

@@ -337,7 +337,7 @@ def _uses_openrouter_attribution(spec: "ProviderSpec | None", api_base: str | No
 
 
 def _uses_opencode_affinity(spec: ProviderSpec | None, api_base: str | None) -> bool:
-    if spec and spec.name in {"opencode", "opencode_zen", "opencode_go"}:
+    if spec and spec.name in {"opencode", "opencode_go"}:
         return True
     host = (urlparse(api_base or "").hostname or "").rstrip(".")
     return host == "opencode.ai" or host.endswith(".opencode.ai")

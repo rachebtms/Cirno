@@ -132,7 +132,6 @@ function bootstrapCapabilities(boot: BootstrapResponse): string[] {
 
 const SIDEBAR_STORAGE_KEY = "cirno-webui.sidebar";
 const SESSION_UPDATES_STORAGE_KEY = "cirno-webui.sidebar.session-updates.v1";
-const LEGACY_COMPLETED_RUNS_STORAGE_KEY = "cirno-webui.sidebar.completed-runs.v1";
 const RESTART_STARTED_KEY = "cirno-webui.restartStartedAt";
 const RESTART_ROUTE_KEY = "cirno-webui.restartRoute";
 const RESTART_ROUTE_TTL_MS = 5 * 60 * 1000;
@@ -545,8 +544,7 @@ function readSessionUpdateChatIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
     const raw =
-      window.localStorage.getItem(SESSION_UPDATES_STORAGE_KEY)
-      ?? window.localStorage.getItem(LEGACY_COMPLETED_RUNS_STORAGE_KEY);
+      window.localStorage.getItem(SESSION_UPDATES_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return new Set();
     return new Set(parsed.filter((item): item is string => typeof item === "string"));

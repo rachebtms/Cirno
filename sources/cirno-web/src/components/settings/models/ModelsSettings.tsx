@@ -9,7 +9,6 @@ import type { EditCompletion } from "@/components/settings/shared/useEditComplet
 import { useEffect, useId, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   GripVertical,
-  ListOrdered,
   Loader2,
   Pencil,
 } from "lucide-react";
@@ -215,7 +214,6 @@ export function ModelsSettings({
   callOrder,
   saving,
   orderSaving,
-  migrationSaving,
   showBrandLogos,
   providerSaving,
   onChangeCallOrder,
@@ -225,7 +223,6 @@ export function ModelsSettings({
   onManageProviders,
   onSave,
   onSaveRequestSettings,
-  onMigrate,
   onBeginCreate,
   onCancelCreate,
   onClearPresetNameError,
@@ -246,7 +243,6 @@ export function ModelsSettings({
   callOrder: string[];
   saving: boolean;
   orderSaving: boolean;
-  migrationSaving: boolean;
   showBrandLogos: boolean;
   providerSaving: string | null;
   onChangeCallOrder: (order: string[]) => void;
@@ -256,7 +252,6 @@ export function ModelsSettings({
   onManageProviders: (trigger: HTMLButtonElement) => void;
   onSave: () => void;
   onSaveRequestSettings: (values: Partial<RequestParameterDraft>) => Promise<void>;
-  onMigrate: () => void;
   onBeginCreate: () => void;
   onCancelCreate: () => void;
   onClearPresetNameError: () => void;
@@ -706,49 +701,11 @@ export function ModelsSettings({
     </div>
   );
 
-  const showMigration = !settings.model_call_order_editable
-    && settings.model_configuration_migratable !== false;
-
   return (
     <div className="settings-stack">
       <section>
         <SettingsSectionTitle>{t("settings.models.presets")}</SettingsSectionTitle>
-        {showMigration ? (
-          <SettingsGroup>
-            <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-muted text-muted-foreground">
-                  <ListOrdered className="h-4 w-4" aria-hidden />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[14px] font-medium text-foreground">
-                    {tx("settings.models.convertTitle", "Convert the current model setup")}
-                  </p>
-                  <p className="mt-0.5 max-w-[34rem] text-[12px] leading-5 text-muted-foreground">
-                    {tx(
-                      "settings.models.convertHelp",
-                      "Turn the existing primary and fallback models into presets so their order can be managed here.",
-                    )}
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="shrink-0 rounded-full"
-                disabled={migrationSaving}
-                onClick={onMigrate}
-              >
-                {migrationSaving ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-                ) : null}
-                {migrationSaving
-                  ? tx("settings.models.converting", "Converting...")
-                  : tx("settings.models.convertAction", "Convert to presets")}
-              </Button>
-            </div>
-          </SettingsGroup>
-        ) : presetRows.length ? (
+        {presetRows.length ? (
           <div ref={presetDrag.listRef} {...presetDrag.listProps} className="flex flex-col"
             role="list" aria-label={t("settings.models.callOrder")}>
             {callOrder.length > 0 && presetRows.length > 1 ? (
@@ -905,8 +862,7 @@ export function ModelsSettings({
               </SettingsStatusMessage>
             </span>
           ) : null}
-          {!showMigration ? (
-            <Button
+          <Button
               type="button"
               variant="link"
               size="sm"
@@ -924,7 +880,6 @@ export function ModelsSettings({
             >
               {tx("settings.models.newPreset", "New preset")}
             </Button>
-          ) : null}
           <Button type="button" variant="link" size="sm"
             className="h-11 shrink-0 text-[13px] font-normal text-muted-foreground hover:font-semibold hover:text-orange-700 hover:no-underline dark:hover:text-orange-400 sm:h-9"
             onClick={(event) => onManageProviders(event.currentTarget)}>

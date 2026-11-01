@@ -39,7 +39,6 @@ import {
   listSlashCommands,
   loginProviderOAuth,
   logoutProviderOAuth,
-  migrateModelConfigurations,
   disableCirnoFeature,
   enableCirnoFeature,
   runAutomationAction,
@@ -728,9 +727,8 @@ describe("webui API helpers", () => {
     );
   });
 
-  it("serializes model preset deletion and migration", async () => {
+  it("serializes model preset deletion", async () => {
     await deleteModelConfiguration(mutationTransport, "spare");
-    await migrateModelConfigurations(mutationTransport);
 
     expect(requestMutation).toHaveBeenNthCalledWith(
       1,
@@ -738,12 +736,7 @@ describe("webui API helpers", () => {
       { name: "spare" },
       20_000,
     );
-    expect(requestMutation).toHaveBeenNthCalledWith(
-      2,
-      "settings.model_configuration.migrate",
-      {},
-      20_000,
-    );
+
   });
 
   it("serializes model call order as an ordered JSON array", async () => {

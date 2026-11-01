@@ -123,25 +123,6 @@ def test_execution_rules_in_system_prompt(tmp_path) -> None:
     assert "execution and verification" in prompt
 
 
-def test_execution_rules_reach_existing_workspace_soul(tmp_path) -> None:
-    """An untouched legacy SOUL is upgraded in memory without overwriting the file."""
-    workspace = _make_workspace(tmp_path)
-    legacy_soul = (
-        pkg_files("cirno") / "templates" / "legacy" / "SOUL.md"
-    ).read_text(encoding="utf-8")
-    legacy_rule = "For multi-step tasks, outline the plan first and wait for user confirmation."
-    soul_path = workspace / "SOUL.md"
-    soul_path.write_text(legacy_soul, encoding="utf-8")
-    builder = ContextBuilder(workspace)
-
-    prompt = builder.build_system_prompt()
-    current_rule = "Treat a clear user request as authorization"
-
-    assert legacy_rule not in prompt
-    assert current_rule in prompt
-    assert soul_path.read_text(encoding="utf-8") == legacy_soul
-
-
 @pytest.mark.parametrize("legacy_workspace", [False, True])
 def test_scheduling_contract_reaches_fresh_and_legacy_workspaces(tmp_path, legacy_workspace) -> None:
     """Default files can be skipped and old files must not hide the current contract."""

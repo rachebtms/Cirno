@@ -43,7 +43,6 @@ from cirno.webui.settings.api import (
     delete_model_configuration,
     login_oauth_provider,
     logout_oauth_provider,
-    migrate_model_configurations,
     model_api_resolution_payload,
     provider_models_payload,
     settings_payload,
@@ -105,7 +104,6 @@ _MODEL_ROUTES = {
     "/api/settings/model-configurations/create": "model-create",
     "/api/settings/model-configurations/update": "model-update",
     "/api/settings/model-configurations/delete": "model-delete",
-    "/api/settings/model-configurations/migrate": "models-migrate",
     "/api/settings/model-call-order/update": "call-order-update",
     "/api/settings/provider/update": "provider-update",
     "/api/settings/provider/create": "provider-create",
@@ -149,7 +147,6 @@ _SETTINGS_MUTATION_PATHS = frozenset({
     "/api/settings/model-configurations/create",
     "/api/settings/model-configurations/update",
     "/api/settings/model-configurations/delete",
-    "/api/settings/model-configurations/migrate",
     "/api/settings/model-call-order/update",
     "/api/settings/provider/update",
     "/api/settings/provider/create",
@@ -489,7 +486,6 @@ class WebUISettingsRouter:
             create_model=create_model_configuration,
             update_model=update_model_configuration,
             delete_model=delete_model_configuration,
-            migrate_models=migrate_model_configurations,
             update_call_order=update_model_call_order,
             update_provider=update_provider_settings,
             create_provider=create_provider_settings,
@@ -531,7 +527,6 @@ class WebUISettingsRouter:
             channel_feature_action=self._channel_feature_action,
             channel_runtime_status=self._channel_runtime_status,
         )
-
 
 
     async def _reload_mcp_runtime(self) -> dict[str, Any]:

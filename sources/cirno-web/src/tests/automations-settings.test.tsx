@@ -215,10 +215,6 @@ describe("Automation task list and detail sheet", () => {
   });
 
 
-
-
-
-
   it.each(["Close", "Escape", "removed", "Edit", "Edit removed"])("finishes the detail exit before cleanup and handoff: %s", async (action) => {
     // Happy DOM has no CSS animations. Give Radix live animation names so its
     // real presence lifecycle runs, including the outer portal's ref boundary.
@@ -655,7 +651,6 @@ describe("Automation task list and detail sheet", () => {
   });
 
 
-
   it("keeps separators inside the date grid and omits an outside-month task list", () => {
     const outsideTask: SessionAutomationJob = {
       ...task,
@@ -728,7 +723,6 @@ describe("Automation task list and detail sheet", () => {
     render(<AutomationEditDialog job={job} saving={false} onOpenChange={() => {}} onSave={vi.fn()} />);
     expect(screen.getByDisplayValue("30 13 25 * *")).toBeVisible();
   });
-
 
 
   it("opens an icon-only filter with the keyboard and restores focus on Escape", async () => {
@@ -975,23 +969,22 @@ describe("Automation task list and detail sheet", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it("localizes the legacy destination error with a recovery path", async () => {
+  it("shows the original execution error without hiding its reason", async () => {
     await act(() => i18n.changeLanguage("zh-CN"));
     render(<Harness payload={{ jobs: [{
       ...task,
       state: {
         ...task.state,
         last_status: "error",
-        last_error: "legacy cron payload is missing channel/to; recreate it from a chat session",
+        last_error: "Node connection timed out after 30 seconds",
       },
     }] }} />);
 
     fireEvent.click(screen.getByRole("button", { name: /PR watch/ }));
     const detail = screen.getByRole("dialog", { name: "PR watch" });
     expect(within(detail).getByRole("alert")).toHaveTextContent(
-      "这个旧版自动任务缺少发送目标，无法继续运行。请从关联会话中重新创建该任务。",
+      "Node connection timed out after 30 seconds",
     );
-    expect(detail).not.toHaveTextContent("legacy cron payload");
   });
 
   it("runs a linked task through the existing action and prevents duplicate actions while busy", async () => {

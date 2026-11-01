@@ -521,7 +521,6 @@ describe("Settings models", () => {
     payload.model_presets[0] = {
       ...payload.model_presets[0],
       name: "openai",
-      label: "minimax",
     };
     payload.model_call_order = ["openai"];
     payload.agent.model_preset = "openai";
@@ -1300,53 +1299,6 @@ describe("Settings models", () => {
     expect(nameInput).toHaveAttribute("aria-invalid", "false");
   });
 
-  it("converts legacy model settings into presets before editing call order", async () => {
-    const migratedPayload = settingsPayload();
-    const defaultPreset = {
-      ...migratedPayload.model_presets[0],
-      name: "default",
-      label: "Default",
-      is_default: true,
-    };
-    const legacyPayload: SettingsPayload = {
-      ...migratedPayload,
-      agent: {
-        ...migratedPayload.agent,
-        model_preset: "default",
-      },
-      model_presets: [defaultPreset],
-      model_call_order: [],
-      model_call_order_editable: false,
-      model_configuration_migratable: true,
-    };
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/settings") return jsonResponse(legacyPayload);
-      if (url === "/api/settings/cli-apps") {
-        return jsonResponse({ apps: [], installed_count: 0 });
-      }
-      if (url === "/api/settings/mcp-presets") {
-        return jsonResponse({ presets: [], installed_count: 0 });
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    requestMutationMock.mockResolvedValueOnce(migratedPayload);
-
-    renderSettingsView({ initialSection: "models", initialSettings: legacyPayload });
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Convert to presets" }),
-    );
-
-    await waitFor(() =>
-      expect(requestMutationMock).toHaveBeenCalledWith(
-        "settings.model_configuration.migrate",
-        {},
-        20_000,
-      ),
-    );
-  });
 
   it("starts fresh users with an empty preset list instead of legacy conversion", async () => {
     const base = settingsPayload();
@@ -1364,7 +1316,7 @@ describe("Settings models", () => {
         {
           ...base.model_presets[0],
           name: "default",
-          label: "Default",
+
           active: true,
           is_default: true,
           model: "anthropic/claude-opus-4-5",
@@ -1374,7 +1326,7 @@ describe("Settings models", () => {
       ],
       model_call_order: [],
       model_call_order_editable: false,
-      model_configuration_migratable: false,
+
       providers: [],
     };
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
@@ -1401,7 +1353,7 @@ describe("Settings models", () => {
         {
           ...base.model_presets[0],
           name: "default",
-          label: "Default",
+
           active: false,
           is_default: true,
           model: "openai-codex/gpt-5.5",
@@ -1411,7 +1363,7 @@ describe("Settings models", () => {
         {
           ...base.model_presets[0],
           name: "fast",
-          label: "fast",
+
           active: true,
           is_default: false,
           model: "MiniMax-M3",
@@ -1465,7 +1417,7 @@ describe("Settings models", () => {
         {
           ...base.model_presets[0],
           name: "default",
-          label: "Default",
+
           is_default: true,
         },
       ],

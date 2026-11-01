@@ -277,20 +277,6 @@ def update_model_call_order(
     return settings_payload(config_path=config_path)
 
 
-def migrate_model_configurations(
-    _query: QueryParams | None = None,
-    *,
-    config_path: Path | None = None,
-) -> dict[str, Any]:
-    config = _load_settings_config(config_path)
-    if models.migrate_model_configurations(
-        config,
-        oauth_status=_oauth_provider_status,
-    ):
-        _save_settings_config(config, config_path)
-    return settings_payload(config_path=config_path)
-
-
 def delete_model_configuration(
     query: QueryParams,
     *,

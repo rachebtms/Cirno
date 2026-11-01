@@ -137,7 +137,6 @@ async def instance_action(
         from cirno.memory.repository import MemoryRepository
         def memory_action():
             repo = MemoryRepository()
-            repo.migrate_legacy()
             repo.sync_profiles()
             if action == "memory.list":
                 from cirno.config.loader import load_config

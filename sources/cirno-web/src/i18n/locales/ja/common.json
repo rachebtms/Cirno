@@ -198,10 +198,6 @@
           "label": "設定を変更",
           "help": "エージェントによる自身の設定の変更を許可します。\n\n自己管理ツールによる設定の更新を許可します。"
         },
-        "tools_exec_timeout": {
-          "label": "コマンドの実行時間",
-          "help": "シェルコマンドの既定の実行時間上限です。\n\n出力や待機によって上限は延長されません。「時間制限なし」を選ぶと実行時間の上限がなくなります。"
-        },
         "tools_exec_path_prepend": {
           "label": "PATH の優先検索",
           "help": "これらのディレクトリを先に検索します。\n\nPATH の先頭に追加するディレクトリです。Windows ではセミコロン、macOS と Linux ではコロンで区切ります。"
@@ -284,10 +280,6 @@
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
-        },
-        "agents_defaults_dream_cron": {
-          "label": "Dream cron expression (optional)",
           "help": "Restart to apply. A cron expression overrides the interval."
         },
         "agents_defaults_dream_model_override": {
@@ -377,6 +369,10 @@
         "agents_defaults_goal_continuation_limit": {
           "label": "目標の自動継続回数の既定上限",
           "help": "0 は無制限。回数は永続化され、個別の目標で変更できます。"
+        },
+        "tools_exec_max_runtime": {
+          "label": "コマンドの実行時間",
+          "help": "シェルコマンドの既定の実行時間上限です。\n\n出力や待機によって上限は延長されません。「時間制限なし」を選ぶと実行時間の上限がなくなります。"
         }
       },
       "groups": {
@@ -782,7 +778,18 @@
       "configuredCount": "{{count}} 個設定済み",
       "totalProviders": "{{count}} 個利用可能",
       "webSearch": "Web 検索",
-      "workspace": "作業ディレクトリ"
+      "workspace": "作業ディレクトリ",
+      "shortcutsTitle": "よく使う設定",
+      "shortcuts": {
+        "memory": "保存した知識を検索し、出典を確認",
+        "context": "圧縮のタイミングと保持するコンテキストの割合を調整",
+        "execution": "自動継続の上限と実行の既定値を設定",
+        "personality": "個性、好み、行動指示を編集",
+        "telegram": "個人チャットを連携し、通知を選択",
+        "nodes": "SSH ホストに接続し、リモートコマンドを実行",
+        "mcp": "外部のツールやサービスと接続",
+        "apps": "ツールを管理し、エージェントの能力を拡張"
+      }
     },
     "usage": {
       "shortTitle": "トークン使用量",
@@ -898,10 +905,6 @@
       "maxTokens": "最大出力トークン",
       "temperature": "温度",
       "reasoningEffort": "推論の強度",
-      "convertTitle": "設定を変換",
-      "convertHelp": "主モデルと予備モデルをプリセットに変換します。",
-      "converting": "変換中...",
-      "convertAction": "プリセットに変換",
       "dragToReorder": "ドラッグして並べ替え",
       "removeFromOrder": "プリセットを無効化",
       "disabled": "無効",
@@ -1260,9 +1263,7 @@
       "create": "タスクを作成",
       "createPrompt": "cirno に何を自動化してほしいですか？",
       "createInput": "自動タスクを説明",
-      "errors": {
-        "legacyMissingDestination": "この旧形式の自動タスクには送信先がありません。続行するには、関連チャットから作り直してください。"
-      },
+      "errors": {},
       "calendar": {
         "previousMonth": "前の月",
         "nextMonth": "次の月",

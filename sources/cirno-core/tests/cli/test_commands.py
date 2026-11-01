@@ -21,7 +21,6 @@ from cirno.bus.queue import MessageBus
 from cirno.cli import commands as cli_commands
 from cirno.cli import gateway_runtime as cli_gateway_runtime
 from cirno.cli import provider as provider_commands
-from cirno.cli import terminal as cli_terminal
 from cirno.cli import webui as cli_webui
 from cirno.cli import webui_support as cli_webui_support
 from cirno.cli.commands import app
@@ -236,10 +235,6 @@ async def test_gateway_signal_fallback_requests_shutdown_then_forces_and_restore
     assert handlers == dict.fromkeys((signal.SIGINT, signal.SIGTERM, sigbreak), previous)
 
 
-
-
-
-
 def test_disabled_dream_cursor_only_advances_when_behind(tmp_path) -> None:
     store = MemoryStore(tmp_path)
     store.append_history("first")
@@ -359,10 +354,6 @@ def test_onboard_existing_config_refresh(mock_paths):
     assert not (workspace_dir / "AGENTS.md").exists()
 
 
-
-
-
-
 def test_onboard_existing_workspace_safe_create(mock_paths):
     """Workspace exists — should not recreate, but still add missing templates."""
     config_file, workspace_dir, _ = mock_paths
@@ -431,8 +422,6 @@ def test_status_uses_explicit_config_and_workspace(tmp_path: Path):
     assert str(config_workspace) not in compact_output
 
 
-
-
 def test_onboard_uses_explicit_config_and_workspace_paths(tmp_path, monkeypatch):
     config_path = tmp_path / "instance" / "config.json"
     workspace_path = tmp_path / "workspace"
@@ -455,8 +444,6 @@ def test_onboard_uses_explicit_config_and_workspace_paths(tmp_path, monkeypatch)
     resolved_config = str(config_path.resolve())
     assert resolved_config in compact_output
     assert f'cirno webui -c "{resolved_config}"' in result.stdout
-
-
 
 
 def test_config_matches_github_copilot_codex_with_hyphen_prefix():
@@ -828,7 +815,7 @@ def test_provider_login_openai_codex_uses_explicit_config_proxy(tmp_path, monkey
     proxy = "http://127.0.0.1:23458"
     config_path = tmp_path / "config.json"
     config_path.write_text(
-        json.dumps({"providers": {"openaiCodex": {"proxy": proxy}}}),
+        json.dumps({"network": {"proxy": proxy}, "providers": {"openaiCodex": {"useProxy": True}}}),
         encoding="utf-8",
     )
     active_path: dict[str, Path] = {}
@@ -1522,8 +1509,6 @@ def test_agent_help_shows_workspace_and_config_options():
     assert "--theme" not in stripped_output
 
 
-
-
 def test_agent_uses_default_config_when_no_workspace_or_config_flags(mock_agent_runtime):
     result = runner.invoke(app, ["agent", "-m", "hello"])
 
@@ -2116,32 +2101,6 @@ def test_webui_not_ready_does_not_print_a_login_link(monkeypatch, tmp_path: Path
     assert "WebUI did not become ready" in result.stdout
     assert "Logs:" in result.stdout
     assert "bootstrapSecret=" not in result.stdout
-
-
-def test_webui_background_points_to_the_single_persistent_gateway_command(
-    tmp_path: Path,
-) -> None:
-    config_file = tmp_path / "config.json"
-    workspace = tmp_path / "workspace"
-
-    result = runner.invoke(
-        app,
-        [
-            "webui",
-            "--background",
-            "--config",
-            str(config_file),
-            "--workspace",
-            str(workspace),
-        ],
-    )
-
-    assert result.exit_code == 1
-    compact_output = _strip_ansi(result.stdout).replace("\n", " ")
-    assert "webui --background` no longer owns gateway lifecycle" in compact_output
-    assert "cirno gateway --background --config" in compact_output
-    assert "--workspace" in compact_output
-    assert not config_file.exists()
 
 
 @pytest.mark.parametrize("managed", [False], ids=["explicit-detach"])
@@ -3113,9 +3072,6 @@ def test_gateway_unbound_agent_cron_is_skipped(
         name="stretch",
         payload=CronPayload(
             message="Remind me to stretch.",
-            deliver=True,
-            channel="telegram",
-            to="user-1",
         ),
     )
 
@@ -3393,9 +3349,6 @@ def test_gateway_local_trigger_queue_submits_agent_turns(
         def register_system_job(self, _job) -> None:
             return None
 
-        def remove_system_job(self, _job_id: str) -> bool:
-            return False
-
         def remove_system_job(self, job_id: str) -> bool:
             seen.setdefault("cron_reconciliation", []).append(f"remove:{job_id}")
             return False
@@ -3575,47 +3528,6 @@ def test_gateway_custom_config_workspace_does_not_migrate_legacy_cron(
     assert seen["cron_store"] == custom_workspace / "cron" / "jobs.json"
     assert legacy_file.exists()
     assert not (custom_workspace / "cron" / "jobs.json").exists()
-
-
-def test_migrate_cron_store_moves_legacy_file(tmp_path: Path) -> None:
-    """Legacy global jobs.json is moved into the workspace on first run."""
-    from cirno.cli.runtime_config import _migrate_cron_store
-
-    legacy_dir = tmp_path / "global" / "cron"
-    legacy_dir.mkdir(parents=True)
-    legacy_file = legacy_dir / "jobs.json"
-    legacy_file.write_text('{"jobs": []}')
-
-    config = Config()
-    config.agents.defaults.workspace = str(tmp_path / "workspace")
-    workspace_cron = config.workspace_path / "cron" / "jobs.json"
-
-    with patch("cirno.config.paths.get_cron_dir", return_value=legacy_dir):
-        _migrate_cron_store(config)
-
-    assert workspace_cron.exists()
-    assert workspace_cron.read_text() == '{"jobs": []}'
-    assert not legacy_file.exists()
-
-
-def test_migrate_cron_store_skips_when_workspace_file_exists(tmp_path: Path) -> None:
-    """Migration does not overwrite an existing workspace cron store."""
-    from cirno.cli.runtime_config import _migrate_cron_store
-
-    legacy_dir = tmp_path / "global" / "cron"
-    legacy_dir.mkdir(parents=True)
-    (legacy_dir / "jobs.json").write_text('{"old": true}')
-
-    config = Config()
-    config.agents.defaults.workspace = str(tmp_path / "workspace")
-    workspace_cron = config.workspace_path / "cron" / "jobs.json"
-    workspace_cron.parent.mkdir(parents=True)
-    workspace_cron.write_text('{"new": true}')
-
-    with patch("cirno.config.paths.get_cron_dir", return_value=legacy_dir):
-        _migrate_cron_store(config)
-
-    assert workspace_cron.read_text() == '{"new": true}'
 
 
 def test_gateway_uses_configured_port_when_cli_flag_is_missing(monkeypatch, tmp_path: Path) -> None:
@@ -4181,8 +4093,6 @@ def test_gateway_shutdown_event_exits_forever_runtime_tasks(
     assert shutdown_order == ["channels_stopped", "channel_task_cleaned_up"]
 
 
-
-
 def test_trigger_cli_queues_message_in_workspace(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -4213,16 +4123,6 @@ def test_trigger_cli_queues_message_in_workspace(
     assert len(deliveries) == 1
     assert deliveries[0].trigger_id == trigger.id
     assert deliveries[0].content == "Review PR #4502"
-
-
-
-
-
-
-
-
-
-
 
 
 def test_channels_login_requires_channel_name() -> None:

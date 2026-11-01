@@ -35,7 +35,7 @@ export function settingsPayload(): SettingsPayload {
     },
     model_presets: [{
       name: "primary",
-      label: "Primary",
+
       active: true,
       is_default: false,
       model: "openai/gpt-4o",

@@ -1,10 +1,18 @@
 import {
+  CompactIcon,
+  McpIcon,
+  MemoryIcon,
   ModelsIcon,
+  ToolRunIcon,
   WebSearchIcon,
 } from "@/components/icons/product-icons";
 import { type Dispatch, type SetStateAction } from "react";
 import {
   ChevronRight,
+  Link,
+  Play,
+  Server,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -26,6 +34,17 @@ import type {
 import { providerBrand, providerDisplayLabel } from "@/lib/provider-brand";
 import type { SettingsPayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const overviewShortcuts = [
+  { section: "memory", icon: MemoryIcon },
+  { section: "context", icon: CompactIcon },
+  { section: "execution", icon: Play },
+  { section: "personality", icon: UserRound },
+  { section: "telegram", icon: Link },
+  { section: "nodes", icon: Server },
+  { section: "mcp", icon: McpIcon },
+  { section: "apps", icon: ToolRunIcon },
+] satisfies { section: SettingsSectionKey; icon: LucideIcon }[];
 
 export function OverviewSettings({
   settings,
@@ -84,10 +103,36 @@ export function OverviewSettings({
             showBrandLogos={showBrandLogos}
             onClick={() => onSelectSection("browser")}
           />
-          
         </SettingsGroup>
       </section>
 
+      <section>
+        <SettingsSectionTitle>{t("settings.overview.shortcutsTitle")}</SettingsSectionTitle>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {overviewShortcuts.map(({ section, icon }) => (
+            <button
+              key={section}
+              type="button"
+              onClick={() => onSelectSection(section)}
+              className="group flex w-full items-center gap-3 rounded-panel bg-settings-surface px-4 py-4 text-left transition-colors settings-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-5"
+            >
+              <OverviewRowIcon icon={icon} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-medium leading-5 text-foreground">
+                  {t(`settings.nav.${section}`)}
+                </span>
+                <span className="mt-1 block text-[13px] leading-5 text-muted-foreground">
+                  {t(`settings.overview.shortcuts.${section}`)}
+                </span>
+              </span>
+              <ChevronRight
+                className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5"
+                aria-hidden
+              />
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

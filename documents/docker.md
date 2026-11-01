@@ -6,7 +6,7 @@ The repository workflow `.github/workflows/container.yml` is configured to verif
 
 - Pull requests run frontend and backend checks and build an AMD64 image for a startup smoke test. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.1.1` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.1.2` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
@@ -16,26 +16,26 @@ The code and workflow must first be committed and pushed to GitHub. A workflow f
 
 ## Deploy
 
-Build a source checkout using the repository's `compose.yaml`:
+Use the repository's minimal `compose.yaml` to run the published image:
 
 ```sh
-docker compose up -d --build
+docker compose up -d
 docker compose logs cirno-gateway
 ```
 
-Once the workflow has published an image, use `docker compose pull` followed by `docker compose up -d` to deploy it without a local build.
+The example publishes only the Web UI port and persists Home. Model providers, Telegram and other features are configured in the browser. There are no default CPU or memory limits.
 
 Open `http://localhost:8765`. On a new Home, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. The next page configures model providers and model configurations; this step can be deferred to Settings. No terminal setup code or generated password is required. The Home directory is mounted from `~/.cirno`; it contains configuration, profiles, memory, skills and runtime records. Existing configuration is preserved on restart.
 
-Pin an image with `CIRNO_IMAGE_TAG=0.1.1`, or track `latest`. `CIRNO_MEMORY_LIMIT` defaults to `400M`. Optional memory embeddings are disabled by default. A container image build does not bundle an embedding model.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.2`; otherwise track `latest`. Optional memory embeddings are disabled by default. A container image build does not bundle an embedding model.
 
-To update a registry deployment, pull the selected image tag and recreate the service. For a source deployment, update the checkout and run `docker compose up -d --build` again.
+To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
-The workflow smoke test starts the server within a 400MB limit, checks its health endpoint and Web UI, and verifies that PID 1 runs as the non-root Cirno user. ARM64 is built for publication; the startup smoke test runs on AMD64.
+The workflow smoke test starts the server, checks its health endpoint and Web UI, and verifies that PID 1 runs as the non-root Cirno user. ARM64 is built for publication; the startup smoke test runs on AMD64.
 
 ## Networking and authentication
 
-Compose publishes the Web interface on port 8765 and binds the gateway health port 18790 to loopback. New instances enable `channels.websocket.browserSetup` and use browser registration. The first person to register becomes the instance owner: keep a new deployment private until you have registered, and use HTTPS when sending credentials over an untrusted network.
+Compose publishes the Web interface on port 8765. The gateway health endpoint stays inside the container. New instances enable `channels.websocket.browserSetup` and use browser registration. The first person to register becomes the instance owner: keep a new deployment private until you have registered, and use HTTPS when sending credentials over an untrusted network.
 
 Owner credentials and browser sessions are stored in `webui-auth.sqlite3` beside the instance configuration, outside the workspace. Passwords use salted scrypt hashes; session tokens are also hashed in storage. Login uses an HttpOnly, SameSite=Strict cookie with a 30-day lifetime. Signing out revokes that browser session. The account, sessions and onboarding progress survive service restarts.
 

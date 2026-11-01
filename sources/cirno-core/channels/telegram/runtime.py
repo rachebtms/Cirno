@@ -496,7 +496,6 @@ class TelegramConfig(Base):
     enabled: bool = False
     token: str = ""
     mode: Literal["polling", "webhook"] = "polling"
-    allow_from: list[str] = Field(default_factory=list)
     use_proxy: bool = False
     reply_to_message: bool = False
     react_emoji: str = "👀"
@@ -601,7 +600,6 @@ class TelegramChannel(BaseChannel):
         BotCommand("history", "Show recent conversation messages"),
         BotCommand("goal", "Start a sustained objective (long-running task)"),
         BotCommand("trigger", "Create a named local trigger"),
-        BotCommand("pairing", "Manage DM pairing (approve/deny/list)"),
         BotCommand("model", "Switch runtime model preset"),
         BotCommand("skill", "List enabled skills"),
         BotCommand("dream", "Run Dream memory consolidation now"),
@@ -615,7 +613,7 @@ class TelegramChannel(BaseChannel):
     # Telegram-safe aliases are normalized before reaching the core router.
     # Canonical hyphenated commands stay on a separate handler (below).
     TELEGRAM_BUS_SLASH_COMMAND_RE = re.compile(
-        r"^/(?:new|compact|stop|restart|status|dream|history|goal|trigger|pairing|model|skill"
+        r"^/(?:new|compact|stop|restart|status|dream|history|goal|trigger|model|skill"
         r"|dream_log|dream_restore|dream_prompt)(?:@\w+)?(?:\s+[\s\S]*)?$"
     )
 
@@ -652,28 +650,10 @@ class TelegramChannel(BaseChannel):
         return self._app
 
     def is_allowed(self, sender_id: str) -> bool:
-        """Preserve Telegram's legacy id|username allowlist matching."""
+        """Admit only the personal account verified by the Web UI PIN."""
         binding = TelegramBinding().status()
-        if binding["bound"]:
-            return binding["enabled"] and str(sender_id).split("|", 1)[0] == binding["user_id"]
-        if binding.get("requires_pin"):
-            return False
-        if super().is_allowed(sender_id):
-            return True
-
-        allow_list = getattr(self.config, "allow_from", [])
-        if not allow_list or "*" in allow_list:
-            return False
-
-        sender_str = str(sender_id)
-        if sender_str.count("|") != 1:
-            return False
-
-        sid, username = sender_str.split("|", 1)
-        if not sid.isdigit() or not username:
-            return False
-
-        return sid in allow_list or username in allow_list
+        return bool(binding["bound"] and binding["enabled"]
+                    and str(sender_id).split("|", 1)[0] == binding["user_id"])
 
     @staticmethod
     def _normalize_telegram_command(content: str) -> str:
@@ -1724,7 +1704,7 @@ class TelegramChannel(BaseChannel):
         if await self._try_bind(message=update.message, user=user):
             return
         if not self.is_allowed(sender_id):
-            await self._send_pairing_code_if_private(sender_id, update.message, user)
+            await self._send_binding_instructions(update.message)
             return
         await update.message.reply_text(
             f"👋 Hi {user.first_name}! I'm cirno.\n\n"
@@ -1741,7 +1721,7 @@ class TelegramChannel(BaseChannel):
         if await self._try_bind(message=update.message, user=user):
             return
         if not self.is_allowed(sender_id):
-            await self._send_pairing_code_if_private(sender_id, update.message, user)
+            await self._send_binding_instructions(update.message)
             return
         await update.message.reply_text(_telegram_command_text(build_help_text()))
 
@@ -1770,22 +1750,9 @@ class TelegramChannel(BaseChannel):
                                  "Invalid or expired PIN. Generate a new PIN in Cirno Settings → Telegram.")
         return True
 
-    async def _send_pairing_code_if_private(
-        self, sender_id: str, message: Message, user: User
-    ) -> None:
-        if message.chat.type != "private":
-            return
-        if TelegramBinding().status().get("requires_pin"):
+    async def _send_binding_instructions(self, message: Message) -> None:
+        if message.chat.type == "private":
             await message.reply_text("This is a personal Cirno bot. Get a PIN from Cirno Settings → Telegram, then send /bind PIN here.")
-            return
-        await self._handle_message(
-            sender_id=sender_id,
-            chat_id=str(message.chat_id),
-            content="",
-            metadata=self._build_message_metadata(message, user),
-            is_dm=True,
-            session_key=CIRNO_SESSION_KEY,
-        )
 
     @staticmethod
     def _build_message_metadata(message: Message, user: User) -> dict[str, Any]:
@@ -1973,7 +1940,7 @@ class TelegramChannel(BaseChannel):
         if await self._try_bind(message=message, user=user):
             return
         if not self.is_allowed(sender_id):
-            await self._send_pairing_code_if_private(sender_id, message, user)
+            await self._send_binding_instructions(message)
             return
 
         # Strip @bot_username suffix if present
@@ -2013,7 +1980,7 @@ class TelegramChannel(BaseChannel):
         if await self._try_bind(message=message, user=user):
             return
         if not self.is_allowed(sender_id):
-            await self._send_pairing_code_if_private(sender_id, message, user)
+            await self._send_binding_instructions(message)
             return
 
         # Build content from text and/or media

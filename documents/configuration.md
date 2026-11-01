@@ -42,6 +42,8 @@ Settings → Network & retries exposes request timeout, stream idle timeout and 
 
 ## Settings pages
 
+Overview shows model and web-search status, plus shortcuts to Memory library, Context compaction, Goals & execution, Personality, Telegram, Nodes, MCP and Tools & CLI Apps.
+
 - Models: provider connections, credentials, presets, context-window capacity and generation parameters.
 - Appearance, Text & reading, Execution display: theme/language, text size, code wrapping and independent brief/detailed reasoning and tool steps.
 - Browser notifications: browser permission, sound and Inbox category mutes for this browser.
@@ -59,7 +61,7 @@ See [Home and workspaces](home-and-workspaces.md) for file ownership and [memory
 
 Only Telegram and Web (WebSocket) channels are bundled. Enable and configure them under Settings → Channels.
 
-For Telegram, supply a bot token in Channel setup. In Settings → Telegram, generate a PIN and send `/bind <PIN>` to your bot in a private chat. The eight-digit PIN expires after two minutes, refreshes while the pairing panel remains open, and can be used once. Generating a new PIN invalidates the previous one. A bound account is the only Telegram account admitted to Cirno; group chats, group commands and group callbacks are ignored. Disconnect revokes the binding and any outstanding PIN. Legacy allowlists work only before PIN-based binding has been requested. Connection errors appear in channel status.
+For Telegram, supply a bot token in Channel setup. In Settings → Telegram, generate a PIN and send `/bind <PIN>` to your bot in a private chat. The eight-digit PIN expires after two minutes, refreshes while the pairing panel remains open, and can be used once. Generating a new PIN invalidates the previous one. A bound account is the only Telegram account admitted to Cirno; group chats, group commands and group callbacks are ignored. Disconnect revokes the binding and any outstanding PIN. Connection errors appear in channel status.
 
 Telegram private input and Heartbeat use the dedicated Cirno conversation. Cirno replies can be mirrored to the bound account, including proactive replies originating in the browser or background work. Inbox Actions, Reports and System notifications use independent server-side switches; browser notification preferences remain local to each browser. Ordinary replies are not added to Inbox. Pending Inbox notifications enter the existing durable delivery outbox, so a restart does not discard an admitted notification. Notifications are rechecked against the current binding before sending. To include an action button, set the Web UI address to one reachable from your phone; the button opens the corresponding Inbox category and conversation. Unanswered questions include their suggested answers in the Telegram notification. Answer and approve in the authenticated Web UI. For Web, configure the listening address, port, authentication, optional public WebSocket address and TLS certificate paths. A remote browser uses the existing gateway and needs no Cirno client installation.
 

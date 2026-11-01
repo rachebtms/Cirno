@@ -161,13 +161,12 @@ class RuntimeClient:
                 await self._loop.sessions.state.get(session_key)
             )
 
-    async def compact_idle_session(self, session_key: str, *, max_suffix: int = 0) -> str | None:
-        """Return a replacement summary; legacy ``max_suffix`` no longer retains history."""
+    async def compact_idle_session(self, session_key: str) -> str | None:
+        """Return a replacement summary checkpoint."""
         async with self._loop._get_session_lock(session_key):  # pyright: ignore[reportPrivateUsage]
             session = await self._loop.sessions.state.get(session_key)
             runtime = await self._loop.runtime_for_session(session)
             return await self._loop.consolidator.compact_idle_session(
                 session_key,
                 runtime=runtime,
-                max_suffix=max_suffix,
             )

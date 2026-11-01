@@ -29,4 +29,5 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.1.2](releases/0.1.2.md): useful Overview shortcuts and removal of obsolete migration and compatibility paths.
 - [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.

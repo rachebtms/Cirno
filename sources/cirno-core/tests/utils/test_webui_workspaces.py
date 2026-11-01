@@ -11,7 +11,6 @@ from cirno.session.manager import SessionManager
 from cirno.session.sqlite_store import SqliteSessionStore
 from cirno.webui.workspaces import (
     WebUIWorkspaceController,
-    read_webui_default_access_mode,
     read_webui_workspace_state,
     webui_workspace_state_path,
     workspaces_payload,
@@ -79,13 +78,6 @@ def test_workspace_payload_uses_webui_default_access_mode(tmp_path, monkeypatch)
     assert payload["default_access_mode"] == "full"
     assert payload["default_scope"]["project_path"] == str(default.resolve())
     assert payload["default_scope"]["access_mode"] == "full"
-
-
-def test_legacy_restricted_webui_default_access_mode_maps_to_default(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
-
-    assert write_webui_default_access_mode("restricted") is False
-    assert read_webui_default_access_mode() == "default"
 
 
 async def test_webui_default_access_applies_to_unscoped_old_sessions(tmp_path, monkeypatch) -> None:

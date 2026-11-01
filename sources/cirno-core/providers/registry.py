@@ -65,7 +65,6 @@ class ProviderSpec:
     display_name: str = ""  # shown in `cirno status`
     model_catalog: str = "auto"  # WebUI model-list source, including builtin/hybrid
     builtin_models: tuple[ProviderModelSpec, ...] = ()
-    settings_alias_for: str = ""  # compatibility alias grouped under this provider in Settings
 
     # which provider implementation to use
     # "openai_compat" | "anthropic" | "azure_openai" | "openai_codex" | "xai_grok"
@@ -314,20 +313,6 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         env_key="OPENCODE_API_KEY",
         request_apis=("chat_completions", "responses"),
         display_name="OpenCode Zen",
-        backend="openai_compat",
-        is_gateway=True,
-        detect_by_base_keyword="opencode.ai/zen",
-        default_api_base="https://opencode.ai/zen/v1",
-        strip_model_prefixes=("opencode", "opencode_zen", "opencode-zen"),
-    ),
-    # Compatibility alias for configs that already used providers.opencodeZen.
-    ProviderSpec(
-        name="opencode_zen",
-        keywords=("opencode/", "opencode_zen", "opencode-zen"),
-        env_key="OPENCODE_API_KEY",
-        request_apis=("chat_completions", "responses"),
-        display_name="OpenCode Zen",
-        settings_alias_for="opencode",
         backend="openai_compat",
         is_gateway=True,
         detect_by_base_keyword="opencode.ai/zen",

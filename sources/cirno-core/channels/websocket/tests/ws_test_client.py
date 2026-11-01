@@ -188,6 +188,7 @@ class WsTestClient:
         """Receive and validate the 'ready' event."""
         msg = await self.recv(timeout)
         assert msg.event == "ready", f"Expected 'ready' event, got '{msg.event}'"
+        self._chat_id = msg.chat_id
         return msg
 
     async def recv_message(self, timeout: float = 10.0) -> WsMessage:
@@ -219,8 +220,8 @@ class WsTestClient:
     # -- Sending ----------------------------------------------------------
 
     async def send_text(self, text: str) -> None:
-        """Send a plain text frame."""
-        await self.ws.send(text)
+        """Send text through the current routed message envelope."""
+        await self.send_json({"type": "message", "chat_id": self._chat_id, "content": text})
 
     async def send_json(self, data: dict[str, Any]) -> None:
         """Send a JSON frame."""

@@ -21,7 +21,7 @@ from cirno.utils.helpers import (
 _WORKSPACE_STATE_DIR = ".cirno"
 _WORKSPACE_ID_FILE = "workspace-id"
 _WORKSPACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
-_SESSION_MIGRATION_LOCK_TIMEOUT_SECONDS = 30
+_SESSION_INITIALIZATION_LOCK_TIMEOUT_SECONDS = 30
 
 
 class SessionLocation:
@@ -42,11 +42,11 @@ class SessionLocation:
         with suppress(OSError):
             os.chmod(root, 0o700)
         self.workspace = canonical_workspace
-        self._migration_lock = FileLock(
-            str(root / ".workspace-migration.lock"),
-            timeout=_SESSION_MIGRATION_LOCK_TIMEOUT_SECONDS,
+        self._initialization_lock = FileLock(
+            str(root / ".workspace-initialization.lock"),
+            timeout=_SESSION_INITIALIZATION_LOCK_TIMEOUT_SECONDS,
         )
-        with self._migration_lock:
+        with self._initialization_lock:
             workspace_id = self._load_or_create_workspace_id(canonical_workspace, root)
             workspace_id = self._claim_workspace_namespace(
                 root,

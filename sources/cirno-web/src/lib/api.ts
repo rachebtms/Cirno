@@ -1254,11 +1254,6 @@ export async function deleteModelConfiguration(
   );
 }
 
-export async function migrateModelConfigurations(
-  transport: WebUIMutationTransport,
-): Promise<SettingsPayload> {
-  return mutation<SettingsPayload>(transport, "settings.model_configuration.migrate");
-}
 
 export async function updateModelCallOrder(
   transport: WebUIMutationTransport,
@@ -1367,4 +1362,3 @@ export async function updateRuntimeConfigSettings(
 ): Promise<SettingsPayload> {
   return mutation<SettingsPayload>(transport, "settings.runtime_config.update", { values });
 }
-

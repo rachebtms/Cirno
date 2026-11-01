@@ -71,31 +71,5 @@ def initialize(root: Path):
                     PRIMARY KEY(token,memory_id)
                 );
             """)
-            legacy = root / "index.sqlite3"
-            migrated = db.execute("SELECT 1 FROM maintenance WHERE key='split_storage_v1'").fetchone()
-            if legacy.exists() and not migrated:
-                db.execute("ATTACH DATABASE ? AS legacy", (str(legacy),))
-                db.execute("BEGIN IMMEDIATE")
-                # Copy inside SQLite: large histories never become Python lists.
-                for table in ("memories", "revisions", "links"):
-                    db.execute(f"INSERT OR REPLACE INTO main.{table} SELECT * FROM legacy.{table}")
-                db.execute("INSERT OR REPLACE INTO maintenance SELECT * FROM legacy.maintenance WHERE key!='last_dream'")
-                db.execute("INSERT OR REPLACE INTO dream_state SELECT * FROM legacy.maintenance WHERE key='last_dream'")
-                db.execute("INSERT OR REPLACE INTO chunks SELECT * FROM legacy.chunks")
-                db.execute("DELETE FROM search.memory_fts")
-                db.execute("INSERT INTO search.memory_fts(rowid,title,tokens) SELECT rowid,title,tokens FROM legacy.memory_fts")
-                db.execute("INSERT OR REPLACE INTO dream_queue SELECT * FROM legacy.dream_queue")
-                db.execute("INSERT OR REPLACE INTO maintenance VALUES('split_storage_v1','1')")
-                db.commit()
-                db.execute("DETACH DATABASE legacy")
-            elif not migrated:
-                db.execute("INSERT INTO maintenance VALUES('split_storage_v1','1')")
-            db.commit()
-            # Keep the original data as a one-time rollback copy, never read it
-            # as a live store after successful migration.
-            if legacy.exists():
-                backup = root / "index.legacy.sqlite3"
-                if not backup.exists():
-                    legacy.rename(backup)
         for name in ("catalog", "search", "dream"):
             (root / f"{name}.sqlite3").chmod(0o600)

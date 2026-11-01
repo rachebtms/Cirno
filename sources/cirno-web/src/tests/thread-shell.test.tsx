@@ -385,7 +385,7 @@ function modelSettings(model: string, provider: string): SettingsPayload {
     },
     model_presets: [{
       name: "default",
-      label: "Default",
+
       active: true,
       is_default: true,
       model,
@@ -450,7 +450,7 @@ function settingsWithFastPreset(): SettingsPayload {
   settings.model_presets.push({
     ...settings.model_presets[0]!,
     name: "fast",
-    label: "Fast",
+
     active: false,
     is_default: false,
     model: "openai-codex/gpt-5.5",
@@ -1441,7 +1441,7 @@ describe("ThreadShell", () => {
     settings.model_presets.push({
       ...settings.model_presets.at(-1)!,
       name: "extra",
-      label: "Extra",
+
       model: "deepseek/extra",
       provider: "deepseek",
       active: false,
@@ -1492,7 +1492,7 @@ describe("ThreadShell", () => {
     settings.model_presets.push({
       ...settings.model_presets[0]!,
       name: "fast",
-      label: "Fast",
+
       active: false,
       is_default: false,
       model: "companyproxy/gpt-4",

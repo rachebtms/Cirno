@@ -10,10 +10,6 @@
       "useProxy": {
         "label": "使用代理"
       },
-      "allowFrom": {
-        "label": "允許使用者",
-        "placeholder": "* 或 Telegram 使用者 ID"
-      },
       "mode": {
         "label": "連接方式",
         "choices": {

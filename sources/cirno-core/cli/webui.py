@@ -1,7 +1,6 @@
 """WebUI CLI command."""
 
 from contextlib import ExitStack
-from pathlib import Path
 
 import typer
 from cirno.cli.dock import dock_icon, request_gateway_icon
@@ -72,11 +71,6 @@ def webui(
     ),
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
-    background: bool = typer.Option(
-        False,
-        "--background",
-        help="Deprecated; use `cirno gateway --background`",
-    ),
     dev: bool = typer.Option(
         False,
         "--dev",
@@ -103,23 +97,7 @@ def webui(
         raise typer.BadParameter("--detach cannot keep a Vite development server alive")
 
     config_path = _resolve_webui_config_path(config)
-    if background:
-        import shlex
 
-        command = ["cirno", "gateway", "--background", "--config", str(config_path)]
-        if workspace:
-            command.extend(
-                ["--workspace", str(Path(workspace).expanduser().resolve(strict=False))]
-            )
-        console.print(
-            "[red]`cirno webui --background` no longer owns gateway lifecycle.[/red]"
-        )
-        console.print("Start the persistent gateway explicitly, then open the WebUI:")
-        console.print("  [cyan]" + " ".join(shlex.quote(part) for part in command) + "[/cyan]")
-        console.print(
-            "  [cyan]cirno webui --config " + shlex.quote(str(config_path)) + "[/cyan]"
-        )
-        raise typer.Exit(1)
     created_config = not config_path.exists()
     setup_config = _load_webui_setup_config(config_path)
     if workspace:

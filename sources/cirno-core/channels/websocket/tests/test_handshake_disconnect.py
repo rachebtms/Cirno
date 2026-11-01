@@ -136,7 +136,7 @@ async def test_disconnect_during_http_response_keeps_listener_usable(
             async with client as ws:
                 ready = json.loads(await asyncio.wait_for(ws.recv(), 2))
                 assert ready["event"] == "ready"
-                await ws.send("still-alive")
+                await ws.send(json.dumps({"type": "message", "chat_id": ready["chat_id"], "content": "still-alive"}))
                 inbound = await asyncio.wait_for(channel.bus.consume_inbound(), 2)
                 assert inbound.content == "still-alive"
             assert completed.is_set()

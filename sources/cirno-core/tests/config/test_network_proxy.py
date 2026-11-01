@@ -4,53 +4,9 @@ import json
 
 import httpx
 import pytest
-from cirno.config.loader import ConfigLoadError, load_config, resolve_config_env_vars, save_config
+from cirno.config.loader import load_config, resolve_config_env_vars, save_config
 from cirno.config.network import NetworkConfig
 from cirno.config.schema import Config
-
-
-@pytest.mark.parametrize("address", ["http://127.0.0.1:7890", "socks5://user:pass@localhost:1080", "${SHARED_PROXY}"])
-def test_legacy_proxy_migrates_once_across_features(tmp_path, address):
-    path = tmp_path / "config.json"
-    original = {
-        "providers": {"openai": {"proxy": address}, "openaiCodex": {"proxy": address}},
-        "tools": {"web": {"proxy": address}},
-        "channels": {"telegram": {"proxy": address}},
-    }
-    path.write_text(json.dumps(original), encoding="utf-8")
-    config = load_config(path)
-    assert json.loads(path.read_text(encoding="utf-8")) == original
-    assert config.network.proxy == address
-    assert config.providers.openai.use_proxy is True
-    assert config.providers.openai_codex.use_proxy is True
-    assert config.tools.web.use_proxy is True
-    assert config.channels.telegram["useProxy"] is True
-    config.providers.openai.use_proxy = False
-    save_config(config, path)
-    saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["network"]["proxy"] == address
-    assert "proxy" not in saved["providers"]["openai"]
-    assert "proxy" not in saved["tools"]["web"]
-    assert "proxy" not in saved["channels"]["telegram"]
-    assert load_config(path).providers.openai.use_proxy is False
-
-
-def test_multiple_legacy_addresses_require_one_explicit_global_address(tmp_path):
-    path = tmp_path / "config.json"
-    original = {"tools": {"web": {"proxy": "http://secret:password@localhost:7890"}}, "channels": {"telegram": {"proxy": "http://localhost:7891"}}}
-    path.write_text(json.dumps(original), encoding="utf-8")
-    with pytest.raises(ConfigLoadError, match="Multiple legacy proxy addresses") as caught:
-        load_config(path)
-    assert "secret" not in str(caught.value)
-    assert json.loads(path.read_text(encoding="utf-8")) == original
-    original["network"] = {"proxy": "http://localhost:7892"}
-    path.write_text(json.dumps(original), encoding="utf-8")
-    config = load_config(path)
-    assert config.network.proxy == "http://localhost:7892"
-    assert config.tools.web.use_proxy is True
-    assert config.channels.telegram["useProxy"] is True
-
-
 
 
 def test_proxy_opt_in_does_not_fall_back_when_unconfigured():
@@ -79,66 +35,15 @@ def test_invalid_shared_proxy_has_a_safe_error(address):
     assert address not in str(caught.value)
 
 
-@pytest.mark.parametrize("file_present", [False, True])
-def test_environment_legacy_proxy_migrates_after_source_merge(tmp_path, monkeypatch, file_present):
-    proxy = "http://localhost:7890"
-    monkeypatch.setenv("CIRNO_PROVIDERS", json.dumps({"openai": {"proxy": proxy}}))
-    monkeypatch.setenv("CIRNO_TOOLS", json.dumps({"web": {"proxy": proxy}}))
-    monkeypatch.setenv("CIRNO_CHANNELS", json.dumps({"telegram": {"proxy": proxy}}))
-    path = tmp_path / "config.json"
-    if file_present:
-        path.write_text(json.dumps({"providers": {"openai": {"apiKey": "test-key"}}}), encoding="utf-8")
-    config = load_config(path)
-    assert config.network.proxy == proxy
-    assert config.providers.openai.use_proxy is True
-    assert config.tools.web.use_proxy is True
-    assert config.channels.telegram == {"useProxy": True}
-    save_config(config, path)
-    saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["network"]["proxy"] == proxy
-    assert "proxy" not in saved["providers"]["openai"]
-    config.providers.openai.use_proxy = False
-    save_config(config, path)
-    assert load_config(path).providers.openai.use_proxy is False
-
-
 def test_file_proxy_and_opt_out_take_precedence_over_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("CIRNO_PROVIDERS", json.dumps({"openai": {"proxy": "http://environment:7890"}}))
     path = tmp_path / "config.json"
-    path.write_text(json.dumps({"providers": {"openai": {"proxy": "http://file:7891", "useProxy": False}}}), encoding="utf-8")
+    path.write_text(json.dumps({"network": {"proxy": "http://file:7891"}, "providers": {"openai": {"useProxy": False}}}), encoding="utf-8")
     config = load_config(path)
     assert config.network.proxy == "http://file:7891"
     assert config.providers.openai.use_proxy is False
 
 
-
-
-
-
-@pytest.mark.parametrize("alias, attribute", [("openaiCodex", "openai_codex"), ("xaiGrok", "xai_grok")])
-@pytest.mark.parametrize("saved_opt_out", [True, False], ids=["refresh", "changed-setting"])
-def test_oauth_proxy_opt_out_survives_save_with_legacy_environment(tmp_path, monkeypatch, alias, attribute, saved_opt_out):
-    proxy = "http://proxy.example:8080"
-    monkeypatch.setenv("CIRNO_PROVIDERS", json.dumps({alias: {"proxy": proxy, "apiKey": "oauth-secret"}}))
-    original = {"network": {"proxy": proxy}, "providers": {alias: {"useProxy": False} if saved_opt_out else {}}}
-    path = tmp_path / "config.json"
-    path.write_text(json.dumps(original), encoding="utf-8")
-
-    config = load_config(path)
-    provider = getattr(config.providers, attribute)
-    assert provider.use_proxy is (not saved_opt_out)
-    assert json.loads(path.read_text(encoding="utf-8")) == original
-    if not saved_opt_out:
-        provider.use_proxy = False
-    save_config(config, path)
-
-    saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["providers"][alias] == {"useProxy": False}
-    assert "oauth-secret" not in path.read_text(encoding="utf-8")
-    assert getattr(load_config(path).providers, attribute).use_proxy is False
-
-
-@pytest.mark.parametrize("legacy", [False, True], ids=["shared", "legacy"])
 @pytest.mark.parametrize(
     "userinfo, environment, expected_auth",
     [
@@ -153,11 +58,11 @@ def test_oauth_proxy_opt_out_survives_save_with_legacy_environment(tmp_path, mon
     ],
     ids=["combined-auth", "combined-encoded-auth", "combined-special-password", "credential-components"],
 )
-def test_proxy_userinfo_references_round_trip_with_httpx_auth(tmp_path, monkeypatch, legacy, userinfo, environment, expected_auth):
+def test_proxy_userinfo_references_round_trip_with_httpx_auth(tmp_path, monkeypatch, userinfo, environment, expected_auth):
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
     template = f"http://{userinfo}@proxy.example:8080"
-    original = {"providers": {"openai": {"proxy": template}}} if legacy else {
+    original = {
         "network": {"proxy": template}, "providers": {"openai": {"useProxy": True}},
     }
     path = tmp_path / "config.json"
@@ -178,5 +83,3 @@ def test_proxy_userinfo_references_round_trip_with_httpx_auth(tmp_path, monkeypa
     reloaded = load_config(path)
     assert reloaded.network.proxy == template
     assert httpx.Proxy(resolve_config_env_vars(reloaded).network.resolve_proxy(True)).raw_auth == expected_auth
-
-

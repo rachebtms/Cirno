@@ -22,7 +22,6 @@ class MemoryIdleCoordinator:
             self.next_scan = current + 60
             def maintain():
                 repo = MemoryRepository(get_home_path())
-                repo.migrate_legacy()
                 repo.sync_profiles()
                 repo.reconcile(limit=self.config.agents.defaults.memory.index_scan_batch)
             try:

@@ -135,20 +135,6 @@ def test_manual_edits_deletion_and_rebuild(repo):
     assert repo.read(row["id"], session_key="websocket:a")["content"] == "Updated keyword entropy"
 
 
-def test_profiles_and_legacy_entries_share_search_without_overwriting_sources(repo):
-    from cirno.storage.instance import InstanceData
-    old = repo.root / "legacy.md"
-    old.write_text("legacy source wording")
-    InstanceData(repo.home).save("memories", {"id": "old", "source": "url:original", "scope": "user", "kind": "fact", "path": str(old)})
-    (repo.home / "USER.md").write_text("Prefer concise answers")
-    repo.migrate_legacy()
-    repo.sync_profiles()
-    repo.migrate_legacy()
-    assert repo.search("legacy")["memories"][0]["id"] == "old"
-    assert repo.search("concise", layer="profile")["memories"]
-    assert old.read_text() == "legacy source wording"
-
-
 def test_chunked_search_paginates_distinct_records_without_skips(repo):
     ids = {save(repo, ("entropy measurement\n" * 150) + str(index))["id"] for index in range(9)}
     found, offset = [], 0

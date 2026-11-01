@@ -50,12 +50,12 @@ from cirno.config import Config
 from cirno.config.schema import ModelPresetConfig
 
 config = Config.model_validate({'tools': {
-    'exec': {'timeout': 37},
+    'exec': {'max_runtime': 37},
 
 }})
-assert config.tools.exec.timeout == 37
+assert config.tools.exec.max_runtime == 37
 restored = Config.model_validate_json(config.model_dump_json(by_alias=True))
-assert restored.tools.exec.timeout == 37
+assert restored.tools.exec.max_runtime == 37
 assert Config.model_json_schema()['properties']['tools']
 assert ModelPresetConfig(model='example').to_generation_settings().max_tokens == 8192
 """

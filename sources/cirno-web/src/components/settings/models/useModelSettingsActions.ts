@@ -26,7 +26,6 @@ import {
   deleteModelConfiguration,
   loginProviderOAuth,
   logoutProviderOAuth,
-  migrateModelConfigurations,
   updateModelCallOrder,
   updateModelConfiguration,
   updateProviderSettings,
@@ -94,7 +93,6 @@ export function useModelSettingsActions({
     modelCallOrder,
     modelCallOrderSaving,
     modelConfigurationSaving,
-    modelMigrationSaving,
     modelPresetBeforeCreateRef,
     modelPresetCreating,
     modelPresetEditingName,
@@ -110,7 +108,6 @@ export function useModelSettingsActions({
     setModelCallOrder,
     setModelCallOrderSaving,
     setModelConfigurationSaving,
-    setModelMigrationSaving,
     setModelPresetCreating,
     setModelPresetEditingName,
     setModelPresetNameError,
@@ -394,21 +391,6 @@ export function useModelSettingsActions({
     }
   };
 
-  const handleMigrateModelConfigurations = async () => {
-    if (modelMigrationSaving) return;
-    setModelMigrationSaving(true);
-    try {
-      const payload = await migrateModelConfigurations(client);
-      applyPayload(payload, { preserveCapabilityForms: true });
-      onModelNameChange(payload.agent.model || null);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setModelMigrationSaving(false);
-    }
-  };
-
   const handleDeleteModelConfiguration = async () => {
     if (
       !modelPresetPendingDelete ||
@@ -645,7 +627,6 @@ export function useModelSettingsActions({
     completeProviderOAuthResponse,
     createCustomProvider,
     handleDeleteModelConfiguration,
-    handleMigrateModelConfigurations,
     resetProviderDraft,
     runProviderOAuth,
     saveModelSettings,

@@ -1,7 +1,6 @@
 [
   "agents.defaults.dream.batch_chars",
   "agents.defaults.dream.batch_entries",
-  "agents.defaults.dream.cron",
   "agents.defaults.dream.enabled",
   "agents.defaults.dream.idle_after_seconds",
   "agents.defaults.dream.interval_h",
@@ -51,7 +50,7 @@
   "tools.exec.sandbox",
   "tools.exec.sandbox_ro_binds",
   "tools.exec.sandbox_rw_binds",
-  "tools.exec.timeout",
+  "tools.exec.max_runtime",
   "tools.file.enable",
   "tools.max_session_messages_per_minute",
   "tools.my.allow_set",

@@ -785,9 +785,9 @@ def test_uninstall_removes_installed_state_and_generated_skill(
     manager = _manager(tmp_path)
     _seed_catalog(manager)
     manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
-    plugin_dir = manager.workspace / "plugins" / "cli-app-gimp"
-    skill_dir = plugin_dir / "skills" / "cli-app-gimp"
-    skill_dir.mkdir(parents=True)
+    from cirno.apps.cli.service import cli_app_skill_path
+    skill_dir = cli_app_skill_path("gimp").parent
+    skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text("# GIMP\n", encoding="utf-8")
     monkeypatch.setattr(
         manager,
@@ -799,7 +799,7 @@ def test_uninstall_removes_installed_state_and_generated_skill(
 
     assert payload["last_action"]["ok"] is True
     assert "gimp" not in json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
-    assert not plugin_dir.exists()
+    assert not skill_dir.exists()
 
 
 def test_uninstall_uses_safe_python_m_pip_uninstall_command(
@@ -938,49 +938,6 @@ def test_mentioned_installed_apps_only_returns_installed_mentions(tmp_path: Path
             "tool": "run_cli_app",
         },
     ]
-
-
-def test_remove_skill_cleans_legacy_underscored_name(tmp_path: Path) -> None:
-    manager = _manager(tmp_path)
-    from cirno.config.home import get_home_path
-    legacy = get_home_path() / "skills" / "cli-app-unimol_tools" / "SKILL.md"
-    legacy.parent.mkdir(parents=True)
-    legacy.write_text("# Legacy Uni-Mol\n", encoding="utf-8")
-
-    manager.remove_skill("unimol_tools")
-
-    assert not legacy.exists()
-
-
-def test_migrated_cli_app_skill_keeps_legacy_identity_alias(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    data_dir = tmp_path / "data"
-    monkeypatch.setattr(
-        "cirno.apps.cli.service.get_runtime_subdir",
-        lambda _name: data_dir,
-    )
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    manager = CliAppManager(workspace=workspace)
-    manager._save_installed({"unimol_tools": {"entry_point": "unimol-tools"}})
-    manager.install_skill({
-        "name": "unimol_tools",
-        "display_name": "Uni-Mol Tools",
-        "entry_point": "unimol-tools",
-    })
-
-    loader = SkillsLoader(workspace)
-    assert loader.get_explicitly_invoked_skills("Use $cli-app-unimol_tools") == [
-        "cli-app-unimol-tools"
-    ]
-    assert loader.load_skill("cli-app-unimol_tools") is not None
-
-    disabled = SkillsLoader(workspace, disabled_skills={"cli-app-unimol_tools"})
-    assert "cli-app-unimol-tools" not in {
-        skill["name"] for skill in disabled.list_skills(filter_unavailable=False)
-    }
 
 
 def test_install_rejects_unknown_and_script_strategy(tmp_path: Path) -> None:

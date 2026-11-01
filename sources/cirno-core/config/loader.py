@@ -112,7 +112,6 @@ def load_config(config_path: Path | None = None) -> Config:
             ),
         )
 
-    data = _migrate_config(cast(dict[str, Any], data))
     try:
         config = Config.model_validate(data)
     except ValidationError as exc:
@@ -339,44 +338,6 @@ def _env_replace(match: re.Match[str]) -> str:
             f"Environment variable '{name}' referenced in config is not set"
         )
     return value
-
-
-def _migrate_config(data: dict[str, Any]) -> dict[str, Any]:
-    """Migrate old config formats to current."""
-    # Move tools.exec.restrictToWorkspace → tools.restrictToWorkspace
-    tools_value = data.get("tools", {})
-    if not isinstance(tools_value, dict):
-        return data
-    tools = cast(dict[str, Any], tools_value)
-    exec_cfg = _as_config_object(tools.get("exec", {}))
-    if (
-        exec_cfg is not None
-        and "restrictToWorkspace" in exec_cfg
-        and "restrictToWorkspace" not in tools
-    ):
-        tools["restrictToWorkspace"] = exec_cfg.pop("restrictToWorkspace")
-
-    # Move tools.myEnabled / tools.mySet → tools.my.{enable, allowSet}.
-    # The old flat keys shipped in the initial MyTool landing; wrapping them in a
-    # sub-config keeps `web` / `exec` / `my` symmetric and gives room to grow.
-    if "myEnabled" in tools or "mySet" in tools:
-        my_cfg = tools.get("my")
-        if my_cfg is None:
-            my_cfg = {}
-            tools["my"] = my_cfg
-        if not isinstance(my_cfg, dict):
-            return data
-        my_cfg = cast(dict[str, Any], my_cfg)
-        if "myEnabled" in tools and "enable" not in my_cfg:
-            my_cfg["enable"] = tools.pop("myEnabled")
-        else:
-            tools.pop("myEnabled", None)
-        if "mySet" in tools and "allowSet" not in my_cfg:
-            my_cfg["allowSet"] = tools.pop("mySet")
-        else:
-            tools.pop("mySet", None)
-
-    return data
 
 
 def _sentence(message: str) -> str:

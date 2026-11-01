@@ -19,7 +19,6 @@ from cirno.agent.tools.registry import ToolRegistry
 from cirno.bus.events import OutboundMessage
 from cirno.bus.queue import MessageBus
 from cirno.cli.dock import watch_gateway_icon
-from cirno.cli.runtime_config import _migrate_cron_store
 from cirno.cli.webui_support import (
     _gateway_health_bind_note,
     _gateway_health_url,
@@ -33,7 +32,7 @@ from cirno.cli.webui_support import (
     _webui_display_url,
     _webui_endpoint_reachable,
 )
-from cirno.config.paths import get_data_dir, is_default_workspace
+from cirno.config.paths import get_data_dir
 from cirno.config.schema import Config
 from cirno.gateway.runtime import GatewayHealthIdentity, GatewayInstance, GatewayRuntime
 from cirno.security.network import is_loopback_host
@@ -522,10 +521,6 @@ def _run_claimed_gateway(
     )
 
     config_path = str(gateway_instance.config_path)
-
-    # Preserve existing single-workspace installs, but keep custom workspaces clean.
-    if is_default_workspace(config.workspace_path):
-        _migrate_cron_store(config)
 
     # Create cron service with workspace-scoped store
     cron_store_path = config.workspace_path / "cron" / "jobs.json"

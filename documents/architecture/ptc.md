@@ -28,8 +28,6 @@ Stop, timeout and outer cancellation cancel unfinished calls and reap the worker
 
 ## Reply contracts
 
-Ordinary conversations receive `regular_conversation.md` and reply through ordinary streamed assistant text. Their tool selection excludes `user.message`, including in the PTC SDK. The server also rejects attempts to invoke that tool through a historical implementation name. `user.ask` remains available for non-blocking questions.
+Ordinary conversations receive `regular_conversation.md` and reply through ordinary streamed assistant text. Their tool selection excludes `user.message`, including in the PTC SDK. The server also rejects attempts to invoke that tool through an internal implementation name. `user.ask` remains available for non-blocking questions.
 
 The Cirno coordination conversation receives `cirno_conversation.md`. It sends visible replies and attachments through `user.message`; ordinary assistant output is internal execution history, collapsed by default. In PTC it calls `tools.user.message(...)` inside the program. A reply segment already delivered by that tool is not streamed again as a second reply. A later steering input starts a new reply segment.
-
-Historical display cleanup only hides a confirmed duplicate terminal snapshot in the same turn when a message-tool call and actual delivery establish that the same text was already sent. It does not merge identical text across unrelated turns or rewrite raw stored evidence.

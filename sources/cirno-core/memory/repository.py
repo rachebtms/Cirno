@@ -590,25 +590,8 @@ class MemoryRepository:
                     "failures": [dict(row) for row in db.execute(f"SELECT q.memory_id,q.revision,q.attempts,q.error FROM dream_queue q JOIN memories m ON m.id=q.memory_id WHERE {failed} ORDER BY queued_at LIMIT 10", args)],
                     "engine": "sqlite-fts5-bm25",
                     "index_bytes": (self.root / "search.sqlite3").stat().st_size,
-                    "databases": {path.name: path.stat().st_size for path in self.root.glob("*.sqlite3") if ".legacy." not in path.name}, "embedding_loaded": False}
+                    "databases": {path.name: path.stat().st_size for path in (self.root / f"{name}.sqlite3" for name in ("catalog", "search", "dream", "vectors")) if path.exists()}, "embedding_loaded": False}
 
-    def migrate_legacy(self):
-        with self.connect() as db:
-            if db.execute("SELECT 1 FROM maintenance WHERE key='legacy_import'").fetchone():
-                return
-        from cirno.storage.instance import InstanceData
-        for record in InstanceData(self.home).iterate("memories"):
-            with self.connect() as db:
-                if db.execute("SELECT 1 FROM memories WHERE id=?", (record["id"],)).fetchone():
-                    continue
-            path = Path(record["path"]).resolve()
-            if not path.is_relative_to(self.home) or not path.is_file():
-                continue
-            self.save(path.read_text(encoding="utf-8"), source=record.get("source") or str(path),
-                      session_key=record.get("session_key", "legacy"), project_id=record.get("project_id"),
-                      scope=record.get("scope", "session"), kind=record.get("kind", "observation"), memory_id=record["id"], created_at=record.get("created_at"))
-        with self.connect() as db:
-            db.execute("INSERT OR REPLACE INTO maintenance VALUES('legacy_import','1')")
 
     def reconcile(self, *, rebuild=False, limit=100):
         """Bounded cursor scan for manual edits; no permanent filesystem watcher or corpus cache."""

@@ -26,7 +26,6 @@ from cirno.skills.metadata import (
 from cirno.skills.metadata import BUILTIN_DOCUMENTS_DIR
 from cirno.config.home import get_home_path
 from cirno.runtime.context import RuntimeContextBlock
-from loguru import logger
 
 _SKILL_REFERENCE = re.compile(r"(?<![\w$])\$([A-Za-z0-9_-]+)")
 
@@ -34,7 +33,6 @@ _SKILL_REFERENCE = re.compile(r"(?<![\w$])\$([A-Za-z0-9_-]+)")
 @dataclass
 class _SkillSnapshot:
     entries: list[dict[str, str]] | None = None
-    aliases: dict[str, str] | None = None
     documents: dict[str, str] = field(default_factory=dict)
     metadata: dict[str, dict[str, object] | None] = field(default_factory=dict)
     binaries: dict[str, bool] = field(default_factory=dict)
@@ -67,21 +65,6 @@ class SkillsLoader:
         finally:
             self._snapshot.reset(token)
 
-    def _skill_aliases(self) -> dict[str, str]:
-        """Return compatibility aliases owned by installed CLI Apps."""
-        from cirno.apps.cli import CliAppError, CliAppManager
-
-        snapshot = self._snapshot.get()
-        if snapshot is not None and snapshot.aliases is not None:
-            return snapshot.aliases
-        try:
-            aliases = CliAppManager(workspace=self.workspace).installed_skill_aliases()
-        except (OSError, CliAppError) as exc:
-            logger.warning("Could not load CLI App skill aliases: {}", exc)
-            aliases = {}
-        if snapshot is not None:
-            snapshot.aliases = aliases
-        return aliases
 
     def _skill_entries_from_dir(self, base: Path, source: str, *, skip_names: set[str] | None = None) -> list[dict[str, str]]:
         if not base.exists():
@@ -129,10 +112,6 @@ class SkillsLoader:
 
         plugin_skills = enabled_agent_plugin_skill_documents(self.workspace)
         disabled = set(self.disabled_skills)
-        if disabled:
-            for legacy, canonical in self._skill_aliases().items():
-                if legacy in disabled or canonical in disabled:
-                    disabled.update((legacy, canonical))
         skills = self._skill_entries_from_dir(self.workspace_skills, "workspace")
         seen_names = {entry["name"] for entry in skills}
         snapshot = self._snapshot.get()
@@ -175,8 +154,7 @@ class SkillsLoader:
 
     def _load_skill(self, name: str) -> str | None:
         skills = self.list_skills(filter_unavailable=False)
-        available = {skill["name"] for skill in skills}
-        resolved = name if name in available else self._skill_aliases().get(name, name)
+        resolved = name
         entry = next((skill for skill in skills if skill["name"] == resolved), None)
         if entry is None:
             return None
@@ -216,11 +194,10 @@ class SkillsLoader:
             entry["name"]
             for entry in self.list_skills(filter_unavailable=True)
         }
-        aliases = self._skill_aliases()
         invoked: list[str] = []
         for match in references:
             requested = match.group(1)
-            name = requested if requested in available else aliases.get(requested, requested)
+            name = requested
             if name in available and name not in invoked:
                 invoked.append(name)
         return invoked

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 import cirno.webui.session_list_index as session_list_index
-from cirno.cron.session_turns import CRON_HISTORY_META
 from cirno.providers.base import ProviderConversationState
 from cirno.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY
 from cirno.session.automation_turns import AUTOMATION_HISTORY_META
@@ -226,7 +225,7 @@ def test_webui_session_list_skips_cron_internal_user_preview(tmp_path: Path) -> 
     session.add_message(
         "user",
         "Scheduled cron job triggered: 30s-test\n\nInternal reminder prompt",
-        **{CRON_HISTORY_META: True},
+        **{AUTOMATION_HISTORY_META: {"kind": "cron"}},
     )
     session.add_message("assistant", "提醒已经到期。")
     manager.save(session)
@@ -348,46 +347,6 @@ async def test_sidebar_allocates_handles_then_reads_during_pending_write(tmp_pat
     finally:
         release.set()
         await state.aclose()
-
-
-def test_webui_session_list_fallback_time_when_missing(tmp_path: Path) -> None:
-    legacy = tmp_path / "sessions"
-    legacy.mkdir()
-    path = legacy / "websocket_missing-time.jsonl"
-    path.write_text(
-        '{"_type": "metadata", "key": "websocket:missing-time"}\n'
-        '{"_type": "message", "role": "user", "content": "hello"}\n',
-        encoding="utf-8",
-    )
-    manager = SessionManager(tmp_path)
-
-    rows = list_webui_sessions(manager)
-    assert len(rows) == 1
-    assert rows[0]["key"] == "websocket:missing-time"
-    assert rows[0]["created_at"] is not None
-    assert rows[0]["updated_at"] is not None
-    datetime.fromisoformat(rows[0]["created_at"])
-    datetime.fromisoformat(rows[0]["updated_at"])
-
-
-def test_session_manager_list_sessions_fallback_time_when_missing(tmp_path: Path) -> None:
-    legacy = tmp_path / "sessions"
-    legacy.mkdir()
-    path = legacy / "websocket_missing-time2.jsonl"
-    path.write_text(
-        '{"_type": "metadata", "key": "websocket:missing-time2"}\n'
-        '{"_type": "message", "role": "user", "content": "hello"}\n',
-        encoding="utf-8",
-    )
-    manager = SessionManager(tmp_path)
-
-    sessions = manager.list_sessions()
-    assert len(sessions) == 1
-    assert sessions[0]["key"] == "websocket:missing-time2"
-    assert sessions[0]["created_at"] is not None
-    assert sessions[0]["updated_at"] is not None
-    datetime.fromisoformat(sessions[0]["created_at"])
-    datetime.fromisoformat(sessions[0]["updated_at"])
 
 
 def test_sidebar_uses_durable_display_summary_and_filters_private_sessions(history):

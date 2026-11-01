@@ -63,8 +63,6 @@ def _mutation_request(path: str, payload: dict[str, object]) -> SimpleNamespace:
     return request
 
 
-
-
 @pytest.mark.asyncio
 async def test_close_releases_channel_connectors() -> None:
     router = _router()
@@ -633,12 +631,7 @@ async def test_oauth_completion_reads_websocket_payload(
             {"name": "spare"},
             {"name": ["spare"]},
         ),
-        (
-            "/api/settings/model-configurations/migrate",
-            "migrate_model_configurations",
-            {},
-            {},
-        ),
+
         (
             "/api/settings/model-call-order/update",
             "update_model_call_order",
@@ -735,11 +728,3 @@ async def test_settings_get_mutation_route_is_method_not_allowed() -> None:
     assert json.loads(response.body) == {
         "error": "WebUI mutations require an authenticated WebSocket"
     }
-
-
-
-
-
-
-
-

@@ -119,8 +119,9 @@ def test_action_log_survives_failed_store_save(
             name="New reminder",
             schedule=CronSchedule(kind="every", every_ms=60_000),
             message="hello",
-            channel="cli",
-            to="test",
+            session_key="cli:test",
+            origin_channel="cli",
+            origin_chat_id="test",
         )
     elif operation == "update":
         writer.update_job(job.id, name="Updated reminder")
@@ -161,8 +162,9 @@ def test_saved_actions_can_be_replayed_if_log_cleanup_fails(
         name="New reminder",
         schedule=CronSchedule(kind="every", every_ms=60_000),
         message="hello",
-        channel="cli",
-        to="test",
+        session_key="cli:test",
+        origin_channel="cli",
+        origin_chat_id="test",
     )
     action_path = store_path.parent / "action.jsonl"
     pending_actions = action_path.read_bytes()

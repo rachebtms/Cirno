@@ -32,7 +32,7 @@ class SessionTypes:
         self._types[session_type.name] = session_type
 
     def resolve(self, metadata: Mapping[str, object]) -> SessionType | None:
-        # Legacy sessions are ordinary conversations. Explicit unknown kinds
+        # Sessions default to ordinary conversations. Explicit unknown kinds
         # remain private until their owner registers the access contract.
         name = metadata.get(SESSION_TYPE_KEY, CONVERSATION.name)
         return self._types.get(name) if isinstance(name, str) else None

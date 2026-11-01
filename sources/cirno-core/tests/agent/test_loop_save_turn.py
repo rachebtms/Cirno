@@ -21,7 +21,7 @@ from cirno.bus.outbound_events import (
     TurnEndEvent,
 )
 from cirno.bus.queue import MessageBus
-from cirno.cron.session_turns import CRON_HISTORY_META, CRON_TRIGGER_META
+from cirno.cron.session_turns import CRON_TRIGGER_META
 from cirno.providers.base import LLMProvider, LLMResponse, LLMUsage, ProviderConversationState
 from cirno.providers.factory import ProviderSnapshot
 from cirno.runtime.context import (
@@ -57,7 +57,6 @@ from cirno.session.webui_turns import (
     WebuiTurnCoordinator,
     clean_generated_title,
     maybe_generate_webui_title,
-    maybe_generate_webui_title_after_turn,
 )
 from cirno.triggers.local_session_turns import LOCAL_TRIGGER_META
 
@@ -191,7 +190,6 @@ async def test_persist_cron_turn_uses_distinct_history_marker(tmp_path: Path) ->
         "cron_run_id": "job-1:1",
         "cron_prompt_ref": prompt_ref,
     }
-    assert message[CRON_HISTORY_META] is True
     assert CRON_TRIGGER_META not in message
     assert message["cron_job_id"] == "job-1"
     assert message["cron_job_name"] == "Daily check"
@@ -434,7 +432,7 @@ async def test_generate_webui_title_ignores_cron_internal_turns(tmp_path: Path) 
     session.add_message(
         "user",
         "Scheduled cron job triggered: 30s-test\n\nInternal reminder prompt",
-        **{CRON_HISTORY_META: True},
+        **{AUTOMATION_HISTORY_META: {"kind": "cron"}},
     )
     session.add_message("assistant", "提醒已经到期。")
     loop.sessions.save(session)
@@ -449,10 +447,6 @@ async def test_generate_webui_title_ignores_cron_internal_turns(tmp_path: Path) 
     assert generated is False
     assert WEBUI_TITLE_METADATA_KEY not in session.metadata
     loop.provider.chat_stream_with_retry.assert_not_awaited()
-
-
-
-
 
 
 def test_save_turn_keeps_multimodal_runtime_context_for_model_replay() -> None:
@@ -1124,10 +1118,6 @@ async def test_subagent_followup_clears_state_before_compatibility_failure(
     persisted = loop.sessions.get_or_create("cli:subagent-compat-crash")
     assert persisted.messages[-1]["content"] == "subagent result"
     assert persisted.provider_state is None
-
-
-
-
 
 
 # 1x1 PNG used by the media-persistence tests. Attachment preparation filters

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from cirno.providers.base import ProviderConversationState
-from cirno.session.display_history import HistoryFact, HistoryImport, HistoryKind, HistoryReader
+from cirno.session.display_history import HistoryFact, HistoryKind, HistoryReader
 from cirno.session.history_visibility import is_hidden_history_message
 from cirno.session.manager import (
     Session,
@@ -42,9 +42,8 @@ def _object(value: str) -> dict[str, Any]:
     return cast(dict[str, Any], parsed)
 
 
-def _create_schema_v1(db: sqlite3.Connection) -> None:
+def _create_session_tables(db: sqlite3.Connection) -> None:
     for statement in (
-        "CREATE TABLE IF NOT EXISTS storage_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
         """CREATE TABLE IF NOT EXISTS sessions (
             key TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
             metadata TEXT NOT NULL, provider_state TEXT, last_archived INTEGER NOT NULL,
@@ -70,22 +69,22 @@ def _create_schema_v1(db: sqlite3.Connection) -> None:
         db.execute(statement)
 
 
-def _create_schema_v2(db: sqlite3.Connection) -> None:
+def _create_history_tables(db: sqlite3.Connection) -> None:
     for statement in (
-        """CREATE TABLE history_heads (
+        """CREATE TABLE IF NOT EXISTS history_heads (
             session_key TEXT PRIMARY KEY REFERENCES sessions(key) ON DELETE CASCADE,
             revision INTEGER NOT NULL DEFAULT 0,
             updated_at_ms INTEGER NOT NULL DEFAULT 0,
             preview TEXT NOT NULL DEFAULT '', user_preview TEXT NOT NULL DEFAULT ''
         )""",
-        """CREATE TABLE history_turns (
+        """CREATE TABLE IF NOT EXISTS history_turns (
             session_key TEXT NOT NULL REFERENCES sessions(key) ON DELETE CASCADE,
             ordinal INTEGER NOT NULL, record_count INTEGER NOT NULL,
             byte_count INTEGER NOT NULL, user_count INTEGER NOT NULL,
             completed INTEGER NOT NULL,
             PRIMARY KEY (session_key, ordinal)
         )""",
-        """CREATE TABLE history_entries (
+        """CREATE TABLE IF NOT EXISTS history_entries (
             session_key TEXT NOT NULL, turn_ordinal INTEGER NOT NULL,
             position INTEGER NOT NULL, kind TEXT NOT NULL, record TEXT NOT NULL,
             PRIMARY KEY (session_key, turn_ordinal, position),
@@ -96,25 +95,22 @@ def _create_schema_v2(db: sqlite3.Connection) -> None:
         db.execute(statement)
 
 
-def _create_schema_v3(db: sqlite3.Connection) -> None:
-    db.execute("""CREATE TABLE inbox_receipts (
+def _create_inbox_tables(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS inbox_receipts (
         session_key TEXT NOT NULL REFERENCES sessions(key) ON DELETE CASCADE,
         generation TEXT NOT NULL, input_id TEXT NOT NULL, journal_id TEXT NOT NULL, digest TEXT NOT NULL,
         read INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (session_key, generation, input_id)
     )""")
-    db.execute("CREATE INDEX inbox_journal ON inbox_receipts(session_key,generation,journal_id)")
+    db.execute("CREATE INDEX IF NOT EXISTS inbox_journal ON inbox_receipts(session_key,generation,journal_id)")
 
 
-# Entries upgrade version N to N+1. Preserve released entries and append upgrades.
-_SCHEMA_MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
-    _create_schema_v1, _create_schema_v2, _create_schema_v3,
-)
+_SCHEMA_VERSION = 3
 
 
 def _schema_version(db: sqlite3.Connection) -> int:
     version = int(db.execute("PRAGMA user_version").fetchone()[0])
-    if not 0 <= version <= len(_SCHEMA_MIGRATIONS):
+    if version not in (0, _SCHEMA_VERSION):
         raise RuntimeError(f"unsupported session database schema: {version}")
     return version
 
@@ -193,9 +189,8 @@ class SqliteSessionStore:
             if owned:
                 connection.close()
 
-    def initialize(self, workspace: Path) -> None:
-        """Upgrade the schema and import legacy sessions in one atomic transaction."""
-        workspace = workspace.expanduser().resolve(strict=False)
+    def initialize(self) -> None:
+        """Initialize current session storage in one atomic transaction."""
         # WAL is persistent and must be enabled outside a transaction.
         if self.path.is_symlink():
             raise RuntimeError("session database must not be a symlink")
@@ -216,27 +211,14 @@ class SqliteSessionStore:
         with suppress(OSError):
             os.chmod(self.path, 0o600)
         with self.transaction() as db:
-            # Recheck under the write lock in case another startup upgraded first.
+            # Recheck under the write lock in case another startup initialized first.
             version = _schema_version(db)
-            for target, migrate in enumerate(_SCHEMA_MIGRATIONS[version:], start=version + 1):
-                migrate(db)
-                db.execute(f"PRAGMA user_version = {target}")
-            marker = db.execute(
-                "SELECT value FROM storage_meta WHERE key='jsonl_import'"
-            ).fetchone()
-            if marker is None:
-                from cirno.session.jsonl_migration import migrate_jsonl
+            if version == 0:
+                _create_session_tables(db)
+                _create_history_tables(db)
+                _create_inbox_tables(db)
+                db.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
 
-                migrate_jsonl(self, workspace)
-                db.execute("INSERT INTO storage_meta (key, value) VALUES ('jsonl_import', 'complete')")
-            elif marker[0] != "complete":
-                raise RuntimeError(
-                    f"invalid JSONL migration marker in {self.path}: {marker[0]!r}; "
-                    "restore a valid database backup or repair the marker explicitly"
-                )
-        from cirno.session.jsonl_migration import finish_workspace_migration
-
-        finish_workspace_migration(self, workspace)
 
     def _metadata(self, db: sqlite3.Connection, key: str, raw: str) -> dict[str, Any]:
         metadata = _object(raw)
@@ -267,7 +249,7 @@ class SqliteSessionStore:
                 created_at=datetime.fromisoformat(row["created_at"]),
                 updated_at=datetime.fromisoformat(row["updated_at"]),
                 metadata=self._metadata(db, key, row["metadata"]),
-                last_consolidated=row["last_archived"],
+                last_archived=row["last_archived"],
                 provider_state=ProviderConversationState.from_private_record(
                     _object(row["provider_state"])
                 ) if row["provider_state"] is not None else None,
@@ -451,35 +433,6 @@ class SqliteSessionStore:
                 "updated_at": session.updated_at.isoformat(),
                 "metadata": session.metadata, "messages": session.messages}
 
-    def migrate_history(
-        self, name: str, collect: Callable[[list[SessionInfo]], list[HistoryImport]],
-    ) -> None:
-        """Commit a channel-owned legacy import and its once-only marker together."""
-        with self.transaction() as db:
-            marker = db.execute("SELECT value FROM storage_meta WHERE key=?", (name,)).fetchone()
-            if marker is not None:
-                if marker[0] != "complete":
-                    raise RuntimeError(f"invalid history import marker: {name}")
-                return
-            for item in collect(self.list_sessions()):
-                session = self.load(item.key, history=False)
-                if session is None:
-                    session = Session(key=item.key)
-                    if item.created_at_ms:
-                        session.created_at = datetime.fromtimestamp(item.created_at_ms / 1000)
-                    if item.updated_at_ms:
-                        session.updated_at = datetime.fromtimestamp(item.updated_at_ms / 1000)
-                    self.save(session)
-                revision = self.project_history(item.key, lambda reader: reader.revision)
-                if revision is not None and revision[1] >= 0:
-                    raise SessionConflictError(f"history already exists before import: {item.key}")
-                self.append_history(item.key, item.facts, expected_generation=session.generation)
-                db.execute("UPDATE history_heads SET updated_at_ms=max(updated_at_ms, ?) WHERE session_key=?",
-                           (item.updated_at_ms, item.key))
-                # Import ownership survives deletion: another namespace must not
-                # mistake this instance-wide backup for a new orphan later.
-                db.execute("INSERT INTO storage_meta (key, value) VALUES (?, 'complete')", (f"{name}:{item.key}",))
-            db.execute("INSERT INTO storage_meta (key, value) VALUES (?, 'complete')", (name,))
 
     def project_history(self, key: str, project: Callable[[HistoryReader], _T]) -> _T:
         """Project durable display facts and canonical messages from one snapshot."""

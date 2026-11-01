@@ -6,7 +6,6 @@ import asyncio
 import json
 import time
 import uuid
-import warnings
 from collections.abc import Awaitable, Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
@@ -42,7 +41,7 @@ from cirno.config.network import NetworkConfig
 from cirno.config.schema import AgentDefaults, ToolsConfig
 from cirno.bus.agent_events import AgentEvent, EventSink
 from cirno.llm_usage.context import LLMUsageSource, current_llm_usage_source
-from cirno.providers.base import LLMProvider, ToolCallRequest
+from cirno.providers.base import ToolCallRequest
 from cirno.security.workspace_access import (
     WorkspaceScope,
     bind_workspace_scope,
@@ -63,8 +62,6 @@ class _SubagentOrigin(TypedDict):
     chat_id: str
     session_key: str | None
     llm_usage_source: NotRequired[LLMUsageSource]
-
-
 
 
 class SubagentControlError(ValueError):
@@ -209,11 +206,9 @@ class SubagentManager:
 
     def __init__(
         self,
-        provider: LLMProvider | None = None,
-        workspace: Path | None = None,
-        bus: MessageBus | None = None,
-        max_tool_result_chars: int | None = None,
-        model: str | None = None,
+        workspace: Path,
+        bus: MessageBus,
+        max_tool_result_chars: int,
         tools_config: ToolsConfig | None = None,
         restrict_to_workspace: bool = False,
         disabled_skills: list[str] | None = None,
@@ -226,31 +221,7 @@ class SubagentManager:
     ):
         if cast(object, consolidator) is None:
             raise TypeError("SubagentManager requires a consolidator")
-        if workspace is None:
-            raise TypeError("SubagentManager.__init__() missing required argument: 'workspace'")
-        if bus is None:
-            raise TypeError("SubagentManager.__init__() missing required argument: 'bus'")
-        if max_tool_result_chars is None:
-            raise TypeError(
-                "SubagentManager.__init__() missing required argument: 'max_tool_result_chars'"
-            )
-        if model is not None and provider is None:
-            raise TypeError("SubagentManager model compatibility argument requires provider")
-
         defaults = AgentDefaults()
-        self._compat_runtime: LLMRuntime | None = None
-        if provider is not None:
-            warnings.warn(
-                "SubagentManager provider/model constructor arguments are deprecated; "
-                "pass runtime=... to spawn() instead",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self._compat_runtime = LLMRuntime.capture(
-                provider,
-                model or provider.get_default_model(),
-                context_window_tokens=defaults.context_window_tokens,
-            )
         self.workspace = workspace
         self.bus = bus
         self.tools_config = tools_config or ToolsConfig()
@@ -473,40 +444,6 @@ class SubagentManager:
             self._merge_session_statuses, session_key, runtime, include_history=True,
         )
 
-    def set_provider(self, provider: LLMProvider, model: str) -> None:
-        """Update the deprecated runtime source used by legacy ``spawn`` calls."""
-        warnings.warn(
-            "SubagentManager.set_provider() is deprecated; pass runtime=... to spawn() instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        context_window_tokens = (
-            self._compat_runtime.context_window_tokens
-            if self._compat_runtime is not None
-            else AgentDefaults().context_window_tokens
-        )
-        self._compat_runtime = LLMRuntime.capture(
-            provider,
-            model,
-            context_window_tokens=context_window_tokens,
-        )
-
-    def _compat_spawn_runtime(self) -> LLMRuntime:
-        runtime = self._compat_runtime
-        if runtime is None:
-            raise TypeError(
-                "SubagentManager.spawn() missing required keyword-only argument: 'runtime'"
-            )
-        warnings.warn(
-            "SubagentManager.spawn() without runtime is deprecated; pass runtime=... explicitly",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        return LLMRuntime.capture(
-            runtime.provider,
-            runtime.model,
-            context_window_tokens=runtime.context_window_tokens,
-        )
 
     def _subagent_tools_config(self) -> ToolsConfig:
         """Build a ToolsConfig scoped for subagent use."""
@@ -545,12 +482,10 @@ class SubagentManager:
         self, task: str, label: str | None, origin_channel: str, origin_chat_id: str,
         session_key: str | None, origin_message_id: str | None,
         temperature: float | None, workspace_scope: WorkspaceScope | None,
-        runtime: LLMRuntime | None, *, announce: bool, origin_turn_id: str | None,
+        runtime: LLMRuntime, *, announce: bool, origin_turn_id: str | None,
         session_policy: SessionPolicy | None,
     ) -> _SubagentTask:
         self.bus.admission.check()
-        if runtime is None:
-            runtime = self._compat_spawn_runtime()
         if temperature is not None:
             runtime = runtime.with_generation_overrides(temperature=temperature)
         # A failed cleanup owns admission even after its status has been evicted.
@@ -622,7 +557,7 @@ class SubagentManager:
         temperature: float | None = None,
         workspace_scope: WorkspaceScope | None = None,
         *,
-        runtime: LLMRuntime | None = None,
+        runtime: LLMRuntime,
         origin_turn_id: str | None = None,
         session_policy: SessionPolicy | None = None,
     ) -> str:
@@ -649,7 +584,7 @@ class SubagentManager:
         temperature: float | None = None,
         workspace_scope: WorkspaceScope | None = None,
         *,
-        runtime: LLMRuntime | None = None,
+        runtime: LLMRuntime,
         origin_turn_id: str | None = None,
         session_policy: SessionPolicy | None = None,
     ) -> str:

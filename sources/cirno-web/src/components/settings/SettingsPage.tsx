@@ -229,7 +229,7 @@ export function SettingsPage({
               {!showSidebar && settings.requires_restart ? <RestartRequiredNotice message={t("settings.status.savedRestartApply")}
                 onRestart={restartViaSettingsSurface} isRestarting={restartInProgress} /> : null}
             </div>
-            
+
             <SettingsFeature onBeforeClose={controller.webEdits.needsCompletion() ? controller.webEdits.commit : undefined} title={t("settings.runtimeConfig.groups.web.title")}
               enabled={settings.runtime_config ? state.value("tools.web.enable") === true : settings.web.enable}
               disabled={restartInProgress || state.saving === "web" || !settings.runtime_config}
@@ -275,7 +275,6 @@ export function SettingsPage({
               callOrder={modelState.modelCallOrder}
               saving={modelState.saving}
               orderSaving={modelState.modelCallOrderSaving || modelState.modelConfigurationSaving}
-              migrationSaving={modelState.modelMigrationSaving}
               showBrandLogos={localPrefs.brandLogos}
               providerSaving={modelState.providerOperation?.action === "login" ? modelState.providerSaving : null}
               onChangeCallOrder={modelActions.changeModelCallOrder}
@@ -295,7 +294,6 @@ export function SettingsPage({
               }}
               onSave={modelActions.saveModelSettings}
               onSaveRequestSettings={modelActions.saveModelRequestSettings}
-              onMigrate={modelActions.handleMigrateModelConfigurations}
               onBeginCreate={modelActions.beginModelPresetCreation}
               onCancelCreate={modelActions.cancelModelPresetCreation}
               onClearPresetNameError={() => modelState.setModelPresetNameError(null)}

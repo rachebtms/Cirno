@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable
 
 from cirno.config.network import NetworkConfig
 
@@ -49,12 +49,6 @@ class RequestContext:
     persist_session: bool = True
     # Effective tool scope; injected inputs retain the active run's scope.
     workspace_scope: WorkspaceScope | None = None
-
-
-@runtime_checkable
-class ContextAware(Protocol):
-    def set_context(self, ctx: RequestContext) -> None:
-        ...
 
 
 def bind_request_context(ctx: RequestContext) -> Token[RequestContext | None]:

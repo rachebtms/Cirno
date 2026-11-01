@@ -43,7 +43,6 @@ class _FsTool(Tool):
         self,
         workspace: Path | None = None,
         allowed_dir: Path | None = None,
-        extra_allowed_dirs: list[Path] | None = None,
         extra_read_allowed_dirs: list[Path] | None = None,
         extra_write_allowed_dirs: list[Path] | None = None,
         extra_write_allowed_files: list[Path] | None = None,
@@ -54,12 +53,7 @@ class _FsTool(Tool):
     ):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
-        # Legacy alias: extra_allowed_dirs is read-only. Write-capable tools
-        # must opt in via extra_write_allowed_dirs.
-        self._extra_read_allowed_dirs = [
-            *(extra_allowed_dirs or []),
-            *(extra_read_allowed_dirs or []),
-        ]
+        self._extra_read_allowed_dirs = list(extra_read_allowed_dirs or [])
         self._extra_read_allowed_files = list(extra_read_allowed_files or [])
         self._extra_write_allowed_dirs = list(extra_write_allowed_dirs or [])
         self._extra_write_allowed_files = list(extra_write_allowed_files or [])

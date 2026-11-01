@@ -144,10 +144,6 @@ def allocate_session_handle_name(used: set[str]) -> str:
             return name
 
 
-# Backward-compatible alias for callers that used the original private helper.
-_allocate_name = allocate_session_handle_name
-
-
 def allocate_session_handles(
     rows: list[dict[str, Any]], types: SessionTypes,
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -222,7 +218,7 @@ class SessionHandleResolver:
         }
 
     def handle_for_session(self, session_key: str) -> SessionHandle | None:
-        """Offline compatibility API; runtime callers must use ahandle_for_session()."""
+        """Offline administrative API; runtime callers must use ahandle_for_session()."""
         try:
             key = _clean_session_key(session_key)
         except ValueError:
@@ -237,7 +233,7 @@ class SessionHandleResolver:
         return (await self._ensure_all_async()).get(key)
 
     def list_all(self) -> list[SessionHandle]:
-        """Offline compatibility API; runtime callers must use alist_all()."""
+        """Offline administrative API; runtime callers must use alist_all()."""
         return sorted(self._ensure_all().values(), key=lambda handle: handle.name)
 
     async def alist_all(self) -> list[SessionHandle]:
@@ -247,14 +243,14 @@ class SessionHandleResolver:
         )
 
     def list_all_by_key(self) -> dict[str, SessionHandle]:
-        """Offline compatibility API; runtime callers must use alist_all_by_key()."""
+        """Offline administrative API; runtime callers must use alist_all_by_key()."""
         return self._ensure_all()
 
     async def alist_all_by_key(self) -> dict[str, SessionHandle]:
         return await self._ensure_all_async()
 
     def resolve(self, name: str) -> SessionHandle | None:
-        """Offline compatibility API; runtime callers must use aresolve()."""
+        """Offline administrative API; runtime callers must use aresolve()."""
         try:
             normalized = normalize_session_handle(name)
         except ValueError:

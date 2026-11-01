@@ -178,7 +178,6 @@ class MemoryTool(Tool):
         access = self.owner_access or dict(session_key=request.session_key, project_id=metadata.get("project_id"), maintenance=self.maintenance)
         def run():
             repo = MemoryRepository()
-            repo.migrate_legacy()
             repo.sync_profiles()
             if action == "status":
                 return repo.status(**access)

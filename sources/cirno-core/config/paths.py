@@ -45,7 +45,7 @@ def get_logs_dir() -> Path:
 
 
 def get_webui_dir() -> Path:
-    """Return WebUI state and legacy display-history import/backup storage."""
+    """Return WebUI browser service state."""
     return get_runtime_subdir("webui")
 
 
@@ -60,8 +60,3 @@ def is_default_workspace(workspace: str | Path | None) -> bool:
     current = Path(workspace).expanduser() if workspace is not None else get_home_path() / "workspace"
     default = get_home_path() / "workspace"
     return current.resolve(strict=False) == default.resolve(strict=False)
-
-
-def get_legacy_sessions_dir() -> Path:
-    """Return the selected home's legacy session directory for migration fallback."""
-    return get_home_path() / "sessions"

@@ -175,13 +175,3 @@ def test_ordinary_replies_and_successful_turns_do_not_enter_inbox(inbox):
     assert inbox.list()["items"] == []
     inbox.record("report:ready", "conversations", "report", status="ready", body="Task verified")
     assert inbox.list()["items"][0]["body"] == "Task verified"
-
-
-def test_existing_ordinary_notifications_are_removed_without_deleting_reports(inbox):
-    inbox.record("reply", "conversations", "message", body="Hello")
-    inbox.record("done", "conversations", "turn", status="completed")
-    inbox.record("failed", "conversations", "turn", status="failed")
-    inbox.record("report", "conversations", "report", status="ready")
-    with inbox.connect() as db:
-        db.execute("PRAGMA user_version=0")
-    assert {item["id"] for item in inbox.list()["items"]} == {"report", "failed"}

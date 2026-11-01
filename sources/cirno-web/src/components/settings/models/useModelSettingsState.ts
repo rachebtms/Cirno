@@ -22,7 +22,6 @@ export function useModelSettingsState(initialSettings: SettingsPayload | null) {
   const [modelPresetNameError, setModelPresetNameError] = useState<string | null>(null);
   const [modelConfigurationSaving, setModelConfigurationSaving] = useState(false);
   const [modelCallOrderSaving, setModelCallOrderSaving] = useState(false);
-  const [modelMigrationSaving, setModelMigrationSaving] = useState(false);
   const [modelPresetPendingDelete, setModelPresetPendingDelete] =
     useState<SettingsPayload["model_presets"][number] | null>(null);
   const modelPresetBeforeCreateRef = useRef<string | null>(null);
@@ -51,7 +50,6 @@ export function useModelSettingsState(initialSettings: SettingsPayload | null) {
     modelCallOrder,
     modelCallOrderSaving,
     modelConfigurationSaving,
-    modelMigrationSaving,
     modelPresetBeforeCreateRef,
     modelPresetCreating,
     modelPresetEditingName,
@@ -71,7 +69,6 @@ export function useModelSettingsState(initialSettings: SettingsPayload | null) {
     setModelCallOrder,
     setModelCallOrderSaving,
     setModelConfigurationSaving,
-    setModelMigrationSaving,
     setModelPresetCreating,
     setModelPresetEditingName,
     setModelPresetNameError,

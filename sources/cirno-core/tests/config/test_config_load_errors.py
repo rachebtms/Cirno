@@ -60,7 +60,7 @@ def test_load_config_invalid_json_fails_fast(tmp_path) -> None:
 def test_load_config_invalid_schema_fails_fast(tmp_path) -> None:
     config_path = tmp_path / "config.json"
     config_path.write_text(
-        json.dumps({"tools": {"exec": {"timeout": -1}}}),
+        json.dumps({"tools": {"exec": {"max_runtime": -1}}}),
         encoding="utf-8",
     )
 
@@ -70,7 +70,7 @@ def test_load_config_invalid_schema_fails_fast(tmp_path) -> None:
     error = exc_info.value
     message = str(error)
     assert error.kind == "invalid_schema"
-    assert "tools.exec.timeout" in message
+    assert "tools.exec.max_runtime" in message
     assert "Must be greater than or equal to 0." in message
     assert "input_value" not in message
     assert "errors.pydantic.dev" not in message
@@ -170,7 +170,3 @@ def test_load_config_malformed_legacy_sections_use_structured_error(
     error = exc_info.value
     assert error.kind == "invalid_schema"
     assert "tools" in str(error)
-
-
-
-

@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, NamedTuple, NotRequired, Sequence, TypedDict, cast
 from urllib.parse import unquote, urlparse
 
-from cirno.agent.tools.naming import implementation_name
 from cirno.bus.events import INBOUND_META_LOCAL_MEDIA, INBOUND_META_TURN_ID
 from cirno.command.builtin import USER_SHELL_COMMAND
 from cirno.runtime.context import public_history_message
@@ -35,7 +34,6 @@ from cirno.session.sqlite_store import SessionConflictError
 from cirno.session.state import SessionOperationQueueFullError
 from cirno.webui.history import (
     fact_from_record,
-    initialize_history,
     record_from_fact,
     turn_records,
 )
@@ -330,13 +328,6 @@ def _compact_completed_turns(
     return compacted, dropped
 
 
-
-
-def compact_legacy_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    turns, _ = _compact_completed_turns(_split_transcript_turns(records))
-    return [record for turn in turns for record in turn]
-
-
 def _records_with_replay_identity(
     records: list[dict[str, Any]],
     *,
@@ -531,10 +522,6 @@ class WebUITranscriptRecorder:
         self._log = log
         self._turn_sequences: dict[tuple[str, str], int] = {}
 
-    async def initialize(self) -> None:
-        sessions = self.sessions
-        if sessions is not None:
-            await initialize_history(sessions)
 
     def client_turn_metadata(self, value: Any) -> dict[str, str]:
         return {WEBUI_TURN_METADATA_KEY: normalize_webui_turn_id(value)}
@@ -745,19 +732,6 @@ def build_user_transcript_event(
     return event
 
 
-def _is_legacy_raw_subagent_result(message: dict[str, Any]) -> bool:
-    content = message.get("content")
-    if not isinstance(content, str):
-        return False
-    text = content.replace("\r\n", "\n").strip()
-    return (
-        text.startswith("[Subagent '")
-        and "\n\nTask:" in text
-        and "\n\nResult:" in text
-        and "Summarize this naturally" in text
-    )
-
-
 def _is_user_shell_command(message: Mapping[str, Any]) -> bool:
     content = message.get("content")
     return (
@@ -778,8 +752,6 @@ def _session_user_event(
     if is_hidden_history_message(message):
         return None
     message = public_history_message(message)
-    if _is_legacy_raw_subagent_result(message):
-        return None
     content = message.get("content")
     text = content if isinstance(content, str) else ""
     media = message.get("media")
@@ -1644,33 +1616,6 @@ def _client_projection_page_event_count(turn: list[dict[str, Any]]) -> int:
     return max(1, sum(record.get("event") in supported for record in turn))
 
 
-def _without_legacy_message_echoes(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Hide the old message-tool + terminal-stream echo without changing evidence."""
-    delivered: set[str] = set()
-    message_calls: set[str] = set()
-    result = []
-    turn_id = None
-    for record in lines:
-        if record.get("event") == "user" or record.get("turn_id") != turn_id:
-            delivered.clear()
-            message_calls.clear()
-        turn_id = record.get("turn_id")
-        for call in record.get("tool_events") or []:
-            if implementation_name(call.get("name", "")) == "message" and isinstance(call.get("arguments"), dict):
-                text = call["arguments"].get("content")
-                if isinstance(text, str):
-                    message_calls.add(text.strip())
-        text = record.get("text")
-        if (record.get("event") == "message" and not record.get("kind")
-                and not record.get("agent_ui") and isinstance(text, str) and text.strip() in message_calls):
-            delivered.add(text.strip())
-        if (record.get("event") == "stream_end" and isinstance(text, str)
-                and text.strip() and text.strip() in delivered):
-            record = {**record, "text": ""}
-        result.append(record)
-    return result
-
-
 def _client_projection_events(
     lines: list[dict[str, Any]],
     *,
@@ -1680,7 +1625,6 @@ def _client_projection_events(
 ) -> tuple[list[dict[str, Any]], int | None]:
     events: list[dict[str, Any]] = []
     fork_boundary_event_index: int | None = None
-    lines = _without_legacy_message_echoes(lines)
     deferred_groups = _client_projection_deferred_trace_groups(lines)
     deferred_until = 0
     for index, record in enumerate(lines):
@@ -1859,31 +1803,6 @@ def build_webui_thread_response(
         lines = recovered_lines
     if _needs_incomplete_turn_recovery(lines):
         lines = _recover_incomplete_turns(lines, load_session_turns())
-    bang_inputs = {
-        record.get("turn_id") for record in lines
-        if record.get("event") == "user" and isinstance(text := record.get("text"), str)
-        and text.startswith("!")
-    }
-    legacy_shell_candidates = {
-        record.get("turn_id") for record in lines
-        if record.get("event") == "message" and record.get("kind") is None
-        and record.get("render_as") != "text" and record.get("turn_id") in bang_inputs
-        and isinstance(record.get("turn_id"), str)
-    }
-    if legacy_shell_candidates:
-        if session_messages is None and session_messages_loader is not None:
-            session_messages = session_messages_loader()
-        shell_turns = {
-            message.get(INBOUND_META_TURN_ID) for message in session_messages or []
-            if _is_user_shell_command(message)
-            and message.get(INBOUND_META_TURN_ID) in legacy_shell_candidates
-        }
-        lines = [
-            {**record, "render_as": "text"}
-            if record.get("event") == "message" and record.get("kind") is None
-            and record.get("turn_id") in shell_turns else record
-            for record in lines
-        ]
     lines = _ensure_replay_identities(lines)
     payload: dict[str, Any] = {
         "schemaVersion": WEBUI_TRANSCRIPT_SCHEMA_VERSION,

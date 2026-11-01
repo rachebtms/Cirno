@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from cirno.config.paths import (
         get_cron_dir,
         get_data_dir,
-        get_legacy_sessions_dir,
         get_logs_dir,
         get_media_dir,
         get_runtime_subdir,
@@ -36,7 +35,6 @@ _EXPORTS = {
     "get_webui_dir": "cirno.config.paths",
     "get_workspace_path": "cirno.config.paths",
     "is_default_workspace": "cirno.config.paths",
-    "get_legacy_sessions_dir": "cirno.config.paths",
 }
 
 
@@ -67,5 +65,4 @@ __all__ = [
     "get_webui_dir",
     "get_workspace_path",
     "is_default_workspace",
-    "get_legacy_sessions_dir",
 ]

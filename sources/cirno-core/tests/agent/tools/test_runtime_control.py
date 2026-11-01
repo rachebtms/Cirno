@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.context import TranscriptInput
 from cirno.agent.loop import AgentLoop
 from cirno.agent.tools.context import RequestContext, request_context
 from cirno.agent.tools.runtime_control import (
@@ -19,7 +18,6 @@ from cirno.agent.tools.runtime_control import (
     RuntimeControl,
 )
 from cirno.agent.tools.self import MyTool, MyToolConfig
-from cirno.bus.events import InboundMessage
 from cirno.bus.queue import MessageBus
 from cirno.config.schema import ToolsConfig
 from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
@@ -287,7 +285,7 @@ async def test_workspace_inspection_matches_registered_file_tool(
 ) -> None:
     # A configured shell backend is not proof that an external sandbox is running.
     monkeypatch.delenv("CIRNO_WORKSPACE_SANDBOX_ENFORCED", raising=False)
-    monkeypatch.delenv("CIRNO_SANDBOX_ENFORCED", raising=False)
+    monkeypatch.delenv("CIRNO_WORKSPACE_SANDBOX_ENFORCED", raising=False)
     agent = tmp_path / "agent"
     project = tmp_path / "project"
     project.mkdir()
@@ -501,8 +499,6 @@ async def test_access_changes_refresh_only_new_message_and_preserve_prefix(tmp_p
     assert [message["content"] for message in session.get_history(
         include_runtime_context=False,
     ) if message["role"] == "user"] == ["Check access"] * 3
-
-
 
 
 @pytest.mark.asyncio

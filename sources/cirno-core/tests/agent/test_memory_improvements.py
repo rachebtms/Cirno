@@ -1,6 +1,4 @@
 """Receipt correctness, scoped recall, split-store migration and chunk coverage."""
-import json
-import sqlite3
 
 import pytest
 
@@ -113,33 +111,6 @@ def test_tags_and_neighbors_are_bounded_and_scope_checked(tmp_path):
     assert matches[0]['neighbors'][0]['status'] == 'superseded'
     exact = repo.search(newer['id'], session_key='a', expand_links=1)['memories'][0]
     assert exact['neighbors'][0]['id'] == first['id']
-
-
-def test_split_databases_and_migration_preserve_authoritative_data(tmp_path):
-    repo = MemoryRepository(tmp_path)
-    original = event(repo, tags=['seed'])
-    event(repo, 'Second version', memory_id=original['id'], expected_revision=1)
-    # Reconstruct the legacy monolith from the split stores for migration testing.
-    with repo.connect() as db:
-        db.execute('ATTACH DATABASE ? AS legacy', (str(repo.root / 'index.sqlite3'),))
-        for table in ('memories', 'revisions', 'links', 'maintenance', 'chunks', 'dream_queue'):
-            db.execute(f'CREATE TABLE legacy.{table} AS SELECT * FROM {table}')
-        db.execute("DELETE FROM legacy.maintenance WHERE key='split_storage_v1'")
-        db.execute('CREATE VIRTUAL TABLE legacy.memory_fts USING fts5(title,tokens)')
-        db.execute('INSERT INTO legacy.memory_fts(rowid,title,tokens) SELECT rowid,title,tokens FROM memory_fts')
-    for name in ('catalog', 'search', 'dream'):
-        (repo.root / f'{name}.sqlite3').unlink()
-    restored = MemoryRepository(tmp_path)
-    assert restored.read(original['id'], session_key='a', revision=1)['content'].startswith('Recorded')
-    assert restored.read(original['id'], session_key='a')['revision'] == 2
-    assert restored.search('Second', session_key='a')['memories'][0]['id'] == original['id']
-    assert restored.pending()[1][0]['revision'] == 2
-    assert (restored.root / 'index.legacy.sqlite3').exists()
-    for name, tables in [('catalog', {'memories', 'revisions', 'links'}), ('search', {'chunks', 'memory_fts'}), ('dream', {'dream_queue', 'dream_receipts'})]:
-        with sqlite3.connect(restored.root / f'{name}.sqlite3') as db:
-            actual = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            assert tables <= actual
-            assert not (({'memories', 'dream_queue', 'chunks'} - tables) & actual)
 
 
 def test_catalog_and_search_roll_back_together(tmp_path, monkeypatch):

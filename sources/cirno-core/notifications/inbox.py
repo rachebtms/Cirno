@@ -35,9 +35,7 @@ class NotificationInbox:
                 )""")
                 db.execute("CREATE INDEX IF NOT EXISTS notice_category ON notices(category,seq)")
                 db.execute("CREATE TABLE IF NOT EXISTS telegram_pending (notice_id TEXT PRIMARY KEY, revision TEXT NOT NULL)")
-                if db.execute("PRAGMA user_version").fetchone()[0] < 1:
-                    db.execute("DELETE FROM notices WHERE category='conversations' AND (kind='message' OR (kind='turn' AND status<>'failed'))")
-                    db.execute("PRAGMA user_version=1")
+
                 yield db
         finally:
             db.close()

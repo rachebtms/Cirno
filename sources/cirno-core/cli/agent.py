@@ -9,7 +9,6 @@ import typer
 from cirno.cli.log_control import _set_cirno_logs
 from cirno.cli.runtime_config import (
     _load_runtime_config,
-    _migrate_cron_store,
     _print_agent_start_error,
 )
 from cirno.config.schema import Config
@@ -89,7 +88,6 @@ def _run_classic(runtime_config: Config, *, message: str | None, session_id: str
     agent_loop_class = _classic_dependency("AgentLoop")
     stream_renderer_class = _classic_dependency("StreamRenderer")
     consume_restart_notice_from_env = _classic_dependency("consume_restart_notice_from_env")
-    is_default_workspace = _classic_dependency("is_default_workspace")
     sync_workspace_templates = _classic_dependency("sync_workspace_templates")
 
     session_id = session_id or "cli:direct"
@@ -103,10 +101,6 @@ def _run_classic(runtime_config: Config, *, message: str | None, session_id: str
     sync_workspace_templates(runtime_config.workspace_path)
 
     bus = MessageBus()
-
-    # Preserve existing single-workspace installs, but keep custom workspaces clean.
-    if is_default_workspace(runtime_config.workspace_path):
-        _migrate_cron_store(runtime_config)
 
     # Create cron service with workspace-scoped store
     cron_store_path = runtime_config.workspace_path / "cron" / "jobs.json"
