@@ -101,11 +101,12 @@ class WebUIBuildHook(BuildHookInterface):
             commit_file = Path(self._build_directory.name) / "_build_commit.txt"
             commit_file.write_text(commit + "\n", encoding="utf-8")
             build_data.setdefault("force_include", {})[str(commit_file)] = f"{package_target}/_build_commit.txt"
-        if not package_json.is_file():
-            # Source distributions carry their prebuilt bundle in the package.
+        if not package_json.is_file() and not index_html.is_file():
+            # Container builds stage build/webui without frontend sources. Only
+            # fall back to the in-package bundle when no staged build exists.
             dist_dir = root / "sources/cirno-core/web/dist"
             index_html = dist_dir / "index.html"
-        if package_json.is_file() and dist_dir.is_dir():
+        if dist_dir == root / "build" / "webui" and dist_dir.is_dir():
             build_data.setdefault("force_include", {})[str(dist_dir)] = f"{package_target}/web/dist"
 
         if os.environ.get("CIRNO_SKIP_WEBUI_BUILD") == "1":

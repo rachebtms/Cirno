@@ -72,3 +72,24 @@ def test_release_embeds_docs_and_revision_without_writing_source(tmp_path, monke
     assert len(stamp.read_text().strip()) == 40
     assert not stamp.is_relative_to(core)
     assert sorted(path.name for path in core.iterdir()) == ["__init__.py"]
+
+
+def test_container_staged_bundle_is_embedded_without_frontend_sources(tmp_path):
+    """The Docker runtime stage carries build/webui but no frontend source tree."""
+    core, _ = project(tmp_path)
+    repository = Path(__file__).resolve().parents[3]
+    for name in ("pyproject.toml", "hatch_build.py", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+        shutil.copyfile(repository / name, tmp_path / name)
+    bundle = tmp_path / "build/webui/index.html"
+    bundle.parent.mkdir(parents=True)
+    bundle.write_text("<html>Container WebUI</html>", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-c", "import hatchling.build; hatchling.build.build_wheel('dist')"],
+        cwd=tmp_path, env={**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"},
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    with ZipFile(next((tmp_path / "dist").glob("*.whl"))) as wheel:
+        assert wheel.read("cirno/web/dist/index.html") == b"<html>Container WebUI</html>"
+        assert wheel.read("cirno/skills/builtin/cirno-document/references/examples/config.json") == b"{}"
+    assert not (core / "web").exists()
