@@ -1,0 +1,23 @@
+{
+  "setup": {
+    "docsLabel": "Ouvrir le guide WebSocket",
+    "officialLabel": "Ouvrir la WebUI locale",
+    "fields": {
+      "host": {
+        "label": "Listen address"
+      },
+      "port": {
+        "label": "Web port"
+      },
+      "publicWsUrl": {
+        "label": "Public WebSocket URL (optional)"
+      },
+      "sslCertfile": {
+        "label": "TLS certificate path (optional)"
+      },
+      "sslKeyfile": {
+        "label": "TLS private key path (optional)"
+      }
+    }
+  }
+}

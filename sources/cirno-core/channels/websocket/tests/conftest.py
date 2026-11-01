@@ -1,0 +1,19 @@
+"""Shared isolation for WebSocket tests that persist runtime state."""
+
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolate_websocket_runtime_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep transcripts and other runtime files out of the active user data directory."""
+    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def _select_web_test_home(tmp_path, monkeypatch):
+    monkeypatch.setattr("cirno.config.home._home_path", tmp_path)

@@ -1,0 +1,38 @@
+{
+  "names": {
+    "read_file": "files.read",
+    "write_file": "files.write",
+    "edit_file": "files.edit",
+    "list_dir": "files.list",
+    "find_files": "files.find",
+    "grep": "files.search",
+    "rg": "files.rg",
+    "apply_patch": "files.patch",
+    "exec": "shell.exec",
+    "exec_session": "shell.session",
+    "list_exec_sessions": "shell.list",
+    "web_search": "web.search",
+    "web_fetch": "web.fetch",
+    "create_goal": "goals.create",
+    "update_goal": "goals.update",
+    "get_goal": "goals.get",
+    "create_session": "conversations.create",
+    "set_session_title": "conversations.set_title",
+    "search_sessions": "conversations.search",
+    "read_session": "conversations.read",
+    "send_session_message": "conversations.send",
+    "report_work": "conversations.report",
+    "ask_user": "user.ask",
+    "message": "user.message",
+    "run_cli_app": "apps.run",
+    "run_code": "ptc.run"
+  },
+  "action_groups": {
+    "memory": "memory",
+    "node": "nodes",
+    "inspect_skill": "skills",
+    "subagent": "agents",
+    "my": "runtime",
+    "cron": "automations"
+  }
+}

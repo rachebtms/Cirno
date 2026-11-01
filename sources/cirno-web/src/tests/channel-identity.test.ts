@@ -1,0 +1,173 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  channelIsRunning,
+  channelSetup,
+  channelStatusLabel,
+  channelToggleChecked,
+} from "@/components/settings/channels/ChannelIdentity";
+import type { CirnoFeatureInfo } from "@/lib/types";
+
+function feature(overrides: Partial<CirnoFeatureInfo>): CirnoFeatureInfo {
+  return {
+    name: "plugin-chat",
+    display_name: "Plugin Chat",
+    type: "channel",
+    enabled: false,
+    installed: true,
+    ready: false,
+    status: "not_enabled",
+    install_supported: true,
+    requires_restart: true,
+    ...overrides,
+  };
+}
+
+describe("channelSetup", () => {
+  it("offers a localized inherited option without changing ordinary booleans", () => {
+    const setup = channelSetup(feature({ setup: { fields: [
+      {
+        key: "channels.plugin-chat.showCompactionNotices",
+        field: "showCompactionNotices",
+        kind: "bool",
+        choices: [],
+        required: false,
+        inheritable: true,
+      },
+      {
+        key: "channels.plugin-chat.sendProgress",
+        field: "sendProgress",
+        kind: "bool",
+        choices: [],
+        required: false,
+      },
+    ] } }), "zh-CN");
+    expect(setup.fields?.[0]?.options).toEqual([
+      { value: "", label: "默认" },
+      { value: "true", label: "True" },
+      { value: "false", label: "False" },
+    ]);
+    expect(setup.fields?.[1]?.options?.map((option) => option.value)).toEqual(["true", "false"]);
+  });
+
+  it("builds editable fields for a plugin-owned backend contract", () => {
+    const setup = channelSetup(feature({
+      setup: {
+        fields: [
+          {
+            key: "channels.plugin-chat.apiToken",
+            field: "apiToken",
+            kind: "secret",
+            choices: [],
+            required: true,
+          },
+          {
+            key: "channels.plugin-chat.region",
+            field: "region",
+            kind: "enum",
+            choices: ["us", "eu"],
+            required: false,
+          },
+        ],
+        official_url: "https://plugin.example/setup",
+      },
+    }));
+
+    expect(setup.officialUrl).toBe("https://plugin.example/setup");
+    expect(setup.officialLabel).toBe("Open official setup");
+    expect(setup.fields).toEqual([
+      expect.objectContaining({
+        key: "channels.plugin-chat.apiToken",
+        label: "Api Token",
+        secret: true,
+        optional: false,
+      }),
+      expect.objectContaining({
+        key: "channels.plugin-chat.region",
+        options: [
+          { value: "us", label: "Us" },
+          { value: "eu", label: "Eu" },
+        ],
+      }),
+    ]);
+  });
+
+  it("filters catalog-only fields that the backend does not accept", () => {
+    const setup = channelSetup(feature({
+      name: "telegram",
+      display_name: "Telegram",
+      webui: "webui/index.ts",
+      setup: {
+        fields: [{
+          key: "channels.telegram.token",
+          field: "token",
+          kind: "secret",
+          choices: [],
+          required: true,
+        }],
+      },
+    }));
+
+    expect(setup.fields?.map((field) => field.key)).toEqual(["channels.telegram.token"]);
+    expect(setup.manualFields).toBeUndefined();
+  });
+
+  it("uses backend defaults and choices with catalog presentation labels", () => {
+    const setup = channelSetup(feature({
+      name: "telegram",
+      display_name: "Telegram",
+      webui: "webui/index.ts",
+      setup: {
+        fields: [{
+          key: "channels.telegram.groupPolicy",
+          field: "groupPolicy",
+          kind: "enum",
+          choices: ["open"],
+          required: false,
+          default_value: "open",
+        }],
+      },
+    }));
+
+    expect(setup.fields).toEqual([
+      expect.objectContaining({
+        key: "channels.telegram.groupPolicy",
+        label: "Group rules",
+        defaultValue: "open",
+        options: [{ value: "open", label: "All messages" }],
+      }),
+    ]);
+  });
+
+  it("loads setup copy from the channel-owned locale", () => {
+    const setup = channelSetup(feature({
+      name: "telegram",
+      display_name: "Telegram",
+      webui: "webui/index.ts",
+      setup: { fields: [{ key: "channels.telegram.allowFrom", field: "allowFrom", kind: "list", choices: [], required: false }], official_url: "https://t.me/BotFather" },
+    }), "zh-CN");
+
+    expect(setup.docsLabel).toBe("打开 Telegram 配置指南");
+    expect(setup.officialLabel).toBe("打开 BotFather");
+    expect(setup.fields).toContainEqual(expect.objectContaining({
+      key: "channels.telegram.allowFrom",
+      label: "允许用户",
+    }));
+  });
+});
+
+describe("channel runtime state", () => {
+  const tx = (_key: string, fallback: string) => fallback;
+
+  it("only reports a channel on when the runtime is explicitly running", () => {
+    const running = feature({ enabled: true, runtime_status: "running" });
+    const unknown = feature({ enabled: true });
+
+    expect(channelIsRunning(running)).toBe(true);
+    expect(channelToggleChecked(running)).toBe(true);
+    expect(channelStatusLabel(running, tx)).toBe("On");
+    expect(channelIsRunning(unknown)).toBe(false);
+    expect(channelToggleChecked(unknown)).toBe(false);
+    expect(channelStatusLabel(unknown, tx)).toBe("Not running");
+  });
+});

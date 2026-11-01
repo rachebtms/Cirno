@@ -1,0 +1,23 @@
+{
+  "setup": {
+    "docsLabel": "WebSocket 設定ガイドを開く",
+    "officialLabel": "ローカル WebUI を開く",
+    "fields": {
+      "host": {
+        "label": "Listen address"
+      },
+      "port": {
+        "label": "Web port"
+      },
+      "publicWsUrl": {
+        "label": "Public WebSocket URL (optional)"
+      },
+      "sslCertfile": {
+        "label": "TLS certificate path (optional)"
+      },
+      "sslKeyfile": {
+        "label": "TLS private key path (optional)"
+      }
+    }
+  }
+}
