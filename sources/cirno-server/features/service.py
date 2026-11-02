@@ -657,22 +657,15 @@ def _install_feature_dependencies(
     name: str,
     dependencies: list[str] | None,
     *,
-    allow_install: bool,
     runner: Any,
 ) -> bool:
     """Ensure one feature's declared dependencies are present.
 
     Returns ``True`` only when this call ran an installer. Package-install
-    authorization belongs here so every WebUI action gets the same policy.
+    authorization is handled by the authenticated WebUI route.
     """
     if not dependencies or extra_installed(name, dependencies):
         return False
-    if not allow_install:
-        raise OptionalFeatureError(
-            "Installing optional features from a remote WebUI is disabled. "
-            "Run this action from localhost or set tools.webuiAllowRemotePackageInstall to true.",
-            status=403,
-        )
     result = install_extra(
         name,
         dependencies,
@@ -689,7 +682,6 @@ def install_optional_feature_support(
     name: str,
     *,
     config_path: Path | None = None,
-    allow_install: bool = True,
     runner: Any = run_install_command,
 ) -> dict[str, Any]:
     """Install channel dependencies without enabling or changing configuration."""
@@ -714,7 +706,6 @@ def install_optional_feature_support(
     installed_now = _install_feature_dependencies(
         name,
         dependencies,
-        allow_install=allow_install,
         runner=runner,
     )
     if dependencies and not extra_installed(name, dependencies):
@@ -755,7 +746,6 @@ def enable_optional_feature(
     name: str,
     *,
     config_path: Path | None = None,
-    allow_install: bool = True,
     instance_id: str | None = None,
     runner: Any = run_install_command,
 ) -> dict[str, Any]:
@@ -776,7 +766,6 @@ def enable_optional_feature(
     _install_feature_dependencies(
         name,
         dependencies,
-        allow_install=allow_install,
         runner=runner,
     )
 

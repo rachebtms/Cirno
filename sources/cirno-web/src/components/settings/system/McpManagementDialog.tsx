@@ -2,10 +2,11 @@ import {
   AppActionsIcon,
 } from "@/components/icons/product-icons";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ExternalLink, Loader2, RotateCcw, Search, Server, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, Loader2, RotateCcw, Search, Server, SquarePen, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { SkeletonStatus } from "@/components/settings/shared/SkeletonStatus";
+import { SettingsTextEditor } from "@/components/settings/shared/SettingsTextEditor";
 import { ProxySettingsControl } from "@/components/settings/shared/ProxySettingsControl";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,11 @@ import type { McpPresetInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type McpManagementTab = "overview" | "tools" | "connection";
+
+export interface McpConfigEditor {
+  load: (name: string) => Promise<string>;
+  save: (name: string, config: string) => Promise<void>;
+}
 
 type McpAction = "enable" | "disable" | "remove" | "test" | "reconnect" | "proxy";
 
@@ -38,6 +44,7 @@ interface McpManagementDialogProps {
   onOAuthConnect: (name: string, reset?: boolean, values?: Record<string, string>) => void;
   onToolsChange: (name: string, enabledTools: string[]) => void;
   onConfigureProxy?: () => void;
+  configEditor?: McpConfigEditor;
 }
 
 export function McpManagementDialog({
@@ -55,6 +62,7 @@ export function McpManagementDialog({
   onOAuthConnect,
   onToolsChange,
   onConfigureProxy,
+  configEditor,
 }: McpManagementDialogProps) {
   const { t } = useTranslation();
   const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
@@ -231,6 +239,7 @@ export function McpManagementDialog({
             />
           ) : (
             <ConnectionPanel
+              configEditor={configEditor}
               onConfigureProxy={onConfigureProxy}
               preset={preset}
               values={connectionValues}
@@ -533,6 +542,7 @@ function ToolsPanel({
 }
 
 function ConnectionPanel({
+  configEditor,
   onConfigureProxy,
   preset,
   values,
@@ -544,6 +554,7 @@ function ConnectionPanel({
   onConnect,
   onRemove,
 }: {
+  configEditor?: McpConfigEditor;
   preset: McpPresetInfo;
   values: Record<string, string>;
   busy: boolean;
@@ -629,6 +640,16 @@ function ConnectionPanel({
         <div role="alert" className="rounded-control bg-destructive/10 px-3.5 py-3 text-[12.5px] leading-5 text-destructive">
           {preset.error}
         </div>
+      ) : null}
+
+      {preset.source === "custom" && configEditor ? (
+        <SettingsTextEditor
+          title={tx("settings.mcp.editConfig", "Edit MCP configuration")}
+          value="" json disabled={busy}
+          loadValue={() => configEditor.load(preset.name)}
+          onSave={(config) => configEditor.save(preset.name, config)}
+          trigger={<Button type="button" variant="outline" className="h-9 rounded-full text-[13px]"><SquarePen className="mr-1.5 h-3.5 w-3.5" aria-hidden />{tx("settings.mcp.editConfig", "Edit MCP configuration")}</Button>}
+        />
       ) : null}
 
       {preset.transport !== "stdio" ? (

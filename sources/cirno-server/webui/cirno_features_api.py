@@ -38,7 +38,6 @@ def cirno_features_action(
     action: str,
     query: QueryParams,
     *,
-    allow_install: bool = True,
     config_path: Path | None = None,
 ) -> dict[str, Any]:
     name = (query_first(query, "name") or "").strip()
@@ -59,12 +58,10 @@ def cirno_features_action(
             return install_optional_feature_support(
                 name,
                 config_path=config_path,
-                allow_install=allow_install,
             )
         return enable_optional_feature(
             name,
             config_path=config_path,
-            allow_install=allow_install,
             instance_id=instance_id,
         )
     if action == "disable":

@@ -164,14 +164,13 @@ export function useRuntimeConfigSettings(
 export type RuntimeConfigController = ReturnType<typeof useRuntimeConfigSettings>;
 
 export function RuntimeConfigSettings({
-  page, settings, state, onRestart, isRestarting, remoteBrowserAccess, children,
+  page, settings, state, onRestart, isRestarting, children,
 }: {
   page: RuntimeConfigPage;
   settings: SettingsPayload;
   state: RuntimeConfigController;
   onRestart?: () => void;
   isRestarting: boolean;
-  remoteBrowserAccess: boolean;
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -234,8 +233,7 @@ export function RuntimeConfigSettings({
                     const key = field.path.replaceAll(".", "_");
                     const text = tr(`fields.${key}.label`);
                     const help = tr(`fields.${key}.help`);
-                    const disabled = (field.path === "agents.defaults.timezone" && state.value("agents.defaults.timezone_mode") === "auto")
-                      || (field.path === "tools.webui_allow_remote_package_install" && remoteBrowserAccess);
+                    const disabled = (field.path === "agents.defaults.timezone" && state.value("agents.defaults.timezone_mode") === "auto");
                     const common = {
                       id, disabled, "aria-label": text, "aria-describedby": `${id}-help${state.invalidField === field.path ? ` ${errorId}` : ""}`,
                       "aria-invalid": state.invalidField === field.path || undefined,

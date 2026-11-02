@@ -239,3 +239,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+---
+
+## BGE-small Chinese embedding model — full container image (MIT)
+
+- **Upstream**: https://github.com/FlagOpen/FlagEmbedding and https://huggingface.co/BAAI/bge-small-zh-v1.5
+- **ONNX conversion**: https://huggingface.co/Xenova/bge-small-zh-v1.5 at `75c43b069aac4d136ba6bc1122f995fedcfd2781`.
+- **Bundled only in the full container**: INT8 ONNX weights, tokenizer, model card and upstream `LICENSE` under `/opt/cirno/models/bge-small-zh-v1.5/`. The download script verifies each file's SHA-256 hash. The model is not loaded until embeddings are enabled.
+- **License**: MIT, Copyright (c) 2022 staoxiao. The complete upstream license accompanies the model files in the image.
+
+The full container also installs third-party CLI packages through Homebrew, npm, Go and uv. Their license files and package metadata remain in their installed distributions.

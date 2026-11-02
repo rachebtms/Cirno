@@ -1077,3 +1077,23 @@ def test_enable_preset_preserves_proxy_choice_on_later_enable(tmp_path, monkeypa
     assert load_config().tools.mcp_servers["xmind"].use_proxy is True
     mcp_presets_action("enable", {"name": ["xmind"], "use_proxy": ["false"]})
     assert load_config().tools.mcp_servers["xmind"].use_proxy is False
+
+
+@pytest.mark.parametrize("server", [
+    {"type": "stdio", "command": "node", "args": ["server.js", "two words"], "env": {"KEY": "${TOKEN}"}, "cwd": "/tmp/mcp", "toolTimeout": 90, "enabledTools": ["search"]},
+    {"type": "streamableHttp", "url": "https://example.com/mcp", "headers": {"Authorization": "Bearer test-secret"}, "toolTimeout": 45, "enabledTools": []},
+    {"type": "sse", "url": "https://example.com/sse", "auth": "oauth", "enabledTools": ["*"]},
+])
+def test_custom_mcp_edit_roundtrip_preserves_connection_fields(tmp_path, server):
+    from cirno_server.webui.mcp.presets_api import custom_mcp_config_payload
+
+    path = tmp_path / "instance" / "config.json"
+    custom_mcp_action("import", {"config": [json.dumps({"mcpServers": {"custom-docs": server}})]}, config_path=path)
+    before = load_config(path).tools.mcp_servers["custom-docs"]
+    editable = custom_mcp_config_payload("custom-docs", config_path=path)["config"]
+    editable["toolTimeout"] = 120
+    custom_mcp_action("import", {"config": [json.dumps({"mcpServers": {"custom-docs": editable}})]}, config_path=path)
+    after = load_config(path).tools.mcp_servers["custom-docs"]
+    assert after == before.model_copy(update={"tool_timeout": 120})
+    with pytest.raises(McpPresetError, match="unknown custom MCP server"):
+        custom_mcp_config_payload("missing", config_path=path)

@@ -32,6 +32,8 @@ Open `http://localhost:8765`. On a new instance, register your instance owner in
 
 The [GitHub Actions workflow](.github/workflows/container.yml) is configured to verify, build and publish Linux AMD64/ARM64 images to `ghcr.io/rachebtms/cirno`. Publication requires committed code, a pushed trigger and a successful workflow. Compose uses the published image without a local build. See [container deployment and publishing](documents/docker.md).
 
+Use `docker compose -f compose.yaml -f compose.full.yaml up -d` for the `latest-full` variant, which includes Telegram dependencies, CLI tools, Homebrew and optional embedding weights. Embedding inference remains disabled by default.
+
 ## Repository and documentation
 
 - `sources/cirno-core/`: execution engine, model providers, memory, tools, Skills and session state.

@@ -14,7 +14,6 @@ class SettingsRequest:
 
     query: QueryParams
     payload: dict[str, Any] | None = None
-    local_browser: bool = False
 
 
 @dataclass(frozen=True)

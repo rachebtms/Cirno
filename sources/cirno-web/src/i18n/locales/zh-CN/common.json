@@ -250,10 +250,6 @@
           "label": "允许 IP",
           "help": "允许网页等出站请求访问这些受限地址。每行填写一个 IP 地址或 CIDR 网段。"
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "远程安装",
-          "help": "允许从其他设备上的 WebUI 安装可选软件包和技能。此开关只能在运行Cirno 服务端的设备上修改。"
-        },
         "tools_cli_apps_install_timeout": {
           "label": "安装超时",
           "help": "CLI 应用安装的最长等待秒数"
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "全局权限",
-          "help": "设置目录限制、网络例外和远程安装\n\n设置工作区访问限制、网络访问例外和远程安装权限。"
+          "help": "设置工作区访问限制和网络访问例外。"
         },
         "cli": {
           "title": "CLI 限制",
@@ -892,7 +888,9 @@
         "linear": "查找和管理任务、项目及评论",
         "github": "管理仓库、Issue 和 PR",
         "supabase": "查看和管理项目"
-      }
+      },
+      "editConfig": "编辑 MCP 配置",
+      "configObjectRequired": "MCP 配置必须是 JSON 对象。"
     },
     "values": {
       "light": "浅色",
@@ -953,7 +951,8 @@
       "open": "打开",
       "export": "导出",
       "opening": "正在打开...",
-      "exporting": "正在导出..."
+      "exporting": "正在导出...",
+      "formatJson": "格式化 JSON"
     },
     "byok": {
       "description": "配置提供商密钥，供模型预设使用",
@@ -1123,7 +1122,7 @@
       "clearSearch": "清除搜索",
       "browseApps": "浏览应用",
       "browseIntegrations": "浏览 MCP 工具",
-      "emptyIntegrationsHint": "可在下方添加自定义 MCP 服务器。",
+      "emptyIntegrationsHint": "添加自定义 MCP 服务器。",
       "restartRequired": "重启 cirno 以应用更新后的应用和 MCP 工具。"
     },
     "channels": {

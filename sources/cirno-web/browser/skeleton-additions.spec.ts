@@ -172,30 +172,26 @@ for (const width of [390, 1440]) for (const locale of ["en", "zh-CN"]) {
       await accessibleSkeleton(page);
     });
 
-    test("session automation and Linear members keep row and action alignment", async ({ page }) => {
-      for (const surface of ["session-jobs", "linear-members"]) {
-        const open = async (state: string) => {
-          await page.goto(fixture(surface, state));
-          if (surface === "session-jobs") await page.getByRole("button", { name: locale === "en" ? "Session details" : "会话详情" }).click();
-          else await page.locator("button[aria-expanded]").first().click();
-          await settle(page);
-        };
-        await open("loaded");
-        const rows = await boxes(surface === "session-jobs" ? page.getByRole("dialog").locator('button[aria-haspopup="dialog"]') : page.locator(".settings-row"));
-        await open("loading");
-        sameBoxes(await boxes(page.locator(surface === "session-jobs" ? "[data-session-job-skeleton]" : "[data-member-skeleton-row]")), rows);
-        await accessibleSkeleton(page);
-      }
+    test("session automation keeps row and action alignment", async ({ page }) => {
+      const open = async (state: string) => {
+        await page.goto(fixture("session-jobs", state));
+        await page.getByRole("button", { name: locale === "en" ? "Session details" : "会话详情" }).click();
+        await settle(page);
+      };
+      await open("loaded");
+      const rows = await boxes(page.getByRole("dialog").locator('button[aria-haspopup="dialog"]'));
+      await open("loading");
+      sameBoxes(await boxes(page.locator("[data-session-job-skeleton]")), rows);
+      await accessibleSkeleton(page);
     });
 
     test("cached settings and lists stay visible during background refresh", async ({ page }) => {
-      for (const surface of ["settings", "chats", "automations", "session-jobs", "linear-members"]) {
+      for (const surface of ["settings", "chats", "automations", "session-jobs"]) {
         await page.goto(fixture(surface, "refresh"));
         if (surface === "session-jobs") await page.getByRole("button", { name: locale === "en" ? "Session details" : "会话详情" }).click();
-        if (surface === "linear-members") await page.locator("button[aria-expanded]").first().click();
         await settle(page);
         await expect(status(page)).toHaveCount(0);
-        await expect(surface === "settings" || surface === "linear-members" ? page.getByRole("switch").first() : page.getByText("Project summary", { exact: true }).first()).toBeVisible();
+        await expect(surface === "settings" ? page.getByRole("switch").first() : page.getByText("Project summary", { exact: true }).first()).toBeVisible();
       }
     });
   });

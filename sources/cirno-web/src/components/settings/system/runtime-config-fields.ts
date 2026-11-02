@@ -87,7 +87,6 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "network", path: "tools.web.use_proxy", kind: "boolean" },
   { group: "network", path: "tools.web.user_agent", kind: "nullable" },
   { group: "safety", path: "tools.restrict_to_workspace", kind: "boolean" },
-  { group: "safety", path: "tools.webui_allow_remote_package_install", kind: "boolean" },
   { group: "safety", path: "tools.ssrf_whitelist", kind: "list" },
   { group: "cli", path: "tools.cli_apps.install_timeout", kind: "number", min: 1, max: 3600 },
   { group: "cli", path: "tools.cli_apps.run_timeout", kind: "number", min: 1, max: 600 },

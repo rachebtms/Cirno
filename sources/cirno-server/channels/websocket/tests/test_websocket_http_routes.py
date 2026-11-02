@@ -881,15 +881,12 @@ async def test_webui_skill_install_rejects_overlapping_requests(
 
 
 @pytest.mark.asyncio
-async def test_webui_skill_delete_remains_local_only(
+async def test_authenticated_remote_webui_can_delete_skill(
     bus: MagicMock,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    delete = MagicMock()
-    policy = MagicMock()
-    policy.tools.webui_allow_remote_package_install = True
-    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda: policy)
+    delete = MagicMock(return_value={"name": "custom-skill", "deleted": True})
     monkeypatch.setattr("cirno_server.webui.ws_http.delete_webui_skill", delete)
     channel = _ch(
         bus,
@@ -904,13 +901,12 @@ async def test_webui_skill_delete_remains_local_only(
         connection=_REMOTE,
     )
 
-    assert response.status_code == 403
-    assert "remote skill deletion is disabled" in response.text
-    delete.assert_not_called()
+    assert response.status_code == 200
+    delete.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_webui_skill_install_honors_remote_install_opt_in(
+async def test_authenticated_remote_webui_can_install_skill(
     bus: MagicMock,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -941,9 +937,6 @@ async def test_webui_skill_install_honors_remote_install_opt_in(
         workspace_path=tmp_path,
         port=_free_port(),
     )
-    policy = load_config(channel.gateway.settings.config.path)
-    policy.tools.webui_allow_remote_package_install = True
-    save_config(policy, channel.gateway.settings.config.path)
     response = await _webui_mutate(
         channel,
         "skill.install",
@@ -1252,7 +1245,7 @@ async def test_pairing_mutation_publishes_committed_snapshot(action, tmp_path, m
 
 
 @pytest.mark.asyncio
-async def test_cirno_feature_remote_install_requires_opt_in(
+async def test_authenticated_remote_webui_can_install_feature(
     bus: MagicMock,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1267,22 +1260,6 @@ async def test_cirno_feature_remote_install_requires_opt_in(
         install_calls=install_calls,
     )
     channel = _ch(bus, session_manager=_seed_session(tmp_path), port=_free_port())
-    blocked = await _webui_mutate(
-        channel,
-        "settings.feature.enable",
-        {"name": "matrix"},
-        connection=_REMOTE,
-    )
-
-    assert blocked.status_code == 403
-    assert "remote WebUI is disabled" in blocked.text
-    assert install_calls == []
-
-    config_path.write_text(
-        json.dumps({"tools": {"webuiAllowRemotePackageInstall": True}}),
-        encoding="utf-8",
-    )
-
     allowed = await _webui_mutate(
         channel,
         "settings.feature.enable",
@@ -1400,12 +1377,10 @@ async def test_cirno_feature_install_only_tracks_pending_restart_without_startin
         action: str,
         query: dict[str, list[str]],
         *,
-        allow_install: bool,
         config_path: Path,
     ) -> dict[str, Any]:
         assert action == "enable"
         assert query == {"name": ["whatsapp"], "install_only": ["true"]}
-        assert allow_install is True
         return {**features_payload(), "requires_restart": installed_now}
 
     async def channel_feature_action(
@@ -1551,7 +1526,7 @@ async def test_channel_configure_route_preserves_existing_channel_values(
 
 
 @pytest.mark.asyncio
-async def test_cirno_feature_loopback_reverse_proxy_install_requires_opt_in(
+async def test_authenticated_reverse_proxy_can_install_feature(
     bus: MagicMock,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1570,21 +1545,6 @@ async def test_cirno_feature_loopback_reverse_proxy_install_requires_opt_in(
         "Host": "cirno.example",
         "X-Forwarded-For": "203.0.113.42",
     }
-    blocked = await _webui_mutate(
-        channel,
-        "settings.feature.enable",
-        {"name": "matrix"},
-        headers=forwarded_headers,
-    )
-
-    assert blocked.status_code == 403
-    assert install_calls == []
-
-    config_path.write_text(
-        json.dumps({"tools": {"webuiAllowRemotePackageInstall": True}}),
-        encoding="utf-8",
-    )
-
     allowed = await _webui_mutate(
         channel,
         "settings.feature.enable",
@@ -4009,3 +3969,23 @@ async def test_current_context_measurement_requires_authenticated_socket_and_ses
     denied = await _webui_mutate(channel, "session.context_usage", {"session_key": "websocket:old"})
     assert denied.status_code == 401
     assert measure.await_count == 1
+
+
+async def test_custom_mcp_config_editor_read_requires_auth_and_does_not_expose_catalog_secrets(bus, tmp_path):
+    from cirno_server.webui.mcp.presets_api import custom_mcp_action
+
+    custom_mcp_action("custom", {"name": ["custom-docs"], "command": ["node"], "env": ['{"TOKEN":"test-secret"}']}, config_path=tmp_path / "config.json")
+    channel = _ch(bus)
+    endpoint = "/api/settings/mcp-presets/config?name=custom-docs"
+    denied = await channel.gateway.http.dispatch(_LOCAL, _FakeReq(path=endpoint))
+    assert denied.status_code == 401
+    token = channel.gateway.tokens.issue_api_token(300)
+    headers = {"Authorization": f"Bearer {token}"}
+    response = await channel.gateway.http.dispatch(_LOCAL, _FakeReq(headers, path=endpoint))
+    assert response.status_code == 200
+    assert json.loads(response.body)["config"]["env"] == {"TOKEN": "test-secret"}
+    catalog = await channel.gateway.http.dispatch(_LOCAL, _FakeReq(headers, path="/api/settings/mcp-presets"))
+    assert catalog.status_code == 200
+    assert b"test-secret" not in catalog.body
+    missing = await channel.gateway.http.dispatch(_LOCAL, _FakeReq(headers, path=endpoint.replace("custom-docs", "missing")))
+    assert missing.status_code == 404

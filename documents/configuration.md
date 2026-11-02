@@ -58,11 +58,13 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Telegram: personal account binding and server-side notification preferences. Channel setup configures the Telegram bot token and Web transport.
 - Account, Network & retries, Permissions, Server: network policy, access controls and service settings.
 
+The **Add MCP server** panel sits above the MCP catalog, with custom connection and JSON import actions. Custom MCP servers can be edited from **MCP → Manage → Connection → Edit MCP configuration**. The JSON editor loads the saved configuration, including arguments, environment variables, request headers, tool scope and timeouts. Saving updates the same server and reloads its connection. JSON import and configuration editors support indentation with **Format JSON**; invalid JSON is shown as an error without discarding the draft.
+
 See [Home and workspaces](home-and-workspaces.md) for file ownership and [memory](architecture/memory.md) for retrieval and maintenance behavior.
 
 ## Channels and remote browsers
 
-Only Telegram and Web (WebSocket) channels are bundled. Enable and configure them under Settings → Channels.
+Only Telegram and Web (WebSocket) channels are bundled. Authenticated users can install optional support and manage Skills from local or remote browsers, including behind a reverse proxy. Enable and configure them under Settings → Channels.
 
 For Telegram, supply a bot token in Channel setup. In Settings → Telegram, generate a PIN and send `/bind <PIN>` to your bot in a private chat. The eight-digit PIN expires after two minutes, refreshes while the pairing panel remains open, and can be used once. Generating a new PIN invalidates the previous one. A bound account is the only Telegram account admitted to Cirno; group chats, group commands and group callbacks are ignored. Disconnect revokes the binding and any outstanding PIN. Connection errors appear in channel status.
 

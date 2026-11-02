@@ -32,7 +32,7 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
         "network.request_timeout_s": 180,
         "network.stream_idle_timeout_s": 150,
         "network.provider_max_retries": 4,
-    }, local_browser=True)
+    })
     provider = make_provider(config)
     assert provider.request_timeout_s == 180
     assert provider.stream_idle_timeout_s == 150
@@ -44,7 +44,7 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
 def test_invalid_maintenance_settings_do_not_change_saved_values():
     config = Config()
     with pytest.raises(WebUISettingsError):
-        update_runtime_config(config, {"network.provider_max_retries": 2}, local_browser=True)
+        update_runtime_config(config, {"network.provider_max_retries": 2})
     assert config.network.provider_max_retries == 3
 
 

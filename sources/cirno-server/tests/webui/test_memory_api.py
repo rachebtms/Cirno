@@ -36,13 +36,13 @@ def test_memory_runtime_settings_round_trip_and_atomic_validation():
               "agents.defaults.dream.batch_entries": 6, "agents.defaults.dream.batch_chars": 8000,
               "agents.defaults.memory.context_tokens": 1024, "agents.defaults.memory.checkpoint_tokens": 2048,
               "agents.defaults.memory.index_scan_batch": 80, "agents.defaults.memory.embedding_enabled": False}
-    assert update_runtime_config(config, values, local_browser=True)
+    assert update_runtime_config(config, values)
     assert config.agents.defaults.memory.context_tokens == 1024
     assert config.agents.defaults.dream.batch_entries == 6
     previous = config.model_dump()
     with pytest.raises(WebUISettingsError):
         update_runtime_config(config, {"agents.defaults.memory.embedding_max_rss_mb": 0,
-                                       "agents.defaults.dream.batch_entries": 4}, local_browser=True)
+                                       "agents.defaults.dream.batch_entries": 4})
     assert config.model_dump() == previous
 
 

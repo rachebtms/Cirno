@@ -250,10 +250,6 @@
           "label": "許可 IP",
           "help": "送信リクエストの保護から除外する IP/CIDR 範囲。1 行に 1 つ指定します。"
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "リモートインストール",
-          "help": "リモートの WebUI から追加パッケージやスキルをインストールできるようにします。この設定はCirno サーバーを実行しているマシン上で変更する必要があります。"
-        },
         "tools_cli_apps_install_timeout": {
           "label": "インストール制限時間",
           "help": "CLI アプリのインストール時間の上限です。"
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "全体の権限",
-          "help": "ワークスペース制限、ネットワーク例外、リモートインストールを設定します。\n\nワークスペース制限、プライベートネットワーク、リモートインストール。"
+          "help": "ワークスペースのアクセス制限とネットワークの例外を設定します。"
         },
         "cli": {
           "title": "CLI 制限",
@@ -746,7 +742,8 @@
       "open": "開く",
       "export": "書き出す",
       "opening": "開いています...",
-      "exporting": "書き出しています..."
+      "exporting": "書き出しています...",
+      "formatJson": "JSON を整形"
     },
     "byok": {
       "description": "モデルのプリセット用にプロバイダーの認証情報を追加します。",
@@ -1096,7 +1093,9 @@
         "linear": "Issue、プロジェクト、コメントを検索・管理します。",
         "github": "リポジトリ、Issue、PR を管理します。",
         "supabase": "プロジェクトを確認・管理します。"
-      }
+      },
+      "editConfig": "MCP 設定を編集",
+      "configObjectRequired": "MCP 設定は JSON オブジェクトである必要があります。"
     },
     "legal": {
       "thirdPartyBrands": "製品名、ロゴ、ブランドはそれぞれの所有者に帰属します。使用は識別のみを目的とし、承認を意味するものではありません。"
@@ -1123,7 +1122,7 @@
       "clearSearch": "検索をクリア",
       "browseApps": "アプリを見る",
       "browseIntegrations": "MCP ツールを見る",
-      "emptyIntegrationsHint": "下からカスタム MCP サーバーを追加できます。",
+      "emptyIntegrationsHint": "カスタム MCP サーバーを追加できます。",
       "restartRequired": "更新したアプリと MCP ツールを反映するには cirno を再起動してください。"
     },
     "channels": {

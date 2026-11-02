@@ -366,7 +366,7 @@ describe("MCP connection draft lifecycle", () => {
     await act(async () => fireEvent.click(within(editor).getByRole("button", { name: "Save" })));
     await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Import" })[1]));
     expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.mcp.import", { config: importedConfig }, 20_000,
+      "settings.mcp.import", { config: JSON.stringify(JSON.parse(importedConfig), null, 2) }, 20_000,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Manage Xmind" }));
@@ -379,6 +379,36 @@ describe("MCP connection draft lifecycle", () => {
     ));
     const cancel = await screen.findByRole("button", { name: "Cancel" });
     await act(async () => fireEvent.click(cancel));
+  });
+
+  it("edits an existing custom server and preserves the draft when saving fails", async () => {
+    const original = { type: "stdio", command: "node", args: ["server.js"], env: { KEY: "keep-me" }, cwd: "/tmp/docs", enabledTools: ["search"], toolTimeout: 90 };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [connectedPreset], installed_count: 1 });
+      if (url === "/api/settings/mcp-presets/config?name=docs") return jsonResponse({ config: original });
+      throw new Error(`Unexpected read: ${url}`);
+    }));
+    requestMutationMock.mockRejectedValueOnce(new Error("Cannot save MCP configuration"));
+    renderSettingsView({ initialSection: "apps" });
+    fireEvent.click(await screen.findByRole("button", { name: "MCP" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage Docs MCP" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Connection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit MCP configuration" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit MCP configuration" });
+    const editor = within(dialog).getByRole("textbox", { name: "Edit MCP configuration" });
+    await waitFor(() => expect(editor).toHaveValue(JSON.stringify(original, null, 2)));
+    const changed = { ...original, command: "npx" };
+    fireEvent.change(editor, { target: { value: JSON.stringify(changed) } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Cannot save MCP configuration");
+    expect(editor).toHaveValue(JSON.stringify(changed));
+    requestMutationMock.mockResolvedValueOnce({ presets: [connectedPreset], installed_count: 1, last_action: { ok: true, message: "Imported 1 MCP server(s)." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(requestMutationMock).toHaveBeenLastCalledWith("settings.mcp.import", { config: JSON.stringify({ mcpServers: { docs: changed } }) }, 20_000);
   });
 
   it("retires the consumed OAuth proxy draft only after success, preserving a failed attempt", async () => {

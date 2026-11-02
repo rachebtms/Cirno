@@ -250,10 +250,6 @@
           "label": "IP diizinkan",
           "help": "IP atau rentang CIDR yang dikecualikan dari perlindungan permintaan keluar, satu per baris."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "Pemasangan jarak jauh",
-          "help": "Mengizinkan pemasangan paket dan keterampilan melalui WebUI jarak jauh. Pengaturan ini harus diubah di komputer yang menjalankan Cirno server."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "Batas waktu pemasangan",
           "help": "Durasi maksimum instalasi aplikasi CLI."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "Izin global",
-          "help": "Atur batas ruang kerja, pengecualian jaringan, dan pemasangan jarak jauh.\n\nPembatasan ruang kerja, jaringan privat, dan instalasi jarak jauh."
+          "help": "Atur batas akses ruang kerja dan pengecualian jaringan."
         },
         "cli": {
           "title": "Batas CLI",
@@ -746,7 +742,8 @@
       "open": "Buka",
       "export": "Ekspor",
       "opening": "Membuka...",
-      "exporting": "Mengekspor..."
+      "exporting": "Mengekspor...",
+      "formatJson": "Format JSON"
     },
     "byok": {
       "description": "Tambahkan kredensial penyedia untuk preset model.",
@@ -1096,7 +1093,9 @@
         "linear": "Cari dan kelola issue, proyek, dan komentar.",
         "github": "Kelola repositori, issue, dan PR.",
         "supabase": "Lihat dan kelola proyek."
-      }
+      },
+      "editConfig": "Edit konfigurasi MCP",
+      "configObjectRequired": "Konfigurasi MCP harus berupa objek JSON."
     },
     "legal": {
       "thirdPartyBrands": "Nama produk, logo, dan merek adalah milik pemiliknya masing-masing. Penggunaan hanya untuk identifikasi dan tidak menyiratkan dukungan."
@@ -1123,7 +1122,7 @@
       "clearSearch": "Hapus pencarian",
       "browseApps": "Jelajahi aplikasi",
       "browseIntegrations": "Jelajahi alat MCP",
-      "emptyIntegrationsHint": "Tambahkan server MCP khusus di bawah.",
+      "emptyIntegrationsHint": "Tambahkan server MCP khusus.",
       "restartRequired": "Mulai ulang cirno untuk menerapkan aplikasi dan alat MCP yang diperbarui."
     },
     "channels": {

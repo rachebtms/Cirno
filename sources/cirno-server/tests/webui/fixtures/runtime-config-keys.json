@@ -61,6 +61,5 @@
   "tools.ssrf_whitelist",
   "tools.web.enable",
   "tools.web.use_proxy",
-  "tools.web.user_agent",
-  "tools.webui_allow_remote_package_install"
+  "tools.web.user_agent"
 ]

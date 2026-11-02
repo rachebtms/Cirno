@@ -1,7 +1,5 @@
 import { useLayoutEffect, useState } from "react";
 
-import { LinearMemberAccessView } from "../channels/linear/webui/LinearMemberAccessView";
-import type { LinearMembersPayload } from "../channels/linear/webui/types";
 import { ChatList } from "@/components/ChatList";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SettingsSectionKey } from "@/components/settings/contracts";
@@ -29,10 +27,6 @@ const sessions: ChatSummary[] = names.map((title, index) => ({
 const skill: SkillDetail = {
   name: "project-review", description: "Review the repository and summarize actionable changes.", source: "builtin", available: true, enabled: true,
   requirements: { bins: [], env: [], missing_bins: [], missing_env: [] }, raw_markdown: "# Project review\n\nRead the repository instructions before reviewing changes.",
-};
-const members: LinearMembersPayload = {
-  session_id: "", status: "members", organization_id: "preview", legacy_allow_all: false,
-  members: names.slice(0, 3).map((_, index) => ({ id: `member-${index}`, name: ["Alex Chen", "Morgan Lee", "Sam Rivera"][index], teams: [], allowed: index === 0 })),
 };
 const previewSettings: SettingsPayload = {
   ...settings,
@@ -90,7 +84,7 @@ function SkeletonPreview() {
     <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: "12px 16px" }} className="border-b bg-background text-sm" aria-label="Skeleton preview controls">
       <span className="font-medium">首载骨架验收</span>
       <select aria-label="Surface" value={surface} onChange={(event) => setSurface(event.target.value)} className="rounded border bg-background p-1">
-        {["chats", "settings", "automations", "skill-detail", "session-jobs", "linear-members"].map((name) => <option key={name}>{name}</option>)}
+        {["chats", "settings", "automations", "skill-detail", "session-jobs"].map((name) => <option key={name}>{name}</option>)}
       </select>
       <select aria-label="State" value={state} onChange={(event) => setState(event.target.value)} className="rounded border bg-background p-1">
         {["loading", "loaded", "refresh", "error"].map((name) => <option key={name}>{name}</option>)}
@@ -139,7 +133,7 @@ function SkeletonSurface() {
               : surface === "skill-detail" ? <SkillsCatalogSettings skills={[skill]} />
                 : surface === "session-jobs" ? <SessionInfoPopoverView title="Project review" jobs={empty ? [] : jobs} loading={loading} loadFailed={state === "error"} now={now}
                   onAction={async () => jobs} onEdit={async () => jobs} />
-                  : surface === "linear-members" ? <LinearMemberAccessView snapshot={{ payload: empty ? null : members, loading, error: state === "error" ? "Preview read failed" : null, saves: {} }} onLoad={noop} onSetAllowed={noop} /> : null}
+                  : null}
         </main>}
     </div>;
 }

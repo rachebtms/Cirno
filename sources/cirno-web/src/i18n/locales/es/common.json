@@ -250,10 +250,6 @@
           "label": "IP permitidas",
           "help": "Direcciones IP o rangos CIDR exentos de la protección de solicitudes salientes, uno por línea."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "Instalación remota",
-          "help": "Permite instalar paquetes y habilidades desde una WebUI remota. Este ajuste debe modificarse en el equipo que ejecuta la pasarela."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "Tiempo límite de instalación",
           "help": "Duración máxima de instalación de aplicaciones CLI."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "Permisos globales",
-          "help": "Configura límites del espacio, excepciones de red e instalaciones remotas.\n\nRestricciones del espacio de trabajo, redes privadas e instalaciones remotas."
+          "help": "Configura las restricciones del espacio de trabajo y las excepciones de red."
         },
         "cli": {
           "title": "Límites CLI",
@@ -746,7 +742,8 @@
       "open": "Abrir",
       "export": "Exportar",
       "opening": "Abriendo...",
-      "exporting": "Exportando..."
+      "exporting": "Exportando...",
+      "formatJson": "Formatear JSON"
     },
     "byok": {
       "description": "Añade credenciales del proveedor para los preajustes.",
@@ -1096,7 +1093,9 @@
         "linear": "Busca y gestiona tareas, proyectos y comentarios.",
         "github": "Gestiona repositorios, issues y PR.",
         "supabase": "Consulta y gestiona proyectos."
-      }
+      },
+      "editConfig": "Editar configuración MCP",
+      "configObjectRequired": "La configuración MCP debe ser un objeto JSON."
     },
     "legal": {
       "thirdPartyBrands": "Los nombres, logotipos y marcas de productos pertenecen a sus respectivos propietarios. Su uso es solo identificativo y no implica respaldo."
@@ -1123,7 +1122,7 @@
       "clearSearch": "Borrar búsqueda",
       "browseApps": "Explorar aplicaciones",
       "browseIntegrations": "Explorar herramientas MCP",
-      "emptyIntegrationsHint": "Añade un servidor MCP personalizado abajo.",
+      "emptyIntegrationsHint": "Añade un servidor MCP personalizado.",
       "restartRequired": "Reinicia cirno para aplicar las aplicaciones y herramientas MCP actualizadas."
     },
     "channels": {

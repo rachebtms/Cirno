@@ -29,9 +29,10 @@ from cirno_server.webui.cirno_features_api import (
 )
 from cirno_server.webui.cli_apps_api import cli_apps_action, cli_apps_payload
 from cirno_server.webui.http_utils import http_response as _http_response
-from cirno_server.webui.http_utils import is_local_browser_request as _is_local_browser_request
 from cirno_server.webui.mcp.oauth_api import McpOAuthManager
 from cirno_server.webui.mcp.presets_api import (
+    McpPresetError,
+    custom_mcp_config_payload,
     ensure_mcp_oauth_server,
     mcp_presets_settings_action,
 )
@@ -283,6 +284,13 @@ class WebUISettingsRouter:
             return None
         if not self._authorized(request):
             return self._unauthorized()
+        if route == ("root", "mcp-config"):
+            name = contracts.query_first(self._query(request), "name") or ""
+            try:
+                payload = await asyncio.to_thread(self.settings.read, custom_mcp_config_payload, name)
+                return self._json_response(payload)
+            except McpPresetError as exc:
+                return self._error_response(exc.status, exc.message)
         if route[0] == "profiles":
             from cirno_server.webui.settings.profiles import profile_payload, update_profile
 
@@ -311,18 +319,7 @@ class WebUISettingsRouter:
             if action in {"runtime-config-update", "web-search-update"}
             else None
         )
-        domain_request = self._domain_request(
-            connection,
-            request,
-            needs_local_browser=(
-                action in {
-                    "runtime-config-update",
-                    "features-enable",
-                    "channel-configure",
-                    "channel-connect",
-                }
-            ),
-        )
+        domain_request = self._domain_request(request)
         if domain == "models":
             result = await self._models.handle(
                 action,
@@ -379,6 +376,8 @@ class WebUISettingsRouter:
 
     @staticmethod
     def _route(path: str) -> tuple[str, str] | None:
+        if path == "/api/settings/mcp-presets/config":
+            return "root", "mcp-config"
         if path in {"/api/settings/profile/read", "/api/settings/profile/update"}:
             return "profiles", path.rsplit("/", 1)[-1]
         if path == "/api/settings":
@@ -401,21 +400,10 @@ class WebUISettingsRouter:
             return _payload_query(payload)
         return self._parse_query(request.path)
 
-    def _domain_request(
-        self,
-        connection: Any,
-        request: WsRequest,
-        *,
-        needs_local_browser: bool,
-    ) -> SettingsRequest:
+    def _domain_request(self, request: WsRequest) -> SettingsRequest:
         return SettingsRequest(
             query=self._query(request),
             payload=_mutation_payload(request),
-            local_browser=(
-                _is_local_browser_request(connection, request.headers)
-                if needs_local_browser
-                else False
-            ),
         )
 
     def _authorized(self, request: WsRequest) -> bool:

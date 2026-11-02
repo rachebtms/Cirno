@@ -484,7 +484,6 @@ class SystemSettingsHandler:
                     self.settings.mutate,
                     operations.update_runtime_config,
                     values,
-                    local_browser=request.local_browser,
                 )
             except WebUISettingsError as exc:
                 return SettingsRouteResult.failure(exc.status, exc.message)
@@ -610,14 +609,11 @@ class SystemSettingsHandler:
         action: str,
         query: QueryParams,
         operations: SystemSettingsOperations,
-        *,
-        allow_install: bool = True,
     ) -> dict[str, Any]:
         return self.settings.mutate(
             operations.cirno_features_action,
             action,
             query,
-            allow_install=allow_install,
         )
 
     async def _features_action(
@@ -637,10 +633,6 @@ class SystemSettingsHandler:
                 action,
                 request.query,
                 operations,
-                allow_install=(
-                    action != "enable"
-                    or self.allow_feature_package_install(request)
-                ),
             )
         except OptionalFeatureError as exc:
             return SettingsRouteResult.failure(exc.status, exc.message)
@@ -817,7 +809,6 @@ class SystemSettingsHandler:
                 "enable",
                 feature_query,
                 operations,
-                allow_install=self.allow_feature_package_install(request),
             )
         except OptionalFeatureError as exc:
             return SettingsRouteResult.failure(
@@ -975,7 +966,6 @@ class SystemSettingsHandler:
                 "enable",
                 target,
                 operations,
-                allow_install=self.allow_feature_package_install(request),
             )
         except OptionalFeatureError as exc:
             features = self.feature_runtime_fallback(
@@ -998,17 +988,6 @@ class SystemSettingsHandler:
             operations,
         )
         return updated
-
-    def allow_feature_package_install(self, request: SettingsRequest) -> bool:
-        if request.local_browser:
-            return True
-        try:
-            return bool(
-                self.settings.config.load().tools.webui_allow_remote_package_install
-            )
-        except Exception:
-            self.logger.exception("failed to load remote package install policy")
-            return False
 
     def _pairing_action(
         self,

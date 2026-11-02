@@ -58,18 +58,24 @@ jobs:
           python -m pytest -q -n 2
 
   container:
-    name: Container (${{ matrix.arch }})
+    name: Container (${{ matrix.variant }}, ${{ matrix.arch }})
     needs: checks
     strategy:
       fail-fast: false
       matrix:
+        arch: [amd64, arm64]
+        variant: [slim, full]
         include:
           - arch: amd64
             runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
+          - variant: slim
+            suffix: ""
+          - variant: full
+            suffix: "-full"
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
@@ -81,6 +87,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          flavor: suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -92,15 +99,15 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
+          build-args: CIRNO_VARIANT=${{ matrix.variant }}
           load: true
           platforms: linux/${{ matrix.arch }}
           tags: cirno:smoke
-          cache-from: type=gha,scope=container-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=container-${{ matrix.arch }}
+          cache-from: type=gha,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
       - name: Verify container startup and Web UI
         run: |
           docker run -d --name cirno-smoke --memory=400m -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke
-          trap 'docker logs cirno-smoke; docker rm -f cirno-smoke' EXIT
           curl --fail --retry 30 --retry-delay 2 --retry-all-errors --retry-max-time 90 --connect-timeout 2 --max-time 5 http://127.0.0.1:18790/health
           curl --fail --output /tmp/cirno-smoke.html http://127.0.0.1:8765/
           grep -q '<html' /tmp/cirno-smoke.html
@@ -120,6 +127,11 @@ jobs:
           assert bootstrap["token"] and bootstrap["api_token"]
           PY
           docker exec cirno-smoke grep -Eq '^Uid:[[:space:]]+1000[[:space:]]' /proc/1/status
+      - name: Verify preinstalled tools and bundled embedding
+        if: matrix.variant == 'full'
+        run: |
+          docker cp sources/development/verify_full_image.py cirno-smoke:/tmp/verify_full_image.py
+          docker exec --user 1000:1000 cirno-smoke python /tmp/verify_full_image.py
       - name: Sign in to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
@@ -127,17 +139,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Remove smoke container
+        if: always()
+        run: |
+          if docker container inspect cirno-smoke >/dev/null 2>&1; then
+            docker logs cirno-smoke
+            docker rm -f cirno-smoke
+          fi
       - name: Push verified image by digest
         if: github.event_name != 'pull_request'
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
+          build-args: CIRNO_VARIANT=${{ matrix.variant }}
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=container-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=container-${{ matrix.arch }}
+          cache-from: type=gha,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
       - name: Export image digest
         if: github.event_name != 'pull_request'
         env:
@@ -149,15 +169,22 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: digests-${{ matrix.arch }}
+          name: digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
   publish:
-    name: Publish multi-platform manifest
+    name: Publish multi-platform manifest (${{ matrix.variant }})
     if: github.event_name != 'pull_request'
     needs: container
+    strategy:
+      matrix:
+        include:
+          - variant: slim
+            suffix: ""
+          - variant: full
+            suffix: "-full"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -168,7 +195,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
-          pattern: digests-*
+          pattern: digests-${{ matrix.variant }}-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Container metadata
@@ -176,6 +203,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          flavor: suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch

@@ -250,10 +250,6 @@
           "label": "IPs permitidos",
           "help": "Endereços IP ou faixas CIDR isentos da proteção de solicitações de saída, um por linha."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "Instalações remotas",
-          "help": "Permite instalar pacotes e habilidades pela WebUI remota. Esta configuração precisa ser alterada no computador que executa o Cirno server."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "Tempo limite de instalação",
           "help": "Duração máxima da instalação de aplicativos CLI."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "Permissões globais",
-          "help": "Configure limites do espaço, exceções de rede e instalações remotas.\n\nRestrições do espaço de trabalho, redes privadas e instalações remotas."
+          "help": "Configure as restrições do espaço de trabalho e as exceções de rede."
         },
         "cli": {
           "title": "Limites CLI",
@@ -892,7 +888,9 @@
         "linear": "Encontre e gerencie issues, projetos e comentários.",
         "github": "Gerencie repositórios, issues e PRs.",
         "supabase": "Veja e gerencie projetos."
-      }
+      },
+      "editConfig": "Editar configuração MCP",
+      "configObjectRequired": "A configuração MCP deve ser um objeto JSON."
     },
     "values": {
       "light": "Claro",
@@ -953,7 +951,8 @@
       "open": "Abrir",
       "export": "Exportar",
       "opening": "Abrindo...",
-      "exporting": "Exportando..."
+      "exporting": "Exportando...",
+      "formatJson": "Formatar JSON"
     },
     "byok": {
       "description": "Adicione credenciais do provedor para presets de modelos.",
@@ -1123,7 +1122,7 @@
       "clearSearch": "Limpar busca",
       "browseApps": "Explorar aplicativos",
       "browseIntegrations": "Explorar ferramentas MCP",
-      "emptyIntegrationsHint": "Adicione um servidor MCP personalizado abaixo.",
+      "emptyIntegrationsHint": "Adicione um servidor MCP personalizado.",
       "restartRequired": "Reinicie o cirno para aplicar os aplicativos e ferramentas MCP atualizados."
     },
     "channels": {

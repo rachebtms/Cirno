@@ -250,10 +250,6 @@
           "label": "IP được phép",
           "help": "IP hoặc dải CIDR được miễn bảo vệ yêu cầu ra ngoài, mỗi dòng một mục."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "Cài đặt từ xa",
-          "help": "Cho phép cài gói và kỹ năng từ WebUI từ xa. Cài đặt này phải được thay đổi trên máy chạy Cirno server."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "Thời hạn cài đặt",
           "help": "Thời gian tối đa để cài ứng dụng CLI."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "Quyền chung",
-          "help": "Đặt giới hạn vùng làm việc, ngoại lệ mạng và cài đặt từ xa.\n\nGiới hạn không gian làm việc, mạng riêng và cài đặt từ xa."
+          "help": "Thiết lập giới hạn truy cập không gian làm việc và ngoại lệ mạng."
         },
         "cli": {
           "title": "Giới hạn CLI",
@@ -746,7 +742,8 @@
       "open": "Mở",
       "export": "Xuất",
       "opening": "Đang mở...",
-      "exporting": "Đang xuất..."
+      "exporting": "Đang xuất...",
+      "formatJson": "Định dạng JSON"
     },
     "byok": {
       "description": "Thêm thông tin xác thực nhà cung cấp cho bộ thiết lập mô hình.",
@@ -1096,7 +1093,9 @@
         "linear": "Tìm và quản lý issue, dự án và bình luận.",
         "github": "Quản lý kho mã, issue và PR.",
         "supabase": "Xem và quản lý dự án."
-      }
+      },
+      "editConfig": "Chỉnh sửa cấu hình MCP",
+      "configObjectRequired": "Cấu hình MCP phải là một đối tượng JSON."
     },
     "legal": {
       "thirdPartyBrands": "Tên sản phẩm, logo và thương hiệu thuộc về chủ sở hữu tương ứng. Việc sử dụng chỉ nhằm nhận diện và không ngụ ý được xác nhận."
@@ -1123,7 +1122,7 @@
       "clearSearch": "Xóa tìm kiếm",
       "browseApps": "Xem ứng dụng",
       "browseIntegrations": "Xem công cụ MCP",
-      "emptyIntegrationsHint": "Thêm máy chủ MCP tùy chỉnh ở bên dưới.",
+      "emptyIntegrationsHint": "Thêm máy chủ MCP tùy chỉnh.",
       "restartRequired": "Khởi động lại cirno để áp dụng ứng dụng và công cụ MCP đã cập nhật."
     },
     "channels": {

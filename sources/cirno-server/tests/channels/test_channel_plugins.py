@@ -1254,24 +1254,6 @@ def test_repository_dependency_installer_propagates_install_failure(monkeypatch,
     assert "demo: dependency install failed" in capsys.readouterr().err
 
 
-def test_enable_optional_feature_blocks_install_when_disallowed(monkeypatch, tmp_path):
-    from cirno_server.features.service import OptionalFeatureError, enable_optional_feature
-
-    config_path = tmp_path / "config.json"
-    monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
-    _stub_channel_registry(monkeypatch)
-    monkeypatch.setattr(
-        "cirno_server.features.service.optional_dependency_groups",
-        lambda: {"bedrock": ["boto3>=1.43.0"]},
-    )
-    monkeypatch.setattr("cirno_server.features.service.extra_installed", lambda _name, _deps: False)
-
-    with pytest.raises(OptionalFeatureError) as exc:
-        enable_optional_feature("bedrock", config_path=config_path, allow_install=False)
-
-    assert exc.value.status == 403
-    assert "remote WebUI is disabled" in exc.value.message
-    assert not config_path.exists()
 
 
 def test_enable_optional_feature_skips_install_when_dependency_present(
@@ -1301,7 +1283,7 @@ def test_enable_optional_feature_skips_install_when_dependency_present(
 
     monkeypatch.setattr("cirno_server.features.service.install_extra", _install_extra)
 
-    payload = enable_optional_feature("bedrock", config_path=config_path, allow_install=False)
+    payload = enable_optional_feature("bedrock", config_path=config_path)
 
     assert install_calls == []
     assert payload["last_action"]["message"] == "Enabled feature 'bedrock'"

@@ -29,11 +29,44 @@ The example publishes only the Web UI port and persists the instance root. Model
 
 Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. The next page configures model providers and model configurations; this step can be deferred to Settings. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.3`; otherwise track `latest`. Optional memory embeddings are disabled by default. A container image build does not bundle an embedding model.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.3`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
 The workflow smoke test starts the server, checks its health endpoint and Web UI, and verifies that PID 1 runs as the non-root Cirno user. Startup, registration and Web UI checks run on both AMD64 and ARM64.
+
+## Full image
+
+The default `latest` image stays small. `latest-full` adds preinstalled tools and optional feature dependencies. Both variants use the same Cirno source and startup behavior, run the agent as UID 1000, and support AMD64 and ARM64 through native runners. Release tags produce matching `VERSION` and `VERSION-full` image tags.
+
+Use the existing deployment with the full-image override:
+
+```sh
+docker compose -f compose.yaml -f compose.full.yaml up -d
+```
+
+The full image includes:
+
+| Purpose | Commands |
+| --- | --- |
+| Development | `git`, `git-lfs`, `gh`, `tea`, `go` |
+| Network and SSH | `curl`, `wget`, `ssh`, `scp`, `sftp`, `rsync`, `rclone` |
+| Terminal and files | `tmux`, `rg`, `fd`, `fzf`, `bat`, `jq`, `yq`, `tree` |
+| Python | `python3`, `pipx`, `uv`, `uvx`, `hf` |
+| Node | `node`, `npm`, `npx`, `bun`, `nvm` (shell function) |
+| Agent integrations | `summarize` (Homebrew), `mcporter`, `gog`, `xurl` |
+| Documents and media | `ffmpeg`, `yt-dlp`, `pandoc`, `pdftotext`, `tesseract` |
+| Storage and package management | `sqlite3`, `brew` |
+
+Telegram dependencies and the available Python optional feature extras are installed at image build time. This does not enable Telegram or configure third-party accounts: bot tokens and CLI authorizations remain instance-specific. Authenticated Web UI installation and skill management work through reverse proxies and remote browsers; there is no localhost-only installation policy or remote-install opt-in.
+
+The full image bundles `Xenova/bge-small-zh-v1.5` at revision `75c43b069aac4d136ba6bc1122f995fedcfd2781`, including `model_quantized.onnx`, `tokenizer.json`, its model card and the upstream MIT license. Downloads are checked against SHA-256 hashes. On a fresh instance the model paths are prefilled under Memory retrieval, but embeddings remain disabled until explicitly enabled. The weights live at `/opt/cirno/models/bge-small-zh-v1.5`, outside the mounted instance and workspace. Existing instances can select these same paths in Settings.
+
+The additional commands consume image disk space; they do not run background daemons at startup. The CI smoke test checks command execution as the non-root user, Telegram dependency availability, and actual CPU inference with the bundled model on both architectures.
+
+The normal instance volume also persists CLI configuration under `state/cli/` and user-installed npm, uv, pipx, Go, Bun and nvm tools under `state/tools/`. `nvm` is loaded for Bash commands, including the agent's non-interactive shell. New Homebrew installations or changes inside the application virtual environment belong to the container layer and are lost on recreation: add those to a derived image rather than treating the running container as the package source. Preinstalled full-image tools are restored from the image whenever the container is recreated.
+
+Full builds have separate per-architecture caches. The tool layer is built before Cirno sources are copied, so an application change does not reinstall the whole tool collection.
 
 ## Networking and authentication
 

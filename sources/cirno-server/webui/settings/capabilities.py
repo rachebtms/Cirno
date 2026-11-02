@@ -232,15 +232,3 @@ class CapabilitySettingsHandler:
         except WebUISettingsError as exc:
             return SettingsRouteResult.failure(exc.status, exc.message)
         return SettingsRouteResult.success(payload, decorate_restart=True, restart_section=section)
-
-
-    def _allow_feature_package_install(self, request: SettingsRequest) -> bool:
-        if request.local_browser:
-            return True
-        try:
-            return bool(
-                self.settings.config.load().tools.webui_allow_remote_package_install
-            )
-        except Exception:
-            self.logger.exception("failed to load remote package install policy")
-            return False

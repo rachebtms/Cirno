@@ -517,6 +517,15 @@ def _preset_payload(preset: McpPreset, configured_servers: dict[str, MCPServerCo
     }
 
 
+def custom_mcp_config_payload(name: str, *, config_path: Path | None = None) -> dict[str, Any]:
+    """Read one custom server for the authenticated configuration editor."""
+    name = _validated_server_name(name)
+    config = load_config(config_path)
+    if name in _known_preset_names() or name not in config.tools.mcp_servers:
+        raise McpPresetError("unknown custom MCP server", status=404)
+    return {"config": config.tools.mcp_servers[name].model_dump(mode="json", by_alias=True)}
+
+
 def _custom_payload(
     name: str,
     cfg: MCPServerConfig,

@@ -79,7 +79,7 @@ def test_threshold_settings_roundtrip(tmp_path):
     save_config(Config(), path)
     values = {'agents.defaults.idle_compact_percent': 40,
               'agents.defaults.idle_compact_keep_percent': 10}
-    payload = update_runtime_config_settings(values, local_browser=True, config_path=path)
+    payload = update_runtime_config_settings(values, config_path=path)
     assert all(payload['runtime_config'][key] == value for key, value in values.items())
     defaults = load_config(path).agents.defaults
     assert defaults.idle_compact_percent == 40

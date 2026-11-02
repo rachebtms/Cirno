@@ -1000,6 +1000,14 @@ export async function fetchMcpPresets(
   );
 }
 
+export async function fetchCustomMcpConfig(token: string, name: string, base = ""): Promise<string> {
+  const payload = await request<{ config: Record<string, unknown> }>(
+    `${base}/api/settings/mcp-presets/config?name=${encodeURIComponent(name)}`,
+    token, undefined, API_READ_TIMEOUT_MS,
+  );
+  return JSON.stringify(payload.config, null, 2);
+}
+
 export async function startMcpOAuth(
   transport: WebUIMutationTransport,
   name: string,

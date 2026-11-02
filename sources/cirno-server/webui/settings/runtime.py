@@ -74,7 +74,6 @@ RUNTIME_CONFIG_PATHS = (
     "tools.restrict_to_workspace",
     "tools.ssrf_whitelist",
     "tools.max_outgoing_session_messages_per_minute",
-    "tools.webui_allow_remote_package_install",
     "tools.web.enable",
     "network.proxy",
     "tools.web.use_proxy",
@@ -101,19 +100,12 @@ def runtime_config_payload(config: Config) -> dict[str, Any]:
 
 
 def update_runtime_config(
-    config: Config, values: dict[str, Any], *, local_browser: bool,
+    config: Config, values: dict[str, Any],
 ) -> bool:
     """Validate the complete patch before changing any persisted configuration."""
     unknown = values.keys() - set(RUNTIME_CONFIG_PATHS)
     if unknown:
         raise WebUISettingsError("Unknown runtime setting: " + sorted(unknown)[0])
-    remote_install = "tools.webui_allow_remote_package_install"
-    if remote_install in values and not local_browser:
-        if values[remote_install] != config.tools.webui_allow_remote_package_install:
-            raise WebUISettingsError(
-                "Change remote installation access from a browser on the Cirno server.",
-                status=403,
-            )
     candidate = config.model_copy(deep=True)
     for path, value in values.items():
         parent, leaf = _parent(candidate, path)

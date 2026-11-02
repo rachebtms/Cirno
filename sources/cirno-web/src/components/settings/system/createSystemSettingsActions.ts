@@ -17,6 +17,7 @@ import {
   enableCirnoFeature,
   fetchMcpOAuthStatus,
   fetchMcpPresets,
+  fetchCustomMcpConfig,
   importMcpConfig,
   runAutomationAction,
   runCliAppAction,
@@ -627,24 +628,43 @@ export function createSystemSettingsActions({
     }
   };
 
+  const saveImportedMcpConfig = async (rawConfig: string) => {
+    const payload = await importMcpConfig(client, rawConfig);
+    setMcpPresets(payload);
+    applyMcpActionFeedback(payload);
+    if (payload.last_action?.ok === false) throw new Error(payload.last_action.message);
+    const config: { mcpServers?: object } = JSON.parse(rawConfig);
+    retireMcpProxyDrafts(Object.keys(config.mcpServers ?? config));
+    notifyMcpPresetsChanged(payload);
+    if (payload.requires_restart) {
+      setPendingRestartSections((prev) => ({ ...prev, runtime: true }));
+    }
+    await maybeRestartHostEngine(payload);
+  };
+
+  const handleSaveMcpConfig = async (name: string, rawConfig: string) => {
+    const config: unknown = JSON.parse(rawConfig);
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      throw new Error(t("settings.mcp.configObjectRequired", { defaultValue: "MCP configuration must be a JSON object." }));
+    }
+    setMcpPresetAction(`edit:${name}`);
+    setMcpMessage(null);
+    setMcpError(null);
+    try {
+      await saveImportedMcpConfig(JSON.stringify({ mcpServers: { [name]: config } }));
+    } finally {
+      setMcpPresetAction(null);
+    }
+  };
+
+  const handleReadMcpConfig = (name: string) => fetchCustomMcpConfig(getToken(), name);
+
   const handleImportMcpConfig = async () => {
     setMcpPresetAction("import");
     setMcpMessage(null);
     setMcpError(null);
     try {
-      const payload = await importMcpConfig(client, mcpConfigImport);
-      setMcpPresets(payload);
-      applyMcpActionFeedback(payload);
-      if (payload.last_action?.ok !== false) {
-        // The accepted import has been validated by the server; its response has no name list.
-        const config: { mcpServers?: object } = JSON.parse(mcpConfigImport);
-        retireMcpProxyDrafts(Object.keys(config.mcpServers ?? config));
-      }
-      notifyMcpPresetsChanged(payload);
-      if (payload.requires_restart) {
-        setPendingRestartSections((prev) => ({ ...prev, runtime: true }));
-      }
-      await maybeRestartHostEngine(payload);
+      await saveImportedMcpConfig(mcpConfigImport);
       setMcpConfigImport("");
     } catch (err) {
       setMcpError((err as Error).message);
@@ -687,6 +707,8 @@ export function createSystemSettingsActions({
     handleMcpToolsChange,
     handleCirnoFeatureAction,
     handleSaveCustomMcp,
+    handleReadMcpConfig,
+    handleSaveMcpConfig,
     installCapabilities,
   };
 }

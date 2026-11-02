@@ -23,7 +23,7 @@ def test_shared_proxy_roundtrip_preserves_independent_feature_switches(tmp_path)
     config.providers.openai.use_proxy = True
     save_config(config, path)
     for proxy in ("http://shared-proxy.example:7890", "http://shared-proxy.example:7891"):
-        payload = update_runtime_config_settings({"network.proxy": proxy}, local_browser=True, config_path=path)
+        payload = update_runtime_config_settings({"network.proxy": proxy}, config_path=path)
         assert payload["runtime_config"]["network.proxy"] == proxy
         assert payload["requires_restart"]
         saved = load_config(path)
@@ -57,7 +57,7 @@ def test_runtime_patch_persists_and_preserves_other_domains(tmp_path):
         "agents.defaults.timezone": "Asia/Shanghai",
         "tools.exec.max_runtime": 0,
         "tools.exec.allowed_env_keys": ["MY_TOKEN"],
-    }, local_browser=True, config_path=path)
+    }, config_path=path)
     saved = load_config(path)
     assert saved.agents.defaults.max_tool_iterations == 71
     assert saved.agents.defaults.timezone == "Asia/Shanghai"
@@ -110,7 +110,7 @@ def test_invalid_patch_is_atomic(tmp_path, values):
     with pytest.raises(WebUISettingsError):
         update_runtime_config_settings({
             "agents.defaults.max_tool_iterations": 71, **values,
-        }, local_browser=True, config_path=path)
+        }, config_path=path)
     assert path.read_bytes() == before
 
 
@@ -147,17 +147,6 @@ def test_other_settings_preserve_a_longer_trusted_shell_runtime(tmp_path):
     assert saved.path_append == "extra-bin"
 
 
-def test_remote_client_cannot_change_install_policy():
-    config = Config()
-    with pytest.raises(WebUISettingsError) as error:
-        update_runtime_config(config, {
-            "tools.webui_allow_remote_package_install": True,
-        }, local_browser=False)
-    assert error.value.status == 403
-    assert not config.tools.webui_allow_remote_package_install
-    assert update_runtime_config(config, {
-        "tools.webui_allow_remote_package_install": True,
-    }, local_browser=True)
 
 
 def test_timezone_auto_and_nullable_fields():
@@ -167,9 +156,9 @@ def test_timezone_auto_and_nullable_fields():
     assert update_runtime_config(config, {
         "agents.defaults.timezone_mode": "auto",
         "network.proxy": None,
-    }, local_browser=True)
+    })
     assert config.agents.defaults.timezone_mode == "auto"
-    assert not update_runtime_config(config, {}, local_browser=True)
+    assert not update_runtime_config(config, {})
 
 
 def test_runtime_payload_matches_shared_catalogue_contract():
@@ -182,7 +171,7 @@ def test_runtime_payload_matches_shared_catalogue_contract():
 def test_disabling_memory_consolidation_preserves_other_memory_settings():
     config = Config()
     before = config.agents.defaults.model_dump()
-    assert update_runtime_config(config, {"agents.defaults.dream.enabled": False}, local_browser=True)
+    assert update_runtime_config(config, {"agents.defaults.dream.enabled": False})
     after = config.agents.defaults.model_dump()
     before["dream"]["enabled"] = False
     assert after == before
@@ -195,7 +184,7 @@ def test_sandbox_backend_persists_with_path_permissions(tmp_path, backend):
         "tools.exec.sandbox": backend,
         "tools.exec.sandbox_ro_binds": ["shared/read"],
         "tools.exec.sandbox_rw_binds": ["shared/write"],
-    }, local_browser=True, config_path=path)
+    }, config_path=path)
     saved = load_config(path).tools.exec
     assert saved.sandbox == backend
     assert saved.sandbox_ro_binds == ["shared/read"]

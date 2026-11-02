@@ -42,6 +42,7 @@ import {
 } from "@/components/settings/shared/SettingsControls";
 import {
   McpManagementDialog,
+  type McpConfigEditor,
   type McpManagementTab,
 } from "@/components/settings/system/McpManagementDialog";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,7 @@ export const DEFAULT_CUSTOM_MCP_FORM: CustomMcpForm = {
 };
 
 export function AppsCatalogSettings({
+  mcpConfigEditor,
   hideFilters = false,
   setupName,
   onSetupOpened,
@@ -149,6 +151,7 @@ export function AppsCatalogSettings({
   onRestart,
   isRestarting,
 }: {
+  mcpConfigEditor?: McpConfigEditor;
   hideFilters?: boolean;
   setupName?: string | null;
   onSetupOpened?: () => void;
@@ -304,6 +307,19 @@ export function AppsCatalogSettings({
         />
       ) : null}
 
+      {filter === "mcp" ? (
+        <McpCustomServerPanel
+          onConfigureProxy={onConfigureProxy}
+          form={customMcpForm}
+          configImport={mcpConfigImport}
+          actionKey={mcpActionKey}
+          onFormChange={onCustomMcpFormChange}
+          onConfigImportChange={onMcpConfigImportChange}
+          onSave={onSaveCustomMcp}
+          onImportConfig={onImportMcpConfig}
+        />
+      ) : null}
+
       <section className="rounded-panel bg-settings-surface px-3 py-3 sm:px-4">
         <div className="settings-section-heading border-b border-border/45 pb-2">
           <SettingsSectionTitle>
@@ -328,6 +344,7 @@ export function AppsCatalogSettings({
                 />
               ) : (
                 <McpAppsCatalogRow
+                  configEditor={mcpConfigEditor}
                   key={item.id}
                   preset={item.preset}
                   openConnection={setupName === item.preset.name}
@@ -385,26 +402,13 @@ export function AppsCatalogSettings({
               <p className="mx-auto mt-2 max-w-[28rem] text-[12px] leading-5">
                 {tx(
                   "settings.apps.emptyIntegrationsHint",
-                  "Add a custom MCP server below.",
+                  "Add a custom MCP server.",
                 )}
               </p>
             )}
           </div>
         ) : null}
       </section>
-
-      {filter === "mcp" ? (
-        <McpCustomServerPanel
-          onConfigureProxy={onConfigureProxy}
-          form={customMcpForm}
-          configImport={mcpConfigImport}
-          actionKey={mcpActionKey}
-          onFormChange={onCustomMcpFormChange}
-          onConfigImportChange={onMcpConfigImportChange}
-          onSave={onSaveCustomMcp}
-          onImportConfig={onImportMcpConfig}
-        />
-      ) : null}
     </div>
   );
 }
@@ -501,6 +505,7 @@ function CliAppsCatalogRow({
 }
 
 function McpAppsCatalogRow({
+  configEditor,
   openConnection = false,
   onConnectionOpened,
   onConfigureProxy,
@@ -523,6 +528,7 @@ function McpAppsCatalogRow({
   onOAuthComplete,
   onToolsChange,
 }: {
+  configEditor?: McpConfigEditor;
   openConnection?: boolean;
   onConnectionOpened?: () => void;
   onConfigureProxy?: () => void;
@@ -881,6 +887,7 @@ function McpAppsCatalogRow({
 
       {managementOpen ? (
         <McpManagementDialog
+          configEditor={configEditor}
           onConfigureProxy={onConfigureProxy}
           preset={preset}
           values={values}
@@ -1287,8 +1294,8 @@ function McpCustomServerPanel({
                 {tx("settings.mcp.configImport", "Import mcp.json")}
               </span>
               <SettingsTextEditor title={tx("settings.mcp.configImport", "Import mcp.json")}
-                value={configImport} onSave={onConfigImportChange}
-                placeholder={'{"mcpServers":{"docs":{"command":"npx","args":["-y","docs-mcp"]}}}'}
+                value={configImport} onSave={onConfigImportChange} json
+                placeholder={JSON.stringify({ mcpServers: { docs: { command: "npx", args: ["-y", "docs-mcp"] } } }, null, 2)}
               />
             </label>
             <Button

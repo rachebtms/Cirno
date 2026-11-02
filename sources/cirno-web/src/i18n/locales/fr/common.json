@@ -250,10 +250,6 @@
           "label": "IP autorisées",
           "help": "Adresses IP ou plages CIDR exemptées de la protection des requêtes sortantes, une par ligne."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "Installations à distance",
-          "help": "Autorise l’installation de paquets et de compétences depuis une WebUI distante. Ce réglage doit être modifié sur la machine qui exécute la passerelle."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "Délai d’installation",
           "help": "Durée maximale d’installation d’une application en ligne de commande."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "Permissions globales",
-          "help": "Réglez les limites de l’espace, les exceptions réseau et les installations distantes.\n\nRestrictions de l’espace de travail, réseaux privés et installations à distance."
+          "help": "Configurez les restrictions de l’espace de travail et les exceptions réseau."
         },
         "cli": {
           "title": "Limites CLI",
@@ -746,7 +742,8 @@
       "open": "Ouvrir",
       "export": "Exporter",
       "opening": "Ouverture...",
-      "exporting": "Exportation..."
+      "exporting": "Exportation...",
+      "formatJson": "Formater le JSON"
     },
     "byok": {
       "description": "Ajoutez les identifiants du fournisseur pour les préréglages.",
@@ -1096,7 +1093,9 @@
         "linear": "Recherchez et gérez les tickets, projets et commentaires.",
         "github": "Gérez les dépôts, issues et PR.",
         "supabase": "Consultez et gérez les projets."
-      }
+      },
+      "editConfig": "Modifier la configuration MCP",
+      "configObjectRequired": "La configuration MCP doit être un objet JSON."
     },
     "legal": {
       "thirdPartyBrands": "Les noms, logos et marques de produits appartiennent à leurs propriétaires respectifs. Leur utilisation sert uniquement à l'identification et n'implique aucune approbation."
@@ -1123,7 +1122,7 @@
       "clearSearch": "Effacer la recherche",
       "browseApps": "Parcourir les applications",
       "browseIntegrations": "Parcourir les outils MCP",
-      "emptyIntegrationsHint": "Ajoutez un serveur MCP personnalisé ci-dessous.",
+      "emptyIntegrationsHint": "Ajoutez un serveur MCP personnalisé.",
       "restartRequired": "Redémarrez cirno pour appliquer les applications et outils MCP mis à jour."
     },
     "channels": {

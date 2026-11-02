@@ -195,7 +195,7 @@ export function SettingsPage({
   const runtimeConfiguration = (page: RuntimeConfigPage) => settings && (
     <RuntimeConfigSettings page={page} settings={settings} state={controller.runtimeConfigState}
       onRestart={showSidebar ? undefined : restartViaSettingsSurface} isRestarting={restartInProgress}
-      remoteBrowserAccess={remoteBrowserAccess}>
+      >
       {page === "advanced" ? (
         <AdvancedSettings
           editCompletion={controller.safetyEdits}
@@ -538,6 +538,7 @@ export function SettingsPage({
               onSaveCustomMcp={systemActions.handleSaveCustomMcp}
               onImportMcpConfig={systemActions.handleImportMcpConfig}
               onMcpToolsChange={systemActions.handleMcpToolsChange}
+              mcpConfigEditor={{ load: systemActions.handleReadMcpConfig, save: systemActions.handleSaveMcpConfig }}
               onRestart={restartViaSettingsSurface}
               isRestarting={restartInProgress}
             />

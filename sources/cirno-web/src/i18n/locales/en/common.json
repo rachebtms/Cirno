@@ -250,10 +250,6 @@
           "label": "Allowed IPs",
           "help": "Allow outbound requests to these otherwise restricted addresses. Enter one IP address or CIDR range per line."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "Remote installs",
-          "help": "Allow WebUI browsers on other devices to install optional packages and skills. This setting can only be changed on the Cirno server host."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "Install timeout",
           "help": "Time allowed for CLI app installation."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "Global permissions",
-          "help": "Set workspace limits, network exceptions, and remote installs.\n\nWorkspace restrictions, private networks, and remote installs."
+          "help": "Set workspace access restrictions and network exceptions."
         },
         "cli": {
           "title": "CLI limits",
@@ -892,7 +888,9 @@
         "supabase": "View and manage projects."
       },
       "toolsFound_one": "{{count}} tool",
-      "toolsFound_other": "{{count}} tools"
+      "toolsFound_other": "{{count}} tools",
+      "editConfig": "Edit MCP configuration",
+      "configObjectRequired": "MCP configuration must be a JSON object."
     },
     "values": {
       "light": "Light",
@@ -953,7 +951,8 @@
       "open": "Open",
       "export": "Export",
       "opening": "Opening...",
-      "exporting": "Exporting..."
+      "exporting": "Exporting...",
+      "formatJson": "Format JSON"
     },
     "byok": {
       "description": "Add provider credentials for model presets.",
@@ -1123,7 +1122,7 @@
       "clearSearch": "Clear search",
       "browseApps": "Browse apps",
       "browseIntegrations": "Browse MCP tools",
-      "emptyIntegrationsHint": "Add a custom MCP server below.",
+      "emptyIntegrationsHint": "Add a custom MCP server.",
       "restartRequired": "Restart cirno to apply updated apps and MCP tools."
     },
     "channels": {

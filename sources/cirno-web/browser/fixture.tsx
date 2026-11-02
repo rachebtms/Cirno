@@ -161,8 +161,14 @@ const unbrandedPlugin: McpPresetInfo = {
 };
 function AppsFixture() {
   const noop = () => {};
-  const managing = parameters.has("manage");
+  const customEditing = parameters.has("custom-edit");
+  const managing = parameters.has("manage") || customEditing;
   const connectionLayout = parameters.has("connection-layout");
+  const [customConfig, setCustomConfig] = useState({
+    type: "stdio", command: "npx", args: ["-y", "docs-mcp"], env: { API_KEY: "${DOCS_API_KEY}" },
+    cwd: "/workspace/docs", toolTimeout: 60, enabledTools: ["search", "read"],
+  });
+  const [importDraft, setImportDraft] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [actions, setActions] = useState<unknown[]>([]);
   const presets: McpPresetInfo[] = connectionLayout ? [
@@ -180,7 +186,12 @@ function AppsFixture() {
       install_supported: true, installed: false, configured: false, available: true,
       status: "not_installed", required_fields: [], connection_summary: "", source: "preset",
     })),
-  ] : managing ? [{
+  ] : customEditing ? [{
+    name: "docs", display_name: "Docs MCP", category: "custom", description: "Custom MCP server", docs_url: "",
+    transport: "stdio", auth: null, requires: "", note: "", install_supported: true, installed: true,
+    configured: true, available: true, status: "configured", required_fields: [],
+    connection_summary: `${customConfig.command} ${customConfig.args.join(" ")}`, source: "custom",
+  }] : managing ? [{
     name: "design", display_name: "Design MCP", category: "design", description: "Read design context",
     docs_url: "", transport: "streamableHttp", auth: "oauth", requires: "", note: "",
     install_supported: true, installed: false, configured: false, available: true,
@@ -199,7 +210,7 @@ function AppsFixture() {
     mcpOAuthPopupBlocked={false}
     mcpOAuthCallbackUrl="" mcpOAuthCompleting={false} mcpOAuthCallbackError={null}
     cliMessage={null} cliError={null} cliFocusName={null} mcpMessage={null} mcpError={null}
-    mcpFieldValues={{}} customMcpForm={DEFAULT_CUSTOM_MCP_FORM} mcpConfigImport=""
+    mcpFieldValues={{}} customMcpForm={DEFAULT_CUSTOM_MCP_FORM} mcpConfigImport={importDraft}
     showBrandLogos={parameters.get("logos") !== "hidden"} requiresRestartPending={false}
     onQueryChange={noop} onFilterChange={noop} onCliAction={noop}
     onMcpAction={(action, name, values) => setActions((prev) => [...prev, { action, name, values }])}
@@ -210,15 +221,19 @@ function AppsFixture() {
     onMcpOAuthCancel={() => setConnecting(false)} onMcpOAuthOpen={noop}
     onMcpOAuthCallbackUrlChange={noop} onMcpOAuthComplete={noop} onDismissStatus={noop}
     onBackToChat={noop} onMcpFieldChange={noop} onCustomMcpFormChange={noop}
-    onMcpConfigImportChange={noop} onSaveCustomMcp={noop} onImportMcpConfig={noop}
+    onMcpConfigImportChange={setImportDraft} onSaveCustomMcp={noop} onImportMcpConfig={noop}
     onMcpToolsChange={noop}
+    mcpConfigEditor={{
+      load: async () => JSON.stringify(customConfig),
+      save: async (name, config) => { setCustomConfig(JSON.parse(config)); setActions((prev) => [...prev, { action: "edit", name, config: JSON.parse(config) }]); },
+    }}
   />{managing && <output data-testid="mcp-actions">{JSON.stringify(actions)}</output>}</main>;
 }
 if (parameters.get("case") === "skeleton-additions") installSkeletonPreviewApi();
 if (parameters.get("case") === "idle-compaction") installIdleCompactionApi();
 if (parameters.get("case") === "subagent-dock") installSubagentDockApi();
 await initializeI18n();
-if (parameters.get("case") === "appearance" && parameters.has("lang")) {
+if (["appearance", "apps"].includes(parameters.get("case") ?? "") && parameters.has("lang")) {
   await setAppLanguage(normalizeLocale(parameters.get("lang")));
 }
 createRoot(document.getElementById("root")!).render(<TooltipProvider>

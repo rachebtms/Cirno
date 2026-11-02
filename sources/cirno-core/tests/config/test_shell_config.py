@@ -81,7 +81,7 @@ def test_webui_runtime_editor_updates_canonical_runtime(tmp_path, runtime: int) 
     }}}), path)
 
     result = update_runtime_config_settings(
-        {"tools.exec.max_runtime": runtime}, local_browser=True, config_path=path,
+        {"tools.exec.max_runtime": runtime}, config_path=path,
     )
     config = load_config(path).tools.exec
 
@@ -110,7 +110,7 @@ def test_exec_runtime_source_precedence_survives_settings_saves(
     assert load_config(path).tools.exec.max_runtime == 60
 
     result = update_runtime_config_settings(
-        {"tools.exec.max_runtime": 42}, local_browser=True, config_path=path,
+        {"tools.exec.max_runtime": 42}, config_path=path,
     )
     assert result["runtime_config"]["tools.exec.max_runtime"] == 42
 

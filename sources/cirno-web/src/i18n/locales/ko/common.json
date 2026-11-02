@@ -250,10 +250,6 @@
           "label": "허용 IP",
           "help": "외부 요청 보호에서 제외할 IP/CIDR 범위를 한 줄에 하나씩 입력하세요."
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "원격 설치",
-          "help": "원격 WebUI에서 추가 패키지와 스킬을 설치하도록 허용합니다. 이 설정은 Cirno 서버를 실행하는 컴퓨터에서 변경해야 합니다."
-        },
         "tools_cli_apps_install_timeout": {
           "label": "설치 제한 시간",
           "help": "CLI 앱 설치에 허용되는 최대 시간입니다."
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "전체 권한",
-          "help": "작업 공간 제한, 네트워크 예외 및 원격 설치를 설정하세요.\n\n작업 공간 제한, 사설 네트워크 및 원격 설치입니다."
+          "help": "작업 공간 접근 제한과 네트워크 예외를 설정합니다."
         },
         "cli": {
           "title": "CLI 제한",
@@ -746,7 +742,8 @@
       "open": "열기",
       "export": "내보내기",
       "opening": "여는 중...",
-      "exporting": "내보내는 중..."
+      "exporting": "내보내는 중...",
+      "formatJson": "JSON 형식 정리"
     },
     "byok": {
       "description": "모델 프리셋에 사용할 제공업체 인증 정보를 추가하세요.",
@@ -1096,7 +1093,9 @@
         "linear": "이슈, 프로젝트 및 댓글을 찾고 관리합니다.",
         "github": "저장소, 이슈 및 PR을 관리합니다.",
         "supabase": "프로젝트를 확인하고 관리합니다."
-      }
+      },
+      "editConfig": "MCP 설정 편집",
+      "configObjectRequired": "MCP 설정은 JSON 객체여야 합니다."
     },
     "legal": {
       "thirdPartyBrands": "제품 이름, 로고 및 브랜드는 각 소유자의 자산입니다. 사용은 식별 목적일 뿐 보증이나 제휴를 의미하지 않습니다."
@@ -1123,7 +1122,7 @@
       "clearSearch": "검색 지우기",
       "browseApps": "앱 둘러보기",
       "browseIntegrations": "MCP 도구 둘러보기",
-      "emptyIntegrationsHint": "아래에서 사용자 지정 MCP 서버를 추가하세요.",
+      "emptyIntegrationsHint": "사용자 지정 MCP 서버를 추가하세요.",
       "restartRequired": "업데이트된 앱과 MCP 도구를 적용하려면 cirno을 다시 시작하세요."
     },
     "channels": {

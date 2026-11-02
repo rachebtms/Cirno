@@ -250,10 +250,6 @@
           "label": "允許 IP",
           "help": "允許網頁等出站請求訪問這些受限地址。每行填寫一個 IP 地址或 CIDR 網段。"
         },
-        "tools_webui_allow_remote_package_install": {
-          "label": "遠端安裝",
-          "help": "允許從其他裝置上的 WebUI 安裝可選軟體包和技能。此開關只能在執行閘道器的裝置上修改。"
-        },
         "tools_cli_apps_install_timeout": {
           "label": "安裝超時",
           "help": "CLI 應用安裝的最長等待秒數"
@@ -421,7 +417,7 @@
         },
         "safety": {
           "title": "全域性許可權",
-          "help": "設定目錄限制、網路例外和遠端安裝\n\n設定工作區訪問限制、網路訪問例外和遠端安裝許可權。"
+          "help": "設定工作區存取限制和網路存取例外。"
         },
         "cli": {
           "title": "CLI 限制",
@@ -746,7 +742,8 @@
       "open": "開啟",
       "export": "匯出",
       "opening": "正在開啟…",
-      "exporting": "正在匯出…"
+      "exporting": "正在匯出…",
+      "formatJson": "格式化 JSON"
     },
     "byok": {
       "description": "配置提供商金鑰，供模型預設使用",
@@ -1096,7 +1093,9 @@
         "linear": "查詢和管理任務、專案及評論",
         "github": "管理倉庫、Issue 和 PR",
         "supabase": "檢視和管理專案"
-      }
+      },
+      "editConfig": "編輯 MCP 設定",
+      "configObjectRequired": "MCP 設定必須是 JSON 物件。"
     },
     "legal": {
       "thirdPartyBrands": "產品名稱、Logo 與品牌均為各自擁有者的財產。僅供識別之用，不代表任何形式的背書。"
@@ -1123,7 +1122,7 @@
       "clearSearch": "清除搜尋",
       "browseApps": "瀏覽應用程式",
       "browseIntegrations": "瀏覽 MCP 工具",
-      "emptyIntegrationsHint": "可在下方新增自訂 MCP 伺服器。",
+      "emptyIntegrationsHint": "新增自訂 MCP 伺服器。",
       "restartRequired": "重新啟動 cirno 以套用更新後的應用程式與 MCP 工具。"
     },
     "channels": {

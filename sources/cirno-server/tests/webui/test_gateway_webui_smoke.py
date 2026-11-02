@@ -15,6 +15,7 @@ from urllib.parse import quote
 import httpx
 import pytest
 import websockets
+from websockets.exceptions import InvalidStatus
 
 from cirno_core.agent.subagents.sessions import SubagentSessions
 from cirno_core.agent.subagents.status import SubagentStatus
@@ -310,7 +311,7 @@ async def test_desktop_terminal_identity_and_independent_client_lifetime(tmp_pat
         identity_query = f'&terminal_protocol=1&terminal_instance={terminal["gatewayId"]}'
         first_url = f'{first["ws_url"]}?token={first["token"]}&client_id=terminal-one'
         # A rejected wrong-instance upgrade must not consume the one-use WS token.
-        with pytest.raises(websockets.exceptions.InvalidStatus) as wrong:
+        with pytest.raises(InvalidStatus) as wrong:
             async with websockets.connect(first_url + "&terminal_protocol=1&terminal_instance=wrong"):
                 pytest.fail("Wrong gateway identity accepted")
         assert wrong.value.response.status_code == 409

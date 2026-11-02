@@ -1693,11 +1693,11 @@ class ServerHTTPHandler:
         if got == "/api/webui/skills/trends":
             return await self._handle_webui_skill_trends(request)
         if got == "/api/webui/skills/install":
-            return await self._handle_webui_skill_install(connection, request)
+            return await self._handle_webui_skill_install(request)
         if got == "/api/webui/skills/update":
             return await self._handle_webui_skill_update(request)
         if got == "/api/webui/skills/delete":
-            return await self._handle_webui_skill_delete(connection, request)
+            return await self._handle_webui_skill_delete(request)
         if got == "/api/webui/skills":
             return await self._handle_webui_skills(request)
         m = re.match(r"^/api/webui/skills/([^/]+)$", got)
@@ -1897,13 +1897,10 @@ class ServerHTTPHandler:
 
     async def _handle_webui_skill_install(
         self,
-        connection: Any,
         request: WsRequest,
     ) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        if not self._allow_webui_package_install(connection, request):
-            return _http_error(403, "remote skill installation is disabled")
         if self._skill_install_lock.locked():
             return _http_error(409, "another skill installation is already in progress")
 
@@ -1930,17 +1927,6 @@ class ServerHTTPHandler:
             **(await self._load_webui_skills()),
             "last_action": action,
         })
-
-    def _allow_webui_package_install(self, connection: Any, request: WsRequest) -> bool:
-        if _is_local_browser_request(connection, request.headers):
-            return True
-        try:
-            return bool(
-                self.settings.config.load().tools.webui_allow_remote_package_install
-            )
-        except Exception:
-            self._log.exception("failed to load remote package install policy")
-            return False
 
     async def _handle_webui_skill_update(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):
@@ -1970,13 +1956,10 @@ class ServerHTTPHandler:
 
     async def _handle_webui_skill_delete(
         self,
-        connection: Any,
         request: WsRequest,
     ) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        if not _is_local_browser_request(connection, request.headers):
-            return _http_error(403, "remote skill deletion is disabled")
         name = _query_first(_request_query(request), "name") or ""
         try:
             action = self.settings.config.run_serialized(

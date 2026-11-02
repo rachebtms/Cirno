@@ -28,6 +28,18 @@ EOF
     exit 1
 fi
 
+if [ "${CIRNO_FULL_IMAGE:-}" = "1" ]; then
+    mkdir -p "$dir/state/cli/config" "$dir/state/cli/data" "$dir/state/cli/cache" \
+        "$dir/state/tools/bin" "$dir/state/tools/npm" "$dir/state/tools/nvm"
+    for tool in xurl ssh summarize mcporter; do
+        mkdir -p "$dir/state/cli/$tool"
+        chmod 700 "$dir/state/cli/$tool"
+        if [ ! -e "$HOME/.$tool" ] && [ ! -L "$HOME/.$tool" ]; then
+            ln -s "$dir/state/cli/$tool" "$HOME/.$tool"
+        fi
+    done
+fi
+
 if [ "$CIRNO_DOCKER_BOOTSTRAP" = "1" ]; then
     # Explicit config selectors belong to the CLI; bootstrap only the default instance.
     initialize_default=1
