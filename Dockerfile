@@ -44,7 +44,7 @@ COPY sources/deployment/full-image.Brewfile /tmp/full-image.Brewfile
 COPY sources/deployment/install_full_tools.sh /tmp/install_full_tools.sh
 COPY sources/deployment/bundle_embedding.py /tmp/bundle_embedding.py
 USER cirno
-RUN --mount=type=cache,target=/home/cirno/.cache/Homebrew,uid=1000,gid=1000 \
+RUN --mount=type=cache,target=/home/cirno/.cache,uid=1000,gid=1000 \
     git clone --depth 1 --branch "$HOMEBREW_VERSION" https://github.com/Homebrew/brew /home/linuxbrew/.linuxbrew/Homebrew && \
     mkdir -p /home/linuxbrew/.linuxbrew/bin && \
     ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew && \
