@@ -13,7 +13,7 @@ class CoreBuildHook(BuildHookInterface):
             for source in root.rglob("*"):
                 relative = source.relative_to(root)
                 if (not source.is_file() or any(part in {"tests", "__pycache__", "dist", ".pytest_cache", ".ruff_cache"} for part in relative.parts)
-                        or source.suffix in {".pyc", ".pyo"} or relative.as_posix() in {"pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md"}):
+                        or source.suffix in {".pyc", ".pyo"} or relative.as_posix() in {"pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md", "_build_commit.txt"}):
                     continue
                 build_data.setdefault("force_include", {})[str(source)] = f"cirno_core/{relative.as_posix()}"
         if self.target_name == "wheel" and version == "editable":

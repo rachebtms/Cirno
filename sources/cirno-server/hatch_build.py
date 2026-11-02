@@ -86,7 +86,7 @@ class WebUIBuildHook(BuildHookInterface):
             # fall back to the in-package bundle when no staged build exists.
             dist_dir = root / "web/dist"
             index_html = dist_dir / "index.html"
-        if dist_dir == root.parents[1] / "build" / "webui" and dist_dir.is_dir():
+        if dist_dir.is_dir():
             build_data.setdefault("force_include", {})[str(dist_dir)] = f"{package_target}/web/dist"
 
         if os.environ.get("CIRNO_SKIP_WEBUI_BUILD") == "1":
