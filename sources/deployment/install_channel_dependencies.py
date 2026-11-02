@@ -5,16 +5,16 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-from cirno.channels.plugin import ChannelPlugin
-from cirno.channels.registry import discover_plugins
-from cirno.features.service import (
+from cirno_server.channels.plugin import ChannelPlugin
+from cirno_server.channels.registry import discover_plugins
+from cirno_server.features.service import (
     ensure_enabled_channel_dependencies,
     extra_installed,
     install_args_for_extra,
     install_extra,
 )
 
-_DEPENDENCY_FAILURE = "Channel dependencies could not be installed. Check gateway logs."
+_DEPENDENCY_FAILURE = "Channel dependencies could not be installed. Check server logs."
 
 
 def ensure_repository_channel_dependencies(

@@ -2,15 +2,15 @@ import json
 
 import pytest
 
-from cirno.config.errors import ConfigLoadError
-from cirno.config.loader import (
+from cirno_core.config.errors import ConfigLoadError
+from cirno_core.config.loader import (
     _resolve_env_vars,
     load_config,
     resolve_config_env_vars,
     resolve_env_refs,
     save_config,
 )
-from cirno.config.schema import Config
+from cirno_core.config.schema import Config
 
 
 class TestResolveEnvVars:

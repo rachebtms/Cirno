@@ -2,8 +2,8 @@
 import asyncio
 import time
 
-from cirno.config.home import get_home_path
-from cirno.memory.repository import MemoryRepository
+from cirno_core.config.home import get_home_path
+from cirno_core.memory.repository import MemoryRepository
 from loguru import logger
 
 

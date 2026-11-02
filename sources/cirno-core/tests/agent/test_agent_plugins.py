@@ -6,9 +6,9 @@ from threading import Event, Thread
 
 import pytest
 
-from cirno.agent import plugins as agent_plugins
-from cirno.agent.loop import AgentLoop
-from cirno.agent.plugins import (
+from cirno_core.agent import plugins as agent_plugins
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.plugins import (
     AGENT_PLUGIN_MCP_SCHEMA,
     AGENT_PLUGIN_SCHEMA,
     agent_plugin_mcp_servers,
@@ -17,18 +17,18 @@ from cirno.agent.plugins import (
     enabled_agent_plugin_skills,
     set_agent_plugin_enabled,
 )
-from cirno.skills.loader import SkillsLoader
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.filesystem import ReadFileTool, WriteFileTool
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import ToolsConfig
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse
-from cirno.security.workspace_access import (
+from cirno_core.skills.loader import SkillsLoader
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.filesystem import ReadFileTool, WriteFileTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import ToolsConfig
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse
+from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     reset_workspace_scope,
     validate_workspace_scope_payload,
 )
-from cirno.session.manager import SessionManager
+from cirno_core.session.manager import SessionManager
 
 
 @pytest.fixture(autouse=True)
@@ -77,7 +77,7 @@ def test_plugin_skill_lifecycle_and_precedence(tmp_path: Path) -> None:
     plugin_skill.write_bytes(plugin_content.replace("\n", "\r\n").encode("utf-8"))
     _skill(tmp_path / "builtin", "shared", body="Built-in body.")
     workspace_skill = _skill(
-        tmp_path / "skills", "shared", "name: shared\ndescription: Workspace version."
+        tmp_path / "home" / "skills", "shared", "name: shared\ndescription: Workspace version."
     )
     loader = SkillsLoader(tmp_path, builtin_skills_dir=tmp_path / "builtin")
 
@@ -114,8 +114,8 @@ def test_plugin_skill_lifecycle_and_precedence(tmp_path: Path) -> None:
 async def test_prompt_snapshot_uses_approved_plugin_bytes_after_replacement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str,
 ) -> None:
-    monkeypatch.setattr("cirno.config.home._home_path", tmp_path / "instance")
-    monkeypatch.setattr("cirno.config.loader._current_config_path", tmp_path / "config" / "config.json")
+    monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path / "instance")
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", tmp_path / "config" / "config.json")
 
     class CaptureProvider(LLMProvider):
         def __init__(self):
@@ -131,10 +131,10 @@ async def test_prompt_snapshot_uses_approved_plugin_bytes_after_replacement(
             return LLMResponse(content="done")
 
     workspace = tmp_path / "workspace"
-    (tmp_path / "skills").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "home" / "skills").mkdir(parents=True, exist_ok=True)
     workspace.mkdir(exist_ok=True)
     builtin = tmp_path / "builtin"
-    builtin.mkdir()
+    builtin.mkdir(parents=True)
     plugin = _plugin(workspace)
     skill_dir = _skill(
         plugin / "skills", "trusted-skill",
@@ -258,10 +258,10 @@ def test_plugin_logo_is_validated_and_contained(tmp_path: Path) -> None:
     extension = {"extensions": {"dev.cirno": {"logo": "./assets/icon.png"}}}
     plugin = _plugin(tmp_path, "demo", **extension)
     icon = plugin / "assets" / "icon.png"
-    icon.parent.mkdir()
+    icon.parent.mkdir(parents=True)
     icon.write_bytes(b"\x89PNG\r\n\x1a\nlogo")
     escaped = _plugin(tmp_path, "escaped", **extension)
-    (escaped / "assets").mkdir()
+    (escaped / "assets").mkdir(parents=True)
     try:
         (escaped / "assets" / "icon.png").symlink_to(icon)
     except OSError:
@@ -276,7 +276,7 @@ def test_plugin_logo_is_validated_and_contained(tmp_path: Path) -> None:
 def test_plugin_mcp_requires_explicit_enable(tmp_path: Path) -> None:
     plugin = _plugin(tmp_path, "desktop")
     executable = plugin / "bin" / "server"
-    executable.parent.mkdir()
+    executable.parent.mkdir(parents=True)
     executable.write_text("#!/bin/sh\n", encoding="utf-8")
     _write_json(
         plugin / "mcp.json",
@@ -341,7 +341,7 @@ async def test_restricted_project_can_read_only_enabled_plugin_skill(
 ) -> None:
     agent_workspace = tmp_path / "agent"
     project = tmp_path / "project"
-    project.mkdir()
+    project.mkdir(parents=True)
     plugin = _plugin(agent_workspace)
     skill = _skill(plugin / "skills", "demo-skill")
     resource = skill / "reference.md"
@@ -394,7 +394,7 @@ async def test_restricted_project_revokes_cached_plugin_read_after_replacement(
 ) -> None:
     agent_workspace = tmp_path / "agent"
     project = tmp_path / "project"
-    project.mkdir()
+    project.mkdir(parents=True)
     plugin = _plugin(agent_workspace)
     skill = _skill(plugin / "skills", "demo-skill")
     resource = skill / "reference.md"
@@ -437,7 +437,7 @@ async def test_project_reads_do_not_rescan_cached_plugin_packages(
 ) -> None:
     agent_workspace = tmp_path / "agent"
     project = tmp_path / "project"
-    project.mkdir()
+    project.mkdir(parents=True)
     project_file = project / "notes.md"
     project_file.write_text("project notes", encoding="utf-8")
     plugin = _plugin(agent_workspace)
@@ -485,11 +485,11 @@ def test_plugin_state_symlink_cannot_escape_config_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = tmp_path / "config"
-    config.mkdir()
+    config.mkdir(parents=True)
     outside = tmp_path / "outside"
-    outside.mkdir()
+    outside.mkdir(parents=True)
     try:
-        (config / "plugin-data").symlink_to(outside, target_is_directory=True)
+        (config / "state" / "plugin-data").symlink_to(outside, target_is_directory=True)
     except OSError as exc:
         pytest.skip(f"directory symlink unavailable: {exc}")
     monkeypatch.setattr(agent_plugins, "get_config_path", lambda: config / "config.json")
@@ -530,7 +530,7 @@ def test_plugin_activation_requires_one_stable_package_identity(tmp_path: Path) 
 def test_legacy_path_activation_is_upgraded_to_package_fingerprint(tmp_path: Path) -> None:
     plugin = _plugin(tmp_path)
     set_agent_plugin_enabled(tmp_path, "demo", True)
-    marker = next((tmp_path / "config" / "plugin-data").glob("*/demo/enabled"))
+    marker = next((tmp_path / "config" / "state" / "plugin-data").glob("*/demo/enabled"))
     marker.write_text(str(plugin), encoding="utf-8")
 
     assert discover_agent_plugins(tmp_path)[0].enabled is True
@@ -597,4 +597,4 @@ def test_plugin_activation_does_not_survive_in_place_code_replacement(
 
 @pytest.fixture(autouse=True)
 def _select_test_home(tmp_path, monkeypatch):
-    monkeypatch.setattr("cirno.config.home._home_path", tmp_path)
+    monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path)

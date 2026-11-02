@@ -12,14 +12,14 @@ from unittest.mock import Mock
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.exec_session import (
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.exec_session import (
     ExecSessionManager,
     ExecSessionTool,
     ListExecSessionsTool,
 )
-from cirno.agent.tools.registry import is_tool_error_result
-from cirno.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.registry import is_tool_error_result
+from cirno_core.agent.tools.shell import ExecTool
 
 
 def _python(code: str) -> list[str]:

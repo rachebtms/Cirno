@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from cirno.cron.types import CronJob
+from cirno_core.cron.types import CronJob
 
 
 def origin_delivery_context(job: CronJob) -> tuple[str, str, dict[str, Any]]:

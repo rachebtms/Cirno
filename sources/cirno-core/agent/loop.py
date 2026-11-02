@@ -19,37 +19,38 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, TypeVar, cast
 
-from cirno.agent import context as agent_context
-from cirno.agent import model_presets as preset_helpers
-from cirno.agent.autocompact import AutoCompact
-from cirno.agent.context import ContextBuilder, PersistedPromptContextResolver, TranscriptInput
-from cirno.agent.cron_turns import CronTurnCoordinator
-from cirno.agent.goals.permission import GoalInputScope
-from cirno.agent.hook import AgentHook, AgentTurnHookFactory
-from cirno.memory.consolidation import Consolidator
-from cirno.agent.model_runtime import ModelRuntimeResolver
-from cirno.agent.runner import AgentRunner, AgentRunResult, AgentRunSpec
-from cirno.agent.subagents.manager import SubagentManager
-from cirno.agent.tools.context import (
+from cirno_core.agent import context as agent_context
+from cirno_core.agent import model_presets as preset_helpers
+from cirno_core.agent.autocompact import AutoCompact
+from cirno_core.agent.context import ContextBuilder, PersistedPromptContextResolver, TranscriptInput
+from cirno_core.agent.cron_turns import CronTurnCoordinator
+from cirno_core.agent.goals.permission import GoalInputScope
+from cirno_core.agent.hook import AgentHook, AgentTurnHookFactory
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.agent.model_runtime import ModelRuntimeResolver
+from cirno_core.agent.runner import AgentRunner, AgentRunResult, AgentRunSpec
+from cirno_core.agent.subagents.manager import SubagentManager
+from cirno_core.agent.tools.context import (
     RequestContext,
     bind_request_context,
     current_request_context,
     reset_request_context,
 )
-from cirno.agent.tools.exec_session import ExecSessionManager
-from cirno.agent.tools.file_state import FileStateStore, bind_file_states, reset_file_states
-from cirno.agent.tools.message import capture_message_deliveries
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.runtime_control import AgentRuntimeControl
-from cirno.agent.tools.selection import conversation_tools
-from cirno.agent.tools.shell import ExecTool
-from cirno.agent.turn_delivery import (
+from cirno_core.agent.tools.exec_session import ExecSessionManager
+from cirno_core.agent.tools.file_state import FileStateStore, bind_file_states, reset_file_states
+from cirno_core.agent.tools.message import capture_message_deliveries
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.runtime_control import AgentRuntimeControl
+from cirno_core.agent.tools.selection import conversation_tools
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.turn_delivery import (
     TurnDelivery,
     TurnDeliveryFactory,
 )
-from cirno.agent.turn_delivery import TurnRoute as TurnRoute
-from cirno.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
-from cirno.bus.events import (
+from cirno_core.agent.turn_delivery import TurnRoute as TurnRoute
+from cirno_core.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
+from cirno_core.bus.input_origin import input_origin, origin_context
+from cirno_core.bus.events import (
     INBOUND_META_LOCAL_MEDIA,
     INBOUND_META_RUNTIME_CONTROL,
     INBOUND_META_TURN_ID,
@@ -58,22 +59,22 @@ from cirno.bus.events import (
     InboundMessage,
     OutboundMessage,
 )
-from cirno.bus.outbound_events import (
+from cirno_core.bus.outbound_events import (
     StreamDeltaEvent,
     StreamedResponseEvent,
     StreamEndEvent,
 )
-from cirno.bus.queue import MessageBus
-from cirno.command import CommandContext, CommandRouter, register_builtin_commands
-from cirno.command.router import command_text
-from cirno.config.network import NetworkConfig
-from cirno.config.schema import AgentDefaults, ModelPresetConfig
-from cirno.bus.agent_events import NO_EVENTS, AgentEvent, EventSink
-from cirno.llm_usage.context import source_from_request
-from cirno.providers.base import LLMProvider, LLMUsage, ProviderConversationState
-from cirno.providers.factory import ProviderSnapshot
-from cirno.runtime.admission import RuntimeMaintenanceError
-from cirno.runtime.context import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.command import CommandContext, CommandRouter, register_builtin_commands
+from cirno_core.command.router import command_text
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.schema import AgentDefaults, ModelPresetConfig
+from cirno_core.bus.agent_events import NO_EVENTS, AgentEvent, EventSink
+from cirno_core.llm_usage.context import source_from_request
+from cirno_core.providers.base import LLMProvider, LLMUsage, ProviderConversationState
+from cirno_core.providers.factory import ProviderSnapshot
+from cirno_core.runtime.admission import RuntimeMaintenanceError
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RUNTIME_CONTEXT_MESSAGE_META,
     RuntimeContextBlock,
@@ -82,28 +83,28 @@ from cirno.runtime.context import (
     resolve_runtime_context,
     runtime_context_blocks_from_metadata,
 )
-from cirno.security.workspace_access import (
+from cirno_core.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScopeResolver,
     bind_workspace_scope,
     reset_workspace_scope,
 )
-from cirno.session import turn_continuation
-from cirno.session.automation_turns import automation_history_overrides
-from cirno.session.goal_state import (
+from cirno_core.session import turn_continuation
+from cirno_core.session.automation_turns import automation_history_overrides
+from cirno_core.session.goal_state import (
     goal_state_raw,
     goal_state_runtime_lines,
     parse_goal_state,
     sustained_goal_active,
 )
-from cirno.session.history_visibility import HIDDEN_HISTORY_META
-from cirno.session.keys import session_key_for_channel
-from cirno.session.manager import SESSION_CACHE_MAX_SIZE, Session, SessionManager, SessionPolicy
-from cirno.session.model_selection import (
+from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
+from cirno_core.session.keys import session_key_for_channel
+from cirno_core.session.manager import SESSION_CACHE_MAX_SIZE, Session, SessionManager, SessionPolicy
+from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
     model_preset_from_metadata,
 )
-from cirno.session.recovery import (
+from cirno_core.session.recovery import (
     PENDING_FOLLOWUP_ID_KEY,
     RECOVERY_INBOUND_METADATA_KEY,
     REQUEST_ORIGIN_METADATA_KEY,
@@ -114,31 +115,31 @@ from cirno.session.recovery import (
     restore_pending_interruption,
     restore_runtime_checkpoint,
 )
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.session.state import SessionOperationQueueFullError
-from cirno.session.summary import (
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.state import SessionOperationQueueFullError
+from cirno_core.session.summary import (
     SessionSummary,
     SessionSummaryCheckpoint,
 )
-from cirno.triggers.local_turns import LocalTriggerTurnCoordinator
-from cirno.utils.cancellation import task_is_cancelling
-from cirno.utils.document import reference_non_image_attachments
-from cirno.utils.helpers import image_placeholder_text
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.utils.progress_events import output_events
-from cirno.utils.runtime import (
+from cirno_core.triggers.local_turns import LocalTriggerTurnCoordinator
+from cirno_core.utils.cancellation import task_is_cancelling
+from cirno_core.utils.document import reference_non_image_attachments
+from cirno_core.utils.helpers import image_placeholder_text
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.progress_events import output_events
+from cirno_core.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
 )
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.config.schema import (
+    from cirno_core.config.schema import (
         ChannelsConfig,
         Config,
         ToolsConfig,
     )
-    from cirno.cron.service import CronService
-    from cirno.triggers.local_store import LocalTriggerStore
+    from cirno_core.cron.service import CronService
+    from cirno_core.triggers.local_store import LocalTriggerStore
 
 _T = TypeVar("_T")
 _SUBAGENT_PROVIDER_TASK_META = "subagent_provider_task_id"
@@ -312,7 +313,7 @@ class AgentLoop:
         tool_registry: ToolRegistry | None = None,
         channels_config: ChannelsConfig | None = None,
         timezone: str | None = None,
-        session_ttl_minutes: int = 0,
+        idle_compact_after_minutes: int = 0,
         hooks: list[AgentHook] | None = None,
         hook_factories: list[AgentTurnHookFactory] | None = None,
         disabled_skills: list[str] | None = None,
@@ -337,7 +338,7 @@ class AgentLoop:
         idle_compact_keep_recent_tokens: int = 8_000,
         recovery_admission: RecoveryAdmission | None = None,
     ):
-        from cirno.config.schema import ToolsConfig
+        from cirno_core.config.schema import ToolsConfig
 
         _tc = tools_config or ToolsConfig()
         defaults = AgentDefaults()
@@ -443,6 +444,7 @@ class AgentLoop:
         self._discarding_sessions: set[str] = set()
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._close_lock = asyncio.Lock()
+        self._intake_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
         self._session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
             weakref.WeakValueDictionary()
         )
@@ -474,7 +476,7 @@ class AgentLoop:
         self.auto_compact = AutoCompact(
             sessions=self.sessions,
             consolidator=self.consolidator,
-            session_ttl_minutes=session_ttl_minutes,
+            idle_compact_after_minutes=idle_compact_after_minutes,
             bind_events=self._idle_events,
             session_lock=self._get_session_lock,
             trigger_percent=idle_compact_percent,
@@ -513,7 +515,7 @@ class AgentLoop:
         allowing callers to override or extend the standard config-derived
         parameters (e.g. ``cron_service``, ``session_manager``).
         """
-        from cirno.providers.factory import make_provider
+        from cirno_core.providers.factory import make_provider
 
         if bus is None:
             bus = MessageBus()
@@ -547,7 +549,7 @@ class AgentLoop:
             channels_config=config.channels,
             timezone=defaults.timezone,
             disabled_skills=defaults.disabled_skills,
-            session_ttl_minutes=defaults.session_ttl_minutes,
+            idle_compact_after_minutes=defaults.idle_compact_after_minutes,
             idle_compact_check_interval_seconds=defaults.idle_compact_check_interval_seconds,
             idle_compact_percent=defaults.idle_compact_percent,
             idle_compact_keep_percent=defaults.idle_compact_keep_percent,
@@ -559,7 +561,7 @@ class AgentLoop:
             model_presets=preset_helpers.configured_model_presets(config),
             model_preset=defaults.model_preset,
             dream_model_preset=defaults.dream.model_override,
-            restart_mode=config.gateway.restart_mode,
+            restart_mode=config.server.restart_mode,
             provider_snapshot_loader=provider_snapshot_loader,
             preset_snapshot_loader=preset_snapshot_loader,
             tool_registry=tool_registry,
@@ -693,9 +695,14 @@ class AgentLoop:
         provider_snapshot_loader: Callable[..., ProviderSnapshot] | None,
     ) -> None:
         """Register the default set of tools via plugin loader."""
-        from cirno.agent.tools.context import ToolContext
-        from cirno.agent.tools.loader import ToolLoader
+        from cirno_core.agent.tools.context import ToolContext
+        from cirno_core.agent.tools.loader import ToolLoader
 
+        from cirno_core.agent.conversation_control import ConversationControl
+
+        from cirno_core.agent.approval.service import OperationApproval
+        self.operation_approval = OperationApproval(self.sessions, self.bus)
+        self.conversation_control = ConversationControl(self)
         runtime_control = AgentRuntimeControl(self)
         self.register_runtime_context_provider(runtime_control.workspace_context)
         self.register_runtime_context_provider(
@@ -715,6 +722,7 @@ class AgentLoop:
             timezone=self.context.timezone or "UTC",
             workspace_sandbox=self.workspace_scopes.sandbox_status,
             runtime_control=runtime_control,
+            conversation_control=self.conversation_control,
         )
         loader = ToolLoader()
         registered = loader.load(ctx, self.tools)
@@ -752,6 +760,8 @@ class AgentLoop:
     def _input_history_extra(msg: InboundMessage) -> dict[str, Any]:
         """Keep input admission separate from the run that eventually consumes it."""
         extra: dict[str, Any] = {"timestamp": msg.timestamp.isoformat()}
+        if origin := input_origin(msg):
+            extra["input_origin"] = origin
         turn_id = msg.metadata.get(INBOUND_META_TURN_ID)
         if isinstance(turn_id, str) and turn_id:
             extra[INBOUND_META_TURN_ID] = turn_id
@@ -850,6 +860,7 @@ class AgentLoop:
             turn_id=origin["turn_id"],
             workspace=scope.project_path,
             workspace_scope=scope,
+            operation_approval=self.operation_approval,
             log_content=ctx.session.policy.log_content and not ctx.ephemeral,
             persist_session=ctx.session.policy.persist and not ctx.ephemeral,
             can_receive_background_results=self._running,
@@ -984,7 +995,7 @@ class AgentLoop:
         if not tasks and self._active_tasks.get(key) is tasks:
             self._active_tasks.pop(key, None)
 
-    async def _cancel_active_tasks(self, key: str) -> int:
+    async def _cancel_active_tasks(self, key: str, *, stop_goal: bool = True) -> int:
         """Cancel and await all active work for *key*.
 
         Returns the total number of cancelled tasks, subagents, and exec sessions.
@@ -992,7 +1003,7 @@ class AgentLoop:
         journal_session = await self.sessions.state.read(key)
         if journal_session is not None:
             goal = parse_goal_state(goal_state_raw(journal_session.metadata)) or {}
-            if goal.get("status") in {"active", "waiting"}:
+            if stop_goal and goal.get("status") in {"active", "waiting"}:
                 await self.sessions.state.update_metadata(key, {"goal_state": {**goal, "status": "stopped"}})
         journaled_followup_ids = (
             tuple(
@@ -1019,11 +1030,13 @@ class AgentLoop:
             await self._cancel_pending_messages(key, pending, asyncio.CancelledError())
         if journaled_followup_ids and journal_session is not None:
             # Explicit session cancellation owns the follow-ups accepted before
-            # it began. Gateway shutdown uses aclose() directly and keeps this
+            # it began. Server shutdown uses aclose() directly and keeps this
             # journal intact for startup recovery.
             await self.sessions.state.acknowledge_followups(key, journaled_followup_ids)
         sub_cancelled = await self.subagents.cancel_by_session(key)
         exec_cancelled = await self._exec_session_manager.terminate_by_owner(key)
+        if stop_goal and self._recovery_admission is not None and journal_session is not None:
+            await self._recovery_admission.turn_stopped(key)
         return cancelled + sub_cancelled + exec_cancelled
 
     async def discard_session(self, key: str) -> None:
@@ -1184,6 +1197,7 @@ class AgentLoop:
                     if isinstance(metadata_value, dict)
                     else {}
                 )
+                blocks: list[RuntimeContextBlock] = []
                 if pending_msg.is_user_input:
                     scope = await self.runner.prepare_prompt(
                         self.workspace_scopes.for_turn,
@@ -1212,12 +1226,11 @@ class AgentLoop:
                         pending_request,
                         effective_tools,
                     )
-                    row["content"], runtime_marker = append_runtime_context(
-                        user_content,
-                        blocks,
-                    )
-                    if runtime_marker is not None:
-                        row["_meta"][RUNTIME_CONTEXT_MESSAGE_META] = runtime_marker
+                if source_block := origin_context(pending_msg):
+                    blocks.insert(0, source_block)
+                row["content"], runtime_marker = append_runtime_context(user_content, blocks)
+                if runtime_marker is not None:
+                    row["_meta"][RUNTIME_CONTEXT_MESSAGE_META] = runtime_marker
                 if (
                     pending_msg.sender_id == "subagent"
                     and metadata.get("injected_event") == "subagent_result"
@@ -1310,6 +1323,7 @@ class AgentLoop:
             session_key=active_session_key,
             workspace=effective_scope.project_path,
             include_memory=session.policy.persist if session is not None else True,
+            include_task_context=False,
         )
         if request_context is None:
             request_ctx = dataclasses.replace(
@@ -1517,7 +1531,7 @@ class AgentLoop:
                     and not self.bus.admission.paused
                     and (self._goal_check_task is None or self._goal_check_task.done())
                 ):
-                    from cirno.agent.goals.scheduler import wake_due_goals
+                    from cirno_core.agent.goals.scheduler import wake_due_goals
                     self._next_goal_check_at = time.monotonic() + 2
                     self._goal_check_task = self.schedule_background(wake_due_goals(self))
                 try:
@@ -1629,7 +1643,7 @@ class AgentLoop:
         """Keep durable checkpoints when the owning gateway exits.
 
         Normal cancellation intentionally materializes partial output so a
-        user-stopped turn leaves a readable conversation.  Gateway lifecycle
+        user-stopped turn leaves a readable conversation.  Server lifecycle
         shutdown is different: RecoveryCoordinator needs the checkpoint intact
         to safely offer the unfinished turn for explicit continuation later.
         """
@@ -1655,8 +1669,21 @@ class AgentLoop:
         )
         return pending_msg
 
+    def session_intake_lock(self, key: str) -> asyncio.Lock:
+        """Serialize short admission/control operations, never a model's execution."""
+        lock = self._intake_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._intake_locks[key] = lock
+        return lock
+
     async def _enqueue_session_message(self, msg: InboundMessage) -> None:
-        """Admit session work without waiting for its execution or result."""
+        """Admit work after any in-progress control operation has settled."""
+        async with self.session_intake_lock(self._effective_session_key(msg)):
+            await self._enqueue_session_message_unlocked(msg)
+
+    async def _enqueue_session_message_unlocked(self, msg: InboundMessage) -> None:
+        """Admit session work while the caller owns its intake lock."""
         self.bus.admission.check()
         session_key = self._effective_session_key(msg)
         if msg.metadata.get("_session_message"):
@@ -1841,7 +1868,7 @@ class AgentLoop:
                             session_key,
                         )
                     # An explicit turn stop materializes partial context so
-                    # the next prompt can see completed tool results.  Gateway
+                    # the next prompt can see completed tool results.  Server
                     # shutdown keeps the durable checkpoint untouched instead,
                     # allowing RecoveryCoordinator to offer Continue safely.
                     if (
@@ -1887,7 +1914,7 @@ class AgentLoop:
         """Stop active work, then close resources owned by the agent loop.
 
         Resource teardown must still run if cancellation interrupts task draining.
-        Gateway shutdown deliberately bounds this coroutine, so keeping the cleanup
+        Server shutdown deliberately bounds this coroutine, so keeping the cleanup
         phase in ``finally`` prevents a timed-out background task from leaving
         subprocess transports alive after the event loop closes.
         """
@@ -2309,7 +2336,7 @@ class AgentLoop:
             # message.  Mark messages with _command so get_history can filter
             # them out of LLM context.  /new is excluded because it
             # intentionally clears the session.
-            if cmd_ctx.raw.lower() != "/new" and ctx.commit_session:
+            if cmd_ctx.raw.lower() not in {"/new", "/clear"} and ctx.commit_session:
                 ctx.input_persisted_early = await self._persist_user_message_early(
                     ctx.msg, session, _command=True
                 )
@@ -2372,6 +2399,15 @@ class AgentLoop:
         ctx.request_context = await self._request_context_for_turn(ctx)
         if ctx.kind is TurnKind.USER:
             ctx.runtime_context_blocks = await self._resolve_runtime_context_for_turn(ctx)
+        if source_block := origin_context(ctx.msg):
+            ctx.runtime_context_blocks = [source_block, *ctx.runtime_context_blocks]
+        if session.policy.persist and not ctx.ephemeral:
+            checkpoint = await self.runner.prepare_prompt(
+                self.context.build_task_context, ctx.session_key,
+                include_automatic=not bool(ctx.pending_summary),
+            )
+            if checkpoint is not None:
+                ctx.runtime_context_blocks.append(checkpoint)
         staged_provider_state = False
         if stored_state is not None and runtime.provider.can_resume_conversation_state(
             stored_state,
@@ -2419,6 +2455,8 @@ class AgentLoop:
         elif stored_state is not None:
             session.provider_state = None
         if ctx.kind is TurnKind.USER and ctx.commit_session:
+            if ctx.delivery.route.channel == "websocket" and ctx.turn_id and INBOUND_META_TURN_ID not in ctx.msg.metadata:
+                ctx.msg.metadata[INBOUND_META_TURN_ID] = ctx.turn_id
             ctx.input_persisted_early = await self._persist_user_message_early(
                 ctx.msg,
                 session,
@@ -2488,7 +2526,7 @@ class AgentLoop:
     async def _release_archived_runtime(self, session_key: str) -> None:
         if not self.release_archived_runtime:
             return
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         home = self.context.memory.workspace
         def archive(messages, project_id):
             return MemoryRepository(home).archive_messages(messages, session_key, project_id)
@@ -2741,6 +2779,8 @@ class AgentLoop:
                 if isinstance(runtime_context_meta, dict):
                     entry[RUNTIME_CONTEXT_HISTORY_META] = runtime_context_meta
                 if isinstance(internal_meta, dict):
+                    if isinstance(origin := internal_meta.get("input_origin"), dict):
+                        entry["input_origin"] = origin
                     for key in ("timestamp", INBOUND_META_TURN_ID):
                         value = cast(dict[str, Any], internal_meta).get(key)
                         if isinstance(value, str) and value:

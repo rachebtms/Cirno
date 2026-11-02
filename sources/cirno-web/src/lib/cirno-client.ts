@@ -987,6 +987,11 @@ export class CirnoClient {
 
 
     if (parsed.event === "session_updated") {
+      if (parsed.scope === "reset" && parsed.chat_id) {
+        this.goalStateByChatId.delete(parsed.chat_id);
+        this.pendingInboundByChat.delete(parsed.chat_id);
+        this.applyRunEffects(this.runs.transition({ kind: "forget", chatId: parsed.chat_id }));
+      }
       this.emitSessionUpdate(parsed.chat_id, parsed.scope, parsed.workspace_scope);
       return;
     }

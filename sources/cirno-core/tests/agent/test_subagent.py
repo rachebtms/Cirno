@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.memory.consolidation import Consolidator
-from cirno.agent.runner import AgentRunResult
-from cirno.agent.subagents.manager import SubagentManager
-from cirno.agent.tools.filesystem import FileToolsConfig
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import ToolsConfig
-from cirno.llm_usage.context import llm_usage_source
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
-from cirno.security.workspace_access import build_workspace_scope
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.subagents.manager import SubagentManager
+from cirno_core.agent.tools.filesystem import FileToolsConfig
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import ToolsConfig
+from cirno_core.llm_usage.context import llm_usage_source
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.security.workspace_access import build_workspace_scope
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 def _runtime(provider: LLMProvider) -> LLMRuntime:
@@ -94,10 +94,10 @@ def test_subagent_respects_file_tool_toggle(tmp_path):
 
 
 def test_subagent_prompt_keeps_agent_paths_for_selected_project(tmp_path):
-    agent_workspace = tmp_path / "agent"
+    agent_workspace = tmp_path / "agent" / "home"
     project = tmp_path / "project"
-    from cirno.config.home import set_home_path
-    set_home_path(agent_workspace)
+    from cirno_core.config.home import set_instance_path
+    set_instance_path(agent_workspace.parent)
     global_skill = agent_workspace / "skills" / "global-custom" / "SKILL.md"
     project_skill = project / "skills" / "project-custom" / "SKILL.md"
     global_skill.parent.mkdir(parents=True)
@@ -123,13 +123,13 @@ def test_subagent_prompt_keeps_agent_paths_for_selected_project(tmp_path):
 
 
 def test_subagent_prompt_uses_relative_paths_in_agent_workspace(tmp_path):
-    from cirno.config.home import set_home_path
-    set_home_path(tmp_path)
-    skill = tmp_path / "skills" / "custom" / "SKILL.md"
+    from cirno_core.config.home import set_instance_path
+    set_instance_path(tmp_path)
+    skill = tmp_path / "home" / "skills" / "custom" / "SKILL.md"
     skill.parent.mkdir(parents=True)
     skill.write_text("---\nname: custom\ndescription: custom skill\n---\nCustom", encoding="utf-8")
     manager = SubagentManager(
-        workspace=tmp_path,
+        workspace=tmp_path / "home",
         bus=MessageBus(),
         max_tool_result_chars=16_000,
         consolidator=MagicMock(spec=Consolidator),
@@ -138,7 +138,7 @@ def test_subagent_prompt_uses_relative_paths_in_agent_workspace(tmp_path):
     prompt = manager._build_subagent_prompt()
 
     assert "History log: memory/history.jsonl" in prompt
-    assert f"### Home skills (`{tmp_path.resolve() / 'skills'}`)" in prompt
+    assert f"### Home skills (`{tmp_path.resolve() / 'home' / 'skills'}`)" in prompt
 
 
 @pytest.mark.asyncio

@@ -5,16 +5,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.context import TranscriptInput
-from cirno.agent.loop import AgentLoop, TurnContext, TurnKind
-from cirno.agent.tools.context import RequestContext
-from cirno.agent.tools.filesystem import ReadFileTool
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import ChannelsConfig
-from cirno.providers.base import LLMResponse
-from cirno.runtime.context import public_history_message
-from cirno.utils.document import reference_non_image_attachments
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.loop import AgentLoop, TurnContext, TurnKind
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.agent.tools.filesystem import ReadFileTool
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import ChannelsConfig
+from cirno_core.providers.base import LLMResponse
+from cirno_core.runtime.context import public_history_message
+from cirno_core.utils.document import reference_non_image_attachments
 
 
 def _make_loop(
@@ -57,7 +57,7 @@ async def test_document_attachment_is_referenced_and_read_on_demand(
     media_dir.mkdir()
     csv_path = media_dir / "report.csv"
     csv_path.write_text("name,value\ncirno,1", encoding="utf-8")
-    monkeypatch.setattr("cirno.agent.tools.path_utils.get_media_dir", lambda: media_dir)
+    monkeypatch.setattr("cirno_core.agent.tools.path_utils.get_media_dir", lambda: media_dir)
 
     loop = _make_loop(
         workspace,
@@ -217,7 +217,7 @@ def test_attachment_references_canonicalize_existing_relative_paths(
 
 @pytest.mark.asyncio
 async def test_borrowed_image_origin_survives_canonical_reload(tmp_path: Path) -> None:
-    from cirno.webui.transcript import build_session_thread_response
+    from cirno_core.session.transcript import build_session_thread_response
 
     source = tmp_path / "borrowed.png"
     source.write_bytes(base64.b64decode(

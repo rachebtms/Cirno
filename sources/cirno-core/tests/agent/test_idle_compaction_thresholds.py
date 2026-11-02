@@ -4,13 +4,13 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from cirno.agent.autocompact import AutoCompact
-from cirno.memory.consolidation import Consolidator, MemoryStore
-from cirno.config.loader import load_config, save_config
-from cirno.config.schema import Config
-from cirno.session.manager import Session, SessionManager
-from cirno.utils.helpers import estimate_message_tokens
-from cirno.webui.settings.api import update_runtime_config_settings
+from cirno_core.agent.autocompact import AutoCompact
+from cirno_core.memory.consolidation import Consolidator, MemoryStore
+from cirno_core.config.loader import load_config, save_config
+from cirno_core.config.schema import Config
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.utils.helpers import estimate_message_tokens
+from cirno_server.webui.settings.api import update_runtime_config_settings
 
 
 @pytest.mark.parametrize('tokens,expected', [(31_999, False), (32_000, True)])

@@ -6,9 +6,9 @@ from collections.abc import Iterable
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 
-from cirno.bus.events import InboundMessage
-from cirno.session.automation_turns import automation_history_overrides
-from cirno.session.turn_continuation import internal_continuation_inbound
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.automation_turns import automation_history_overrides
+from cirno_core.session.turn_continuation import internal_continuation_inbound
 
 _GOAL_MUTATION_ALLOWED: ContextVar[bool] = ContextVar(
     "cirno_goal_mutation_allowed",

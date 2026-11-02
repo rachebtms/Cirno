@@ -2,17 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from cirno.agent.turn_delivery import TurnDeliveryFactory
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.outbound_events import ContextCompactionEvent
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import TurnCompleted
-from cirno.bus.agent_events import RetryStatusEvent
-from cirno.providers.base import LLMProvider, ProviderCallContext
-from cirno.session.keys import HEARTBEAT_SESSION_KEY
-from cirno.session.manager import SessionManager
-from cirno.session.webui_turns import WebuiTurnRoutePolicy
-from cirno.webui.metadata import (
+from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.outbound_events import ContextCompactionEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import TurnCompleted
+from cirno_core.bus.agent_events import RetryStatusEvent
+from cirno_core.providers.base import LLMProvider, ProviderCallContext
+from cirno_core.session.keys import HEARTBEAT_SESSION_KEY
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
+from cirno_core.session.transport_metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
 )
@@ -213,7 +213,7 @@ async def test_retry_completion_is_isolated_between_turns_in_one_session() -> No
 async def test_next_model_request_clears_exhaustion_within_the_same_turn() -> None:
     from unittest.mock import AsyncMock, patch
 
-    from cirno.providers.base import LLMResponse
+    from cirno_core.providers.base import LLMResponse
 
     class Provider(LLMProvider):
         async def chat(self, **kwargs):
@@ -228,7 +228,7 @@ async def test_next_model_request_clears_exhaustion_within_the_same_turn() -> No
     msg = InboundMessage(channel="websocket", sender_id="user", chat_id="chat", content="")
     delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
     await delivery.events.emit(RetryStatusEvent("exhausted", 4, 4, "connection"))
-    with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+    with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
         response = await Provider(provider_name="test").chat_stream_with_retry(
             [{"role": "user", "content": "continue"}],
             provider_context=ProviderCallContext(events=delivery.events),
@@ -274,7 +274,7 @@ def test_websocket_lifecycles_get_distinct_internal_owners(tmp_path: Path) -> No
 
 
 def test_websocket_lifecycle_reuses_registered_ingress_owner(tmp_path: Path) -> None:
-    from cirno.session import webui_turns as wth
+    from cirno_core.session import webui_turns as wth
 
     owner = wth.register_queued_websocket_turn_if_idle("chat-queued", "turn-queued")
     assert owner is not None
@@ -303,7 +303,7 @@ def test_websocket_lifecycle_reuses_registered_ingress_owner(tmp_path: Path) -> 
 
 
 async def test_internal_user_input_uses_the_persisted_webui_route(tmp_path: Path) -> None:
-    from cirno.session import webui_turns as wth
+    from cirno_core.session import webui_turns as wth
 
     sessions = SessionManager(tmp_path / "sessions")
     target = sessions.get_or_create("websocket:target")
@@ -338,7 +338,7 @@ async def test_same_chat_different_sessions_restore_previous_active_projection(
 ) -> None:
     from unittest.mock import AsyncMock, MagicMock
 
-    from cirno.session import webui_turns as wth
+    from cirno_core.session import webui_turns as wth
 
     factory = TurnDeliveryFactory(
         MessageBus(),
@@ -455,8 +455,8 @@ async def test_late_subagent_route_requires_webui_owned_session(tmp_path: Path) 
 
 @pytest.mark.asyncio
 async def test_unified_display_route_admits_alias_generation_and_rejects_stale_lifetime(tmp_path):
-    from cirno.session.display_history import HISTORY_GENERATION_METADATA_KEY
-    from cirno.session.sqlite_store import SessionConflictError
+    from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
+    from cirno_core.session.sqlite_store import SessionConflictError
 
     sessions = SessionManager(tmp_path)
     alias = await sessions.state.get_header("websocket:chat")

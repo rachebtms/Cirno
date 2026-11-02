@@ -11,12 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.llm_usage.context import current_llm_usage_source, llm_usage_source
-from cirno.llm_usage.models import LLMCallRecord
-from cirno.llm_usage.service import record_llm_call
-from cirno.llm_usage.store import LLMUsageStore
-from cirno.providers.base import LLMProvider, LLMResponse, LLMUsage
-from cirno.providers.fallback_provider import FallbackProvider
+from cirno_core.llm_usage.context import current_llm_usage_source, llm_usage_source
+from cirno_core.llm_usage.models import LLMCallRecord
+from cirno_core.llm_usage.service import record_llm_call
+from cirno_core.llm_usage.store import LLMUsageStore
+from cirno_core.providers.base import LLMProvider, LLMResponse, LLMUsage
+from cirno_core.providers.fallback_provider import FallbackProvider
 
 
 class _SequenceProvider(LLMProvider):
@@ -190,7 +190,7 @@ async def test_missing_usage_keeps_loop_responsive_and_settles_before_cancellati
     events: list[LLMCallRecord] = []
     observer_loops = []
     clock = [1_000_000_000]
-    monkeypatch.setattr("cirno.providers.base.time.monotonic_ns", lambda: clock[0])
+    monkeypatch.setattr("cirno_core.providers.base.time.monotonic_ns", lambda: clock[0])
 
     def estimate() -> tuple[int, str]:
         sources.append(current_llm_usage_source())
@@ -362,7 +362,7 @@ async def test_gateway_usage_observer_records_missing_usage_and_retry(
     reply = "gateway-response-canary-27be91"
     error = "gateway-error-canary-64a8cd"
     store = LLMUsageStore(tmp_path / "usage.sqlite3")
-    monkeypatch.setattr("cirno.llm_usage.service.get_llm_usage_store", lambda: store)
+    monkeypatch.setattr("cirno_core.llm_usage.service.get_llm_usage_store", lambda: store)
     provider = _SequenceProvider(iter([
         LLMResponse(content=error, finish_reason="error", error_kind="timeout"),
         LLMResponse(content=reply),
@@ -410,7 +410,7 @@ async def test_stream_observer_records_physical_attempt_timing(monkeypatch) -> N
         ]
     )
     monkeypatch.setattr(
-        "cirno.providers.base.time.monotonic_ns",
+        "cirno_core.providers.base.time.monotonic_ns",
         lambda: next(monotonic_values),
     )
 

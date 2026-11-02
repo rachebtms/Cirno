@@ -17,26 +17,26 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, cast
 import httpx
 from loguru import logger
 
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.context import tool_log_content_allowed
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.network import NetworkConfig
-from cirno.security.network import (
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.context import tool_log_content_allowed
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.network import NetworkConfig
+from cirno_core.security.network import (
     PinnedDNSAsyncTransport,
     env_proxy_applies_to_url,
     httpx_env_proxy_mounts,
     resolve_url_target,
     validate_url_target,
 )
-from cirno.utils.cancellation import task_is_cancelling
+from cirno_core.utils.cancellation import task_is_cancelling
 
 if TYPE_CHECKING:
     from mcp import ClientSession
     from mcp.types import Prompt, Resource
     from mcp.types import Tool as MCPToolDefinition
 
-    from cirno.agent.tools.mcp_oauth import MCPOAuthHandlers
-    from cirno.config.schema import Config, MCPServerConfig
+    from cirno_core.agent.tools.mcp_oauth import MCPOAuthHandlers
+    from cirno_core.config.schema import Config, MCPServerConfig
 
 # Transient connection errors that warrant a single retry.
 # These typically happen when an MCP server restarts or a network
@@ -781,7 +781,7 @@ class MCPToolWrapper(_MCPWrapperBase):
         self, data_url: str, arguments: Mapping[str, Any]
     ) -> dict[str, Any] | None:
         """Persist one image data URL as an artifact; return its metadata or None."""
-        from cirno.utils.artifacts import ArtifactError, store_generated_image_artifact
+        from cirno_core.utils.artifacts import ArtifactError, store_generated_image_artifact
 
         try:
             return store_generated_image_artifact(
@@ -1002,7 +1002,7 @@ async def connect_mcp_servers(
                         name,
                     )
                     return False
-                from cirno.agent.tools.mcp_oauth import (
+                from cirno_core.agent.tools.mcp_oauth import (
                     MCPAuthorizationRequiredError,
                     create_mcp_oauth_auth,
                 )
@@ -1323,7 +1323,7 @@ def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def _configured_servers(config: Config) -> dict[str, MCPServerConfig]:
-    from cirno.agent.plugins import agent_plugin_mcp_servers
+    from cirno_core.agent.plugins import agent_plugin_mcp_servers
 
     return agent_plugin_mcp_servers(
         config.workspace_path,
@@ -1332,7 +1332,7 @@ def _configured_servers(config: Config) -> dict[str, MCPServerConfig]:
 
 
 def _load_current_servers() -> tuple[dict[str, MCPServerConfig], NetworkConfig]:
-    from cirno.config.loader import load_config, resolve_config_env_vars
+    from cirno_core.config.loader import load_config, resolve_config_env_vars
 
     config = resolve_config_env_vars(load_config())
     return _configured_servers(config), config.network
@@ -1424,7 +1424,7 @@ class MCPProvider:
             }
             authorization_pending: set[str] = set()
             if oauth_servers:
-                from cirno.agent.tools.mcp_oauth import mcp_oauth_has_credentials
+                from cirno_core.agent.tools.mcp_oauth import mcp_oauth_has_credentials
 
                 authorization_pending = {
                     name
@@ -1491,7 +1491,7 @@ class MCPProvider:
             current_servers = dict(self._servers)
             current_names = set(current_servers)
             next_names = set(next_servers)
-            from cirno.agent.tools.mcp_oauth import mcp_oauth_has_credentials
+            from cirno_core.agent.tools.mcp_oauth import mcp_oauth_has_credentials
 
             authorization_pending = {
                 name

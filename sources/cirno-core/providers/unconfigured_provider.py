@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from cirno.providers.base import LLMProvider, LLMResponse
+from cirno_core.providers.base import LLMProvider, LLMResponse
 
 
 class UnconfiguredProvider(LLMProvider):

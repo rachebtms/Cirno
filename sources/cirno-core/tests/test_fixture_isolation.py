@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from cirno.llm_usage import LLMCallRecord, get_llm_usage_store
-from cirno.pairing import store as pairing_store
-from cirno.session.manager import SessionManager
-from cirno.config.home import get_home_path
+from cirno_core.llm_usage import LLMCallRecord, get_llm_usage_store
+from cirno_core.pairing import store as pairing_store
+from cirno_core.session.manager import SessionManager
+from cirno_core.config.home import get_home_path
 
 
 @pytest.mark.parametrize("_iteration", range(2))

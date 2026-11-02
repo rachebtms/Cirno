@@ -1,6 +1,6 @@
 """Pairing module for DM sender approval."""
 
-from cirno.pairing.store import (
+from cirno_core.pairing.store import (
     approve_code,
     clear_channel,
     deny_code,

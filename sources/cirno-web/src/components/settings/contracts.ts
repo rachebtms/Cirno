@@ -4,6 +4,10 @@ export type SettingsExitGuard = (leave: () => void, options?: { promptRestart?: 
 
 export type SettingsSectionKey =
   | "overview"
+  | "account"
+  | "heartbeat"
+  | "coordination"
+  | "regional"
   | "about"
   | "appearance"
   | "reading"

@@ -9,12 +9,12 @@ import pkgutil
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
 
-from cirno.agent.tools.base import Tool
-from cirno.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.base import Tool
+from cirno_core.agent.tools.registry import ToolRegistry
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.context import ToolContext
+    from cirno_core.agent.tools.context import ToolContext
 
 _SKIP_MODULES = frozenset({
     "base", "schema", "registry", "context", "loader", "config",
@@ -25,7 +25,7 @@ _SKIP_MODULES = frozenset({
 class ToolLoader:
     def __init__(self, package: Any = None, *, test_classes: list[type[Tool]] | None = None):
         if package is None:
-            import cirno.agent.tools as _pkg
+            import cirno_core.agent.tools as _pkg
             package = _pkg
         self._package = package
         self._test_classes = test_classes

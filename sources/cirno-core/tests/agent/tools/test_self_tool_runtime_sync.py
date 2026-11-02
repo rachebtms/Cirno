@@ -4,10 +4,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.runtime_control import AgentRuntimeControl
-from cirno.agent.tools.self import MyTool
-from cirno.bus.queue import MessageBus
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.runtime_control import AgentRuntimeControl
+from cirno_core.agent.tools.self import MyTool
+from cirno_core.bus.queue import MessageBus
 
 
 @pytest.mark.asyncio

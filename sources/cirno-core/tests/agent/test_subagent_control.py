@@ -13,24 +13,24 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from loguru import logger
 
-from cirno.agent.loop import AgentLoop
-from cirno.memory.consolidation import Consolidator
-from cirno.agent.runner import AgentRunResult
-from cirno.agent.subagents.manager import SubagentManager
-from cirno.agent.tools.base import Tool
-from cirno.agent.tools.context import RequestContext, current_request_context, request_context
-from cirno.agent.tools.registry import ToolRegistry, is_tool_error_result
-from cirno.agent.tools.shell import ExecTool
-from cirno.agent.tools.subagent import SubagentTool
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import TurnRunStatusChanged
-from cirno.config import Config
-from cirno.sdk.assistant import Cirno
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
-from cirno.session.manager import SESSION_CACHE_MAX_SIZE, SessionManager
-from cirno.session.webui_turns import WebuiTurnRoutePolicy
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.subagents.manager import SubagentManager
+from cirno_core.agent.tools.base import Tool
+from cirno_core.agent.tools.context import RequestContext, current_request_context, request_context
+from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.subagent import SubagentTool
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import TurnRunStatusChanged
+from cirno_core.config import Config
+from cirno_core.sdk.assistant import Cirno
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.session.manager import SESSION_CACHE_MAX_SIZE, SessionManager
+from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 def setup(tmp_path, **kwargs):
@@ -184,7 +184,7 @@ async def test_child_origin_uses_the_channel_turn_identity(loop_factory):
 async def test_default_loop_keeps_slack_thread_for_late_subagent_result(
     tmp_path, monkeypatch, cache_invalidation,
 ):
-    monkeypatch.setattr("cirno.agent.loop._SUBAGENT_TERMINAL_WAIT_SECONDS", 0.01)
+    monkeypatch.setattr("cirno_core.agent.loop._SUBAGENT_TERMINAL_WAIT_SECONDS", 0.01)
     # This checks real default-runtime routing and persistence, not disk latency.
     # Keep bounded waits without treating a loaded Windows runner as a routing failure.
     timeout = 30

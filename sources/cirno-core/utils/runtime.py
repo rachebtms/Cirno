@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
-from cirno.agent.tools.naming import implementation_name
-from cirno.utils.helpers import stringify_text_blocks
+from cirno_core.agent.tools.naming import implementation_name
+from cirno_core.utils.helpers import stringify_text_blocks
 from loguru import logger
 
 _MAX_REPEAT_EXTERNAL_LOOKUPS = 2

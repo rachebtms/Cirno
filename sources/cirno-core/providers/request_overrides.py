@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-from cirno.config.schema import ModelPresetConfig, ProviderConfig, RequestOverrides
+from cirno_core.config.schema import ModelPresetConfig, ProviderConfig, RequestOverrides
 
 
 def isolate_request_overrides(

@@ -6,9 +6,9 @@ import threading
 
 import pytest
 
-from cirno.bus.events import InboundMessage
-from cirno.session.manager import SessionManager
-from cirno.session.sqlite_store import SessionConflictError
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.sqlite_store import SessionConflictError
 
 
 async def test_append_does_not_resubmit_committed_rows(tmp_path):

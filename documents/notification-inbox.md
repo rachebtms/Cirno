@@ -16,7 +16,7 @@ Settings allows each category to be muted separately. Muting controls this brows
 
 ## Storage
 
-Records live in `Home/notifications/inbox.sqlite3`, separate from conversation and memory stores. Pages load records in batches. The main interface refreshes the inbox summary and recent records every ten seconds without a model call. Cleanup retains the latest 10,000 records and preserves unresolved actions outside that window. Temporary-conversation notices are not persisted.
+Records live in `state/notifications/inbox.sqlite3` under the instance root, separate from Agent Home, conversation and memory stores. Pages load records in batches. The main interface refreshes the inbox summary and recent records every ten seconds without a model call. Cleanup retains the latest 10,000 records and preserves unresolved actions outside that window. Temporary-conversation notices are not persisted.
 
 Ordinary replies and successful turn completions are not written to Inbox. Reports, failures and action requests are retained.
 

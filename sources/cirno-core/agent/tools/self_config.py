@@ -1,6 +1,6 @@
 """Self-inspection configuration shared by the tool and root schema."""
 
-from cirno.config.base import Base
+from cirno_core.config.base import Base
 
 
 class MyToolConfig(Base):

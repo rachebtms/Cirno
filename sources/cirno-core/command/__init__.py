@@ -1,6 +1,6 @@
 """Slash command routing and built-in handlers."""
 
-from cirno.command.builtin import register_builtin_commands
-from cirno.command.router import CommandContext, CommandRouter
+from cirno_core.command.builtin import register_builtin_commands
+from cirno_core.command.router import CommandContext, CommandRouter
 
 __all__ = ["CommandContext", "CommandRouter", "register_builtin_commands"]

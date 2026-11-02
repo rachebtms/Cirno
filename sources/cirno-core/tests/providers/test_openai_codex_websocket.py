@@ -8,10 +8,7 @@ import hashlib
 import io
 import json
 import random
-import subprocess
-import sys
 from dataclasses import dataclass, field, replace
-from textwrap import dedent
 from types import SimpleNamespace
 from typing import Any
 
@@ -21,13 +18,13 @@ from loguru import logger
 from PIL import Image
 from pypdf import PdfWriter
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.model_runtime import ModelRuntimeResolver
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import LLMResponse, ProviderCallContext
-from cirno.providers.factory import ProviderSnapshot
-from cirno.providers.openai_codex_provider import OpenAICodexProvider
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.model_runtime import ModelRuntimeResolver
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import LLMResponse, ProviderCallContext
+from cirno_core.providers.factory import ProviderSnapshot
+from cirno_core.providers.openai_codex_provider import OpenAICodexProvider
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 @dataclass
@@ -116,9 +113,9 @@ async def codex_peer(monkeypatch):
     site = web.TCPSite(runner, "127.0.0.1", 0)
     await site.start()
     url = f"http://127.0.0.1:{runner.addresses[0][1]}/responses"
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.DEFAULT_CODEX_URL", url)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.DEFAULT_CODEX_URL", url)
     token = SimpleNamespace(account_id="acct", access="test-token")
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.get_codex_token", lambda **_: token)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.get_codex_token", lambda **_: token)
     monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
     monkeypatch.setenv("no_proxy", "127.0.0.1,localhost")
     provider = OpenAICodexProvider(default_model="gpt-6-astra")

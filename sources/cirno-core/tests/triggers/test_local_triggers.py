@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from cirno.agent.automation_turns import AutomationTurnError
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.triggers.local_runner import run_local_trigger_queue
-from cirno.triggers.local_store import LocalTriggerStore, TriggerDisabledError
-from cirno.triggers.local_types import LocalTrigger, TriggerDelivery
-from cirno.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
+from cirno_core.agent.automation_turns import AutomationTurnError
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.triggers.local_runner import run_local_trigger_queue
+from cirno_core.triggers.local_store import LocalTriggerStore, TriggerDisabledError
+from cirno_core.triggers.local_types import LocalTrigger, TriggerDelivery
+from cirno_core.session.transport_metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
 def _channel_is_enabled(_name: str) -> bool:

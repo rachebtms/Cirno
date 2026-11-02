@@ -27,21 +27,21 @@ npx --yes clawhub@latest search "web scraping" --limit 5
 ## Install
 
 ```bash
-npx --yes clawhub@latest install <slug> --workdir ~/.cirno
+npx --yes clawhub@latest install <slug> --workdir ~/.cirno/home
 ```
 
-Replace `<slug>` with the skill name from search results. This places the skill into `~/.cirno/skills/`, where Cirno discovers Home Skills. Always include `--workdir`. If the instance uses a custom Home, replace `~/.cirno` with that exact Home path in every command. Never install into the project workspace.
+Replace `<slug>` with the skill name from search results. This places the skill into `~/.cirno/home/skills/`, where Cirno discovers Home Skills. Always include `--workdir`. If the instance uses a custom Home, replace `~/.cirno/home` with that exact Home path in every command. Never install into the project workspace.
 
 ## Update
 
 ```bash
-npx --yes clawhub@latest update --all --workdir ~/.cirno
+npx --yes clawhub@latest update --all --workdir ~/.cirno/home
 ```
 
 ## List installed
 
 ```bash
-npx --yes clawhub@latest list --workdir ~/.cirno
+npx --yes clawhub@latest list --workdir ~/.cirno/home
 ```
 
 ## Notes
@@ -49,5 +49,5 @@ npx --yes clawhub@latest list --workdir ~/.cirno
 - Requires Node.js (`npx` comes with it).
 - No API key needed for search and install.
 - Login (`npx --yes clawhub@latest login`) is only required for publishing.
-- `--workdir ~/.cirno` is critical — without it, skills install to the current directory instead of Cirno Home.
+- `--workdir ~/.cirno/home` is critical — without it, skills install to the current directory instead of Cirno Home.
 - After installation, use `skills__validate` for the installed name and check that it appears in the available Skill list. Do not claim installation succeeded before verifying the files and validation result.

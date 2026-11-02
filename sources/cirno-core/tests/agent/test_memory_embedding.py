@@ -1,8 +1,8 @@
 import sys
 
-from cirno.config.schema import MemoryConfig
-from cirno.memory.embedding import search
-from cirno.memory.repository import MemoryRepository
+from cirno_core.config.schema import MemoryConfig
+from cirno_core.memory.embedding import search
+from cirno_core.memory.repository import MemoryRepository
 
 
 def test_default_bm25_never_imports_inference_runtime(tmp_path):
@@ -25,7 +25,7 @@ def test_bad_optional_model_is_a_visible_bm25_fallback(tmp_path):
 
 
 def test_chunk_index_resumes_and_matches_a_long_records_tail(tmp_path, monkeypatch):
-    import cirno.memory.embedding as embedding
+    import cirno_core.memory.embedding as embedding
 
     class Worker:
         peak_mb = 120

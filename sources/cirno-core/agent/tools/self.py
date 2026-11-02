@@ -10,19 +10,19 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from loguru import logger
 
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.context import current_request_context, current_request_session_key
-from cirno.agent.tools.runtime_control import (
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.context import current_request_context, current_request_session_key
+from cirno_core.agent.tools.runtime_control import (
     RUNTIME_COMMAND_KEYS,
     RUNTIME_SNAPSHOT_KEYS,
     JsonValue,
     RuntimeControl,
     RuntimeSnapshot,
 )
-from cirno.agent.tools.self_config import MyToolConfig
+from cirno_core.agent.tools.self_config import MyToolConfig
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.context import ToolContext
+    from cirno_core.agent.tools.context import ToolContext
 
 
 def _is_string_mapping(value: object) -> TypeGuard[Mapping[str, object]]:

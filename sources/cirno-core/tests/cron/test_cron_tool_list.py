@@ -7,10 +7,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.cron import CronTool
-from cirno.cron.service import CronService
-from cirno.cron.types import CronJob, CronJobState, CronPayload, CronSchedule
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.cron.service import CronService
+from cirno_core.cron.types import CronJob, CronJobState, CronPayload, CronSchedule
 
 
 def _make_tool(tmp_path) -> CronTool:
@@ -309,7 +309,7 @@ def test_add_at_job_rejects_past_datetime(tmp_path) -> None:
 def test_add_at_job_rejects_datetime_equal_to_now(tmp_path, monkeypatch) -> None:
     tool = _make_tool(tmp_path)
     fixed_now = 1_900_000_000.0
-    monkeypatch.setattr("cirno.agent.tools.cron.time", SimpleNamespace(time=lambda: fixed_now))
+    monkeypatch.setattr("cirno_core.agent.tools.cron.time", SimpleNamespace(time=lambda: fixed_now))
     at = datetime.fromtimestamp(fixed_now, tz=timezone.utc).isoformat()
     with request_context(
         RequestContext(channel="telegram", chat_id="chat-1", session_key="telegram:chat-1")

@@ -18,9 +18,9 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus, ProxyError
 from websockets.protocol import State
 
-from cirno.providers.base import LLMProvider, LLMResponse, resolve_stream_idle_timeout_s
-from cirno.providers.openai_responses.backend import ResponsesBackend
-from cirno.providers.openai_responses.parsing import ResponsesStreamCapture
+from cirno_core.providers.base import LLMProvider, LLMResponse, resolve_stream_idle_timeout_s
+from cirno_core.providers.openai_responses.backend import ResponsesBackend
+from cirno_core.providers.openai_responses.parsing import ResponsesStreamCapture
 
 _TRANSPORT_FAILURE_LIMIT = 3
 

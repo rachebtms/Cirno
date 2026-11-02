@@ -16,7 +16,7 @@ export function ClearConversationButton({ client, chatId, onCleared }: {
   async function clear() {
     setBusy(true); setError("");
     try {
-      await client.sendSystemCommand(chatId, "/new", 30_000);
+      await client.sendSystemCommand(chatId, "/clear", 30_000);
       onCleared(); setOpen(false);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(false); }

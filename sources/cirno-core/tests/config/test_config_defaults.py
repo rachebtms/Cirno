@@ -3,8 +3,8 @@ import socket
 from unittest.mock import patch
 
 
-from cirno.config.loader import load_config
-from cirno.security.network import validate_url_target
+from cirno_core.config.loader import load_config
+from cirno_core.security.network import validate_url_target
 
 
 def _fake_resolve(host: str, results: list[str]):
@@ -26,12 +26,12 @@ def test_load_config_resets_ssrf_whitelist_when_next_config_is_empty(tmp_path) -
     defaulted.write_text(json.dumps({}), encoding="utf-8")
 
     load_config(whitelisted)
-    with patch("cirno.security.network.socket.getaddrinfo", _fake_resolve("ts.local", ["100.100.1.1"])):
+    with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve("ts.local", ["100.100.1.1"])):
         ok, err = validate_url_target("http://ts.local/api")
         assert ok, err
 
     load_config(defaulted)
-    with patch("cirno.security.network.socket.getaddrinfo", _fake_resolve("ts.local", ["100.100.1.1"])):
+    with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve("ts.local", ["100.100.1.1"])):
         ok, _ = validate_url_target("http://ts.local/api")
         assert not ok
 

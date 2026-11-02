@@ -13,9 +13,9 @@ from collections.abc import Iterator
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.cron import CronTool
-from cirno.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.agent.tools.registry import ToolRegistry
 
 
 class _SvcStub:

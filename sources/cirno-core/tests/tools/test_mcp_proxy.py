@@ -12,14 +12,14 @@ import pytest
 import pytest_asyncio
 from aiohttp import web
 
-from cirno.agent.tools.mcp import MCPProvider, MCPToolWrapper, connect_mcp_servers
-from cirno.agent.tools.mcp_oauth import MCPOAuthStorage
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.network import NetworkConfig
-from cirno.config.schema import MCPServerConfig
-from cirno.runtime.admission import RuntimeAdmission
-from cirno.security import network as security_network
-from cirno.webui.mcp.oauth_api import McpOAuthManager
+from cirno_core.agent.tools.mcp import MCPProvider, MCPToolWrapper, connect_mcp_servers
+from cirno_core.agent.tools.mcp_oauth import MCPOAuthStorage
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.schema import MCPServerConfig
+from cirno_core.runtime.admission import RuntimeAdmission
+from cirno_core.security import network as security_network
+from cirno_server.webui.mcp.oauth_api import McpOAuthManager
 
 _PROXY_ENV_VARS = (
     "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
@@ -126,7 +126,7 @@ async def recording_mcp_proxy(tmp_path, monkeypatch: pytest.MonkeyPatch):
     for name in _PROXY_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(security_network, "getproxies", getproxies_environment)
-    monkeypatch.setattr("cirno.agent.tools.mcp_oauth.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp_oauth.get_data_dir", lambda: tmp_path)
     previous_whitelist = [str(cidr) for cidr in security_network._allowed_networks]
     security_network.configure_ssrf_whitelist(["127.0.0.1/32"])
     fixture = _RecordingMCPProxy()

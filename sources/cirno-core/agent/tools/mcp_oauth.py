@@ -33,8 +33,8 @@ from mcp.shared.auth import (
 )
 from pydantic import AnyHttpUrl, AnyUrl
 
-from cirno.config.paths import get_data_dir
-from cirno.utils.helpers import _write_text_atomic  # pyright: ignore[reportPrivateUsage]
+from cirno_core.config.paths import get_data_dir
+from cirno_core.utils.helpers import _write_text_atomic  # pyright: ignore[reportPrivateUsage]
 
 MCP_OAUTH_CALLBACK_PATH = "/auth/mcp/callback"
 _STORE_VERSION = 1

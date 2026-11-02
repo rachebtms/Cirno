@@ -6,9 +6,9 @@ import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 
-from cirno.session.goal_state import goal_state_raw, parse_goal_state
-from cirno.session.keys import CIRNO_SESSION_KEY
-from cirno.session.session_handles import SessionHandleResolver
+from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
+from cirno_core.session.keys import CIRNO_SESSION_KEY
+from cirno_core.session.session_handles import SessionHandleResolver
 
 WORK_REPORT_KEY = "work_report"
 REPORT_STATES = ("progress", "waiting", "ready", "blocked", "failed", "dropped")
@@ -77,7 +77,7 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
 
     await sessions.state.mutate_metadata(key, save, expected_generation=session.generation)
     if report and state in {"ready", "blocked", "failed", "dropped"}:
-        from cirno.notifications.inbox import NotificationInbox
+        from cirno_core.notifications.inbox import NotificationInbox
         import asyncio
         await asyncio.to_thread(NotificationInbox().record, "report:" + report["id"],
                                 "conversations", "report", status=state, session_key=key,
@@ -93,8 +93,8 @@ async def deliver_work_report(sessions, sender, key, report):
     retry_at = report.get("retry_at")
     if retry_at and datetime.fromisoformat(retry_at) > datetime.now(timezone.utc):
         return "pending"
-    from cirno.agent.tools.session_messages import SessionMessageError
-    from cirno.webui.instance_api import ensure_global_session
+    from cirno_core.agent.tools.session_messages import SessionMessageError
+    from cirno_core.session.global_session import ensure_global_session
 
     try:
         target_key = report["target_session_key"]

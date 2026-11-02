@@ -1,6 +1,6 @@
 # Configuration
 
-`cirno webui --port 8000` prepares the local Web interface and starts or attaches to the gateway. Configure a provider in Settings → Models. An instance stores configuration in `~/.cirno/config.json`; select another Home with `cirno --home /path/to/home webui`.
+`cirno --port 8000` starts the complete service and Web interface in the foreground. Configure a provider in Settings → Models. An instance stores configuration in `~/.cirno/config.json`; select another instance root with `cirno --home /path/to/instance`.
 
 ## Install from a checkout
 
@@ -9,8 +9,8 @@ Requires Python 3.11+ and Node.js 24. From the repository root:
 ```sh
 npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run build
-python -m pip install -e .
-cirno webui --port 8000
+python -m pip install -e sources/cirno-core -e sources/cirno-server -e .
+cirno --port 8000
 ```
 
 The initial local launch creates the default configuration automatically. Open `http://localhost:8000`, register the instance owner, and configure a provider and model. First-time setup takes place in the browser. Existing instances retain their previous authentication settings. For a server deployment, see [Docker](docker.md).
@@ -23,12 +23,12 @@ A minimal OpenAI-compatible configuration is included in [examples/config.json](
 {
   "agents": {
     "defaults": {
-      "provider": "gateway",
+      "provider": "local-api",
       "model": "your-model"
     }
   },
   "providers": {
-    "gateway": {
+    "local-api": {
       "apiBase": "https://api.example.com/v1",
       "apiKey": "${CIRNO_API_KEY}"
     }
@@ -38,7 +38,7 @@ A minimal OpenAI-compatible configuration is included in [examples/config.json](
 
 Replace the endpoint and model with values accepted by your provider. Set referenced environment variables before starting Cirno; missing references and invalid configuration produce errors. Configuration accepts camelCase and snake_case keys. Provider credentials, named model presets and connection settings can be managed in the browser. Saved connection settings take precedence over provider-constructor environment defaults.
 
-Settings → Network & retries exposes request timeout, stream idle timeout and retry count. The configured defaults are 120 seconds for both timeouts and three retries. Proxy settings determine whether a provider uses the configured shared proxy. Restart the gateway to apply service-level settings when requested by the interface.
+Settings → Network & retries exposes request timeout, stream idle timeout and retry count. The configured defaults are 120 seconds for both timeouts and three retries. Proxy settings determine whether a provider uses the configured shared proxy. Restart the server to apply service-level settings when requested by the interface.
 
 ## Settings pages
 
@@ -48,12 +48,15 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Appearance, Text & reading, Execution display: theme/language, text size, code wrapping and independent brief/detailed reasoning and tool steps.
 - Browser notifications: browser permission, sound and Inbox category mutes for this browser.
 - Memory library, Context compaction, Dream consolidation, Memory retrieval: separate pages for stored knowledge, context thresholds, background consolidation and optional embeddings.
-- Personality: Home personality, preferences, agent instructions and heartbeat instructions.
+- Personality: Home personality, preferences and agent instructions.
+- Agent heartbeat: periodic checks of `HEARTBEAT.md` and wakeups in Cirno, separate from service health checks.
+- Conversation coordination: concurrent subagents and the per-source outgoing cross-conversation message limit.
+- Time & region: automatic or manually selected timezone.
 - Goals & execution: continuation and execution limits.
 - Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management.
 - Web search, Nodes, MCP: independently configured agent connections.
 - Telegram: personal account binding and server-side notification preferences. Channel setup configures the Telegram bot token and Web transport.
-- Network & retries, Permissions, Server & heartbeat: network policy, access controls and service settings.
+- Account, Network & retries, Permissions, Server: network policy, access controls and service settings.
 
 See [Home and workspaces](home-and-workspaces.md) for file ownership and [memory](architecture/memory.md) for retrieval and maintenance behavior.
 
@@ -63,9 +66,9 @@ Only Telegram and Web (WebSocket) channels are bundled. Enable and configure the
 
 For Telegram, supply a bot token in Channel setup. In Settings → Telegram, generate a PIN and send `/bind <PIN>` to your bot in a private chat. The eight-digit PIN expires after two minutes, refreshes while the pairing panel remains open, and can be used once. Generating a new PIN invalidates the previous one. A bound account is the only Telegram account admitted to Cirno; group chats, group commands and group callbacks are ignored. Disconnect revokes the binding and any outstanding PIN. Connection errors appear in channel status.
 
-Telegram private input and Heartbeat use the dedicated Cirno conversation. Cirno replies can be mirrored to the bound account, including proactive replies originating in the browser or background work. Inbox Actions, Reports and System notifications use independent server-side switches; browser notification preferences remain local to each browser. Ordinary replies are not added to Inbox. Pending Inbox notifications enter the existing durable delivery outbox, so a restart does not discard an admitted notification. Notifications are rechecked against the current binding before sending. To include an action button, set the Web UI address to one reachable from your phone; the button opens the corresponding Inbox category and conversation. Unanswered questions include their suggested answers in the Telegram notification. Answer and approve in the authenticated Web UI. For Web, configure the listening address, port, authentication, optional public WebSocket address and TLS certificate paths. A remote browser uses the existing gateway and needs no Cirno client installation.
+Telegram private input and Heartbeat use the dedicated Cirno conversation. Cirno replies can be mirrored to the bound account, including proactive replies originating in the browser or background work. Inbox Actions, Reports and System notifications use independent server-side switches; browser notification preferences remain local to each browser. Ordinary replies are not added to Inbox. Pending Inbox notifications enter the existing durable delivery outbox, so a restart does not discard an admitted notification. Notifications are rechecked against the current binding before sending. To include an action button, set the Web UI address to one reachable from your phone; the button opens the corresponding Inbox category and conversation. Unanswered questions include their suggested answers in the Telegram notification. Answer and approve in the authenticated Web UI. For Web, configure the listening address, port, authentication, optional public WebSocket address and TLS certificate paths. A remote browser uses the Cirno server and needs no Cirno client installation.
 
-Authenticated remote sessions can select Full Access. It applies to files and commands on the gateway host. Stop a running conversation before changing its access mode. Use authentication and the deployment's TLS or reverse-proxy configuration when exposing a gateway outside the local machine.
+Authenticated remote sessions can select Full Access. It applies to files and commands on the server host. Stop a running conversation before changing its access mode. Use authentication and the deployment's TLS or reverse-proxy configuration when exposing a server outside the local machine.
 
 ## Idle context compaction
 
@@ -81,10 +84,22 @@ The `@handle` beside a conversation is its stable address for coordination tools
 
 ## Nodes
 
-Settings → Nodes manages SSH connections, host fingerprints, direct commands and persistent jobs. Supply host, port, SSH username, remote working directory and either key or password authentication. A key path refers to a file on the gateway. A blank password while editing preserves the saved password. Credentials are stored in the private Home instance database and omitted from connection listings. Saved host keys or the gateway's `known_hosts` verify the server; compare scanned fingerprints before saving them.
+Settings → Nodes manages SSH connections, host fingerprints, direct commands and persistent jobs. Supply host, port, SSH username, remote working directory and either key or password authentication. A key path refers to a file on the server. A blank password while editing preserves the saved password. Credentials are stored in the private `state/instance.sqlite3` database and omitted from connection listings. Saved host keys or the server’s `known_hosts` verify the server; compare scanned fingerprints before saving them.
 
-Execute command runs a command and returns output without creating a job. The `nodes` tool namespace also lists connections, transfers files and starts, inspects or stops persistent jobs. Job output, PID and exit status stay on the remote host; tracking records stay in Home. No remote Cirno daemon or client is installed. Persistent jobs require a POSIX shell, OpenSSH and `setsid`. An uncertain submission exposes its job ID for inspection before resubmitting.
+Execute command runs a command and returns output without creating a job. The `nodes` tool namespace also lists connections, transfers files and starts, inspects or stops persistent jobs. Job output, PID and exit status stay on the remote host; tracking records stay in `state/instance.sqlite3`. No remote Cirno daemon or client is installed. Persistent jobs require a POSIX shell, OpenSSH and `setsid`. An uncertain submission exposes its job ID for inspection before resubmitting.
 
 ## Service lifecycle
 
 Settings retains Restart. There is no in-app upgrade platform or terminal configuration wizard. The CLI Apps catalog remains available for installing command-line integrations. Source installations upgrade by updating the checkout, rebuilding the browser assets and reinstalling the package; container installations rebuild or pull a published image.
+
+## Account password
+
+Settings → Account shows the registered owner and changes the browser-login password. Enter the current password, a new password and confirmation. The same rules apply as registration: at least ten characters, including an uppercase letter and a symbol. Successful changes keep the current browser signed in, revoke other browser sessions, invalidate server access tokens and reconnect Web UI sockets. Other browsers must sign in again. Password hashes and sessions live in `state/webui-auth.sqlite3`; passwords are not saved in `config.json`. Shared-token authentication has no registered browser account and continues to use the existing server authentication settings.
+
+## Conversation controls and access review
+
+Settings → Goals & execution configures the continuation text and its visibility. Stop preserves context; Continue or `/resume` starts another model request from saved progress. New conversation drafts accept `/temporary on|off`, `/ptc on|off` and `/model <preset>`. `/access default|review|full` selects the permission mode. Model preset names are unique ignoring case.
+
+AI review keeps Default restrictions and reviews blocked operations independently of Cirno memory. Uncertain cases appear in Inbox → Actions. Each approval covers one exact operation; it does not grant Full Access. AI can make unsafe decisions, so this mode displays an explicit warning. See [operation review](architecture/access-review.md).
+
+Use message actions to branch or edit an idle human message. Context changes do not undo previous file edits, commands or external actions; tool history triggers a warning. Editing retains attachments and replaces later conversation context before sending the revised request. `/clear` resets only the fixed personal Cirno context through its dedicated control.

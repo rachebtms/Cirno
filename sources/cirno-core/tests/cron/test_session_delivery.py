@@ -1,7 +1,7 @@
 import pytest
 
-from cirno.cron.session_delivery import origin_delivery_context
-from cirno.cron.types import CronJob, CronPayload
+from cirno_core.cron.session_delivery import origin_delivery_context
+from cirno_core.cron.types import CronJob, CronPayload
 
 
 def test_origin_delivery_context_uses_explicit_origin_fields() -> None:

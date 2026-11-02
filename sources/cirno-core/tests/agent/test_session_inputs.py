@@ -5,24 +5,24 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.session_messages import SendSessionMessageTool
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import UserInputEvent
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import UserInputAccepted
-from cirno.providers.base import LLMResponse
-from cirno.runtime.context import public_history_message
-from cirno.session.session_handles import SessionHandleResolver
-from cirno.session.session_messages import SESSION_MESSAGE_METADATA_KEY
-from cirno.session.webui_turns import WebuiTurnCoordinator
-from cirno.webui.history import record_from_fact
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.session_messages import SendSessionMessageTool
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import UserInputEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import UserInputAccepted
+from cirno_core.providers.base import LLMResponse
+from cirno_core.runtime.context import public_history_message
+from cirno_core.session.session_handles import SessionHandleResolver
+from cirno_core.session.session_messages import SESSION_MESSAGE_METADATA_KEY
+from cirno_core.session.webui_turns import WebuiTurnCoordinator
+from cirno_core.session.presentation_history import record_from_fact
 
 
 @pytest.fixture
 async def loop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path / "state")
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "state")
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
     provider.generation = SimpleNamespace(max_tokens=4096)

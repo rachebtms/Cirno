@@ -6,7 +6,7 @@ from urllib.parse import quote, urlsplit
 
 from pydantic import Field, field_validator
 
-from cirno.config.base import Base
+from cirno_core.config.base import Base
 
 _ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 

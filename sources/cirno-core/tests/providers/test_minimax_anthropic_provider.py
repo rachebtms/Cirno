@@ -1,7 +1,7 @@
 """Tests for the MiniMax Anthropic provider registration."""
 
-from cirno.config.schema import ProvidersConfig
-from cirno.providers.registry import PROVIDERS
+from cirno_core.config.schema import ProvidersConfig
+from cirno_core.providers.registry import PROVIDERS
 
 
 def test_minimax_anthropic_config_field_exists():

@@ -19,35 +19,35 @@ from oauth_cli_kit import get_token as get_codex_token
 from oauth_cli_kit.providers import OPENAI_CODEX_PROVIDER
 from oauth_cli_kit.storage import FileTokenStorage
 
-from cirno import __version__
-from cirno.bus.agent_events import NO_EVENTS, ContextCompactionEvent
-from cirno.providers.base import (
+from cirno_core import __version__
+from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent
+from cirno_core.providers.base import (
     CONTEXT_SAFETY_BUFFER,
     LLMProvider,
     LLMResponse,
     ProviderCallContext,
     ProviderConversationState,
 )
-from cirno.providers.images import prepare_inline_images
-from cirno.providers.oauth_catalog_cache import (
+from cirno_core.providers.images import prepare_inline_images
+from cirno_core.providers.oauth_catalog_cache import (
     OAuthCatalogAuthRequiredError,
     OAuthModelCatalog,
     OAuthModelCatalogSnapshot,
     oauth_catalog_auth_rejected,
 )
-from cirno.providers.openai_responses import (
+from cirno_core.providers.openai_responses import (
     ResponsesBackend,
     ResponsesWebSocketOptions,
     responses_state_matches,
 )
-from cirno.providers.openai_responses.state import (
+from cirno_core.providers.openai_responses.state import (
     responses_compaction_items,
     without_response_item_ids,
 )
-from cirno.providers.openai_responses.websocket import ResponsesWebSocketError
-from cirno.providers.registry import ProviderModelSpec, find_by_name
-from cirno.utils.cancellation import shield_and_drain
-from cirno.utils.helpers import estimate_prompt_tokens
+from cirno_core.providers.openai_responses.websocket import ResponsesWebSocketError
+from cirno_core.providers.registry import ProviderModelSpec, find_by_name
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.helpers import estimate_prompt_tokens
 
 DEFAULT_CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_OPENAI_CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from cirno.agent.runner import AgentRunSpec
-from cirno.config.schema import AgentDefaults
-from cirno.providers.base import GenerationSettings, LLMProvider
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.runner import AgentRunSpec
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.providers.base import GenerationSettings, LLMProvider
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 async def failed_test_consolidator(

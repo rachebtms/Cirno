@@ -18,20 +18,20 @@ from ddgs.exceptions import DDGSException
 from ddgs.exceptions import TimeoutException as DDGSTimeoutException
 from loguru import logger
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import ToolContext, tool_log_content_allowed
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import ToolContext, tool_log_content_allowed
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.agent.tools.web_config import (
+from cirno_core.agent.tools.web_config import (
     WebFetchConfig,
     WebSearchConfig,
     WebToolsConfig,
 )
-from cirno.utils.helpers import build_image_content_blocks
+from cirno_core.utils.helpers import build_image_content_blocks
 
 # Shared constants
 _DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
@@ -106,26 +106,26 @@ def _validate_url(url: str) -> tuple[bool, str]:
 
 def _validate_url_safe(url: str) -> tuple[bool, str]:
     """Validate URL with SSRF protection: scheme, domain, and resolved IP check."""
-    from cirno.security.network import validate_url_target
+    from cirno_core.security.network import validate_url_target
 
     return validate_url_target(url)
 
 
 def _resolve_url_safe(url: str) -> tuple[bool, str, tuple[str, ...]]:
     """Validate URL and return the resolved IPs to pin during the request."""
-    from cirno.security.network import resolve_url_target
+    from cirno_core.security.network import resolve_url_target
 
     return resolve_url_target(url)
 
 
 def _pinned_dns_transport() -> httpx.AsyncBaseTransport:
-    from cirno.security.network import PinnedDNSAsyncTransport
+    from cirno_core.security.network import PinnedDNSAsyncTransport
 
     return PinnedDNSAsyncTransport()
 
 
 def _fetch_client_kwargs(proxy: str | None, timeout: float) -> dict[str, Any]:
-    from cirno.security.network import httpx_env_proxy_mounts
+    from cirno_core.security.network import httpx_env_proxy_mounts
 
     kwargs: dict[str, Any] = {"timeout": timeout}
     if proxy:
@@ -139,7 +139,7 @@ def _fetch_client_kwargs(proxy: str | None, timeout: float) -> dict[str, Any]:
 
 
 def _unsafe_url_request_error(exc: BaseException) -> str | None:
-    from cirno.security.network import UnsafeURLRequestError
+    from cirno_core.security.network import UnsafeURLRequestError
 
     return str(exc) if isinstance(exc, UnsafeURLRequestError) else None
 
@@ -413,7 +413,7 @@ class WebSearchTool(Tool):
         config_loader: Callable[[], WebSearchConfig] | None = None
         if ctx.provider_snapshot_loader is not None:
             def _load_search_config() -> WebSearchConfig:
-                from cirno.config.loader import load_config, resolve_config_env_vars
+                from cirno_core.config.loader import load_config, resolve_config_env_vars
                 return resolve_config_env_vars(load_config()).tools.web.search
             config_loader = _load_search_config
         return cls(

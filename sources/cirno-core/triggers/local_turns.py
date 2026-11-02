@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable
 
-from cirno.agent.automation_turns import AutomationTurnCoordinator
-from cirno.bus.events import InboundMessage
-from cirno.triggers.local_session_turns import local_trigger, local_trigger_delivery_id
+from cirno_core.agent.automation_turns import AutomationTurnCoordinator
+from cirno_core.bus.events import InboundMessage
+from cirno_core.triggers.local_session_turns import local_trigger, local_trigger_delivery_id
 
 
 class LocalTriggerTurnCoordinator(AutomationTurnCoordinator):

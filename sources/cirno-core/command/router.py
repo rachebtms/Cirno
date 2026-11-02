@@ -7,12 +7,12 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from cirno.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.events import InboundMessage, OutboundMessage
 
 if TYPE_CHECKING:
-    from cirno.agent.loop import AgentLoop
-    from cirno.session.manager import Session
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.session.manager import Session
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 Handler = Callable[["CommandContext"], Awaitable["InboundMessage | OutboundMessage | None"]]
 _BOT_SUFFIX_RE = re.compile(r"^[A-Za-z0-9_]+$")

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import AliasChoices, Field
 
-from cirno.config.base import Base
+from cirno_core.config.base import Base
 
 
 class ExecToolConfig(Base):

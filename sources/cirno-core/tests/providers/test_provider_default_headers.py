@@ -1,6 +1,6 @@
-from cirno.config.schema import Config, ProviderConfig
-from cirno.providers.factory import _provider_extra_headers, provider_signature
-from cirno.providers.registry import find_by_name
+from cirno_core.config.schema import Config, ProviderConfig
+from cirno_core.providers.factory import _provider_extra_headers, provider_signature
+from cirno_core.providers.registry import find_by_name
 
 
 def test_kimi_coding_uses_default_user_agent_header() -> None:

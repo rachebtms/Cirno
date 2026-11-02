@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
 
-from cirno.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
-from cirno.security.workspace_access import (
+from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
+from cirno_core.security.workspace_access import (
     WorkspaceSandboxStatus,
     WorkspaceScope,
     current_tool_workspace,
@@ -17,11 +17,11 @@ from cirno.security.workspace_access import (
 )
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.context import RequestContext
-    from cirno.agent.tools.shell import ExecToolConfig
-    from cirno.agent.tools.web import WebToolsConfig
-    from cirno.config.schema import ModelPresetConfig
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.agent.tools.context import RequestContext
+    from cirno_core.agent.tools.shell import ExecToolConfig
+    from cirno_core.agent.tools.web import WebToolsConfig
+    from cirno_core.config.schema import ModelPresetConfig
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 JsonScalar: TypeAlias = str | int | float | bool | None

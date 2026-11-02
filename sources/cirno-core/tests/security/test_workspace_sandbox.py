@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from cirno.security.workspace_access import workspace_sandbox_status
+from cirno_core.security.workspace_access import workspace_sandbox_status
 
 
 def test_workspace_sandbox_disabled(tmp_path: Path) -> None:

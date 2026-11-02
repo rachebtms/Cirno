@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from cirno.providers.openai_compat_provider import (
+from cirno_core.providers.openai_compat_provider import (
     OpenAICompatProvider,
     _deep_merge,
 )
-from cirno.providers.registry import find_by_name
+from cirno_core.providers.registry import find_by_name
 
 # ---------------------------------------------------------------------------
 # _deep_merge unit tests
@@ -144,7 +144,7 @@ class TestBuildKwargsExtraBody:
 
     def test_extra_body_merges_with_thinking(self) -> None:
         """Config extra_body should merge with (and override) thinking params."""
-        from cirno.providers.registry import ProviderSpec
+        from cirno_core.providers.registry import ProviderSpec
 
         spec = ProviderSpec(
             name="custom", keywords=(), env_key="",
@@ -362,19 +362,19 @@ class TestSchemaConfig:
     """Verify ProviderConfig accepts extra_body."""
 
     def test_default_is_none(self) -> None:
-        from cirno.config.schema import ProviderConfig
+        from cirno_core.config.schema import ProviderConfig
 
         config = ProviderConfig()
         assert config.extra_body is None
 
     def test_accepts_dict(self) -> None:
-        from cirno.config.schema import ProviderConfig
+        from cirno_core.config.schema import ProviderConfig
 
         config = ProviderConfig(extra_body={"guided_json": {"type": "object"}})
         assert config.extra_body == {"guided_json": {"type": "object"}}
 
     def test_nested_dict(self) -> None:
-        from cirno.config.schema import ProviderConfig
+        from cirno_core.config.schema import ProviderConfig
 
         config = ProviderConfig(
             extra_body={"chat_template_kwargs": {"enable_thinking": False}}

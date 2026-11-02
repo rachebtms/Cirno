@@ -10,11 +10,11 @@ import httpx
 import pytest
 from loguru import logger
 
-import cirno.providers.base as provider_base
-from cirno.config.schema import Config
-from cirno.bus.agent_events import ContextCompactionEvent, EventSink
-from cirno.providers.factory import make_provider
-from cirno.providers.openai_codex_provider import (
+import cirno_core.providers.base as provider_base
+from cirno_core.config.schema import Config
+from cirno_core.bus.agent_events import ContextCompactionEvent, EventSink
+from cirno_core.providers.factory import make_provider
+from cirno_core.providers.openai_codex_provider import (
     OpenAICodexProvider,
     _build_codex_http_error,
     _build_reasoning_options,
@@ -23,11 +23,11 @@ from cirno.providers.openai_codex_provider import (
     _CodexHTTPError,
     _request_codex,
 )
-from cirno.providers.openai_responses import (
+from cirno_core.providers.openai_responses import (
     build_responses_state,
     responses_state_items,
 )
-from cirno.providers.registry import find_by_name
+from cirno_core.providers.registry import find_by_name
 
 
 def _mock_codex_token(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -35,7 +35,7 @@ def _mock_codex_token(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(account_id="acct", access="token")
 
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider.get_codex_token",
+        "cirno_core.providers.openai_codex_provider.get_codex_token",
         fake_token,
     )
 
@@ -72,10 +72,10 @@ async def test_codex_provider_reuses_tls_context_for_concurrent_requests(monkeyp
         return provider_base.LLMResponse(content="ok")
 
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider.httpx.create_ssl_context",
+        "cirno_core.providers.openai_codex_provider.httpx.create_ssl_context",
         fake_create_ssl_context,
     )
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider(proxy=proxy)
     responses = await asyncio.gather(*(
@@ -95,7 +95,7 @@ def codex_warning_log(monkeypatch):
     logger.enable("cirno")
     handler_id = logger.add(
         sink, format="{message}", level="WARNING",
-        filter="cirno.providers.openai_codex_provider", backtrace=True, diagnose=True,
+        filter="cirno_core.providers.openai_codex_provider", backtrace=True, diagnose=True,
     )
     try:
         yield sink
@@ -128,8 +128,8 @@ def test_codex_error_details_do_not_retain_arbitrary_messages(raw: str) -> None:
 
 @pytest.mark.asyncio
 async def test_codex_title_omits_effort_even_with_high_chat_reasoning(monkeypatch, tmp_path) -> None:
-    from cirno.session.manager import SessionManager
-    from cirno.session.webui_turns import maybe_generate_webui_title
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.session.webui_turns import maybe_generate_webui_title
 
     _mock_codex_token(monkeypatch)
     requests: list[dict[str, Any]] = []
@@ -138,7 +138,7 @@ async def test_codex_title_omits_effort_even_with_high_chat_reasoning(monkeypatc
         requests.append(body)
         return provider_base.LLMResponse(content="Context Compaction")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     provider = OpenAICodexProvider()
     provider.generation = provider_base.GenerationSettings(reasoning_effort="high")
     sessions = SessionManager(tmp_path)
@@ -163,9 +163,9 @@ async def test_codex_title_omits_effort_even_with_high_chat_reasoning(monkeypatc
 async def test_codex_title_failure_logs_request_purpose_and_safe_upstream_details(
     monkeypatch, tmp_path,
 ) -> None:
-    from cirno.session.manager import SessionManager
-    from cirno.session.webui_turns import maybe_generate_webui_title
-    from cirno.utils.log_config import add_console_log_sink
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.session.webui_turns import maybe_generate_webui_title
+    from cirno_core.utils.log_config import add_console_log_sink
 
     _mock_codex_token(monkeypatch)
     original_client = httpx.AsyncClient
@@ -191,7 +191,7 @@ async def test_codex_title_failure_logs_request_purpose_and_safe_upstream_detail
     def fake_client(**kwargs):
         return original_client(transport=httpx.MockTransport(handler))
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
     sessions = SessionManager(tmp_path)
     session = sessions.get_or_create("websocket:diagnostic-title")
     session.metadata["webui"] = True
@@ -253,7 +253,7 @@ async def test_codex_diagnostics_distinguish_compaction_from_following_request(
             error_param="input[1].type", request_id="req-compaction-test",
         )
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     response = await OpenAICodexProvider(
         extra_body={"reasoning": {"effort": "low"}},
     ).chat(
@@ -298,7 +298,7 @@ async def test_codex_request_non_200_populates_http_metadata(monkeypatch) -> Non
         assert verify is True
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
 
     with pytest.raises(_CodexHTTPError) as caught:
         await _request_codex("https://codex.example/responses", {}, {"input": []}, verify=True)
@@ -338,7 +338,7 @@ async def test_codex_request_marks_rejected_compaction_without_retaining_raw_bod
     ) -> httpx.AsyncClient:
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
 
     with pytest.raises(_CodexHTTPError) as caught:
         await _request_codex(
@@ -376,7 +376,7 @@ async def test_codex_request_honors_stream_idle_timeout_env(monkeypatch) -> None
         seen["timeout"] = timeout
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
 
     await _request_codex("https://codex.example/responses", {}, {"input": []}, verify=True)
 
@@ -406,7 +406,7 @@ async def test_codex_request_uses_configured_proxy(monkeypatch) -> None:
         seen["trust_env"] = trust_env
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
 
     await _request_codex(
         "https://codex.example/responses",
@@ -441,7 +441,7 @@ async def test_codex_omits_prompt_cache_key_without_session_id(monkeypatch) -> N
         headers_seen.append(headers)
         return provider_base.LLMResponse(content="ok")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     await provider.chat(
@@ -471,8 +471,8 @@ async def test_codex_prompt_cache_key_prefers_stable_session_id(monkeypatch) -> 
     async def http_only(_self, *_args, **_kwargs):
         return None
 
-    monkeypatch.setattr("cirno.providers.openai_responses.websocket.ResponsesWebSocketSession.request", http_only)
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_responses.websocket.ResponsesWebSocketSession.request", http_only)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     provider = OpenAICodexProvider()
 
     for session_id, first_request in (
@@ -510,7 +510,7 @@ async def test_codex_provider_applies_extra_body_from_config(monkeypatch) -> Non
         headers_seen.append(headers)
         return provider_base.LLMResponse(content="ok")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     config = Config.model_validate({
         "agents": {
             "defaults": {
@@ -544,7 +544,7 @@ async def test_codex_timeout_error_is_typed_and_retryable(monkeypatch) -> None:
     async def fake_request(*args, **kwargs):
         raise httpx.ReadTimeout("")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     response = await provider.chat([{"role": "user", "content": "hello"}])
@@ -567,7 +567,7 @@ async def test_codex_mid_stream_server_error_is_treated_as_transient(monkeypatch
             "'message': 'An error occurred while processing your request.'}"
         )
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     response = await provider.chat([{"role": "user", "content": "hello"}])
@@ -599,8 +599,8 @@ async def test_codex_provider_passes_proxy_to_oauth_and_response_request(monkeyp
         seen["request_proxy"] = proxy
         return provider_base.LLMResponse(content="ok")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.get_codex_token", fake_token)
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.get_codex_token", fake_token)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider(proxy=proxy)
     response = await provider.chat([{"role": "user", "content": "hello"}])
@@ -619,7 +619,7 @@ async def test_codex_timeout_error_writes_diagnostic_log(monkeypatch, codex_warn
         assert body["input"][0]["content"][0]["text"] == prompt
         raise httpx.ReadTimeout("")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     response = await provider.chat(
@@ -656,7 +656,7 @@ async def test_codex_diagnostic_log_omits_prompt_content(monkeypatch) -> None:
         async def fake_request(*args: Any, **kwargs: Any):
             raise httpx.ReadTimeout("")
 
-        monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+        monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
         provider = OpenAICodexProvider()
         response = await provider.chat(
@@ -690,7 +690,7 @@ async def test_codex_retry_uses_structured_transient_error_metadata(monkeypatch,
     async def fake_sleep(delay: float) -> None:
         delays.append(delay)
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     monkeypatch.setattr(provider_base.asyncio, "sleep", fake_sleep)
 
     provider = OpenAICodexProvider()
@@ -715,7 +715,7 @@ async def test_codex_http_error_preserves_status_and_retry_after(monkeypatch) ->
             error_code="overloaded",
         )
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     response = await provider.chat([{"role": "user", "content": "hello"}])
@@ -754,7 +754,7 @@ async def test_codex_http_diagnostic_log_omits_raw_body(monkeypatch, codex_warni
     def fake_client(**kwargs):
         return original_client(transport=httpx.MockTransport(handler))
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
     provider = OpenAICodexProvider()
     try:
         response = await provider.chat(
@@ -812,7 +812,7 @@ async def test_codex_429_preserves_retry_semantics(
             should_retry=expected_retry,
         )
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     response = await provider.chat([{"role": "user", "content": "hello"}])
@@ -903,7 +903,7 @@ async def test_codex_replayed_tool_turn_omits_server_item_ids(monkeypatch) -> No
         return provider_base.LLMResponse(content="done")
 
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider._request_codex",
+        "cirno_core.providers.openai_codex_provider._request_codex",
         fake_request,
     )
 
@@ -1008,7 +1008,7 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
         )
 
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider._request_codex",
+        "cirno_core.providers.openai_codex_provider._request_codex",
         fake_request,
     )
 
@@ -1121,7 +1121,7 @@ async def test_codex_disables_unsupported_native_compaction_and_continues(
         return provider_base.LLMResponse(content="done")
 
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider._request_codex",
+        "cirno_core.providers.openai_codex_provider._request_codex",
         fake_request,
     )
 
@@ -1182,7 +1182,7 @@ async def test_codex_native_compaction_terminal_survives_cancellation(monkeypatc
             output_items=[{"type": "compaction", "encrypted_content": "compacted"}],
         ))
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     task = asyncio.create_task(provider.chat(
         [{"role": "user", "content": "new"}], max_tokens=5,
         provider_context=provider_base.ProviderCallContext(
@@ -1208,7 +1208,7 @@ async def test_codex_stream_surfaces_reasoning_summary(monkeypatch) -> None:
         return SimpleNamespace(account_id="acct", access="token")
 
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider.get_codex_token",
+        "cirno_core.providers.openai_codex_provider.get_codex_token",
         fake_token,
     )
 
@@ -1235,7 +1235,7 @@ async def test_codex_stream_surfaces_reasoning_summary(monkeypatch) -> None:
             reasoning_content="summary",
         )
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
     provider = OpenAICodexProvider()
     content_deltas: list[str] = []
@@ -1267,7 +1267,7 @@ async def test_codex_request_preserves_optional_tool_fields(monkeypatch):
         captured.update(body)
         return provider_base.LLMResponse(content="ok")
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", fake_request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     parameters = {
         "type": "object",
         "properties": {"query": {"type": "string"}},

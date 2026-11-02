@@ -2,7 +2,7 @@
 
 import os
 
-from cirno.utils.path import abbreviate_path
+from cirno_core.utils.path import abbreviate_path
 
 
 class TestAbbreviatePathShort:

@@ -59,6 +59,13 @@ class HistoryFact:
         )
 
 
+def is_model_input_fact(fact: HistoryFact) -> bool:
+    """Display-only control, subagent and continuation rows do not index prompts."""
+    return (fact.kind is HistoryKind.INPUT
+            and (fact.content.get("input_origin") or {}).get("kind")
+            not in {"supervision", "subagent", "continuation"})
+
+
 @dataclass(frozen=True)
 class HistoryTurn:
     ordinal: int

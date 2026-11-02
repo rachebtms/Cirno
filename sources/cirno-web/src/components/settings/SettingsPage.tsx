@@ -1,3 +1,4 @@
+import { AccountSettings } from "@/components/settings/account/AccountSettings";
 import { NodesSettings, MemorySourcesSettings, SkillHistorySettings } from "@/components/settings/InstanceFeaturesSettings";
 import { HomeFilesSettings } from "@/components/settings/capabilities/HomeFilesSettings";
 import { ChevronLeft } from "lucide-react";
@@ -392,6 +393,12 @@ export function SettingsPage({
             </WebSettings>
           </div>
         );
+      case "heartbeat":
+        return <div className="settings-stack"><p className="settings-list-inset text-sm leading-6 text-muted-foreground">{t("settings.heartbeat.help")}</p>
+          {runtimeConfiguration("heartbeat")}<HomeFilesSettings client={controller.client} section="heartbeat" /></div>;
+      case "coordination":
+      case "regional":
+        return runtimeConfiguration(section);
       case "runtime":
         return (
           <div className="settings-stack">
@@ -427,13 +434,17 @@ export function SettingsPage({
 
   const renderSection = (section: SettingsSectionKey, embedded = false): ReactNode => {
     switch (section) {
+      case "account":
+        return <AccountSettings />;
       case "telegram":
         return <TelegramBindingSettings client={controller.client} onConfigure={() => selectSection("channels")} />;
       case "appearance":
       case "reading":
-      case "activity":
         return <AppearanceSettings section={section} themePreference={themePreference} onChangeTheme={onChangeTheme}
           localPrefs={localPrefs} onChangeLocalPrefs={setLocalPrefs} />;
+      case "activity":
+        return <div className="settings-stack"><AppearanceSettings section="activity" themePreference={themePreference} onChangeTheme={onChangeTheme}
+          localPrefs={localPrefs} onChangeLocalPrefs={setLocalPrefs} />{runtimeConfiguration("activity")}</div>;
       case "channels":
         return (
           <ChannelsSettings

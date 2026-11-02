@@ -6,24 +6,24 @@ from collections.abc import Mapping
 from functools import lru_cache
 from typing import Any
 
-from cirno.session.automation_spec import (
+from cirno_core.session.automation_spec import (
     AUTOMATION_HISTORY_META as AUTOMATION_HISTORY_META,
 )
-from cirno.session.automation_spec import (
+from cirno_core.session.automation_spec import (
     AutomationTurnSpec as AutomationTurnSpec,
 )
-from cirno.session.automation_spec import (
+from cirno_core.session.automation_spec import (
     automation_history_overrides_for_spec as automation_history_overrides_for_spec,
 )
-from cirno.session.automation_spec import (
+from cirno_core.session.automation_spec import (
     automation_trigger as automation_trigger,
 )
 
 
 @lru_cache(maxsize=1)
 def _automation_specs() -> tuple[AutomationTurnSpec, ...]:
-    from cirno.cron.session_turns import CRON_AUTOMATION_SPEC
-    from cirno.triggers.local_session_turns import LOCAL_TRIGGER_AUTOMATION_SPEC
+    from cirno_core.cron.session_turns import CRON_AUTOMATION_SPEC
+    from cirno_core.triggers.local_session_turns import LOCAL_TRIGGER_AUTOMATION_SPEC
 
     return (CRON_AUTOMATION_SPEC, LOCAL_TRIGGER_AUTOMATION_SPEC)
 

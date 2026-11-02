@@ -18,15 +18,15 @@ import httpx
 from oauth_cli_kit.models import OAuthToken
 from oauth_cli_kit.storage import FileTokenStorage
 
-from cirno.providers.base import LLMResponse, ProviderCallContext
-from cirno.providers.model_api import ModelAPICapabilities, RequestAPI
-from cirno.providers.oauth_catalog_cache import (
+from cirno_core.providers.base import LLMResponse, ProviderCallContext
+from cirno_core.providers.model_api import ModelAPICapabilities, RequestAPI
+from cirno_core.providers.oauth_catalog_cache import (
     OAuthCatalogAuthRequiredError,
     OAuthModelCatalog,
     OAuthModelCatalogSnapshot,
 )
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import ProviderModelSpec, find_by_name
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import ProviderModelSpec, find_by_name
 
 DEFAULT_GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code"
 DEFAULT_GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"

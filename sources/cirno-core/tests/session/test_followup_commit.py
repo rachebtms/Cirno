@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.context import TranscriptInput
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import RequestContext
-from cirno.bus.events import INBOUND_META_TURN_ID, InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import GenerationSettings, LLMResponse
-from cirno.runtime.context import public_history_message
-from cirno.session.manager import SessionManager
-from cirno.session.recovery import PENDING_FOLLOWUP_ID_KEY, pending_followups
-from cirno.webui.recovery import RecoveryCoordinator
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.bus.events import INBOUND_META_TURN_ID, InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import GenerationSettings, LLMResponse
+from cirno_core.runtime.context import public_history_message
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY, pending_followups
+from cirno_core.session.display_recovery import RecoveryCoordinator
 
 
 def _loop(sessions):

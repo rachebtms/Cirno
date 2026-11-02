@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.shell import ExecTool
-from cirno.bus.events import INBOUND_META_USER_SHELL, InboundMessage, OutboundMessage
-from cirno.command.builtin import cmd_user_shell
-from cirno.command.router import CommandContext
-from cirno.session.manager import Session, SessionPolicy
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.bus.events import INBOUND_META_USER_SHELL, InboundMessage, OutboundMessage
+from cirno_core.command.builtin import cmd_user_shell
+from cirno_core.command.router import CommandContext
+from cirno_core.session.manager import Session, SessionPolicy
 
 
 def _context(loop: MagicMock, *, trusted: bool, command: str = "pwd") -> CommandContext:

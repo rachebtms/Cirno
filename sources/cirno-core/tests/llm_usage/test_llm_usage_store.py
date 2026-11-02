@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
-from cirno.llm_usage.context import LLMUsageSource
-from cirno.llm_usage.models import LLMCallRecord
-from cirno.llm_usage.store import SCHEMA_VERSION, LLMUsageStore
-from cirno.providers.base import LLMUsage
+from cirno_core.llm_usage.context import LLMUsageSource
+from cirno_core.llm_usage.models import LLMCallRecord
+from cirno_core.llm_usage.store import SCHEMA_VERSION, LLMUsageStore
+from cirno_core.providers.base import LLMUsage
 
 
 def _timestamp(value: str) -> int:

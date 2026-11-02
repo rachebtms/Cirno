@@ -1,7 +1,7 @@
 import { FullAccessIcon, RestrictedAccessIcon, WorkspaceIcon } from "@/components/icons/product-icons";
 import type { HTMLAttributes, ReactElement, RefObject } from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, FolderSearch, History, Search, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, FolderSearch, History, Search, ShieldCheck, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ToggleButton } from "@/components/ui/toggle-button";
 import { Button } from "@/components/ui/button";
@@ -702,10 +702,11 @@ export function WorkspaceAccessMenu({
   const restoreTriggerFocus = useRef(true);
   const descriptionId = useId();
   const isFull = scope.access_mode === "full";
-  const label = t(isFull ? "thread.composer.workspace.full" : "thread.composer.workspace.default");
-  const description = t(isFull ? "thread.composer.workspace.fullDescription" : "thread.composer.workspace.defaultDescription");
+  const isReview = scope.access_mode === "review";
+  const label = t(isReview ? "thread.composer.workspace.review" : isFull ? "thread.composer.workspace.full" : "thread.composer.workspace.default");
+  const description = t(isReview ? "thread.composer.workspace.reviewDescription" : isFull ? "thread.composer.workspace.fullDescription" : "thread.composer.workspace.defaultDescription");
   const accessAriaLabel = `${t("thread.composer.workspace.accessAria")}: ${label}`;
-  const AccessIcon = isFull ? FullAccessIcon : RestrictedAccessIcon;
+  const AccessIcon = isReview ? ShieldCheck : isFull ? FullAccessIcon : RestrictedAccessIcon;
 
   useEffect(() => { if (disabled || !onChange) setOpen(false); }, [disabled, onChange]);
   useEffect(() => { if (!hintEnabled) setHintOpen(false); }, [hintEnabled]);
@@ -742,7 +743,7 @@ export function WorkspaceAccessMenu({
                 onKeyDown={() => { restoreTriggerFocus.current = true; }}
                 className={cn(
                   "thread-composer-access touch-target inline-flex h-8 min-w-0 max-w-full shrink items-center gap-1.5 rounded-md px-2 text-[12px] font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55",
-                  isFull ? "text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200" : "text-muted-foreground hover:text-foreground",
+                  isReview ? "text-destructive hover:text-destructive" : isFull ? "text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200" : "text-muted-foreground hover:text-foreground",
                 )}>
                 <AccessIcon className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 truncate">{label}</span>
@@ -761,14 +762,15 @@ export function WorkspaceAccessMenu({
         onPointerDownOutside={() => { restoreTriggerFocus.current = false; }}
         onCloseAutoFocus={event => { if (!restoreTriggerFocus.current) event.preventDefault(); }}
         className="w-max min-w-[13rem] max-w-[calc(100vw-2rem)]">
-        {(["restricted", "full"] as const).map(mode => {
+        {(["restricted", "review", "full"] as const).map(mode => {
           const full = mode === "full";
-          const optionLabel = t(full ? "thread.composer.workspace.full" : "thread.composer.workspace.default");
-          const OptionIcon = full ? FullAccessIcon : RestrictedAccessIcon;
+          const review = mode === "review";
+          const optionLabel = t(review ? "thread.composer.workspace.review" : full ? "thread.composer.workspace.full" : "thread.composer.workspace.default");
+          const OptionIcon = review ? ShieldCheck : full ? FullAccessIcon : RestrictedAccessIcon;
           return <DropdownMenuItem key={mode} role="menuitemradio" aria-checked={scope.access_mode === mode} aria-label={optionLabel}
             className="touch-target gap-2.5"
             onSelect={() => { if (!disabled && scope.access_mode !== mode) onChange?.(scopeWithAccessMode(scope, mode)); }}>
-            <OptionIcon className={full ? "text-orange-600 dark:text-orange-300" : undefined} />
+            <OptionIcon className={review ? "text-destructive" : full ? "text-orange-600 dark:text-orange-300" : undefined} />
             <span className="min-w-0 flex-1">{optionLabel}</span>
             <span aria-hidden className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
               {scope.access_mode === mode && <Check className={cn("h-3.5 w-3.5", full && "text-orange-600 dark:text-orange-300")} />}

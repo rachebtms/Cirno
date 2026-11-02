@@ -7,15 +7,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext
-from cirno.bus.events import InboundMessage
-from cirno.session.goal_state import (
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.goal_state import (
     GOAL_STATE_KEY,
     explicit_goal_requested,
     sustained_goal_turn,
 )
-from cirno.session.recovery import REQUEST_ORIGIN_METADATA_KEY
-from cirno.session.turn_continuation import (
+from cirno_core.session.recovery import REQUEST_ORIGIN_METADATA_KEY
+from cirno_core.session.turn_continuation import (
     INTERNAL_CONTINUATION_KIND_META,
     INTERNAL_CONTINUATION_META,
     INTERNAL_CONTINUATION_RUN_STARTED_AT_META,

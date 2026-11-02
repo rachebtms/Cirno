@@ -10,14 +10,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.exec_session import ExecSessionManager
-from cirno.agent.tools.loader import ToolLoader
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.rg import RgTool
-from cirno.agent.tools.search import FindFilesTool, GrepTool
-from cirno.agent.tools.shell import ExecTool, _PreparedCommand
-from cirno.config.schema import ToolsConfig
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.exec_session import ExecSessionManager
+from cirno_core.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.rg import RgTool
+from cirno_core.agent.tools.search import FindFilesTool, GrepTool
+from cirno_core.agent.tools.shell import ExecTool, _PreparedCommand
+from cirno_core.config.schema import ToolsConfig
 
 
 @pytest.mark.parametrize("installed", [True, False])
@@ -28,7 +28,7 @@ from cirno.config.schema import ToolsConfig
     [RgTool, GrepTool, FindFilesTool], [GrepTool, FindFilesTool, RgTool],
 ])
 def test_loader_selects_one_search_backend(tmp_path, monkeypatch, installed, exec_enabled, file_enabled, scope, classes):
-    monkeypatch.setattr("cirno.agent.tools.rg.shutil.which", lambda *a, **kw: "rg" if installed else None)
+    monkeypatch.setattr("cirno_core.agent.tools.rg.shutil.which", lambda *a, **kw: "rg" if installed else None)
     config = ToolsConfig()
     config.exec.enable = exec_enabled
     config.file.enable = file_enabled
@@ -85,7 +85,7 @@ def test_detection_uses_exec_path_configuration(tmp_path, monkeypatch):
         captured.update(command=command, path=path)
         return "rg"
 
-    monkeypatch.setattr("cirno.agent.tools.rg.shutil.which", which)
+    monkeypatch.setattr("cirno_core.agent.tools.rg.shutil.which", which)
     assert RgTool.enabled(ToolContext(config=config, workspace=str(tmp_path)))
     assert captured["path"] == os.pathsep.join([
         config.exec.path_prepend, os.environ.get("PATH", ""), config.exec.path_append,
@@ -225,7 +225,7 @@ async def test_direct_search_uses_configured_path(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("backend", ["bwrap", "seatbelt"])
 def test_direct_search_preserves_sandbox_and_arguments(tmp_path, monkeypatch, backend):
-    monkeypatch.setattr("cirno.agent.tools.shell._IS_WINDOWS", False)
+    monkeypatch.setattr("cirno_core.agent.tools.shell._IS_WINDOWS", False)
     args = ["rg", "-F", "hello | $HOME; 'world'", "."]
     prepared = RgTool(working_dir=str(tmp_path), sandbox=backend)._prepare_command(args)
     assert isinstance(prepared, _PreparedCommand)

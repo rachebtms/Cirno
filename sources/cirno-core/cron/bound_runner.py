@@ -8,13 +8,13 @@ import time
 import uuid
 from typing import Any, Protocol
 
-from cirno.bus.delivery import DELIVERY_RUN_META
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.cron.session_delivery import origin_delivery_context
-from cirno.cron.session_turns import CRON_DEFER_UNTIL_IDLE_META, CRON_TRIGGER_META
-from cirno.cron.types import CronJob, CronRunResult
-from cirno.cron.webui_metadata import cron_proactive_delivery_metadata
-from cirno.utils.prompt_templates import render_template
+from cirno_core.bus.delivery import DELIVERY_RUN_META
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.cron.session_delivery import origin_delivery_context
+from cirno_core.cron.session_turns import CRON_DEFER_UNTIL_IDLE_META, CRON_TRIGGER_META
+from cirno_core.cron.types import CronJob, CronRunResult
+from cirno_core.cron.webui_metadata import cron_proactive_delivery_metadata
+from cirno_core.utils.prompt_templates import render_template
 
 
 class BoundCronAgent(Protocol):

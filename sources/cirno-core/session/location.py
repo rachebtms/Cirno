@@ -12,8 +12,8 @@ from pathlib import Path
 
 from filelock import FileLock
 
-from cirno.config.paths import get_runtime_subdir
-from cirno.utils.helpers import (
+from cirno_core.config.paths import get_runtime_subdir
+from cirno_core.utils.helpers import (
     ensure_dir,
     safe_filename,
 )

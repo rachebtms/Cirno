@@ -110,7 +110,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
         for tag in filters.get("tags") or []:
             access_clauses.append("EXISTS(SELECT 1 FROM json_each(m.body,'$.tags') WHERE value=?)")
             args.append(tag.strip().casefold())
-        from cirno.memory.repository import time_conditions
+        from cirno_core.memory.repository import time_conditions
         dates, date_args = time_conditions(filters.get("since"), filters.get("until"), filters.get("time_field", "observed_at"), filters.get("time_zone", "UTC"))
         access_clauses.extend(dates)
         args.extend(date_args)

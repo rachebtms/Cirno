@@ -10,7 +10,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
-from cirno.sdk.assistant import (
+from cirno_core.sdk.assistant import (
     STREAM_EVENT_REASONING_COMPLETED,
     STREAM_EVENT_REASONING_DELTA,
     STREAM_EVENT_RUN_COMPLETED,
@@ -30,13 +30,13 @@ from cirno.sdk.assistant import (
     StreamEvent,
     StreamEventType,
 )
-from cirno.providers.base import LLMUsage
-from cirno.runtime.context import (
+from cirno_core.providers.base import LLMUsage
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RuntimeContextBlock,
     append_runtime_context,
 )
-from cirno.utils.llm_runtime import runtime_from_provider_snapshot
+from cirno_core.utils.llm_runtime import runtime_from_provider_snapshot
 
 
 def _write_config(tmp_path: Path, overrides: dict | None = None) -> Path:
@@ -80,7 +80,7 @@ def test_from_config_missing_env_reports_explicit_config_path(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from cirno.config.errors import ConfigLoadError
+    from cirno_core.config.errors import ConfigLoadError
 
     name = "CIRNO_TEST_SDK_MISSING_KEY"
     monkeypatch.delenv(name, raising=False)
@@ -102,7 +102,7 @@ def test_from_config_creates_instance(tmp_path):
     bot = Cirno.from_config(config_path, workspace=workspace)
     assert bot._loop is not None
     assert bot._loop.workspace == workspace
-    assert bot._loop.sessions.sessions_dir.parent == config_path.parent / "sessions"
+    assert bot._loop.sessions.sessions_dir.parent == config_path.parent / "state" / "sessions"
 
 
 def test_from_config_composes_configured_mcp_outside_agent_loop(tmp_path):
@@ -163,10 +163,10 @@ def test_from_config_rejects_multiple_model_selectors(tmp_path):
 
 
 def test_from_config_default_path():
-    from cirno.config.schema import Config
+    from cirno_core.config.schema import Config
 
-    with patch("cirno.config.loader.load_config") as mock_load, \
-         patch("cirno.providers.factory.make_provider") as mock_prov:
+    with patch("cirno_core.config.loader.load_config") as mock_load, \
+         patch("cirno_core.providers.factory.make_provider") as mock_prov:
         mock_load.return_value = Config()
         mock_prov.return_value = MagicMock()
         mock_prov.return_value.get_default_model.return_value = "test"
@@ -180,7 +180,7 @@ async def test_run_returns_result(tmp_path):
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
 
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     mock_response = OutboundMessage(
         channel="cli", chat_id="direct", content="Hello back!"
@@ -200,8 +200,8 @@ async def test_run_returns_result(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_with_hooks(tmp_path):
-    from cirno.agent.hook import AgentHook, AgentHookContext, SDKCaptureHook
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.agent.hook import AgentHook, AgentHookContext, SDKCaptureHook
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -230,7 +230,7 @@ async def test_run_hooks_restored_on_error(tmp_path):
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
 
-    from cirno.agent.hook import AgentHook
+    from cirno_core.agent.hook import AgentHook
 
     bot._loop.process_direct = AsyncMock(side_effect=RuntimeError("boom"))
     original_hooks = bot._loop._extra_hooks
@@ -262,7 +262,7 @@ def test_workspace_override(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_custom_session_key(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -282,7 +282,7 @@ async def test_run_custom_session_key(tmp_path):
 
 @pytest.mark.parametrize("generation_kwargs", [{}, {"session_generation": "generation-1"}])
 def test_request_context_preserves_legacy_positional_arguments(tmp_path, generation_kwargs):
-    from cirno.agent.tools.context import RequestContext
+    from cirno_core.agent.tools.context import RequestContext
 
     context = RequestContext(
         "cli",
@@ -313,10 +313,10 @@ def test_request_context_preserves_legacy_positional_arguments(tmp_path, generat
 
 @pytest.mark.asyncio
 async def test_run_exposes_attributes_to_context_provider_without_persisting_them(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.agent.tools.context import RequestContext
-    from cirno.bus.queue import MessageBus
-    from cirno.providers.base import LLMResponse
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.tools.context import RequestContext
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.providers.base import LLMResponse
 
     provider = _fake_provider("test-model")
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -361,9 +361,9 @@ async def test_run_exposes_attributes_to_context_provider_without_persisting_the
 @pytest.mark.asyncio
 async def test_persisted_turn_callback_is_best_effort_and_reads_display_safe_session(tmp_path):
     from cirno import SessionTurnPersisted
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
-    from cirno.providers.base import LLMResponse
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.providers.base import LLMResponse
 
     provider = _fake_provider("test-model")
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -431,8 +431,8 @@ async def test_persisted_turn_callback_is_best_effort_and_reads_display_safe_ses
 @pytest.mark.asyncio
 async def test_persisted_turn_callback_observes_saved_command_turn(tmp_path):
     from cirno import SessionTurnPersisted
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     bot = Cirno(AgentLoop(
         bus=MessageBus(),
@@ -457,9 +457,9 @@ async def test_persisted_turn_callback_observes_saved_command_turn(tmp_path):
 @pytest.mark.asyncio
 async def test_ephemeral_run_does_not_invoke_persisted_turn_callback(tmp_path):
     from cirno import SessionTurnPersisted
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
-    from cirno.providers.base import LLMResponse
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.providers.base import LLMResponse
 
     provider = _fake_provider("test-model")
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -534,9 +534,9 @@ def test_stream_event_constants_are_stable():
 @pytest.mark.asyncio
 async def test_run_populates_tools_used_across_iterations(tmp_path):
     """tools_used collects every tool name fired across all iterations, in order."""
-    from cirno.agent.hook import AgentHookContext
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.base import ToolCallRequest
+    from cirno_core.agent.hook import AgentHookContext
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.base import ToolCallRequest
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -566,8 +566,8 @@ async def test_run_populates_tools_used_across_iterations(tmp_path):
 @pytest.mark.asyncio
 async def test_run_populates_final_messages(tmp_path):
     """messages reflects the agent's message list at the last iteration."""
-    from cirno.agent.hook import AgentHookContext
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.agent.hook import AgentHookContext
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -593,7 +593,7 @@ async def test_run_populates_final_messages(tmp_path):
 @pytest.mark.asyncio
 async def test_run_no_iterations_leaves_defaults_empty(tmp_path):
     """If process_direct never triggers after_iteration, tools_used/messages stay []."""
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -610,8 +610,8 @@ async def test_run_no_iterations_leaves_defaults_empty(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_populates_observability_fields(tmp_path):
-    from cirno.agent.hook import AgentRunHookContext
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.agent.hook import AgentRunHookContext
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -651,9 +651,9 @@ async def test_run_populates_observability_fields(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_ephemeral_still_captures_runner_observability(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
-    from cirno.providers.base import LLMResponse
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.providers.base import LLMResponse
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -677,7 +677,7 @@ async def test_run_ephemeral_still_captures_runner_observability(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_forwards_non_default_runtime_options(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -711,7 +711,7 @@ async def test_run_forwards_non_default_runtime_options(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_allows_parallel_sessions_without_model_override(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -739,8 +739,8 @@ async def test_run_allows_parallel_sessions_without_model_override(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_model_overrides_can_overlap_without_default_mutation(tmp_path):
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.factory import ProviderSnapshot
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.factory import ProviderSnapshot
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -805,8 +805,8 @@ async def test_run_model_overrides_can_overlap_without_default_mutation(tmp_path
 
 @pytest.mark.asyncio
 async def test_run_model_override_is_per_run_without_default_mutation(tmp_path):
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.factory import ProviderSnapshot
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.factory import ProviderSnapshot
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -845,8 +845,8 @@ async def test_run_model_override_is_per_run_without_default_mutation(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_model_preset_override_is_per_run(tmp_path):
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.factory import ProviderSnapshot
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.factory import ProviderSnapshot
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -893,8 +893,8 @@ async def test_run_rejects_multiple_model_selectors(tmp_path):
 @pytest.mark.asyncio
 async def test_run_user_hooks_still_fire_alongside_capture(tmp_path):
     """Capture hook must not displace user-provided hooks."""
-    from cirno.agent.hook import AgentHook, AgentHookContext
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -919,9 +919,9 @@ async def test_run_user_hooks_still_fire_alongside_capture(tmp_path):
 
 @pytest.mark.asyncio
 async def test_concurrent_run_hooks_are_isolated_per_call(tmp_path):
-    from cirno.agent.hook import AgentHook, AgentHookContext
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.base import ToolCallRequest
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.base import ToolCallRequest
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -972,8 +972,8 @@ async def test_concurrent_run_hooks_are_isolated_per_call(tmp_path):
 @pytest.mark.asyncio
 async def test_run_restores_extra_hooks_even_on_populated_iterations(tmp_path):
     """Previously-installed _extra_hooks must be restored regardless of capture state."""
-    from cirno.agent.hook import AgentHook, AgentHookContext
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -994,7 +994,7 @@ async def test_run_restores_extra_hooks_even_on_populated_iterations(tmp_path):
 
 @pytest.mark.asyncio
 async def test_stream_yields_text_events_in_order(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1032,8 +1032,8 @@ async def test_stream_yields_text_events_in_order(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_wait_returns_full_result_without_consuming_events(tmp_path):
-    from cirno.agent.hook import AgentRunHookContext
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.agent.hook import AgentRunHookContext
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1079,7 +1079,7 @@ async def test_run_streamed_wait_returns_full_result_without_consuming_events(tm
 
 @pytest.mark.asyncio
 async def test_run_streamed_cancel_releases_full_queue_without_consuming(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1106,7 +1106,7 @@ async def test_run_streamed_cancel_releases_full_queue_without_consuming(tmp_pat
 
 @pytest.mark.asyncio
 async def test_run_streamed_text_returns_final_content(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1121,7 +1121,7 @@ async def test_run_streamed_text_returns_final_content(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_forwards_runtime_options(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1160,8 +1160,8 @@ async def test_run_streamed_forwards_runtime_options(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_model_override_reports_admitted_runtime(tmp_path):
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.factory import ProviderSnapshot
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.factory import ProviderSnapshot
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1223,9 +1223,9 @@ async def test_stream_rejects_multiple_model_selectors(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_emits_tool_events(tmp_path):
-    from cirno.agent.hook import AgentHookContext
-    from cirno.bus.events import OutboundMessage
-    from cirno.providers.base import ToolCallRequest
+    from cirno_core.agent.hook import AgentHookContext
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.providers.base import ToolCallRequest
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1275,7 +1275,7 @@ async def test_run_streamed_emits_tool_events(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_emits_reasoning_events(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1305,7 +1305,7 @@ async def test_run_streamed_emits_reasoning_events(tmp_path):
 
 @pytest.mark.asyncio
 async def test_stream_generator_break_cancels_underlying_run(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1334,7 +1334,7 @@ async def test_stream_generator_break_cancels_underlying_run(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_restores_hooks_and_reports_failure(tmp_path):
-    from cirno.agent.hook import AgentHook
+    from cirno_core.agent.hook import AgentHook
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1358,7 +1358,7 @@ async def test_run_streamed_restores_hooks_and_reports_failure(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_streamed_stream_events_is_single_consumer(tmp_path):
-    from cirno.bus.events import OutboundMessage
+    from cirno_core.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1377,8 +1377,8 @@ async def test_run_streamed_stream_events_is_single_consumer(tmp_path):
 
 @pytest.mark.asyncio
 async def test_sdk_capture_prefers_run_level_snapshot():
-    from cirno.agent.hook import AgentHookContext, AgentRunHookContext, SDKCaptureHook
-    from cirno.providers.base import ToolCallRequest
+    from cirno_core.agent.hook import AgentHookContext, AgentRunHookContext, SDKCaptureHook
+    from cirno_core.providers.base import ToolCallRequest
 
     hook = SDKCaptureHook()
     iter_messages = [{"role": "user", "content": "work"}]

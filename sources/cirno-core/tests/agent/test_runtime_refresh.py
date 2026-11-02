@@ -6,20 +6,20 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import RuntimeModelChanged
-from cirno.config.errors import ConfigLoadError
-from cirno.config.loader import save_config
-from cirno.config.schema import Config, ModelPresetConfig
-from cirno.providers.base import GenerationSettings
-from cirno.providers.factory import ProviderSnapshot, load_provider_snapshot
-from cirno.session.model_selection import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import RuntimeModelChanged
+from cirno_core.config.errors import ConfigLoadError
+from cirno_core.config.loader import save_config
+from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.providers.base import GenerationSettings
+from cirno_core.providers.factory import ProviderSnapshot, load_provider_snapshot
+from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
     model_preset_from_metadata,
 )
-from cirno.webui.settings.api import update_agent_settings
+from cirno_server.webui.settings.api import update_agent_settings
 
 
 def _provider(default_model: str, max_tokens: int = 123) -> MagicMock:
@@ -323,7 +323,7 @@ def test_settings_context_window_refreshes_runtime_state(
     config.agents.defaults.context_window_tokens = 65_536
     config.providers.openai.api_key = "sk-test"
     save_config(config, config_path)
-    monkeypatch.setattr("cirno.config.loader._current_config_path", config_path)
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     def loader(*, preset_name: str | None = None) -> ProviderSnapshot:
         return load_provider_snapshot(config_path, preset_name=preset_name)

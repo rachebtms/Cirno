@@ -1,4 +1,4 @@
-"""Tests for ``cirno.utils.media_decode``."""
+"""Tests for ``cirno_core.utils.media_decode``."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from cirno.utils.media_decode import (
+from cirno_core.utils.media_decode import (
     DEFAULT_MAX_BYTES,
     MAX_FILE_SIZE,
     FileSizeExceeded,

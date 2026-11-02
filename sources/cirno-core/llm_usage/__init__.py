@@ -6,24 +6,24 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from cirno.llm_usage.models import LLMCallRecord
-    from cirno.llm_usage.service import (
+    from cirno_core.llm_usage.models import LLMCallRecord
+    from cirno_core.llm_usage.service import (
         empty_usage_payload,
         get_llm_usage_store,
         llm_usage_payload,
         llm_usage_store_path,
         record_llm_call,
     )
-    from cirno.llm_usage.store import LLMUsageStore
+    from cirno_core.llm_usage.store import LLMUsageStore
 
 _EXPORTS = {
-    "LLMCallRecord": "cirno.llm_usage.models",
-    "LLMUsageStore": "cirno.llm_usage.store",
-    "empty_usage_payload": "cirno.llm_usage.service",
-    "get_llm_usage_store": "cirno.llm_usage.service",
-    "record_llm_call": "cirno.llm_usage.service",
-    "llm_usage_store_path": "cirno.llm_usage.service",
-    "llm_usage_payload": "cirno.llm_usage.service",
+    "LLMCallRecord": "cirno_core.llm_usage.models",
+    "LLMUsageStore": "cirno_core.llm_usage.store",
+    "empty_usage_payload": "cirno_core.llm_usage.service",
+    "get_llm_usage_store": "cirno_core.llm_usage.service",
+    "record_llm_call": "cirno_core.llm_usage.service",
+    "llm_usage_store_path": "cirno_core.llm_usage.service",
+    "llm_usage_payload": "cirno_core.llm_usage.service",
 }
 
 

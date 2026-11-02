@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from cirno.cron.types import CronJob
-from cirno.session.automation_spec import (
+from cirno_core.cron.types import CronJob
+from cirno_core.session.automation_spec import (
     AutomationTurnSpec,
     automation_trigger,
 )

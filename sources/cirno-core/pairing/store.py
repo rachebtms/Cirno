@@ -1,6 +1,6 @@
 """Pairing store for DM sender approval.
 
-Persistent storage at ``~/.cirno/pairing.json`` keeps approved senders
+Persistent storage at ``~/.cirno/state/pairing.json`` keeps approved senders
 and pending pairing codes per channel.  The store is designed for
 private-assistant scale: small JSON file, simple locking, no external DB.
 """
@@ -18,8 +18,8 @@ from typing import Any, Literal, cast
 
 from loguru import logger
 
-from cirno.config.paths import get_data_dir
-from cirno.utils.helpers import _write_text_atomic  # pyright: ignore[reportPrivateUsage]
+from cirno_core.config.paths import get_data_dir
+from cirno_core.utils.helpers import _write_text_atomic  # pyright: ignore[reportPrivateUsage]
 
 # threading.Lock is used so store functions remain callable from both sync CLI
 # and async channel handlers.  At private-assistant scale (small JSON file,

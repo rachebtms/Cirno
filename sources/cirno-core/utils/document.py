@@ -10,7 +10,7 @@ from zipfile import BadZipFile, ZipFile
 
 from loguru import logger
 
-from cirno.utils.helpers import detect_image_mime
+from cirno_core.utils.helpers import detect_image_mime
 
 _MAX_TEXT_LENGTH = 200_000
 _MAX_EXTRACT_FILE_SIZE = 50 * 1024 * 1024  # 50 MB

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from cirno.utils import bun
+from cirno_core.utils import bun
 
 
 def test_ensure_bun_reuses_matching_system_runtime(monkeypatch, tmp_path):
@@ -76,3 +76,11 @@ def test_private_bun_path_does_not_modify_parent_environment(monkeypatch, tmp_pa
         assert env["PATH"].endswith(os.pathsep + "original")
     assert not alias_dir.exists()
     assert os.environ["PATH"] == "original"
+
+
+def test_bun_default_cache_belongs_to_instance_state(download, tmp_path):
+    from cirno_core.config.home import set_instance_path
+    set_instance_path(tmp_path)
+    executable = Path(bun.ensure_bun())
+    assert executable.is_relative_to(tmp_path / "state" / "cache" / "bun")
+    assert not (tmp_path / "home" / "cache").exists()

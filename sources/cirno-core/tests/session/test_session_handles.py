@@ -7,15 +7,15 @@ from threading import Event, Thread
 
 import pytest
 
-from cirno.session.manager import SessionManager
-from cirno.session.session_handles import (
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.session_handles import (
     SESSION_HANDLE_METADATA_KEY,
     SessionHandleResolver,
     allocate_session_handle_name,
     _tier_size,
     normalize_session_handle,
 )
-from cirno.session.types import SESSION_TYPE_KEY, SessionType
+from cirno_core.session.types import SESSION_TYPE_KEY, SessionType
 
 
 def _persist(manager: SessionManager, key: str) -> None:
@@ -245,3 +245,20 @@ async def test_runtime_existing_handles_do_not_wait_for_an_external_write_lock(t
         release.set()
         thread.join()
         await state.aclose()
+
+
+def test_personal_cirno_has_reserved_handle_across_reopen_and_name_collisions(tmp_path):
+    from cirno_core.session.keys import CIRNO_SESSION_KEY
+    from cirno_core.session.session_handles import session_handle_for_name
+    manager = SessionManager(tmp_path)
+    for key, name in [("websocket:ordinary", "cirno"), (CIRNO_SESSION_KEY, "vave")]:
+        session = manager.get_or_create(key)
+        session.metadata[SESSION_HANDLE_METADATA_KEY] = name
+        manager.save(session)
+    resolver = SessionHandleResolver(manager)
+    assert resolver.resolve("@cirno").session_key == CIRNO_SESSION_KEY
+    assert resolver.handle_for_session("websocket:ordinary").name != "cirno"
+    assert session_handle_for_name(CIRNO_SESSION_KEY, "vave").name == "cirno"
+    assert SessionHandleResolver(SessionManager(tmp_path)).resolve("cirno").session_key == CIRNO_SESSION_KEY
+    with pytest.raises(ValueError, match="reserved"):
+        session_handle_for_name("websocket:ordinary", "cirno")

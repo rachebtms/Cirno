@@ -7,20 +7,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from cirno.config.network import NetworkConfig
+from cirno_core.config.network import NetworkConfig
 
 if TYPE_CHECKING:
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.exec_session import ExecSessionManager
-    from cirno.agent.tools.file_state import FileStates
-    from cirno.agent.tools.runtime_control import RuntimeControl
-    from cirno.bus.queue import MessageBus
-    from cirno.config.schema import ProvidersConfig, ToolsConfig
-    from cirno.cron.service import CronService
-    from cirno.providers.factory import ProviderSnapshot
-    from cirno.security.workspace_access import WorkspaceSandboxStatus, WorkspaceScope
-    from cirno.session.manager import SessionManager
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.agent.approval.service import OperationApproval
+    from cirno_core.agent.conversation_control import ConversationControl
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.exec_session import ExecSessionManager
+    from cirno_core.agent.tools.file_state import FileStates
+    from cirno_core.agent.tools.runtime_control import RuntimeControl
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.config.schema import ProvidersConfig, ToolsConfig
+    from cirno_core.cron.service import CronService
+    from cirno_core.providers.factory import ProviderSnapshot
+    from cirno_core.security.workspace_access import WorkspaceSandboxStatus, WorkspaceScope
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 _CURRENT_REQUEST_CONTEXT: ContextVar["RequestContext | None"] = ContextVar(
     "cirno_tool_request_context",
@@ -49,6 +51,7 @@ class RequestContext:
     persist_session: bool = True
     # Effective tool scope; injected inputs retain the active run's scope.
     workspace_scope: WorkspaceScope | None = None
+    operation_approval: OperationApproval | None = None
 
 
 def bind_request_context(ctx: RequestContext) -> Token[RequestContext | None]:
@@ -101,3 +104,4 @@ class ToolContext:
     workspace_sandbox: WorkspaceSandboxStatus | None = None
     goal_continuation_limit: int = 0
     runtime_control: RuntimeControl | None = None
+    conversation_control: ConversationControl | None = None

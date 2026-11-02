@@ -32,14 +32,14 @@ _LAZY_IMPORTS = {
 }
 
 if TYPE_CHECKING:
-    from cirno.providers.anthropic_provider import AnthropicProvider
-    from cirno.providers.azure_openai_provider import AzureOpenAIProvider
-    from cirno.providers.base import LLMProvider, LLMResponse, LLMUsage
-    from cirno.providers.bedrock_provider import BedrockProvider
-    from cirno.providers.github_copilot_provider import GitHubCopilotProvider
-    from cirno.providers.openai_codex_provider import OpenAICodexProvider
-    from cirno.providers.openai_compat_provider import OpenAICompatProvider
-    from cirno.providers.xai_grok_provider import XAIGrokProvider
+    from cirno_core.providers.anthropic_provider import AnthropicProvider
+    from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
+    from cirno_core.providers.base import LLMProvider, LLMResponse, LLMUsage
+    from cirno_core.providers.bedrock_provider import BedrockProvider
+    from cirno_core.providers.github_copilot_provider import GitHubCopilotProvider
+    from cirno_core.providers.openai_codex_provider import OpenAICodexProvider
+    from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+    from cirno_core.providers.xai_grok_provider import XAIGrokProvider
 
 
 def __getattr__(name: str):

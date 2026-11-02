@@ -13,7 +13,7 @@
     },
     "error": {
       "title": "cirno에 연결할 수 없습니다",
-      "gatewayHint": "gateway(`cirno gateway`)가 실행 중이고 이 브라우저에서 WebUI 주소에 접근할 수 있는지 확인하세요."
+      "serverHint": "Cirno server(`cirno`)가 실행 중이고 이 브라우저에서 WebUI 주소에 접근할 수 있는지 확인하세요."
     },
     "auth": {
       "title": "cirno에 연결",
@@ -30,7 +30,7 @@
     },
     "account": {
       "section": "계정",
-      "logoutHint": "이 브라우저와 게이트웨이의 연결을 끊습니다.",
+      "logoutHint": "이 브라우저와 Cirno 서버의 연결을 끊습니다.",
       "logout": "로그아웃"
     },
     "system": {
@@ -54,7 +54,7 @@
     },
     "pairing": {
       "haveCode": "이미 코드를 받으셨나요?",
-      "deliveryFailed": "페어링 코드를 보내지 못했습니다. 봇의 메시지 전송 권한과 게이트웨이 로그를 확인한 후, 봇에게 개인 메시지를 다시 보내세요.",
+      "deliveryFailed": "페어링 코드를 보내지 못했습니다. 봇의 메시지 전송 권한과 Cirno 서버 로그를 확인한 후, 봇에게 개인 메시지를 다시 보내세요.",
       "deliverySending": "채팅으로 페어링 코드를 보내고 있습니다. 코드가 도착하지 않으면 봇에게 개인 메시지를 다시 보내세요.",
       "title": "계정 연결",
       "description": "채팅에서 받은 연결 코드를 입력하세요.",
@@ -136,59 +136,59 @@
         },
         "agents_defaults_timezone": {
           "label": "시간대",
-          "help": "UTC 오프셋은 오늘 날짜를 기준으로 합니다.\n\n시간대를 선택하세요. UTC 시차는 현재 날짜를 기준으로 표시됩니다."
+          "help": "시간대를 선택하세요. UTC 시차는 현재 날짜를 기준으로 표시됩니다."
         },
         "agents_defaults_dream_enabled": {
           "label": "기억 정리",
-          "help": "메모리를 자동 정리합니다. 꺼도 기존 메모리는 유지됩니다.\n\n대화의 유용한 정보를 자동으로 정리합니다. 꺼도 기존 기억은 계속 사용합니다."
+          "help": "대화의 유용한 정보를 자동으로 정리합니다. 꺼도 기존 기억은 계속 사용합니다."
         },
-        "gateway_heartbeat_enabled": {
+        "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
         },
-        "gateway_heartbeat_interval_s": {
+        "agents_defaults_heartbeat_interval_s": {
           "label": "Heartbeat interval (seconds)",
           "help": "Restart to apply."
         },
         "agents_defaults_max_tool_iterations": {
           "label": "도구 실행 횟수",
-          "help": "답변당 도구 실행 횟수의 상한입니다.\n\n한 턴에서 모델과 도구가 상호작용하는 최대 횟수입니다."
+          "help": "한 턴에서 모델과 도구가 상호작용하는 최대 횟수입니다."
         },
         "agents_defaults_max_concurrent_subagents": {
           "label": "동시 하위 에이전트",
-          "help": "동시에 실행하는 하위 에이전트의 상한입니다.\n\n동시에 실행할 수 있는 하위 에이전트 수입니다."
+          "help": "동시에 실행할 수 있는 하위 에이전트 수입니다."
         },
         "agents_defaults_max_tool_result_chars": {
           "label": "결과 길이",
-          "help": "모델에 전달하는 도구 결과당 글자 수 상한입니다.\n\n모델 컨텍스트에 포함되는 도구 출력의 길이를 제한합니다."
+          "help": "모델 컨텍스트에 포함되는 도구 출력의 길이를 제한합니다."
         },
         "agents_defaults_provider_retry_mode": {
           "label": "계속 재시도",
-          "help": "복구 가능한 오류는 계속 재시도합니다. 끄면 기본 재시도를 사용합니다.\n\n일시적인 오류로 모델 요청이 실패하면 계속 재시도합니다. 끄면 재시도 횟수를 제한합니다."
+          "help": "일시적인 오류로 모델 요청이 실패하면 계속 재시도합니다. 끄면 재시도 횟수를 제한합니다."
         },
-        "agents_defaults_tool_hint_max_length": {
+        "agents_defaults_tool_status_summary_max_chars": {
           "label": "요약 길이",
-          "help": "도구 실행 요약의 글자 수 상한입니다.\n\n도구 활동을 나타내는 짧은 안내의 최대 길이입니다."
+          "help": "도구 활동을 나타내는 짧은 안내의 최대 길이입니다."
         },
-        "tools_max_session_messages_per_minute": {
-          "label": "메시지 빈도",
-          "help": "도구가 한 세션에 보내는 분당 메시지 수 상한입니다.\n\n도구가 대화에 메시지를 보내는 빈도를 제한합니다."
+        "tools_max_outgoing_session_messages_per_minute": {
+          "label": "대화 간 전송 한도(건/분)",
+          "help": "각 원본 대화가 최근 60초 동안 다른 대화로 보낼 수 있는 총 메시지 수입니다. 사용자 메시지는 제한하지 않습니다."
         },
         "tools_exec_enable": {
           "label": "셸 도구",
-          "help": "에이전트의 Shell 명령 실행을 허용합니다.\n\n에이전트의 셸 명령 실행을 허용합니다."
+          "help": "에이전트의 셸 명령 실행을 허용합니다."
         },
         "tools_file_enable": {
           "label": "파일 도구",
-          "help": "내장 파일 읽기와 편집 도구를 허용합니다.\n\n기본 파일 읽기 및 편집 도구를 허용합니다."
+          "help": "기본 파일 읽기 및 편집 도구를 허용합니다."
         },
         "tools_web_enable": {
           "label": "웹 접근",
-          "help": "웹 검색과 페이지 읽기를 허용합니다.\n\n웹 검색과 페이지 가져오기를 허용합니다."
+          "help": "웹 검색과 페이지 가져오기를 허용합니다."
         },
         "tools_cli_apps_enable": {
           "label": "CLI 앱",
-          "help": "CLI 앱 설치, 관리 및 실행을 허용합니다.\n\n에이전트의 CLI 앱 관리와 실행을 허용합니다."
+          "help": "에이전트의 CLI 앱 관리와 실행을 허용합니다."
         },
         "tools_my_enable": {
           "label": "설정 확인",
@@ -196,39 +196,39 @@
         },
         "tools_my_allow_set": {
           "label": "설정 변경",
-          "help": "에이전트가 자신의 설정을 변경하도록 허용합니다.\n\n자체 관리 도구의 설정 수정을 허용합니다."
+          "help": "자체 관리 도구의 설정 수정을 허용합니다."
         },
         "tools_exec_path_prepend": {
           "label": "PATH 우선 검색",
-          "help": "이 디렉터리부터 검색합니다.\n\nPATH 앞에 추가할 디렉터리입니다. Windows에서는 세미콜론, macOS와 Linux에서는 콜론으로 구분하세요."
+          "help": "PATH 앞에 추가할 디렉터리입니다. Windows에서는 세미콜론, macOS와 Linux에서는 콜론으로 구분하세요."
         },
         "tools_exec_path_append": {
           "label": "PATH 추가 검색",
-          "help": "이 디렉터리를 마지막에 검색합니다.\n\nPATH 뒤에 추가할 디렉터리입니다. Windows에서는 세미콜론, macOS와 Linux에서는 콜론으로 구분하세요."
+          "help": "PATH 뒤에 추가할 디렉터리입니다. Windows에서는 세미콜론, macOS와 Linux에서는 콜론으로 구분하세요."
         },
         "tools_exec_sandbox": {
           "label": "명령 샌드박스",
-          "help": "명령 프로세스를 격리합니다. 시스템 지원이 필요합니다.\n\nLinux에서는 bwrap, macOS에서는 Seatbelt를 사용합니다. 작업 공간 검사만으로는 프로세스가 격리되지 않습니다."
+          "help": "Linux에서는 bwrap, macOS에서는 Seatbelt를 사용합니다. 작업 공간 검사만으로는 프로세스가 격리되지 않습니다."
         },
         "tools_exec_sandbox_ro_binds": {
           "label": "읽기 전용 경로",
-          "help": "추가 읽기 전용 경로를 한 줄에 하나씩 입력하세요.\n\n읽기 전용으로 추가 마운트할 경로를 한 줄에 하나씩 입력하세요."
+          "help": "읽기 전용으로 추가 마운트할 경로를 한 줄에 하나씩 입력하세요."
         },
         "tools_exec_sandbox_rw_binds": {
           "label": "쓰기 가능 경로",
-          "help": "추가 쓰기 가능 경로를 한 줄에 하나씩 입력하세요.\n\n쓰기를 허용하여 추가 마운트할 경로를 한 줄에 하나씩 입력하세요."
+          "help": "쓰기를 허용하여 추가 마운트할 경로를 한 줄에 하나씩 입력하세요."
         },
         "tools_exec_allowed_env_keys": {
           "label": "환경 변수",
-          "help": "명령에 추가로 전달할 변수 이름을 한 줄에 하나씩 입력하세요.\n\n명령에 전달할 환경 변수를 추가합니다. 한 줄에 하나씩 입력하세요. 실행에 필요한 기본 환경 변수는 계속 전달됩니다."
+          "help": "명령에 전달할 환경 변수를 추가합니다. 한 줄에 하나씩 입력하세요. 실행에 필요한 기본 환경 변수는 계속 전달됩니다."
         },
         "tools_exec_allow_patterns": {
           "label": "허용 명령",
-          "help": "허용 규칙과 완전히 일치하는 명령만 실행합니다.\n\n정규식을 한 줄에 하나씩 입력하세요. 규칙을 추가하면 명령의 각 부분이 규칙 중 하나와 완전히 일치해야 실행됩니다. 허용된 명령에는 기본 및 추가 차단 규칙이 적용되지 않지만, 네트워크와 작업 공간 제한은 유지됩니다."
+          "help": "정규식을 한 줄에 하나씩 입력하세요. 규칙을 추가하면 명령의 각 부분이 규칙 중 하나와 완전히 일치해야 실행됩니다. 허용된 명령에는 기본 및 추가 차단 규칙이 적용되지 않지만, 네트워크와 작업 공간 제한은 유지됩니다."
         },
         "tools_exec_deny_patterns": {
           "label": "차단 명령",
-          "help": "이 규칙과 일치하는 명령을 차단합니다.\n\n추가 차단 정규식을 한 줄에 하나씩 입력하세요. 명시적 허용 규칙이 기본 및 추가 차단 규칙보다 우선합니다."
+          "help": "추가 차단 정규식을 한 줄에 하나씩 입력하세요. 명시적 허용 규칙이 기본 및 추가 차단 규칙보다 우선합니다."
         },
         "network_proxy": {
           "label": "공유 프록시",
@@ -240,55 +240,43 @@
         },
         "tools_web_user_agent": {
           "label": "User-Agent 헤더",
-          "help": "웹 요청의 User-Agent입니다. 비워 두면 기본값을 사용합니다.\n\n사용자 지정 User-Agent 헤더입니다. 비워 두면 기본값을 사용합니다."
+          "help": "사용자 지정 User-Agent 헤더입니다. 비워 두면 기본값을 사용합니다."
         },
         "tools_restrict_to_workspace": {
           "label": "작업 공간 제한",
-          "help": "전체 작업 공간 제한입니다. WebUI 채팅 권한은 별도로 설정합니다.\n\n전체 도구 접근 정책입니다. WebUI의 대화별 권한은 별도로 설정합니다."
+          "help": "전체 도구 접근 정책입니다. WebUI의 대화별 권한은 별도로 설정합니다."
         },
         "tools_ssrf_whitelist": {
           "label": "허용 IP",
-          "help": "허용할 IP 또는 CIDR 범위를 한 줄에 하나씩 입력하세요.\n\n외부 요청 보호에서 제외할 IP/CIDR 범위를 한 줄에 하나씩 입력하세요."
+          "help": "외부 요청 보호에서 제외할 IP/CIDR 범위를 한 줄에 하나씩 입력하세요."
         },
         "tools_webui_allow_remote_package_install": {
           "label": "원격 설치",
-          "help": "패키지와 스킬의 원격 설치를 허용합니다. 게이트웨이 호스트에서 설정하세요.\n\n원격 WebUI에서 추가 패키지와 스킬을 설치하도록 허용합니다. 이 설정은 게이트웨이를 실행하는 컴퓨터에서 변경해야 합니다."
+          "help": "원격 WebUI에서 추가 패키지와 스킬을 설치하도록 허용합니다. 이 설정은 Cirno 서버를 실행하는 컴퓨터에서 변경해야 합니다."
         },
         "tools_cli_apps_install_timeout": {
           "label": "설치 제한 시간",
-          "help": "CLI 앱 설치에 허용되는 최대 초입니다.\n\nCLI 앱 설치에 허용되는 최대 시간입니다."
+          "help": "CLI 앱 설치에 허용되는 최대 시간입니다."
         },
         "tools_cli_apps_run_timeout": {
           "label": "실행 제한 시간",
-          "help": "CLI 명령 실행에 허용되는 최대 초입니다.\n\nCLI 앱 명령의 최대 실행 시간입니다."
+          "help": "CLI 앱 명령의 최대 실행 시간입니다."
         },
         "tools_cli_apps_catalog_ttl_seconds": {
           "label": "캐시 유지 시간",
-          "help": "CLI 앱 목록을 캐시하는 초입니다.\n\nCLI 앱 카탈로그를 캐시에 보관하는 시간입니다."
-        },
-        "gateway_host": {
-          "label": "게이트웨이 주소",
-          "help": "게이트웨이 주소입니다. WebUI 수신 주소는 별도로 설정합니다.\n\n게이트웨이가 연결을 수신하는 주소입니다. WebSocket과 WebUI 주소는 채널 → WebSocket에서 설정합니다."
-        },
-        "gateway_port": {
-          "label": "게이트웨이 포트",
-          "help": "게이트웨이 포트입니다. 시작 인수가 우선합니다.\n\n저장할 포트입니다. 명령줄 인수가 우선 적용됩니다."
-        },
-        "gateway_restart_mode": {
-          "label": "다시 시작 방식",
-          "help": "재시작 방법을 선택하세요. 자동은 실행 환경에 맞춥니다.\n\n프로세스를 다시 시작하는 방식입니다. 자동 모드는 호스트 환경에 따라 선택합니다."
+          "help": "CLI 앱 카탈로그를 캐시에 보관하는 시간입니다."
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
+          "help": "유휴 시간 또는 고정 간격으로 정리합니다."
         },
         "agents_defaults_dream_model_override": {
           "label": "Dream model",
           "help": "Dream 전용 모델을 선택할 수 있습니다. 비워 두면 현재 모델을 사용합니다."
         },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Idle memory check (seconds)",
-          "help": "Restart to apply."
+          "label": "유휴 압축 확인 간격(초)",
+          "help": "대화가 유휴 압축 조건을 충족하는지 확인하는 간격입니다. 유휴 시간 제한과는 별개이며 재시작 후 적용됩니다."
         },
         "network_request_timeout_s": {
           "label": "Compatible API request timeout (seconds)",
@@ -372,7 +360,27 @@
         },
         "tools_exec_max_runtime": {
           "label": "명령 실행 시간",
-          "help": "셸 명령에 기본으로 적용되는 최대 실행 시간입니다.\n\n출력이나 대기로 이 제한이 늘어나지 않습니다. ‘시간 제한 없음’을 선택하면 실행 시간 제한이 해제됩니다."
+          "help": "출력이나 대기로 이 제한이 늘어나지 않습니다. ‘시간 제한 없음’을 선택하면 실행 시간 제한이 해제됩니다."
+        },
+        "server_health_host": {
+          "label": "Cirno 서버 주소",
+          "help": "Cirno 서버가 연결을 수신하는 주소입니다. WebSocket과 WebUI 주소는 채널 → WebSocket에서 설정합니다."
+        },
+        "server_health_port": {
+          "label": "Cirno 서버 포트",
+          "help": "저장할 포트입니다. 명령줄 인수가 우선 적용됩니다."
+        },
+        "server_restart_mode": {
+          "label": "다시 시작 방식",
+          "help": "프로세스를 다시 시작하는 방식입니다. 자동 모드는 호스트 환경에 따라 선택합니다."
+        },
+        "agents_defaults_resume_message": {
+          "label": "계속하기 메시지",
+          "help": "Continue 또는 /resume 사용 시 모델에 보낼 지시입니다."
+        },
+        "agents_defaults_resume_show_message": {
+          "label": "계속하기 메시지 표시",
+          "help": "계속하기 지시를 시스템 입력으로 대화에 표시합니다."
         }
       },
       "groups": {
@@ -389,15 +397,11 @@
           "help": "메모리 자동 정리를 켜거나 끄세요."
         },
         "heartbeat": {
-          "title": "Heartbeat"
+          "title": "에이전트 하트비트"
         },
         "execution": {
           "title": "실행 제한",
           "help": "도구 제한과 요청 재시도를 설정하세요."
-        },
-        "sessions": {
-          "title": "대화",
-          "help": "플랫폼 간 채팅 공유를 설정하세요."
         },
         "tools": {
           "title": "기본 도구",
@@ -423,8 +427,8 @@
           "title": "CLI 제한",
           "help": "설치와 실행 제한 시간, 목록 캐시 시간을 설정하세요.\n\n설치, 실행 및 카탈로그 캐시의 시간 제한입니다."
         },
-        "gateway": {
-          "title": "게이트웨이",
+        "server": {
+          "title": "Cirno 서버",
           "help": "배포와 재시작 옵션을 설정하세요."
         },
         "api": {
@@ -449,6 +453,16 @@
         },
         "requests": {
           "title": "Model connection"
+        },
+        "coordination": {
+          "title": "대화 협업"
+        },
+        "activity": {
+          "title": "실행 과정 표시"
+        },
+        "resume": {
+          "title": "중지된 작업 계속하기",
+          "help": "저장된 문맥으로 새 모델 요청을 시작합니다. 완료된 도구 호출은 다시 실행하지 않습니다."
         }
       },
       "save": "변경 사항 저장",
@@ -474,7 +488,7 @@
       "manual": "수동",
       "standard": "표준",
       "persistent": "계속",
-      "unavailable": "이 설정을 편집하려면 게이트웨이를 업데이트하세요.",
+      "unavailable": "이 설정을 편집하려면 Cirno 서버를 업데이트하세요.",
       "advancedOptions": "고급 옵션",
       "idle": "유휴 시",
       "interval": "고정 간격"
@@ -503,7 +517,7 @@
       "voice": "음성",
       "browser": "웹 검색",
       "channels": "채널 설정",
-      "runtime": "서버 및 하트비트",
+      "runtime": "서버",
       "advanced": "권한 및 보안",
       "memory": "메모리 라이브러리",
       "cliApps": "CLI 앱",
@@ -522,7 +536,11 @@
       "execution": "목표 및 실행",
       "shell": "Shell 실행",
       "network": "네트워크 및 재시도",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "account": "계정",
+      "heartbeat": "에이전트 하트비트",
+      "coordination": "대화 협업",
+      "regional": "시간 및 지역"
     },
     "sections": {
       "interface": "인터페이스",
@@ -607,7 +625,7 @@
       "restart": "cirno 다시 시작",
       "configPath": "설정 경로",
       "activePreset": "활성 프리셋",
-      "gateway": "게이트웨이",
+      "gateway": "Cirno 서버",
       "restartState": "다시 시작 상태",
       "pendingChanges": "적용 대기 변경",
       "selectedPreset": "선택한 프리셋",
@@ -642,7 +660,7 @@
       "language": "화면 언어를 선택하세요.",
       "provider": "새 요청에 사용할 제공업체를 선택하세요.",
       "model": "이 프리셋의 모델을 선택하세요.",
-      "configPath": "현재 게이트웨이가 사용하는 설정 파일입니다.",
+      "configPath": "현재 Cirno 서버가 사용하는 설정 파일입니다.",
       "selectedPreset": "모델에서 저장된 프리셋을 편집하세요.",
       "presetModel": "모델에서 모델과 제공업체를 변경하세요.",
       "activityMode": "처리 과정의 기본 표시 방법을 선택하세요.",
@@ -1475,7 +1493,7 @@
       "deleteConfirmAction": "스킬 삭제",
       "instructionsTitle": "스킬 안내",
       "setupRequired": "설정 필요",
-      "setupDescription": "게이트웨이 호스트에 의존성을 설치한 뒤 다시 확인하세요.\n\ncirno을 실행하는 컴퓨터에 필요한 패키지를 설치한 후 다시 확인하세요.",
+      "setupDescription": "Cirno 서버 호스트에 의존성을 설치한 뒤 다시 확인하세요.\n\ncirno을 실행하는 컴퓨터에 필요한 패키지를 설치한 후 다시 확인하세요.",
       "copySetupCommand": "명령 복사",
       "checkAgain": "다시 확인",
       "marketplaceSearchFailed": "스킬 마켓을 검색할 수 없습니다.",
@@ -1565,6 +1583,20 @@
       "webuiUrl": "Web UI address (optional)",
       "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
       "settingsLink": "Configure Telegram notifications"
+    },
+    "account": {
+      "owner": "인스턴스 소유자",
+      "changePassword": "비밀번호 변경",
+      "currentPassword": "현재 비밀번호",
+      "newPassword": "새 비밀번호",
+      "help": "변경하려면 현재 비밀번호를 입력하세요. 다른 브라우저의 세션은 로그아웃됩니다.",
+      "saved": "비밀번호가 변경되었습니다. 이 브라우저의 로그인은 유지됩니다.",
+      "unavailable": "계정 설정은 브라우저 등록 및 로그인 사용 시 이용할 수 있습니다.",
+      "loading": "계정 불러오는 중…",
+      "retry": "다시 시도"
+    },
+    "heartbeat": {
+      "help": "HEARTBEAT.md를 주기적으로 확인하고 작업이 있으면 Cirno를 깨웁니다. 서비스 상태 확인과는 별개입니다."
     }
   },
   "chat": {
@@ -1920,6 +1952,26 @@
           "pairing": {
             "title": "페어링",
             "description": "연결 요청을 관리합니다."
+          },
+          "resume": {
+            "title": "작업 계속하기",
+            "description": "저장된 문맥에서 중지된 작업을 계속합니다."
+          },
+          "clear": {
+            "title": "Cirno 문맥 지우기",
+            "description": "개인 Cirno 대화를 지웁니다. 파일 변경은 취소되지 않습니다."
+          },
+          "temporary": {
+            "title": "임시 대화",
+            "description": "첫 메시지 전에 임시 모드를 선택합니다."
+          },
+          "ptc": {
+            "title": "PTC 모드",
+            "description": "첫 메시지 전에 프로그래밍 방식 도구 호출을 선택합니다."
+          },
+          "access": {
+            "title": "접근 모드",
+            "description": "기본, AI 승인 또는 전체 접근을 선택합니다."
           }
         },
         "badges": {
@@ -1931,7 +1983,12 @@
           "goalReady": "지속 목표 시작",
           "history": "최근 메시지 보기",
           "stopRunning": "실행 중"
-        }
+        },
+        "controlRunning": "옵션을 변경하기 전에 현재 작업을 중지하세요.",
+        "accessUsage": "사용법: /access default|review|full",
+        "modelUsage": "/model 뒤에 설정된 모델 이름을 입력하세요.",
+        "creationOnly": "새 대화에서 첫 메시지를 보내기 전에 선택하세요.",
+        "toggleUsage": "사용법: {{command}} on|off"
       },
       "encoding": "처리 중…",
       "remove": "첨부 제거",
@@ -1972,7 +2029,9 @@
         "full": "전체 접근 권한",
         "fullShort": "전체",
         "defaultDescription": "작업 디렉터리 안에서만 파일을 읽고 쓰며 명령을 실행합니다.",
-        "fullDescription": "작업 디렉터리 밖의 파일 접근과 명령 실행을 허용합니다."
+        "fullDescription": "작업 디렉터리 밖의 파일 접근과 명령 실행을 허용합니다.",
+        "review": "AI 승인",
+        "reviewDescription": "기본 제한을 유지합니다. 독립 AI가 Cirno 기억 없이 제한된 작업을 검토하며 불확실하면 받은 편지함에서 승인을 요청합니다. AI 오판으로 파일 유출이나 유해한 명령 실행이 발생할 수 있습니다."
       },
       "goalStatus": {
         "blocked": "진행 불가",
@@ -2001,6 +2060,47 @@
       "title": "Cirno 대화 지우기",
       "description": "현재 실행을 중지하고 이 대화의 메시지와 컨텍스트를 지웁니다. 저장된 기억과 다른 대화는 유지됩니다.",
       "confirm": "대화 지우기"
+    },
+    "inputSources": {
+      "heartbeat": "하트비트",
+      "scheduled_task": "예약 작업",
+      "trigger": "트리거",
+      "conversation": "대화 메시지",
+      "subagent": "하위 에이전트 결과",
+      "continuation": "자동 계속",
+      "system": "시스템 이벤트",
+      "supervision": "Cirno가 이 대화를 변경했습니다"
+    },
+    "supervision": {
+      "changed": "Cirno가 이 대화를 변경했습니다",
+      "actions": {
+        "stop": "이 대화를 중지했습니다",
+        "continue": "이 대화를 계속했습니다",
+        "goal_create": "Goal을 만들었습니다",
+        "goal_set": "Goal을 교체했습니다",
+        "goal_update": "Goal 설정을 변경했습니다",
+        "goal_stop": "Goal을 중지했습니다",
+        "goal_pause": "Goal을 일시 중지했습니다",
+        "goal_resume": "Goal을 재개했습니다",
+        "goal_delete": "Goal을 삭제했습니다",
+        "goal_wait": "Goal을 대기시켰습니다"
+      },
+      "fields": {
+        "objective": "목표",
+        "ui_summary": "표시 이름",
+        "recap": "저장된 진행 상황",
+        "continuation_limit": "자동 계속 횟수 제한",
+        "wake_after_seconds": "대기 시간(초)"
+      }
+    },
+    "historyEffects": {
+      "title": "작업 공간 변경은 유지됩니다",
+      "description": "분기와 편집은 대화 문맥만 변경합니다. 이전 명령이나 파일 수정은 취소되지 않습니다. 다시 실행하면 현재 작업 공간과 충돌하거나 파일이 손상될 수 있으므로 계속하기 전에 파일을 확인하세요."
+    },
+    "historyEdit": {
+      "text": "수정된 메시지",
+      "description": "이 메시지와 이후 대화 문맥을 교체한 뒤 수정된 요청을 실행합니다. 기존 첨부 파일은 유지됩니다.",
+      "submit": "저장하고 보내기"
     }
   },
   "message": {
@@ -2228,7 +2328,8 @@
     "automationSourceFallback": "자동화",
     "automationTriggered": "자동 실행됨",
     "expandStep": "단계 펼치기",
-    "collapseStep": "단계 접기"
+    "collapseStep": "단계 접기",
+    "edit": "메시지 편집"
   },
   "recovery": {
     "actionFailed": "복구 작업에 실패했습니다. 다시 시도하세요.",
@@ -2284,7 +2385,7 @@
     "failed": "복사하지 못했습니다. 다시 시도하세요.",
     "unavailable": "파일을 확인할 수 없습니다. 원본 참조를 복사할 수 있습니다.",
     "loading": "파일 확인 중…",
-    "gatewayPath": "경로는 게이트웨이 컴퓨터를 가리킵니다."
+    "serverPath": "경로는 Cirno 서버 컴퓨터를 가리킵니다."
   },
   "filePreview": {
     "displayMode": "표시 방식",
@@ -2295,7 +2396,7 @@
     "close": "파일 미리보기 닫기",
     "loading": "미리보기 로딩 중...",
     "failed": "이 파일을 미리 볼 수 없습니다.",
-    "routeMissing": "파일 미리보기에는 최신 gateway가 필요합니다. cirno gateway를 다시 시작한 뒤 다시 시도하세요.",
+    "routeMissing": "파일 미리보기에는 최신 gateway가 필요합니다. cirno를 다시 시작한 뒤 다시 시도하세요.",
     "resize": "파일 미리보기 크기 조절",
     "truncated": "파일이 커서 미리보기가 잘렸습니다."
   },
@@ -2352,11 +2453,11 @@
     },
     "workspaceScopeRejected": {
       "title": "작업공간이 변경되지 않았습니다",
-      "body": "게이트웨이가 이 프로젝트 또는 접근 모드를 거부했습니다. 기존 프로젝트나 다른 접근 모드를 선택한 후 다시 시도하세요."
+      "body": "Cirno 서버가 이 프로젝트 또는 접근 모드를 거부했습니다. 기존 프로젝트나 다른 접근 모드를 선택한 후 다시 시도하세요."
     },
     "turnRejected": {
       "title": "메시지가 전송되지 않았습니다",
-      "body": "게이트웨이가 이 메시지를 거부했습니다. 텍스트나 첨부 파일을 확인한 후 다시 시도하세요."
+      "body": "Cirno 서버가 이 메시지를 거부했습니다. 텍스트나 첨부 파일을 확인한 후 다시 시도하세요."
     },
     "modelRequestFailed": {
       "authenticationTitle": "모델 제공업체 인증 실패",
@@ -2538,7 +2639,7 @@
     "jobs": "원격 작업",
     "refresh": "새로 고침",
     "refreshList": "목록 새로 고침",
-    "noJobs": "에이전트가 노드 도구로 작업을 시작할 수 있습니다. 기록은 Home에, 전체 출력은 노드에 저장됩니다.",
+    "noJobs": "Agent는 SSH로 지속 작업을 시작할 수 있습니다. 추적 기록은 서버 상태 디렉터리에, 전체 출력은 노드에 저장됩니다.",
     "readStatus": "상태 확인",
     "stop": "중지",
     "memorySources": "기억 출처",
@@ -2598,7 +2699,8 @@
       "dream": "기억 정리",
       "turn": "대화 실행",
       "message": "메시지",
-      "report": "작업 보고"
+      "report": "작업 보고",
+      "approval": "작업 승인"
     },
     "status": {
       "pending": "대기 중",
@@ -2651,7 +2753,9 @@
       "storage_failed": "계정을 저장할 수 없습니다. 서버 저장소를 확인하세요.",
       "password_mismatch": "비밀번호가 일치하지 않습니다.",
       "connection_failed": "Cirno에 연결할 수 없습니다. 네트워크를 확인하세요.",
-      "request_failed": "요청에 실패했습니다. 다시 시도하세요."
+      "request_failed": "요청에 실패했습니다. 다시 시도하세요.",
+      "incorrect_password": "현재 비밀번호가 올바르지 않습니다.",
+      "unauthorized": "다시 로그인하세요."
     }
   }
 }

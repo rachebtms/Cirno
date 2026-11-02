@@ -5,9 +5,9 @@ import os
 
 import pytest
 
-from cirno.agent.tools import file_state
-from cirno.agent.tools.apply_patch import ApplyPatchTool
-from cirno.agent.tools.filesystem import EditFileTool, ReadFileTool
+from cirno_core.agent.tools import file_state
+from cirno_core.agent.tools.apply_patch import ApplyPatchTool
+from cirno_core.agent.tools.filesystem import EditFileTool, ReadFileTool
 
 # ---------------------------------------------------------------------------
 # Helpers

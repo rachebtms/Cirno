@@ -135,9 +135,9 @@ export function useRuntimeConfigSettings(
     }, delay.current);
     return () => window.clearTimeout(timer);
   }, [drafts, saving]);
-  const saveList = async (field: RuntimeConfigField, next: string) => {
+  const saveText = async (field: RuntimeConfigField, next: string) => {
     const payload = await updateRuntimeConfigSettings(client, {
-      [field.path]: next.split("\n").map((line) => line.trim()).filter(Boolean),
+      [field.path]: field.kind === "list" ? next.split("\n").map((line) => line.trim()).filter(Boolean) : next,
     });
     applyPayload(payload, { preserveAgentForm: true, preserveCapabilityForms: true });
     setSaved((prev) => ({ ...prev, [field.group]: true }));
@@ -158,7 +158,7 @@ export function useRuntimeConfigSettings(
       setSaving(null);
     }
   };
-  return { value, visible, dirty, discard, change, commit, reject, save, saveList, saveProxy, saving, errors, invalidField, saved };
+  return { value, visible, dirty, discard, change, commit, reject, save, saveText, saveProxy, saving, errors, invalidField, saved };
 }
 
 export type RuntimeConfigController = ReturnType<typeof useRuntimeConfigSettings>;
@@ -184,8 +184,8 @@ export function RuntimeConfigSettings({
   const memoryField = (field: RuntimeConfigField) => {
     if (!memoryPage || page === "memory") return true;
     if (page === "dream") return field.path.includes(".dream.");
-    const context = field.path.includes("idle_compact") || field.path.endsWith("session_ttl_minutes")
-      || field.path.endsWith("checkpoint_tokens");
+    const context = field.path.includes("idle_compact") || field.path.endsWith("idle_compact_after_minutes")
+      || field.path.endsWith("checkpoint_tokens") || field.path.endsWith("release_archived_runtime");
     return page === "context" ? context : !context && !field.path.includes(".dream.");
   };
   const groups = RUNTIME_CONFIG_GROUPS.filter((group) => group.page === page || (memoryPage && group.id === "memory"));
@@ -270,10 +270,10 @@ export function RuntimeConfigSettings({
                                 error={state.invalidField === field.path && state.errors[group.id]
                                   ? { id: errorId, message: state.errors[group.id] } : undefined}
                                 onReject={(message) => state.reject(field, message)} />
-                            ) : field.kind === "list" ? (
+                            ) : field.kind === "list" || field.kind === "multiline" ? (
                               <SettingsTextEditor id={id} title={text} description={help} value={String(current)}
                                 disabled={disabled || state.saving !== null || isRestarting}
-                                onSave={(next) => state.saveList(field, next)} />
+                                onSave={(next) => state.saveText(field, next)} />
                             ) : field.kind === "select" || field.kind === "preset" ? (
                               <ProviderPicker triggerProps={{ ...common, disabled: disabled || state.saving === group.id || isRestarting }}
                                 value={String(current) || "__none__"} emptyLabel={tr("none")}

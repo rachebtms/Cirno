@@ -1,4 +1,4 @@
-from cirno.agent.context_governance import ContextGovernor
+from cirno_core.agent.context_governance import ContextGovernor
 
 
 def _assistant_tool_call(call_id: str) -> dict:

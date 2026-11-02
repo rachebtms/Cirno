@@ -7,20 +7,20 @@ from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from cirno.agent.hook import AgentHook, SDKCaptureHook
-from cirno.agent.hooks import create_file_edit_activity_hook
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.mcp import MCPProvider
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.schema import Config
-from cirno.providers.base import LLMUsage
-from cirno.sdk.clients import MemoryClient, RuntimeClient, SessionClient
-from cirno.sdk.runtime import (
+from cirno_core.agent.hook import AgentHook, SDKCaptureHook
+from cirno_core.agent.hooks import create_file_edit_activity_hook
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.mcp import MCPProvider
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.schema import Config
+from cirno_core.providers.base import LLMUsage
+from cirno_core.sdk.clients import MemoryClient, RuntimeClient, SessionClient
+from cirno_core.sdk.runtime import (
     build_process_direct_kwargs,
     ensure_single_model_selector,
 )
-from cirno.sdk.streaming import RunStream, SDKStreamEmitter, SDKStreamingHook
-from cirno.sdk.types import (
+from cirno_core.sdk.streaming import RunStream, SDKStreamEmitter, SDKStreamingHook
+from cirno_core.sdk.types import (
     STREAM_EVENT_REASONING_COMPLETED,
     STREAM_EVENT_REASONING_DELTA,
     STREAM_EVENT_RUN_COMPLETED,
@@ -39,7 +39,7 @@ from cirno.sdk.types import (
     StreamEventType,
     result_from_response,
 )
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 __all__ = [
     "Cirno",
@@ -106,7 +106,7 @@ class Cirno:
             model: Override the instance default model.
             model_preset: Override the instance default model preset.
         """
-        from cirno.config.loader import load_config, resolve_config_env_vars
+        from cirno_core.config.loader import load_config, resolve_config_env_vars
 
         ensure_single_model_selector(model=model, model_preset=model_preset)
         resolved: Path | None = None

@@ -9,10 +9,12 @@ import secrets
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
-from cirno.session.manager import SessionManager
-from cirno.session.types import SessionTypes
+from cirno_core.session.keys import CIRNO_SESSION_KEY
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.types import SessionTypes
 
 SESSION_HANDLE_METADATA_KEY = "session_handle"
+CIRNO_HANDLE = "cirno"
 
 _MAX_SESSION_KEY_CHARS = 512
 _MAX_HANDLE_CHARS = 16
@@ -82,7 +84,9 @@ def normalize_session_handle(value: str) -> str:
 def session_handle_for_name(session_key: str, name: str) -> SessionHandle:
     """Build a trusted handle from a persisted name and its private session key."""
     key = _clean_session_key(session_key)
-    normalized = normalize_session_handle(name)
+    normalized = CIRNO_HANDLE if key == CIRNO_SESSION_KEY else normalize_session_handle(name)
+    if key != CIRNO_SESSION_KEY and normalized == CIRNO_HANDLE:
+        raise ValueError("@cirno is reserved for the personal Cirno conversation")
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return SessionHandle(
         id=f"handle_{digest[:32]}",
@@ -136,11 +140,11 @@ def allocate_session_handle_name(used: set[str]) -> str:
             if len(set(parts)) != len(parts):
                 continue
             name = "".join(parts)
-            if name not in used and name not in _BLOCKED_NAMES:
+            if name != CIRNO_HANDLE and name not in used and name not in _BLOCKED_NAMES:
                 return name
     while True:
         name = "".join(secrets.choice(_ALPHABET) for _ in range(12))
-        if name not in used and name not in _BLOCKED_NAMES:
+        if name != CIRNO_HANDLE and name not in used and name not in _BLOCKED_NAMES:
             return name
 
 
@@ -148,7 +152,8 @@ def allocate_session_handles(
     rows: list[dict[str, Any]], types: SessionTypes,
 ) -> tuple[dict[str, str], dict[str, str]]:
     """Return valid existing names and metadata updates for missing handles."""
-    used: set[str] = set()
+    used: set[str] = {CIRNO_HANDLE}
+    updates: dict[str, str] = {}
     names: dict[str, str] = {}
     pending: list[str] = []
     for row in sorted(
@@ -166,6 +171,11 @@ def allocate_session_handles(
         if not types.needs_handle(metadata):
             continue
         raw_name = metadata.get(SESSION_HANDLE_METADATA_KEY)
+        if raw_key == CIRNO_SESSION_KEY:
+            names[raw_key] = CIRNO_HANDLE
+            if raw_name != CIRNO_HANDLE:
+                updates[raw_key] = CIRNO_HANDLE
+            continue
         try:
             name = normalize_session_handle(raw_name) if isinstance(raw_name, str) else ""
         except ValueError:
@@ -176,7 +186,6 @@ def allocate_session_handles(
         names[raw_key] = name
         used.add(name)
 
-    updates: dict[str, str] = {}
     for key in pending:
         name = allocate_session_handle_name(used)
         names[key] = name

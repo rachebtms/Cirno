@@ -5,24 +5,24 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import RequestContext, current_request_context, request_context
-from cirno.agent.tools.cron import CronTool
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import Config
-from cirno.cron.binding import CronBinding, binding_revision
-from cirno.cron.bound_runner import run_bound_cron_job
-from cirno.cron.service import CronService
-from cirno.cron.session_turns import CRON_TRIGGER_META
-from cirno.cron.types import CronSchedule
-from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
-from cirno.session.manager import SessionManager
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import RequestContext, current_request_context, request_context
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import Config
+from cirno_core.cron.binding import CronBinding, binding_revision
+from cirno_core.cron.bound_runner import run_bound_cron_job
+from cirno_core.cron.service import CronService
+from cirno_core.cron.session_turns import CRON_TRIGGER_META
+from cirno_core.cron.types import CronSchedule
+from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.session.manager import SessionManager
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("delivery", ["reply", "legacy_message", "broadcast"])
 async def test_moved_cron_keeps_reply_send_and_prompt_prefix_contract(tmp_path, monkeypatch, delivery):
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
     workspace = tmp_path / "workspace"
     sessions = SessionManager(workspace)
     bus = MessageBus()

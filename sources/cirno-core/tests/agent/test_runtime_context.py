@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext
-from cirno.runtime.context import (
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.runtime.context import (
     MAX_WEBUI_QUOTE_CHARS,
     RUNTIME_CONTEXT_HISTORY_META,
     RUNTIME_CONTEXT_INPUT_META,
@@ -19,10 +19,10 @@ from cirno.runtime.context import (
     runtime_context_blocks_from_metadata,
     webui_quote_runtime_context,
 )
-from cirno.sdk.types import snapshot_from_session
-from cirno.session.manager import Session, message_preview_text
-from cirno.session.webui_turns import _title_inputs
-from cirno.webui.transcript import _session_user_event
+from cirno_core.sdk.types import snapshot_from_session
+from cirno_core.session.manager import Session, message_preview_text
+from cirno_core.session.webui_turns import _title_inputs
+from cirno_core.session.transcript import _session_user_event
 
 
 @pytest.mark.asyncio

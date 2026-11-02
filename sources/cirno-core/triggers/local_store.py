@@ -14,9 +14,9 @@ from typing import Any, cast
 from filelock import FileLock
 from loguru import logger
 
-from cirno.triggers.local_types import LocalTrigger, TriggerDelivery, TriggerRunRecord
-from cirno.utils.helpers import atomic_write_text, truncate_text
-from cirno.utils.run_records import write_run_record as write_automation_run_record
+from cirno_core.triggers.local_types import LocalTrigger, TriggerDelivery, TriggerRunRecord
+from cirno_core.utils.helpers import atomic_write_text, truncate_text
+from cirno_core.utils.run_records import write_run_record as write_automation_run_record
 
 _TRIGGER_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 _MAX_RUN_HISTORY = 20

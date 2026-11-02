@@ -10,21 +10,21 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping
 
-from cirno.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
-from cirno.session.goal_state import (
+from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
+from cirno_core.session.goal_state import (
     goal_state_raw,
     goal_state_runtime_lines,
     parse_goal_state,
     sustained_goal_active,
     sustained_goal_turn,
 )
-from cirno.session.recovery import REQUEST_ORIGIN_METADATA_KEY
+from cirno_core.session.recovery import REQUEST_ORIGIN_METADATA_KEY
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.agent.loop import TurnContext
-    from cirno.agent.tools.context import RequestContext
-    from cirno.session.state import SessionState
+    from cirno_core.agent.loop import TurnContext
+    from cirno_core.agent.tools.context import RequestContext
+    from cirno_core.session.state import SessionState
 
 INTERNAL_CONTINUATION_META = "_internal_continuation"
 INTERNAL_CONTINUATION_KIND_META = "_internal_continuation_kind"

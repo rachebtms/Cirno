@@ -6,58 +6,58 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from cirno.config.home import set_home_path
+from cirno_core.config.home import set_instance_path
 
 
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path):
-    set_home_path(tmp_path)
+    set_instance_path(tmp_path)
     yield
-    set_home_path(None)
+    set_instance_path(None)
 
 
 from agent.session_helpers import mock_session_manager
-from cirno.agent.context import TranscriptInput
-from cirno.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
-from cirno.agent.tools.context import RequestContext
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import StreamedResponseEvent
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import AgentDefaults
-from cirno.bus.agent_events import RetryStatusEvent
-from cirno.providers.base import (
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import StreamedResponseEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.bus.agent_events import RetryStatusEvent
+from cirno_core.providers.base import (
     GenerationSettings,
     LLMProvider,
     LLMResponse,
     ToolCallRequest,
 )
-from cirno.runtime.context import (
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_INPUT_META,
     WEBUI_QUOTE_METADATA,
     RuntimeContextBlock,
     public_history_message,
     webui_quote_runtime_context,
 )
-from cirno.session.goal_state import GOAL_STATE_KEY
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.utils.progress_events import output_events
+from cirno_core.session.goal_state import GOAL_STATE_KEY
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.progress_events import output_events
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 _GOAL_RUNTIME_GUIDANCE_TAG = "[Goal Runtime Guidance — host instructions]"
 
 
 def _make_loop(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
     provider.generation = GenerationSettings()
 
-    with patch("cirno.agent.loop.ContextBuilder"), \
-         patch("cirno.agent.loop.SessionManager", side_effect=mock_session_manager), \
-         patch("cirno.agent.loop.SubagentManager") as mock_sub_mgr:
+    with patch("cirno_core.agent.loop.ContextBuilder"), \
+         patch("cirno_core.agent.loop.SessionManager", side_effect=mock_session_manager), \
+         patch("cirno_core.agent.loop.SubagentManager") as mock_sub_mgr:
         mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path)
     return loop
@@ -65,7 +65,7 @@ def _make_loop(tmp_path):
 
 @pytest.mark.asyncio
 async def test_loop_uses_structured_retry_status_without_legacy_text(tmp_path):
-    from cirno.agent.loop import AgentLoop
+    from cirno_core.agent.loop import AgentLoop
 
     bus = MessageBus()
     provider = MagicMock()
@@ -132,9 +132,9 @@ async def test_ephemeral_runner_enters_and_restores_turn_scopes(tmp_path):
 
 @pytest.mark.asyncio
 async def test_goal_command_can_implement_plan_from_prior_discussion(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -196,11 +196,11 @@ async def test_goal_command_can_implement_plan_from_prior_discussion(tmp_path):
 
 @pytest.mark.asyncio
 async def test_runtime_context_is_persisted_as_next_turn_prompt_prefix(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
-    skill_dir = tmp_path / "skills" / "review"
+    skill_dir = tmp_path / "home" / "skills" / "review"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
         "---\n"
@@ -263,9 +263,9 @@ async def test_runtime_context_is_persisted_as_next_turn_prompt_prefix(tmp_path)
 
 @pytest.mark.asyncio
 async def test_webui_quote_reaches_model_without_leaking_into_public_history(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -296,9 +296,9 @@ async def test_webui_quote_reaches_model_without_leaking_into_public_history(tmp
 
 @pytest.mark.asyncio
 async def test_runtime_context_provider_runs_once_across_tool_iterations(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     (tmp_path / "note.txt").write_text("hello", encoding="utf-8")
     provider = MagicMock()
@@ -341,8 +341,8 @@ async def test_runtime_context_provider_runs_once_across_tool_iterations(tmp_pat
 
 @pytest.mark.asyncio
 async def test_background_direct_turn_cannot_reuse_prior_goal_command(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -523,9 +523,9 @@ async def test_loop_retries_think_only_final_response(tmp_path):
 @pytest.mark.asyncio
 async def test_llm_error_returns_regular_response_instead_of_streamed_event(tmp_path):
     """LLM errors must not produce StreamedResponseEvent, so channels deliver the error."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -555,9 +555,9 @@ async def test_llm_error_returns_regular_response_instead_of_streamed_event(tmp_
 
 @pytest.mark.asyncio
 async def test_ssrf_soft_block_can_finalize_after_streamed_tool_call(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -607,10 +607,10 @@ async def test_ssrf_soft_block_can_finalize_after_streamed_tool_call(tmp_path):
 
 @pytest.mark.asyncio
 async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -655,8 +655,8 @@ async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
 
 @pytest.mark.asyncio
 async def test_subagent_max_iterations_announces_partial_incomplete_result(tmp_path, monkeypatch):
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -676,7 +676,7 @@ async def test_subagent_max_iterations_announces_partial_incomplete_result(tmp_p
     async def fake_execute(self, **kwargs):
         return "tool result"
 
-    monkeypatch.setattr("cirno.agent.tools.filesystem.ListDirTool.execute", fake_execute)
+    monkeypatch.setattr("cirno_core.agent.tools.filesystem.ListDirTool.execute", fake_execute)
 
     await mgr.spawn(
         task="do task",

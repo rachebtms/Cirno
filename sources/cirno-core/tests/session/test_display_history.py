@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from cirno.session.display_history import HistoryFact, HistoryKind
-from cirno.session.manager import SessionManager
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.webui.forking import create_webui_chat_fork
-from cirno.webui.transcript import WebUITranscriptRecorder, build_webui_thread_response
+from cirno_core.session.display_history import HistoryFact, HistoryKind
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_server.webui.forking import create_webui_chat_fork
+from cirno_core.session.transcript import WebUITranscriptRecorder, build_webui_thread_response
 
 
 def _manager(tmp_path: Path) -> SessionManager:
@@ -97,7 +97,7 @@ async def test_fork_rolls_back_both_histories_if_display_copy_fails(tmp_path, mo
     source.add_message("user", "question")
     source.add_message("assistant", "answer")
     await sessions.state.finish_turn(source)
-    monkeypatch.setattr("cirno.webui.forking.uuid.uuid4", lambda: "failed-fork")
+    monkeypatch.setattr("cirno_server.webui.forking.uuid.uuid4", lambda: "failed-fork")
     original = sessions._store.append_history
 
     def fail(key, facts, *, expected_generation):
@@ -147,7 +147,7 @@ async def test_real_process_exit_cannot_split_fork_model_and_display_histories(t
     child = tmp_path / "crash.py"
     child.write_text('''import asyncio, os, sys
 from pathlib import Path
-from cirno.session.manager import SessionManager
+from cirno_core.session.manager import SessionManager
 root = Path(sys.argv[1])
 sessions = SessionManager(root / "workspace", sessions_root=root / "sessions")
 original = sessions._store.append_history
@@ -177,7 +177,7 @@ asyncio.run(run())
 async def test_large_display_fact_serialization_and_copy_stay_off_runtime_loop(tmp_path, monkeypatch):
     import threading
 
-    import cirno.session.state as state_module
+    import cirno_core.session.state as state_module
 
     sessions = _manager(tmp_path)
     session = await sessions.state.get_header("websocket:large-activity")
@@ -206,7 +206,7 @@ async def test_large_display_fact_serialization_and_copy_stay_off_runtime_loop(t
 
 
 def test_message_projection_adapter_preserves_reply_and_agent_activity():
-    from cirno.webui.history import fact_from_record, record_from_fact
+    from cirno_core.session.presentation_history import fact_from_record, record_from_fact
 
     record = {
         "event": "message", "chat_id": "activity", "kind": "progress",
@@ -221,7 +221,7 @@ def test_message_projection_adapter_preserves_reply_and_agent_activity():
 async def test_new_fork_activity_uses_creation_time_not_inherited_history(tmp_path, stored_display):
     from datetime import datetime
 
-    from cirno.webui.session_list_index import list_webui_sessions
+    from cirno_server.webui.session_list_index import list_webui_sessions
 
     sessions = _manager(tmp_path)
     source = await sessions.state.get("websocket:old-source")

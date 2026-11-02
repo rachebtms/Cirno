@@ -18,15 +18,15 @@ def test_source_checkout_import_uses_pyproject_version_without_metadata() -> Non
         import types
 
         import importlib.util
-        source = {str(Path.cwd() / 'sources/cirno-core/__init__.py')!r}
+        source = {str(Path.cwd() / 'sources/cirno/__init__.py')!r}
         spec = importlib.util.spec_from_file_location("cirno", source)
         package = importlib.util.module_from_spec(spec)
         sys.modules["cirno"] = package
         spec.loader.exec_module(package)
-        fake = types.ModuleType("cirno.sdk.assistant")
+        fake = types.ModuleType("cirno_core.sdk.assistant")
         fake.Cirno = object
         fake.RunResult = object
-        sys.modules["cirno.sdk.assistant"] = fake
+        sys.modules["cirno_core.sdk.assistant"] = fake
 
         import cirno
 

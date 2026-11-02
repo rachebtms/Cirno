@@ -69,7 +69,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readWorkspaceScope(value: unknown): WorkspaceScopePayload | undefined {
   if (!isRecord(value) || typeof value.project_path !== "string"
-    || (value.access_mode !== "full" && value.access_mode !== "restricted")
+    || (value.access_mode !== "full" && value.access_mode !== "restricted" && value.access_mode !== "review")
     || typeof value.restrict_to_workspace !== "boolean") return undefined;
   return {
     project_path: value.project_path,

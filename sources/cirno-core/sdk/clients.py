@@ -7,16 +7,16 @@ from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from cirno.bus.runtime_events import SessionTurnPersisted
-from cirno.runtime.context import RUNTIME_CONTEXT_HISTORY_META, RuntimeContextProvider
-from cirno.sdk.types import (
+from cirno_core.bus.runtime_events import SessionTurnPersisted
+from cirno_core.runtime.context import RUNTIME_CONTEXT_HISTORY_META, RuntimeContextProvider
+from cirno_core.sdk.types import (
     SessionInfo,
     SessionSnapshot,
     snapshot_from_session,
 )
 
 if TYPE_CHECKING:
-    from cirno.agent.loop import AgentLoop
+    from cirno_core.agent.loop import AgentLoop
 
 
 class SessionClient:

@@ -7,18 +7,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cirno.agent import SubagentManager
-from cirno.agent.hook import AgentHookContext
-from cirno.memory.consolidation import Consolidator
-from cirno.agent.runner import AgentRunResult
-from cirno.agent.subagents.manager import (
+from cirno_core.agent import SubagentManager
+from cirno_core.agent.hook import AgentHookContext
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.subagents.manager import (
     SubagentStatus,
     _SubagentHook,
 )
-from cirno.agent.tools.context import current_request_context
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMUsage
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMUsage
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 # ---------------------------------------------------------------------------
 # Helpers

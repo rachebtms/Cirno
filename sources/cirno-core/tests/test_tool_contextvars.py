@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.cron import CronTool
-from cirno.agent.tools.message import MessageTool
-from cirno.agent.tools.subagent import SubagentTool
-from cirno.cron.service import CronService
-from cirno.providers.base import GenerationSettings, LLMProvider
-from cirno.runtime.context import RUNTIME_CONTEXT_INPUT_META, RuntimeContextBlock
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.agent.tools.message import MessageTool
+from cirno_core.agent.tools.subagent import SubagentTool
+from cirno_core.cron.service import CronService
+from cirno_core.providers.base import GenerationSettings, LLMProvider
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 def _runtime(model: str = "test-model") -> LLMRuntime:

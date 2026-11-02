@@ -5,16 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from cirno.agent.tools.base import ToolResult, tool_parameters
-from cirno.agent.tools.filesystem import _FsTool  # pyright: ignore[reportPrivateUsage]
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import ToolResult, tool_parameters
+from cirno_core.agent.tools.filesystem import _FsTool  # pyright: ignore[reportPrivateUsage]
+from cirno_core.agent.tools.schema import (
     ArraySchema,
     BooleanSchema,
     ObjectSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.utils.file_edit_events import FileDiff, FileEditResult, display_file_edit_path
+from cirno_core.utils.file_edit_events import FileDiff, FileEditResult, display_file_edit_path
 
 
 class _PatchError(ValueError):

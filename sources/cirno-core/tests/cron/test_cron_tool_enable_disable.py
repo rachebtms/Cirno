@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from cirno.agent.tools.cron import CronTool
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.cron.service import CronService
-from cirno.cron.types import CronJob, CronPayload, CronSchedule
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.cron.service import CronService
+from cirno_core.cron.types import CronJob, CronPayload, CronSchedule
 
 
 def _registry(service: CronService) -> ToolRegistry:

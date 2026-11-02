@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from cirno.session.manager import Session, SessionManager
+from cirno_core.session.manager import Session, SessionManager
 
 
 def _session(count: int, last_archived: object) -> Session:

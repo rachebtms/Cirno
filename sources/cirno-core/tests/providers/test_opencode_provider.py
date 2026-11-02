@@ -7,10 +7,10 @@ import json
 import httpx
 import pytest
 
-from cirno.config.schema import Config, ProvidersConfig
-from cirno.providers.base import ProviderCallContext
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import PROVIDERS, ModelAPICapabilities, find_by_name
+from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.providers.base import ProviderCallContext
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import PROVIDERS, ModelAPICapabilities, find_by_name
 
 
 def test_opencode_config_fields_exist() -> None:
@@ -177,7 +177,7 @@ async def test_opencode_wire_affinity(monkeypatch, api_type, stream, configured_
     """Exercise SDK header encoding/merging through the public provider entrypoints."""
     from openai import AsyncOpenAI
 
-    from cirno.providers import openai_compat_provider
+    from cirno_core.providers import openai_compat_provider
 
     requests: list[httpx.Request] = []
     rejected: list[httpx.Request] = []

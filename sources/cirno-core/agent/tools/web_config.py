@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from cirno.config.base import Base
+from cirno_core.config.base import Base
 
 
 class WebSearchConfig(Base):

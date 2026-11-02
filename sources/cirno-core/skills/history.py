@@ -10,8 +10,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from cirno.skills.metadata import parse_skill_metadata, valid_skill_metadata
-from cirno.config.home import get_home_path
+from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
+from cirno_core.config.home import get_home_path
 from filelock import FileLock
 
 

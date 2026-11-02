@@ -1,4 +1,4 @@
-from cirno.utils.helpers import (
+from cirno_core.utils.helpers import (
     extract_reasoning,
     extract_think,
     strip_reasoning_tags,

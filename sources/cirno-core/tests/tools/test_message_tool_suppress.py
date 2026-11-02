@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.context import TranscriptInput
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.message import MessageTool
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import LLMResponse, ToolCallRequest
-from cirno.utils.progress_events import output_events
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.message import MessageTool
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.utils.progress_events import output_events
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
@@ -259,7 +259,7 @@ async def test_regular_conversation_cannot_use_message_even_through_ptc(tmp_path
 
 @pytest.mark.asyncio
 async def test_regular_message_guard_cannot_be_bypassed_with_hidden_ui_argument():
-    from cirno.agent.tools.context import RequestContext, request_context
+    from cirno_core.agent.tools.context import RequestContext, request_context
     callback = AsyncMock()
     tool = MessageTool(send_callback=callback)
     with request_context(RequestContext(channel="websocket", chat_id="regular", session_key="websocket:regular")):

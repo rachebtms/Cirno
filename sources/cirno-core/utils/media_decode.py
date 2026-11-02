@@ -10,7 +10,7 @@ import mimetypes
 import uuid
 from pathlib import Path
 
-from cirno.utils.helpers import safe_filename
+from cirno_core.utils.helpers import safe_filename
 
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 MAX_FILE_SIZE = DEFAULT_MAX_BYTES

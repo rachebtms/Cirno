@@ -176,6 +176,7 @@ const RenameDialog = lazy(async () => {
 });
 
 const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
+  "account", "heartbeat", "coordination", "regional",
   "reading", "activity", "context", "dream", "memory-search", "execution", "shell", "network", "telegram",
   "capabilities",
   "overview",
@@ -565,12 +566,12 @@ function writeSessionUpdateChatIds(chatIds: Set<string>): void {
 }
 
 function normalizeWorkspaceScope(scope: WorkspaceScopePayload): WorkspaceScopePayload {
-  const accessMode = scope.access_mode === "restricted" ? "restricted" : "full";
+  const accessMode = scope.access_mode;
   return {
     ...scope,
     project_name: scope.project_name ?? projectNameFromPath(scope.project_path),
     access_mode: accessMode,
-    restrict_to_workspace: accessMode === "restricted",
+    restrict_to_workspace: accessMode !== "full",
   };
 }
 
@@ -1093,7 +1094,7 @@ export default function App() {
           <p className="text-lg font-semibold">{t("app.error.title")}</p>
           <p className="text-sm text-muted-foreground">{state.message}</p>
           <p className="text-xs text-muted-foreground">
-            {t("app.error.gatewayHint")}
+            {t("app.error.serverHint")}
           </p>
         </div>
       </div>
@@ -1936,7 +1937,7 @@ function Shell({
         project_path: trimmed,
         project_name: projectName || projectNameFromPath(trimmed),
         access_mode: base.access_mode,
-        restrict_to_workspace: base.access_mode === "restricted",
+        restrict_to_workspace: base.access_mode !== "full",
       }));
       setWorkspaceError(null);
       setMobileSidebarOpen(false);

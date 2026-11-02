@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import LLMResponse
-from cirno.session.manager import Session
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import LLMResponse
+from cirno_core.session.manager import Session
 
 
 def _make_loop(tmp_path: Path, context_window_tokens: int = 200_000) -> AgentLoop:
@@ -72,6 +72,8 @@ async def test_process_message_hands_complete_replay_to_runner(tmp_path: Path) -
         return_value=LLMResponse(content="ok", tool_calls=[], usage=None)
     )
     loop.tools.unregister("message")
+    loop.tools.unregister("control_session")
+    loop.tools.unregister("control_goal")
     loop.tools.get_definitions = MagicMock(return_value=[])
 
     session = await loop.sessions.state.import_messages("cli:test", _populated_session(30).messages)
@@ -96,6 +98,8 @@ async def test_runner_checkpoint_keeps_current_user_as_replay_boundary(tmp_path:
         return_value=LLMResponse(content="ok", tool_calls=[], usage=None)
     )
     loop.tools.unregister("message")
+    loop.tools.unregister("control_session")
+    loop.tools.unregister("control_goal")
     loop.tools.get_definitions = MagicMock(return_value=[])
 
     session = loop.sessions.get_or_create("cli:test")

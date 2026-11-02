@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-from cirno.cron.types import CronJob
+from cirno_core.cron.types import CronJob
 
 
 class CronBindingError(ValueError):

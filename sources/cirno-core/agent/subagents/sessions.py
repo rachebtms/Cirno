@@ -9,11 +9,11 @@ from typing import Any, cast
 from loguru import logger
 from pydantic import TypeAdapter, ValidationError
 
-from cirno.agent.subagents.status import SubagentSessionError as SubagentSessionError
-from cirno.agent.subagents.status import SubagentStatus
-from cirno.session.manager import Session, SessionManager, SessionPolicy
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY, SessionType
+from cirno_core.agent.subagents.status import SubagentSessionError as SubagentSessionError
+from cirno_core.agent.subagents.status import SubagentStatus
+from cirno_core.session.manager import Session, SessionManager, SessionPolicy
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY, SessionType
 
 SUBAGENT = SessionType("subagent", needs_handle=False, public_history=False)
 TASK_METADATA_KEY = "subagent_task"

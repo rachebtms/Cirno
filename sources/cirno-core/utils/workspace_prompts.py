@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import suppress
 from pathlib import Path
 
-from cirno.utils.helpers import truncate_text
+from cirno_core.utils.helpers import truncate_text
 
 WORKSPACE_PROMPT_MAX_CHARS = 32_000
 

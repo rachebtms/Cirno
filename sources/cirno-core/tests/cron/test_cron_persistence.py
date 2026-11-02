@@ -1,4 +1,4 @@
-"""Persistence tests for ``cirno.cron.service.CronService``.
+"""Persistence tests for ``cirno_core.cron.service.CronService``.
 
 These tests target the specific failure mode where a corrupt or partially
 written ``jobs.json`` would silently turn into an empty job list on the next
@@ -15,8 +15,8 @@ from typing import Callable
 
 import pytest
 
-from cirno.cron.service import CronService
-from cirno.cron.types import CronJob, CronPayload, CronSchedule
+from cirno_core.cron.service import CronService
+from cirno_core.cron.types import CronJob, CronPayload, CronSchedule
 
 
 def _seeded_store(tmp_path: Path) -> tuple[CronService, Path]:

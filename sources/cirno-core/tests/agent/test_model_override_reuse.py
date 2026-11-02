@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.model_runtime import ModelRuntimeResolver
-from cirno.config.schema import Config, ModelPresetConfig
-from cirno.providers import factory
-from cirno.providers.base import LLMProvider, LLMResponse
-from cirno.utils.llm_runtime import runtime_from_provider_snapshot
+from cirno_core.agent.model_runtime import ModelRuntimeResolver
+from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.providers import factory
+from cirno_core.providers.base import LLMProvider, LLMResponse
+from cirno_core.utils.llm_runtime import runtime_from_provider_snapshot
 
 
 @pytest.fixture
@@ -209,8 +209,8 @@ async def test_non_json_override_keeps_existing_construction_contract(configured
 
 @pytest.mark.asyncio
 async def test_sdk_stream_survives_reuse_replacement_and_invalidation(configured_override, tmp_path):
-    from cirno.bus.events import OutboundMessage
-    from cirno.sdk.assistant import Cirno
+    from cirno_core.bus.events import OutboundMessage
+    from cirno_core.sdk.assistant import Cirno
 
     config, fixture_resolver, created = configured_override
     path = tmp_path / "config.json"

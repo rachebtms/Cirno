@@ -12,25 +12,25 @@ from loguru import logger
 from mcp import types
 from mcp.shared.exceptions import McpError
 
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.agent.runner import AgentRunner
-from cirno.agent.tools.context import (
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.tools.context import (
     RequestContext,
     request_context,
     tool_log_content_allowed,
 )
-from cirno.agent.tools.execution import _classify_violation, execute_tool_calls
-from cirno.agent.tools.mcp import (
+from cirno_core.agent.tools.execution import _classify_violation, execute_tool_calls
+from cirno_core.agent.tools.mcp import (
     MCPPromptWrapper,
     MCPProvider,
     MCPResourceWrapper,
     MCPToolWrapper,
 )
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.web import WebFetchTool, WebSearchTool, _redact_url_for_log
-from cirno.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
-from cirno.config.schema import MCPServerConfig, WebSearchConfig
-from cirno.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.web import WebFetchTool, WebSearchTool, _redact_url_for_log
+from cirno_core.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
+from cirno_core.config.schema import MCPServerConfig, WebSearchConfig
+from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 _SECRET = "synthetic-private-detail"
 
@@ -134,7 +134,7 @@ async def test_mcp_private_errors_exclude_exception_payloads(
         else:
             if kind == "retry":
                 error = ConnectionResetError(_SECRET)
-                monkeypatch.setattr("cirno.agent.tools.mcp.asyncio.sleep", AsyncMock())
+                monkeypatch.setattr("cirno_core.agent.tools.mcp.asyncio.sleep", AsyncMock())
             session.call_tool = AsyncMock(side_effect=error)
     elif kind == "resource":
         tool = MCPResourceWrapper(session, "test", types.Resource(
@@ -168,12 +168,12 @@ async def test_web_private_diagnostics_keep_error_category_not_content(
     error = RuntimeError(url)
     with request_context(RequestContext(channel="websocket", chat_id="test", log_content=log_content)):
         if kind == "fetch":
-            monkeypatch.setattr("cirno.agent.tools.web.httpx.AsyncClient", MagicMock(side_effect=error))
+            monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", MagicMock(side_effect=error))
             result = await WebFetchTool()._fetch_readability(url, "text", 100)
             assert url in result
         elif kind == "jina":
             tool = WebSearchTool(config=WebSearchConfig(provider="jina", api_key="synthetic"))
-            monkeypatch.setattr("cirno.agent.tools.web.httpx.AsyncClient", MagicMock(side_effect=error))
+            monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", MagicMock(side_effect=error))
             monkeypatch.setattr(tool, "_search_duckduckgo", AsyncMock(return_value="fallback"))
             assert await tool._search_jina(_SECRET, 1) == "fallback"
         elif kind == "duckduckgo":

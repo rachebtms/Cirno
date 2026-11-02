@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from cirno.cron.service import CronService
-from cirno.cron.types import CronJob, CronSchedule
+from cirno_core.cron.service import CronService
+from cirno_core.cron.types import CronJob, CronSchedule
 
 
 @pytest.mark.parametrize("kind", ["every", "cron", "at"])
 @pytest.mark.parametrize("resend_schedule", [False, True])
 async def test_metadata_edit_preserves_due_occurrence(tmp_path, monkeypatch, kind, resend_schedule):
     now = 1_900_000_000_000
-    monkeypatch.setattr("cirno.cron.service._now_ms", lambda: now)
+    monkeypatch.setattr("cirno_core.cron.service._now_ms", lambda: now)
     schedules = {
         "every": CronSchedule(kind="every", every_ms=60_000),
         "cron": CronSchedule(kind="cron", expr="* * * * *", tz="UTC"),
@@ -80,7 +80,7 @@ async def test_reschedule_during_execution_preserves_new_occurrence(
     roundtrip: bool,
 ) -> None:
     now = 1_900_000_000_000
-    monkeypatch.setattr("cirno.cron.service._now_ms", lambda: now)
+    monkeypatch.setattr("cirno_core.cron.service._now_ms", lambda: now)
     entered = asyncio.Event()
     release = asyncio.Event()
     calls: list[str] = []

@@ -10,8 +10,8 @@ from typing import Any, AsyncGenerator, cast
 import httpx
 from loguru import logger
 
-from cirno.providers.base import LLMResponse, LLMUsage, ToolCallRequest, parse_tool_arguments
-from cirno.providers.openai_responses.state import (
+from cirno_core.providers.base import LLMResponse, LLMUsage, ToolCallRequest, parse_tool_arguments
+from cirno_core.providers.openai_responses.state import (
     REPLAYABLE_FINISH_REASONS,
     attach_responses_state,
 )

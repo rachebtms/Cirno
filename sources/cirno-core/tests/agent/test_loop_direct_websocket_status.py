@@ -3,15 +3,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.events import OutboundMessage
-from cirno.bus.outbound_events import GoalStatusEvent
-from cirno.bus.queue import MessageBus
-from cirno.channels.websocket.runtime import WebSocketChannel
-from cirno.providers.base import GenerationSettings, LLMResponse
-from cirno.session import webui_turns as wth
-from cirno.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
-from cirno.webui.metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.events import OutboundMessage
+from cirno_core.bus.outbound_events import GoalStatusEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_server.channels.websocket.runtime import WebSocketChannel
+from cirno_core.providers.base import GenerationSettings, LLMResponse
+from cirno_core.session import webui_turns as wth
+from cirno_core.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
+from cirno_core.session.transport_metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY
 
 
 def _make_loop(tmp_path):
@@ -124,7 +124,7 @@ async def test_process_direct_reuses_existing_session_lock(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_process_direct_applies_per_run_hooks(tmp_path) -> None:
-    from cirno.agent.hook import AgentHook, AgentRunHookContext
+    from cirno_core.agent.hook import AgentHook, AgentRunHookContext
 
     loop = _make_loop(tmp_path)
     events: list[tuple[str, str | None]] = []

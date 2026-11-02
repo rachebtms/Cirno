@@ -31,7 +31,7 @@ export function settingsPayload(): SettingsPayload {
       temperature: 0.1,
       reasoning_effort: null,
       timezone: "UTC",
-      tool_hint_max_length: 40,
+      tool_status_summary_max_chars: 40,
     },
     model_presets: [{
       name: "primary",
@@ -67,8 +67,8 @@ export function settingsPayload(): SettingsPayload {
     runtime: {
       config_path: "/tmp/config.json",
       workspace_path: "/tmp/workspace",
-      gateway_host: "127.0.0.1",
-      gateway_port: 18790,
+      health_host: "127.0.0.1",
+      health_port: 18790,
       heartbeat: {
         enabled: true,
         interval_s: 1800,

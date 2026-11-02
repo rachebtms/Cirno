@@ -2,10 +2,10 @@
 
 from datetime import datetime
 
-from cirno.providers.base import ProviderConversationState
-from cirno.session.manager import Session, SessionManager
-from cirno.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY
+from cirno_core.providers.base import ProviderConversationState
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
+from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY
 
 
 def test_manager_roundtrips_full_history_and_private_state(tmp_path):

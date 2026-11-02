@@ -10,11 +10,11 @@ import httpx
 import pytest
 from openai import AsyncOpenAI
 
-from cirno.providers.azure_openai_provider import (
+from cirno_core.providers.azure_openai_provider import (
     AzureOpenAIProvider,
     _AzureTokenProvider,
 )
-from cirno.providers.base import LLMResponse, ProviderCallContext
+from cirno_core.providers.base import LLMResponse, ProviderCallContext
 
 # ---------------------------------------------------------------------------
 # Init & validation
@@ -107,7 +107,7 @@ async def azure_wire_requests(monkeypatch):
         def create_client(**kwargs):
             return AsyncOpenAI(http_client=http_client, **kwargs)
 
-        monkeypatch.setattr("cirno.providers.azure_openai_provider.AsyncOpenAI", create_client)
+        monkeypatch.setattr("cirno_core.providers.azure_openai_provider.AsyncOpenAI", create_client)
         yield requests
 
 

@@ -7,21 +7,21 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from cirno.agent.subagents.manager import SubagentControlError
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import current_request_context, current_request_session_key
-from cirno.agent.tools.schema import (
+from cirno_core.agent.subagents.manager import SubagentControlError
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import current_request_context, current_request_session_key
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     NumberSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.security.workspace_access import current_workspace_scope
-from cirno.session.manager import SessionPolicy
+from cirno_core.security.workspace_access import current_workspace_scope
+from cirno_core.session.manager import SessionPolicy
 
 if TYPE_CHECKING:
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.context import ToolContext
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.context import ToolContext
 
 
 @tool_parameters(tool_parameters_schema(

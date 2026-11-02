@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import json_repair
 from loguru import logger
 
-from cirno.bus.agent_events import (
+from cirno_core.bus.agent_events import (
     NO_EVENTS,
     EventSink,
     ResponseSource,
@@ -28,13 +28,13 @@ from cirno.bus.agent_events import (
     RetryStatusEvent,
     RetryWaitEvent,
 )
-from cirno.llm_usage.types import LLMUsage as LLMUsage
-from cirno.providers.generation import GenerationSettings as GenerationSettings
-from cirno.utils.cancellation import shield_and_drain
-from cirno.utils.helpers import sanitize_surrogates_deep
+from cirno_core.llm_usage.types import LLMUsage as LLMUsage
+from cirno_core.providers.generation import GenerationSettings as GenerationSettings
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.helpers import sanitize_surrogates_deep
 
 if TYPE_CHECKING:
-    from cirno.llm_usage.models import LLMCallRecord
+    from cirno_core.llm_usage.models import LLMCallRecord
 
 STREAM_IDLE_TIMEOUT_ENV = "CIRNO_STREAM_IDLE_TIMEOUT_S"
 DEFAULT_STREAM_IDLE_TIMEOUT_S = 90.0
@@ -471,7 +471,7 @@ class LLMProvider(ABC):
             model_value = kwargs.get("model")
             model = model_value if isinstance(model_value, str) else self.get_default_model()
             try:
-                from cirno.utils.helpers import (
+                from cirno_core.utils.helpers import (
                     build_assistant_message,
                     estimate_message_tokens,
                     estimate_prompt_tokens_chain,
@@ -571,8 +571,8 @@ class LLMProvider(ABC):
         model_value = kwargs.get("model")
         model = model_value if isinstance(model_value, str) and model_value else self.get_default_model()
         try:
-            from cirno.llm_usage.context import current_llm_usage_source
-            from cirno.llm_usage.models import LLMCallRecord
+            from cirno_core.llm_usage.context import current_llm_usage_source
+            from cirno_core.llm_usage.models import LLMCallRecord
 
             observer(LLMCallRecord(
                 started_at_ms=started_at_ms,

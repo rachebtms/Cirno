@@ -9,24 +9,24 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.subagents.status import SubagentStatus
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.command import CommandContext
-from cirno.config.schema import AgentDefaults, Config
-from cirno.bus.agent_events import NO_EVENTS, ContextCompactionEvent
-from cirno.providers.base import LLMResponse
-from cirno.runtime.context import public_history_message
-from cirno.sdk.clients import RuntimeClient
-from cirno.session.keys import HEARTBEAT_SESSION_KEY
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.subagents.status import SubagentStatus
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.command import CommandContext
+from cirno_core.config.schema import AgentDefaults, Config
+from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent
+from cirno_core.providers.base import LLMResponse
+from cirno_core.runtime.context import public_history_message
+from cirno_core.sdk.clients import RuntimeClient
+from cirno_core.session.keys import HEARTBEAT_SESSION_KEY
 
 
 def _make_loop(
     tmp_path: Path,
-    session_ttl_minutes: int = 15,
+    idle_compact_after_minutes: int = 15,
 ) -> AgentLoop:
     """Create a minimal AgentLoop for testing."""
     bus = MessageBus()
@@ -41,7 +41,7 @@ def _make_loop(
         workspace=tmp_path,
         model="test-model",
         context_window_tokens=128_000,
-        session_ttl_minutes=session_ttl_minutes,
+        idle_compact_after_minutes=idle_compact_after_minutes,
         idle_compact_min_tokens=0,
         idle_compact_keep_recent_tokens=0,
     )
@@ -162,7 +162,7 @@ async def test_idle_compaction_emits_its_real_trigger_for_each_phase(tmp_path, m
         await loop.sessions.state.finish_turn(session)
         clock = MagicMock(wraps=datetime)
         clock.now.return_value = datetime.now() + timedelta(minutes=20)
-        monkeypatch.setattr("cirno.agent.autocompact.datetime", clock)
+        monkeypatch.setattr("cirno_core.agent.autocompact.datetime", clock)
         if outcome == "succeeded":
             loop.consolidator.archive_session = AsyncMock(return_value="Idle summary.")
         else:
@@ -222,7 +222,7 @@ async def test_idle_compaction_skips_subagent_sessions(tmp_path, monkeypatch, re
 
         clock = MagicMock(wraps=datetime)
         clock.now.return_value = datetime.now() + timedelta(minutes=20)
-        monkeypatch.setattr("cirno.agent.autocompact.datetime", clock)
+        monkeypatch.setattr("cirno_core.agent.autocompact.datetime", clock)
         loop.consolidator.archive_session = AsyncMock(return_value="Conversation summary.")
         await loop._check_expired_sessions_if_due()
         await _drain_background_tasks(loop)
@@ -242,8 +242,8 @@ async def test_idle_compaction_skips_subagent_sessions(tmp_path, monkeypatch, re
 
 @pytest.mark.parametrize("compaction", ["idle", "compact_session", "compact_idle_session"])
 async def test_turn_resuming_during_archive_commits_reply(tmp_path, monkeypatch, compaction):
-    monkeypatch.setattr("cirno.config.home._home_path", tmp_path / "home")
-    monkeypatch.setattr("cirno.config.loader._current_config_path", tmp_path / "config.json")
+    monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path / "home")
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", tmp_path / "config.json")
     loop = _make_loop(tmp_path / "workspace")
     session = loop.sessions.get_or_create("cli:idle")
     _add_turns(session, 1, prefix="old")
@@ -313,27 +313,27 @@ class TestSessionTTLConfig:
     def test_default_ttl_is_fifteen_minutes(self):
         """Default TTL should proactively compact stale sessions."""
         defaults = AgentDefaults()
-        assert defaults.session_ttl_minutes == 15
+        assert defaults.idle_compact_after_minutes == 15
 
     def test_explicit_zero_disables_ttl(self):
         """Explicit 0 should still disable idle auto-compact."""
-        defaults = AgentDefaults(session_ttl_minutes=0)
-        assert defaults.session_ttl_minutes == 0
+        defaults = AgentDefaults(idle_compact_after_minutes=0)
+        assert defaults.idle_compact_after_minutes == 0
 
     def test_custom_ttl(self):
         """Custom TTL should be stored correctly."""
-        defaults = AgentDefaults(session_ttl_minutes=30)
-        assert defaults.session_ttl_minutes == 30
+        defaults = AgentDefaults(idle_compact_after_minutes=30)
+        assert defaults.idle_compact_after_minutes == 30
 
     def test_user_friendly_alias_is_supported(self):
         """Config should accept idleCompactAfterMinutes as the preferred JSON key."""
         defaults = AgentDefaults.model_validate({"idleCompactAfterMinutes": 30})
-        assert defaults.session_ttl_minutes == 30
+        assert defaults.idle_compact_after_minutes == 30
 
 
     def test_serializes_with_user_friendly_alias(self):
         """Config dumps should use idleCompactAfterMinutes for JSON output."""
-        defaults = AgentDefaults(session_ttl_minutes=30)
+        defaults = AgentDefaults(idle_compact_after_minutes=30)
         data = defaults.model_dump(mode="json", by_alias=True)
         assert data["idleCompactAfterMinutes"] == 30
         assert "sessionTtlMinutes" not in data
@@ -373,7 +373,7 @@ class TestIdleScanThrottling:
         )
         loop.auto_compact.check_expired = AsyncMock()
         loop._next_idle_compact_check_at = 0
-        monkeypatch.setattr("cirno.agent.loop.time", SimpleNamespace(time=time.time, monotonic=lambda: next(ticks)))
+        monkeypatch.setattr("cirno_core.agent.loop.time", SimpleNamespace(time=time.time, monotonic=lambda: next(ticks)))
 
         await loop._check_expired_sessions_if_due()
         loop.auto_compact.check_expired.assert_called_once()
@@ -385,7 +385,7 @@ class TestIdleScanThrottling:
 
     async def test_zero_idle_scan_interval_checks_every_tick(self, tmp_path, monkeypatch):
         """An explicit zero should leave each idle tick eligible to scan."""
-        monkeypatch.setattr("cirno.agent.loop.time", SimpleNamespace(time=time.time, monotonic=lambda: 1_000.0))
+        monkeypatch.setattr("cirno_core.agent.loop.time", SimpleNamespace(time=time.time, monotonic=lambda: 1_000.0))
         loop = _make_loop(tmp_path)
         loop.auto_compact.check_expired = AsyncMock()
 
@@ -396,16 +396,16 @@ class TestIdleScanThrottling:
 
 
 class TestAgentLoopTTLParam:
-    """Test that AutoCompact receives and stores session_ttl_minutes."""
+    """Test that AutoCompact receives and stores idle_compact_after_minutes."""
 
     def test_loop_stores_ttl(self, tmp_path):
         """AutoCompact should store the TTL value."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=25)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=25)
         assert loop.auto_compact._ttl == 25
 
     def test_explicit_zero_ttl_disables_loop_compaction(self, tmp_path):
         """An explicit zero TTL disables idle compaction in the loop."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=0)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=0)
         assert loop.auto_compact._ttl == 0
 
 class TestAutoCompact:
@@ -414,7 +414,7 @@ class TestAutoCompact:
     @pytest.mark.asyncio
     async def test_check_expired_only_archives_expired_sessions(self, tmp_path):
         """With multiple sessions, only the expired one should be archived."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         # Expired session
         s1 = loop.sessions.get_or_create("cli:expired")
         s1.add_message("user", "old")
@@ -436,7 +436,7 @@ class TestAutoCompact:
 
     @pytest.mark.asyncio
     async def test_auto_compact_archives_full_tail_without_deleting_history(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6)
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -459,7 +459,7 @@ class TestAutoCompact:
 
     @pytest.mark.asyncio
     async def test_auto_compact_replaces_entire_tool_turn(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 2, prefix="old")
         session.add_message("user", "record this")
@@ -480,7 +480,7 @@ class TestAutoCompact:
     @pytest.mark.asyncio
     async def test_auto_compact_stores_summary_in_cache_and_metadata(self, tmp_path):
         """_archive caches and persists the summary without exposing archived history."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="hello")
         last_active = datetime.now() - timedelta(minutes=20)
@@ -509,7 +509,7 @@ class TestAutoCompact:
     @pytest.mark.asyncio
     async def test_auto_compact_empty_session(self, tmp_path):
         """_archive on empty session should not store a summary."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
 
         loop.consolidator.compact_idle_session = _make_fake_compact(loop)
 
@@ -523,7 +523,7 @@ class TestAutoCompact:
     @pytest.mark.asyncio
     async def test_auto_compact_respects_last_archived(self, tmp_path):
         """_archive should process only unarchived messages."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 14)
         session.last_archived = 18
@@ -546,7 +546,7 @@ class TestAutoCompactIdleDetection:
 
     @pytest.mark.asyncio
     async def test_no_auto_compact_when_ttl_disabled(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=0)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=0)
         session = loop.sessions.get_or_create("cli:test")
         session.add_message("user", "old message")
         session.updated_at = datetime.now() - timedelta(minutes=30)
@@ -561,7 +561,7 @@ class TestAutoCompactIdleDetection:
 
     @pytest.mark.asyncio
     async def test_auto_compact_triggers_on_idle(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -590,7 +590,7 @@ class TestAutoCompactIdleDetection:
 
     @pytest.mark.asyncio
     async def test_no_auto_compact_when_active(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.add_message("user", "recent message")
         loop.sessions.save(session)
@@ -605,7 +605,7 @@ class TestAutoCompactIdleDetection:
     @pytest.mark.asyncio
     async def test_auto_compact_does_not_affect_priority_commands(self, tmp_path):
         """Priority commands (/stop, /restart) bypass _process_message entirely via run()."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.add_message("user", "old message")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -627,7 +627,7 @@ class TestAutoCompactIdleDetection:
 
     @pytest.mark.asyncio
     async def test_auto_compact_with_slash_new(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         for i in range(4):
             session.add_message("user", f"msg{i}")
@@ -688,7 +688,7 @@ class TestAutoCompactSystemMessages:
 
     @pytest.mark.asyncio
     async def test_auto_compact_triggers_for_system_messages(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -719,7 +719,7 @@ class TestAutoCompactEdgeCases:
 
     @pytest.mark.asyncio
     async def test_auto_compact_with_nothing_summary(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="thanks")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -741,7 +741,7 @@ class TestAutoCompactEdgeCases:
 
     @pytest.mark.asyncio
     async def test_auto_compact_archive_failure_preserves_raw_history(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="important")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -761,7 +761,7 @@ class TestAutoCompactEdgeCases:
     @pytest.mark.asyncio
     async def test_auto_compact_preserves_runtime_checkpoint_before_check(self, tmp_path):
         """Short expired sessions keep recent messages; checkpoint restore still works on resume."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.metadata[AgentLoop._RUNTIME_CHECKPOINT_KEY] = {
             "assistant_message": {"role": "assistant", "content": "interrupted response"},
@@ -796,7 +796,7 @@ class TestAutoCompactIntegration:
 
     @pytest.mark.asyncio
     async def test_full_lifecycle(self, tmp_path):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         overview = (
             "IDLE_OVERVIEW_MARKER: User is learning English past tense. "
@@ -872,7 +872,7 @@ class TestAutoCompactIntegration:
     @pytest.mark.asyncio
     async def test_runtime_context_markers_hidden_for_multi_paragraph_turn(self, tmp_path):
         """Auto-compact resume context must not leak runtime markers into public history."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.add_message("user", "old message")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -917,7 +917,7 @@ class TestProactiveAutoCompact:
         tmp_path,
         monkeypatch,
     ):
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         removed = loop.sessions.get_or_create("cli:removed")
         removed.add_message("user", "remove me")
         loop.sessions.save(removed)
@@ -945,7 +945,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_no_check_when_ttl_disabled(self, tmp_path):
         """check_expired should be a no-op when TTL is 0."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=0)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=0)
         session = loop.sessions.get_or_create("cli:test")
         session.add_message("user", "old message")
         session.updated_at = datetime.now() - timedelta(minutes=30)
@@ -960,7 +960,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_proactive_archive_on_idle_tick(self, tmp_path):
         """Expired session should be archived during idle tick."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 5, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -985,7 +985,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_proactive_archive_skips_dream_sessions(self, tmp_path):
         """Internal Dream sessions should be left to Dream retention, not idle compact."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("dream:20260602-155256")
         _add_turns(session, 6, prefix="dream")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1006,7 +1006,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_no_proactive_archive_when_active(self, tmp_path):
         """Recently active session should NOT be archived on idle tick."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.add_message("user", "recent message")
         loop.sessions.save(session)
@@ -1020,7 +1020,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_no_duplicate_archive(self, tmp_path):
         """Should not archive the same session twice if already in progress."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1056,7 +1056,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_proactive_archive_error_does_not_block(self, tmp_path):
         """Proactive archive failure should be caught and not block future ticks."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1077,7 +1077,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_proactive_archive_skips_empty_sessions(self, tmp_path):
         """Proactive archive should not produce a summary for sessions with no messages."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.updated_at = datetime.now() - timedelta(minutes=20)
         loop.sessions.save(session)
@@ -1093,7 +1093,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_skip_expired_session_with_active_agent_task(self, tmp_path):
         """Expired session with an active agent task should NOT be archived."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1114,7 +1114,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_archive_after_active_task_completes(self, tmp_path):
         """Session should be archived on next tick after active task completes."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1135,7 +1135,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_partial_active_set_only_archives_inactive_expired(self, tmp_path):
         """With multiple sessions, only the expired+inactive one should be archived."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         # Session A: expired, no active task -> should be archived
         s1 = loop.sessions.get_or_create("cli:expired_idle")
         _add_turns(s1, 6, prefix="old_a")
@@ -1170,7 +1170,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.parametrize("command_tail", [False, True])
     async def test_no_reschedule_after_successful_archive(self, tmp_path, monkeypatch, command_tail):
         """Idle scans skip archived history until another ordinary message arrives."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 5, prefix="old")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1210,7 +1210,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_empty_session_does_not_schedule_idle_compact(self, tmp_path):
         """Empty expired sessions have no removable tail and should not schedule."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         session.updated_at = datetime.now() - timedelta(minutes=20)
         loop.sessions.save(session)
@@ -1230,7 +1230,7 @@ class TestProactiveAutoCompact:
     @pytest.mark.asyncio
     async def test_session_can_be_compacted_again_after_new_messages(self, tmp_path, monkeypatch):
         """After successful compact + user sends new messages + idle again, should compact again."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 5, prefix="first")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1248,7 +1248,7 @@ class TestProactiveAutoCompact:
         await loop._process_message(msg)
 
         # New messages have now been idle for a fresh TTL interval.
-        monkeypatch.setattr("cirno.agent.autocompact.datetime", SimpleNamespace(
+        monkeypatch.setattr("cirno_core.agent.autocompact.datetime", SimpleNamespace(
             now=lambda: datetime.now() + timedelta(minutes=20),
             fromisoformat=datetime.fromisoformat,
         ))
@@ -1263,7 +1263,7 @@ class TestSummaryPersistence:
     @pytest.mark.asyncio
     async def test_summary_recovered_after_restart(self, tmp_path):
         """Summary should be recovered from metadata when _summaries is empty (simulates restart)."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="hello")
         last_active = datetime.now() - timedelta(minutes=20)
@@ -1296,7 +1296,7 @@ class TestSummaryPersistence:
     @pytest.mark.asyncio
     async def test_metadata_persists_for_restart(self, tmp_path):
         """_last_summary stays in metadata so it survives process restarts."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="hello")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1324,7 +1324,7 @@ class TestSummaryPersistence:
     @pytest.mark.asyncio
     async def test_inmemory_summary_preserves_metadata_for_restart(self, tmp_path):
         """The in-memory summary path preserves _last_summary for restart recovery."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="hello")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1350,7 +1350,7 @@ class TestSummaryPersistence:
     @pytest.mark.asyncio
     async def test_new_summary_overrides_old(self, tmp_path, monkeypatch):
         """A fresh archive writes a new summary that replaces the old one."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="hello")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1378,7 +1378,7 @@ class TestSummaryPersistence:
             loop, summary="Second summary.",
         )
         # New messages have now been idle for a fresh TTL interval.
-        monkeypatch.setattr("cirno.agent.autocompact.datetime", SimpleNamespace(
+        monkeypatch.setattr("cirno_core.agent.autocompact.datetime", SimpleNamespace(
             now=lambda: datetime.now() + timedelta(minutes=20),
             fromisoformat=datetime.fromisoformat,
         ))
@@ -1397,7 +1397,7 @@ class TestSummaryPersistence:
     @pytest.mark.asyncio
     async def test_new_command_clears_last_summary(self, tmp_path):
         """/new should clear _last_summary so the new session starts fresh."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
+        loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
         _add_turns(session, 6, prefix="hello")
         session.updated_at = datetime.now() - timedelta(minutes=20)
@@ -1423,8 +1423,8 @@ class TestSummaryPersistence:
 
 @pytest.mark.parametrize("ordering", ["scan_during_turn", "archive_queued_before_turn"])
 async def test_idle_compaction_rechecks_settled_activity(tmp_path, monkeypatch, ordering):
-    monkeypatch.setattr("cirno.config.home._home_path", tmp_path / "home")
-    monkeypatch.setattr("cirno.config.loader._current_config_path", tmp_path / "config.json")
+    monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path / "home")
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", tmp_path / "config.json")
     now = [datetime.now()]
 
     class Clock(datetime):
@@ -1433,7 +1433,7 @@ async def test_idle_compaction_rechecks_settled_activity(tmp_path, monkeypatch, 
             return now[0] if tz is None else now[0].replace(tzinfo=tz)
 
     # The scanner and settled-turn/summary writers must share the same clock.
-    for module in ("cirno.agent.autocompact", "cirno.agent.loop", "cirno.session.manager"):
+    for module in ("cirno_core.agent.autocompact", "cirno_core.agent.loop", "cirno_core.session.manager"):
         monkeypatch.setattr(f"{module}.datetime", Clock)
     loop = _make_loop(tmp_path / "workspace")
     key = HEARTBEAT_SESSION_KEY

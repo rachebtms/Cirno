@@ -8,7 +8,8 @@ import type { CirnoClient } from "@/lib/cirno-client";
 type HomeFile = { name: string; file: string; content: string; revision: string };
 const FILE_GROUPS = {
   memory: ["memory"],
-  personality: ["soul", "user", "instructions", "heartbeat"],
+  personality: ["soul", "user", "instructions"],
+  heartbeat: ["heartbeat"],
 } as const;
 
 export function HomeFilesSettings({ client, section }: { client: CirnoClient; section: keyof typeof FILE_GROUPS }) {

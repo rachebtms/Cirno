@@ -1,6 +1,6 @@
 # Cirno
 
-Cirno is a general-purpose AI assistant with a Python gateway and a React/TypeScript browser interface, based on [Nanobot](https://github.com/HKUDS/nanobot).
+Cirno is a general-purpose AI assistant with a Python service and a React/TypeScript browser interface, based on [Nanobot](https://github.com/HKUDS/nanobot).
 
 Conversations have separate histories, input queues, Goals and cancellation scopes. The Cirno coordination conversation delegates execution to ordinary conversations and presents reports. Projects group conversations independently of their working directories. Memory, profiles and learned Skills live in Agent Home.
 
@@ -11,11 +11,11 @@ Requires Python 3.11+ and Node.js 24 for the frontend build. From the repository
 ```sh
 npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run build
-python -m pip install -e .
-cirno webui --port 8000
+python -m pip install -e sources/cirno-core -e sources/cirno-server -e .
+cirno --port 8000
 ```
 
-Open `http://localhost:8000` and configure a provider under Settings → Models. On first launch, register the instance owner and configure a model in the browser. Data defaults to `~/.cirno/`; use `cirno --home /path/to/instance webui` for a separate instance. See [configuration](documents/configuration.md).
+Open `http://localhost:8000` and configure a provider under Settings → Models. On first launch, register the instance owner and configure a model in the browser. Data defaults to `~/.cirno/`; use `cirno --home /path/to/instance` for a separate instance. See [configuration](documents/configuration.md).
 
 The new-conversation header offers optional [PTC mode](documents/architecture/ptc.md), which lets the model compose tool calls inside a bounded Python program. It is off by default and saved per conversation.
 
@@ -25,16 +25,18 @@ Run the published image:
 
 ```sh
 docker compose up -d
-docker compose logs cirno-gateway
+docker compose logs cirno
 ```
 
-Open `http://localhost:8765`. On a new Home, register your instance owner in the browser, then configure a model. No generated password or setup code needs to be copied from logs. Configuration and durable state persist in the mounted `~/.cirno`. Optional embeddings are disabled by default.
+Open `http://localhost:8765`. On a new instance, register your instance owner in the browser, then configure a model. No generated password or setup code needs to be copied from logs. The mounted `~/.cirno` holds `config.json`, Agent Home in `home/`, runtime data in `state/` and the default `workspace/`. Optional embeddings are disabled by default.
 
 The [GitHub Actions workflow](.github/workflows/container.yml) is configured to verify, build and publish Linux AMD64/ARM64 images to `ghcr.io/rachebtms/cirno`. Publication requires committed code, a pushed trigger and a successful workflow. Compose uses the published image without a local build. See [container deployment and publishing](documents/docker.md).
 
 ## Repository and documentation
 
-- `sources/cirno-core/`: Python runtime, bundled Skills, prompts and tests.
+- `sources/cirno-core/`: execution engine, model providers, memory, tools, Skills and session state.
+- `sources/cirno-server/`: HTTP/WebSocket API, Telegram, service lifecycle and settings.
+- `sources/cirno/`: lightweight application distribution and public SDK facade.
 - `sources/cirno-web/`: browser client and client contracts.
 - `documents/`: current English user and developer guides.
 - `references/`: ignored local references, archived implementations and verification records.
@@ -43,7 +45,7 @@ Start with the [documentation index](documents/README.md). It covers [memory](do
 
 ## Releases
 
-The current version is **0.1.2**. See the [release notes](documents/releases/0.1.2.md). This unstable release targets fresh deployments; automatic migration of older data and configuration formats is not supported.
+The current version is **0.1.3**. See the [release notes](documents/releases/0.1.3.md). This unstable release targets fresh deployments; automatic migration of older data and configuration formats is not supported.
 
 ## Attribution and updates
 

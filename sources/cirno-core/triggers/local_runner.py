@@ -1,4 +1,4 @@
-"""Gateway delivery loop for local triggers."""
+"""Server delivery loop for local triggers."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from typing import Any
 
 from loguru import logger
 
-from cirno.agent.automation_turns import AutomationTurnError
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.runtime.admission import RuntimeAdmission
-from cirno.triggers.local_session_turns import LOCAL_TRIGGER_META
-from cirno.triggers.local_store import LocalTriggerStore
-from cirno.triggers.local_types import LocalTrigger, TriggerDelivery
-from cirno.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
+from cirno_core.agent.automation_turns import AutomationTurnError
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.runtime.admission import RuntimeAdmission
+from cirno_core.triggers.local_session_turns import LOCAL_TRIGGER_META
+from cirno_core.triggers.local_store import LocalTriggerStore
+from cirno_core.triggers.local_types import LocalTrigger, TriggerDelivery
+from cirno_core.session.transport_metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
 async def run_local_trigger_queue(
@@ -174,6 +174,7 @@ def _write_delivery_run_record(
 
 def _delivery_metadata(trigger: LocalTrigger, delivery: TriggerDelivery) -> dict[str, Any]:
     metadata = dict(trigger.origin_metadata or {})
+    metadata["_runtime_input_source"] = "local_trigger"
     metadata[LOCAL_TRIGGER_META] = {
         "trigger_id": trigger.id,
         "trigger_name": trigger.name,

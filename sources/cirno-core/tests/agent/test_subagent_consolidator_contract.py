@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from cirno.memory.consolidation import Consolidator, MemoryStore
-from cirno.agent.subagents.manager import SubagentManager
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
-from cirno.session.manager import SessionManager
-from cirno.utils.helpers import estimate_prompt_tokens_chain
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.memory.consolidation import Consolidator, MemoryStore
+from cirno_core.agent.subagents.manager import SubagentManager
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.session.manager import SessionManager
+from cirno_core.utils.helpers import estimate_prompt_tokens_chain
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 def test_subagent_requires_consolidator_at_construction(tmp_path):

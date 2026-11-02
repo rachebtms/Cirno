@@ -12,14 +12,14 @@ import pytest
 from aiohttp import web
 from PIL import Image
 
-from cirno.providers.anthropic_provider import AnthropicProvider
-from cirno.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno.providers.base import ProviderCallContext
-from cirno.providers.bedrock_provider import BedrockProvider
-from cirno.providers.github_copilot_provider import GitHubCopilotProvider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import ModelAPICapabilities, find_by_name
-from cirno.providers.xai_grok_provider import XAIGrokProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
+from cirno_core.providers.base import ProviderCallContext
+from cirno_core.providers.bedrock_provider import BedrockProvider
+from cirno_core.providers.github_copilot_provider import GitHubCopilotProvider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import ModelAPICapabilities, find_by_name
+from cirno_core.providers.xai_grok_provider import XAIGrokProvider
 
 
 @pytest.fixture(scope="module")
@@ -128,12 +128,12 @@ def _provider(adapter, url, monkeypatch):
     if adapter == "copilot":
         monkeypatch.setenv("CIRNO_COPILOT_BASE_URL", f"{url}/v1")
         monkeypatch.setenv("CIRNO_COPILOT_TOKEN_URL", f"{url}/copilot_token")
-        monkeypatch.setattr("cirno.providers.github_copilot_provider._load_github_token",
+        monkeypatch.setattr("cirno_core.providers.github_copilot_provider._load_github_token",
                             lambda: SimpleNamespace(access="github-fixture"))
         return GitHubCopilotProvider(default_model="github-copilot/gpt-5.4-mini")
     if adapter == "xai":
-        monkeypatch.setattr("cirno.providers.xai_grok_provider.DEFAULT_XAI_GROK_URL", f"{url}/v1/responses")
-        monkeypatch.setattr("cirno.providers.xai_grok_provider.get_xai_oauth_token",
+        monkeypatch.setattr("cirno_core.providers.xai_grok_provider.DEFAULT_XAI_GROK_URL", f"{url}/v1/responses")
+        monkeypatch.setattr("cirno_core.providers.xai_grok_provider.get_xai_oauth_token",
                             lambda **_: SimpleNamespace(access="xai-fixture"))
         return XAIGrokProvider(extra_body={"tools": []})
     spec = find_by_name("deepseek" if adapter == "deepseek" else "openai")

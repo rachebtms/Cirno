@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from cirno.providers.base import GenerationSettings, LLMProvider
+from cirno_core.providers.base import GenerationSettings, LLMProvider
 
 if TYPE_CHECKING:
-    from cirno.providers.factory import ProviderSnapshot
+    from cirno_core.providers.factory import ProviderSnapshot
 
 
 @dataclass(frozen=True, slots=True)

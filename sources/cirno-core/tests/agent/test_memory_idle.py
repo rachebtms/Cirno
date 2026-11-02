@@ -5,15 +5,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from cirno.memory.idle import MemoryIdleCoordinator
-from cirno.config.home import set_home_path
-from cirno.config.schema import Config
-from cirno.memory.repository import MemoryRepository
+from cirno_core.memory.idle import MemoryIdleCoordinator
+from cirno_core.config.home import set_instance_path
+from cirno_core.config.schema import Config
+from cirno_core.memory.repository import MemoryRepository
 
 
 @pytest.fixture
 def idle(tmp_path):
-    set_home_path(tmp_path)
+    set_instance_path(tmp_path)
     cfg = Config()
     agent = SimpleNamespace(bus=SimpleNamespace(admission=SimpleNamespace(paused=False), has_pending_events=False),
                             _active_tasks=set(), _background_tasks=set(), _last_memory_activity=time.monotonic()-3600,
@@ -21,7 +21,7 @@ def idle(tmp_path):
     runner = AsyncMock()
     coordinator = MemoryIdleCoordinator(agent, cfg, runner)
     yield coordinator, agent, cfg, runner
-    set_home_path(None)
+    set_instance_path(None)
 
 
 @pytest.mark.asyncio
@@ -54,7 +54,7 @@ async def test_foreground_and_disabled_modes_do_not_start_dream(idle, block):
 async def test_idle_maintenance_indexes_manual_changes(idle, tmp_path):
     idle, agent, cfg, runner = idle
     cfg.agents.defaults.dream.enabled = False
-    repo = MemoryRepository(tmp_path)
+    repo = MemoryRepository(tmp_path / "home")
     record = repo.save("old", source="test:source", session_key="a")
     (repo.root / "entries" / (record["id"] + ".md")).write_text("new entropy")
     await idle.check()

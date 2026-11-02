@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import cirno.session.sqlite_store as sqlite_store
-from cirno.providers.base import ProviderConversationState
-from cirno.session.manager import Session
-from cirno.session.sqlite_store import SqliteSessionStore
+import cirno_core.session.sqlite_store as sqlite_store
+from cirno_core.providers.base import ProviderConversationState
+from cirno_core.session.manager import Session
+from cirno_core.session.sqlite_store import SqliteSessionStore
 
 
 def _session() -> Session:

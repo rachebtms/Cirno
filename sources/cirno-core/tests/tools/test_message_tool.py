@@ -2,10 +2,10 @@ import os
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.message import MessageTool
-from cirno.bus.events import OutboundMessage
-from cirno.config.paths import get_workspace_path
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.message import MessageTool
+from cirno_core.bus.events import OutboundMessage
+from cirno_core.config.paths import get_workspace_path
 
 
 @pytest.mark.asyncio

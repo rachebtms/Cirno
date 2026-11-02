@@ -4,9 +4,9 @@ import json
 
 import httpx
 import pytest
-from cirno.config.loader import load_config, resolve_config_env_vars, save_config
-from cirno.config.network import NetworkConfig
-from cirno.config.schema import Config
+from cirno_core.config.loader import load_config, resolve_config_env_vars, save_config
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.schema import Config
 
 
 def test_proxy_opt_in_does_not_fall_back_when_unconfigured():

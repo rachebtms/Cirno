@@ -4,10 +4,10 @@ import asyncio
 import faulthandler
 import time
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.subagents.status import SubagentStatus
-from cirno.bus.events import InboundMessage
-from cirno.runtime.context import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.subagents.status import SubagentStatus
+from cirno_core.bus.events import InboundMessage
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RUNTIME_CONTEXT_MESSAGE_META,
     public_history_message,
@@ -56,8 +56,8 @@ def mock_session_manager(*_args, **_kwargs):
     """Model the asynchronous state boundary in scheduler-only unit tests."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from cirno.session.manager import Session, SessionManager
-    from cirno.session.state import SessionState
+    from cirno_core.session.manager import Session, SessionManager
+    from cirno_core.session.state import SessionState
 
     manager = MagicMock(spec=SessionManager)
     manager.get_or_create.side_effect = lambda key: Session(key=key)

@@ -5,9 +5,9 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.bus.outbound_events import ProgressEvent
-from cirno.bus.agent_events import AgentEvent
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.bus.outbound_events import ProgressEvent
+from cirno_core.bus.agent_events import AgentEvent
 
 
 class SessionActivity(AgentHook):

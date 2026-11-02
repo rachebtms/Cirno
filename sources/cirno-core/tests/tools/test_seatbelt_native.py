@@ -15,8 +15,8 @@ from threading import Thread
 
 import pytest
 
-from cirno.agent.tools.shell import ExecTool
-from cirno.agent.tools.exec_session import ExecSessionManager
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.exec_session import ExecSessionManager
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "darwin" or shutil.which("sandbox-exec") is None,
@@ -46,7 +46,7 @@ def layout(tmp_path, monkeypatch):
             (paths[name] / "sentinel").write_text("synthetic-data")
         paths["link"] = paths["workspace"] / "outside-link"
         paths["link"].symlink_to(paths["peer"], target_is_directory=True)
-        monkeypatch.setattr("cirno.agent.tools.sandbox.get_media_dir", lambda: paths["media"])
+        monkeypatch.setattr("cirno_core.agent.tools.sandbox.get_media_dir", lambda: paths["media"])
         yield paths
 
 
@@ -230,7 +230,7 @@ async def test_native_failed_cwd_does_not_execute_shell_list(layout, cwd_kind, s
 
     result = str(await tool.execute(
         command=f"printf first > first{separator}printf second > second",
-        working_dir=str(cwd), timeout=5,
+        working_dir=str(cwd), timeout=5, yield_time_ms=10000,
     ))
 
     assert "cd:" in result
@@ -247,7 +247,7 @@ async def test_native_nested_cwd_runs_complete_shell_list(layout):
 
     result = str(await tool.execute(
         command="printf first > first; printf second > second",
-        working_dir=str(cwd), timeout=5,
+        working_dir=str(cwd), timeout=5, yield_time_ms=10000,
     ))
 
     assert completed(result) == ("", 0)

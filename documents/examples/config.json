@@ -1,12 +1,12 @@
 {
   "agents": {
     "defaults": {
-      "provider": "gateway",
+      "provider": "local-api",
       "model": "your-model"
     }
   },
   "providers": {
-    "gateway": {
+    "local-api": {
       "apiBase": "https://api.example.com/v1",
       "apiKey": "${CIRNO_API_KEY}"
     }

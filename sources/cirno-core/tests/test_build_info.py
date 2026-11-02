@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from cirno.runtime.build_info import read_commit
+from cirno_core.runtime.build_info import read_commit
 
 
 def git(root: Path, *args: str) -> str:

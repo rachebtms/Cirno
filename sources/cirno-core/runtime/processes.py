@@ -22,8 +22,8 @@ from typing import Any, Generic, Literal, TypeVar, cast
 
 from filelock import FileLock
 
-from cirno.utils.atomic_file import read_atomic_bytes, replace_atomic
-from cirno.utils.rotating_output import (
+from cirno_core.utils.atomic_file import read_atomic_bytes, replace_atomic
+from cirno_core.utils.rotating_output import (
     BACKGROUND_LOG_BACKUP_COUNT_ENV,
     BACKGROUND_LOG_MAX_BYTES_ENV,
     BACKGROUND_LOG_PATH_ENV,

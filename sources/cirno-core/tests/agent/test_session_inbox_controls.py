@@ -6,27 +6,26 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.session_helpers import run_session, stop_loop
-from cirno.agent.automation_turns import AutomationTurnError
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.cron import CronTool
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.cron.service import CronService
-from cirno.cron.session_turns import CRON_DEFER_UNTIL_IDLE_META, CRON_TRIGGER_META
-from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
-from cirno.runtime.context import public_history_messages
-from cirno.session.automation_turns import AUTOMATION_HISTORY_META
-from cirno.session.goal_state import GOAL_STATE_KEY
-from cirno.session.manager import SessionManager
-from cirno.session.recovery import (
+from agent.session_helpers import run_session
+from cirno_core.agent.automation_turns import AutomationTurnError
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.cron.service import CronService
+from cirno_core.cron.session_turns import CRON_DEFER_UNTIL_IDLE_META, CRON_TRIGGER_META
+from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.runtime.context import public_history_messages
+from cirno_core.session.automation_turns import AUTOMATION_HISTORY_META
+from cirno_core.session.goal_state import GOAL_STATE_KEY
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.recovery import (
     PENDING_FOLLOWUPS_KEY,
-    REQUEST_ORIGIN_METADATA_KEY,
     pending_followups,
 )
-from cirno.triggers.local_session_turns import LOCAL_TRIGGER_META
-from cirno.webui.recovery import RecoveryCoordinator
+from cirno_core.triggers.local_session_turns import LOCAL_TRIGGER_META
+from cirno_core.session.display_recovery import RecoveryCoordinator
 
 
 @pytest.fixture

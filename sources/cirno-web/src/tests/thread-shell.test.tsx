@@ -381,7 +381,7 @@ function modelSettings(model: string, provider: string): SettingsPayload {
       temperature: 0.7,
       reasoning_effort: null,
       timezone: "UTC",
-      tool_hint_max_length: 40,
+      tool_status_summary_max_chars: 40,
     },
     model_presets: [{
       name: "default",
@@ -419,8 +419,8 @@ function modelSettings(model: string, provider: string): SettingsPayload {
     runtime: {
       config_path: "/tmp/config.json",
       workspace_path: "/tmp/workspace",
-      gateway_host: "127.0.0.1",
-      gateway_port: 18790,
+      health_host: "127.0.0.1",
+      health_port: 18790,
       heartbeat: {
         enabled: true,
         interval_s: 1800,
@@ -2491,6 +2491,32 @@ describe("ThreadShell", () => {
     await waitFor(() =>
       expect(onForkChat).toHaveBeenCalledWith("long-chat", 101),
     );
+  });
+
+  it("edits an idle human turn and refreshes the rewritten history", async () => {
+    const client = makeClient();
+    let edited = false;
+    client.requestMutation.mockImplementation(async (...args: unknown[]) => {
+      if (args[0] === "instance.action") { edited = true; return { ok: true, turn_id: "edited-turn" } as never; }
+      throw new Error("Unavailable");
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("webui-thread")) return httpJson(transcriptFromSimpleMessages(edited
+        ? [{ role: "user", content: "Revised request", turnId: "edited-turn" }]
+        : [{ role: "user", content: "Original request", turnId: "old-turn" }, { role: "assistant", content: "Discarded answer", turnId: "old-turn" }]));
+      return { ok: false, status: 404, json: async () => ({}) };
+    }));
+    render(wrap(client, <ThreadShell session={session("edit-chat")} title="Editing" onToggleSidebar={() => {}} />));
+    const menu = await openMessageActions("Original request");
+    fireEvent.click(within(menu).getByRole("button", { name: "Edit message" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit message" });
+    fireEvent.change(within(editor).getByRole("textbox", { name: "Edited message" }), { target: { value: "Revised request" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Save and send" }));
+    await waitFor(() => expect(client.requestMutation).toHaveBeenCalledWith("instance.action", {
+      action: "conversations.edit", values: { session_key: "websocket:edit-chat", turn_id: "old-turn", content: "Revised request" },
+    }));
+    await screen.findByText("Revised request");
+    expect(screen.queryByText("Discarded answer")).not.toBeInTheDocument();
   });
 
   it("does not cache optimistic messages under the next chat during a session switch", async () => {

@@ -1,3 +1,4 @@
+import { isModelInput } from "@/lib/thread-inputs";
 import { Fragment, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -43,6 +44,7 @@ interface ThreadMessagesProps {
   onLoadTraceDetails?: (refs: string[]) => void | Promise<void>;
   onOpenFilePreview?: (path: string) => void;
   onForkFromMessage?: (beforeUserIndex: number) => void;
+  onEditMessage?: (message: UIMessage) => void;
   onQuoteSelection?: (text: string) => void;
   onActivityToggle?: () => void;
 }
@@ -102,6 +104,7 @@ export function ThreadMessages({
   onLoadTraceDetails,
   onOpenFilePreview,
   onForkFromMessage,
+  onEditMessage,
   onQuoteSelection,
   onActivityToggle,
 }: ThreadMessagesProps) {
@@ -242,8 +245,7 @@ export function ThreadMessages({
             );
         if (
           unit.type === "message"
-          && unit.message.role === "user"
-          && unit.message.deliveryStatus !== "failed"
+          && isModelInput(unit.message)
         ) nextUserIndex += 1;
 
         const prefix = beforeUnit?.key === unitKeys[index] ? beforeUnit.content : null;
@@ -288,6 +290,7 @@ export function ThreadMessages({
             onLoadTraceDetails={onLoadTraceDetails}
             onOpenFilePreview={onOpenFilePreview}
             onForkFromMessage={onForkFromMessage}
+            onEditMessage={isStreaming ? undefined : onEditMessage}
             onActivityExpandedChange={setActivityExpanded}
             onContextBlockActiveChange={setContextBlockPointed}
             onContextBlockFocusChange={setContextBlockFocused}
@@ -392,6 +395,7 @@ interface ThreadDisplayUnitProps {
   onLoadTraceDetails?: (refs: string[]) => void | Promise<void>;
   onOpenFilePreview?: (path: string) => void;
   onForkFromMessage?: (beforeUserIndex: number) => void;
+  onEditMessage?: (message: UIMessage) => void;
   onActivityExpandedChange: (key: string, expanded: boolean) => void;
   onContextBlockActiveChange: (key: string | null) => void;
   onContextBlockFocusChange: (key: string | null) => void;
@@ -408,6 +412,7 @@ interface MessageBlockMenuProps {
   onOpenChange: (open: boolean) => void;
   onContextActiveChange: (key: string | null) => void;
   onForkFromHere?: () => void;
+  onEdit?: () => void;
   activity?: {
     label: string;
     expanded: boolean;
@@ -426,6 +431,7 @@ function MessageBlockMenu({
   onOpenChange,
   onContextActiveChange,
   onForkFromHere,
+  onEdit,
   activity,
 }: MessageBlockMenuProps) {
   const { t } = useTranslation();
@@ -454,6 +460,7 @@ function MessageBlockMenu({
   const actions = <MessageBlockMenuActions
     message={message}
     isTurnStreaming={isTurnStreaming}
+    onEdit={onEdit ? () => { if (mobileActions) onOpenChange(false); onEdit(); } : undefined}
     onForkFromHere={onForkFromHere ? () => { if (mobileActions) onOpenChange(false); onForkFromHere(); } : undefined}
     activity={activity}
     sheet={mobileActions}
@@ -594,6 +601,7 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
   onLoadTraceDetails,
   onOpenFilePreview,
   onForkFromMessage,
+  onEditMessage,
   onActivityExpandedChange,
   onContextBlockActiveChange,
   onContextBlockFocusChange,
@@ -670,6 +678,8 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
       onOpenChange={(open) => onContextBlockMenuOpenChange(contextBlockKey, open)}
       onContextActiveChange={onContextBlockActiveChange}
       onForkFromHere={forkIndex !== undefined ? onForkFromHere : undefined}
+      onEdit={onEditMessage && !temporary && unit.message.role === "user" && !unit.message.inputOrigin && !unit.message.sessionMessage && unit.message.turnId && !isTurnStreaming
+        ? () => onEditMessage(unit.message) : undefined}
       activity={activityLabel ? {
         label: activityLabel,
         expanded: blockActivityExpanded,
@@ -813,6 +823,7 @@ function threadDisplayUnitPropsEqual(
     && previous.onLoadTraceDetails === next.onLoadTraceDetails
     && previous.onOpenFilePreview === next.onOpenFilePreview
     && previous.onForkFromMessage === next.onForkFromMessage
+    && previous.onEditMessage === next.onEditMessage
     && previous.onActivityExpandedChange === next.onActivityExpandedChange
     && previous.onContextBlockActiveChange === next.onContextBlockActiveChange
     && previous.onContextBlockFocusChange === next.onContextBlockFocusChange

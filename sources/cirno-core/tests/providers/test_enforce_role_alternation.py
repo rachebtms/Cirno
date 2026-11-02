@@ -1,6 +1,6 @@
 """Tests for LLMProvider._enforce_role_alternation."""
 
-from cirno.providers.base import _SYNTHETIC_USER_CONTENT, LLMProvider
+from cirno_core.providers.base import _SYNTHETIC_USER_CONTENT, LLMProvider
 
 
 class TestEnforceRoleAlternation:

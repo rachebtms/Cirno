@@ -12,8 +12,8 @@ from typing import Any, TypeVar, cast
 if typing.TYPE_CHECKING:
     from pydantic import BaseModel
 
-    from cirno.agent.tools.context import ToolContext
-    from cirno.runtime.context import RuntimeContextProvider
+    from cirno_core.agent.tools.context import ToolContext
+    from cirno_core.runtime.context import RuntimeContextProvider
 
 _ToolT = TypeVar("_ToolT", bound="Tool")
 
@@ -57,7 +57,7 @@ def _json_values_equal(left: Any, right: Any) -> bool:
 class Schema(ABC):
     """Abstract base for JSON Schema fragments describing tool parameters.
 
-    Concrete types live in :mod:`cirno.agent.tools.schema`; all implement
+    Concrete types live in :mod:`cirno_core.agent.tools.schema`; all implement
     :meth:`to_json_schema` and :meth:`validate_value`. Class methods
     :meth:`validate_json_schema_value` and :meth:`fragment` are the shared validation and normalization entry points.
     """
@@ -277,6 +277,10 @@ class Tool(ABC):
 
     def runtime_context_provider(self) -> RuntimeContextProvider | None:
         """Return optional per-turn prompt context owned by this tool."""
+        return None
+
+    def approval_reason(self, params: dict[str, Any]) -> str | None:
+        """Preflight without effects; return a boundary requiring explicit review."""
         return None
 
     @abstractmethod

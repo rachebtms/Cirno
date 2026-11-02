@@ -1,47 +1,62 @@
 # Source layout
 
-- `sources/cirno-core/`: gateway, agent loop, providers, tools and Python channel adapters.
-- `sources/cirno-core/tests/`: runtime tests.
-- `sources/cirno-web/src/`: browser interface.
-- `sources/cirno-web/channels/`: channel interface contributions and their tests.
-- `sources/cirno-web/packages/client-events/`: browser transport contracts.
+Cirno has three Python distributions and one browser frontend. They run as one
+service and share one release version; package boundaries do not create extra
+processes or network services.
 
-Run `npm ci`, `npm run typecheck`, `npm test` and `npm run build` from `sources/cirno-web/`. The build writes static assets to `build/webui/`, which the Python package serves and includes in its wheel. Run Python tests from the repository root. Packaging metadata lives in the root `pyproject.toml`; the source directory is installed as the `cirno` package.
+| Source | Installed package | Responsibility |
+| --- | --- | --- |
+| `sources/cirno-core/` | `cirno_core` (`cirno-core`) | Agent execution, Goals, PTC, providers, tools, memory, Skills, durable sessions and domain services |
+| `sources/cirno-server/` | `cirno_server` (`cirno-server`) | HTTP/WebSocket API, authentication, settings, Telegram, optional channel dependencies and service lifecycle |
+| `sources/cirno/` | `cirno` (`cirno-ai`) | Small installation entry and public `from cirno import Cirno` SDK facade |
+| `sources/cirno-web/` | Browser bundle | React/TypeScript interface, channel UI contributions and client transport contracts |
 
-Channel manifests declare logical interface entry names. The web build resolves those names from its channel registry; the Python runtime does not require TypeScript source files to be installed.
+The dependency direction is `cirno-ai → cirno-server → cirno-core`. The core must
+not import the server or application facade. Shared history projection, turn
+recovery and the personal Cirno session initializer belong to `core/session/`;
+HTTP routes and channel adapters consume them. Package ownership is checked by
+`sources/development/check_import_boundaries.py`.
 
-`cirno` opens the browser interface. `cirno agent --message "..."` supports single requests for scripts. There is no terminal interface or terminal binary distribution.
+Each Python distribution has its own `pyproject.toml` and wheel. The core and
+server source directories map directly to their installed package names; source
+files are not nested in another copy of the same directory. There are no old
+import-path forwarding modules.
 
-Only Telegram and Web (WebSocket) channels are included.
+## Core domains
 
-Container deployment uses the root `Dockerfile` and `compose.yaml`. The container entrypoint lives in `sources/deployment/`. Contribution instructions are in `documents/development/contributing.md`; the example model configuration is in `documents/examples/config.json`.
+- `agent/`: execution, Goals, PTC, subagents and tools.
+- `memory/`: knowledge, split SQLite stores, retrieval, embeddings and Dream.
+- `session/`: durable state, display history, recovery and turn ownership.
+- `providers/`: model transports, authentication and provider catalogs.
+- `config/`, `security/`, `runtime/`, `bus/`: configuration, permissions, execution contracts and events.
+- `skills/`, `nodes/`, `notifications/`, `storage/`: Skills/history, SSH operations, Inbox and instance records.
+- `cron/`, `triggers/`, `apps/`, `sdk/`, `utils/`: scheduling, wakeups, CLI Apps, SDK and shared utilities.
 
-## Core modules
+## Build and development
 
-The `cirno-core` directory maps directly to the installed `cirno` package. Only `__init__.py` (public exports) and `__main__.py` (entrypoint) live at its root.
+Install the local distributions together from the repository root:
 
-| Directory | Responsibility |
-| --- | --- |
-| `agent/` | Turn execution and tools; `goals/`, `ptc/` and `subagents/` own their execution mechanisms |
-| `memory/` | Memory records, split SQLite stores, shared retrieval, embedding worker and Dream/consolidation |
-| `skills/` | Discovery, metadata and version history; `builtin/` contains bundled skill documents |
-| `runtime/` | Admission, prompt context contracts, process ownership, heartbeat and build identity |
-| `sdk/` | Public assistant facade, session/memory clients and streaming types |
-| `bus/` | Agent events, channel envelopes, runtime events and delivery contracts |
-| `nodes/` | SSH command, transfer and remote job service |
-| `notifications/` | Durable notification inbox |
-| `storage/` | Small shared instance records such as Projects and Nodes |
-| `features/` | Optional dependency installation and feature activation |
-| `config/` | Schema, lightweight DTO base, paths and configuration loading |
-| `webui/settings/` | Settings requests, validation, models, capabilities and system operations |
-| `webui/mcp/` | MCP presets, configuration endpoints and OAuth adapter |
+```sh
+python -m pip install -e sources/cirno-core -e sources/cirno-server -e ".[dev]"
+npm --prefix sources/cirno-web ci
+npm --prefix sources/cirno-web run build
+cirno
+```
 
-`channels/`, `providers/`, `session/`, `security/`, `cron/`, `triggers/`, `apps/` and `utils/` retain their domain responsibilities. Internal imports use the owning module directly; there are no files forwarding the removed flat module paths. The public `from cirno import Cirno` interface remains available.
+`cirno` starts the complete service in the foreground. Initial owner registration
+and model configuration take place in the browser. There are no separate
+`gateway`, `webui`, terminal agent or terminal onboarding commands. A supervisor
+or Docker handles background execution.
 
-## Development and build files
+Frontend compilation writes `build/webui/`. The server wheel embeds that bundle;
+the core wheel embeds the current documentation in its documentation Skill.
+Build hooks stage generated resources without writing them into the source tree.
+Source distributions contain the resources needed to rebuild their own wheels.
 
-Shared Python test fixtures live in root `conftest.py`, outside the runtime package. The architecture checker is `sources/development/check_import_boundaries.py`; channel dependency installation is `sources/deployment/install_channel_dependencies.py`. Colocated channel tests and runtime test suites are excluded from release artifacts.
+Root `conftest.py` contains shared test fixtures. Core tests, server tests and
+colocated channel tests run from the repository root and are excluded from
+release wheels. Only Web (WebSocket) and personal Telegram channels are bundled.
+Container files live at the repository root and in `sources/deployment/`.
 
-Frontend compilation writes `build/webui/`. Hatch inserts that bundle and document resources into release artifacts directly; the Git revision is staged in a temporary directory. Neither building a wheel nor installing editable mode writes generated files into `sources/cirno-core/`.
-
-Historical review notes and local verification outputs belong in ignored `references/`, rather than the bundled product documentation. Caches, dependency installs and generated assets are ignored by Git.
+Historical research, verification output and runtime samples belong in ignored
+`references/`. Current English product guides live in `documents/`.

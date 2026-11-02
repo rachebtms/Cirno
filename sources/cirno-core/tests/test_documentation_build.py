@@ -1,95 +1,73 @@
-"""Release resources must not create generated files in the source package."""
+"""Standalone distributions preserve resources across source and wheel builds."""
 
-from pathlib import Path
-from types import SimpleNamespace
-import subprocess
+import importlib.util
 import os
+from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tarfile
+from types import SimpleNamespace
 from zipfile import ZipFile
 
-from hatch_build import WebUIBuildHook
+import pytest
+
+REPOSITORY = Path(__file__).resolve().parents[3]
 
 
-def project(root):
-    docs = root / "documents"
-    docs.mkdir()
-    (docs / "README.md").write_text("Document index", encoding="utf-8")
-    (docs / "configuration.md").write_text("Configure a model", encoding="utf-8")
-    (docs / "examples").mkdir()
-    (docs / "examples/config.json").write_text("{}", encoding="utf-8")
-    core = root / "sources/cirno-core"
-    core.mkdir(parents=True)
-    (core / "__init__.py").write_text("", encoding="utf-8")
-    return core, WebUIBuildHook(str(root), {}, None, {}, "", "wheel",
-                               SimpleNamespace(display_info=lambda message: None))
-
-
-def test_editable_install_does_not_copy_documents_into_source(tmp_path):
-    core, hook = project(tmp_path)
-    build_data = {}
-    hook.initialize("editable", build_data)
-    assert sorted(path.name for path in core.iterdir()) == ["__init__.py"]
-    assert any(name.endswith(".pth") for name in build_data["force_include"].values())
-
-
-def test_source_distribution_rebuild_has_one_bundle_and_bundled_documents(tmp_path):
-    core, _ = project(tmp_path)
-    repository = Path(__file__).resolve().parents[3]
-    for name in ("pyproject.toml", "hatch_build.py", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
-        shutil.copyfile(repository / name, tmp_path / name)
-    bundle = core / "web/dist/index.html"
-    bundle.parent.mkdir(parents=True)
-    bundle.write_text("<html>Cirno package</html>", encoding="utf-8")
-    environment = {**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"}
-    def build(directory, target):
-        result = subprocess.run([sys.executable, "-c", f"import hatchling.build; hatchling.build.build_{target}('dist')"],
-                                cwd=directory, env=environment, capture_output=True, text=True)
-        assert result.returncode == 0, result.stdout + result.stderr
-    build(tmp_path, "sdist")
-    with tarfile.open(next((tmp_path / "dist").glob("*.tar.gz"))) as archive:
-        archive.extractall(tmp_path / "extracted", filter="data")
-    extracted = next((tmp_path / "extracted").iterdir())
-    build(extracted, "wheel")
-    with ZipFile(next((extracted / "dist").glob("*.whl"))) as wheel:
-        assert wheel.namelist().count("cirno/web/dist/index.html") == 1
-        assert wheel.read("cirno/skills/builtin/cirno-document/references/README.md") == b"Document index"
-        assert wheel.read("cirno/skills/builtin/cirno-document/references/examples/config.json") == b"{}"
-
-
-def test_release_embeds_docs_and_revision_without_writing_source(tmp_path, monkeypatch):
-    core, hook = project(tmp_path)
-    subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=Test", "-c", "user.email=test@example.com",
-                    "commit", "--allow-empty", "-m", "Initial"], check=True, capture_output=True)
-    monkeypatch.setenv("CIRNO_SKIP_WEBUI_BUILD", "1")
-    build_data = {}
-    hook.initialize("standard", build_data)
-    artifacts = build_data["force_include"]
-    assert artifacts[str(tmp_path / "documents/README.md")] == "cirno/skills/builtin/cirno-document/references/README.md"
-    stamp = next(Path(source) for source, destination in artifacts.items() if destination == "cirno/_build_commit.txt")
-    assert len(stamp.read_text().strip()) == 40
-    assert not stamp.is_relative_to(core)
-    assert sorted(path.name for path in core.iterdir()) == ["__init__.py"]
-
-
-def test_container_staged_bundle_is_embedded_without_frontend_sources(tmp_path):
-    """The Docker runtime stage carries build/webui but no frontend source tree."""
-    core, _ = project(tmp_path)
-    repository = Path(__file__).resolve().parents[3]
-    for name in ("pyproject.toml", "hatch_build.py", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
-        shutil.copyfile(repository / name, tmp_path / name)
-    bundle = tmp_path / "build/webui/index.html"
-    bundle.parent.mkdir(parents=True)
-    bundle.write_text("<html>Container WebUI</html>", encoding="utf-8")
+def build(directory, target):
     result = subprocess.run(
-        [sys.executable, "-c", "import hatchling.build; hatchling.build.build_wheel('dist')"],
-        cwd=tmp_path, env={**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"},
-        capture_output=True, text=True,
+        [sys.executable, "-c", f"import hatchling.build; hatchling.build.build_{target}('dist')"],
+        cwd=directory, env={**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"}, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    with ZipFile(next((tmp_path / "dist").glob("*.whl"))) as wheel:
-        assert wheel.read("cirno/web/dist/index.html") == b"<html>Container WebUI</html>"
-        assert wheel.read("cirno/skills/builtin/cirno-document/references/examples/config.json") == b"{}"
-    assert not (core / "web").exists()
+
+
+def fixture_package(root, name):
+    folder = root / "sources" / f"cirno-{name}"
+    folder.mkdir(parents=True)
+    for file in ["pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md"]:
+        shutil.copyfile(REPOSITORY / "sources" / f"cirno-{name}" / file, folder / file)
+    (folder / "__init__.py").write_text('"""Package fixture."""')
+    return folder
+
+
+def test_editable_build_does_not_copy_generated_resources_into_source(tmp_path):
+    root = fixture_package(tmp_path, "core")
+    spec = importlib.util.spec_from_file_location("core_build_test", root / "hatch_build.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    hook = module.CoreBuildHook(str(root), {}, None, {}, "", "wheel", SimpleNamespace())
+    before = set(root.iterdir())
+    data = {}
+    hook.initialize("editable", data)
+    assert set(root.iterdir()) == before
+    assert any(destination.endswith(".pth") for destination in data["force_include"].values())
+
+
+@pytest.mark.parametrize("package", ["core", "server"])
+def test_source_distribution_rebuild_preserves_owned_resources(tmp_path, package):
+    folder = fixture_package(tmp_path, package)
+    if package == "core":
+        docs = tmp_path / "documents"
+        docs.mkdir()
+        (docs / "README.md").write_text("Current documentation")
+        resource = "cirno_core/skills/builtin/cirno-document/references/README.md"
+        expected = b"Current documentation"
+    else:
+        bundle = tmp_path / "build/webui/index.html"
+        bundle.parent.mkdir(parents=True)
+        bundle.write_text("<html>Browser UI</html>")
+        resource = "cirno_server/web/dist/index.html"
+        expected = b"<html>Browser UI</html>"
+    build(folder, "sdist")
+    with tarfile.open(next((folder / "dist").glob("*.tar.gz"))) as archive:
+        archive.extractall(tmp_path / "unpacked", filter="data")
+    unpacked = next((tmp_path / "unpacked").iterdir())
+    build(unpacked, "wheel")
+    with ZipFile(next((unpacked / "dist").glob("*.whl"))) as wheel:
+        assert wheel.namelist().count(resource) == 1
+        assert wheel.read(resource) == expected
+        assert not any("/tests/" in name or "__pycache__" in name for name in wheel.namelist())
+    assert not (folder / "_build_commit.txt").exists()
+    assert not (folder / "skills/builtin/cirno-document/references").exists()

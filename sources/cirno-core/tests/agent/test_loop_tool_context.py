@@ -5,20 +5,20 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.context import TranscriptInput
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import (
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import (
     RequestContext,
     bind_request_context,
     current_request_context,
     reset_request_context,
 )
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import Config
-from cirno.providers.base import LLMResponse, ToolCallRequest
-from cirno.session.turn_continuation import INTERNAL_CONTINUATION_META
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import Config
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.session.turn_continuation import INTERNAL_CONTINUATION_META
 
 
 class _ContextRecordingTool:

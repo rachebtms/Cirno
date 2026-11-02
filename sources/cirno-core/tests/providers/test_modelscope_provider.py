@@ -2,9 +2,9 @@
 
 from unittest.mock import patch
 
-from cirno.config.schema import Config, ProvidersConfig
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import PROVIDERS, find_by_name
+from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import PROVIDERS, find_by_name
 
 
 def test_modelscope_config_field_exists() -> None:
@@ -78,7 +78,7 @@ def test_modelscope_keyword_matches_prefixed_model() -> None:
 
 def test_modelscope_strips_prefix_in_request_model() -> None:
     spec = find_by_name("modelscope")
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(
             api_key="ms-token",
             default_model="modelscope/Qwen/Qwen3.5-35B-A3B",

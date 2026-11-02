@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.context import RequestContext
+    from cirno_core.agent.tools.context import RequestContext
 
 RUNTIME_CONTEXT_HISTORY_META = "_runtime_context"
 RUNTIME_CONTEXT_MESSAGE_META = "runtime_context"

@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from cirno.agent.tools.shell_config import ExecToolConfig
-from cirno.config.loader import load_config, save_config
-from cirno.config.schema import Config
+from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.config.loader import load_config, save_config
+from cirno_core.config.schema import Config
 
 
 def test_exec_timing_defaults() -> None:
@@ -72,7 +72,7 @@ def test_exec_unlimited_default_keeps_a_positive_model_limit() -> None:
 
 @pytest.mark.parametrize("runtime", [0, 42, 14400])
 def test_webui_runtime_editor_updates_canonical_runtime(tmp_path, runtime: int) -> None:
-    from cirno.webui.settings.api import update_runtime_config_settings
+    from cirno_server.webui.settings.api import update_runtime_config_settings
 
     path = tmp_path / "config.json"
     save_config(Config.model_validate({"tools": {"exec": {
@@ -102,7 +102,7 @@ def test_webui_runtime_editor_updates_canonical_runtime(tmp_path, runtime: int) 
 def test_exec_runtime_source_precedence_survives_settings_saves(
     tmp_path, monkeypatch, file_name: str, env_name: str,
 ) -> None:
-    from cirno.webui.settings.api import update_agent_settings, update_runtime_config_settings
+    from cirno_server.webui.settings.api import update_agent_settings, update_runtime_config_settings
 
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"tools": {"exec": {file_name: 60}}}), encoding="utf-8")
@@ -134,9 +134,9 @@ def test_exec_runtime_source_precedence_covers_both_canonical_spellings(monkeypa
 
 @pytest.mark.asyncio
 async def test_my_exec_config_reports_configured_timing(tmp_path) -> None:
-    from cirno.agent.loop import AgentLoop
-    from cirno.agent.tools.self import MyTool
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.tools.self import MyTool
+    from cirno_core.bus.queue import MessageBus
 
     config = Config.model_validate({"tools": {"exec": {
         "maxRuntime": 172800, "idleTimeout": 0, "idleAction": "terminate",

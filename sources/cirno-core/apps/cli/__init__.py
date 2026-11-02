@@ -1,6 +1,6 @@
 """CLI app adapter for the unified Apps domain."""
 
-from cirno.apps.cli.service import (
+from cirno_core.apps.cli.service import (
     CliAppError,
     CliAppManager,
     CliAppsRuntimeConfig,

@@ -7,18 +7,18 @@ from collections.abc import Awaitable, Collection
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
-from cirno.bus.agent_events import NO_EVENTS, EventSink
-from cirno.session.keys import is_dream_session
-from cirno.session.manager import Session, SessionManager
-from cirno.session.summary import (
+from cirno_core.bus.agent_events import NO_EVENTS, EventSink
+from cirno_core.session.keys import is_dream_session
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.summary import (
     SessionSummary,
     session_summary_from_metadata,
 )
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.memory.consolidation import Consolidator
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.memory.consolidation import Consolidator
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 SessionEventFactory = Callable[[str], EventSink]
 
@@ -28,7 +28,7 @@ class AutoCompact:
         self,
         sessions: SessionManager,
         consolidator: Consolidator,
-        session_ttl_minutes: int = 0,
+        idle_compact_after_minutes: int = 0,
         bind_events: SessionEventFactory | None = None,
         *,
         session_lock: Callable[[str], asyncio.Lock],
@@ -39,7 +39,7 @@ class AutoCompact:
     ):
         self.sessions = sessions
         self.consolidator = consolidator
-        self._ttl = session_ttl_minutes
+        self._ttl = idle_compact_after_minutes
         self._archiving: set[str] = set()
         self._summaries: dict[str, SessionSummary] = {}
         self._bind_events = bind_events

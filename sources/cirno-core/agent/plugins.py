@@ -13,9 +13,9 @@ from typing import cast
 from loguru import logger
 from pydantic import ValidationError
 
-from cirno.skills.metadata import parse_skill_metadata, valid_skill_metadata
-from cirno.config.loader import get_config_path
-from cirno.config.schema import MCPServerConfig
+from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
+from cirno_core.config.loader import get_config_path
+from cirno_core.config.schema import MCPServerConfig
 
 AGENT_PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 AGENT_PLUGIN_MCP_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
@@ -431,7 +431,7 @@ def _expand(value: str, root: Path, data: Path) -> str:
 
 def _plugin_data_dir(workspace: Path, name: str, *, create: bool) -> Path:
     workspace_id = sha256(str(workspace.expanduser().resolve()).encode()).hexdigest()[:12]
-    current = get_config_path().expanduser().resolve().parent
+    current = get_config_path().expanduser().resolve().parent / "state"
     for segment in ("plugin-data", workspace_id, name):
         path = current / segment
         if create:

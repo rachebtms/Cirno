@@ -6,11 +6,11 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.base import Schema, Tool, ToolResult, tool_parameters
-    from cirno.agent.tools.context import ToolContext
-    from cirno.agent.tools.loader import ToolLoader
-    from cirno.agent.tools.registry import ToolRegistry
-    from cirno.agent.tools.schema import (
+    from cirno_core.agent.tools.base import Schema, Tool, ToolResult, tool_parameters
+    from cirno_core.agent.tools.context import ToolContext
+    from cirno_core.agent.tools.loader import ToolLoader
+    from cirno_core.agent.tools.registry import ToolRegistry
+    from cirno_core.agent.tools.schema import (
         ArraySchema,
         BooleanSchema,
         IntegerSchema,
@@ -22,20 +22,20 @@ if TYPE_CHECKING:
 
 
 _EXPORTS = {
-    "Schema": "cirno.agent.tools.base",
-    "ArraySchema": "cirno.agent.tools.schema",
-    "BooleanSchema": "cirno.agent.tools.schema",
-    "IntegerSchema": "cirno.agent.tools.schema",
-    "NumberSchema": "cirno.agent.tools.schema",
-    "ObjectSchema": "cirno.agent.tools.schema",
-    "StringSchema": "cirno.agent.tools.schema",
-    "Tool": "cirno.agent.tools.base",
-    "ToolContext": "cirno.agent.tools.context",
-    "ToolLoader": "cirno.agent.tools.loader",
-    "ToolResult": "cirno.agent.tools.base",
-    "ToolRegistry": "cirno.agent.tools.registry",
-    "tool_parameters": "cirno.agent.tools.base",
-    "tool_parameters_schema": "cirno.agent.tools.schema",
+    "Schema": "cirno_core.agent.tools.base",
+    "ArraySchema": "cirno_core.agent.tools.schema",
+    "BooleanSchema": "cirno_core.agent.tools.schema",
+    "IntegerSchema": "cirno_core.agent.tools.schema",
+    "NumberSchema": "cirno_core.agent.tools.schema",
+    "ObjectSchema": "cirno_core.agent.tools.schema",
+    "StringSchema": "cirno_core.agent.tools.schema",
+    "Tool": "cirno_core.agent.tools.base",
+    "ToolContext": "cirno_core.agent.tools.context",
+    "ToolLoader": "cirno_core.agent.tools.loader",
+    "ToolResult": "cirno_core.agent.tools.base",
+    "ToolRegistry": "cirno_core.agent.tools.registry",
+    "tool_parameters": "cirno_core.agent.tools.base",
+    "tool_parameters_schema": "cirno_core.agent.tools.schema",
 }
 
 

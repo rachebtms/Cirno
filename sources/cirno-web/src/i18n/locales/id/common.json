@@ -13,7 +13,7 @@
     },
     "error": {
       "title": "Tidak dapat menjangkau cirno",
-      "gatewayHint": "Pastikan gateway sedang berjalan (`cirno gateway`) dan browser ini dapat menjangkau alamat WebUI-nya."
+      "serverHint": "Pastikan Cirno server sedang berjalan (`cirno`) dan browser ini dapat menjangkau alamat WebUI-nya."
     },
     "auth": {
       "title": "Hubungkan ke cirno",
@@ -30,7 +30,7 @@
     },
     "account": {
       "section": "Akun",
-      "logoutHint": "Putuskan koneksi browser ini dari gateway.",
+      "logoutHint": "Putuskan koneksi browser ini dari Cirno server.",
       "logout": "Keluar"
     },
     "system": {
@@ -54,7 +54,7 @@
     },
     "pairing": {
       "haveCode": "Sudah menerima kode?",
-      "deliveryFailed": "Kode tidak dapat dikirim. Periksa izin pengiriman pesan bot dan log gateway, lalu kirim pesan pribadi lagi untuk mencoba ulang.",
+      "deliveryFailed": "Kode tidak dapat dikirim. Periksa izin pengiriman pesan bot dan log Cirno server, lalu kirim pesan pribadi lagi untuk mencoba ulang.",
       "deliverySending": "Mengirim kode ke obrolan Anda. Jika belum diterima, kirim pesan pribadi lagi ke bot untuk mencoba ulang.",
       "title": "Pasangkan akun",
       "description": "Masukkan kode pemasangan yang diterima di chat.",
@@ -132,103 +132,103 @@
       "fields": {
         "agents_defaults_timezone_mode": {
           "label": "Zona waktu sistem",
-          "help": "Nonaktifkan untuk memilih zona waktu.\n\nNonaktifkan untuk memilih zona waktu secara manual."
+          "help": "Nonaktifkan untuk memilih zona waktu secara manual."
         },
         "agents_defaults_timezone": {
           "label": "Zona waktu",
-          "help": "Selisih UTC mengikuti tanggal saat ini.\n\nPilih zona waktu. Selisih waktu dari UTC mengikuti tanggal saat ini."
+          "help": "Pilih zona waktu. Selisih waktu dari UTC mengikuti tanggal saat ini."
         },
         "agents_defaults_dream_enabled": {
           "label": "Penataan memori",
-          "help": "Atur memori otomatis; menonaktifkan tetap menyimpan memori yang ada.\n\nMenata informasi berguna dari percakapan secara otomatis. Memori yang ada tetap digunakan saat dinonaktifkan."
+          "help": "Menata informasi berguna dari percakapan secara otomatis. Memori yang ada tetap digunakan saat dinonaktifkan."
         },
-        "gateway_heartbeat_enabled": {
+        "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
         },
-        "gateway_heartbeat_interval_s": {
+        "agents_defaults_heartbeat_interval_s": {
           "label": "Heartbeat interval (seconds)",
           "help": "Restart to apply."
         },
         "agents_defaults_max_tool_iterations": {
           "label": "Putaran alat",
-          "help": "Batas putaran alat untuk tiap balasan.\n\nJumlah maksimum interaksi model dan alat dalam satu giliran."
+          "help": "Jumlah maksimum interaksi model dan alat dalam satu giliran."
         },
         "agents_defaults_max_concurrent_subagents": {
           "label": "Subagen bersamaan",
-          "help": "Batas subagen yang berjalan bersamaan.\n\nJumlah maksimum subagen yang berjalan bersamaan."
+          "help": "Jumlah maksimum subagen yang berjalan bersamaan."
         },
         "agents_defaults_max_tool_result_chars": {
           "label": "Panjang hasil",
-          "help": "Batas karakter tiap hasil alat yang dikirim ke model.\n\nMembatasi keluaran alat yang disertakan dalam konteks model."
+          "help": "Membatasi keluaran alat yang disertakan dalam konteks model."
         },
         "agents_defaults_provider_retry_mode": {
           "label": "Terus mencoba",
-          "help": "Ulangi setelah kesalahan yang dapat dipulihkan; nonaktifkan untuk percobaan standar.\n\nMencoba kembali permintaan ke model saat terjadi kesalahan sementara. Nonaktifkan untuk membatasi jumlah percobaan ulang."
+          "help": "Mencoba kembali permintaan ke model saat terjadi kesalahan sementara. Nonaktifkan untuk membatasi jumlah percobaan ulang."
         },
-        "agents_defaults_tool_hint_max_length": {
+        "agents_defaults_tool_status_summary_max_chars": {
           "label": "Panjang ringkasan",
-          "help": "Batas karakter ringkasan aktivitas alat.\n\nPanjang maksimum petunjuk singkat aktivitas alat."
+          "help": "Panjang maksimum petunjuk singkat aktivitas alat."
         },
-        "tools_max_session_messages_per_minute": {
-          "label": "Frekuensi pesan",
-          "help": "Batas pesan alat ke satu sesi per menit.\n\nMembatasi frekuensi alat mengirim pesan ke percakapan."
+        "tools_max_outgoing_session_messages_per_minute": {
+          "label": "Batas pesan antarpercakapan (per menit)",
+          "help": "Jumlah total pesan dari setiap percakapan sumber ke percakapan lain dalam jendela bergulir 60 detik. Pesan pengguna tidak dibatasi."
         },
         "tools_exec_enable": {
           "label": "Alat shell",
-          "help": "Izinkan agen menjalankan perintah Shell.\n\nMengizinkan agen menjalankan perintah shell."
+          "help": "Mengizinkan agen menjalankan perintah shell."
         },
         "tools_file_enable": {
           "label": "Alat file",
-          "help": "Izinkan alat bawaan untuk membaca dan mengedit berkas.\n\nMengizinkan alat bawaan untuk membaca dan mengedit file."
+          "help": "Mengizinkan alat bawaan untuk membaca dan mengedit file."
         },
         "tools_web_enable": {
           "label": "Akses web",
-          "help": "Izinkan pencarian dan pembacaan halaman web.\n\nMengizinkan pencarian web dan pengambilan halaman."
+          "help": "Mengizinkan pencarian web dan pengambilan halaman."
         },
         "tools_cli_apps_enable": {
           "label": "Aplikasi CLI",
-          "help": "Izinkan pemasangan, pengelolaan, dan menjalankan aplikasi CLI.\n\nMengizinkan agen mengelola dan menjalankan aplikasi baris perintah."
+          "help": "Mengizinkan agen mengelola dan menjalankan aplikasi baris perintah."
         },
         "tools_my_enable": {
           "label": "Lihat konfigurasi",
-          "help": "Izinkan agen melihat konfigurasinya.\n\nMengizinkan agen memeriksa konfigurasinya sendiri."
+          "help": "Mengizinkan agen memeriksa konfigurasinya sendiri."
         },
         "tools_my_allow_set": {
           "label": "Ubah konfigurasi",
-          "help": "Izinkan agen mengubah konfigurasinya.\n\nMengizinkan alat pengelolaan diri memperbarui konfigurasi."
+          "help": "Mengizinkan alat pengelolaan diri memperbarui konfigurasi."
         },
         "tools_exec_path_prepend": {
           "label": "Prioritas PATH",
-          "help": "Cari di direktori ini terlebih dahulu.\n\nDirektori yang ditambahkan di awal PATH. Pisahkan dengan titik koma di Windows atau titik dua di macOS dan Linux."
+          "help": "Direktori yang ditambahkan di awal PATH. Pisahkan dengan titik koma di Windows atau titik dua di macOS dan Linux."
         },
         "tools_exec_path_append": {
           "label": "Tambahan PATH",
-          "help": "Cari di direktori ini terakhir.\n\nDirektori yang ditambahkan di akhir PATH. Pisahkan dengan titik koma di Windows atau titik dua di macOS dan Linux."
+          "help": "Direktori yang ditambahkan di akhir PATH. Pisahkan dengan titik koma di Windows atau titik dua di macOS dan Linux."
         },
         "tools_exec_sandbox": {
           "label": "Sandbox perintah",
-          "help": "Isolasi proses perintah; memerlukan dukungan sistem.\n\nGunakan bwrap di Linux atau Seatbelt di macOS. Pemeriksaan ruang kerja saja tidak mengisolasi proses."
+          "help": "Gunakan bwrap di Linux atau Seatbelt di macOS. Pemeriksaan ruang kerja saja tidak mengisolasi proses."
         },
         "tools_exec_sandbox_ro_binds": {
           "label": "Lokasi hanya-baca",
-          "help": "Lokasi tambahan hanya-baca, satu per baris.\n\nJalur tambahan yang dipasang hanya baca, satu per baris."
+          "help": "Jalur tambahan yang dipasang hanya baca, satu per baris."
         },
         "tools_exec_sandbox_rw_binds": {
           "label": "Lokasi dapat ditulis",
-          "help": "Lokasi tambahan yang dapat ditulis, satu per baris.\n\nJalur tambahan yang dipasang dengan izin tulis, satu per baris."
+          "help": "Jalur tambahan yang dipasang dengan izin tulis, satu per baris."
         },
         "tools_exec_allowed_env_keys": {
           "label": "Variabel lingkungan",
-          "help": "Variabel tambahan untuk perintah, satu nama per baris.\n\nVariabel tambahan yang diteruskan ke perintah, satu per baris. Variabel dasar yang diperlukan tetap tersedia."
+          "help": "Variabel tambahan yang diteruskan ke perintah, satu per baris. Variabel dasar yang diperlukan tetap tersedia."
         },
         "tools_exec_allow_patterns": {
           "label": "Perintah diizinkan",
-          "help": "Hanya jalankan perintah yang cocok sepenuhnya dengan aturan izin.\n\nSatu ekspresi reguler per baris. Jika diisi, setiap bagian perintah harus cocok sepenuhnya dengan salah satu aturan. Perintah yang diizinkan melewati aturan pemblokiran bawaan dan tambahan, tetapi tetap mengikuti batasan jaringan dan ruang kerja."
+          "help": "Satu ekspresi reguler per baris. Jika diisi, setiap bagian perintah harus cocok sepenuhnya dengan salah satu aturan. Perintah yang diizinkan melewati aturan pemblokiran bawaan dan tambahan, tetapi tetap mengikuti batasan jaringan dan ruang kerja."
         },
         "tools_exec_deny_patterns": {
           "label": "Perintah diblokir",
-          "help": "Blokir perintah yang cocok dengan aturan ini.\n\nAturan pemblokiran tambahan berupa ekspresi reguler, satu per baris. Aturan izin eksplisit mengesampingkan aturan pemblokiran bawaan dan tambahan."
+          "help": "Aturan pemblokiran tambahan berupa ekspresi reguler, satu per baris. Aturan izin eksplisit mengesampingkan aturan pemblokiran bawaan dan tambahan."
         },
         "network_proxy": {
           "label": "Proxy bersama",
@@ -240,55 +240,43 @@
         },
         "tools_web_user_agent": {
           "label": "Header User-Agent",
-          "help": "User-Agent untuk permintaan web; kosongkan untuk nilai default.\n\nHeader User-Agent kustom. Kosongkan untuk memakai nilai default."
+          "help": "Header User-Agent kustom. Kosongkan untuk memakai nilai default."
         },
         "tools_restrict_to_workspace": {
           "label": "Batas ruang kerja",
-          "help": "Batas ruang kerja global; izin chat WebUI diatur terpisah.\n\nKebijakan alat global. Izin setiap percakapan WebUI diatur secara terpisah."
+          "help": "Kebijakan alat global. Izin setiap percakapan WebUI diatur secara terpisah."
         },
         "tools_ssrf_whitelist": {
           "label": "IP diizinkan",
-          "help": "IP atau rentang CIDR diizinkan, satu per baris.\n\nIP atau rentang CIDR yang dikecualikan dari perlindungan permintaan keluar, satu per baris."
+          "help": "IP atau rentang CIDR yang dikecualikan dari perlindungan permintaan keluar, satu per baris."
         },
         "tools_webui_allow_remote_package_install": {
           "label": "Pemasangan jarak jauh",
-          "help": "Izinkan pemasangan paket dan skill jarak jauh; atur di host gateway.\n\nMengizinkan pemasangan paket dan keterampilan melalui WebUI jarak jauh. Pengaturan ini harus diubah di komputer yang menjalankan gateway."
+          "help": "Mengizinkan pemasangan paket dan keterampilan melalui WebUI jarak jauh. Pengaturan ini harus diubah di komputer yang menjalankan Cirno server."
         },
         "tools_cli_apps_install_timeout": {
           "label": "Batas waktu pemasangan",
-          "help": "Batas detik untuk memasang aplikasi CLI.\n\nDurasi maksimum instalasi aplikasi CLI."
+          "help": "Durasi maksimum instalasi aplikasi CLI."
         },
         "tools_cli_apps_run_timeout": {
           "label": "Batas waktu eksekusi",
-          "help": "Batas detik untuk perintah CLI.\n\nDurasi maksimum perintah aplikasi CLI."
+          "help": "Durasi maksimum perintah aplikasi CLI."
         },
         "tools_cli_apps_catalog_ttl_seconds": {
           "label": "Durasi cache",
-          "help": "Durasi cache daftar aplikasi CLI dalam detik.\n\nLama katalog aplikasi CLI disimpan dalam cache."
-        },
-        "gateway_host": {
-          "label": "Alamat gateway",
-          "help": "Alamat gateway; atur listener WebUI secara terpisah.\n\nAlamat tempat gateway menerima koneksi. Alamat WebSocket dan WebUI diatur di Kanal → WebSocket."
-        },
-        "gateway_port": {
-          "label": "Port gateway",
-          "help": "Port gateway; argumen peluncuran diutamakan.\n\nPort yang disimpan. Argumen baris perintah lebih diutamakan."
-        },
-        "gateway_restart_mode": {
-          "label": "Mode mulai ulang",
-          "help": "Pilih cara mulai ulang; Otomatis mengikuti lingkungan.\n\nCara memulai ulang proses. Mode otomatis memilih berdasarkan lingkungan host."
+          "help": "Lama katalog aplikasi CLI disimpan dalam cache."
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
+          "help": "Konsolidasi saat diam atau pada interval tetap."
         },
         "agents_defaults_dream_model_override": {
           "label": "Dream model",
           "help": "Pilih model terpisah untuk Dream; kosongkan untuk memakai model aktif."
         },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Idle memory check (seconds)",
-          "help": "Restart to apply."
+          "label": "Interval pemeriksaan pemadatan saat tidak aktif (detik)",
+          "help": "Seberapa sering percakapan diperiksa untuk pemadatan; terpisah dari batas waktu tidak aktif. Mulai ulang untuk menerapkan."
         },
         "network_request_timeout_s": {
           "label": "Compatible API request timeout (seconds)",
@@ -372,7 +360,27 @@
         },
         "tools_exec_max_runtime": {
           "label": "Durasi perintah",
-          "help": "Batas durasi bawaan untuk perintah shell.\n\nKeluaran dan waktu tunggu tidak memperpanjang batas ini. Pilih Tanpa batas waktu untuk menghapus batas durasi."
+          "help": "Keluaran dan waktu tunggu tidak memperpanjang batas ini. Pilih Tanpa batas waktu untuk menghapus batas durasi."
+        },
+        "server_health_host": {
+          "label": "Alamat Cirno server",
+          "help": "Alamat tempat Cirno server menerima koneksi. Alamat WebSocket dan WebUI diatur di Kanal → WebSocket."
+        },
+        "server_health_port": {
+          "label": "Port Cirno server",
+          "help": "Port yang disimpan. Argumen baris perintah lebih diutamakan."
+        },
+        "server_restart_mode": {
+          "label": "Mode mulai ulang",
+          "help": "Cara memulai ulang proses. Mode otomatis memilih berdasarkan lingkungan host."
+        },
+        "agents_defaults_resume_message": {
+          "label": "Pesan kelanjutan",
+          "help": "Instruksi saat menggunakan Continue atau /resume."
+        },
+        "agents_defaults_resume_show_message": {
+          "label": "Tampilkan pesan kelanjutan",
+          "help": "Tampilkan instruksi sebagai masukan sistem berlabel dalam percakapan."
         }
       },
       "groups": {
@@ -389,15 +397,11 @@
           "help": "Aktifkan atau nonaktifkan pengaturan memori otomatis."
         },
         "heartbeat": {
-          "title": "Heartbeat"
+          "title": "Heartbeat agen"
         },
         "execution": {
           "title": "Batas eksekusi",
           "help": "Atur batas alat dan percobaan ulang permintaan."
-        },
-        "sessions": {
-          "title": "Percakapan",
-          "help": "Atur chat bersama di berbagai platform."
         },
         "tools": {
           "title": "Alat bawaan",
@@ -423,8 +427,8 @@
           "title": "Batas CLI",
           "help": "Atur batas waktu pemasangan dan eksekusi, serta durasi cache daftar.\n\nBatas waktu instalasi, eksekusi, dan cache katalog."
         },
-        "gateway": {
-          "title": "Gateway",
+        "server": {
+          "title": "Cirno server",
           "help": "Atur opsi penerapan dan mulai ulang."
         },
         "api": {
@@ -449,6 +453,16 @@
         },
         "requests": {
           "title": "Model connection"
+        },
+        "coordination": {
+          "title": "Koordinasi percakapan"
+        },
+        "activity": {
+          "title": "Tampilan eksekusi"
+        },
+        "resume": {
+          "title": "Lanjutkan tugas yang dihentikan",
+          "help": "Memulai permintaan model baru dengan konteks tersimpan, tanpa mengulang panggilan alat yang selesai."
         }
       },
       "save": "Simpan perubahan",
@@ -474,7 +488,7 @@
       "manual": "Manual",
       "standard": "Standar",
       "persistent": "Terus-menerus",
-      "unavailable": "Perbarui gateway untuk mengedit pengaturan ini.",
+      "unavailable": "Perbarui Cirno server untuk mengedit pengaturan ini.",
       "advancedOptions": "Opsi lanjutan",
       "idle": "Saat diam",
       "interval": "Interval tetap"
@@ -503,7 +517,7 @@
       "voice": "Suara",
       "browser": "Pencarian web",
       "channels": "Pengaturan kanal",
-      "runtime": "Server dan heartbeat",
+      "runtime": "Server Cirno",
       "advanced": "Izin",
       "memory": "Pustaka memori",
       "cliApps": "Aplikasi CLI",
@@ -522,7 +536,11 @@
       "execution": "Tujuan dan eksekusi",
       "shell": "Eksekusi Shell",
       "network": "Jaringan dan percobaan ulang",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "account": "Akun",
+      "heartbeat": "Heartbeat agen",
+      "coordination": "Koordinasi percakapan",
+      "regional": "Waktu & wilayah"
     },
     "sections": {
       "interface": "Antarmuka",
@@ -607,7 +625,7 @@
       "restart": "Mulai ulang cirno",
       "configPath": "Lokasi konfigurasi",
       "activePreset": "Prasetel aktif",
-      "gateway": "Gateway",
+      "gateway": "Cirno server",
       "restartState": "Status mulai ulang",
       "pendingChanges": "Perubahan tertunda",
       "selectedPreset": "Preset dipilih",
@@ -642,7 +660,7 @@
       "language": "Pilih bahasa antarmuka.",
       "provider": "Pilih penyedia untuk permintaan baru.",
       "model": "Pilih model untuk preset ini.",
-      "configPath": "Berkas konfigurasi yang digunakan gateway saat ini.",
+      "configPath": "Berkas konfigurasi yang digunakan Cirno server saat ini.",
       "selectedPreset": "Ubah preset tersimpan di Model.",
       "presetModel": "Ubah model dan penyedia di Model.",
       "activityMode": "Pilih tampilan detail aktivitas default.",
@@ -1475,7 +1493,7 @@
       "deleteConfirmAction": "Hapus keterampilan",
       "instructionsTitle": "Petunjuk keterampilan",
       "setupRequired": "Perlu penyiapan",
-      "setupDescription": "Pasang dependensi di host gateway, lalu periksa lagi.\n\nInstal dependensi yang belum tersedia di mesin yang menjalankan cirno, lalu periksa lagi.",
+      "setupDescription": "Pasang dependensi di host Cirno server, lalu periksa lagi.\n\nInstal dependensi yang belum tersedia di mesin yang menjalankan cirno, lalu periksa lagi.",
       "copySetupCommand": "Salin perintah",
       "checkAgain": "Periksa lagi",
       "marketplaceSearchFailed": "Tidak dapat mencari marketplace keterampilan.",
@@ -1565,6 +1583,20 @@
       "webuiUrl": "Web UI address (optional)",
       "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
       "settingsLink": "Configure Telegram notifications"
+    },
+    "account": {
+      "owner": "Pemilik instans",
+      "changePassword": "Ubah kata sandi",
+      "currentPassword": "Kata sandi saat ini",
+      "newPassword": "Kata sandi baru",
+      "help": "Masukkan kata sandi saat ini untuk mengubahnya. Sesi peramban lain akan dikeluarkan.",
+      "saved": "Kata sandi diubah. Peramban ini tetap masuk.",
+      "unavailable": "Pengaturan akun tersedia saat menggunakan pendaftaran dan login melalui peramban.",
+      "loading": "Memuat akun…",
+      "retry": "Coba lagi"
+    },
+    "heartbeat": {
+      "help": "Memeriksa HEARTBEAT.md secara berkala dan membangunkan Cirno jika ada tugas. Terpisah dari pemeriksaan kesehatan layanan."
     }
   },
   "chat": {
@@ -1920,6 +1952,26 @@
           "pairing": {
             "title": "Pemasangan",
             "description": "Kelola permintaan pemasangan."
+          },
+          "resume": {
+            "title": "Lanjutkan tugas",
+            "description": "Lanjutkan permintaan yang dihentikan dengan konteks tersimpan."
+          },
+          "clear": {
+            "title": "Hapus konteks Cirno",
+            "description": "Hapus percakapan pribadi Cirno tanpa membatalkan perubahan berkas."
+          },
+          "temporary": {
+            "title": "Percakapan sementara",
+            "description": "Pilih mode sementara sebelum pesan pertama."
+          },
+          "ptc": {
+            "title": "Mode PTC",
+            "description": "Pilih pemanggilan alat terprogram sebelum pesan pertama."
+          },
+          "access": {
+            "title": "Mode akses",
+            "description": "Pilih bawaan, tinjauan AI, atau akses penuh."
           }
         },
         "badges": {
@@ -1931,7 +1983,12 @@
           "goalReady": "Mulai tujuan berkelanjutan",
           "history": "Tampilkan pesan terbaru",
           "stopRunning": "Sedang berjalan"
-        }
+        },
+        "controlRunning": "Hentikan tugas sebelum mengubah opsi.",
+        "accessUsage": "Penggunaan: /access default|review|full",
+        "modelUsage": "Tulis nama model yang dikonfigurasi setelah /model.",
+        "creationOnly": "Pilih opsi sebelum pesan pertama dalam percakapan baru.",
+        "toggleUsage": "Penggunaan: {{command}} on|off"
       },
       "encoding": "Memproses…",
       "remove": "Hapus lampiran",
@@ -1972,7 +2029,9 @@
         "full": "Akses penuh",
         "fullShort": "Penuh",
         "defaultDescription": "Baca, edit berkas, dan jalankan perintah hanya di direktori kerja.",
-        "fullDescription": "Izinkan akses berkas dan perintah di luar direktori kerja."
+        "fullDescription": "Izinkan akses berkas dan perintah di luar direktori kerja.",
+        "review": "Tinjauan AI",
+        "reviewDescription": "Pembatasan bawaan tetap berlaku. AI independen meninjau setiap operasi yang diblokir tanpa memori Cirno; kasus meragukan diteruskan ke kotak masuk. Kesalahan AI dapat membocorkan berkas atau menjalankan perintah berbahaya."
       },
       "goalStatus": {
         "blocked": "Terhambat",
@@ -2001,6 +2060,47 @@
       "title": "Kosongkan percakapan Cirno",
       "description": "Hentikan proses saat ini dan hapus pesan serta konteks percakapan ini. Memori tersimpan dan percakapan lain tetap disimpan.",
       "confirm": "Kosongkan percakapan"
+    },
+    "inputSources": {
+      "heartbeat": "Heartbeat",
+      "scheduled_task": "Tugas terjadwal",
+      "trigger": "Pemicu",
+      "conversation": "Pesan percakapan",
+      "subagent": "Hasil subagen",
+      "continuation": "Kelanjutan otomatis",
+      "system": "Peristiwa sistem",
+      "supervision": "Cirno memperbarui percakapan ini"
+    },
+    "supervision": {
+      "changed": "Cirno memperbarui percakapan ini",
+      "actions": {
+        "stop": "Percakapan dihentikan",
+        "continue": "Percakapan dilanjutkan",
+        "goal_create": "Goal dibuat",
+        "goal_set": "Goal diganti",
+        "goal_update": "Pengaturan Goal diperbarui",
+        "goal_stop": "Goal dihentikan",
+        "goal_pause": "Goal dijeda",
+        "goal_resume": "Goal dilanjutkan",
+        "goal_delete": "Goal dihapus",
+        "goal_wait": "Goal menunggu"
+      },
+      "fields": {
+        "objective": "Tujuan",
+        "ui_summary": "Label",
+        "recap": "Kemajuan tersimpan",
+        "continuation_limit": "Batas kelanjutan otomatis",
+        "wake_after_seconds": "Tunggu (detik)"
+      }
+    },
+    "historyEffects": {
+      "title": "Perubahan ruang kerja tetap ada",
+      "description": "Percabangan atau penyuntingan hanya mengubah konteks percakapan. Perintah dan perubahan berkas sebelumnya tidak dibatalkan. Menjalankan ulang dapat menyebabkan konflik atau kehilangan berkas. Periksa berkas sebelum melanjutkan."
+    },
+    "historyEdit": {
+      "text": "Pesan yang diedit",
+      "description": "Ganti pesan ini dan konteks percakapan setelahnya, lalu jalankan permintaan yang diperbarui. Lampiran dipertahankan.",
+      "submit": "Simpan dan kirim"
     }
   },
   "message": {
@@ -2228,7 +2328,8 @@
     "automationSourceFallback": "Otomatisasi",
     "automationTriggered": "Dipicu otomatis",
     "expandStep": "Buka detail langkah",
-    "collapseStep": "Tutup detail langkah"
+    "collapseStep": "Tutup detail langkah",
+    "edit": "Edit pesan"
   },
   "recovery": {
     "actionFailed": "Pemulihan gagal. Coba lagi.",
@@ -2284,7 +2385,7 @@
     "failed": "Tidak dapat menyalin. Coba lagi.",
     "unavailable": "File tidak dapat ditemukan. Anda dapat menyalin referensi aslinya.",
     "loading": "Memeriksa file…",
-    "gatewayPath": "Jalur merujuk ke komputer gateway."
+    "serverPath": "Jalur merujuk ke komputer Cirno server."
   },
   "filePreview": {
     "displayMode": "Mode tampilan",
@@ -2295,7 +2396,7 @@
     "close": "Tutup pratinjau file",
     "loading": "Memuat pratinjau...",
     "failed": "Tidak dapat mempratinjau file ini.",
-    "routeMissing": "Pratinjau file memerlukan gateway terbaru. Mulai ulang cirno gateway lalu coba lagi.",
+    "routeMissing": "Pratinjau file memerlukan Cirno server terbaru. Mulai ulang cirno lalu coba lagi.",
     "resize": "Ubah ukuran pratinjau file",
     "truncated": "Pratinjau dipotong karena file ini besar."
   },
@@ -2352,11 +2453,11 @@
     },
     "workspaceScopeRejected": {
       "title": "Ruang kerja tidak berubah",
-      "body": "Gateway menolak proyek atau mode akses ini. Pilih proyek yang sudah ada atau mode akses lain, lalu coba lagi."
+      "body": "Cirno server menolak proyek atau mode akses ini. Pilih proyek yang sudah ada atau mode akses lain, lalu coba lagi."
     },
     "turnRejected": {
       "title": "Pesan tidak terkirim",
-      "body": "Gateway menolak pesan ini. Periksa teks atau lampiran, lalu coba lagi."
+      "body": "Cirno server menolak pesan ini. Periksa teks atau lampiran, lalu coba lagi."
     },
     "modelRequestFailed": {
       "authenticationTitle": "Otorisasi penyedia model gagal",
@@ -2538,7 +2639,7 @@
     "jobs": "Tugas jarak jauh",
     "refresh": "Segarkan",
     "refreshList": "Segarkan daftar",
-    "noJobs": "Agen dapat memulai tugas dengan alat node. Catatan disimpan di Home dan keluaran lengkap tetap di node.",
+    "noJobs": "Agent dapat memulai pekerjaan persisten melalui SSH. Catatan pelacakan disimpan dalam status server; keluaran lengkap tetap di Node.",
     "readStatus": "Periksa status",
     "stop": "Hentikan",
     "memorySources": "Sumber ingatan",
@@ -2598,7 +2699,8 @@
       "dream": "Konsolidasi memori",
       "turn": "Proses percakapan",
       "message": "Pesan",
-      "report": "Laporan kerja"
+      "report": "Laporan kerja",
+      "approval": "Persetujuan operasi"
     },
     "status": {
       "pending": "Tertunda",
@@ -2651,7 +2753,9 @@
       "storage_failed": "Akun tidak dapat disimpan. Periksa penyimpanan server.",
       "password_mismatch": "Kata sandi tidak cocok.",
       "connection_failed": "Tidak dapat terhubung ke Cirno. Periksa jaringan Anda.",
-      "request_failed": "Permintaan gagal. Silakan coba lagi."
+      "request_failed": "Permintaan gagal. Silakan coba lagi.",
+      "incorrect_password": "Kata sandi saat ini salah.",
+      "unauthorized": "Silakan masuk lagi."
     }
   }
 }

@@ -237,3 +237,12 @@ it("uses deterministic unknown replay time and preserves distinct same-text inpu
   expect(messages.map((message) => message.createdAt)).toEqual([0, 0]);
   expect(projectThreadEvents(events)).toEqual(messages);
 });
+
+it("keeps internal input provenance and deduplicates replay by source identity", () => {
+  const event = { event: "user_message" as const, projection_id: "input-event-1", starts_turn: true, chat_id: "global", text: "A scheduled task", created_at_ms: 100, provenance: { input_origin: { kind: "scheduled_task" as const, label: "Daily check", id: "schedule-input-1" } } };
+  let state = createThreadProjectionState();
+  state = projectThreadEvent(state, event, { createId: () => "source-row", now: 100 });
+  state = projectThreadEvent(state, event, { createId: () => "duplicate-row", now: 200 });
+  expect(state.messages).toHaveLength(1);
+  expect(state.messages[0].inputOrigin).toEqual(event.provenance.input_origin);
+});

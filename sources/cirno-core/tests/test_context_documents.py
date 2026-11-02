@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cirno.agent.context import ContextBuilder
+from cirno_core.agent.context import ContextBuilder
 
 
 def _make_builder(tmp_path: Path) -> ContextBuilder:

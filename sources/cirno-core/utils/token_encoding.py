@@ -15,7 +15,7 @@ def _load_encoding() -> None:
     global _encoding
     try:
         if "TIKTOKEN_CACHE_DIR" not in os.environ and "DATA_GYM_CACHE_DIR" not in os.environ:
-            from cirno.config.paths import get_data_dir
+            from cirno_core.config.paths import get_data_dir
 
             os.environ.setdefault("TIKTOKEN_CACHE_DIR", str(get_data_dir() / "cache" / "tiktoken"))
         _encoding = tiktoken.get_encoding("cl100k_base")

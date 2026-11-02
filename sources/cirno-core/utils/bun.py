@@ -91,7 +91,9 @@ def ensure_bun(
     if existing and _matches_version(existing):
         return existing
     target = _target()
-    root = cache_dir or Path.home() / ".cirno" / "tools" / "bun"
+    from cirno_core.config.paths import get_data_dir
+
+    root = cache_dir or get_data_dir() / "cache" / "bun"
     directory = root / BUN_VERSION / target
     executable = directory / ("bun.exe" if os.name == "nt" else "bun")
     directory.mkdir(parents=True, exist_ok=True)

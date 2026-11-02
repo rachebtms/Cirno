@@ -112,7 +112,7 @@ describe("Settings navigation on mobile", () => {
     expect(screen.getByRole("menuitem", { name: "Overview" })).toHaveFocus();
     await user.keyboard("{ArrowDown}{Enter}");
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Settings: Appearance" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Settings: Account" })).toHaveFocus();
   });
 
   it("opens and selects sections with touch taps", async () => {
@@ -123,9 +123,9 @@ describe("Settings navigation on mobile", () => {
       { keys: "[TouchA>]", target }, { keys: "[/TouchA]", target },
     ]);
     await tap(screen.getByRole("button", { name: "Settings: Models" }));
-    await tap(screen.getByRole("menuitem", { name: "Server & heartbeat" }));
+    await tap(screen.getByRole("menuitem", { name: "Server" }));
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Settings: Server & heartbeat" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Settings: Server" })).toBeVisible();
   });
 
   it("keeps manual restart in the menu and closes it on selection", async () => {

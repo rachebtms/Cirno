@@ -5,13 +5,13 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, cast
 
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     ProviderCallContext,
     ProviderConversationState,
 )
-from cirno.utils.helpers import estimate_prompt_tokens_chain
+from cirno_core.utils.helpers import estimate_prompt_tokens_chain
 
 _PROVIDER_STATE_OUTPUT_META = "provider_state_output"
 _PROVIDER_STATE_BOUNDARY_META = "provider_state_boundary"

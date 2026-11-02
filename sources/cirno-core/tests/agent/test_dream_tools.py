@@ -1,7 +1,7 @@
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.loader import ToolLoader
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.schema import Config
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.schema import Config
 
 
 def test_tool_loader_scope_memory_only_returns_memory_tools():

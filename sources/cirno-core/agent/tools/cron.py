@@ -8,17 +8,17 @@ import time
 from datetime import datetime
 from typing import Any
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import ToolContext, current_request_context
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import ToolContext, current_request_context
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.cron.service import CronService
-from cirno.cron.session_turns import is_bound_cron_job, is_cron_turn
-from cirno.cron.types import CronJob, CronJobState, CronSchedule
+from cirno_core.cron.service import CronService
+from cirno_core.cron.session_turns import is_bound_cron_job, is_cron_turn
+from cirno_core.cron.types import CronJob, CronJobState, CronSchedule
 
 _CRON_PARAMETERS = tool_parameters_schema(
     action=StringSchema(

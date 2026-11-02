@@ -1,12 +1,12 @@
 """Home owns assistant profiles and learned skills across project workspaces."""
 
-from cirno.agent.context import ContextBuilder
-from cirno.skills.loader import SkillsLoader
-from cirno.config.home import get_home_path
-from cirno.config.loader import save_config
-from cirno.config.schema import Config
-from cirno.utils.helpers import sync_workspace_templates
-from cirno.webui.skills_api import delete_webui_skill
+from cirno_core.agent.context import ContextBuilder
+from cirno_core.skills.loader import SkillsLoader
+from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import save_config
+from cirno_core.config.schema import Config
+from cirno_core.utils.helpers import sync_workspace_templates
+from cirno_server.webui.skills_api import delete_webui_skill
 
 
 async def test_dream_skill_is_learned_in_home_and_available_from_another_project(tmp_path):

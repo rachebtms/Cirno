@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.registry import ToolRegistry
 
 Dispatch = Callable[[str, dict[str, Any], int], Awaitable[tuple[Any, bool]]]
 

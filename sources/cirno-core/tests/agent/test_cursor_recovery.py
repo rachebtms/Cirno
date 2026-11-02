@@ -8,7 +8,7 @@ history.jsonl (e.g. ``"cursor": "abc"``).  The original ``_next_cursor`` and
 
 import pytest
 
-from cirno.memory.consolidation import MemoryStore
+from cirno_core.memory.consolidation import MemoryStore
 
 
 @pytest.fixture

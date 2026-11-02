@@ -9,21 +9,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.file_state import FileStates, current_file_states
-from cirno.agent.tools.filesystem_config import FileToolsConfig
-from cirno.agent.tools.path_utils import resolve_workspace_path
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.file_state import FileStates, current_file_states
+from cirno_core.agent.tools.filesystem_config import FileToolsConfig
+from cirno_core.agent.tools.path_utils import resolve_workspace_path
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.config.home import get_home_path
-from cirno.security.workspace_access import current_tool_workspace
-from cirno.utils.file_edit_events import FileDiff, FileEditResult, display_file_edit_path
-from cirno.utils.helpers import build_image_content_blocks, detect_image_mime
+from cirno_core.config.home import get_home_path
+from cirno_core.security.workspace_access import current_tool_workspace
+from cirno_core.utils.file_edit_events import FileDiff, FileEditResult, display_file_edit_path
+from cirno_core.utils.helpers import build_image_content_blocks, detect_image_mime
 
 
 class _FsTool(Tool):
@@ -71,7 +71,7 @@ class _FsTool(Tool):
 
     @classmethod
     def create(cls, ctx: ToolContext) -> Tool:
-        from cirno.skills.metadata import BUILTIN_SKILLS_DIR, BUILTIN_DOCUMENTS_DIR
+        from cirno_core.skills.metadata import BUILTIN_SKILLS_DIR, BUILTIN_DOCUMENTS_DIR
 
         agent_workspace = Path(ctx.workspace)
         agent_home = get_home_path().resolve()
@@ -142,7 +142,7 @@ class _FsTool(Tool):
     def _resolve_read(self, path: str) -> Path:
         plugin_skill_dirs: list[Path] = []
         if self._workspace is not None:
-            from cirno.agent.plugins import enabled_agent_plugin_skill_dirs
+            from cirno_core.agent.plugins import enabled_agent_plugin_skill_dirs
 
             try:
                 access = current_tool_workspace(
@@ -170,6 +170,21 @@ class _FsTool(Tool):
             extra_files_require_allowed_root=True,
         )
 
+    def approval_reason(self, params: dict[str, Any]) -> str | None:
+        from cirno_core.security.workspace_policy import WorkspaceBoundaryError
+        paths = [edit["path"] for edit in params.get("edits", [])] if self.name == "apply_patch" else [params.get("path", ".")]
+        try:
+            for path in paths:
+                if self.read_only:
+                    self._resolve_read(path)
+                else:
+                    # The write resolver also snapshots Skills: preflight must not.
+                    self._resolve_with_extra(path, self._extra_write_allowed_dirs,
+                                             self._extra_write_allowed_files, include_media_dir=False)
+        except WorkspaceBoundaryError as error:
+            return str(error)
+        return None
+
     def _resolve_write(self, path: str) -> Path:
         resolved = self._resolve_with_extra(
             path,
@@ -177,7 +192,7 @@ class _FsTool(Tool):
             self._extra_write_allowed_files,
             include_media_dir=False,
         )
-        from cirno.skills.history import capture_skill_path
+        from cirno_core.skills.history import capture_skill_path
         capture_skill_path(resolved)
         return resolved
 
@@ -227,7 +242,7 @@ def _is_blocked_device(path: str | Path) -> bool:
 
 def _builtin_skill_read_path(path: str) -> Path | None:
     """Map workspace-relative skills/<name>/... reads onto bundled skills."""
-    from cirno.skills.metadata import BUILTIN_SKILLS_DIR
+    from cirno_core.skills.metadata import BUILTIN_SKILLS_DIR
 
     requested = Path(path)
     if requested.is_absolute():
@@ -342,7 +357,7 @@ class ReadFileTool(_FsTool):
                 fp, offset=offset, limit=limit, content_hash=content_hash,
             ):
                 return f"[File unchanged since last read: {path}]"
-            from cirno.utils.document import _decode_bom_text
+            from cirno_core.utils.document import _decode_bom_text
 
             text_content = _decode_bom_text(raw)
             if text_content is None:
@@ -351,7 +366,7 @@ class ReadFileTool(_FsTool):
                 except UnicodeDecodeError:
                     # Match the former eager extractor for known text formats while
                     # keeping arbitrary binary files on the guarded error path.
-                    from cirno.utils.document import _is_text_extension
+                    from cirno_core.utils.document import _is_text_extension
 
                     if _is_text_extension(fp.suffix.lower()):
                         text_content = raw.decode("latin-1")
@@ -426,7 +441,7 @@ class ReadFileTool(_FsTool):
             return ToolResult.error(f"Error reading file: {e}")
 
     def _read_pdf(self, fp: Path, pages: str | None) -> str:
-        from cirno.utils.document import PdfPageRangeError, PdfSafetyError, extract_pdf_pages
+        from cirno_core.utils.document import PdfPageRangeError, PdfSafetyError, extract_pdf_pages
 
         try:
             extraction = extract_pdf_pages(
@@ -466,7 +481,7 @@ class ReadFileTool(_FsTool):
         offset: int,
         limit: int | None,
     ) -> str:
-        from cirno.utils.document import open_document_line_source
+        from cirno_core.utils.document import open_document_line_source
 
         offset = max(1, offset)
         requested_limit = limit or self._DEFAULT_LIMIT

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import RecoveryStateEvent, SessionUpdatedEvent
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import ProviderConversationState
-from cirno.session.manager import Session, SessionManager
-from cirno.session.recovery import (
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import RecoveryStateEvent, SessionUpdatedEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import ProviderConversationState
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.recovery import (
     PENDING_FOLLOWUPS_KEY,
     PENDING_USER_TURN_KEY,
     RECOVERY_METADATA_KEY,
@@ -19,7 +19,7 @@ from cirno.session.recovery import (
     pending_followups,
     record_pending_followup,
 )
-from cirno.webui.recovery import RecoveryActionError, RecoveryCoordinator
+from cirno_core.session.display_recovery import RecoveryActionError, RecoveryCoordinator
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +65,7 @@ async def test_stale_incomplete_transcript_waits_for_confirmation(tmp_path: Path
     session = sessions.get_or_create("websocket:chat")
     _persist(sessions, session)
     monkeypatch.setattr(
-        "cirno.webui.transcript.has_unfinished_transcript_tail",
+        "cirno_core.session.transcript.has_unfinished_transcript_tail",
         lambda _key, **_kwargs: True,
     )
 
@@ -98,7 +98,7 @@ async def test_materialized_interruption_can_continue_from_saved_context(
     )
     _persist(sessions, session)
     monkeypatch.setattr(
-        "cirno.webui.transcript.has_unfinished_transcript_tail",
+        "cirno_core.session.transcript.has_unfinished_transcript_tail",
         lambda _key, **_kwargs: True,
     )
 
@@ -147,7 +147,7 @@ async def test_scan_loads_only_sessions_that_need_webui_recovery(
 
     monkeypatch.setattr(restarted.state, "get", tracked_get_or_create)
     monkeypatch.setattr(
-        "cirno.webui.transcript.has_unfinished_transcript_tail",
+        "cirno_core.session.transcript.has_unfinished_transcript_tail",
         lambda _key, **_kwargs: False,
     )
 
@@ -708,7 +708,7 @@ async def test_model_failure_waits_across_restart_and_rejects_duplicate_continue
     state = sessions.get_or_create("websocket:chat").metadata[RECOVERY_METADATA_KEY]
     assert state["failure_error_kind"] == "connection"
     assert state.get("reply_preserved", False) is reply_preserved
-    from cirno.session.recovery import recovery_state_from_metadata
+    from cirno_core.session.recovery import recovery_state_from_metadata
     public_state = recovery_state_from_metadata({RECOVERY_METADATA_KEY: state})
     assert public_state is not None
     assert public_state.get("reply_preserved", False) is reply_preserved

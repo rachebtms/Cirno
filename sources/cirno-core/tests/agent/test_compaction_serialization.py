@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from cirno.sdk.assistant import Cirno
-from cirno.providers.base import LLMProvider, LLMResponse
+from cirno_core.sdk.assistant import Cirno
+from cirno_core.providers.base import LLMProvider, LLMResponse
 
 
 class ControlledProvider(LLMProvider):
@@ -41,7 +41,7 @@ class ControlledProvider(LLMProvider):
 @pytest.fixture
 async def bot(loop_factory):
     provider = ControlledProvider()
-    bot = Cirno(loop_factory(provider=provider, session_ttl_minutes=1))
+    bot = Cirno(loop_factory(provider=provider, idle_compact_after_minutes=1))
     try:
         yield bot, provider
     finally:
@@ -59,7 +59,7 @@ async def seed_history(bot, key):
 
 async def schedule_idle_archive(bot):
     scheduled = []
-    with patch("cirno.agent.autocompact.datetime") as clock:
+    with patch("cirno_core.agent.autocompact.datetime") as clock:
         clock.now.return_value = datetime.now() + timedelta(minutes=30)
         clock.fromisoformat.side_effect = datetime.fromisoformat
         await bot._loop.auto_compact.check_expired(scheduled.append, bot._loop.runtime_for_session)
@@ -125,7 +125,7 @@ async def test_compaction_waits_for_active_sdk_turn_and_preserves_reply(
             # Only the later, genuinely idle scan may summarize the fresh reply.
             # sdk:other is idle by then too; this expectation concerns sdk:shared.
             scheduled = []
-            with patch("cirno.agent.autocompact.datetime") as clock:
+            with patch("cirno_core.agent.autocompact.datetime") as clock:
                 clock.now.return_value = datetime.now() + timedelta(minutes=30)
                 clock.fromisoformat.side_effect = datetime.fromisoformat
                 await bot._loop.auto_compact.check_expired(
@@ -172,7 +172,7 @@ async def test_sdk_turn_waits_for_running_idle_archive_and_uses_its_summary(bot)
 
     tasks = []
     try:
-        with patch("cirno.agent.autocompact.datetime") as clock:
+        with patch("cirno_core.agent.autocompact.datetime") as clock:
             clock.now.return_value = datetime.now() + timedelta(minutes=30)
             clock.fromisoformat.side_effect = datetime.fromisoformat
             archive = asyncio.create_task(await schedule_idle_archive(bot))

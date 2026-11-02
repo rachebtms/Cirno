@@ -7,24 +7,24 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import (
+from cirno_core.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import (
     RequestContext,
     current_request_context,
     request_context,
 )
-from cirno.agent.tools.long_task import (
+from cirno_core.agent.tools.long_task import (
     CreateGoalTool,
     UpdateGoalTool,
 )
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.bus.outbound_events import GoalStateSyncEvent
-from cirno.bus.queue import MessageBus
-from cirno.session.goal_state import GOAL_STATE_KEY, MAX_GOAL_OBJECTIVE_CHARS
-from cirno.session.manager import SessionManager
-from cirno.session.turn_continuation import should_finalize_on_max_iterations
-from cirno.session.webui_turns import WebuiTurnCoordinator
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.bus.outbound_events import GoalStateSyncEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.session.goal_state import GOAL_STATE_KEY, MAX_GOAL_OBJECTIVE_CHARS
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.turn_continuation import should_finalize_on_max_iterations
+from cirno_core.session.webui_turns import WebuiTurnCoordinator
 
 
 def _goal_metadata() -> dict[str, object]:
@@ -510,8 +510,8 @@ async def test_goal_tools_registered_in_base_registry(tmp_path):
 
 
 async def test_goal_can_pause_resume_and_delete_without_affecting_another_chat(tmp_path):
-    from cirno.agent.goals.permission import GoalInputScope
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.goals.permission import GoalInputScope
+    from cirno_core.bus.events import InboundMessage
     sm = SessionManager(tmp_path)
     create, update, ctx = _tools(sm, metadata={})
     other = _request_context(chat_id="other", metadata={})

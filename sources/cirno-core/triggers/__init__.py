@@ -1,12 +1,12 @@
 """Local trigger support."""
 
-from cirno.triggers.local_store import (
+from cirno_core.triggers.local_store import (
     LocalTriggerStore,
     TriggerDisabledError,
     TriggerNotFoundError,
     TriggerStoreError,
 )
-from cirno.triggers.local_types import LocalTrigger, TriggerDelivery, TriggerRunRecord
+from cirno_core.triggers.local_types import LocalTrigger, TriggerDelivery, TriggerRunRecord
 
 __all__ = [
     "LocalTrigger",

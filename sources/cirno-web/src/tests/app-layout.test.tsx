@@ -100,7 +100,7 @@ function baseSettingsPayload() {
       temperature: 0.1,
       reasoning_effort: null,
       timezone: "UTC",
-      tool_hint_max_length: 40,
+      tool_status_summary_max_chars: 40,
     },
     model_presets: [{
       name: "default",
@@ -135,8 +135,8 @@ function baseSettingsPayload() {
     runtime: {
       config_path: "/tmp/config.json",
       workspace_path: "/tmp/workspace",
-      gateway_host: "127.0.0.1",
-      gateway_port: 18790,
+      health_host: "127.0.0.1",
+      health_port: 18790,
       heartbeat: {
         enabled: true,
         interval_s: 1800,
@@ -1072,7 +1072,7 @@ describe("App layout", () => {
     const projectButton = screen.getByRole("button", { name: "Switch directory" });
     await waitFor(() => expect(projectButton).toHaveFocus());
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "The gateway rejected this project or access mode. Choose an existing project or a different access mode, then try again.",
+      "The Cirno server rejected this project or access mode. Choose an existing project or a different access mode, then try again.",
     );
     fireEvent.click(projectButton);
     fireEvent.click(screen.getByRole("button", { name: /^Edit path:/ }));
@@ -1081,7 +1081,7 @@ describe("App layout", () => {
     expect(pathInput).toHaveAttribute("aria-invalid", "true");
     expect(pathInput).toHaveFocus();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "The gateway rejected this project or access mode. Choose an existing project or a different access mode, then try again.",
+      "The Cirno server rejected this project or access mode. Choose an existing project or a different access mode, then try again.",
     );
     expect(window.location.hash).toBe("");
     consoleError.mockRestore();
@@ -1758,7 +1758,7 @@ describe("App layout", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
 
     await waitFor(() =>
-      expect(screen.getByText("Delete this topic?")).toBeInTheDocument(),
+      expect(screen.getByText("Delete this conversation?")).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
@@ -1770,7 +1770,7 @@ describe("App layout", () => {
         within(sidebar).getByRole("button", { name: /^Second chat$/ }),
       ).toBeInTheDocument(),
     );
-    expect(screen.queryByText("Delete this topic?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Delete this conversation?")).not.toBeInTheDocument();
     expect(document.body.style.pointerEvents).not.toBe("none");
   }, 15_000);
 
@@ -1918,7 +1918,7 @@ describe("App layout", () => {
       ).toBeInTheDocument(),
     );
 
-    fireEvent.pointerDown(screen.getByLabelText(/First chat.*话题操作/), {
+    fireEvent.pointerDown(screen.getByLabelText(/First chat.*会话操作/), {
       button: 0,
     });
     fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }));
@@ -1928,10 +1928,10 @@ describe("App layout", () => {
     );
     expect(getSessionAutomationsSpy).toHaveBeenCalledWith("websocket:chat-a");
     expect(
-      screen.getByText("删除话题也会删除关联的自动任务"),
+      screen.getByText("删除会话也会删除关联的自动任务"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Deleting this topic also deletes its linked automations."),
+      screen.queryByText("Deleting this conversation also deletes its linked automations."),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
@@ -2034,7 +2034,7 @@ describe("App layout", () => {
 
     fireEvent.click(deleteItem);
     await waitFor(() =>
-      expect(screen.getByText("Delete this topic?")).toBeInTheDocument(),
+      expect(screen.getByText("Delete this conversation?")).toBeInTheDocument(),
     );
   }, 15_000);
 
@@ -3302,7 +3302,7 @@ describe("App layout", () => {
       name: "New conversation pane actions",
     }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
-    expect(await screen.findByText("Delete this topic?")).toBeInTheDocument();
+    expect(await screen.findByText("Delete this conversation?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteChatSpy).toHaveBeenCalledWith("websocket:new-pane"));

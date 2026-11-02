@@ -168,6 +168,7 @@ export function useCirnoStream(
   stop: () => Promise<void>;
   history: ThreadPaging;
   refreshHistory: () => void;
+  resetHistory: (keepTurnId?: string) => void;
   loadOlder: () => Promise<void>;
   loadTraceDetails: (refs: string[]) => Promise<Array<{ ref: string; events: ThreadProjectionEvent[] }>>;
   /** Latest transport-level fault raised since the last ``dismissStreamError``.
@@ -531,6 +532,19 @@ export function useCirnoStream(
     pending.owner.finishRead(pending.read);
     if (transcriptRef.current === pending.owner) publishHistory();
   }, [publishHistory]);
+  const resetHistory = useCallback((keepTurnId?: string) => {
+    flushPendingStreamEvents();
+    cancelOlderRead();
+    const retained = keepTurnId ? transcriptRef.current.messages.filter(message => message.turnId === keepTurnId) : [];
+    const owner = new ThreadTranscript(retained, undefined, true);
+    owner.paging = { ...owner.paging, loading: Boolean(historyKey) };
+    transcriptRef.current = owner;
+    setMessages(owner.messages);
+    setGoalState(undefined); setRecoveryState(null); setRetryStatus(null); setStreamError(null);
+    if (chatId) messageCache?.set(chatId, owner.save());
+    if (historyKey) webuiThreadCache.delete(historyKey);
+    refreshHistory();
+  }, [chatId, historyKey, messageCache, flushPendingStreamEvents, cancelOlderRead, refreshHistory, setMessages]);
   const latestReadOwnerRef = useRef<ThreadTranscript>();
   const detailRequestsRef = useRef(new Map<string, {
     owner: ThreadTranscript;
@@ -1102,6 +1116,7 @@ export function useCirnoStream(
     stop,
     history: historyState,
     refreshHistory,
+    resetHistory,
     loadOlder,
     loadTraceDetails,
     streamError,

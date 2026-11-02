@@ -9,8 +9,8 @@ from datetime import datetime
 from typing import Any, Protocol, TypedDict, cast
 from uuid import uuid4
 
-from cirno.bus.events import InboundMessage
-from cirno.session.manager import Session
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.manager import Session
 from loguru import logger
 
 RUNTIME_CHECKPOINT_KEY = "runtime_checkpoint"
@@ -54,6 +54,10 @@ class RecoveryAdmission(Protocol):
     """Narrow AgentLoop boundary for explicit recovery validation."""
 
     async def admit(self, message: InboundMessage) -> bool: ...
+
+    async def turn_stopped(self, session_key: str) -> None: ...
+
+    async def resume_session(self, session_key: str) -> dict[str, Any]: ...
 
     def register_recovery_task(self, session_key: str, task: asyncio.Task[Any]) -> None: ...
 
@@ -145,7 +149,7 @@ def pending_followups(session: Session) -> list[InboundMessage]:
                 media=media,
                 metadata={**cast(dict[str, Any], metadata), PENDING_FOLLOWUP_ID_KEY: followup_id},
                 session_key_override=session.key,
-                require_existing_session=True,
+                require_existing_session=True, session_generation=session.generation,
             )
         )
     return messages

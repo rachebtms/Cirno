@@ -8,9 +8,9 @@ import os
 import shutil
 from typing import Any
 
-from cirno.agent.tools.base import ToolResult
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.base import ToolResult
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.shell import ExecTool
 
 
 class RgTool(ExecTool):

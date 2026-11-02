@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import find_by_name
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import find_by_name
 
 
 def test_provider_init_does_not_mutate_shared_env_keys(monkeypatch) -> None:

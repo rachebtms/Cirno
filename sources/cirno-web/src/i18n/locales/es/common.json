@@ -13,7 +13,7 @@
     },
     "error": {
       "title": "No se pudo conectar con cirno",
-      "gatewayHint": "Asegúrate de que la gateway esté en ejecución (`cirno gateway`) y de que este navegador pueda acceder a la dirección de la WebUI."
+      "serverHint": "Asegúrate de que la Cirno server esté en ejecución (`cirno`) y de que este navegador pueda acceder a la dirección de la WebUI."
     },
     "auth": {
       "title": "Conectar con cirno",
@@ -132,51 +132,51 @@
       "fields": {
         "agents_defaults_timezone_mode": {
           "label": "Zona del sistema",
-          "help": "Desactívalo para elegir una zona horaria.\n\nDesactiva esta opción para elegir la zona horaria manualmente."
+          "help": "Desactiva esta opción para elegir la zona horaria manualmente."
         },
         "agents_defaults_timezone": {
           "label": "Zona horaria",
-          "help": "Los desfases UTC usan la fecha actual.\n\nElige una zona horaria. La diferencia con UTC corresponde a la fecha actual."
+          "help": "Elige una zona horaria. La diferencia con UTC corresponde a la fecha actual."
         },
         "agents_defaults_dream_enabled": {
           "label": "Consolidación de memoria",
-          "help": "Organiza la memoria automáticamente; al desactivar, conserva los recuerdos.\n\nOrganiza la información útil de las conversaciones. La memoria existente sigue disponible al desactivarla."
+          "help": "Organiza la información útil de las conversaciones. La memoria existente sigue disponible al desactivarla."
         },
-        "gateway_heartbeat_enabled": {
+        "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
         },
-        "gateway_heartbeat_interval_s": {
+        "agents_defaults_heartbeat_interval_s": {
           "label": "Heartbeat interval (seconds)",
           "help": "Restart to apply."
         },
         "agents_defaults_max_tool_iterations": {
           "label": "Rondas de herramientas",
-          "help": "Máximo de rondas de herramientas por respuesta.\n\nMáximo de intercambios entre el modelo y las herramientas en un turno."
+          "help": "Máximo de intercambios entre el modelo y las herramientas en un turno."
         },
         "agents_defaults_max_concurrent_subagents": {
           "label": "Subagentes simultáneos",
-          "help": "Máximo de subagentes ejecutándose a la vez.\n\nMáximo de subagentes que pueden ejecutarse a la vez."
+          "help": "Máximo de subagentes que pueden ejecutarse a la vez."
         },
         "agents_defaults_max_tool_result_chars": {
           "label": "Longitud del resultado",
-          "help": "Límite de caracteres por resultado de herramienta enviado al modelo.\n\nLimita la salida de las herramientas incluida en el contexto del modelo."
+          "help": "Limita la salida de las herramientas incluida en el contexto del modelo."
         },
         "agents_defaults_provider_retry_mode": {
           "label": "Seguir reintentando",
-          "help": "Reintenta errores recuperables; desactívalo para usar reintentos estándar.\n\nVuelve a intentar las solicitudes al modelo tras un error temporal. Desactiva esta opción para limitar el número de reintentos."
+          "help": "Vuelve a intentar las solicitudes al modelo tras un error temporal. Desactiva esta opción para limitar el número de reintentos."
         },
-        "agents_defaults_tool_hint_max_length": {
+        "agents_defaults_tool_status_summary_max_chars": {
           "label": "Longitud del resumen",
-          "help": "Límite de caracteres de los resúmenes de herramientas.\n\nLongitud máxima de las indicaciones breves de actividad."
+          "help": "Longitud máxima de las indicaciones breves de actividad."
         },
-        "tools_max_session_messages_per_minute": {
-          "label": "Frecuencia de mensajes",
-          "help": "Máximo de mensajes de herramientas a una sesión por minuto.\n\nLimita la frecuencia de los mensajes que envían las herramientas a una conversación."
+        "tools_max_outgoing_session_messages_per_minute": {
+          "label": "Límite de mensajes entre conversaciones (por minuto)",
+          "help": "Cada conversación de origen puede enviar este total de mensajes a otras conversaciones en una ventana móvil de 60 segundos. No limita tus mensajes."
         },
         "tools_exec_enable": {
           "label": "Herramienta de shell",
-          "help": "Permite al agente ejecutar comandos Shell.\n\nPermite al agente ejecutar comandos de shell."
+          "help": "Permite al agente ejecutar comandos de shell."
         },
         "tools_file_enable": {
           "label": "Herramientas de archivos",
@@ -184,11 +184,11 @@
         },
         "tools_web_enable": {
           "label": "Acceso web",
-          "help": "Permite buscar y leer páginas web.\n\nPermite buscar en la web y obtener páginas."
+          "help": "Permite buscar en la web y obtener páginas."
         },
         "tools_cli_apps_enable": {
           "label": "Apps CLI",
-          "help": "Permite instalar, gestionar y ejecutar apps CLI.\n\nPermite al agente gestionar y ejecutar aplicaciones de línea de comandos."
+          "help": "Permite al agente gestionar y ejecutar aplicaciones de línea de comandos."
         },
         "tools_my_enable": {
           "label": "Ver configuración",
@@ -196,39 +196,39 @@
         },
         "tools_my_allow_set": {
           "label": "Editar configuración",
-          "help": "Permite al agente cambiar su configuración.\n\nPermite que la herramienta de autogestión modifique la configuración."
+          "help": "Permite que la herramienta de autogestión modifique la configuración."
         },
         "tools_exec_path_prepend": {
           "label": "Prioridad de PATH",
-          "help": "Busca primero en estos directorios.\n\nDirectorios que se añaden al inicio de PATH. Sepáralos con punto y coma en Windows o con dos puntos en macOS y Linux."
+          "help": "Directorios que se añaden al inicio de PATH. Sepáralos con punto y coma en Windows o con dos puntos en macOS y Linux."
         },
         "tools_exec_path_append": {
           "label": "Añadidos a PATH",
-          "help": "Busca al final en estos directorios.\n\nDirectorios que se añaden al final de PATH. Sepáralos con punto y coma en Windows o con dos puntos en macOS y Linux."
+          "help": "Directorios que se añaden al final de PATH. Sepáralos con punto y coma en Windows o con dos puntos en macOS y Linux."
         },
         "tools_exec_sandbox": {
           "label": "Sandbox de comandos",
-          "help": "Aísla los procesos de comandos; requiere soporte del sistema.\n\nUsa bwrap en Linux o Seatbelt en macOS. Las comprobaciones del espacio de trabajo por sí solas no aíslan los procesos."
+          "help": "Usa bwrap en Linux o Seatbelt en macOS. Las comprobaciones del espacio de trabajo por sí solas no aíslan los procesos."
         },
         "tools_exec_sandbox_ro_binds": {
           "label": "Rutas de solo lectura",
-          "help": "Rutas adicionales de solo lectura, una por línea.\n\nMontajes adicionales de solo lectura, uno por línea."
+          "help": "Montajes adicionales de solo lectura, uno por línea."
         },
         "tools_exec_sandbox_rw_binds": {
           "label": "Rutas con escritura",
-          "help": "Rutas adicionales con escritura, una por línea.\n\nMontajes adicionales con permiso de escritura, uno por línea."
+          "help": "Montajes adicionales con permiso de escritura, uno por línea."
         },
         "tools_exec_allowed_env_keys": {
           "label": "Variables de entorno",
-          "help": "Variables adicionales para los comandos, un nombre por línea.\n\nVariables adicionales que se pasan a los comandos, una por línea. Las variables básicas necesarias siguen disponibles."
+          "help": "Variables adicionales que se pasan a los comandos, una por línea. Las variables básicas necesarias siguen disponibles."
         },
         "tools_exec_allow_patterns": {
           "label": "Comandos permitidos",
-          "help": "Ejecuta solo comandos que coincidan por completo con las reglas permitidas.\n\nUna expresión regular por línea. Si añades reglas, cada segmento del comando debe coincidir por completo con alguna de ellas. Los comandos permitidos omiten las reglas de bloqueo integradas y personalizadas, pero mantienen las restricciones de red y del espacio de trabajo."
+          "help": "Una expresión regular por línea. Si añades reglas, cada segmento del comando debe coincidir por completo con alguna de ellas. Los comandos permitidos omiten las reglas de bloqueo integradas y personalizadas, pero mantienen las restricciones de red y del espacio de trabajo."
         },
         "tools_exec_deny_patterns": {
           "label": "Comandos bloqueados",
-          "help": "Bloquea los comandos que coincidan con estas reglas.\n\nExpresiones regulares de bloqueo adicionales, una por línea. Las reglas de permiso explícitas tienen prioridad sobre las reglas de bloqueo integradas y personalizadas."
+          "help": "Expresiones regulares de bloqueo adicionales, una por línea. Las reglas de permiso explícitas tienen prioridad sobre las reglas de bloqueo integradas y personalizadas."
         },
         "network_proxy": {
           "label": "Proxy compartido",
@@ -240,55 +240,43 @@
         },
         "tools_web_user_agent": {
           "label": "Cabecera User-Agent",
-          "help": "User-Agent para solicitudes web; en blanco usa el predeterminado.\n\nCabecera User-Agent personalizada. Déjalo vacío para usar el valor predeterminado."
+          "help": "Cabecera User-Agent personalizada. Déjalo vacío para usar el valor predeterminado."
         },
         "tools_restrict_to_workspace": {
           "label": "Restricción del espacio",
-          "help": "Límites globales del espacio; los permisos de chats WebUI se ajustan aparte.\n\nPolítica global de herramientas. Los permisos de cada conversación WebUI se configuran por separado."
+          "help": "Política global de herramientas. Los permisos de cada conversación WebUI se configuran por separado."
         },
         "tools_ssrf_whitelist": {
           "label": "IP permitidas",
-          "help": "IP o rangos CIDR permitidos, uno por línea.\n\nDirecciones IP o rangos CIDR exentos de la protección de solicitudes salientes, uno por línea."
+          "help": "Direcciones IP o rangos CIDR exentos de la protección de solicitudes salientes, uno por línea."
         },
         "tools_webui_allow_remote_package_install": {
           "label": "Instalación remota",
-          "help": "Permite instalar paquetes y habilidades a distancia; ajústalo en el equipo de la puerta de enlace.\n\nPermite instalar paquetes y habilidades desde una WebUI remota. Este ajuste debe modificarse en el equipo que ejecuta la pasarela."
+          "help": "Permite instalar paquetes y habilidades desde una WebUI remota. Este ajuste debe modificarse en el equipo que ejecuta la pasarela."
         },
         "tools_cli_apps_install_timeout": {
           "label": "Tiempo límite de instalación",
-          "help": "Segundos máximos para instalar una app CLI.\n\nDuración máxima de instalación de aplicaciones CLI."
+          "help": "Duración máxima de instalación de aplicaciones CLI."
         },
         "tools_cli_apps_run_timeout": {
           "label": "Tiempo límite de ejecución",
-          "help": "Segundos máximos para un comando CLI.\n\nDuración máxima de los comandos de aplicaciones CLI."
+          "help": "Duración máxima de los comandos de aplicaciones CLI."
         },
         "tools_cli_apps_catalog_ttl_seconds": {
           "label": "Duración de caché",
-          "help": "Segundos de caché de la lista de apps CLI.\n\nTiempo que se conserva en caché el catálogo de aplicaciones CLI."
-        },
-        "gateway_host": {
-          "label": "Dirección de la puerta de enlace",
-          "help": "Dirección de la puerta de enlace; configura el listener WebUI aparte.\n\nDirección de escucha de la pasarela. Las direcciones de WebSocket y WebUI se configuran en Canales → WebSocket."
-        },
-        "gateway_port": {
-          "label": "Puerto de la pasarela",
-          "help": "Puerto de la puerta de enlace; los argumentos de inicio tienen prioridad.\n\nPuerto guardado. Los argumentos de línea de comandos tienen prioridad."
-        },
-        "gateway_restart_mode": {
-          "label": "Modo de reinicio",
-          "help": "Elige cómo reiniciar; Automático se adapta al entorno.\n\nMétodo de reinicio del proceso. El modo automático depende del entorno del host."
+          "help": "Tiempo que se conserva en caché el catálogo de aplicaciones CLI."
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
+          "help": "Consolidar en reposo o a intervalos fijos."
         },
         "agents_defaults_dream_model_override": {
           "label": "Dream model",
           "help": "Elegir otro modelo para Dream; si está vacío, usar el modelo activo."
         },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Idle memory check (seconds)",
-          "help": "Restart to apply."
+          "label": "Intervalo de comprobación de compactación por inactividad (segundos)",
+          "help": "Frecuencia de comprobación de las conversaciones para compactarlas; es independiente del tiempo de inactividad. Reinicia para aplicar."
         },
         "network_request_timeout_s": {
           "label": "Compatible API request timeout (seconds)",
@@ -372,7 +360,27 @@
         },
         "tools_exec_max_runtime": {
           "label": "Duración de los comandos",
-          "help": "Límite de duración predeterminado para los comandos de shell.\n\nLa salida y la espera no amplían este límite. Elige Sin límite de tiempo para eliminar el límite de duración."
+          "help": "La salida y la espera no amplían este límite. Elige Sin límite de tiempo para eliminar el límite de duración."
+        },
+        "server_health_host": {
+          "label": "Dirección de la puerta de enlace",
+          "help": "Dirección de escucha de la pasarela. Las direcciones de WebSocket y WebUI se configuran en Canales → WebSocket."
+        },
+        "server_health_port": {
+          "label": "Puerto de la pasarela",
+          "help": "Puerto guardado. Los argumentos de línea de comandos tienen prioridad."
+        },
+        "server_restart_mode": {
+          "label": "Modo de reinicio",
+          "help": "Método de reinicio del proceso. El modo automático depende del entorno del host."
+        },
+        "agents_defaults_resume_message": {
+          "label": "Mensaje de continuación",
+          "help": "Instrucción enviada al usar Continue o /resume."
+        },
+        "agents_defaults_resume_show_message": {
+          "label": "Mostrar mensaje de continuación",
+          "help": "Muestra la instrucción como una entrada del sistema identificada."
         }
       },
       "groups": {
@@ -389,15 +397,11 @@
           "help": "Activa o desactiva la organización automática de memoria."
         },
         "heartbeat": {
-          "title": "Heartbeat"
+          "title": "Latido del agente"
         },
         "execution": {
           "title": "Límites de ejecución",
           "help": "Configura los límites de herramientas y los reintentos."
-        },
-        "sessions": {
-          "title": "Conversaciones",
-          "help": "Configura chats compartidos entre plataformas."
         },
         "tools": {
           "title": "Herramientas integradas",
@@ -423,7 +427,7 @@
           "title": "Límites CLI",
           "help": "Configura tiempos límite de instalación y ejecución y la duración de caché.\n\nTiempos de instalación, ejecución y caché del catálogo."
         },
-        "gateway": {
+        "server": {
           "title": "Puerta de enlace",
           "help": "Configura el despliegue y el reinicio."
         },
@@ -449,6 +453,16 @@
         },
         "requests": {
           "title": "Model connection"
+        },
+        "coordination": {
+          "title": "Coordinación de conversaciones"
+        },
+        "activity": {
+          "title": "Vista de ejecución"
+        },
+        "resume": {
+          "title": "Continuar tareas detenidas",
+          "help": "Inicia una nueva solicitud con el contexto guardado, sin repetir llamadas a herramientas ya completadas."
         }
       },
       "save": "Guardar cambios",
@@ -503,7 +517,7 @@
       "voice": "Voz",
       "browser": "Búsqueda web",
       "channels": "Configurar canales",
-      "runtime": "Servidor y latido",
+      "runtime": "Servidor",
       "advanced": "Permisos",
       "memory": "Biblioteca de memoria",
       "cliApps": "Apps CLI",
@@ -522,7 +536,11 @@
       "execution": "Objetivos y ejecución",
       "shell": "Ejecución de Shell",
       "network": "Red y reintentos",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "account": "Cuenta",
+      "heartbeat": "Latido del agente",
+      "coordination": "Coordinación de conversaciones",
+      "regional": "Hora y región"
     },
     "sections": {
       "interface": "Interfaz",
@@ -1565,6 +1583,20 @@
       "webuiUrl": "Web UI address (optional)",
       "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
       "settingsLink": "Configure Telegram notifications"
+    },
+    "account": {
+      "owner": "Propietario de la instancia",
+      "changePassword": "Cambiar contraseña",
+      "currentPassword": "Contraseña actual",
+      "newPassword": "Nueva contraseña",
+      "help": "Introduce tu contraseña actual para cambiarla. Se cerrarán las sesiones de otros navegadores.",
+      "saved": "Contraseña cambiada. Este navegador sigue conectado.",
+      "unavailable": "La configuración de cuenta está disponible al usar el registro e inicio de sesión del navegador.",
+      "loading": "Cargando cuenta…",
+      "retry": "Reintentar"
+    },
+    "heartbeat": {
+      "help": "Comprueba HEARTBEAT.md periódicamente y activa Cirno cuando hay tareas. Es independiente de la comprobación de estado del servicio."
     }
   },
   "chat": {
@@ -1920,6 +1952,26 @@
           "pairing": {
             "title": "Emparejamiento",
             "description": "Gestiona las solicitudes de vinculación."
+          },
+          "resume": {
+            "title": "Continuar tarea",
+            "description": "Continúa la solicitud detenida con el contexto guardado."
+          },
+          "clear": {
+            "title": "Borrar contexto de Cirno",
+            "description": "Borra la conversación personal de Cirno sin deshacer cambios en archivos."
+          },
+          "temporary": {
+            "title": "Conversación temporal",
+            "description": "Elige el modo temporal antes del primer mensaje."
+          },
+          "ptc": {
+            "title": "Modo PTC",
+            "description": "Elige llamadas programáticas antes del primer mensaje."
+          },
+          "access": {
+            "title": "Modo de acceso",
+            "description": "Elige acceso predeterminado, revisión por IA o acceso total."
           }
         },
         "badges": {
@@ -1931,7 +1983,12 @@
           "goalReady": "Iniciar un objetivo sostenido",
           "history": "Mostrar mensajes recientes",
           "stopRunning": "En ejecución"
-        }
+        },
+        "controlRunning": "Detén la tarea antes de cambiar las opciones.",
+        "accessUsage": "Uso: /access default|review|full",
+        "modelUsage": "Escribe un modelo configurado después de /model.",
+        "creationOnly": "Elige esta opción antes del primer mensaje de una conversación nueva.",
+        "toggleUsage": "Uso: {{command}} on|off"
       },
       "encoding": "Procesando…",
       "remove": "Quitar adjunto",
@@ -1972,7 +2029,9 @@
         "full": "Acceso completo",
         "fullShort": "Completo",
         "defaultDescription": "Lee y edita archivos y ejecuta comandos solo en el directorio de trabajo.",
-        "fullDescription": "Permite acceder a archivos y ejecutar comandos fuera del directorio de trabajo."
+        "fullDescription": "Permite acceder a archivos y ejecutar comandos fuera del directorio de trabajo.",
+        "review": "Revisión por IA",
+        "reviewDescription": "Mantiene las restricciones. Una IA independiente revisa cada operación bloqueada sin la memoria de Cirno; las dudas van a tu bandeja. La IA puede equivocarse y exponer archivos o ejecutar comandos dañinos."
       },
       "goalStatus": {
         "blocked": "Bloqueado",
@@ -2001,6 +2060,47 @@
       "title": "Vaciar conversación de Cirno",
       "description": "Detiene la ejecución y borra los mensajes y el contexto de esta conversación. Se conservan los recuerdos guardados y las otras conversaciones.",
       "confirm": "Vaciar conversación"
+    },
+    "inputSources": {
+      "heartbeat": "Latido",
+      "scheduled_task": "Tarea programada",
+      "trigger": "Activador",
+      "conversation": "Mensaje de conversación",
+      "subagent": "Resultado del subagente",
+      "continuation": "Continuación automática",
+      "system": "Evento del sistema",
+      "supervision": "Cirno actualizó esta conversación"
+    },
+    "supervision": {
+      "changed": "Cirno actualizó esta conversación",
+      "actions": {
+        "stop": "Conversación detenida",
+        "continue": "Conversación reanudada",
+        "goal_create": "Goal creado",
+        "goal_set": "Goal reemplazado",
+        "goal_update": "Ajustes del Goal actualizados",
+        "goal_stop": "Goal detenido",
+        "goal_pause": "Goal pausado",
+        "goal_resume": "Goal reanudado",
+        "goal_delete": "Goal eliminado",
+        "goal_wait": "Goal en espera"
+      },
+      "fields": {
+        "objective": "Objetivo",
+        "ui_summary": "Etiqueta",
+        "recap": "Progreso guardado",
+        "continuation_limit": "Límite de continuación automática",
+        "wake_after_seconds": "Espera (segundos)"
+      }
+    },
+    "historyEffects": {
+      "title": "Los cambios del espacio de trabajo permanecen",
+      "description": "Crear una rama o editar solo cambia el contexto de la conversación. No deshace comandos ni cambios en archivos. Ejecutar de nuevo puede causar conflictos o pérdida de archivos. Revisa los archivos antes de continuar."
+    },
+    "historyEdit": {
+      "text": "Mensaje editado",
+      "description": "Reemplaza este mensaje y el contexto posterior, y ejecuta la solicitud revisada. Se conservan los adjuntos.",
+      "submit": "Guardar y enviar"
     }
   },
   "message": {
@@ -2228,7 +2328,8 @@
     "automationSourceFallback": "Automatización",
     "automationTriggered": "Activada automáticamente",
     "expandStep": "Expandir paso",
-    "collapseStep": "Contraer paso"
+    "collapseStep": "Contraer paso",
+    "edit": "Editar mensaje"
   },
   "recovery": {
     "actionFailed": "La recuperación falló. Inténtalo de nuevo.",
@@ -2284,7 +2385,7 @@
     "failed": "No se pudo copiar. Inténtalo de nuevo.",
     "unavailable": "No se pudo resolver el archivo. Puedes copiar la referencia original.",
     "loading": "Resolviendo archivo…",
-    "gatewayPath": "Las rutas pertenecen al equipo del gateway."
+    "serverPath": "Las rutas pertenecen al equipo del Cirno server."
   },
   "filePreview": {
     "displayMode": "Modo de visualización",
@@ -2295,7 +2396,7 @@
     "close": "Cerrar vista previa de archivo",
     "loading": "Cargando vista previa...",
     "failed": "No se pudo previsualizar este archivo.",
-    "routeMissing": "La vista previa necesita el gateway más reciente. Reinicia cirno gateway e inténtalo de nuevo.",
+    "routeMissing": "La vista previa necesita el Cirno server más reciente. Reinicia cirno e inténtalo de nuevo.",
     "resize": "Cambiar el tamaño de la vista previa",
     "truncated": "La vista previa está truncada porque el archivo es grande."
   },
@@ -2352,11 +2453,11 @@
     },
     "workspaceScopeRejected": {
       "title": "El espacio de trabajo no cambió",
-      "body": "El gateway rechazó este proyecto o modo de acceso. Elige un proyecto existente u otro modo de acceso e inténtalo de nuevo."
+      "body": "El Cirno server rechazó este proyecto o modo de acceso. Elige un proyecto existente u otro modo de acceso e inténtalo de nuevo."
     },
     "turnRejected": {
       "title": "El mensaje no se envió",
-      "body": "El gateway rechazó este mensaje. Revisa el texto o los archivos adjuntos e inténtalo de nuevo."
+      "body": "El Cirno server rechazó este mensaje. Revisa el texto o los archivos adjuntos e inténtalo de nuevo."
     },
     "modelRequestFailed": {
       "authenticationTitle": "Falló la autorización del proveedor del modelo",
@@ -2538,7 +2639,7 @@
     "jobs": "Tareas remotas",
     "refresh": "Actualizar",
     "refreshList": "Actualizar lista",
-    "noJobs": "El agente puede iniciar tareas con la herramienta de nodos. Los registros quedan en Home y la salida completa en el nodo.",
+    "noJobs": "El agente puede iniciar trabajos persistentes por SSH. Los registros se guardan en el estado del servidor y la salida completa en el nodo.",
     "readStatus": "Consultar estado",
     "stop": "Detener",
     "memorySources": "Fuentes de los recuerdos",
@@ -2598,7 +2699,8 @@
       "dream": "Consolidación de memoria",
       "turn": "Ejecución de conversación",
       "message": "Mensaje",
-      "report": "Informe de trabajo"
+      "report": "Informe de trabajo",
+      "approval": "Aprobación de operación"
     },
     "status": {
       "pending": "Pendiente",
@@ -2651,7 +2753,9 @@
       "storage_failed": "No se pudo guardar la cuenta. Revisa el almacenamiento del servidor.",
       "password_mismatch": "Las contraseñas no coinciden.",
       "connection_failed": "No se pudo conectar con Cirno. Revisa tu conexión.",
-      "request_failed": "La solicitud falló. Inténtalo de nuevo."
+      "request_failed": "La solicitud falló. Inténtalo de nuevo.",
+      "incorrect_password": "La contraseña actual es incorrecta.",
+      "unauthorized": "Vuelve a iniciar sesión."
     }
   }
 }

@@ -9,8 +9,8 @@ import time
 
 import pytest
 
-from cirno.session.manager import Session, SessionManager
-from cirno.session.sqlite_store import SessionConflictError
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.sqlite_store import SessionConflictError
 
 
 def test_stale_administrative_save_is_rejected(tmp_path):
@@ -173,7 +173,7 @@ async def test_existing_reads_do_not_wait_for_another_sessions_write_lock(tmp_pa
 
 
 async def test_closing_one_owner_preserves_another_owners_connections(tmp_path):
-    from cirno.session.state import SessionState
+    from cirno_core.session.state import SessionState
 
     manager = SessionManager(tmp_path)
     first = SessionState(manager._store)
@@ -219,7 +219,7 @@ def test_committed_checkpoint_survives_process_exit(tmp_path):
     script = '''
 import asyncio, os, sys
 from pathlib import Path
-from cirno.session.manager import SessionManager
+from cirno_core.session.manager import SessionManager
 async def main():
     state = SessionManager(Path(sys.argv[1]), sessions_root=Path(sys.argv[2])).state
     draft = await state.get("chat:a")
@@ -253,7 +253,7 @@ async def test_late_metadata_and_summary_cannot_resurrect_deleted_session(tmp_pa
 
 
 async def test_large_draft_copy_and_publication_run_on_owner_worker(tmp_path, monkeypatch):
-    import cirno.session.state as owner
+    import cirno_core.session.state as owner
 
     state = SessionManager(tmp_path).state
     draft = await state.get("chat:copy")
@@ -431,5 +431,5 @@ def test_committed_version_tracks_history_and_session_replacement(tmp_path, monk
     def unexpected_decode(*args, **kwargs):
         pytest.fail("version read decoded history or metadata")
 
-    monkeypatch.setattr("cirno.session.sqlite_store._object", unexpected_decode)
+    monkeypatch.setattr("cirno_core.session.sqlite_store._object", unexpected_decode)
     assert manager.read_session_version(key) == (replacement.generation, replacement.revision)

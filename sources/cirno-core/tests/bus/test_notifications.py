@@ -3,19 +3,19 @@ from dataclasses import dataclass
 
 import pytest
 
-from cirno.agent.turn_delivery import TurnDeliveryFactory, TurnRoute
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.notification_delivery import NOTIFICATION_AUDIENCES
-from cirno.bus.outbound_events import (
+from cirno_core.agent.turn_delivery import TurnDeliveryFactory, TurnRoute
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.notification_delivery import NOTIFICATION_AUDIENCES
+from cirno_core.bus.outbound_events import (
     FileEditEvent,
     ProgressEvent,
     StreamDeltaEvent,
     StreamEndEvent,
 )
-from cirno.bus.queue import MessageBus
-from cirno.bus.agent_events import AgentEvent, ContextCompactionEvent, EventSink, RetryWaitEvent
-from cirno.utils.progress_events import output_events
-from cirno.webui.outbound_wire import project_notification
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.agent_events import AgentEvent, ContextCompactionEvent, EventSink, RetryWaitEvent
+from cirno_core.utils.progress_events import output_events
+from cirno_core.session.outbound_wire import project_notification
 
 
 async def test_sink_isolates_observer_failure_but_propagates_cancellation():

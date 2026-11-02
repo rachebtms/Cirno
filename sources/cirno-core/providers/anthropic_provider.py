@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     LLMUsage,
@@ -22,10 +22,10 @@ from cirno.providers.base import (
     resolve_stream_idle_timeout_s,
     tool_arguments_object_for_replay,
 )
-from cirno.providers.images import prepare_message_images
+from cirno_core.providers.images import prepare_message_images
 
 if TYPE_CHECKING:
-    from cirno.providers.registry import ProviderSpec
+    from cirno_core.providers.registry import ProviderSpec
 
 _ALNUM = string.ascii_letters + string.digits
 
@@ -566,15 +566,22 @@ class AnthropicProvider(LLMProvider):
             system[-1] = {**system[-1], "cache_control": marker}
 
         new_msgs = list(messages)
-        if len(new_msgs) >= 3:
-            m = new_msgs[-2]
+        for index in range(len(new_msgs) - 1, -1, -1):
+            m = new_msgs[index]
             c = m.get("content")
-            if isinstance(c, str):
-                new_msgs[-2] = {**m, "content": [{"type": "text", "text": c, "cache_control": marker}]}
+            if isinstance(c, str) and c:
+                new_msgs[index] = {**m, "content": [{"type": "text", "text": c, "cache_control": marker}]}
+                break
             elif isinstance(c, list) and c:
                 nc = list(cast(list[dict[str, Any]], c))
-                nc[-1] = {**nc[-1], "cache_control": marker}
-                new_msgs[-2] = {**m, "content": nc}
+                # Thinking blocks cannot carry explicit cache breakpoints.
+                cacheable = next((i for i in range(len(nc) - 1, -1, -1)
+                                  if nc[i].get("type") in {"text", "image", "document", "tool_use", "tool_result"}
+                                  and (nc[i].get("type") != "text" or nc[i].get("text"))), None)
+                if cacheable is not None:
+                    nc[cacheable] = {**nc[cacheable], "cache_control": marker}
+                    new_msgs[index] = {**m, "content": nc}
+                    break
 
         new_tools = tools
         if tools:

@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from cirno.sdk.streaming import SDKStreamEmitter
-from cirno.sdk.types import STREAM_EVENT_TEXT_DELTA, StreamEvent
+from cirno_core.sdk.streaming import SDKStreamEmitter
+from cirno_core.sdk.types import STREAM_EVENT_TEXT_DELTA, StreamEvent
 
 
 @pytest.mark.asyncio

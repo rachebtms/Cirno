@@ -4,14 +4,14 @@ import json
 import time
 from uuid import uuid4
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
-from cirno.storage.instance import InstanceData
-from cirno.session.goal_state import MAX_GOAL_OBJECTIVE_CHARS
-from cirno.session.keys import CIRNO_SESSION_KEY
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.session.session_handles import SessionHandleResolver
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
+from cirno_core.storage.instance import InstanceData
+from cirno_core.session.goal_state import MAX_GOAL_OBJECTIVE_CHARS
+from cirno_core.session.keys import CIRNO_SESSION_KEY
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.session_handles import SessionHandleResolver
 
 
 @tool_parameters(
@@ -49,7 +49,7 @@ class CreateSessionTool(Tool):
         return self._provide_runtime_context
 
     async def _provide_runtime_context(self, request):
-        from cirno.runtime.context import RuntimeContextBlock
+        from cirno_core.runtime.context import RuntimeContextBlock
 
         current = (
             await self.sessions.state.read_metadata(request.session_key)
@@ -59,12 +59,19 @@ class CreateSessionTool(Tool):
         projects = InstanceData().list("projects")
         metadata = (current or {}).get("metadata", {})
         role = (
-            "Current conversation: Cirno (coordination). Its name is fixed; do not rename it. "
+            "Current conversation: Cirno (coordination). Its name is fixed; do not rename it. Use conversations__control to stop/continue workers and goals__control to inspect or manage their Goals. Workers declare completion themselves. Supervise only the user-authorized objectives. "
             if request.session_key == CIRNO_SESSION_KEY
             else "Use conversations__set_title early to choose a concise title in the user’s language. "
         )
         details = []
         remaining = 12000
+        if metadata.get("supervision_events"):
+            latest = metadata["supervision_events"][-1]
+            details.append({"latest_supervision": {
+                **{key: latest[key] for key in ("id", "action", "source", "created_at_ms")},
+                "values": {key: value[:512] if isinstance(value, str) else value for key, value in latest["values"].items()},
+            }})
+            remaining -= len(json.dumps(details, ensure_ascii=False))
         if metadata.get("delegation_source"):
             details.append({"original_request": metadata["delegation_source"]})
             remaining -= len(json.dumps(details, ensure_ascii=False))
@@ -117,13 +124,13 @@ class CreateSessionTool(Tool):
                 "continuation_limit": self.limit,
                 "report_to": request.session_key,
             }
-        from cirno.session.keys import session_key_for_channel
+        from cirno_core.session.keys import session_key_for_channel
         key = session_key_for_channel("websocket", str(uuid4()))
         await self.sessions.state.get(key)
         goal = metadata.get("goal_state")
         await self.sessions.state.update_metadata(key, {name: value for name, value in metadata.items() if name != "goal_state"})
         if goal is not None:
-            from cirno.webui.transcript import append_session_message_input
+            from cirno_core.session.transcript import append_session_message_input
             source_handle = await SessionHandleResolver(self.sessions).ahandle_for_session(request.session_key)
             await self.sessions.state.import_messages(key, [{"role": "user", "content": objective.strip()}])
             if source_handle is not None:
@@ -158,7 +165,7 @@ class ReportWorkTool(Tool):
         return cls(ctx.sessions, ctx.bus)
 
     def __init__(self, sessions, bus):
-        from cirno.agent.tools.session_messages import SendSessionMessageTool
+        from cirno_core.agent.tools.session_messages import SendSessionMessageTool
         self.sessions = sessions
         self.sender = SendSessionMessageTool(sessions=sessions, bus=bus)
 
@@ -171,8 +178,8 @@ class ReportWorkTool(Tool):
         return "Record structured work status for the delegating conversation, or Cirno. Routine progress/waiting updates records silently. Results, failure, blockers and a concrete human question wake the coordinator through its durable inbox. Does not finish or pause a Goal; use goals__update separately."
 
     async def execute(self, state, summary, artifacts=None, human_action=None, **kwargs):
-        from cirno.agent.work_reports import deliver_work_report, save_work_report
-        from cirno.agent.tools.session_messages import SessionMessageError
+        from cirno_core.agent.work_reports import deliver_work_report, save_work_report
+        from cirno_core.agent.tools.session_messages import SessionMessageError
         request = current_request_context()
         if request is None or not request.session_key or not request.persist_session:
             return ToolResult.error("A persistent owning conversation is required")
@@ -217,7 +224,7 @@ class SetSessionTitleTool(Tool):
         return "Summarize this conversation's purpose in a short title. User-chosen titles and Cirno's fixed name are preserved."
 
     async def execute(self, title, **kwargs):
-        from cirno.bus.outbound_events import SessionUpdatedEvent, outbound_message_for_event
+        from cirno_core.bus.outbound_events import SessionUpdatedEvent, outbound_message_for_event
 
         request = current_request_context()
         if request is None or not request.session_key:

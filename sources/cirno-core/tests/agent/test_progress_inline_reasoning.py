@@ -2,10 +2,10 @@
 
 import pytest
 
-from cirno.agent.hook import AgentHookContext
-from cirno.agent.progress_hook import AgentProgressHook
-from cirno.bus.outbound_events import ProgressEvent
-from cirno.bus.agent_events import AgentEvent, EventSink
+from cirno_core.agent.hook import AgentHookContext
+from cirno_core.agent.progress_hook import AgentProgressHook
+from cirno_core.bus.outbound_events import ProgressEvent
+from cirno_core.bus.agent_events import AgentEvent, EventSink
 
 
 @pytest.mark.parametrize("chunks, expected", [

@@ -7,9 +7,9 @@ import sys
 
 import pytest
 
-from cirno.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
-from cirno.agent.tools.shell import ExecTool
-from cirno.agent.tools.shell_output import ShellOutputFilter
+from cirno_core.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell_output import ShellOutputFilter
 
 
 @pytest.mark.parametrize("chunk_size", [1, 4096])

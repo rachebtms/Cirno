@@ -1408,3 +1408,42 @@ describe("MessageBubble", () => {
   });
 
 });
+
+it("renders nonhuman inputs as labeled collapsed details rather than human chat bubbles", async () => {
+  await setAppLanguage("en");
+  const { container } = render(<MessageBubble message={{ id: "system-source", createdAt: 1, role: "user", content: "Check the saved instructions and authorized tasks.", inputOrigin: { kind: "heartbeat", label: "Heartbeat", id: "wake-1" } }} />);
+  const details = container.querySelector("details[data-system-input]");
+  expect(details).not.toHaveAttribute("open");
+  expect(within(details as HTMLElement).getByText("Heartbeat")).toBeInTheDocument();
+  expect(details?.querySelector("summary")).toBeInTheDocument();
+});
+
+it("localizes Cirno supervisory records while retaining the @cirno source", async () => {
+  await setAppLanguage("zh-CN");
+  render(<MessageBubble message={{ id: "supervisor-source", role: "user", createdAt: 1, content: 'Cirno supervisory operation: {"action":"stop"}', inputOrigin: { kind: "supervision", label: "@cirno", id: "control-1", action: "stop", values: {} }, sessionMessage: { message_id: "control-1", session: { id: "handle_00000000000000000000000000000000", name: "cirno" } } }} />);
+  expect(screen.getByText("@cirno")).toBeInTheDocument();
+  expect(screen.getByText("已停止此会话")).toBeInTheDocument();
+  expect(screen.queryByText(/supervisory operation/)).not.toBeInTheDocument();
+  await setAppLanguage("en");
+});
+
+it("offers edit only for a saved idle human message", async () => {
+  await setAppLanguage("en");
+  const edit = vi.fn();
+  const { rerender } = render(<MessageBlockMenuActions message={{ id: "human-edit", role: "user", content: "Original", createdAt: 1, turnId: "human-turn" }} onEdit={edit} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+  expect(edit).toHaveBeenCalledOnce();
+  rerender(<MessageBlockMenuActions message={{ id: "human-edit", role: "user", content: "Original", createdAt: 1, turnId: "human-turn" }} isTurnStreaming onEdit={edit} />);
+  expect(screen.queryByRole("button", { name: "Edit message" })).not.toBeInTheDocument();
+  rerender(<MessageBlockMenuActions message={{ id: "source-edit", role: "user", content: "Heartbeat", createdAt: 1, inputOrigin: { kind: "heartbeat", label: "Heartbeat" } }} onEdit={edit} />);
+  expect(screen.queryByRole("button", { name: "Edit message" })).not.toBeInTheDocument();
+});
+
+it("clears Goal and run caches on a server reset without affecting another conversation", () => {
+  const { client, receive } = createStreamClient();
+  receive({ event: "goal_state", chat_id: "edited", goal_state: { active: true, status: "active", objective: "Old objective" } });
+  receive({ event: "goal_state", chat_id: "other", goal_state: { active: true, status: "active", objective: "Other objective" } });
+  receive({ event: "session_updated", chat_id: "edited", scope: "reset" });
+  expect(client.getGoalState("edited")).toBeUndefined();
+  expect(client.getGoalState("other")?.objective).toBe("Other objective");
+});

@@ -8,23 +8,23 @@ import pytest
 from loguru import logger
 
 from agent.session_helpers import run_session, save_completed_subagent, visible_message
-from cirno.agent.context import ContextBuilder, TranscriptInput
-from cirno.agent.loop import AgentLoop
-from cirno.agent.runner import AgentRunResult
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import (
+from cirno_core.agent.context import ContextBuilder, TranscriptInput
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import (
     GoalStatusEvent,
     StreamDeltaEvent,
     StreamedResponseEvent,
     StreamEndEvent,
     TurnEndEvent,
 )
-from cirno.bus.queue import MessageBus
-from cirno.cron.session_turns import CRON_TRIGGER_META
-from cirno.providers.base import LLMProvider, LLMResponse, LLMUsage, ProviderConversationState
-from cirno.providers.factory import ProviderSnapshot
-from cirno.runtime.context import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.cron.session_turns import CRON_TRIGGER_META
+from cirno_core.providers.base import LLMProvider, LLMResponse, LLMUsage, ProviderConversationState
+from cirno_core.providers.factory import ProviderSnapshot
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RUNTIME_CONTEXT_MESSAGE_META,
     RUNTIME_CONTEXT_TAG,
@@ -32,10 +32,10 @@ from cirno.runtime.context import (
     append_runtime_context,
     public_history_message,
 )
-from cirno.session.automation_turns import AUTOMATION_HISTORY_META
-from cirno.session.goal_state import GOAL_STATE_KEY
-from cirno.session.manager import Session
-from cirno.session.recovery import (
+from cirno_core.session.automation_turns import AUTOMATION_HISTORY_META
+from cirno_core.session.goal_state import GOAL_STATE_KEY
+from cirno_core.session.manager import Session
+from cirno_core.session.recovery import (
     PENDING_FOLLOWUP_ID_KEY,
     PENDING_FOLLOWUPS_KEY,
     PROVIDER_STATE_CHECKPOINT_VERSION,
@@ -43,14 +43,14 @@ from cirno.session.recovery import (
     RUNTIME_CHECKPOINT_KEY,
     restore_runtime_checkpoint,
 )
-from cirno.session.summary import (
+from cirno_core.session.summary import (
     SUMMARY_CONTINUATION_TEXT,
     SessionSummaryCheckpoint,
 )
-from cirno.session.turn_continuation import (
+from cirno_core.session.turn_continuation import (
     INTERNAL_CONTINUATION_META,
 )
-from cirno.session.webui_turns import (
+from cirno_core.session.webui_turns import (
     TITLE_GENERATION_MAX_TOKENS,
     WEBUI_SESSION_METADATA_KEY,
     WEBUI_TITLE_METADATA_KEY,
@@ -58,7 +58,7 @@ from cirno.session.webui_turns import (
     clean_generated_title,
     maybe_generate_webui_title,
 )
-from cirno.triggers.local_session_turns import LOCAL_TRIGGER_META
+from cirno_core.triggers.local_session_turns import LOCAL_TRIGGER_META
 
 
 def _agent_run_result(
@@ -87,7 +87,7 @@ def _assembled_messages(
 
 def _mk_loop() -> AgentLoop:
     loop = AgentLoop.__new__(AgentLoop)
-    from cirno.config.schema import AgentDefaults
+    from cirno_core.config.schema import AgentDefaults
 
     loop.max_tool_result_chars = AgentDefaults().max_tool_result_chars
     return loop
@@ -1032,7 +1032,8 @@ async def test_subagent_followup_stages_provider_state_before_turn_runs(
     assert persisted.messages[-1]["content"] == "subagent result"
     assert persisted.provider_state is not None
     assert persisted.provider_state.pending_messages[-1]["role"] == "user"
-    assert persisted.provider_state.pending_messages[-1]["content"] == "subagent result"
+    assert persisted.provider_state.pending_messages[-1]["content"].startswith("subagent result\n\n")
+    assert "Input provenance supplied by the Cirno runtime" in persisted.provider_state.pending_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -1064,13 +1065,9 @@ async def test_subagent_redelivery_does_not_duplicate_staged_provider_input(
     persisted = loop.sessions.get_or_create("cli:subagent-redelivery")
     assert persisted.messages[-1]["content"] == "subagent result"
     assert persisted.provider_state is not None
-    assert persisted.provider_state.pending_messages[-1]["content"] == (
-        "subagent result"
-    )
-    assert [
-        message.get("content")
-        for message in persisted.provider_state.pending_messages
-    ].count("subagent result") == 1
+    assert persisted.provider_state.pending_messages[-1]["content"].startswith("subagent result\n\n")
+    assert sum(str(message.get("content")).startswith("subagent result\n\n")
+               for message in persisted.provider_state.pending_messages) == 1
     loop.context.build_system_prompt = build_system_prompt  # type: ignore[method-assign]
     loop._run_agent_loop = AsyncMock(  # type: ignore[method-assign]
         side_effect=RuntimeError("provider boom"),
@@ -1083,12 +1080,13 @@ async def test_subagent_redelivery_does_not_duplicate_staged_provider_input(
     pending_results = [
         message
         for message in provider_state.pending_messages
-        if message.get("content") == "subagent result"
+        if str(message.get("content")).startswith("subagent result\n\n")
     ]
     assert len(pending_results) == 1
-    assert LLMProvider._sanitize_empty_content(pending_results) == [
-        {"role": "user", "content": "subagent result"},
-    ]
+    sanitized = LLMProvider._sanitize_empty_content(pending_results)
+    assert len(sanitized) == 1 and sanitized[0]["role"] == "user"
+    assert sanitized[0]["content"].startswith("subagent result\n\n")
+    assert "Input provenance supplied by the Cirno runtime" in sanitized[0]["content"]
 
 
 @pytest.mark.asyncio
@@ -1429,8 +1427,8 @@ async def test_websocket_internal_continuation_keeps_single_visible_run(
 async def test_stop_after_continuation_queued_ends_visible_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str,
 ) -> None:
-    from cirno.command.builtin import cmd_stop
-    from cirno.command.router import CommandContext
+    from cirno_core.command.builtin import cmd_stop
+    from cirno_core.command.router import CommandContext
 
     loop = _make_full_loop(tmp_path)
     session = loop.sessions.get_or_create("websocket:c-stop-continuation")
@@ -1579,7 +1577,7 @@ async def test_process_message_uses_explicit_session_for_goal_context(
 async def test_run_agent_loop_continuation_reads_latest_goal_metadata(
     tmp_path: Path,
 ) -> None:
-    from cirno.agent.runner import AgentRunResult
+    from cirno_core.agent.runner import AgentRunResult
 
     loop = _make_full_loop(tmp_path)
     session = await loop.sessions.state.get("websocket:late-goal")
@@ -1722,8 +1720,8 @@ async def test_next_turn_after_crash_closes_pending_user_turn_before_new_input(t
 
 @pytest.mark.asyncio
 async def test_stop_preserves_runtime_checkpoint_for_next_turn(tmp_path: Path) -> None:
-    from cirno.command.builtin import cmd_stop
-    from cirno.command.router import CommandContext
+    from cirno_core.command.builtin import cmd_stop
+    from cirno_core.command.router import CommandContext
 
     loop = _make_full_loop(tmp_path)
 
@@ -1901,7 +1899,8 @@ async def test_system_subagent_followup_is_persisted_before_prompt_assembly(tmp_
     assert "[Message Time:" not in non_system[1]["content"]
     assert non_system[2]["role"] == "user"
     assert non_system[2]["content"].count("subagent result") == 1
-    assert non_system[2]["content"] == "subagent result"
+    assert non_system[2]["content"].startswith("subagent result\n\n")
+    assert "Input provenance supplied by the Cirno runtime" in non_system[2]["content"]
 
     loop.sessions.invalidate("cli:test")
     persisted = loop.sessions.get_or_create("cli:test")
@@ -2481,3 +2480,48 @@ def test_save_turn_drops_duplicate_tool_result_ids() -> None:
 
     assert [m["role"] for m in session.messages] == ["assistant", "tool"]
     assert session.messages[1]["content"] == "first"
+
+
+@pytest.mark.asyncio
+async def test_task_checkpoint_snapshot_survives_early_save_and_replay(tmp_path: Path) -> None:
+    from copy import deepcopy
+    from cirno_core.memory.repository import MemoryRepository
+
+    loop = _make_full_loop(tmp_path)
+    repo = MemoryRepository(loop.context.memory.workspace)
+    key = "cli:cache-checkpoint"
+    saved = repo.checkpoint(key, "Milestone A", "test:milestone")
+    requests = []
+
+    async def capture(**kwargs):
+        requests.append(deepcopy(kwargs))
+        return LLMResponse(content="Done", usage=LLMUsage.reported(input_tokens=100, output_tokens=2))
+
+    loop.provider.chat_stream_with_retry.side_effect = capture
+    await loop.process_direct("first input", session_key=key)
+    repo.checkpoint(key, "Milestone B", "test:milestone", expected_revision=saved["revision"])
+    await loop.process_direct("second input", session_key=key)
+    assert len(requests) == 2
+    first, second = requests
+    assert first["messages"][0] == second["messages"][0]
+    assert first["messages"][1]["content"] == second["messages"][1]["content"]
+    assert "Milestone A" in first["messages"][1]["content"]
+    assert "Milestone B" in second["messages"][-1]["content"]
+    assert "Milestone B" not in second["messages"][0]["content"]
+    assert first["tools"] == second["tools"]
+    from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+    from cirno_core.providers.registry import find_by_name
+
+    wire_provider = OpenAICompatProvider(
+        api_key="test-key", default_model="deepseek-flash", spec=find_by_name("deepseek"),
+    )
+    bodies = [wire_provider._build_kwargs(
+        request["messages"], request["tools"], "deepseek-flash", 4096, 0.7, None, None,
+    ) for request in requests]
+    assert bodies[0]["messages"] == bodies[1]["messages"][:len(bodies[0]["messages"])]
+    assert bodies[0]["tools"] == bodies[1]["tools"]
+    session = await loop.sessions.state.get(key)
+    users = [message for message in session.messages if message["role"] == "user"]
+    assert users[0]["content"] == first["messages"][1]["content"]
+    assert users[1]["content"] == second["messages"][-1]["content"]
+    assert [public_history_message(message)["content"] for message in users] == ["first input", "second input"]

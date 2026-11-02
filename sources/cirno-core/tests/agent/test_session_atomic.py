@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from cirno.providers.base import ProviderConversationState
-from cirno.session.manager import Session, SessionManager
+from cirno_core.providers.base import ProviderConversationState
+from cirno_core.session.manager import Session, SessionManager
 
 
 def test_provider_state_round_trips_in_private_record_only(tmp_path: Path):

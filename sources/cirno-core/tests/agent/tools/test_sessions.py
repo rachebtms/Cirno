@@ -8,15 +8,15 @@ from datetime import datetime
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.loader import ToolLoader
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.session_messages import SendSessionMessageTool
-from cirno.agent.tools.sessions import ReadSessionTool, SearchSessionsTool
-from cirno.bus.queue import MessageBus
-from cirno.runtime.context import RuntimeContextBlock, append_runtime_context
-from cirno.session.manager import SessionManager
-from cirno.session.session_handles import SessionHandleResolver
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.session_messages import SendSessionMessageTool
+from cirno_core.agent.tools.sessions import ReadSessionTool, SearchSessionsTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.runtime.context import RuntimeContextBlock, append_runtime_context
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.session_handles import SessionHandleResolver
 
 
 @pytest.fixture

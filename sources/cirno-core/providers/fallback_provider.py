@@ -12,8 +12,8 @@ from typing import Any
 
 from loguru import logger
 
-from cirno.bus.agent_events import RetryStatusEvent
-from cirno.providers.base import (
+from cirno_core.bus.agent_events import RetryStatusEvent
+from cirno_core.providers.base import (
     GenerationSettings,
     LLMCallObserver,
     LLMProvider,
@@ -23,8 +23,8 @@ from cirno.providers.base import (
     RetryEventCallback,
     RetryStatusCallback,
 )
-from cirno.providers.oauth_catalog_cache import oauth_catalog_auth_rejected
-from cirno.providers.registry import find_by_name
+from cirno_core.providers.oauth_catalog_cache import oauth_catalog_auth_rejected
+from cirno_core.providers.registry import find_by_name
 
 # Circuit breaker tuned to match OpenAICompatProvider's Responses API breaker.
 _PRIMARY_FAILURE_THRESHOLD = 3

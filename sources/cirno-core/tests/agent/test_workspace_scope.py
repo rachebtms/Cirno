@@ -8,17 +8,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.agent.context import ContextBuilder
-from cirno.agent.tools.cli_apps import CliAppsTool
-from cirno.agent.tools.context import RequestContext, ToolContext, request_context
-from cirno.agent.tools.filesystem import ReadFileTool, WriteFileTool
-from cirno.agent.tools.message import MessageTool
-from cirno.agent.tools.search import GrepTool
-from cirno.agent.tools.shell import ExecTool
-from cirno.agent.tools.subagent import SubagentTool
-from cirno.apps.cli.service import CliAppManager, CliAppsRuntimeConfig
-from cirno.config.schema import ProviderConfig, ToolsConfig
-from cirno.security.workspace_access import (
+from cirno_core.agent.context import ContextBuilder
+from cirno_core.agent.tools.cli_apps import CliAppsTool
+from cirno_core.agent.tools.context import RequestContext, ToolContext, request_context
+from cirno_core.agent.tools.filesystem import ReadFileTool, WriteFileTool
+from cirno_core.agent.tools.message import MessageTool
+from cirno_core.agent.tools.search import GrepTool
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.subagent import SubagentTool
+from cirno_core.apps.cli.service import CliAppManager, CliAppsRuntimeConfig
+from cirno_core.config.schema import ToolsConfig
+from cirno_core.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScopeError,
     WorkspaceScopeResolver,
@@ -170,10 +170,10 @@ async def test_filesystem_tool_uses_current_restricted_workspace_scope(tmp_path:
 
 @pytest.mark.asyncio
 async def test_restricted_project_can_read_agent_skills_and_exact_history(tmp_path: Path) -> None:
-    agent_workspace = tmp_path / "agent"
+    agent_workspace = tmp_path / "agent" / "home"
     project = tmp_path / "project"
-    from cirno.config.home import set_home_path
-    set_home_path(agent_workspace)
+    from cirno_core.config.home import set_instance_path
+    set_instance_path(agent_workspace.parent)
     skill_file = agent_workspace / "skills" / "custom" / "SKILL.md"
     history_file = agent_workspace / "memory" / "history.jsonl"
     private_memory_file = agent_workspace / "memory" / "private.txt"
@@ -233,15 +233,16 @@ async def test_restricted_project_reads_history_from_linked_agent_workspace(
     tmp_path: Path,
 ) -> None:
     real_agent_workspace = tmp_path / "real-agent"
-    linked_agent_workspace = tmp_path / "agent-link"
+    linked_agent_workspace = tmp_path / "instance" / "home"
+    linked_agent_workspace.parent.mkdir()
     project = tmp_path / "project"
     history_file = real_agent_workspace / "memory" / "history.jsonl"
     history_file.parent.mkdir(parents=True)
     project.mkdir()
     history_file.write_text('{"content":"linked history"}\n', encoding="utf-8")
     _make_directory_link(linked_agent_workspace, real_agent_workspace)
-    from cirno.config.home import set_home_path
-    set_home_path(linked_agent_workspace)
+    from cirno_core.config.home import set_instance_path
+    set_instance_path(linked_agent_workspace.parent)
 
     ctx = ToolContext(
         config=ToolsConfig(restrict_to_workspace=True),
@@ -454,9 +455,9 @@ async def test_cli_app_scope_controls_working_dir(
     CliAppManager(workspace=project, data_dir=data_dir)._save_installed(
         {"demo": {"entry_point": "demo-cli"}}
     )
-    monkeypatch.setattr("cirno.apps.cli.service.get_runtime_subdir", lambda _name: data_dir)
+    monkeypatch.setattr("cirno_core.apps.cli.service.get_runtime_subdir", lambda _name: data_dir)
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda entry: "/usr/bin/demo-cli" if entry == "demo-cli" else None,
     )
 
@@ -466,7 +467,7 @@ async def test_cli_app_scope_controls_working_dir(
         seen["cwd"] = kwargs["cwd"]
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
-    monkeypatch.setattr("cirno.apps.cli.service.subprocess.run", fake_run)
+    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
     tool = CliAppsTool(
         workspace=tmp_path,
         restrict_to_workspace=True,

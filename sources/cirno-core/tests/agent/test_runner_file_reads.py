@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.runner_helpers import make_run_spec
-from cirno.agent.context import TranscriptInput
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.agent.runner import AgentRunner
-from cirno.agent.tools.execution import execute_tool_calls
-from cirno.agent.tools.file_state import FileStates, bind_file_states, reset_file_states
-from cirno.agent.tools.filesystem import ListDirTool, ReadFileTool
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.tools.execution import execute_tool_calls
+from cirno_core.agent.tools.file_state import FileStates, bind_file_states, reset_file_states
+from cirno_core.agent.tools.filesystem import ListDirTool, ReadFileTool
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 
 def _tools(tmp_path):
@@ -85,7 +85,7 @@ async def test_dedup_uses_compacted_request_instead_of_raw_transcript(tmp_path, 
         contains_original = any(message.get("tool_call_id") == "read-1" for message in messages)
         return (600 if contains_original else 100), "test-counter"
 
-    monkeypatch.setattr("cirno.agent.context_governance.estimate_prompt_tokens_chain", estimate)
+    monkeypatch.setattr("cirno_core.agent.context_governance.estimate_prompt_tokens_chain", estimate)
     consolidate = AsyncMock(return_value="The file was inspected; its original text was omitted.")
 
     def build(transcript):

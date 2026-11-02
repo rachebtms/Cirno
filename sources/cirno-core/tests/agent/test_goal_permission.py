@@ -2,13 +2,13 @@ import asyncio
 
 import pytest
 
-from cirno.agent.goals.permission import (
+from cirno_core.agent.goals.permission import (
     GoalInputScope,
     goal_mutation_allowed,
     goal_mutation_permission,
     revoke_goal_mutation_permission,
 )
-from cirno.bus.events import InboundMessage
+from cirno_core.bus.events import InboundMessage
 
 
 def goal_message(**overrides):

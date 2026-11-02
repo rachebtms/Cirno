@@ -1,6 +1,6 @@
 # Cirno documentation
 
-These guides describe the current Cirno implementation. The Python gateway owns execution, durable conversations, tools and memory; the browser displays and controls that state.
+These guides describe the current Cirno implementation. The Python service owns execution, durable conversations, tools and memory; the browser displays and controls that state.
 
 ## Use Cirno
 
@@ -16,6 +16,7 @@ These guides describe the current Cirno implementation. The Python gateway owns 
 - [Memory](architecture/memory.md): BM25, evidence, scopes, Dream and optional embeddings.
 - [Asynchronous questions](architecture/async-questions.md): queued questions and steering replies.
 - [Programmatic tool calling](architecture/ptc.md): PTC execution and conversation reply delivery.
+- [Operation review](architecture/access-review.md): permission modes, independent AI review and owner decisions.
 - [Tool namespaces](architecture/tools.md): logical names, native function names and role selection.
 - [Conversation routing and Stop](development/conversation-routing.md): isolation and cancellation.
 
@@ -29,5 +30,6 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.1.3](releases/0.1.3.md): package boundaries, instance storage, account passwords, conversation controls and independent operation review.
 - [0.1.2](releases/0.1.2.md): useful Overview shortcuts and removal of obsolete migration and compatibility paths.
 - [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.

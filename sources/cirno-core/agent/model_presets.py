@@ -6,9 +6,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
 
-from cirno.config.schema import Config, ModelPresetConfig
-from cirno.providers.base import LLMProvider
-from cirno.providers.factory import ProviderSnapshot, build_provider_snapshot
+from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.factory import ProviderSnapshot, build_provider_snapshot
 
 PresetSnapshotLoader = Callable[[str], ProviderSnapshot]
 PresetCatalogLoader = Callable[[], Mapping[str, ModelPresetConfig]]
@@ -29,7 +29,7 @@ def load_model_preset_catalog(
     config_path: Path | None = None,
 ) -> dict[str, ModelPresetConfig]:
     """Load the current preset catalog from the configured file."""
-    from cirno.config.loader import load_config, resolve_config_env_vars
+    from cirno_core.config.loader import load_config, resolve_config_env_vars
 
     return configured_model_presets(
         resolve_config_env_vars(

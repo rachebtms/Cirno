@@ -1,6 +1,6 @@
 import pytest
 
-from cirno.agent.tools.file_state import FileStateStore
+from cirno_core.agent.tools.file_state import FileStateStore
 
 
 def test_file_state_store_evicts_least_recently_used_session() -> None:

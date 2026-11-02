@@ -2,8 +2,8 @@
 
 import pytest
 
-from cirno.session.manager import Session, SessionManager
-from cirno.session.sqlite_store import SessionConflictError
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.sqlite_store import SessionConflictError
 
 
 async def test_committed_view_cache_is_bounded(tmp_path):

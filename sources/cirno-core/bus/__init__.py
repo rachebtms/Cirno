@@ -3,9 +3,9 @@
 from importlib import import_module
 
 _EXPORTS = {
-    "InboundMessage": "cirno.bus.events",
-    "OutboundMessage": "cirno.bus.events",
-    "MessageBus": "cirno.bus.queue",
+    "InboundMessage": "cirno_core.bus.events",
+    "OutboundMessage": "cirno_core.bus.events",
+    "MessageBus": "cirno_core.bus.queue",
 }
 
 

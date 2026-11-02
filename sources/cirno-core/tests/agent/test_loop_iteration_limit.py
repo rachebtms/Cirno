@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from cirno.runtime.context import public_history_messages
-from cirno.session.goal_state import GOAL_STATE_KEY
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.runtime.context import public_history_messages
+from cirno_core.session.goal_state import GOAL_STATE_KEY
 
 _STOP_MARKER = "previous turn stopped at the tool-iteration limit"
 

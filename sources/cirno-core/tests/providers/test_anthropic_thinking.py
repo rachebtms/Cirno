@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from cirno.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
 
 
 def _make_provider(model: str = "claude-sonnet-4-6") -> AnthropicProvider:

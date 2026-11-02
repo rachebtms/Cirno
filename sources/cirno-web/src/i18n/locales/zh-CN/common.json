@@ -13,7 +13,7 @@
     },
     "error": {
       "title": "无法连接到 cirno",
-      "gatewayHint": "请确认网关已启动（`cirno gateway`），并且当前浏览器可以访问它的 WebUI 地址。"
+      "serverHint": "请确认Cirno 服务端已启动（`cirno`），并且当前浏览器可以访问它的 WebUI 地址。"
     },
     "auth": {
       "title": "连接到 cirno",
@@ -30,7 +30,7 @@
     },
     "account": {
       "section": "账户",
-      "logoutHint": "断开此浏览器与网关的连接",
+      "logoutHint": "断开此浏览器与Cirno 服务端的连接",
       "logout": "退出登录"
     },
     "system": {
@@ -54,7 +54,7 @@
     },
     "pairing": {
       "haveCode": "已收到配对码？",
-      "deliveryFailed": "配对码发送失败。请检查此机器人的消息发送权限和网关日志，再给它发一条私聊消息重试。",
+      "deliveryFailed": "配对码发送失败。请检查此机器人的消息发送权限和Cirno 服务端日志，再给它发一条私聊消息重试。",
       "deliverySending": "正在向聊天发送配对码。如果没有收到，请再给机器人发一条私聊消息重试。",
       "title": "账号配对",
       "description": "输入聊天平台收到的配对码",
@@ -85,12 +85,12 @@
     "resize": "调整侧栏宽度",
     "navigation": "侧边栏导航",
     "collapse": "收起侧边栏",
-    "newChat": "新建话题",
+    "newChat": "新建会话",
     "searchAria": "搜索",
     "searchPlaceholder": "搜索已加载内容",
     "searchResults": "搜索结果",
-    "noSearchResults": "没有匹配的话题。",
-    "recent": "最近话题",
+    "noSearchResults": "没有匹配的会话。",
+    "recent": "最近会话",
     "settings": "设置",
     "language": {
       "label": "语言",
@@ -140,39 +140,39 @@
         },
         "agents_defaults_dream_enabled": {
           "label": "记忆整理",
-          "help": "自动整理记忆；关闭后仍可用已有记忆\n\n自动整理对话中的有用信息。关闭后停止整理，已有记忆仍可使用。"
+          "help": "自动整理对话中的有用信息。关闭后停止整理，已有记忆仍可使用。"
         },
-        "gateway_heartbeat_enabled": {
+        "agents_defaults_heartbeat_enabled": {
           "label": "启用心跳",
           "help": "修改后重启生效。"
         },
-        "gateway_heartbeat_interval_s": {
+        "agents_defaults_heartbeat_interval_s": {
           "label": "心跳间隔（秒）",
           "help": "修改后重启生效。"
         },
         "agents_defaults_max_tool_iterations": {
-          "label": "交互上限",
-          "help": "每次回复最多与工具交互多少轮\n\n每次回复中，模型与工具最多可以交互多少轮。"
+          "label": "单段执行轮数上限",
+          "help": "单个执行段允许的模型和工具交互轮数，与 Goal 自动续跑次数分开。"
         },
         "agents_defaults_max_concurrent_subagents": {
           "label": "并发上限",
           "help": "同时执行任务的子智能体数量上限"
         },
         "agents_defaults_max_tool_result_chars": {
-          "label": "结果长度",
-          "help": "每条工具结果传给模型的字符上限\n\n限制每条工具结果传入模型的长度，按字符计数。"
+          "label": "工具结果上限（字符）",
+          "help": "每次工具结果发送给模型的最大字符数。"
         },
         "agents_defaults_provider_retry_mode": {
           "label": "持续重试",
-          "help": "可恢复错误持续重试；关闭用标准策略\n\n遇到可恢复的请求错误时持续重试。关闭后使用标准重试策略。"
+          "help": "遇到可恢复的请求错误时持续重试。关闭后使用标准重试策略。"
         },
-        "agents_defaults_tool_hint_max_length": {
-          "label": "提示长度",
-          "help": "工具执行提示的字符数上限\n\n工具执行时显示的简短提示最多包含多少个字符。"
+        "agents_defaults_tool_status_summary_max_chars": {
+          "label": "工具状态摘要上限（字符）",
+          "help": "通道中工具活动摘要的最大显示字符数。"
         },
-        "tools_max_session_messages_per_minute": {
-          "label": "消息频率",
-          "help": "工具每分钟向同一会话发消息的上限"
+        "tools_max_outgoing_session_messages_per_minute": {
+          "label": "跨会话发送上限（条/分钟）",
+          "help": "每个来源会话在滚动 60 秒内发给其他会话的消息总数上限，不限制用户发消息。"
         },
         "tools_exec_enable": {
           "label": "执行命令",
@@ -191,24 +191,24 @@
           "help": "允许安装、管理和运行 CLI 应用"
         },
         "tools_my_enable": {
-          "label": "查看配置",
-          "help": "允许智能体查看自身配置"
+          "label": "查看 Agent 运行设置",
+          "help": "允许模型通过 runtime 工具查看运行设置，不提供服务密钥。"
         },
         "tools_my_allow_set": {
-          "label": "修改配置",
-          "help": "允许智能体修改自身配置"
+          "label": "修改 Agent 运行设置",
+          "help": "允许 runtime 工具修改受支持的 Agent 运行设置。"
         },
         "tools_exec_path_prepend": {
           "label": "优先目录",
-          "help": "优先查找命令的目录\n\n添加到 PATH 开头。多个目录在 Windows 上用分号分隔，在 Linux 和 macOS 上用冒号分隔。"
+          "help": "添加到 PATH 开头。多个目录在 Windows 上用分号分隔，在 Linux 和 macOS 上用冒号分隔。"
         },
         "tools_exec_path_append": {
           "label": "追加目录",
-          "help": "最后查找命令的目录\n\n添加到 PATH 末尾。多个目录在 Windows 上用分号分隔，在 Linux 和 macOS 上用冒号分隔。"
+          "help": "添加到 PATH 末尾。多个目录在 Windows 上用分号分隔，在 Linux 和 macOS 上用冒号分隔。"
         },
         "tools_exec_sandbox": {
           "label": "命令沙箱",
-          "help": "隔离命令进程，需系统支持\n\nLinux 使用 bwrap，macOS 使用 Seatbelt。工作区路径限制本身不提供进程隔离。"
+          "help": "Linux 使用 bwrap，macOS 使用 Seatbelt。工作区路径限制本身不提供进程隔离。"
         },
         "tools_exec_sandbox_ro_binds": {
           "label": "只读路径",
@@ -240,19 +240,19 @@
         },
         "tools_web_user_agent": {
           "label": "User-Agent",
-          "help": "网页请求标识，留空使用默认值\n\n网页请求使用的 User-Agent 标识，留空使用默认值。"
+          "help": "网页请求使用的 User-Agent 标识，留空使用默认值。"
         },
         "tools_restrict_to_workspace": {
           "label": "目录限制",
-          "help": "全局目录限制，WebUI 权限另设\n\n设置全局工作区访问限制；WebUI 中每个对话的权限单独设置。"
+          "help": "设置全局工作区访问限制；WebUI 中每个对话的权限单独设置。"
         },
         "tools_ssrf_whitelist": {
           "label": "允许 IP",
-          "help": "允许访问的 IP 或 CIDR，每行一项\n\n允许网页等出站请求访问这些受限地址。每行填写一个 IP 地址或 CIDR 网段。"
+          "help": "允许网页等出站请求访问这些受限地址。每行填写一个 IP 地址或 CIDR 网段。"
         },
         "tools_webui_allow_remote_package_install": {
           "label": "远程安装",
-          "help": "包和技能可远程安装，仅网关设备可设\n\n允许从其他设备上的 WebUI 安装可选软件包和技能。此开关只能在运行网关的设备上修改。"
+          "help": "允许从其他设备上的 WebUI 安装可选软件包和技能。此开关只能在运行Cirno 服务端的设备上修改。"
         },
         "tools_cli_apps_install_timeout": {
           "label": "安装超时",
@@ -266,37 +266,25 @@
           "label": "缓存时长",
           "help": "CLI 应用列表的缓存有效秒数"
         },
-        "gateway_host": {
-          "label": "网关地址",
-          "help": "网关地址，WebUI 监听地址另设\n\n网关使用的地址。WebUI 的监听地址需在聊天平台的 WebSocket 设置中单独配置。"
-        },
-        "gateway_port": {
-          "label": "网关端口",
-          "help": "网关端口，启动参数优先\n\n网关使用的端口。启动时指定的命令行参数优先于此设置。"
-        },
-        "gateway_restart_mode": {
-          "label": "重启模式",
-          "help": "选择重启方式，自动按环境决定\n\n选择网关的重启方式。“自动”会根据运行环境选择。"
-        },
         "agents_defaults_dream_interval_h": {
-          "label": "Dream 周期（小时）",
-          "help": "修改后重启生效。定时表达式会覆盖周期设置。"
+          "label": "Dream 间隔（小时）",
+          "help": "仅用于 Dream 的间隔调度模式，重启后生效。"
         },
         "agents_defaults_dream_model_override": {
           "label": "Dream 模型",
           "help": "可为 Dream 选择独立模型；未选择时使用当前模型。"
         },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "空闲记忆检查间隔（秒）",
-          "help": "修改后重启生效。"
+          "label": "空闲压缩检查间隔（秒）",
+          "help": "扫描会话是否满足空闲压缩条件的间隔，并非空闲时长。重启后生效。"
         },
         "network_request_timeout_s": {
-          "label": "兼容 API 请求超时（秒）",
-          "help": "修改后重启生效。"
+          "label": "模型请求超时（秒）",
+          "help": "单次模型请求的最长等待时间。"
         },
         "network_stream_idle_timeout_s": {
-          "label": "兼容 API 流式空闲超时（秒）",
-          "help": "修改后重启生效。"
+          "label": "模型流空闲超时（秒）",
+          "help": "模型流连续没有新数据时的最长等待时间。"
         },
         "network_provider_max_retries": {
           "label": "模型重试次数",
@@ -372,7 +360,27 @@
         },
         "tools_exec_max_runtime": {
           "label": "运行上限",
-          "help": "Shell 命令的默认运行上限\n\n命令输出或继续等待都不会延长此上限。选择“不限时”可取消运行时限。"
+          "help": "命令输出或继续等待都不会延长此上限。选择“不限时”可取消运行时限。"
+        },
+        "server_health_host": {
+          "label": "健康检查监听地址",
+          "help": "服务健康检查的监听地址。Web UI 的监听地址在通道配置中单独设置。"
+        },
+        "server_health_port": {
+          "label": "健康检查端口",
+          "help": "独立于 Web UI 端口的服务健康检查端口，重启后生效。"
+        },
+        "server_restart_mode": {
+          "label": "重启模式",
+          "help": "选择Cirno 服务端的重启方式。“自动”会根据运行环境选择。"
+        },
+        "agents_defaults_resume_message": {
+          "label": "继续执行提示词",
+          "help": "点击“继续”或使用 /resume 时发送给模型的指令。"
+        },
+        "agents_defaults_resume_show_message": {
+          "label": "显示继续执行消息",
+          "help": "在会话中显示带系统来源标记的继续执行指令。"
         }
       },
       "groups": {
@@ -389,15 +397,11 @@
           "help": "开启或关闭自动记忆整理"
         },
         "heartbeat": {
-          "title": "心跳"
+          "title": "Agent 心跳"
         },
         "execution": {
           "title": "运行限制",
           "help": "设置工具上限和请求重试方式"
-        },
-        "sessions": {
-          "title": "会话",
-          "help": "设置跨平台对话共享"
         },
         "tools": {
           "title": "内置工具",
@@ -423,8 +427,8 @@
           "title": "CLI 限制",
           "help": "设置安装、运行超时和列表缓存\n\n设置安装和运行超时，以及应用列表的缓存时长。"
         },
-        "gateway": {
-          "title": "网关",
+        "server": {
+          "title": "Cirno 服务端",
           "help": "设置部署和重启方式"
         },
         "api": {
@@ -449,6 +453,16 @@
         },
         "requests": {
           "title": "模型连接"
+        },
+        "coordination": {
+          "title": "会话协作"
+        },
+        "activity": {
+          "title": "执行过程显示"
+        },
+        "resume": {
+          "title": "停止后的继续执行",
+          "help": "从已保存的上下文继续，重新发起模型请求，不会自动重放已完成的工具调用。"
         }
       },
       "save": "保存修改",
@@ -474,7 +488,7 @@
       "manual": "手动",
       "standard": "标准",
       "persistent": "持续",
-      "unavailable": "更新网关后可编辑这些设置。",
+      "unavailable": "更新Cirno 服务端后可编辑这些设置。",
       "advancedOptions": "高级选项",
       "idle": "空闲时",
       "interval": "固定间隔"
@@ -505,7 +519,7 @@
       "channels": "通道配置",
       "cliApps": "CLI 应用",
       "mcp": "MCP",
-      "runtime": "服务与心跳",
+      "runtime": "服务端",
       "advanced": "权限与安全",
       "apps": "工具与 CLI Apps",
       "automations": "自动任务",
@@ -522,7 +536,11 @@
       "execution": "Goal 与执行",
       "shell": "Shell 执行",
       "network": "网络与重试",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "account": "账户",
+      "heartbeat": "Agent 心跳",
+      "coordination": "会话协作",
+      "regional": "时间与地区"
     },
     "sections": {
       "interface": "界面",
@@ -661,7 +679,7 @@
       "restart": "重启 cirno",
       "configPath": "配置路径",
       "activePreset": "当前预设",
-      "gateway": "网关",
+      "gateway": "Cirno 服务端",
       "restartState": "重启状态",
       "pendingChanges": "待生效项",
       "currentModel": "当前配置",
@@ -696,7 +714,7 @@
       "language": "选择界面语言",
       "provider": "选择处理新请求的提供商",
       "model": "选择此预设使用的模型",
-      "configPath": "当前网关使用的配置文件",
+      "configPath": "当前Cirno 服务端使用的配置文件",
       "currentModel": "用于新的回复",
       "selectedModelProvider": "由选中的模型决定。",
       "selectedModelValue": "由选中的模型决定。",
@@ -1050,7 +1068,7 @@
       "backToProviders": "返回提供商列表",
       "customProvider": "自定义",
       "customProviderName": "名称",
-      "customProviderNamePlaceholder": "例如：公司模型网关",
+      "customProviderNamePlaceholder": "例如：公司模型Cirno 服务端",
       "saveProvider": "保存提供商",
       "advancedOptions": "高级选项",
       "saveAdvancedBeforeSignIn": "请先保存高级选项再登录。",
@@ -1475,7 +1493,7 @@
       "deleteConfirmAction": "删除技能",
       "instructionsTitle": "技能说明",
       "setupRequired": "需要设置",
-      "setupDescription": "在网关设备安装依赖，再重新检查\n\n请在运行 cirno 的设备上安装缺少的依赖，然后重新检查。",
+      "setupDescription": "在Cirno 服务端设备安装依赖，再重新检查\n\n请在运行 cirno 的设备上安装缺少的依赖，然后重新检查。",
       "copySetupCommand": "复制命令",
       "checkAgain": "重新检查",
       "marketplaceSearchFailed": "暂时无法搜索技能市场。",
@@ -1565,18 +1583,32 @@
       "webuiUrl": "Web UI 地址（可选）",
       "urlHelp": "填写手机可以打开的地址。通知会附带按钮，打开收件箱中的对应事项。",
       "settingsLink": "配置 Telegram 通知"
+    },
+    "account": {
+      "owner": "实例所有者",
+      "changePassword": "修改密码",
+      "currentPassword": "当前密码",
+      "newPassword": "新密码",
+      "help": "输入当前密码以进行修改。其他浏览器的登录会话将失效。",
+      "saved": "密码已修改，当前浏览器保持登录。",
+      "unavailable": "账户设置适用于通过网页注册和登录的实例。",
+      "loading": "正在加载账户…",
+      "retry": "重试"
+    },
+    "heartbeat": {
+      "help": "定期检查 HEARTBEAT.md，其中有任务时唤醒 Cirno Agent。服务健康检查是独立功能。"
     }
   },
   "chat": {
-    "fallbackTitle": "话题 {{id}}",
+    "fallbackTitle": "会话 {{id}}",
     "forkTitle": "分叉：{{title}}",
     "loading": "加载中…",
-    "noSessions": "还没有话题。",
+    "noSessions": "还没有会话。",
     "showMore": "再显示 {{count}} 个",
-    "collapsed": "已折叠 {{count}} 个话题",
+    "collapsed": "已折叠 {{count}} 个会话",
     "showLess": "收起",
-    "actions": "“{{title}}” 的话题操作",
-    "newInProject": "在 {{project}} 中开始新话题",
+    "actions": "“{{title}}” 的会话操作",
+    "newInProject": "在 {{project}} 中开始新会话",
     "activity": {
       "running": "智能体正在运行",
       "complete": "智能体已完成",
@@ -1586,7 +1618,7 @@
     "pin": "置顶",
     "unpin": "取消置顶",
     "rename": "重命名",
-    "renamePlaceholder": "话题名称",
+    "renamePlaceholder": "会话名称",
     "renameProjectTitle": "项目改名",
     "renameProjectDescription": "仅修改 WebUI 侧栏中的项目名称",
     "renameProjectPlaceholder": "项目名称",
@@ -1599,10 +1631,10 @@
     "select": "选择",
     "selectedCount": "已选择 {{count}} 项",
     "delete": "删除",
-    "newChat": "新建话题",
+    "newChat": "新建会话",
     "groups": {
       "pinned": "置顶",
-      "all": "话题",
+      "all": "会话",
       "projects": "项目",
       "today": "今天",
       "yesterday": "昨天",
@@ -1611,21 +1643,21 @@
     }
   },
   "archiveConfirm": {
-    "title": "归档此话题？",
-    "titleMany": "归档 {{count}} 个话题？",
-    "unarchiveTitle": "取消归档此话题？",
-    "unarchiveTitleMany": "取消归档 {{count}} 个话题？",
+    "title": "归档此会话？",
+    "titleMany": "归档 {{count}} 个会话？",
+    "unarchiveTitle": "取消归档此会话？",
+    "unarchiveTitleMany": "取消归档 {{count}} 个会话？",
     "description": "聊天记录会保留，可随时取消归档。",
-    "unarchiveDescription": "这些话题将重新显示在侧栏中。"
+    "unarchiveDescription": "这些会话将重新显示在侧栏中。"
   },
   "deleteConfirm": {
-    "title": "删除这个话题？",
+    "title": "删除这个会话？",
     "titleMany": "删除这 {{count}} 个对话？",
     "description": "此操作无法撤销。",
     "descriptionMany": "此操作无法撤销。",
     "cancel": "取消",
     "confirm": "删除",
-    "automationsDescription": "删除话题也会删除关联的自动任务",
+    "automationsDescription": "删除会话也会删除关联的自动任务",
     "automationsDescriptionMany": "关联的自动任务也会一并删除。",
     "moreAutomations": "另有 {{count}} 个",
     "confirmWithAutomations": "删除",
@@ -1712,7 +1744,7 @@
       "errorUnavailable": "这条旧记录未保存具体错误原因。",
       "attempt": "第 {{number}} 次尝试"
     },
-    "loadingConversation": "正在加载话题…",
+    "loadingConversation": "正在加载会话…",
     "empty": {
       "greetings": {
         "workOn": "我们要一起做点什么？",
@@ -1749,14 +1781,14 @@
     },
     "header": {
       "toggleSidebar": "切换侧边栏",
-      "newChat": "从顶部新建话题",
+      "newChat": "从顶部新建会话",
       "toggleTheme": "从顶部切换主题",
       "settings": "打开设置",
       "sessionInfo": "会话详情"
     },
     "sessionInfo": {
       "title": "会话",
-      "untitled": "未命名话题",
+      "untitled": "未命名会话",
       "automations": "自动任务",
       "count": "{{count}}",
       "loading": "正在加载自动任务...",
@@ -1783,7 +1815,7 @@
     "composer": {
       "placeholderThread": "输入消息…",
       "placeholderHero": "描述你想做的事",
-      "placeholderOpening": "正在打开新话题…",
+      "placeholderOpening": "正在打开新会话…",
       "inputAria": "消息输入框",
       "goalStatus": {
         "paused": "已暂停",
@@ -1877,8 +1909,8 @@
         },
         "commands": {
           "new": {
-            "title": "新建话题",
-            "description": "重置当前话题，开始新话题"
+            "title": "新建会话",
+            "description": "重置当前会话，开始新会话"
           },
           "compact": {
             "title": "压缩上下文",
@@ -1935,8 +1967,33 @@
           "pairing": {
             "title": "配对",
             "description": "管理配对请求"
+          },
+          "resume": {
+            "title": "继续任务",
+            "description": "从已保存的上下文继续停止的任务。"
+          },
+          "clear": {
+            "title": "清空 Cirno 上下文",
+            "description": "清空个人 Cirno 会话；不会撤销文件修改。"
+          },
+          "temporary": {
+            "title": "临时会话",
+            "description": "在发送第一条消息前选择临时会话模式。"
+          },
+          "ptc": {
+            "title": "PTC 模式",
+            "description": "在发送第一条消息前选择程序化工具调用。"
+          },
+          "access": {
+            "title": "权限模式",
+            "description": "选择默认权限、AI 审批或完全访问。"
           }
-        }
+        },
+        "controlRunning": "请先停止当前任务，再修改会话选项。",
+        "accessUsage": "用法：/access default|review|full",
+        "modelUsage": "请在 /model 后填写已配置的模型名称。",
+        "creationOnly": "请在新会话发送第一条消息前选择此选项。",
+        "toggleUsage": "用法：{{command}} on|off"
       },
       "mentions": {
         "ariaLabel": "提及",
@@ -1978,7 +2035,9 @@
         "full": "完全访问",
         "fullShort": "完全",
         "defaultDescription": "仅在当前工作目录内读写和执行命令",
-        "fullDescription": "可读写目录外文件并执行命令"
+        "fullDescription": "可读写目录外文件并执行命令",
+        "review": "AI 审批",
+        "reviewDescription": "保留默认限制。独立 AI 不加载 Cirno 记忆，逐项审查受限操作；疑难情况交给你在收件箱审批。AI 可能判断错误，导致文件泄露或执行有害命令。"
       }
     },
     "scrollToBottom": "滚动到底部",
@@ -2001,6 +2060,47 @@
       "title": "清空 Cirno 会话",
       "description": "停止当前执行并清空本会话的消息与上下文。已保存的记忆和其他会话会保留。",
       "confirm": "清空会话"
+    },
+    "inputSources": {
+      "heartbeat": "心跳检查",
+      "scheduled_task": "定时任务",
+      "trigger": "触发器",
+      "conversation": "会话消息",
+      "subagent": "子 Agent 结果",
+      "continuation": "自动续跑",
+      "system": "系统事件",
+      "supervision": "Cirno 已更新此会话"
+    },
+    "supervision": {
+      "changed": "Cirno 已更新此会话",
+      "actions": {
+        "stop": "已停止此会话",
+        "continue": "已继续此会话",
+        "goal_create": "已创建 Goal",
+        "goal_set": "已替换 Goal",
+        "goal_update": "已更新 Goal 设置",
+        "goal_stop": "已停止 Goal",
+        "goal_pause": "已暂停 Goal",
+        "goal_resume": "已恢复 Goal",
+        "goal_delete": "已删除 Goal",
+        "goal_wait": "已让 Goal 等待"
+      },
+      "fields": {
+        "objective": "目标",
+        "ui_summary": "显示名称",
+        "recap": "已保存进度",
+        "continuation_limit": "自动续跑上限",
+        "wake_after_seconds": "等待秒数"
+      }
+    },
+    "historyEffects": {
+      "title": "工作区修改不会撤销",
+      "description": "分支或编辑只会改变会话上下文，不会撤销之前的命令执行或文件修改。再次执行可能与当前工作区冲突，造成文件混乱或损坏。继续前请检查相关文件。"
+    },
+    "historyEdit": {
+      "text": "修改后的消息",
+      "description": "替换此消息及其后的会话上下文，然后执行修改后的请求。原有附件会保留。",
+      "submit": "保存并发送"
     }
   },
   "message": {
@@ -2228,7 +2328,8 @@
       "estimated": "包含估算用量"
     },
     "expandStep": "展开详情",
-    "collapseStep": "收起详情"
+    "collapseStep": "收起详情",
+    "edit": "编辑消息"
   },
   "recovery": {
     "actionFailed": "恢复操作失败，请重试。",
@@ -2284,7 +2385,7 @@
     "failed": "复制失败，请重试。",
     "unavailable": "无法解析此文件，可复制原始引用。",
     "loading": "正在解析文件…",
-    "gatewayPath": "路径指向网关所在的机器。"
+    "serverPath": "路径指向Cirno 服务端所在的机器。"
   },
   "filePreview": {
     "displayMode": "显示方式",
@@ -2295,7 +2396,7 @@
     "close": "关闭文件预览",
     "loading": "正在加载预览...",
     "failed": "无法预览这个文件。",
-    "routeMissing": "文件预览需要最新的网关。请重启 cirno gateway 后再试。",
+    "routeMissing": "文件预览需要最新的Cirno 服务端。请重启 cirno 后再试。",
     "resize": "调整文件预览宽度",
     "truncated": "文件较大，当前只显示前半部分预览。"
   },
@@ -2352,11 +2453,11 @@
     },
     "workspaceScopeRejected": {
       "title": "工作区未更改",
-      "body": "网关拒绝了此项目或访问权限。请选择已存在的项目或其他访问权限，然后重试。"
+      "body": "Cirno 服务端拒绝了此项目或访问权限。请选择已存在的项目或其他访问权限，然后重试。"
     },
     "turnRejected": {
       "title": "消息未发送",
-      "body": "网关拒绝了这条消息。请检查消息内容或附件后重试。"
+      "body": "Cirno 服务端拒绝了这条消息。请检查消息内容或附件后重试。"
     },
     "modelRequestFailed": {
       "authenticationTitle": "模型提供商验证失败",
@@ -2457,7 +2558,7 @@
     "jobs": "远端作业",
     "refresh": "刷新",
     "refreshList": "刷新列表",
-    "noJobs": "Agent 可以使用 node 工具创建作业。作业记录保存在 Home，完整输出保存在 Node。",
+    "noJobs": "Agent 可以通过 SSH 启动持久任务。跟踪记录保存在服务端状态目录，完整输出保存在节点上。",
     "readStatus": "读取状态",
     "stop": "停止",
     "memorySources": "记忆来源",
@@ -2598,7 +2699,8 @@
       "dream": "记忆整理",
       "turn": "会话运行",
       "message": "消息",
-      "report": "工作报告"
+      "report": "工作报告",
+      "approval": "操作审批"
     },
     "status": {
       "pending": "待处理",
@@ -2651,7 +2753,9 @@
       "storage_failed": "无法保存账号数据，请检查服务端存储后重试。",
       "password_mismatch": "两次输入的密码不一致。",
       "connection_failed": "无法连接 Cirno，请检查网络后重试。",
-      "request_failed": "请求失败，请重试。"
+      "request_failed": "请求失败，请重试。",
+      "incorrect_password": "当前密码不正确。",
+      "unauthorized": "请重新登录。"
     }
   }
 }

@@ -1,4 +1,4 @@
-from cirno.llm_usage.context import source_from_request
+from cirno_core.llm_usage.context import source_from_request
 
 
 def test_automation_metadata_overrides_user_session_source() -> None:

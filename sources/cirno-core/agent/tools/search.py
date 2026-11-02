@@ -17,10 +17,10 @@ from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Iterator, TypeVar
 
-from cirno.agent.tools._search_content import ContentPage, MatchTooLargeError
-from cirno.agent.tools.base import ToolResult
-from cirno.agent.tools.filesystem import ListDirTool, _FsTool
-from cirno.utils.document import (
+from cirno_core.agent.tools._search_content import ContentPage, MatchTooLargeError
+from cirno_core.agent.tools.base import ToolResult
+from cirno_core.agent.tools.filesystem import ListDirTool, _FsTool
+from cirno_core.utils.document import (
     DocumentLineSource,
     LocatedDocumentLine,
     PdfPageRangeError,

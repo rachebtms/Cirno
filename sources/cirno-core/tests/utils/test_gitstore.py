@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from cirno.utils.gitstore import GitStore
+from cirno_core.utils.gitstore import GitStore
 
 
 @pytest.fixture

@@ -15,16 +15,16 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
 from loguru import logger
 
-from cirno.utils.atomic_file import atomic_write_lines as atomic_write_lines
-from cirno.utils.atomic_file import atomic_write_text as atomic_write_text
-from cirno.utils.file_io import ensure_dir as ensure_dir
-from cirno.utils.file_io import write_text_atomic as _write_text_atomic
-from cirno.utils.token_encoding import get_token_encoding as _get_token_encoding
+from cirno_core.utils.atomic_file import atomic_write_lines as atomic_write_lines
+from cirno_core.utils.atomic_file import atomic_write_text as atomic_write_text
+from cirno_core.utils.file_io import ensure_dir as ensure_dir
+from cirno_core.utils.file_io import write_text_atomic as _write_text_atomic
+from cirno_core.utils.token_encoding import get_token_encoding as _get_token_encoding
 
 if TYPE_CHECKING:
     from tiktoken import Encoding
 
-    from cirno.providers.base import LLMUsage
+    from cirno_core.providers.base import LLMUsage
 
 _TOOLS_TOKEN_CACHE_MAX_ENTRIES = 64
 _TOOLS_TOKEN_CACHE: dict[int, tuple[tuple[int, ...], dict[bool, int]]] = {}
@@ -889,7 +889,7 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     from importlib.resources import files as pkg_files
 
     try:
-        tpl = pkg_files("cirno") / "templates"
+        tpl = pkg_files("cirno_core") / "templates"
     except Exception:
         return []
     if not tpl.is_dir():
@@ -905,7 +905,7 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
         dest.write_text(content, encoding="utf-8")
         added.append(str(dest))
 
-    from cirno.config.home import get_home_path
+    from cirno_core.config.home import get_home_path
 
     agent_home = get_home_path()
     agent_home.mkdir(parents=True, exist_ok=True)
@@ -925,7 +925,7 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
 
     # Initialize git for memory version control
     try:
-        from cirno.utils.gitstore import GitStore
+        from cirno_core.utils.gitstore import GitStore
 
         gs = GitStore(
             agent_home,
@@ -947,7 +947,7 @@ def load_bundled_template(template_name: str) -> str | None:
     from importlib.resources import files as pkg_files
 
     with suppress(Exception):
-        tpl = pkg_files("cirno") / "templates" / template_name
+        tpl = pkg_files("cirno_core") / "templates" / template_name
         if tpl.is_file():
             return tpl.read_text(encoding="utf-8")
     return None

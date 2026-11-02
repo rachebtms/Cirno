@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from cirno.config.loader import load_config, save_config
-from cirno.config.schema import Config
+from cirno_core.config.loader import load_config, save_config
+from cirno_core.config.schema import Config
 
 
 def test_save_config_round_trips(tmp_path: Path) -> None:

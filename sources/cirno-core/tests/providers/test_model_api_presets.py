@@ -9,22 +9,22 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
-from cirno.agent.tools.web import WebSearchTool
-from cirno.config.schema import (
+from cirno_core.agent.tools.web import WebSearchTool
+from cirno_core.config.schema import (
     Config,
     InlineFallbackConfig,
     ModelAPIConfig,
     ModelPresetConfig,
     ProviderAPIConfig,
 )
-from cirno.providers.anthropic_provider import AnthropicProvider
-from cirno.providers.factory import (
+from cirno_core.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.factory import (
     make_provider,
     provider_signature,
     resolve_automatic_model_api,
     validate_provider_setup,
 )
-from cirno.providers.openai_compat_provider import _RESPONSES_FAILURE_THRESHOLD
+from cirno_core.providers.openai_compat_provider import _RESPONSES_FAILURE_THRESHOLD
 
 
 def _config() -> Config:
@@ -55,9 +55,9 @@ def _config() -> Config:
 async def test_model_override_keeps_request_settings_within_connection(
     bind_transport, entrypoint, target, literal_env_syntax, monkeypatch,
 ):
-    from cirno.agent.model_runtime import ModelRuntimeResolver
-    from cirno.providers.factory import build_provider_snapshot
-    from cirno.utils.llm_runtime import runtime_from_provider_snapshot
+    from cirno_core.agent.model_runtime import ModelRuntimeResolver
+    from cirno_core.providers.factory import build_provider_snapshot
+    from cirno_core.utils.llm_runtime import runtime_from_provider_snapshot
 
     config = Config.model_validate({
         "agents": {"defaults": {"modelPreset": "primary"}},
@@ -231,9 +231,9 @@ async def test_preset_overrides_isolate_requests_and_preserve_prompt_prefix(bind
 
 
 def test_preset_override_fallbacks_and_roundtrip(tmp_path):
-    from cirno.config.loader import load_config, save_config
-    from cirno.providers.factory import _resolve_fallback_presets
-    from cirno.providers.routing import resolve_provider_route
+    from cirno_core.config.loader import load_config, save_config
+    from cirno_core.providers.factory import _resolve_fallback_presets
+    from cirno_core.providers.routing import resolve_provider_route
 
     config = _config()
     primary = config.model_presets["chat"]
@@ -330,7 +330,7 @@ async def test_automatic_preview_matches_actual_request(
 async def test_deepseek_automatic_api_preserves_endpoint_routing(
     bind_transport, tmp_path, stream, model, api_base, api,
 ):
-    from cirno.config.loader import load_config
+    from cirno_core.config.loader import load_config
 
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps({
@@ -480,7 +480,7 @@ async def test_fallback_preset_keeps_its_api_and_invalidates_runtime(bind_transp
             return httpx.Response(401, json={"error": {"message": "invalid_api_key", "type": "authentication_error"}})
         return _answer(request)
 
-    from cirno.providers import factory
+    from cirno_core.providers import factory
 
     original = factory._make_provider_core
     monkeypatch.setattr(factory, "_make_provider_core", lambda *args, **kwargs: bind_transport(original(*args, **kwargs), handler))
@@ -530,7 +530,7 @@ async def test_messages_declaration_validates_adapter_before_loading_client(prov
 async def test_custom_messages_keeps_connection_options_and_tool_history(bind_transport, stream):
     config = _config()
     connection = config.get_provider(preset=config.model_presets["messages"])
-    connection.extra_headers = {"X-Gateway": "fixture"}
+    connection.extra_headers = {"X-Server": "fixture"}
     connection.extra_query = {"route": "claude"}
     connection.extra_body = {"metadata": {"user_id": "fixture"}}
     requests = []
@@ -555,7 +555,7 @@ async def test_custom_messages_keeps_connection_options_and_tool_history(bind_tr
     request = requests[0]
     assert request.url.path == "/v1/messages"
     assert request.url.params["route"] == "claude"
-    assert request.headers["X-Gateway"] == "fixture"
+    assert request.headers["X-Server"] == "fixture"
     body = json.loads(request.content)
     assert body["metadata"] == {"user_id": "fixture"}
     assert body["model"] == "claude-sonnet-4-6"

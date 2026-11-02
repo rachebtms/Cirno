@@ -8,8 +8,8 @@ import httpx
 import pytest
 from openai import APIConnectionError, AsyncOpenAI
 
-from cirno.providers.base import LLMUsage
-from cirno.providers.openai_responses import (
+from cirno_core.providers.base import LLMUsage
+from cirno_core.providers.openai_responses import (
     ResponsesStreamCapture,
     consume_sdk_stream,
     consume_sse_with_reasoning,
@@ -171,9 +171,9 @@ async def test_interleaved_tool_argument_events_reach_the_correct_call(transport
 @pytest.mark.parametrize("provider_kind", ["compat", "azure"])
 @pytest.mark.parametrize("tail", ["disconnect", "open"])
 async def test_provider_returns_and_closes_stream_at_terminal(monkeypatch, provider_kind, tail):
-    from cirno.providers.azure_openai_provider import AzureOpenAIProvider
-    from cirno.providers.openai_compat_provider import OpenAICompatProvider
-    from cirno.providers.registry import find_by_name
+    from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
+    from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+    from cirno_core.providers.registry import find_by_name
 
     body = _ResponseBody([
         {"type": "response.output_text.delta", "delta": "answer"},
@@ -192,7 +192,7 @@ async def test_provider_returns_and_closes_stream_at_terminal(monkeypatch, provi
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http_client:
         async with AsyncOpenAI(api_key="test", http_client=http_client) as client:
             module = "azure_openai_provider" if provider_kind == "azure" else "openai_compat_provider"
-            monkeypatch.setattr(f"cirno.providers.{module}.AsyncOpenAI", lambda **kwargs: client)
+            monkeypatch.setattr(f"cirno_core.providers.{module}.AsyncOpenAI", lambda **kwargs: client)
             if provider_kind == "azure":
                 provider = AzureOpenAIProvider(api_key="test", api_base="https://azure.test", default_model="gpt-5")
             else:

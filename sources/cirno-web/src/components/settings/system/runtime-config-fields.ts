@@ -1,7 +1,7 @@
 export interface RuntimeConfigField {
   group: string;
   path: string;
-  kind: "toggle" | "text" | "nullable" | "number" | "duration" | "boolean" | "select" | "list" | "preset" | "idle-compaction";
+  kind: "toggle" | "text" | "nullable" | "number" | "duration" | "boolean" | "select" | "list" | "multiline" | "preset" | "idle-compaction";
   options?: string[];
   when?: { path: string; value: string | boolean | string[] };
   manual?: boolean;
@@ -9,16 +9,18 @@ export interface RuntimeConfigField {
   max?: number;
 }
 
-export type RuntimeConfigPage = "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
+export type RuntimeConfigPage = "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
 
 export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabledBy?: string }[] = [
-  { id: "identity", page: "runtime" },
-  { id: "heartbeat", page: "runtime" },
+  { id: "identity", page: "regional" },
+  { id: "heartbeat", page: "heartbeat" },
   { id: "requests", page: "network" },
   { id: "memory", page: "memory" },
   { id: "chat", page: "advanced" },
   { id: "execution", page: "execution" },
-  { id: "sessions", page: "runtime" },
+  { id: "resume", page: "execution" },
+  { id: "coordination", page: "coordination" },
+  { id: "activity", page: "activity" },
   { id: "tools", page: "tools" },
   { id: "web", page: "browser" },
   { id: "shell", page: "shell", enabledBy: "tools.exec.enable" },
@@ -26,7 +28,7 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
   { id: "proxy", page: "network" },
   { id: "safety", page: "advanced" },
   { id: "cli", page: "tools", enabledBy: "tools.cli_apps.enable" },
-  { id: "gateway", page: "advanced" },
+  { id: "server", page: "runtime" },
 ];
 
 export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
@@ -49,8 +51,8 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   {"group": "memory", "path": "agents.defaults.idle_compact_check_interval_seconds", "kind": "number", "min": 10, "max": 3600},
   { group: "memory", path: "agents.defaults.idle_compact_percent", kind: "number", min: 0, max: 100 },
   { group: "memory", path: "agents.defaults.idle_compact_keep_percent", kind: "number", min: 0, max: 100 },
-  {"group": "heartbeat", "path": "gateway.heartbeat.enabled", "kind": "boolean"},
-  {"group": "heartbeat", "path": "gateway.heartbeat.interval_s", "kind": "number", "min": 60},
+  {"group": "heartbeat", "path": "agents.defaults.heartbeat.enabled", "kind": "boolean"},
+  {"group": "heartbeat", "path": "agents.defaults.heartbeat.interval_s", "kind": "number", "min": 60},
   {"group": "requests", "path": "network.request_timeout_s", "kind": "number", "min": 60, "max": 3600},
   {"group": "requests", "path": "network.stream_idle_timeout_s", "kind": "number", "min": 60, "max": 3600},
   {"group": "requests", "path": "network.provider_max_retries", "kind": "number", "min": 3, "max": 20},
@@ -59,12 +61,14 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "memory", path: "agents.defaults.dream.enabled", kind: "boolean" },
   { group: "execution", path: "agents.defaults.provider_retry_mode", kind: "toggle", options: ["standard", "persistent"] },
   { group: "execution", path: "agents.defaults.goal_continuation_limit", kind: "number", min: 0 },
+  { group: "resume", path: "agents.defaults.resume.message", kind: "multiline" },
+  { group: "resume", path: "agents.defaults.resume.show_message", kind: "boolean" },
   { group: "execution", path: "agents.defaults.max_tool_iterations", kind: "number", min: 1 },
-  { group: "execution", path: "agents.defaults.max_concurrent_subagents", kind: "number", min: 1 },
+  { group: "coordination", path: "agents.defaults.max_concurrent_subagents", kind: "number", min: 1 },
   { group: "execution", path: "agents.defaults.max_tool_result_chars", kind: "number", min: 1 },
-  { group: "execution", path: "agents.defaults.tool_hint_max_length", kind: "number", min: 20, max: 500 },
-  { group: "execution", path: "tools.max_session_messages_per_minute", kind: "number", min: 1 },
-  { group: "memory", path: "agents.defaults.session_ttl_minutes", kind: "idle-compaction", manual: true },
+  { group: "activity", path: "agents.defaults.tool_status_summary_max_chars", kind: "number", min: 20, max: 500 },
+  { group: "coordination", path: "tools.max_outgoing_session_messages_per_minute", kind: "number", min: 1 },
+  { group: "memory", path: "agents.defaults.idle_compact_after_minutes", kind: "idle-compaction", manual: true },
   { group: "tools", path: "tools.exec.enable", kind: "boolean" },
   { group: "tools", path: "tools.file.enable", kind: "boolean" },
   { group: "web", path: "tools.web.enable", kind: "boolean" },
@@ -88,7 +92,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "cli", path: "tools.cli_apps.install_timeout", kind: "number", min: 1, max: 3600 },
   { group: "cli", path: "tools.cli_apps.run_timeout", kind: "number", min: 1, max: 600 },
   { group: "cli", path: "tools.cli_apps.catalog_ttl_seconds", kind: "number", min: 60, max: 86400 },
-  { group: "gateway", path: "gateway.host", kind: "text", manual: true },
-  { group: "gateway", path: "gateway.port", kind: "number", min: 1, max: 65535, manual: true },
-  { group: "gateway", path: "gateway.restart_mode", kind: "select", options: ["auto", "exec", "spawn", "exit"] },
+  { group: "server", path: "server.health_host", kind: "text", manual: true },
+  { group: "server", path: "server.health_port", kind: "number", min: 1, max: 65535, manual: true },
+  { group: "server", path: "server.restart_mode", kind: "select", options: ["auto", "exec", "spawn", "exit"] },
 ];

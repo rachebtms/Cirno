@@ -10,7 +10,7 @@ import shlex
 from pathlib import Path
 from typing import Iterable
 
-from cirno.config.paths import get_media_dir
+from cirno_core.config.paths import get_media_dir
 
 
 def _normalize_bind_paths(

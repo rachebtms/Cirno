@@ -8,7 +8,7 @@ import {
 
 vi.mock("@/components/settings/capabilities/HomeFilesSettings", () => ({ HomeFilesSettings: () => null }));
 
-const path = "agents.defaults.session_ttl_minutes";
+const path = "agents.defaults.idle_compact_after_minutes";
 
 function setup(minutes = 720) {
   let persisted = {

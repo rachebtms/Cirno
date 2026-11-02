@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.memory.consolidation import MemoryStore
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.command.builtin import (
+from cirno_core.memory.consolidation import MemoryStore
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.command.builtin import (
     build_help_text,
     builtin_command_palette,
     cmd_dream,
@@ -15,9 +15,9 @@ from cirno.command.builtin import (
     cmd_dream_prompt,
     cmd_dream_restore,
 )
-from cirno.command.router import CommandContext
-from cirno.session.manager import SessionManager
-from cirno.utils.gitstore import CommitInfo
+from cirno_core.command.router import CommandContext
+from cirno_core.session.manager import SessionManager
+from cirno_core.utils.gitstore import CommitInfo
 
 
 class _FakeStore:
@@ -28,7 +28,7 @@ class _FakeStore:
         dream_prompt_result=None,
         content_diff: str = "",
     ):
-        from cirno.config.home import get_home_path
+        from cirno_core.config.home import get_home_path
         self.workspace = get_home_path()
         self.git = git
         self._last_dream_cursor = last_dream_cursor
@@ -327,7 +327,7 @@ async def test_dream_noop_batch_unlocks_following_history(tmp_path) -> None:
 
     async def process_direct(prompt, *args, **kwargs):
         processed_prompts.append(prompt)
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         repo = MemoryRepository(store.workspace)
         with repo.connect() as db:
             claimed = db.execute("SELECT memory_id,claimed_revision FROM dream_queue WHERE lease=?", (store._dream_batch_token,)).fetchall()
@@ -581,7 +581,7 @@ async def test_dream_restore_rejects_non_dream_commit_clearly() -> None:
 
 @pytest.mark.asyncio
 async def test_dream_background_reply_keeps_admitted_conversation_metadata(tmp_path):
-    from cirno.session.display_history import HISTORY_GENERATION_METADATA_KEY
+    from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
     ctx, store = _build_runnable_dream(tmp_path, initialized=False, content_diff="", stop_reason="completed")
     ctx.msg.metadata[HISTORY_GENERATION_METADATA_KEY] = 'original-generation'
     await _run_dream_command(ctx)

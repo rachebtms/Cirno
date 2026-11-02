@@ -1,4 +1,4 @@
-from cirno.skills.loader import BUILTIN_SKILLS_DIR
+from cirno_core.skills.loader import BUILTIN_SKILLS_DIR
 
 
 def test_weather_skill_uses_windows_safe_single_today_request() -> None:

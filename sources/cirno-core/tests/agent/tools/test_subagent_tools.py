@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cirno.agent.context import TranscriptInput
-from cirno.memory.consolidation import Consolidator
-from cirno.agent.runner import AgentRunResult
-from cirno.agent.tools.context import RequestContext
-from cirno.agent.tools.registry import is_tool_error_result
-from cirno.config.schema import AgentDefaults
-from cirno.providers.base import GenerationSettings
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.agent.tools.registry import is_tool_error_result
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.providers.base import GenerationSettings
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -26,8 +26,8 @@ def _runtime(provider: MagicMock, model: str = "test-model") -> LLMRuntime:
 @pytest.mark.asyncio
 async def test_run_inline_returns_result_without_announcement(tmp_path):
     """Inline subagents return directly instead of injecting a follow-up."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock()
     manager = SubagentManager(
@@ -60,9 +60,9 @@ async def test_run_inline_returns_result_without_announcement(tmp_path):
 @pytest.mark.asyncio
 async def test_run_inline_returns_structured_error(tmp_path):
     """Inline subagent failures remain tool errors for the parent runner."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.registry import is_tool_error_result
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.registry import is_tool_error_result
+    from cirno_core.bus.queue import MessageBus
 
     manager = SubagentManager(
         consolidator=MagicMock(spec=Consolidator),
@@ -93,10 +93,10 @@ async def test_run_inline_returns_structured_error(tmp_path):
 @pytest.mark.asyncio
 async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
     """allowed_env_keys from ExecToolConfig must be forwarded to the subagent's ExecTool."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.shell import ExecToolConfig
-    from cirno.bus.queue import MessageBus
-    from cirno.config.schema import ToolsConfig
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.shell import ExecToolConfig
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.config.schema import ToolsConfig
 
     bus = MessageBus()
     provider = MagicMock()
@@ -138,8 +138,8 @@ async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
 @pytest.mark.asyncio
 async def test_subagent_uses_configured_max_iterations(tmp_path):
     """Subagents should honor the configured tool-iteration limit."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -179,8 +179,8 @@ async def test_subagent_uses_configured_max_iterations(tmp_path):
 @pytest.mark.asyncio
 async def test_subagent_checkpoint_updates_status_and_preserves_omitted_fields(tmp_path):
     """Runner checkpoints update detached task snapshots without resetting omitted fields."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     mgr = SubagentManager(
         consolidator=MagicMock(spec=Consolidator),
@@ -225,8 +225,8 @@ async def test_subagent_checkpoint_updates_status_and_preserves_omitted_fields(t
 @pytest.mark.asyncio
 async def test_spawn_forwards_temperature_to_run_spec(tmp_path):
     """A temperature passed to spawn() should reach the AgentRunSpec."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -263,9 +263,9 @@ async def test_spawn_forwards_temperature_to_run_spec(tmp_path):
 @pytest.mark.asyncio
 async def test_background_spawn_waits_for_concurrency_capacity(tmp_path):
     """Background tasks should be accepted and start when capacity becomes available."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.subagent import SubagentTool
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.subagent import SubagentTool
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -302,7 +302,7 @@ async def test_background_spawn_waits_for_concurrency_capacity(tmp_path):
 
     mgr.runner.run = AsyncMock(side_effect=fake_run)
 
-    from cirno.agent.tools.context import RequestContext, request_context
+    from cirno_core.agent.tools.context import RequestContext, request_context
 
     tool = SubagentTool(mgr)
     with request_context(RequestContext(
@@ -333,8 +333,8 @@ async def test_background_spawn_waits_for_concurrency_capacity(tmp_path):
 
 @pytest.mark.asyncio
 async def test_subagent_tool_waits_for_inline_result():
-    from cirno.agent.tools.context import RequestContext, request_context
-    from cirno.agent.tools.subagent import SubagentTool
+    from cirno_core.agent.tools.context import RequestContext, request_context
+    from cirno_core.agent.tools.subagent import SubagentTool
 
     class Manager:
         max_concurrent_subagents = 1
@@ -367,10 +367,10 @@ async def test_subagent_tool_waits_for_inline_result():
 
 @pytest.mark.asyncio
 async def test_inline_spawn_waits_for_concurrency_capacity(tmp_path):
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.context import RequestContext, request_context
-    from cirno.agent.tools.subagent import SubagentTool
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.context import RequestContext, request_context
+    from cirno_core.agent.tools.subagent import SubagentTool
+    from cirno_core.bus.queue import MessageBus
 
     manager = SubagentManager(
         consolidator=MagicMock(spec=Consolidator),
@@ -430,14 +430,14 @@ async def test_inline_spawn_waits_for_concurrency_capacity(tmp_path):
 @pytest.mark.asyncio
 async def test_runner_executes_inline_spawn_batch_concurrently(tmp_path):
     """Adjacent blocking consultations should share one concurrent tool batch."""
-    from cirno.agent.hook import AgentHook, AgentHookContext
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.agent.tools.context import RequestContext, request_context
-    from cirno.agent.tools.execution import execute_tool_calls
-    from cirno.agent.tools.registry import ToolRegistry
-    from cirno.agent.tools.subagent import SubagentTool
-    from cirno.bus.queue import MessageBus
-    from cirno.providers.base import ToolCallRequest
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.tools.context import RequestContext, request_context
+    from cirno_core.agent.tools.execution import execute_tool_calls
+    from cirno_core.agent.tools.registry import ToolRegistry
+    from cirno_core.agent.tools.subagent import SubagentTool
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.providers.base import ToolCallRequest
 
     manager = SubagentManager(
         consolidator=MagicMock(spec=Consolidator),
@@ -507,8 +507,8 @@ async def test_runner_executes_inline_spawn_batch_concurrently(tmp_path):
 
 @pytest.mark.asyncio
 async def test_cancel_by_session_cancels_inline_subagent(tmp_path):
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     manager = SubagentManager(
         consolidator=MagicMock(spec=Consolidator),
@@ -540,8 +540,8 @@ async def test_cancel_by_session_cancels_inline_subagent(tmp_path):
 
 def test_subagent_default_max_concurrent_matches_agent_defaults(tmp_path):
     """Direct SubagentManager construction should use the agent default concurrency limit."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     mgr = SubagentManager(
@@ -557,8 +557,8 @@ def test_subagent_default_max_concurrent_matches_agent_defaults(tmp_path):
 
 def test_subagent_default_max_iterations_matches_agent_defaults(tmp_path):
     """Direct SubagentManager construction should use the agent default limit."""
-    from cirno.agent.subagents.manager import SubagentManager
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     mgr = SubagentManager(
@@ -573,8 +573,8 @@ def test_subagent_default_max_iterations_matches_agent_defaults(tmp_path):
 
 def test_agent_loop_passes_max_iterations_to_subagents(tmp_path):
     """AgentLoop's configured limit should be shared with spawned subagents."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -594,8 +594,8 @@ def test_agent_loop_passes_max_iterations_to_subagents(tmp_path):
 @pytest.mark.asyncio
 async def test_agent_loop_syncs_updated_max_iterations_before_run(tmp_path):
     """Runtime max_iterations changes should be reflected before tool execution."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -637,8 +637,8 @@ async def test_agent_loop_syncs_updated_max_iterations_before_run(tmp_path):
 @pytest.mark.asyncio
 async def test_drain_pending_no_block_when_no_subagents(tmp_path):
     """_drain_pending should not block when no sub-agents are running."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -687,9 +687,9 @@ async def test_drain_pending_no_block_when_no_subagents(tmp_path):
 @pytest.mark.asyncio
 async def test_terminal_drain_timeout(tmp_path):
     """The terminal drain should return empty after its shared timeout expires."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
-    from cirno.session.manager import Session
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.session.manager import Session
 
     bus = MessageBus()
     provider = MagicMock()
@@ -744,7 +744,7 @@ async def test_terminal_drain_timeout(tmp_path):
         awaitable.close()
         raise asyncio.TimeoutError
 
-    with patch("cirno.agent.loop.asyncio.wait_for", side_effect=_timeout):
+    with patch("cirno_core.agent.loop.asyncio.wait_for", side_effect=_timeout):
         results = await terminal_injection_callback()
         assert results == []
 
@@ -754,10 +754,10 @@ async def test_terminal_drain_timeout(tmp_path):
 @pytest.mark.asyncio
 async def test_terminal_drain_reuses_one_timeout_budget(tmp_path):
     """Repeated terminal rendezvous calls share one 300-second deadline."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
-    from cirno.session.manager import Session
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.session.manager import Session
 
     loop = AgentLoop(
         bus=MessageBus(),
@@ -818,7 +818,7 @@ async def test_terminal_drain_reuses_one_timeout_budget(tmp_path):
     loop_asyncio = SimpleNamespace(**vars(asyncio))
     loop_asyncio.get_running_loop = lambda: fake_loop
     loop_asyncio.wait_for = _deliver
-    with patch("cirno.agent.loop.asyncio", loop_asyncio):
+    with patch("cirno_core.agent.loop.asyncio", loop_asyncio):
         assert await terminal_injection_callback()
         assert await terminal_injection_callback()
 

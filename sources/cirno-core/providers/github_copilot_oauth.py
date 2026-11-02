@@ -9,8 +9,8 @@ import time
 
 from oauth_cli_kit.models import OAuthToken
 
-from cirno.providers import github_copilot_provider
-from cirno.providers.github_copilot_provider import login_github_copilot
+from cirno_core.providers import github_copilot_provider
+from cirno_core.providers.github_copilot_provider import login_github_copilot
 
 
 class GitHubCopilotOAuthFlow:

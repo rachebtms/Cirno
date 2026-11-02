@@ -1,10 +1,10 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.cron import CronTool
-from cirno.bus.queue import MessageBus
-from cirno.cron.service import CronService
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.cron.service import CronService
 
 
 def test_agent_loop_registers_cron_tool_with_configured_timezone(tmp_path: Path) -> None:

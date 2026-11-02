@@ -10,8 +10,8 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import httpx
 import pytest
 
-import cirno.providers.xai_oauth as xai_oauth
-from cirno.providers.xai_oauth import (
+import cirno_core.providers.xai_oauth as xai_oauth
+from cirno_core.providers.xai_oauth import (
     XAI_CLIENT_ID,
     XAI_OAUTH_SCOPES,
     XAIOAuthError,

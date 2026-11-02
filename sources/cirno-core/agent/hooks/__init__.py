@@ -1,6 +1,6 @@
 """Concrete agent hook implementations."""
 
-from cirno.agent.hooks.file_edit_activity import (
+from cirno_core.agent.hooks.file_edit_activity import (
     FileEditActivityHook,
     create_file_edit_activity_hook,
 )

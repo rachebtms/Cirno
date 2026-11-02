@@ -14,9 +14,9 @@ from typing import Any, Callable, Coroutine, Literal
 from filelock import FileLock
 from loguru import logger
 
-from cirno.cron.binding import CronBinding, CronBindingError, binding_revision
-from cirno.cron.session_turns import is_bound_cron_job
-from cirno.cron.types import (
+from cirno_core.cron.binding import CronBinding, CronBindingError, binding_revision
+from cirno_core.cron.session_turns import is_bound_cron_job
+from cirno_core.cron.types import (
     CronJob,
     CronJobState,
     CronPayload,
@@ -25,10 +25,10 @@ from cirno.cron.types import (
     CronSchedule,
     CronStore,
 )
-from cirno.runtime.admission import RuntimeAdmission
-from cirno.runtime.context import RUNTIME_CONTEXT_INPUT_META
-from cirno.utils.helpers import atomic_write_text
-from cirno.utils.run_records import (
+from cirno_core.runtime.admission import RuntimeAdmission
+from cirno_core.runtime.context import RUNTIME_CONTEXT_INPUT_META
+from cirno_core.utils.helpers import atomic_write_text
+from cirno_core.utils.run_records import (
     write_run_record as write_automation_run_record,
 )
 

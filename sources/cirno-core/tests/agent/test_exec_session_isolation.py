@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.queue import MessageBus
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.queue import MessageBus
 
 
 def _provider() -> MagicMock:

@@ -15,46 +15,46 @@ from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict, cast
 
 from loguru import logger
 
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.agent.hooks import create_file_edit_activity_hook
-from cirno.agent.runner import AgentRunner, AgentRunSpec
-from cirno.agent.session_activity import SessionActivity
-from cirno.agent.subagents.sessions import SubagentSessions
-from cirno.agent.subagents.status import SubagentState as SubagentState
-from cirno.agent.subagents.status import SubagentStatus
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.context import (
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.agent.hooks import create_file_edit_activity_hook
+from cirno_core.agent.runner import AgentRunner, AgentRunSpec
+from cirno_core.agent.session_activity import SessionActivity
+from cirno_core.agent.subagents.sessions import SubagentSessions
+from cirno_core.agent.subagents.status import SubagentState as SubagentState
+from cirno_core.agent.subagents.status import SubagentStatus
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.context import (
     RequestContext,
     ToolContext,
     bind_request_context,
     reset_request_context,
 )
-from cirno.agent.tools.exec_session import ExecSessionManager
-from cirno.agent.tools.file_state import FileStates
-from cirno.agent.tools.loader import ToolLoader
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import RuntimeEventContext, SubagentTaskChanged
-from cirno.config.network import NetworkConfig
-from cirno.config.schema import AgentDefaults, ToolsConfig
-from cirno.bus.agent_events import AgentEvent, EventSink
-from cirno.llm_usage.context import LLMUsageSource, current_llm_usage_source
-from cirno.providers.base import ToolCallRequest
-from cirno.security.workspace_access import (
+from cirno_core.agent.tools.exec_session import ExecSessionManager
+from cirno_core.agent.tools.file_state import FileStates
+from cirno_core.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import RuntimeEventContext, SubagentTaskChanged
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.schema import AgentDefaults, ToolsConfig
+from cirno_core.bus.agent_events import AgentEvent, EventSink
+from cirno_core.llm_usage.context import LLMUsageSource, current_llm_usage_source
+from cirno_core.providers.base import ToolCallRequest
+from cirno_core.security.workspace_access import (
     WorkspaceScope,
     bind_workspace_scope,
     reset_workspace_scope,
     workspace_sandbox_status,
 )
-from cirno.session.manager import Session, SessionManager, SessionPolicy
-from cirno.utils.cancellation import shield_and_drain
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.utils.prompt_templates import render_template
+from cirno_core.session.manager import Session, SessionManager, SessionPolicy
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
-    from cirno.memory.consolidation import Consolidator
+    from cirno_core.memory.consolidation import Consolidator
 
 
 class _SubagentOrigin(TypedDict):
@@ -637,7 +637,7 @@ class SubagentManager:
 
     async def _save_transcript(self, record: _SubagentTask) -> None:
         if self.sessions is not None:
-            from cirno.session.sqlite_store import SessionConflictError
+            from cirno_core.session.sqlite_store import SessionConflictError
 
             try:
                 await self.sessions.sessions.state.finish_turn(record.session)
@@ -886,7 +886,7 @@ class SubagentManager:
 
     def _build_subagent_prompt(self, workspace: Path | None = None) -> str:
         """Build a focused system prompt for the subagent."""
-        from cirno.skills.loader import SkillsLoader
+        from cirno_core.skills.loader import SkillsLoader
 
         agent_workspace = self.workspace.expanduser().resolve()
         project_workspace = workspace.expanduser().resolve() if workspace else agent_workspace
@@ -894,7 +894,7 @@ class SubagentManager:
             self.workspace,
             disabled_skills=self.disabled_skills,
         ).build_skills_summary(workspace=project_workspace)
-        from cirno.config.home import get_home_path
+        from cirno_core.config.home import get_home_path
         agent_home = get_home_path().resolve()
         history_log = (
             str(agent_home / "memory" / "history.jsonl")

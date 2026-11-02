@@ -1,12 +1,12 @@
 from unittest.mock import MagicMock
 from types import SimpleNamespace
 
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.file_state import FileStates
-from cirno.agent.tools.filesystem import FileToolsConfig, ReadFileTool
-from cirno.agent.tools.loader import ToolLoader
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.schema import Config, ToolsConfig
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.file_state import FileStates
+from cirno_core.agent.tools.filesystem import FileToolsConfig, ReadFileTool
+from cirno_core.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.schema import Config, ToolsConfig
 
 FILE_TOOL_NAMES = {
     "apply_patch",

@@ -13,7 +13,7 @@
     },
     "error": {
       "title": "Couldn't reach cirno",
-      "gatewayHint": "Make sure the gateway is running (`cirno gateway`) and this browser can reach its WebUI address."
+      "serverHint": "Make sure the Cirno server is running (`cirno`) and this browser can reach its WebUI address."
     },
     "auth": {
       "title": "Connect to cirno",
@@ -30,7 +30,7 @@
     },
     "account": {
       "section": "Account",
-      "logoutHint": "Disconnect this browser from the gateway.",
+      "logoutHint": "Disconnect this browser from the Cirno server.",
       "logout": "Sign out"
     },
     "system": {
@@ -54,7 +54,7 @@
     },
     "pairing": {
       "haveCode": "Already received a code?",
-      "deliveryFailed": "Couldn't send the pairing code. Check this bot's send-message permissions and gateway logs, then send it another private message to retry.",
+      "deliveryFailed": "Couldn't send the pairing code. Check this bot's send-message permissions and Cirno server logs, then send it another private message to retry.",
       "deliverySending": "Sending a pairing code to your chat. If it doesn't arrive, send the bot another private message to retry.",
       "title": "Pair account",
       "description": "Enter the pairing code received in chat.",
@@ -132,51 +132,51 @@
       "fields": {
         "agents_defaults_timezone_mode": {
           "label": "System timezone",
-          "help": "Turn off to choose a timezone.\n\nTurn off to choose a timezone manually."
+          "help": "Turn off to choose a timezone manually."
         },
         "agents_defaults_timezone": {
           "label": "Timezone",
-          "help": "UTC offsets use today's date.\n\nChoose a timezone. UTC offsets reflect the current date."
+          "help": "Choose a timezone. UTC offsets reflect the current date."
         },
         "agents_defaults_dream_enabled": {
           "label": "Memory consolidation",
-          "help": "Organize memory automatically; turning off keeps existing memories.\n\nAutomatically organize useful information from conversations. Turning this off keeps existing memories available."
+          "help": "Automatically organize useful information from conversations. Turning this off keeps existing memories available."
         },
-        "gateway_heartbeat_enabled": {
+        "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
         },
-        "gateway_heartbeat_interval_s": {
+        "agents_defaults_heartbeat_interval_s": {
           "label": "Heartbeat interval (seconds)",
           "help": "Restart to apply."
         },
         "agents_defaults_max_tool_iterations": {
-          "label": "Tool rounds",
-          "help": "Maximum tool rounds per reply.\n\nMaximum number of model and tool rounds for each reply."
+          "label": "Execution rounds per segment",
+          "help": "Maximum model and tool rounds in one execution segment; separate from Goal continuation limits."
         },
         "agents_defaults_max_concurrent_subagents": {
           "label": "Concurrent subagents",
-          "help": "Maximum subagents running at once.\n\nMaximum number of subagents running at the same time."
+          "help": "Maximum number of subagents running at the same time."
         },
         "agents_defaults_max_tool_result_chars": {
-          "label": "Result length",
-          "help": "Character limit for each tool result sent to the model.\n\nMaximum number of characters from each tool result sent to the model."
+          "label": "Tool result limit (characters)",
+          "help": "Maximum characters from each tool result sent to the model."
         },
         "agents_defaults_provider_retry_mode": {
           "label": "Keep retrying",
-          "help": "Retry recoverable errors; turn off for standard retries.\n\nKeep retrying requests after recoverable errors. Turn off to use standard retries."
+          "help": "Keep retrying requests after recoverable errors. Turn off to use standard retries."
         },
-        "agents_defaults_tool_hint_max_length": {
-          "label": "Summary length",
-          "help": "Character limit for tool activity summaries.\n\nMaximum number of characters shown in a tool activity summary."
+        "agents_defaults_tool_status_summary_max_chars": {
+          "label": "Tool status summary limit (characters)",
+          "help": "Maximum characters shown in channel tool activity summaries."
         },
-        "tools_max_session_messages_per_minute": {
-          "label": "Message rate",
-          "help": "Maximum tool messages to one session per minute.\n\nMaximum number of messages tools can send to the same session each minute."
+        "tools_max_outgoing_session_messages_per_minute": {
+          "label": "Outgoing cross-conversation messages (per minute)",
+          "help": "Each source conversation can send this many messages to other conversations in a rolling 60-second window. This does not limit your messages."
         },
         "tools_exec_enable": {
           "label": "Shell tool",
-          "help": "Allow the agent to run Shell commands.\n\nAllow the agent to run shell commands."
+          "help": "Allow the agent to run shell commands."
         },
         "tools_file_enable": {
           "label": "File tools",
@@ -184,39 +184,39 @@
         },
         "tools_web_enable": {
           "label": "Web access",
-          "help": "Allow web search and page reading.\n\nAllow web search and web fetch tools."
+          "help": "Allow web search and web fetch tools."
         },
         "tools_cli_apps_enable": {
           "label": "CLI apps",
-          "help": "Allow installing, managing, and running CLI apps.\n\nAllow the agent to manage and run CLI apps."
+          "help": "Allow the agent to manage and run CLI apps."
         },
         "tools_my_enable": {
-          "label": "Inspect config",
-          "help": "Allow the agent to inspect its configuration."
+          "label": "Inspect agent runtime",
+          "help": "Allow runtime inspection through runtime tools; service secrets are excluded."
         },
         "tools_my_allow_set": {
-          "label": "Edit config",
-          "help": "Allow the agent to change its configuration.\n\nAllow the self-management tool to update configuration."
+          "label": "Change agent runtime",
+          "help": "Allow runtime tools to change supported agent settings."
         },
         "tools_exec_path_prepend": {
           "label": "PATH priority",
-          "help": "Search these directories first.\n\nDirectories added to the start of PATH. Separate entries with semicolons on Windows or colons on Linux and macOS."
+          "help": "Directories added to the start of PATH. Separate entries with semicolons on Windows or colons on Linux and macOS."
         },
         "tools_exec_path_append": {
           "label": "PATH additions",
-          "help": "Search these directories last.\n\nDirectories added to the end of PATH. Separate entries with semicolons on Windows or colons on Linux and macOS."
+          "help": "Directories added to the end of PATH. Separate entries with semicolons on Windows or colons on Linux and macOS."
         },
         "tools_exec_sandbox": {
           "label": "Command sandbox",
-          "help": "Isolate command processes; requires system support.\n\nUse bwrap on Linux or Seatbelt on macOS. Workspace checks alone do not isolate processes."
+          "help": "Use bwrap on Linux or Seatbelt on macOS. Workspace checks alone do not isolate processes."
         },
         "tools_exec_sandbox_ro_binds": {
           "label": "Read-only paths",
-          "help": "Extra read-only paths, one per line.\n\nAdditional paths mounted read-only. One path per line."
+          "help": "Additional paths mounted read-only. One path per line."
         },
         "tools_exec_sandbox_rw_binds": {
           "label": "Writable paths",
-          "help": "Extra writable paths, one per line.\n\nAdditional paths mounted with write access. One path per line."
+          "help": "Additional paths mounted with write access. One path per line."
         },
         "tools_exec_allowed_env_keys": {
           "label": "Environment variables",
@@ -240,63 +240,51 @@
         },
         "tools_web_user_agent": {
           "label": "User agent",
-          "help": "User-Agent for web requests; leave blank for the default.\n\nUser-Agent header sent with web requests. Leave blank to use the default."
+          "help": "User-Agent header sent with web requests. Leave blank to use the default."
         },
         "tools_restrict_to_workspace": {
           "label": "Workspace restriction",
-          "help": "Global workspace limits; WebUI chat permissions are separate.\n\nGlobal tool access policy. Per-chat WebUI permissions are configured separately."
+          "help": "Global tool access policy. Per-chat WebUI permissions are configured separately."
         },
         "tools_ssrf_whitelist": {
           "label": "Allowed IPs",
-          "help": "Allowed IPs or CIDR ranges, one per line.\n\nAllow outbound requests to these otherwise restricted addresses. Enter one IP address or CIDR range per line."
+          "help": "Allow outbound requests to these otherwise restricted addresses. Enter one IP address or CIDR range per line."
         },
         "tools_webui_allow_remote_package_install": {
           "label": "Remote installs",
-          "help": "Allow remote package and skill installs; set this on the gateway host.\n\nAllow WebUI browsers on other devices to install optional packages and skills. This setting can only be changed on the gateway host."
+          "help": "Allow WebUI browsers on other devices to install optional packages and skills. This setting can only be changed on the Cirno server host."
         },
         "tools_cli_apps_install_timeout": {
           "label": "Install timeout",
-          "help": "Maximum seconds for installing a CLI app.\n\nTime allowed for CLI app installation."
+          "help": "Time allowed for CLI app installation."
         },
         "tools_cli_apps_run_timeout": {
           "label": "Run timeout",
-          "help": "Maximum seconds for a CLI command.\n\nTime allowed for a CLI app command."
+          "help": "Time allowed for a CLI app command."
         },
         "tools_cli_apps_catalog_ttl_seconds": {
           "label": "Cache duration",
-          "help": "Seconds to cache the CLI app list.\n\nHow long the CLI app catalog stays cached."
-        },
-        "gateway_host": {
-          "label": "Gateway address",
-          "help": "Gateway address; configure the WebUI listener separately.\n\nAddress used by the gateway. Configure the WebUI listener separately under Channels → WebSocket."
-        },
-        "gateway_port": {
-          "label": "Gateway port",
-          "help": "Gateway port; launch arguments take priority.\n\nPort used by the gateway. Command-line arguments override this setting."
-        },
-        "gateway_restart_mode": {
-          "label": "Restart mode",
-          "help": "Choose a restart method; Automatic follows your environment.\n\nChoose how the gateway restarts. Automatic selects a method for your environment."
+          "help": "How long the CLI app catalog stays cached."
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
+          "help": "Used when Dream scheduling is set to Interval. Restart to apply."
         },
         "agents_defaults_dream_model_override": {
           "label": "Dream model",
           "help": "Use a separate model for Dream; leave empty to use the active model."
         },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Idle memory check (seconds)",
-          "help": "Restart to apply."
+          "label": "Idle compaction check interval (seconds)",
+          "help": "How often to check conversations for idle compaction; separate from the inactivity timeout. Restart to apply."
         },
         "network_request_timeout_s": {
-          "label": "Compatible API request timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "Model request timeout (seconds)",
+          "help": "Maximum time for a model request."
         },
         "network_stream_idle_timeout_s": {
-          "label": "Compatible API stream idle timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "Model stream idle timeout (seconds)",
+          "help": "Maximum time without new stream data before a model request times out."
         },
         "network_provider_max_retries": {
           "label": "Model retries",
@@ -372,7 +360,27 @@
         },
         "tools_exec_max_runtime": {
           "label": "Command runtime",
-          "help": "Default hard runtime limit for shell commands.\n\nOutput and waiting do not extend it. Choose No time limit to remove this limit."
+          "help": "Output and waiting do not extend it. Choose No time limit to remove this limit."
+        },
+        "server_health_host": {
+          "label": "Health endpoint bind address",
+          "help": "Address for the service health endpoint; Web UI listens on its own address in Channel setup."
+        },
+        "server_health_port": {
+          "label": "Health endpoint port",
+          "help": "Service health port, separate from the Web UI port. Restart to apply."
+        },
+        "server_restart_mode": {
+          "label": "Restart mode",
+          "help": "Choose how the Cirno server restarts. Automatic selects a method for your environment."
+        },
+        "agents_defaults_resume_message": {
+          "label": "Continuation message",
+          "help": "Instruction sent when you press Continue or use /resume."
+        },
+        "agents_defaults_resume_show_message": {
+          "label": "Show continuation message",
+          "help": "Display the continuation instruction as a labeled system input in the conversation."
         }
       },
       "groups": {
@@ -389,15 +397,11 @@
           "help": "Turn automatic memory organization on or off."
         },
         "heartbeat": {
-          "title": "Heartbeat"
+          "title": "Agent heartbeat"
         },
         "execution": {
           "title": "Run limits",
           "help": "Set tool limits and request retries."
-        },
-        "sessions": {
-          "title": "Sessions",
-          "help": "Set up shared chats across platforms."
         },
         "tools": {
           "title": "Built-in tools",
@@ -423,8 +427,8 @@
           "title": "CLI limits",
           "help": "Set install and run timeouts, and list cache duration.\n\nSet installation and command timeouts, and how long to cache the app catalog."
         },
-        "gateway": {
-          "title": "Gateway",
+        "server": {
+          "title": "Cirno server",
           "help": "Set deployment and restart options."
         },
         "api": {
@@ -449,6 +453,16 @@
         },
         "requests": {
           "title": "Model connection"
+        },
+        "coordination": {
+          "title": "Conversation coordination"
+        },
+        "activity": {
+          "title": "Execution display"
+        },
+        "resume": {
+          "title": "Continue stopped tasks",
+          "help": "Continue from saved context. Completed tool calls are not replayed, and generation starts a new model request."
         }
       },
       "save": "Save changes",
@@ -474,7 +488,7 @@
       "manual": "Manual",
       "standard": "Standard",
       "persistent": "Persistent",
-      "unavailable": "Update the gateway to edit these settings.",
+      "unavailable": "Update the Cirno server to edit these settings.",
       "advancedOptions": "Advanced options",
       "idle": "When idle",
       "interval": "Fixed interval"
@@ -505,7 +519,7 @@
       "channels": "Channel setup",
       "cliApps": "CLI apps",
       "mcp": "MCP",
-      "runtime": "Server & heartbeat",
+      "runtime": "Server",
       "advanced": "Permissions",
       "apps": "Tools & CLI Apps",
       "automations": "Automations",
@@ -522,7 +536,11 @@
       "execution": "Goals & execution",
       "shell": "Shell execution",
       "network": "Network & retries",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "account": "Account",
+      "heartbeat": "Agent heartbeat",
+      "coordination": "Conversation coordination",
+      "regional": "Time & region"
     },
     "sections": {
       "interface": "Interface",
@@ -661,7 +679,7 @@
       "restart": "Restart cirno",
       "configPath": "Config path",
       "activePreset": "Active preset",
-      "gateway": "Gateway",
+      "gateway": "Cirno server",
       "restartState": "Restart state",
       "pendingChanges": "Pending changes",
       "currentModel": "Current configuration",
@@ -696,7 +714,7 @@
       "language": "Choose the interface language.",
       "provider": "Choose the provider for new requests.",
       "model": "Choose the model for this preset.",
-      "configPath": "The configuration file used by the current gateway.",
+      "configPath": "The configuration file used by the current Cirno server.",
       "currentModel": "Used for new replies.",
       "selectedModelProvider": "Set by the selected model.",
       "selectedModelValue": "Set by the selected model.",
@@ -1475,7 +1493,7 @@
       "deleteConfirmAction": "Delete skill",
       "instructionsTitle": "Skill instructions",
       "setupRequired": "Setup required",
-      "setupDescription": "Install dependencies on the gateway host, then check again.\n\nInstall the missing dependency on the machine running cirno, then check again.",
+      "setupDescription": "Install dependencies on the Cirno server host, then check again.\n\nInstall the missing dependency on the machine running cirno, then check again.",
       "copySetupCommand": "Copy command",
       "checkAgain": "Check again",
       "marketplaceSearchFailed": "Could not search skill marketplaces.",
@@ -1565,6 +1583,20 @@
       "webuiUrl": "Web UI address (optional)",
       "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
       "settingsLink": "Configure Telegram notifications"
+    },
+    "account": {
+      "owner": "Instance owner",
+      "changePassword": "Change password",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "help": "Enter your current password to change it. Other browser sessions will be signed out.",
+      "saved": "Password changed. This browser stays signed in.",
+      "unavailable": "Account settings are available when using browser registration and login.",
+      "loading": "Loading account…",
+      "retry": "Retry"
+    },
+    "heartbeat": {
+      "help": "Periodically check HEARTBEAT.md and wake the Cirno agent when it contains tasks. This is separate from the service health endpoint."
     }
   },
   "chat": {
@@ -1576,7 +1608,7 @@
     "collapsed": "{{count}} hidden topics",
     "showLess": "Show less",
     "actions": "Topic actions for {{title}}",
-    "newInProject": "Start a new topic in {{project}}",
+    "newInProject": "Start a new conversation in {{project}}",
     "activity": {
       "running": "Agent running",
       "complete": "Agent finished",
@@ -1611,21 +1643,21 @@
     }
   },
   "archiveConfirm": {
-    "title": "Archive this topic?",
+    "title": "Archive this conversation?",
     "titleMany": "Archive {{count}} topics?",
-    "unarchiveTitle": "Unarchive this topic?",
+    "unarchiveTitle": "Unarchive this conversation?",
     "unarchiveTitleMany": "Unarchive {{count}} topics?",
     "description": "Conversations are kept. You can unarchive them at any time.",
     "unarchiveDescription": "These topics will return to the sidebar."
   },
   "deleteConfirm": {
-    "title": "Delete this topic?",
+    "title": "Delete this conversation?",
     "titleMany": "Delete {{count}} conversations?",
     "description": "This action cannot be undone.",
     "descriptionMany": "This action cannot be undone.",
     "cancel": "Cancel",
     "confirm": "Delete",
-    "automationsDescription": "Deleting this topic also deletes its linked automations.",
+    "automationsDescription": "Deleting this conversation also deletes its linked automations.",
     "automationsDescriptionMany": "Linked automations will also be deleted.",
     "moreAutomations": "+ {{count}} more",
     "confirmWithAutomations": "Delete",
@@ -1749,7 +1781,7 @@
     },
     "header": {
       "toggleSidebar": "Toggle sidebar",
-      "newChat": "Start a new topic",
+      "newChat": "Start a new conversation",
       "toggleTheme": "Toggle theme from header",
       "settings": "Open settings",
       "sessionInfo": "Session details"
@@ -1783,7 +1815,7 @@
     "composer": {
       "placeholderThread": "Type your message…",
       "placeholderHero": "Describe what you’d like to do",
-      "placeholderOpening": "Opening a new topic…",
+      "placeholderOpening": "Opening a new conversation…",
       "inputAria": "Message input",
       "goalStatus": {
         "paused": "Paused",
@@ -1879,7 +1911,7 @@
         "commands": {
           "new": {
             "title": "New chat",
-            "description": "Reset this topic and start a new one."
+            "description": "Reset this conversation and start a new one."
           },
           "compact": {
             "title": "Compact context",
@@ -1936,8 +1968,33 @@
           "pairing": {
             "title": "Pairing",
             "description": "Manage pairing requests."
+          },
+          "resume": {
+            "title": "Continue task",
+            "description": "Continue the stopped request from saved context."
+          },
+          "clear": {
+            "title": "Clear Cirno context",
+            "description": "Clear the personal Cirno conversation. File changes are not undone."
+          },
+          "temporary": {
+            "title": "Temporary conversation",
+            "description": "Choose temporary mode before sending the first message."
+          },
+          "ptc": {
+            "title": "PTC mode",
+            "description": "Choose programmatic tool calling before the first message."
+          },
+          "access": {
+            "title": "Access mode",
+            "description": "Choose Default, AI review or Full Access."
           }
-        }
+        },
+        "controlRunning": "Stop the current task before changing conversation options.",
+        "accessUsage": "Usage: /access default|review|full",
+        "modelUsage": "Use /model followed by a configured model preset name.",
+        "creationOnly": "Choose this option in a new conversation before sending its first message.",
+        "toggleUsage": "Usage: {{command}} on|off"
       },
       "mentions": {
         "ariaLabel": "Mentions",
@@ -1978,7 +2035,9 @@
         "full": "Full Access",
         "fullShort": "Full",
         "defaultDescription": "Read files, edit files, and run commands only inside the working directory.",
-        "fullDescription": "Allow file access and commands outside the working directory."
+        "fullDescription": "Allow file access and commands outside the working directory.",
+        "review": "AI review",
+        "reviewDescription": "Default restrictions remain. An independent AI reviews each blocked operation without Cirno memory; uncertain cases go to you in Inbox. AI decisions can be wrong and may expose files or execute harmful commands."
       }
     },
     "scrollToBottom": "Scroll to bottom",
@@ -2001,6 +2060,47 @@
       "title": "Clear Cirno conversation",
       "description": "Stop the current run and clear this conversation’s messages and context. Saved memories and other conversations are kept.",
       "confirm": "Clear conversation"
+    },
+    "inputSources": {
+      "heartbeat": "Heartbeat",
+      "scheduled_task": "Scheduled task",
+      "trigger": "Trigger",
+      "conversation": "Conversation message",
+      "subagent": "Subagent result",
+      "continuation": "Automatic continuation",
+      "system": "System event",
+      "supervision": "Cirno updated this conversation"
+    },
+    "supervision": {
+      "changed": "Cirno updated this conversation",
+      "actions": {
+        "stop": "Stopped this conversation",
+        "continue": "Continued this conversation",
+        "goal_create": "Created a Goal",
+        "goal_set": "Replaced the Goal",
+        "goal_update": "Updated Goal settings",
+        "goal_stop": "Stopped the Goal",
+        "goal_pause": "Paused the Goal",
+        "goal_resume": "Resumed the Goal",
+        "goal_delete": "Deleted the Goal",
+        "goal_wait": "Scheduled the Goal to wait"
+      },
+      "fields": {
+        "objective": "Objective",
+        "ui_summary": "Display label",
+        "recap": "Saved progress",
+        "continuation_limit": "Automatic continuation limit",
+        "wake_after_seconds": "Wait (seconds)"
+      }
+    },
+    "historyEffects": {
+      "title": "Workspace changes remain",
+      "description": "Branching or editing changes conversation context only. It does not undo earlier commands or file edits. Running again may conflict with the current workspace and cause file loss. Check your files before continuing."
+    },
+    "historyEdit": {
+      "text": "Edited message",
+      "description": "Replace this message and the later conversation context, then run the revised request. Existing attachments are retained.",
+      "submit": "Save and send"
     }
   },
   "message": {
@@ -2228,7 +2328,8 @@
       "estimated": "Includes estimated usage"
     },
     "expandStep": "Expand step",
-    "collapseStep": "Collapse step"
+    "collapseStep": "Collapse step",
+    "edit": "Edit message"
   },
   "recovery": {
     "actionFailed": "Recovery action failed. Try again.",
@@ -2284,7 +2385,7 @@
     "failed": "Could not copy. Please try again.",
     "unavailable": "Could not resolve this file. You can copy the original reference.",
     "loading": "Resolving file…",
-    "gatewayPath": "Paths refer to the gateway machine."
+    "serverPath": "Paths refer to the Cirno server machine."
   },
   "filePreview": {
     "displayMode": "Display mode",
@@ -2295,7 +2396,7 @@
     "close": "Close file preview",
     "loading": "Loading preview...",
     "failed": "Could not preview this file.",
-    "routeMissing": "File preview needs the latest gateway. Restart cirno gateway and try again.",
+    "routeMissing": "File preview needs the latest Cirno server. Restart cirno and try again.",
     "resize": "Resize file preview",
     "truncated": "Preview is truncated because this file is large."
   },
@@ -2352,11 +2453,11 @@
     },
     "workspaceScopeRejected": {
       "title": "Workspace was not changed",
-      "body": "The gateway rejected this project or access mode. Choose an existing project or a different access mode, then try again."
+      "body": "The Cirno server rejected this project or access mode. Choose an existing project or a different access mode, then try again."
     },
     "turnRejected": {
       "title": "Message was not sent",
-      "body": "The gateway rejected this message. Review its text or attachments, then try again."
+      "body": "The Cirno server rejected this message. Review its text or attachments, then try again."
     },
     "modelRequestFailed": {
       "authenticationTitle": "Model provider authorization failed",
@@ -2457,7 +2558,7 @@
     "jobs": "Remote jobs",
     "refresh": "Refresh",
     "refreshList": "Refresh list",
-    "noJobs": "The agent can start jobs with the node tool. Job records stay in Home; full output stays on the Node.",
+    "noJobs": "The agent can start persistent jobs over SSH. Tracking records stay in server state; full output stays on the Node.",
     "readStatus": "Check status",
     "stop": "Stop",
     "memorySources": "Memory sources",
@@ -2598,7 +2699,8 @@
       "dream": "Memory consolidation",
       "turn": "Conversation run",
       "message": "Message",
-      "report": "Work report"
+      "report": "Work report",
+      "approval": "Operation approval"
     },
     "status": {
       "pending": "Pending",
@@ -2651,7 +2753,9 @@
       "storage_failed": "Could not save account data. Check the server storage and try again.",
       "password_mismatch": "Passwords do not match.",
       "connection_failed": "Could not reach Cirno. Check your connection and try again.",
-      "request_failed": "The request failed. Please try again."
+      "request_failed": "The request failed. Please try again.",
+      "incorrect_password": "The current password is incorrect.",
+      "unauthorized": "Please sign in again."
     }
   }
 }

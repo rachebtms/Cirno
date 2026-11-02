@@ -6,7 +6,7 @@ import asyncio
 import dataclasses
 from collections.abc import Awaitable, Callable, Iterable
 
-from cirno.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.events import InboundMessage, OutboundMessage
 
 
 class AutomationTurnError(RuntimeError):

@@ -1,13 +1,13 @@
 """Both retrieval callers share the same routing and low-resource fallbacks."""
 import pytest
 
-from cirno.config.schema import MemoryConfig
-from cirno.memory.repository import MemoryRepository
-from cirno.memory.search import search
+from cirno_core.config.schema import MemoryConfig
+from cirno_core.memory.repository import MemoryRepository
+from cirno_core.memory.search import search
 
 
 def test_browsing_and_evidence_do_not_start_inference(tmp_path, monkeypatch):
-    import cirno.memory.embedding as embedding
+    import cirno_core.memory.embedding as embedding
     def forbidden(*args, **kwargs):
         pytest.fail('Metadata/evidence must not start semantic retrieval')
     monkeypatch.setattr(embedding, 'search', forbidden)

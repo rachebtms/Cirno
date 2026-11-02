@@ -1,4 +1,4 @@
-from cirno.config.schema import DreamConfig, MemoryConfig
+from cirno_core.config.schema import DreamConfig, MemoryConfig
 
 
 def test_optional_embedding_stays_disabled_with_200mb_worker_budget() -> None:

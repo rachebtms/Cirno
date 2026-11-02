@@ -1,6 +1,6 @@
 """Session storage reads only the current database."""
 
-from cirno.session.manager import SessionManager
+from cirno_core.session.manager import SessionManager
 
 
 def test_list_and_reads_ignore_unrelated_jsonl_files(tmp_path):

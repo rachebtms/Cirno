@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.runner_helpers import make_run_spec
-from cirno.agent.runner import AgentRunner
-from cirno.config.schema import AgentDefaults
-from cirno.providers.base import LLMProvider, LLMResponse
+from cirno_core.agent.runner import AgentRunner
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.providers.base import LLMProvider, LLMResponse
 
 
 @pytest.fixture

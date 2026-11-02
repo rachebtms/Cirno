@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
 
 
 def _final_message_stub(text: str = "Hi") -> SimpleNamespace:

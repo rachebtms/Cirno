@@ -7,19 +7,19 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from cirno.agent.context_governance import (
+from cirno_core.agent.context_governance import (
     ContextCompactionState,
     ContextGovernanceConfig,
     ContextGovernor,
     ModelRequestState,
 )
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.schema import ModelPresetConfig
-from cirno.providers.base import LLMResponse, LLMUsage, ProviderCallContext
-from cirno.providers.conversation_state import ProviderConversationStateController
-from cirno.providers.fallback_provider import FallbackProvider
-from cirno.providers.openai_codex_provider import OpenAICodexProvider, _CodexHTTPError
-from cirno.providers.openai_responses import build_responses_state
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.providers.base import LLMResponse, LLMUsage, ProviderCallContext
+from cirno_core.providers.conversation_state import ProviderConversationStateController
+from cirno_core.providers.fallback_provider import FallbackProvider
+from cirno_core.providers.openai_codex_provider import OpenAICodexProvider, _CodexHTTPError
+from cirno_core.providers.openai_responses import build_responses_state
 
 
 def _request_state(provider, *, prior_tokens=180_000, repetitions=12_000):
@@ -69,7 +69,7 @@ def transport(monkeypatch):
     bodies = []
     behavior = {"errors": [], "compacted_content": "compacted state"}
     monkeypatch.setattr(
-        "cirno.providers.openai_codex_provider.get_codex_token",
+        "cirno_core.providers.openai_codex_provider.get_codex_token",
         lambda **_kwargs: SimpleNamespace(account_id="acct", access="token"),
     )
 
@@ -96,7 +96,7 @@ def transport(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr("cirno.providers.openai_codex_provider._request_codex", request)
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", request)
     return bodies, behavior
 
 

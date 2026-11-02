@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
-WorkspaceAccessMode = Literal["restricted", "full"]
+WorkspaceAccessMode = Literal["restricted", "review", "full"]
 WORKSPACE_SCOPE_METADATA_KEY = "workspace_scope"
-_ACCESS_MODES = {"restricted", "full"}
+_ACCESS_MODES = {"restricted", "review", "full"}
 
 _TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}
 _FALSE_VALUES = {"0", "false", "no", "off", "disabled", ""}
@@ -221,7 +221,7 @@ def build_workspace_scope(
 ) -> WorkspaceScope:
     mode = _normalize_access_mode(access_mode)
     root = Path(project_path).expanduser().resolve(strict=False)
-    restrict = mode == "restricted"
+    restrict = mode != "full"
     return WorkspaceScope(
         project_path=root,
         access_mode=mode,
@@ -431,5 +431,5 @@ def _normalize_access_mode(value: str) -> WorkspaceAccessMode:
     if mode == "full-access":
         mode = "full"
     if mode not in _ACCESS_MODES:
-        raise WorkspaceScopeError("access_mode must be restricted or full")
+        raise WorkspaceScopeError("access_mode must be restricted, review or full")
     return mode  # type: ignore[return-value]

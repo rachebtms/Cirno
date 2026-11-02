@@ -8,11 +8,11 @@ Logical names below use dots. Native calls use double underscores, such as `goal
 | --- | --- |
 | `goals.create` | Create an objective, optionally overriding the default continuation limit |
 | `goals.get` | Read the objective, state and continuation count |
-| `goals.update` | `continue`, `wait`, `complete`, `block`, `pause`, `resume`, `stop`, `cancel`, `replace` or `delete` |
+| `goals.update` | `continue`, `wait`, `complete`, `block`, `pause`, `resume`, `stop`, `cancel`, `replace`, `update` or `delete` |
 
-The instance continuation limit is configured under Settings → Goals & execution. Zero means unlimited and is the default. `/goal` does not require a limit. Counts persist across waiting, pauses and gateway restarts. Creating or replacing a Goal starts a new count. Reaching a finite limit pauses it and preserves progress.
+The instance continuation limit is configured under Settings → Goals & execution. Zero means unlimited and is the default. `/goal` does not require a limit. Counts persist across waiting, pauses and service restarts. Creating or replacing a Goal starts a new count. Reaching a finite limit pauses it and preserves progress.
 
-A running Goal continues between execution segments until it completes, waits, blocks or is paused/stopped. `wait` saves progress and a `wake_after_seconds` deadline. Due work resumes through its conversation queue; incoming conversation input also wakes a waiting Goal. Deadlines require the gateway to run; overdue work is handled after restart. Interrupted tools follow the existing recovery process rather than being blindly repeated.
+A running Goal continues between execution segments until it completes, waits, blocks or is paused/stopped. `wait` saves progress and a `wake_after_seconds` deadline. Due work resumes through its conversation queue; incoming conversation input also wakes a waiting Goal. Deadlines require the server to run; overdue work is handled after restart. Interrupted tools follow the existing recovery process rather than being blindly repeated.
 
 Pause prevents automatic continuation. The conversation Stop control cancels active execution and stops its Goal until resumed. The model's `stop` operation stops continuation without interrupting a tool already executing. Creation, replacement, limit changes and user control operations require fresh user input. Automatic continuation can save progress, wait, block or complete the existing objective.
 
@@ -24,11 +24,13 @@ Both roles can use `conversations.create`, `conversations.send`, `conversations.
 
 Coordination messages are journaled before delivery and deduplicated by stable IDs and destination-generation receipts. Queued does not mean finished. Delegation preserves source references and the original request; worker reports do not grant new authorization. Each conversation retains its own history, Goal, queue and cancellation scope. See [inbox and report delivery](notification-inbox.md).
 
+Only Cirno receives `conversations.control` and `goals.control`. It can stop/continue other saved Web conversations and inspect or change their Goals while preserving progress and continuation counts. `goals.control` has no completion action: the executing worker must verify and finish its own Goal. Each control is recorded with the `@cirno` source.
+
 `conversations.set_title` lets the model set a concise title in the user's language. Automatic title generation is also available; manual titles and Cirno's identity are preserved.
 
 ## Heartbeat
 
-When enabled under Settings → Server & heartbeat, the protected heartbeat job queues active `Home/HEARTBEAT.md` instructions into Cirno. Pending checks survive restart and use the normal conversation queue. Cirno is instructed to notify only when something needs attention. Use Automations for an explicit time or interval; heartbeat is for flexible background checks.
+When enabled under Settings → Agent heartbeat, the protected heartbeat job queues active `Home/HEARTBEAT.md` instructions into Cirno. Pending checks survive restart and use the normal conversation queue. Cirno is instructed to notify only when something needs attention. Use Automations for an explicit time or interval; heartbeat is for flexible background checks.
 
 ## Memory and learned Skills
 

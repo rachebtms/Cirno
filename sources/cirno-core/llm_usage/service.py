@@ -8,9 +8,9 @@ from typing import Any
 
 from loguru import logger
 
-from cirno.config.paths import get_data_dir
-from cirno.llm_usage.models import LLMCallRecord
-from cirno.llm_usage.store import LLMUsageStore
+from cirno_core.config.paths import get_data_dir
+from cirno_core.llm_usage.models import LLMCallRecord
+from cirno_core.llm_usage.store import LLMUsageStore
 
 _STORES_LOCK = threading.Lock()
 _STORES: dict[Path, LLMUsageStore] = {}

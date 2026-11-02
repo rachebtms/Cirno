@@ -7,20 +7,20 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
-from cirno.agent.goals.permission import (
+from cirno_core.agent.goals.permission import (
     goal_mutation_allowed,
     revoke_goal_mutation_permission,
 )
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import RequestContext, ToolContext, current_request_context
-from cirno.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import GoalStateChanged, RuntimeEventContext
-from cirno.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
-from cirno.session.goal_state import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import RequestContext, ToolContext, current_request_context
+from cirno_core.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import GoalStateChanged, RuntimeEventContext
+from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
+from cirno_core.session.goal_state import (
     GOAL_STATE_KEY,
     MAX_GOAL_OBJECTIVE_CHARS,
     explicit_goal_requested,
@@ -29,16 +29,16 @@ from cirno.session.goal_state import (
     parse_goal_state,
     sustained_goal_active,
 )
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.session.turn_continuation import reset_goal_continuation_rounds
-from cirno.utils.cancellation import shield_and_drain
-from cirno.utils.prompt_templates import render_template
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.turn_continuation import reset_goal_continuation_rounds
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
-    from cirno.session.manager import Session, SessionManager
+    from cirno_core.session.manager import Session, SessionManager
 
 
-_GOAL_ACTIONS = ("complete", "cancel", "block", "replace", "pause", "resume", "stop", "wait", "continue", "delete")
+_GOAL_ACTIONS = ("complete", "cancel", "block", "replace", "pause", "resume", "stop", "wait", "continue", "update", "delete")
 _CREATE_UNAVAILABLE_ERROR = (
     "Error: creating a goal requires a current user request."
 )
@@ -354,13 +354,23 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
         normalized = (action or "").strip().lower()
         if normalized not in _GOAL_ACTIONS:
             return ToolResult.error(
-                "Error: action must be complete, cancel, block, replace, pause, resume, stop, wait, continue, delete."
+                "Error: action must be complete, cancel, block, replace, update, pause, resume, stop, wait, continue, delete."
             )
 
         if continuation_limit is not None and continuation_limit != prior.get("continuation_limit") and not self._goal_mutation_allowed():
             return ToolResult.error("Changing the continuation limit requires a current user request.")
         if continuation_limit is not None:
             prior = {**prior, "continuation_limit": continuation_limit}
+        if normalized == "update":
+            if not self._goal_mutation_allowed():
+                return ToolResult.error("Updating saved Goal settings requires a current user request.")
+            blob = dict(prior)
+            if recap is not None:
+                blob["recap"] = recap.strip()
+            if ui_summary is not None:
+                blob["ui_summary"] = ui_summary.strip()[:120]
+            await self._save_goal_state(sess, blob)
+            return "Goal settings updated; status and continuation count preserved."
         if normalized == "wait":
             if wake_after_seconds is None or wake_after_seconds < 1:
                 return ToolResult.error("wait requires a positive wake_after_seconds")
@@ -368,7 +378,7 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
                 return ToolResult.error("Only an active goal can wait.")
             blob = {**prior, "status": "waiting", "wake_at": (datetime.now(timezone.utc) + timedelta(seconds=wake_after_seconds)).isoformat(), "recap": (recap or "").strip()}
             await self._save_goal_state(sess, blob)
-            return "Goal waiting; the gateway will wake it at " + blob["wake_at"]
+            return "Goal waiting; Cirno will wake it at " + blob["wake_at"]
         if normalized == "continue":
             if prior.get("status") != "active":
                 return ToolResult.error("Only an active goal can continue.")

@@ -10,12 +10,13 @@ function slashCommandName(content: string): string {
   return content.split(/\s+/, 1)[0];
 }
 
-function slashCommandArgs(content: string, commandName: string): string {
-  return content.slice(commandName.length).trim();
+function slashCommandArgs(content: string): string {
+  const text = content.trim();
+  return text.slice(slashCommandName(text).length).trim();
 }
 
 export function isRegisteredSlashCommand(content: string, slashCommands: SlashCommand[]): boolean {
-  // Argument validation belongs to the gateway. Even invalid commands must not
+  // Argument validation belongs to the server. Even invalid commands must not
   // wait behind the active response; paths and unknown names are ordinary text.
   const name = slashCommandName(content.trim()).replace(/@[A-Za-z0-9_]+$/, "").toLowerCase();
   return slashCommands.some((item) => item.command === name);
@@ -25,11 +26,11 @@ export function matchingSlashCommand(
   content: string,
   slashCommands: SlashCommand[],
 ): SlashCommand | null {
-  const commandName = slashCommandName(content);
+  const commandName = slashCommandName(content.trim()).replace(/@[A-Za-z0-9_]+$/, "").toLowerCase();
   if (!commandName.startsWith("/")) return null;
   const command = slashCommands.find((item) => item.command === commandName);
   if (!command) return null;
-  if (slashCommandArgs(content, command.command).length > 0 && !command.acceptsArgs) return null;
+  if (slashCommandArgs(content).length > 0 && !command.acceptsArgs) return null;
   return command;
 }
 
@@ -40,7 +41,7 @@ export function slashCommandLifecycle(
   const command = matchingSlashCommand(content, slashCommands);
   if (!command) return null;
   if (command.lifecycle === "agent_turn_with_args") {
-    return slashCommandArgs(content, command.command).length > 0
+    return slashCommandArgs(content).length > 0
       ? "agent_turn"
       : "side_channel";
   }

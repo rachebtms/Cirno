@@ -5,30 +5,30 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.turn_delivery import TurnDeliveryFactory
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import (
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import (
     GoalStatusEvent,
     RetryStatusEvent,
     TurnEndEvent,
     TurnModelUpdatedEvent,
     UserInputEvent,
 )
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import (
     RuntimeEventContext,
     TurnRuntimeAdmitted,
     UserInputAccepted,
 )
-from cirno.providers.base import GenerationSettings, LLMUsage
-from cirno.providers.fallback_provider import FallbackModelSelection
-from cirno.session import webui_turns as wth
-from cirno.session.manager import SessionManager
-from cirno.session.session_handles import session_handle_for_name
-from cirno.session.session_messages import SESSION_MESSAGE_METADATA_KEY
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.webui.metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY
+from cirno_core.providers.base import GenerationSettings, LLMUsage
+from cirno_core.providers.fallback_provider import FallbackModelSelection
+from cirno_core.session import webui_turns as wth
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.session_handles import session_handle_for_name
+from cirno_core.session.session_messages import SESSION_MESSAGE_METADATA_KEY
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.session.transport_metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY
 
 
 @pytest.fixture(autouse=True)
@@ -196,7 +196,7 @@ async def test_fallback_model_is_scoped_to_its_websocket_chat() -> None:
 
 @pytest.mark.asyncio
 async def test_coordinator_connections_end_on_scope_exit_and_can_reconnect(tmp_path):
-    from cirno.bus.runtime_events import RuntimeModelChanged
+    from cirno_core.bus.runtime_events import RuntimeModelChanged
 
     bus = MessageBus()
     bus.publish_outbound = AsyncMock()

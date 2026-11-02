@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from cirno.bus.agent_events import AgentEvent
+from cirno_core.bus.agent_events import AgentEvent
 
 
 @dataclass(frozen=True)

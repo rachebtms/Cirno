@@ -17,15 +17,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Iterator, cast
 from uuid import uuid4
 
-from cirno.bus.agent_events import NO_EVENTS, CompactionReason, ContextCompactionEvent, EventSink
-from cirno.llm_usage.context import llm_usage_source
-from cirno.providers.base import LLMResponse, ProviderConversationState
-from cirno.providers.conversation_state import ProviderConversationStateController
-from cirno.runtime.context import public_history_messages
-from cirno.session.manager import Session, SessionManager
-from cirno.session.summary import is_summary_checkpoint, session_summary_from_metadata
-from cirno.utils.gitstore import GitStore
-from cirno.utils.helpers import (
+from cirno_core.bus.agent_events import NO_EVENTS, CompactionReason, ContextCompactionEvent, EventSink
+from cirno_core.llm_usage.context import llm_usage_source
+from cirno_core.providers.base import LLMResponse, ProviderConversationState
+from cirno_core.providers.conversation_state import ProviderConversationStateController
+from cirno_core.runtime.context import public_history_messages
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.summary import is_summary_checkpoint, session_summary_from_metadata
+from cirno_core.utils.gitstore import GitStore
+from cirno_core.utils.helpers import (
     atomic_write_lines,
     build_assistant_message,
     content_with_media_breadcrumbs,
@@ -36,8 +36,8 @@ from cirno.utils.helpers import (
     truncate_text,
     truncate_text_to_tokens,
 )
-from cirno.utils.prompt_templates import render_template
-from cirno.utils.workspace_prompts import (
+from cirno_core.utils.prompt_templates import render_template
+from cirno_core.utils.workspace_prompts import (
     WORKSPACE_PROMPT_MAX_CHARS,
     has_workspace_prompt_override,
     load_workspace_prompt_override,
@@ -46,8 +46,8 @@ from cirno.utils.workspace_prompts import (
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.registry import ToolRegistry
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.agent.tools.registry import ToolRegistry
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 # ---------------------------------------------------------------------------
 # MemoryStore — pure file I/O layer
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 
 async def run_with_dream_lease(coro, token, home):
     """Keep a long provider call's lease live; cancellation always stops renewal."""
-    from cirno.memory.repository import MemoryRepository
+    from cirno_core.memory.repository import MemoryRepository
     async def renew():
         while True:
             await asyncio.sleep(60)
@@ -216,7 +216,7 @@ class MemoryStore:
             with open(self.history_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
             self._cursor_file.write_text(str(cursor), encoding="utf-8")
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         MemoryRepository(self.workspace).ingest_history(cursor, content, session_key, source_refs, timestamp=ts)
         return cursor
 
@@ -381,7 +381,7 @@ class MemoryStore:
 
     @staticmethod
     def default_dream_prompt() -> str:
-        from cirno.skills.metadata import BUILTIN_SKILLS_DIR
+        from cirno_core.skills.metadata import BUILTIN_SKILLS_DIR
 
         return render_template(
             "agent/dream.md",
@@ -413,8 +413,8 @@ class MemoryStore:
         The current contents of the durable memory files (SOUL.md, USER.md,
         memory/MEMORY.md) reach Dream through the normal agent system context.
         """
-        from cirno.config.loader import load_config
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.config.loader import load_config
+        from cirno_core.memory.repository import MemoryRepository
         repo = MemoryRepository(self.workspace)
         # Incremental upgrade: historical cursors retain their original source identity.
         imported_cursor = self.get_last_dream_cursor()
@@ -451,15 +451,15 @@ class MemoryStore:
         return (prompt, max([self.get_last_dream_cursor(), *history_cursors]))
 
     def finish_dream_batch(self, token: str | None = None, *, error: str | None = None, preempted: bool = False) -> dict | None:
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         if token:
             result = MemoryRepository(self.workspace).finish(token, error=error, preempted=preempted)
             self._dream_batch_token = None
             if not preempted:
                 import sqlite3
-                from cirno.notifications.inbox import NotificationInbox
+                from cirno_core.notifications.inbox import NotificationInbox
                 try:
-                    NotificationInbox(self.workspace).record(
+                    NotificationInbox().record(
                         "dream:" + token, "system", "dream",
                         status="failed" if error else "partial" if (result or {}).get("retained") else "succeeded",
                         body=error or "", data=result or {},
@@ -474,7 +474,7 @@ class MemoryStore:
         Returns "" when git is unavailable or no content file changed. This is
         the ground-truth input for diff-grounded Dream commit messages.
         """
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         with MemoryRepository(self.workspace).connect() as db:
             changed = db.execute("SELECT memory_id,revision FROM revisions WHERE rowid>? LIMIT 50", (getattr(self, "_dream_revision_baseline", 0),)).fetchall()
         records = "\n".join(f"Memory {row[0]} revision {row[1]} saved" for row in changed)
@@ -483,14 +483,14 @@ class MemoryStore:
 
     def build_dream_tools(self) -> ToolRegistry:
         """Build the restricted tool registry used by Dream runs."""
-        from cirno.skills.metadata import BUILTIN_SKILLS_DIR, BUILTIN_DOCUMENTS_DIR
-        from cirno.agent.tools.apply_patch import ApplyPatchTool
-        from cirno.agent.tools.file_state import FileStates
-        from cirno.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
-        from cirno.agent.tools.registry import ToolRegistry
+        from cirno_core.skills.metadata import BUILTIN_SKILLS_DIR, BUILTIN_DOCUMENTS_DIR
+        from cirno_core.agent.tools.apply_patch import ApplyPatchTool
+        from cirno_core.agent.tools.file_state import FileStates
+        from cirno_core.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
+        from cirno_core.agent.tools.registry import ToolRegistry
 
         tools = ToolRegistry()
-        from cirno.agent.tools.instance_features import InspectSkillTool, MemoryTool
+        from cirno_core.agent.tools.instance_features import InspectSkillTool, MemoryTool
         tools.register(InspectSkillTool())
         tools.register(MemoryTool(maintenance=True, owner_access=getattr(self, "_dream_owner", None), evidence_ids=getattr(self, "_dream_evidence_ids", None), batch_token=getattr(self, "_dream_batch_token", None)))
         file_states = FileStates()
@@ -760,7 +760,7 @@ class MemoryArchiver:
             return None
         evidence = None
         if persist:
-            from cirno.memory.repository import MemoryRepository
+            from cirno_core.memory.repository import MemoryRepository
             evidence = await asyncio.to_thread(
                 MemoryRepository(self.store.workspace).archive_messages, source_messages, session_key, project_id,
             )
@@ -952,7 +952,7 @@ class MemoryArchiver:
         previous_summary = session_summary["text"] if session_summary else None
 
         async def raw_checkpoint():
-            from cirno.memory.repository import MemoryRepository
+            from cirno_core.memory.repository import MemoryRepository
             repo = MemoryRepository(self.store.workspace)
             evidence = await asyncio.to_thread(repo.archive_messages, messages, session.key, session.metadata.get("project_id"))
             summary = self._raw_checkpoint(messages, session_key=session.key, previous_summary=previous_summary,

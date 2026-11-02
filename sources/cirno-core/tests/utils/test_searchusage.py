@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cirno.providers.base import LLMUsage
-from cirno.utils.helpers import build_status_content
-from cirno.utils.searchusage import (
+from cirno_core.providers.base import LLMUsage
+from cirno_core.utils.helpers import build_status_content
+from cirno_core.utils.searchusage import (
     SearchUsageInfo,
     _parse_tavily_usage,
     fetch_search_usage,

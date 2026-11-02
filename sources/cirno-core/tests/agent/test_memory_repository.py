@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from cirno.memory.repository import MemoryRepository
+from cirno_core.memory.repository import MemoryRepository
 
 
 @pytest.fixture

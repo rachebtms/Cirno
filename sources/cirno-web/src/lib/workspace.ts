@@ -7,7 +7,7 @@ export function scopeWithAccessMode(
   return {
     ...scope,
     access_mode: accessMode,
-    restrict_to_workspace: accessMode === "restricted",
+    restrict_to_workspace: accessMode !== "full",
   };
 }
 

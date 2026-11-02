@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { RUNTIME_CONFIG_FIELDS, RUNTIME_CONFIG_GROUPS } from "@/components/settings/system/runtime-config-fields";
-import runtimeConfigKeys from "../../../cirno-core/tests/webui/fixtures/runtime-config-keys.json";
+import runtimeConfigKeys from "../../../cirno-server/tests/webui/fixtures/runtime-config-keys.json";
 import { TimezonePicker } from "@/components/settings/shared/TimezonePicker";
 import type { SettingsPayload } from "@/lib/types";
 import { installSettingsViewTestHooks, jsonResponse, renderSettingsView, requestMutationMock, settingsPayload } from "@/tests/settings-test-utils";
@@ -15,8 +15,8 @@ function runtimeSettings() {
     "agents.defaults.timezone_mode": "auto",
     "agents.defaults.timezone": "UTC",
     "agents.defaults.dream.enabled": true,
-    "agents.defaults.session_ttl_minutes": 15,
-    "gateway.heartbeat.enabled": true,
+    "agents.defaults.idle_compact_after_minutes": 15,
+    "agents.defaults.heartbeat.enabled": true,
     "tools.exec.max_runtime": 60,
     "tools.exec.allowed_env_keys": ["TERM"],
     "tools.exec.allow_patterns": [],
@@ -86,7 +86,7 @@ describe("Runtime configuration settings", () => {
 
   it("explains unavailable memory settings instead of rendering a blank page", () => {
     renderSettingsView({ initialSection: "context", initialSettings: settingsPayload() });
-    expect(screen.getByText("Update the gateway to edit these settings.")).toBeVisible();
+    expect(screen.getByText("Update the Cirno server to edit these settings.")).toBeVisible();
   });
 
   it.each(["bwrap", "seatbelt", ""])("saves the %s sandbox and reveals its path settings", async (backend) => {
@@ -233,7 +233,7 @@ describe("Runtime configuration settings", () => {
     expect(field).toHaveValue(86400);
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.queryByText("Saved.", { exact: true })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Server & heartbeat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Server" }));
     fireEvent.click(screen.getByRole("button", { name: "Shell execution" }));
     expect(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" })).toHaveValue(86400);
     expect(screen.getByRole("alert")).toHaveTextContent("1 to 86,400");
@@ -293,14 +293,14 @@ describe("Runtime configuration settings", () => {
     expect(proxy).toHaveAttribute("type", "text");
     expect(proxy).toHaveValue("http://localhost:8080");
     fireEvent.change(proxy, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Server & heartbeat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Server" }));
     fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
     expect(screen.getByLabelText("Shared proxy", { selector: "input" })).toHaveValue("");
     fireEvent.click(within(screen.getByRole("region", { name: "Shared proxy" })).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
       "settings.runtime_config.update", { values: { "network.proxy": null } }, 20_000,
     ));
-    fireEvent.click(screen.getByRole("button", { name: "Server & heartbeat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Server" }));
     fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
     expect(screen.getByLabelText("Shared proxy", { selector: "input" })).toHaveValue("");
   });
@@ -345,7 +345,7 @@ describe("Runtime configuration settings", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) =>
       jsonResponse(String(input) === "/api/settings" ? payload : {})));
     requestMutationMock.mockResolvedValue(payload);
-    renderSettingsView({ initialSection: "runtime", initialSettings: payload });
+    renderSettingsView({ initialSection: "regional", initialSettings: payload });
     fireEvent.click(screen.getByRole("switch", { name: "System timezone" }));
     const field = screen.getByRole("button", { name: "Timezone", expanded: false });
     expect(field).toBeEnabled();

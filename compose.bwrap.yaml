@@ -1,5 +1,5 @@
 services:
-  cirno-gateway:
+  cirno:
     cap_add:
       - SYS_ADMIN
     security_opt:

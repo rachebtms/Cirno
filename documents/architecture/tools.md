@@ -10,8 +10,8 @@ Python execution, PTC, activity rendering and persisted calls use the same map.
 | `shell` | Execute, continue a process, list running processes |
 | `web` | Search and fetch |
 | `memory` | Search, read, original evidence, revisions, tags, save, update, link, checkpoint, status |
-| `goals` | Create, update, inspect |
-| `conversations` | Create, title, search, read, send, report |
+| `goals` | Create, update, inspect; Cirno-only control of other conversations' Goals |
+| `conversations` | Create, title, search, read, send, report; Cirno-only stop and continue |
 | `user` | Asynchronous questions; Cirno-only visible messages |
 | `agents` | Create, check, send, cancel subtasks |
 | `automations` | Add, list, update, enable, disable, remove, history |

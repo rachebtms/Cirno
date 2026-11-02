@@ -65,7 +65,7 @@ export interface AgentSettingsDraft {
   extraQuery: string;
   extraBody: string;
   timezone: string;
-  toolHintMaxLength: number;
+  toolStatusSummaryMaxChars: number;
 }
 
 function modelPresetValue(payload: SettingsPayload): string {
@@ -109,7 +109,7 @@ export const DEFAULT_AGENT_SETTINGS_DRAFT: AgentSettingsDraft = {
   extraQuery: "",
   extraBody: "",
   timezone: "UTC",
-  toolHintMaxLength: 40,
+  toolStatusSummaryMaxChars: 40,
 };
 
 export function agentDraftFromPayload(
@@ -138,7 +138,7 @@ export function agentDraftFromPayload(
     extraQuery: providerJsonValue(activePreset?.extra_query),
     extraBody: providerJsonValue(activePreset?.extra_body),
     timezone: payload.agent.timezone,
-    toolHintMaxLength: payload.agent.tool_hint_max_length,
+    toolStatusSummaryMaxChars: payload.agent.tool_status_summary_max_chars,
   };
 }
 

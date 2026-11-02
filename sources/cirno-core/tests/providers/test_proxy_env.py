@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-import cirno.providers.openai_compat_provider as openai_compat_provider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
+import cirno_core.providers.openai_compat_provider as openai_compat_provider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 def _make_spec(is_local: bool = False) -> MagicMock:

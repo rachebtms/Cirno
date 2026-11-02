@@ -1,7 +1,7 @@
 """Tests for the LongCat provider registration."""
 
-from cirno.config.schema import ProvidersConfig
-from cirno.providers.registry import PROVIDERS, find_by_name
+from cirno_core.config.schema import ProvidersConfig
+from cirno_core.providers.registry import PROVIDERS, find_by_name
 
 
 def test_longcat_config_field_exists():

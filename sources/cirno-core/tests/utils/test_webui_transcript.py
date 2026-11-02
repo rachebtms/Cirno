@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-import cirno.webui.transcript as transcript_module
-from cirno.webui.history import fact_from_record
-from cirno.webui.transcript import WEBUI_TRANSCRIPT_SCHEMA_VERSION, TranscriptReplayStats
+import cirno_core.session.transcript as transcript_module
+from cirno_core.session.presentation_history import fact_from_record
+from cirno_core.session.transcript import WEBUI_TRANSCRIPT_SCHEMA_VERSION, TranscriptReplayStats
 
 
 def test_append_and_read_roundtrip(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t1"
     history.append(key, {"event": "user", "chat_id": "t1", "text": "hello"})
     lines = history.read(key)
@@ -37,7 +37,7 @@ def test_history_preserves_phase_qualified_stream_identity(history, event) -> No
 
 @pytest.mark.parametrize("reason", [None, "idle", "context_pressure", "manual", "provider_native"])
 def test_compaction_reason_survives_sqlite_reload_and_older_page(history, tmp_path, reason) -> None:
-    from cirno.session.manager import SessionManager
+    from cirno_core.session.manager import SessionManager
 
     key = "websocket:compaction-reason"
     history.append(key, {"event": "user", "chat_id": "compaction-reason", "text": "first"})
@@ -68,8 +68,8 @@ def test_compaction_reason_survives_sqlite_reload_and_older_page(history, tmp_pa
 
 
 def test_append_stamps_created_at_ms(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno.webui.transcript.time.time", lambda: 1_700_000_000.0)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.session.transcript.time.time", lambda: 1_700_000_000.0)
     key = "websocket:t-created-at"
 
     history.append(key, {"event": "user", "chat_id": "t-created-at", "text": "hello"})
@@ -91,7 +91,7 @@ def _append_numbered_turn(history, key: str, chat_id: str, idx: int) -> None:
 
 
 def _write_history_turns(history, tmp_path, monkeypatch, key: str, chat_id: str, count: int) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     for idx in range(1, count + 1):
         _append_numbered_turn(history, key, chat_id, idx)
 
@@ -169,8 +169,8 @@ def test_sqlite_history_paginates_latest_and_older_without_overlap(history,
 
 
 def test_missing_page_query_uses_bounded_default(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno.webui.transcript._DEFAULT_TRANSCRIPT_PAGE_LIMIT", 4)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.session.transcript._DEFAULT_TRANSCRIPT_PAGE_LIMIT", 4)
     key = "websocket:bounded-default"
     for idx in range(1, 5):
         _append_numbered_turn(history, key, "bounded-default", idx)
@@ -184,7 +184,7 @@ def test_missing_page_query_uses_bounded_default(history, tmp_path, monkeypatch)
 
 
 def test_large_trace_details_are_deferred_and_resolved(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:deferred-trace"
     trace = f'exec({json.dumps({"command": "x" * 40_000})})'
     for event in (
@@ -217,7 +217,7 @@ def test_large_trace_details_are_deferred_and_resolved(history, tmp_path, monkey
 
 
 def test_event_projection_augments_complete_stream_text(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:project-stream-media"
     for event in (
         {
@@ -279,7 +279,7 @@ def test_thread_response_preserves_optional_stream_ids(history, delta_event, end
 def test_event_projection_defers_trace_details_without_legacy_fallback(history,
     tmp_path, monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:event-trace-fallback"
     for event in (
         {"event": "user", "chat_id": "event-trace-fallback", "text": "run"},
@@ -321,7 +321,7 @@ def test_event_projection_defers_trace_details_without_legacy_fallback(history,
 def test_active_trace_details_match_compacted_event_page(history,
     tmp_path, monkeypatch, delta_event: str, end_event: str,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:legacy-active-traces"
     traces = [f'exec({json.dumps({"command": label * 40_000})})' for label in ("A", "B")]
     rows = [
@@ -356,7 +356,7 @@ def test_active_trace_details_match_compacted_event_page(history,
 
 
 def test_large_structured_trace_error_is_bounded_and_resolved(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:deferred-trace-error"
     full_error = "failure: " + "界" * 40_000
     for event in (
@@ -396,7 +396,7 @@ def test_large_structured_trace_error_is_bounded_and_resolved(history, tmp_path,
 
 
 def test_many_short_trace_rows_are_bounded_and_resolved(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:deferred-many-traces"
     trace_count = 2_000
     rows = [
@@ -464,7 +464,7 @@ def test_thread_response_summary_receipts_preserve_holes_and_turn_membership(his
 
 
 def test_transcript_revision_tracks_artifacts_and_variants(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:revision"
     history.append(key, {"event": "user", "chat_id": "revision", "text": "one"})
 
@@ -481,9 +481,9 @@ def test_transcript_revision_tracks_artifacts_and_variants(history, tmp_path, mo
 
 
 def test_single_oversized_turn_is_bounded_and_marked(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno.webui.transcript._MAX_TRANSCRIPT_PAGE_RECORDS", 5)
-    monkeypatch.setattr("cirno.webui.transcript._MAX_TRANSCRIPT_PAGE_BYTES", 1_200)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_RECORDS", 5)
+    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_BYTES", 1_200)
     key = "websocket:oversized-turn"
     history.append(
         key,
@@ -522,9 +522,9 @@ def test_truncated_turn_does_not_advertise_ambiguous_trace_detail(history,
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno.webui.transcript._MAX_TRANSCRIPT_PAGE_RECORDS", 6)
-    monkeypatch.setattr("cirno.webui.transcript._MAX_TRANSCRIPT_PAGE_BYTES", 1_000_000)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_RECORDS", 6)
+    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_BYTES", 1_000_000)
     key = "websocket:truncated-trace-detail"
     history.append(
         key,
@@ -592,7 +592,7 @@ def test_page_cursor_survives_appends_after_latest_page(history,
 
 
 def test_build_response_reports_fork_boundary_from_marker(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:fork"
     for ev in (
         {"event": "user", "chat_id": "fork", "text": "round1"},
@@ -615,7 +615,7 @@ def test_thread_response_does_not_mark_completed_message_tool_tail_pending(histo
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:cron-tail"
     turn_id = "cron:job:run"
     for ev in (
@@ -679,7 +679,7 @@ def test_thread_response_does_not_mark_completed_message_tool_tail_pending(histo
 
 
 def test_thread_response_marks_unfinished_tool_tail_pending(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:active-tail"
     history.append(
         key,
@@ -702,7 +702,7 @@ def test_thread_response_reports_active_registry_without_transcript(history,
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
 
     out = history.build(
         "websocket:active-without-transcript",
@@ -721,7 +721,7 @@ def test_thread_response_reports_explicit_completion_without_assistant_row(histo
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:empty-answer"
     turn_id = "turn-empty-answer"
     history.append(
@@ -745,7 +745,7 @@ def test_incomplete_turn_with_ambiguous_session_match_stays_pending(history,
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:ambiguous-incomplete"
     turn_id = "turn-ambiguous"
     history.append(
@@ -792,7 +792,7 @@ def test_later_completion_does_not_hide_older_incomplete_turn(history,
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:older-incomplete"
     for event in (
         {"event": "user", "text": "first", "turn_id": "turn-first"},
@@ -818,7 +818,7 @@ def test_later_completion_does_not_hide_older_incomplete_turn(history,
 
 
 def test_active_registry_does_not_hide_a_newer_queued_turn(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:queued-tail"
     for event in (
         {"event": "user", "text": "first", "turn_id": "turn-old"},
@@ -842,7 +842,7 @@ def test_build_response_restores_session_users_for_legacy_transcript(history,
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:legacy-users"
     history.append(
         key,
@@ -875,7 +875,7 @@ def test_build_response_restores_session_users_for_legacy_transcript(history,
 
 
 def test_complete_transcript_does_not_load_session_messages(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:complete-fast-path"
     for event in (
         {"event": "user", "chat_id": "complete-fast-path", "text": "question"},
@@ -908,7 +908,7 @@ def test_legacy_recovery_loads_session_and_builds_backfill_turns_once(history,
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:lazy-legacy-recovery"
     history.append(
         key,
@@ -961,7 +961,7 @@ def test_build_response_restores_session_users_without_duplicating_new_transcrip
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:mixed-users"
     history.append(
         key,
@@ -995,7 +995,7 @@ def test_build_response_restores_session_users_without_duplicating_new_transcrip
 
 
 def test_build_response_backfills_legacy_sse_only_transcripts(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t-legacy"
     for ev in (
         {"event": "delta", "chat_id": "t-legacy", "text": "first answer"},
@@ -1032,7 +1032,7 @@ def test_build_response_backfills_legacy_sse_only_transcripts(history, tmp_path,
 
 
 def test_backfill_does_not_duplicate_existing_user_transcript(history, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t-current"
     for ev in (
         {"event": "user", "chat_id": "t-current", "text": "already stored"},
@@ -1057,7 +1057,7 @@ def test_backfill_does_not_misalign_when_session_only_has_transcript_tail(histor
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t-tail"
     for ev in (
         {"event": "message", "chat_id": "t-tail", "text": "old answer"},
@@ -1089,7 +1089,7 @@ def test_backfill_does_not_misalign_when_session_only_has_transcript_tail(histor
 
 
 def test_build_response_schema(history, monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t3"
     history.append(key, {"event": "user", "chat_id": "t3", "text": "x"})
     out = history.build(key, augment_user_media=None)
@@ -1100,7 +1100,7 @@ def test_build_response_schema(history, monkeypatch, tmp_path) -> None:
 
 
 def test_shell_output_format_survives_reload_and_paging_without_loading_model_history(history, tmp_path) -> None:
-    from cirno.session.manager import SessionManager
+    from cirno_core.session.manager import SessionManager
 
     key = "websocket:shell-output"
     output = "Path\n----\n  __pycache__\n```mermaid\nflowchart LR\n```\n![preview](local.png)\n"

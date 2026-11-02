@@ -8,16 +8,16 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from cirno.config.home import get_home_path
+from cirno_core.config.paths import get_data_dir
 
 KINDS = {"projects", "nodes", "node_jobs", "memories"}
 
 
 class InstanceData:
-    def __init__(self, home: Path | None = None):
-        self.home = home or get_home_path()
-        self.home.mkdir(parents=True, exist_ok=True)
-        self.path = self.home / "instance.sqlite3"
+    def __init__(self, state_dir: Path | None = None):
+        self.state_dir = state_dir or get_data_dir()
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.path = self.state_dir / "instance.sqlite3"
         self.path.touch(mode=0o600, exist_ok=True)
         self.path.chmod(0o600)
         with self.connect() as connection:

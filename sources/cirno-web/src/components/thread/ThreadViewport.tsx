@@ -1,3 +1,4 @@
+import { isModelInput } from "@/lib/thread-inputs";
 import {
   forwardRef,
   type ReactNode,
@@ -68,6 +69,7 @@ interface ThreadViewportProps {
   onLoadTraceDetails?: (refs: string[]) => void | Promise<void>;
   onOpenFilePreview?: (path: string) => void;
   onForkFromMessage?: (beforeUserIndex: number) => void;
+  onEditMessage?: (message: UIMessage) => void;
   onQuoteSelection?: (text: string) => void;
 }
 
@@ -279,6 +281,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   onLoadTraceDetails,
   onOpenFilePreview,
   onForkFromMessage,
+  onEditMessage,
   onQuoteSelection,
 }, ref) {
   const { t } = useTranslation();
@@ -425,9 +428,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   const hiddenUserMessageCount =
     userMessageOffset
     + (hiddenMessageCount > 0
-      ? messages.slice(0, hiddenMessageCount).filter(
-        (message) => message.role === "user" && message.deliveryStatus !== "failed",
-      ).length
+      ? messages.slice(0, hiddenMessageCount).filter(isModelInput).length
       : 0);
   const visibleForkBoundaryMessageCount =
     forkBoundaryMessageCount !== null && forkBoundaryMessageCount > hiddenMessageCount
@@ -1214,6 +1215,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
                   onLoadTraceDetails={onLoadTraceDetails}
                   onOpenFilePreview={onOpenFilePreview}
                   onForkFromMessage={onForkFromMessage}
+                  onEditMessage={onEditMessage}
                   onQuoteSelection={onQuoteSelection}
                   onActivityToggle={yieldCameraToUser}
                 />

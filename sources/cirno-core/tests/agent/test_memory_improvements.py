@@ -2,7 +2,7 @@
 
 import pytest
 
-from cirno.memory.repository import MemoryRepository
+from cirno_core.memory.repository import MemoryRepository
 
 
 def event(repo, text="Recorded value 0.00003125", **kwargs):

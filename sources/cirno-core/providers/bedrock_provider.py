@@ -11,7 +11,7 @@ import re
 from collections.abc import Awaitable, Callable, Iterator
 from typing import Any, cast
 
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     LLMUsage,
@@ -20,7 +20,7 @@ from cirno.providers.base import (
     resolve_stream_idle_timeout_s,
     tool_arguments_object_for_replay,
 )
-from cirno.providers.images import prepare_message_images
+from cirno_core.providers.images import prepare_message_images
 
 _IMAGE_DATA_URL = re.compile(r"^data:image/([a-zA-Z0-9.+-]+);base64,(.*)$", re.DOTALL)
 _TEXT_BLOCK_TYPES = {"text", "input_text", "output_text"}

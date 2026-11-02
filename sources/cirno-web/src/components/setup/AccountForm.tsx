@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AccountRequestError, accountRequest } from "@/lib/account";
+import { AccountRequestError, accountRequest, validAccountPassword } from "@/lib/account";
 import { useTheme } from "@/hooks/useTheme";
 
 export function AccountForm({ mode, onSuccess }: { mode: "register" | "login"; onSuccess: () => void }) {
@@ -21,7 +21,7 @@ export function AccountForm({ mode, onSuccess }: { mode: "register" | "login"; o
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    if (register && (Array.from(password).length < 10 || !/\p{Lu}/u.test(password) || !/[\p{P}\p{S}]/u.test(password))) {
+    if (register && !validAccountPassword(password)) {
       setError(t("setup.errors.invalid_password"));
       return;
     }

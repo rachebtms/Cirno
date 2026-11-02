@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from cirno.config.schema import Config, ProvidersConfig
-from cirno.providers.bedrock_provider import BedrockProvider
-from cirno.providers.registry import find_by_name
+from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.providers.bedrock_provider import BedrockProvider
+from cirno_core.providers.registry import find_by_name
 
 
 class FakeClient:

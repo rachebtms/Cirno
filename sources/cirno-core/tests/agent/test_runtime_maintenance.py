@@ -1,4 +1,4 @@
-"""Gateway task admission, without installing packages or contacting a model."""
+"""Server task admission, without installing packages or contacting a model."""
 
 import asyncio
 import inspect
@@ -9,18 +9,18 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.llm_runtime import LLMRuntime
 
-from cirno.agent.runner import AgentRunResult
-from cirno.bus.events import InboundMessage
-from cirno.bus.runtime_events import RuntimeModelChanged
-from cirno.cron.service import CronService
-from cirno.cron.types import CronSchedule
-from cirno.providers.base import LLMResponse
-from cirno.runtime.admission import RuntimeBusyError, RuntimeMaintenanceError
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.triggers.local_runner import run_local_trigger_queue
-from cirno.triggers.local_store import LocalTriggerStore
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.runtime_events import RuntimeModelChanged
+from cirno_core.cron.service import CronService
+from cirno_core.cron.types import CronSchedule
+from cirno_core.providers.base import LLMResponse
+from cirno_core.runtime.admission import RuntimeBusyError, RuntimeMaintenanceError
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.triggers.local_runner import run_local_trigger_queue
+from cirno_core.triggers.local_store import LocalTriggerStore
 
 
 @pytest.fixture

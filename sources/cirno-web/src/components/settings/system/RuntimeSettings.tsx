@@ -163,7 +163,7 @@ export function RuntimeSettings({
           {!isNativeHost ? (
             <ReadOnlyRow
               title={tx("settings.rows.gateway", "Gateway")}
-              value={`${settings.runtime.gateway_host}:${settings.runtime.gateway_port}`}
+              value={`${settings.runtime.health_host}:${settings.runtime.health_port}`}
             />
           ) : null}
           <ReadOnlyRow title={t("settings.rows.configPath")} value={settings.runtime.config_path} />

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable
 
-from cirno.agent.automation_turns import AutomationTurnCoordinator
-from cirno.bus.events import InboundMessage
-from cirno.cron.session_turns import (
+from cirno_core.agent.automation_turns import AutomationTurnCoordinator
+from cirno_core.bus.events import InboundMessage
+from cirno_core.cron.session_turns import (
     cron_run_id,
     cron_trigger,
     defer_cron_until_session_idle,

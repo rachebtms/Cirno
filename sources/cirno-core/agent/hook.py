@@ -9,9 +9,9 @@ from typing import Any
 
 from loguru import logger
 
-from cirno.agent.tools.context import tool_log_content_allowed
-from cirno.bus.agent_events import NO_EVENTS, EventSink
-from cirno.providers.base import LLMResponse, LLMUsage, ToolCallRequest
+from cirno_core.agent.tools.context import tool_log_content_allowed
+from cirno_core.bus.agent_events import NO_EVENTS, EventSink
+from cirno_core.providers.base import LLMResponse, LLMUsage, ToolCallRequest
 
 
 @dataclass(slots=True)

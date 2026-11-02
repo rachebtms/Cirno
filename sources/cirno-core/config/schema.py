@@ -4,24 +4,24 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, Literal, cast
 
-from cirno.agent.tools.cli_apps_config import CliAppsToolConfig
-from cirno.agent.tools.filesystem_config import FileToolsConfig
-from cirno.agent.tools.self_config import MyToolConfig
-from cirno.agent.tools.shell_config import ExecToolConfig
-from cirno.agent.tools.web_config import (
+from cirno_core.agent.tools.cli_apps_config import CliAppsToolConfig
+from cirno_core.agent.tools.filesystem_config import FileToolsConfig
+from cirno_core.agent.tools.self_config import MyToolConfig
+from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.agent.tools.web_config import (
     WebFetchConfig as WebFetchConfig,
 )
-from cirno.agent.tools.web_config import (
+from cirno_core.agent.tools.web_config import (
     WebSearchConfig as WebSearchConfig,
 )
-from cirno.agent.tools.web_config import WebToolsConfig
-from cirno.config.home import get_default_workspace
-from cirno.config.network import NetworkConfig
-from cirno.config.timezone import detect_system_timezone
-from cirno.config.base import Base
-from cirno.cron.types import CronSchedule
-from cirno.providers.generation import GenerationSettings
-from cirno.providers.model_api import ModelAPICapabilities, RequestAPI
+from cirno_core.agent.tools.web_config import WebToolsConfig
+from cirno_core.config.home import get_default_workspace
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.timezone import detect_system_timezone
+from cirno_core.config.base import Base
+from cirno_core.cron.types import CronSchedule
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.model_api import ModelAPICapabilities, RequestAPI
 from pydantic import AliasChoices, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
@@ -162,6 +162,27 @@ class ModelPresetConfig(RequestOverrides):
         )
 
 
+class HeartbeatConfig(Base):
+    """Heartbeat service configuration (now backed by cron)."""
+
+    enabled: bool = True
+    interval_s: int = 30 * 60  # 30 minutes
+
+
+class ResumeConfig(Base):
+    """Explicit continuation after Stop or an interrupted request."""
+
+    message: str = Field(default="Continue the interrupted request from the saved conversation context. Check completed work before acting; do not repeat completed operations.", min_length=1, max_length=4000)
+    show_message: bool = False
+
+    @field_validator("message")
+    @classmethod
+    def nonblank_message(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Continuation message must not be blank")
+        return value
+
+
 class AgentDefaults(Base):
     """Default agent configuration."""
 
@@ -176,25 +197,24 @@ class AgentDefaults(Base):
     temperature: float = 0.1
     fallback_models: list[FallbackCandidate] = Field(default_factory=list)
     goal_continuation_limit: int = Field(default=0, ge=0)
+    resume: ResumeConfig = Field(default_factory=ResumeConfig)
     max_tool_iterations: int = 200
     max_concurrent_subagents: int = Field(default=4, ge=1)
     max_tool_result_chars: int = 16_000
     provider_retry_mode: Literal["standard", "persistent"] = "standard"
-    tool_hint_max_length: int = Field(
+    tool_status_summary_max_chars: int = Field(
         default=40,
         ge=20,
         le=500,
-        validation_alias=AliasChoices("toolHintMaxLength"),
-        serialization_alias="toolHintMaxLength",
-    )  # Max characters for tool hint display (e.g. "$ cd …/project && npm test")
+        validation_alias=AliasChoices("toolStatusSummaryMaxChars"),
+        serialization_alias="toolStatusSummaryMaxChars",
+    )  # Max characters for channel tool status summaries (e.g. "$ cd …/project && npm test")
     reasoning_effort: str | None = None  # low / medium / high / xhigh / max / adaptive / none — LLM thinking effort; None preserves the provider default
     api: ModelAPIConfig | None = None
     timezone: str = "UTC"  # Effective IANA timezone, e.g. "Asia/Shanghai"
     timezone_mode: Literal["auto", "manual"] = "auto"
-    bot_name: str = "Cirno"  # Display name shown in CLI prompts (e.g. "{name} is thinking...")
-    bot_icon: str = "❄"  # Short icon (emoji or text) shown next to the bot name in CLI; "" to omit
     disabled_skills: list[str] = Field(default_factory=list)  # Skill names to exclude from loading (e.g. ["summarize", "skill-creator"])
-    session_ttl_minutes: int = Field(
+    idle_compact_after_minutes: int = Field(
         default=15,
         ge=0,
         validation_alias="idleCompactAfterMinutes",
@@ -204,6 +224,7 @@ class AgentDefaults(Base):
         default=60,
         ge=0,
     )  # Minimum interval in seconds between scans for idle sessions
+    heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
     dream: DreamConfig = Field(default_factory=DreamConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     idle_compact_percent: float = Field(default=20, ge=0, le=100)
@@ -350,7 +371,7 @@ class ProvidersConfig(Base):
     def convert_extra_providers(self):
         """Convert extra fields (custom providers) to ProviderConfig objects."""
         if self.model_extra:
-            from cirno.providers.registry import find_by_name
+            from cirno_core.providers.registry import find_by_name
 
             for key, value in self.model_extra.items():
                 if spec := find_by_name(key):
@@ -363,20 +384,14 @@ class ProvidersConfig(Base):
         return self
 
 
-class HeartbeatConfig(Base):
-    """Heartbeat service configuration (now backed by cron)."""
-
-    enabled: bool = True
-    interval_s: int = 30 * 60  # 30 minutes
 
 
-class GatewayConfig(Base):
-    """Gateway/server configuration."""
+class ServerConfig(Base):
+    """Server/server configuration."""
 
-    host: str = "127.0.0.1"  # Safer default: local-only bind.
-    port: int = 18790
+    health_host: str = "127.0.0.1"  # Safer default: local-only bind.
+    health_port: int = 18790
     restart_mode: Literal["auto", "exec", "spawn", "exit"] = "auto"
-    heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
 
 
 class MCPServerConfig(Base):
@@ -403,7 +418,7 @@ class ToolsConfig(Base):
     file: FileToolsConfig = Field(default_factory=FileToolsConfig)
     cli_apps: CliAppsToolConfig = Field(default_factory=CliAppsToolConfig)
     my: MyToolConfig = Field(default_factory=MyToolConfig)
-    max_session_messages_per_minute: int = Field(default=6, ge=1)
+    max_outgoing_session_messages_per_minute: int = Field(default=6, ge=1)
     restrict_to_workspace: bool = False  # policy intent: keep tool access inside workspace when possible
     webui_allow_local_service_access: bool = Field(
         default=True,
@@ -467,7 +482,7 @@ class Config(BaseSettings):
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     network: NetworkConfig = Field(default_factory=NetworkConfig)
-    gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     model_presets: dict[str, ModelPresetConfig] = Field(
         default_factory=dict,
@@ -496,7 +511,7 @@ class Config(BaseSettings):
     @property
     def runtime_data_dir(self) -> Path | None:
         """Return the active instance data directory when loaded from a config path."""
-        return self._source_path.parent if self._source_path is not None else None
+        return self._source_path.parent / "state" if self._source_path is not None else None
 
     @model_validator(mode="after")
     def _validate_model_preset(self) -> "Config":
@@ -552,7 +567,7 @@ class Config(BaseSettings):
         preset: ModelPresetConfig | None = None,
     ) -> tuple["ProviderConfig | None", str | None]:
         """Match provider config and its registry name. Returns (config, spec_name)."""
-        from cirno.providers.registry import (
+        from cirno_core.providers.registry import (
             PROVIDERS,
             find_by_name,
         )
@@ -700,7 +715,7 @@ class Config(BaseSettings):
         preset: ModelPresetConfig | None = None,
     ) -> str | None:
         """Get API base URL for the given model, falling back to the provider default when present."""
-        from cirno.providers.registry import find_by_name
+        from cirno_core.providers.registry import find_by_name
 
         p, name = self._match_provider(model, preset=preset)
         if p and p.api_base:

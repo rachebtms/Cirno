@@ -6,25 +6,25 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.goals.scheduler import wake_due_goals
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.coordination import CreateSessionTool, ReportWorkTool, SetSessionTitleTool
-from cirno.agent.tools.long_task import UpdateGoalTool
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.selection import conversation_tools
-from cirno.agent.tools.session_messages import SendSessionMessageTool, SessionMessageError
-from cirno.agent.work_reports import deliver_work_report, save_work_report
-from cirno.bus.queue import MessageBus
-from cirno.config.home import set_home_path
-from cirno.session.manager import SessionManager
-from cirno.session.recovery import pending_followups
-from cirno.session.sqlite_store import SessionConflictError
+from cirno_core.agent.goals.scheduler import wake_due_goals
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.coordination import CreateSessionTool, ReportWorkTool, SetSessionTitleTool
+from cirno_core.agent.tools.long_task import UpdateGoalTool
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.selection import conversation_tools
+from cirno_core.agent.tools.session_messages import SendSessionMessageTool, SessionMessageError
+from cirno_core.agent.work_reports import deliver_work_report, save_work_report
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.home import set_instance_path
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.recovery import pending_followups
+from cirno_core.session.sqlite_store import SessionConflictError
 
 
 @pytest.fixture
 async def setup(tmp_path):
     home = tmp_path / "home"
-    set_home_path(home)
+    set_instance_path(home)
     manager = SessionManager(home / "workspace", sessions_root=home / "sessions")
     for key in ("websocket:global", "websocket:worker"):
         await manager.state.get(key)
@@ -35,7 +35,7 @@ async def setup(tmp_path):
     bus = MessageBus()
     yield home, manager, bus
     await manager.state.aclose()
-    set_home_path(None)
+    set_instance_path(None)
 
 
 def worker_context(**kwargs):
@@ -163,8 +163,8 @@ async def test_delegation_preserves_original_request_and_reference(setup):
 
 
 async def test_router_and_ptc_cannot_execute_worker_tools(setup):
-    from cirno.agent.tools.filesystem import ReadFileTool, WriteFileTool
-    from cirno.agent.tools.message import MessageTool
+    from cirno_core.agent.tools.filesystem import ReadFileTool, WriteFileTool
+    from cirno_core.agent.tools.message import MessageTool
     _, manager, bus = setup
     registry = ToolRegistry()
     for tool in (ReadFileTool(), WriteFileTool(), MessageTool(), ReportWorkTool(manager, bus), SetSessionTitleTool(manager, bus)):
@@ -185,8 +185,8 @@ async def test_router_and_ptc_cannot_execute_worker_tools(setup):
 
 
 async def test_live_and_late_duplicate_messages_run_once(setup):
-    from cirno.agent.loop import AgentLoop
-    from cirno.providers.base import GenerationSettings, LLMResponse
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.providers.base import GenerationSettings, LLMResponse
     home, manager, bus = setup
     sender = SendSessionMessageTool(sessions=manager, bus=bus)
     await sender.enqueue(source_session_key="websocket:worker", target_handle="Cirno", content="One report", expect_reply=False, message_id="live-duplicate")
@@ -259,11 +259,11 @@ async def test_report_retries_while_worker_is_busy(setup):
 
 
 async def test_full_worker_report_to_cirno_user_message_pipeline(setup):
-    from cirno.agent.loop import AgentLoop
-    from cirno.agent.turn_delivery import TurnDeliveryFactory
-    from cirno.bus.events import InboundMessage
-    from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
-    from cirno.session.webui_turns import WebuiTurnRoutePolicy
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+    from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
 
     home, manager, bus = setup
     await manager.state.update_metadata("websocket:worker", {"goal_state": None})
@@ -347,6 +347,6 @@ async def test_delegated_instruction_is_saved_and_marked_with_its_source(setup):
     assert session.messages[0]["role"] == "user"
     assert session.messages[0]["content"] == "Read the document and verify its claims"
     facts = await manager.state.project_history(session.key, lambda history: history.all_facts())
-    from cirno.session.session_handles import SessionHandleResolver
+    from cirno_core.session.session_handles import SessionHandleResolver
     source = await SessionHandleResolver(manager).ahandle_for_session("websocket:global")
     assert facts[0].content["session_message"]["session"] == source.public_payload()

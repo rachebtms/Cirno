@@ -30,6 +30,10 @@ Large files, web artifacts and Node job output remain at their original location
 
 Before compaction, Cirno streams original messages to disk and saves the compaction increment in a durable queue. The executing model saves explicit task checkpoints at milestones and before compaction; automatic summaries do not overwrite them. Task recovery does not depend on a successful Dream run.
 
+Task checkpoints are attached as model-only evidence to the fresh input and saved with that exact input before the model request. A later checkpoint update does not rewrite the system prompt or earlier messages. Skill and tool declarations use deterministic ordering. Claude cache breakpoints cover the latest cacheable input, including first-turn documents and tool results. Changes to profiles, `MEMORY.md`, available tools or compacted summaries still change the request prefix and can invalidate provider caches.
+
+Token totals include cached input; they are not a billable-cost estimate. The cache hit rate divides provider-reported cache reads by input tokens from requests that report cache metrics. Missing cache metrics are unknown, not misses. Cache persistence and pricing remain provider-specific.
+
 By default Dream runs after 180 seconds of foreground inactivity, processing at most eight inputs and 16,000 characters per batch, with up to 24 model iterations. Interval mode is also available. Each batch has one visibility scope. Derived records inherit their evidence scope and version; project/session batches cannot edit shared profiles. Dream's file tools cannot read configuration or modify original evidence logs.
 
 Leases prevent simultaneous processing, and long calls renew them. New foreground input interrupts automatic idle Dream, releases the lease and does not consume a failure attempt. Knowledge already saved remains; a later run searches for duplicates. Inputs changed during processing stay queued.
@@ -70,11 +74,11 @@ Managed edits update the index immediately. Idle scans detect changes and deleti
 
 Catalog, search and queue writes use attached SQLite databases and rollback-journal transactions. Each database has a 512 KiB page-cache setting; splitting stores does not load the corpus into memory.
 
-Back up the entire Home while the service is stopped. Catalog and Dream databases contain authoritative state. Search and vectors are derived indexes; after losing the text index, perform a full rebuild in Settings. Vector chunks regenerate on explicit searches. Markdown alone cannot restore scopes, revisions, links or processing state. Evidence and revisions do not expire automatically, so disk usage grows with history.
+Back up the entire instance root while the service is stopped; Agent Home is its `home/` subdirectory. Catalog and Dream databases contain authoritative state. Search and vectors are derived indexes; after losing the text index, perform a full rebuild in Settings. Vector chunks regenerate on explicit searches. Markdown alone cannot restore scopes, revisions, links or processing state. Evidence and revisions do not expire automatically, so disk usage grows with history.
 
 ## Optional CPU embeddings
 
-Install the `memory-embedding` extra, then configure a local BGE-small INT8 ONNX model and matching `tokenizer.json` in Settings → Memory retrieval. Model files are not downloaded automatically. The worker uses normalized CLS vectors and one CPU thread. ONNX Runtime, NumPy and tokenizers stay out of the default gateway process.
+Install the `memory-embedding` extra, then configure a local BGE-small INT8 ONNX model and matching `tokenizer.json` in Settings → Memory retrieval. Model files are not downloaded automatically. The worker uses normalized CLS vectors and one CPU thread. ONNX Runtime, NumPy and tokenizers stay out of the default server process.
 
 Explicit semantic/hybrid retrieval launches a disposable worker. Vectors are cached on disk by model and content fingerprints; similarity scoring streams stored vectors. Only distilled knowledge and shared profiles are embedded. Long records use 224-token windows with a 192-token stride and retain character offsets. Each search generates at most 32 chunks, with at most eight per worker response. Remaining progress is persisted for the next explicit search. A record ranks by its best matching chunk. Hybrid retrieval uses reciprocal-rank fusion.
 

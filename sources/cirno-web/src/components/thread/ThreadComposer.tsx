@@ -17,6 +17,7 @@ import {
   HistoryIcon,
   AttachIcon,
   RestartIcon,
+  ResumeIcon,
   RestrictedAccessIcon,
   DreamIcon,
   StopIcon,
@@ -57,6 +58,9 @@ import {
 import { INLINE_REFERENCE_HIGHLIGHT_COLOR, INLINE_TOKEN_HIGHLIGHT_COLOR, InlineTokenHighlight } from "@/components/InlineTokenHighlight";
 import { SlashCommandText } from "@/components/SlashCommandText";
 import {
+  Code2,
+  Eraser,
+  Ghost,
   ChevronDown,
   ChevronUp,
   CornerDownRight,
@@ -224,6 +228,9 @@ interface ThreadComposerProps {
 
 const COMMAND_ICONS: Record<string, LucideIcon> = {
   activity: ActivityIcon,
+  code: Code2,
+  play: ResumeIcon,
+  eraser: Eraser,
   archive: ArchiveIcon,
   "book-open": SkillsIcon,
   brain: MemoryIcon,
@@ -241,6 +248,8 @@ const COMMAND_ICONS: Record<string, LucideIcon> = {
 };
 
 const BUILTIN_COMMAND_ICONS: Record<string, LucideIcon> = {
+  "/temporary": Ghost, "/ptc": Code2, "/access": RestrictedAccessIcon,
+  "/resume": ResumeIcon, "/clear": Eraser,
   "/new": NewChatIcon, "/compact": CompactIcon, "/stop": StopIcon,
   "/restart": RestartIcon, "/status": StatusIcon, "/model": ModelsIcon,
   "/history": HistoryIcon, "/goal": GoalIcon, "/trigger": TriggerIcon,

@@ -10,14 +10,14 @@ import pytest
 from loguru import logger
 from openai.types.responses import ResponseFunctionToolCall
 
-from cirno.providers.base import LLMUsage
-from cirno.providers.openai_responses.converters import (
+from cirno_core.providers.base import LLMUsage
+from cirno_core.providers.openai_responses.converters import (
     convert_messages,
     convert_tools,
     convert_user_message,
     split_tool_call_id,
 )
-from cirno.providers.openai_responses.parsing import (
+from cirno_core.providers.openai_responses.parsing import (
     ResponsesStreamCapture,
     consume_sdk_stream,
     consume_sse,
@@ -26,7 +26,7 @@ from cirno.providers.openai_responses.parsing import (
     map_finish_reason,
     parse_response_output,
 )
-from cirno.providers.openai_responses.state import (
+from cirno_core.providers.openai_responses.state import (
     build_responses_state,
     is_compaction_compatibility_error,
     prepare_responses_input,
@@ -571,7 +571,7 @@ class TestParseResponseOutput:
             }],
             "status": "completed", "usage": {},
         }
-        with patch("cirno.providers.openai_responses.parsing.logger") as mock_logger:
+        with patch("cirno_core.providers.openai_responses.parsing.logger") as mock_logger:
             result = parse_response_output(resp)
         assert result.tool_calls[0].arguments == "{bad json"
         mock_logger.warning.assert_called_once()
@@ -2220,7 +2220,7 @@ class TestConsumeSdkStream:
             for e in [ev1, ev2, ev3, ev4]:
                 yield e
 
-        with patch("cirno.providers.openai_responses.parsing.logger") as mock_logger:
+        with patch("cirno_core.providers.openai_responses.parsing.logger") as mock_logger:
             _, tool_calls, _, _, _ = await consume_sdk_stream(stream())
         assert tool_calls[0].arguments == "{bad"
         mock_logger.warning.assert_called_once()

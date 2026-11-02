@@ -5,13 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from cirno.bus.events import InboundMessage
-from cirno.bus.agent_events import AgentEvent
-from cirno.providers.base import LLMUsage
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.input_origin import InputOrigin, input_origin
+from cirno_core.bus.agent_events import AgentEvent
+from cirno_core.providers.base import LLMUsage
 
 if TYPE_CHECKING:
-    from cirno.bus.queue import MessageBus
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,8 @@ class SessionTurnStarted(AgentEvent):
     """A user/system turn has loaded its session and is about to build context."""
 
     context: RuntimeEventContext
+    content: str = ""
+    origin: InputOrigin | None = None
 
 
 @dataclass(frozen=True)
@@ -203,6 +206,8 @@ class RuntimeEventPublisher:
                     metadata=msg.metadata,
                     session_generation=msg.session_generation,
                 ),
+                content=msg.content,
+                origin=input_origin(msg),
             )
         )
 

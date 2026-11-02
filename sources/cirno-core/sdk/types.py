@@ -6,8 +6,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping, TypeAlias, cast
 
-from cirno.providers.base import LLMUsage
-from cirno.runtime.context import public_history_messages
+from cirno_core.providers.base import LLMUsage
+from cirno_core.runtime.context import public_history_messages
 
 StreamEventType: TypeAlias = Literal[
     "run.started",

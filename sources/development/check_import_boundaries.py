@@ -34,91 +34,94 @@ class Violation:
 
 
 _ADAPTERS = (
-    "cirno.channels",
-    "cirno.cli",
-    "cirno.gateway",
-    "cirno.webui",
+    "cirno_server.channels",
+    "cirno_server.cli",
+    "cirno_server.application",
+    "cirno_server.lifecycle",
+    "cirno_server.lifecycle",
+    "cirno_server.webui",
 )
 
 _TOOL_CONFIG_MODULES = (
-    "cirno.agent.tools.cli_apps_config",
-    "cirno.agent.tools.filesystem_config",
-    "cirno.agent.tools.self_config",
-    "cirno.agent.tools.shell_config",
-    "cirno.agent.tools.web_config",
+    "cirno_core.agent.tools.cli_apps_config",
+    "cirno_core.agent.tools.filesystem_config",
+    "cirno_core.agent.tools.self_config",
+    "cirno_core.agent.tools.shell_config",
+    "cirno_core.agent.tools.web_config",
 )
 
 IMPORT_RULES = (
+    ImportRule("package-dependencies", ("cirno_core",), ("cirno_server", "cirno")),
     ImportRule(
         "core-execution",
-        ("cirno.agent.loop", "cirno.agent.runner", "cirno.agent.turn_delivery"),
+        ("cirno_core.agent.loop", "cirno_core.agent.runner", "cirno_core.agent.turn_delivery"),
         _ADAPTERS,
-        allowed_targets=("cirno.channels.notification_routes",),
+        allowed_targets=("cirno_core.notifications.routes",),
     ),
     ImportRule(
         "channel-routing-contracts",
-        ("cirno.channels.notification_routes",),
-        ("cirno",),
+        ("cirno_core.notifications.routes",),
+        ("cirno_core", "cirno_server", "cirno"),
     ),
     ImportRule(
         "session-storage",
-        ("cirno.session.manager", "cirno.session.history", "cirno.session.summary",
-         "cirno.session.recovery"),
-        (*_ADAPTERS, "cirno.agent"),
+        ("cirno_core.session.manager", "cirno_core.session.history", "cirno_core.session.summary",
+         "cirno_core.session.recovery"),
+        (*_ADAPTERS, "cirno_core.agent"),
     ),
     ImportRule(
         "security-primitives",
-        ("cirno.security",),
-        (*_ADAPTERS, "cirno.agent", "cirno.session"),
+        ("cirno_core.security",),
+        (*_ADAPTERS, "cirno_core.agent", "cirno_core.session"),
     ),
     ImportRule(
         "websocket-transport",
-        ("cirno.channels.websocket.runtime",),
+        ("cirno_server.channels.websocket.runtime",),
         (
-            "cirno.bus.outbound_events",
-            "cirno.command",
-            "cirno.runtime.context",
-            "cirno.security.workspace_access",
-            "cirno.pairing.events",
-            "cirno.session.goal_state",
-            "cirno.session.webui_turns",
-            "cirno.webui.metadata",
-            "cirno.webui.outbound_wire",
-            "cirno.webui.transcript",
-            "cirno.webui.cli_apps_api",
-            "cirno.webui.forking",
-            "cirno.webui.mcp.presets_api",
-            "cirno.webui.sidebar_state",
+            "cirno_core.bus.outbound_events",
+            "cirno_core.command",
+            "cirno_core.runtime.context",
+            "cirno_core.security.workspace_access",
+            "cirno_core.pairing.events",
+            "cirno_core.session.goal_state",
+            "cirno_core.session.webui_turns",
+            "cirno_core.session.transport_metadata",
+            "cirno_core.session.outbound_wire",
+            "cirno_core.session.transcript",
+            "cirno_server.webui.cli_apps_api",
+            "cirno_server.webui.forking",
+            "cirno_server.webui.mcp.presets_api",
+            "cirno_server.webui.sidebar_state",
         ),
     ),
     ImportRule(
         "tool-config-base",
-        ("cirno.agent.tools", "cirno.channels"),
-        ("cirno.config.schema.Base",),
+        ("cirno_core.agent.tools", "cirno_server.channels"),
+        ("cirno_core.config.schema.Base",),
     ),
     ImportRule(
         "configuration-contracts",
-        ("cirno.config", "cirno.config.base"),
-        (*_ADAPTERS, "cirno.agent", "cirno.apps", "cirno.session"),
+        ("cirno_core.config", "cirno_core.config.base"),
+        (*_ADAPTERS, "cirno_core.agent", "cirno_core.apps", "cirno_core.session"),
         allowed_targets=_TOOL_CONFIG_MODULES,
     ),
     ImportRule(
         "tool-configuration-contracts",
         _TOOL_CONFIG_MODULES,
-        (*_ADAPTERS, "cirno.agent", "cirno.apps", "cirno.session", "cirno.config"),
-        allowed_targets=(*_TOOL_CONFIG_MODULES, "cirno.config.base"),
+        (*_ADAPTERS, "cirno_core.agent", "cirno_core.apps", "cirno_core.session", "cirno_core.config"),
+        allowed_targets=(*_TOOL_CONFIG_MODULES, "cirno_core.config.base"),
     ),
     ImportRule(
         "shared-primitives",
-        ("cirno.utils.file_io", "cirno.skills.metadata", "cirno.providers.generation",
-         "cirno.llm_usage.types", "cirno.session.automation_spec"),
-        (*_ADAPTERS, "cirno.agent", "cirno.apps", "cirno.session", "cirno.config"),
+        ("cirno_core.utils.file_io", "cirno_core.skills.metadata", "cirno_core.providers.generation",
+         "cirno_core.llm_usage.types", "cirno_core.session.automation_spec"),
+        (*_ADAPTERS, "cirno_core.agent", "cirno_core.apps", "cirno_core.session", "cirno_core.config"),
     ),
     ImportRule(
         "oauth-catalog-cache",
-        ("cirno.providers.oauth_catalog_cache",),
-        ("cirno.providers.oauth_model_catalog", "cirno.providers.openai_codex_provider",
-         "cirno.providers.github_copilot_provider", "cirno.providers.xai_grok_provider"),
+        ("cirno_core.providers.oauth_catalog_cache",),
+        ("cirno_core.providers.oauth_model_catalog", "cirno_core.providers.openai_codex_provider",
+         "cirno_core.providers.github_copilot_provider", "cirno_core.providers.xai_grok_provider"),
     ),
 )
 
@@ -178,7 +181,7 @@ class ImportCollector(ast.NodeVisitor):
                         self.builtin_import_calls.add(binding)
 
     def _add(self, target: str, line: int) -> None:
-        if _within(target, "cirno"):
+        if any(_within(target, prefix) for prefix in ("cirno_core", "cirno_server", "cirno")):
             self.edges.append(ImportEdge(target, line, self.type_only))
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -250,7 +253,8 @@ def check_repository(root: Path) -> tuple[int, list[str]]:
         relative = path.relative_to(root)
         if "tests" in relative.parts or path.name == "conftest.py":
             continue
-        parts = ("cirno", *relative.with_suffix("").parts)
+        namespace = "cirno_server" if root.name == "cirno-server" else "cirno_core"
+        parts = (namespace, *relative.with_suffix("").parts)
         is_package = parts[-1] == "__init__"
         module = ".".join(parts[:-1] if is_package else parts)
         if not any(
@@ -271,13 +275,19 @@ def check_repository(root: Path) -> tuple[int, list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--root", type=Path, default=Path(__file__).resolve().parents[2] / "sources/cirno-core",
+        "--root", type=Path, default=Path(__file__).resolve().parents[2] / "sources",
         help="core source directory",
     )
     args = parser.parse_args()
-    if not (args.root / "__init__.py").is_file():
-        parser.error(f"{args.root} is not the core source directory")
-    checked, violations = check_repository(args.root)
+    roots = [args.root] if (args.root / "__init__.py").is_file() else [args.root / "cirno-core", args.root / "cirno-server"]
+    checked = 0
+    violations = []
+    for root in roots:
+        if not (root / "__init__.py").is_file():
+            parser.error(f"{root} is not a Python package")
+        count, found = check_repository(root)
+        checked += count
+        violations.extend(found)
     if checked == 0:
         parser.error(f"{args.root} contains no protected Python modules")
     if violations:

@@ -25,7 +25,9 @@
     "ask_user": "user.ask",
     "message": "user.message",
     "run_cli_app": "apps.run",
-    "run_code": "ptc.run"
+    "run_code": "ptc.run",
+    "control_session": "conversations.control",
+    "control_goal": "goals.control"
   },
   "action_groups": {
     "memory": "memory",

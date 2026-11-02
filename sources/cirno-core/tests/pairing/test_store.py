@@ -2,13 +2,13 @@ import json
 
 import pytest
 
-from cirno.pairing import __all__ as pairing_all
-from cirno.pairing import store
+from cirno_core.pairing import __all__ as pairing_all
+from cirno_core.pairing import store
 
 
 def test_all_exports_are_importable():
-    """Every name in __all__ must actually be importable from cirno.pairing."""
-    import cirno.pairing as pkg
+    """Every name in __all__ must actually be importable from cirno_core.pairing."""
+    import cirno_core.pairing as pkg
 
     for name in pairing_all:
         assert hasattr(pkg, name), f"{name} is in __all__ but not exported"

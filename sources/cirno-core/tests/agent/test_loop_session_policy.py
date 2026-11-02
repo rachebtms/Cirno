@@ -5,23 +5,23 @@ import pytest
 from loguru import logger
 
 from agent.session_helpers import run_session
-from cirno.agent.context import TranscriptInput
-from cirno.agent.loop import AgentLoop
-from cirno.agent.runner import AgentRunResult
-from cirno.agent.subagents.sessions import SubagentSessions
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.bus.events import (
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.subagents.sessions import SubagentSessions
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.bus.events import (
     INBOUND_META_RUNTIME_CONTROL,
     RUNTIME_CONTROL_SESSION_DISCARD,
     InboundMessage,
 )
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
-from cirno.runtime.context import RuntimeContextBlock, public_history_message
-from cirno.session.manager import SessionPolicy
-from cirno.webui.temporary_chats import WebUITemporaryChats
-from cirno.webui.workspaces import WebUIWorkspaceController
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.runtime.context import RuntimeContextBlock
+from cirno_core.session.manager import SessionPolicy
+from cirno_server.webui.temporary_chats import WebUITemporaryChats
+from cirno_server.webui.workspaces import WebUIWorkspaceController
 
 
 def _message(key: str, content: str) -> InboundMessage:
@@ -90,7 +90,7 @@ async def test_transient_session_keeps_history_without_persisting_or_durable_too
 
 @pytest.mark.parametrize("selection", ["explicit_empty", "disable_all", "default"])
 async def test_turn_tool_selection_preserves_empty_registries(tmp_path, monkeypatch, selection) -> None:
-    monkeypatch.setattr("cirno.agent.tools.loader.entry_points", lambda **kwargs: [])
+    monkeypatch.setattr("cirno_core.agent.tools.loader.entry_points", lambda **kwargs: [])
     loop = _loop(tmp_path, [], max_iterations=2)
     key = "cli:tool-selection"
     write_tool = loop.tools.get("write_file")
@@ -121,7 +121,7 @@ async def test_turn_tool_selection_preserves_empty_registries(tmp_path, monkeypa
         requests = loop.provider.chat_stream_with_retry.await_args_list
         assert len(requests) == 2
         allowed = selection == "default"
-        expected_names = {item["function"]["name"] for item in loop.tools.get_definitions() if item["function"]["name"] != "user__message"} if allowed else set()
+        expected_names = {item["function"]["name"] for item in loop.tools.get_definitions() if item["function"]["name"] not in {"user__message", "conversations__control", "goals__control"}} if allowed else set()
         for request in requests:
             assert {item["function"]["name"] for item in request.kwargs["tools"]} == expected_names
             assert (tool_context.content in str(request.kwargs["messages"])) is allowed
@@ -161,6 +161,8 @@ async def test_session_policy_controls_tool_logs_and_result_offload(
     image = {"type": "image_url", "image_url": {"url": "data:image/png;base64,c3ludGhldGlj"}}
     result = [{"type": "text", "text": text}, image] if structured else text
     loop.tools.unregister("message")
+    loop.tools.unregister("control_session")
+    loop.tools.unregister("control_goal")
     loop.tools.prepare_call = MagicMock(return_value=(None, {"query": secret}, None))
     loop.tools.execute = AsyncMock(return_value=result)
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -202,6 +204,8 @@ async def test_direct_transient_run_never_spills_before_cancellation(tmp_path) -
     session = await loop.sessions.state.register_transient("websocket:cancel-private")
     loop.max_tool_result_chars = 100
     loop.tools.unregister("message")
+    loop.tools.unregister("control_session")
+    loop.tools.unregister("control_goal")
     loop.tools.prepare_call = MagicMock(return_value=(None, {}, None))
     loop.tools.execute = AsyncMock(return_value="synthetic large result" * 1000)
     second_call = asyncio.Event()

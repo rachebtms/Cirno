@@ -11,21 +11,21 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from cirno import __version__
-from cirno.bus.events import INBOUND_META_USER_SHELL, InboundMessage, OutboundMessage
-from cirno.command.router import CommandContext, CommandRouter, normalize_command_text
-from cirno.providers.base import LLMUsage
-from cirno.session.history_visibility import HIDDEN_HISTORY_META
-from cirno.utils.cancellation import shield_and_drain
-from cirno.utils.helpers import build_status_content
-from cirno.utils.restart import set_restart_notice_to_env
-from cirno.utils.workspace_prompts import initialize_workspace_prompt
+from cirno_core import __version__
+from cirno_core.bus.events import INBOUND_META_USER_SHELL, InboundMessage, OutboundMessage
+from cirno_core.command.router import CommandContext, CommandRouter, normalize_command_text
+from cirno_core.providers.base import LLMUsage
+from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.helpers import build_status_content
+from cirno_core.utils.restart import set_restart_notice_to_env
+from cirno_core.utils.workspace_prompts import initialize_workspace_prompt
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.agent.loop import AgentLoop
-    from cirno.session.manager import Session
-    from cirno.utils.gitstore import CommitInfo
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.session.manager import Session
+    from cirno_core.utils.gitstore import CommitInfo
 
 # WebUI protocol contract for how a slash command participates in turn state:
 # - side_channel: returns control text without starting or ending an agent turn.
@@ -67,6 +67,11 @@ class BuiltinCommandSpec:
 
 
 BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
+    BuiltinCommandSpec("/temporary", "Temporary conversation", "Choose temporary mode before creating a conversation.", "square-pen", "on|off", accepts_args=True),
+    BuiltinCommandSpec("/ptc", "PTC mode", "Choose programmatic tool calling before creating a conversation.", "code", "on|off", accepts_args=True),
+    BuiltinCommandSpec("/access", "Access mode", "Choose Default, independent AI review, or Full Access.", "shield", "default|review|full", accepts_args=True),
+    BuiltinCommandSpec("/resume", "Continue stopped task", "Continue the stopped request from saved context without replaying completed tool calls.", "play"),
+    BuiltinCommandSpec("/clear", "Clear Cirno context", "Clear the personal Cirno conversation's context. This does not undo file or environment changes.", "eraser", lifecycle="finalize_active_turn"),
     BuiltinCommandSpec(
         "/new",
         "New chat",
@@ -215,13 +220,79 @@ async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
             try:
                 pending.get_nowait()
                 total += 1
-            except Exception:
+            except asyncio.QueueEmpty:
                 break
     content = f"Stopped {total} task(s)." if total else "No active task to stop."
     return OutboundMessage(
         channel=msg.channel, chat_id=msg.chat_id, content=content,
         metadata=dict(msg.metadata or {})
     )
+
+
+def _human_control_required(ctx: CommandContext) -> OutboundMessage | None:
+    if ctx.is_user_turn:
+        return None
+    return OutboundMessage(channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
+                           content="This control requires a direct user request; agent and system inputs cannot change it.",
+                           metadata={**ctx.msg.metadata, "render_as": "text"})
+
+
+async def cmd_access(ctx: CommandContext) -> OutboundMessage:
+    from cirno_core.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY, build_workspace_scope
+    from cirno_core.bus.outbound_events import SessionUpdatedEvent, outbound_message_for_event
+    denied = _human_control_required(ctx)
+    if denied is not None:
+        return denied
+    mode = {"default": "restricted", "restricted": "restricted", "review": "review", "full": "full"}.get(ctx.args.strip().lower())
+    text = "Usage: /access default|review|full"
+    if mode is not None:
+        session = ctx.session or await ctx.loop.sessions.state.get(ctx.key)
+        scope = ctx.loop.workspace_scopes.for_turn(channel="websocket", message_metadata={}, session_metadata=session.metadata)
+        changed = build_workspace_scope(scope.project_path, mode, source_channel="websocket")
+        await ctx.loop.sessions.state.update_metadata(ctx.key, {WORKSPACE_SCOPE_METADATA_KEY: changed.payload()}, expected_generation=session.generation)
+        await ctx.loop.bus.publish_outbound(outbound_message_for_event(channel="websocket", chat_id=ctx.key.split(":", 1)[1], event=SessionUpdatedEvent(scope="metadata", workspace_scope=changed.payload()), metadata={}))
+        text = {"restricted": "Default access selected.", "review": "Independent AI review selected. AI decisions can be wrong; uncertain cases require owner approval in Inbox.", "full": "Full Access selected. Commands and files are not restricted to the workspace; mistakes can expose or damage data."}[mode]
+    return OutboundMessage(channel=ctx.msg.channel, chat_id=ctx.msg.chat_id, content=text,
+                           metadata={**ctx.msg.metadata, "render_as": "text"})
+
+
+async def cmd_draft_mode(ctx: CommandContext) -> OutboundMessage:
+    return OutboundMessage(channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
+                           content="Use /temporary on|off or /ptc on|off in the new-conversation composer before sending its first message.",
+                           metadata={**ctx.msg.metadata, "render_as": "text"})
+
+
+async def cmd_resume(ctx: CommandContext) -> OutboundMessage:
+    """Resume the saved request through the same mechanism as the UI button."""
+    from cirno_core.session.display_recovery import RecoveryActionError
+
+    denied = _human_control_required(ctx)
+    if denied is not None:
+        return denied
+    recovery = ctx.loop._recovery_admission
+    if ctx.key in ctx.loop._pending_queues:
+        text = "This conversation is already running."
+    elif recovery is None:
+        text = "Continuation is unavailable in this runtime."
+    else:
+        try:
+            await recovery.resume_session(ctx.key)
+        except RecoveryActionError as error:
+            text = str(error)
+        else:
+            text = "Continuing from saved context."
+    return OutboundMessage(channel=ctx.msg.channel, chat_id=ctx.msg.chat_id, content=text,
+                           metadata={**ctx.msg.metadata, "render_as": "text"})
+
+
+async def cmd_clear(ctx: CommandContext) -> OutboundMessage:
+    """Only the fixed personal conversation needs a dedicated clear command."""
+    from cirno_core.session.keys import CIRNO_SESSION_KEY
+
+    if ctx.key != CIRNO_SESSION_KEY:
+        return OutboundMessage(channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
+                               content="/clear is available only in the personal Cirno conversation.", metadata=dict(ctx.msg.metadata))
+    return await cmd_new(ctx)
 
 
 async def cmd_restart(ctx: CommandContext) -> OutboundMessage:
@@ -275,7 +346,7 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
     search_usage_text: str | None = None
     # Never let usage fetch break /status
     with suppress(Exception):
-        from cirno.utils.searchusage import fetch_search_usage
+        from cirno_core.utils.searchusage import fetch_search_usage
         search_cfg = loop.web_config.search
         usage = await fetch_search_usage(
             provider=search_cfg.provider,
@@ -305,6 +376,9 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
 
 async def cmd_new(ctx: CommandContext) -> OutboundMessage:
     """Stop active task and start a fresh session."""
+    denied = _human_control_required(ctx)
+    if denied is not None:
+        return denied
     loop = ctx.loop
     await loop._cancel_active_tasks(ctx.key)  # pyright: ignore[reportPrivateUsage]
     loop.discard_session_file_state(ctx.key)
@@ -332,6 +406,12 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
             )
 
     await shield_and_drain(reset_and_schedule_archive())
+    from cirno_core.session.session_identity import webui_chat_id
+    from cirno_core.bus.outbound_events import SessionUpdatedEvent, outbound_message_for_event
+    chat_id = webui_chat_id(ctx.key)
+    if chat_id is not None:
+        await loop.bus.publish_outbound(outbound_message_for_event(
+            channel="websocket", chat_id=chat_id, event=SessionUpdatedEvent(scope="reset"), metadata={}))
     return OutboundMessage(
         channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
         content="New session started.",
@@ -448,7 +528,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     msg = ctx.msg
 
     async def _run_dream():
-        from cirno.memory.consolidation import MemoryStore, run_with_dream_lease
+        from cirno_core.memory.consolidation import MemoryStore, run_with_dream_lease
 
         async def _silent(*_args: Any, **_kwargs: Any) -> None:
             pass
@@ -889,8 +969,8 @@ async def cmd_goal(ctx: CommandContext) -> InboundMessage | OutboundMessage:
 
 async def cmd_pairing(ctx: CommandContext) -> OutboundMessage:
     """List, approve, deny or revoke pairing requests."""
-    from cirno.pairing import PAIRING_COMMAND_META_KEY, handle_pairing_command
-    from cirno.pairing.events import PairingChanged
+    from cirno_core.pairing import PAIRING_COMMAND_META_KEY, handle_pairing_command
+    from cirno_core.pairing.events import PairingChanged
 
     def changed() -> None:
         ctx.loop.bus.publish_nowait(PairingChanged())
@@ -938,7 +1018,7 @@ async def cmd_trigger(ctx: CommandContext) -> OutboundMessage:
             metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
         )
 
-    from cirno.triggers.local_store import LocalTriggerStore
+    from cirno_core.triggers.local_store import LocalTriggerStore
 
     loop = ctx.loop
     store = loop.local_trigger_store
@@ -1013,7 +1093,14 @@ def build_help_text() -> str:
 
 def register_builtin_commands(router: CommandRouter) -> None:
     """Register the default set of slash commands."""
+    router.exact("/access", cmd_access)
+    router.prefix("/access ", cmd_access)
+    for name in ("/temporary", "/ptc"):
+        router.exact(name, cmd_draft_mode)
+        router.prefix(name + " ", cmd_draft_mode)
     router.priority("/stop", cmd_stop)
+    router.priority("/resume", cmd_resume)
+    router.priority("/clear", cmd_clear)
     router.priority("/restart", cmd_restart)
     router.priority("/status", cmd_status)
     router.exact("/new", cmd_new)

@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import ProgressEvent
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import (
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import ProgressEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import (
     RuntimeEventContext,
     RuntimeEventPublisher,
     RuntimeModelChanged,
@@ -15,7 +15,7 @@ from cirno.bus.runtime_events import (
     TurnRunStatusChanged,
     TurnRuntimeAdmitted,
 )
-from cirno.providers.base import LLMUsage
+from cirno_core.providers.base import LLMUsage
 
 
 async def test_local_state_subscriber_does_not_block_routed_delivery():

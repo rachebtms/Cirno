@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cirno.utils.runtime import (
+from cirno_core.utils.runtime import (
     repeated_workspace_violation_error,
     workspace_violation_signature,
 )

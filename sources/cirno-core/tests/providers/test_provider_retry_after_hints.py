@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
-from cirno.providers.anthropic_provider import AnthropicProvider
-from cirno.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 def test_openai_compat_error_captures_retry_after_from_headers() -> None:

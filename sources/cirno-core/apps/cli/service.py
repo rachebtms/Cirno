@@ -19,11 +19,11 @@ from typing import Any, cast
 from urllib.parse import urlparse
 
 import httpx
-from cirno.skills.metadata import parse_skill_metadata, valid_skill_metadata
-from cirno.apps.protocol import app_manifest, compact_dict
-from cirno.config.home import get_home_path
-from cirno.config.paths import get_runtime_subdir
-from cirno.security.workspace_policy import is_path_within
+from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
+from cirno_core.apps.protocol import app_manifest, compact_dict
+from cirno_core.config.home import get_home_path
+from cirno_core.config.paths import get_runtime_subdir
+from cirno_core.security.workspace_policy import is_path_within
 from loguru import logger
 
 CLI_ANYTHING_REGISTRY_URL = "https://hkuds.github.io/CLI-Anything/registry.json"

@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.command.builtin import (
+from cirno_core.command.builtin import (
     builtin_command_starts_agent_turn,
     register_builtin_commands,
 )
-from cirno.command.router import CommandContext, CommandRouter
+from cirno_core.command.router import CommandContext, CommandRouter
 
 
 def test_command_context_requires_loop_as_keyword_dependency() -> None:
@@ -135,7 +135,7 @@ class TestMidTurnCommandDispatchedDirectly:
         """cmd_new works when session=None (mid-turn dispatch path)."""
         ctx = CommandContext(
             msg=fake_msg, session=None,
-            key="test:chat1", raw="/new", loop=fake_loop,
+            key="test:chat1", raw="/new", loop=fake_loop, is_user_turn=True,
         )
         fake_loop.sessions.state.reset = AsyncMock()
         result = await router.dispatch(ctx)
@@ -239,7 +239,7 @@ class TestPairingCommandDispatch:
         self, router: CommandRouter, fake_msg: MagicMock, monkeypatch,
     ) -> None:
         monkeypatch.setattr(
-            "cirno.pairing.store.list_pending",
+            "cirno_core.pairing.store.list_pending",
             lambda: [
                 {
                     "code": "ABCD-EFGH",
@@ -263,7 +263,7 @@ class TestPairingCommandDispatch:
         self, router: CommandRouter, fake_msg: MagicMock, monkeypatch,
     ) -> None:
         monkeypatch.setattr(
-            "cirno.pairing.store.approve_code",
+            "cirno_core.pairing.store.approve_code",
             lambda code, *, on_change=None: ("telegram", "123") if code == "ABCD-EFGH" else None,
         )
         fake_msg.content = "/pairing approve ABCD-EFGH"
@@ -285,7 +285,7 @@ class TestPairingCommandDispatch:
         self, router: CommandRouter, fake_msg: MagicMock, monkeypatch,
     ) -> None:
         monkeypatch.setattr(
-            "cirno.pairing.store.revoke",
+            "cirno_core.pairing.store.revoke",
             lambda ch, sid, *, on_change=None: sid == "123",
         )
         fake_msg.content = "/pairing revoke 123"

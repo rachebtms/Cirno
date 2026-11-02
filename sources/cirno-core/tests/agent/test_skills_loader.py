@@ -1,4 +1,4 @@
-"""Tests for cirno.skills.loader.SkillsLoader."""
+"""Tests for cirno_core.skills.loader.SkillsLoader."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from cirno.config.home import get_home_path
-from cirno.skills import loader as agent_skills
-from cirno.agent.context import ContextBuilder
-from cirno.skills.loader import SkillsLoader
-from cirno.agent.tools.filesystem import ListDirTool, WriteFileTool
-from cirno.agent.tools.search import GrepTool
+from cirno_core.config.home import get_home_path
+from cirno_core.skills import loader as agent_skills
+from cirno_core.agent.context import ContextBuilder
+from cirno_core.skills.loader import SkillsLoader
+from cirno_core.agent.tools.filesystem import ListDirTool, WriteFileTool
+from cirno_core.agent.tools.search import GrepTool
 
 
 def _write_skill(
@@ -148,7 +148,7 @@ def test_list_skills_filter_unavailable_excludes_unmet_bin_requirement(
             return None
         return "/usr/bin/true"
 
-    monkeypatch.setattr("cirno.skills.loader.shutil.which", fake_which)
+    monkeypatch.setattr("cirno_core.skills.loader.shutil.which", fake_which)
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     assert loader.list_skills(filter_unavailable=True) == []
@@ -173,7 +173,7 @@ def test_list_skills_filter_unavailable_includes_when_bin_requirement_met(
             return "/fake/cirno_test_fake_binary"
         return None
 
-    monkeypatch.setattr("cirno.skills.loader.shutil.which", fake_which)
+    monkeypatch.setattr("cirno_core.skills.loader.shutil.which", fake_which)
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = loader.list_skills(filter_unavailable=True)
@@ -196,7 +196,7 @@ def test_list_skills_filter_unavailable_false_keeps_unmet_requirements(
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
-    monkeypatch.setattr("cirno.skills.loader.shutil.which", lambda _cmd: None)
+    monkeypatch.setattr("cirno_core.skills.loader.shutil.which", lambda _cmd: None)
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = loader.list_skills(filter_unavailable=False)
@@ -242,13 +242,13 @@ def test_list_skills_openclaw_metadata_parsed_for_requirements(
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
-    monkeypatch.setattr("cirno.skills.loader.shutil.which", lambda _cmd: None)
+    monkeypatch.setattr("cirno_core.skills.loader.shutil.which", lambda _cmd: None)
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     assert loader.list_skills(filter_unavailable=True) == []
 
     monkeypatch.setattr(
-        "cirno.skills.loader.shutil.which",
+        "cirno_core.skills.loader.shutil.which",
         lambda cmd: "/x" if cmd == "cirno_oc_bin" else None,
     )
     entries = loader.list_skills(filter_unavailable=True)
@@ -515,7 +515,7 @@ def test_prompt_reads_skills_once_and_refreshes_on_next_build(
     monkeypatch.setattr(builder.skills, "_discover_skills", discover)
     monkeypatch.setattr(Path, "read_text", read)
     monkeypatch.setattr(agent_skills, "parse_skill_metadata", parse)
-    monkeypatch.setattr("cirno.skills.loader.shutil.which", which)
+    monkeypatch.setattr("cirno_core.skills.loader.shutil.which", which)
     first = build_prompt()
     assert "First instructions" in first
     assert "**beta**" not in first
@@ -672,8 +672,8 @@ def test_check_requirements_tolerates_null_requires_and_lists(tmp_path: Path) ->
 
 
 def test_documentation_skill_resolves_docs_without_rewriting_home_override(tmp_path):
-    from cirno.config.home import get_home_path
-    from cirno.skills.metadata import BUILTIN_DOCUMENTS_DIR
+    from cirno_core.config.home import get_home_path
+    from cirno_core.skills.metadata import BUILTIN_DOCUMENTS_DIR
 
     loader = SkillsLoader(tmp_path)
     assert str(BUILTIN_DOCUMENTS_DIR / "README.md") in loader.load_skill("cirno-document")

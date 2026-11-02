@@ -45,7 +45,7 @@ const providers: SettingsPayload["providers"] = [
 
 export const settings: SettingsPayload = {
   agent: { model: "gpt-5.4", provider: "openai", resolved_provider: "openai", has_api_key: true, model_preset: null,
-    max_tokens: 8192, context_window_tokens: 200_000, temperature: 0.1, reasoning_effort: null, timezone: "UTC", tool_hint_max_length: 40 },
+    max_tokens: 8192, context_window_tokens: 200_000, temperature: 0.1, reasoning_effort: null, timezone: "UTC", tool_status_summary_max_chars: 40 },
   model_presets: [], model_call_order: [], model_call_order_editable: true,
   providers,
   web_search: { provider: "duckduckgo", max_results: 5, timeout: 30, providers: [
@@ -54,7 +54,7 @@ export const settings: SettingsPayload = {
     { name: "searxng", label: "SearXNG", credential: "base_url" },
   ] },
   web: { enable: true, search: { max_results: 5, timeout: 30 }, fetch: { use_jina_reader: true } },
-  runtime: { config_path: "config.json", workspace_path: "workspace", gateway_host: "127.0.0.1", gateway_port: 8765,
+  runtime: { config_path: "config.json", workspace_path: "workspace", health_host: "127.0.0.1", health_port: 8765,
     heartbeat: { enabled: true, interval_s: 1800 }, dream: { schedule: "0 3 * * *" } },
   advanced: { restrict_to_workspace: true, ssrf_whitelist_count: 0, webui_allow_local_service_access: true,
     webui_default_access_mode: "default", private_service_protection_enabled: true, mcp_server_count: 0,

@@ -3,15 +3,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.runtime_control import AgentRuntimeControl
-from cirno.agent.tools.self import MyTool
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import ModelPresetConfig
-from cirno.providers.factory import ProviderSnapshot
-from cirno.session.model_selection import model_preset_from_metadata
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.runtime_control import AgentRuntimeControl
+from cirno_core.agent.tools.self import MyTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.providers.factory import ProviderSnapshot
+from cirno_core.session.model_selection import model_preset_from_metadata
 
 
 def _provider(default_model: str, max_tokens: int = 123) -> MagicMock:
@@ -373,12 +373,12 @@ async def test_self_tool_set_model_clears_active_preset(tmp_path) -> None:
 def test_from_config_injects_default_preset(tmp_path) -> None:
     from unittest.mock import patch
 
-    from cirno.config.schema import Config
+    from cirno_core.config.schema import Config
     config = Config.model_validate({
         "agents": {"defaults": {"model": "openai/gpt-4.1", "workspace": str(tmp_path)}},
     })
     fake_provider = _provider("openai/gpt-4.1")
-    with patch("cirno.providers.factory.make_provider", return_value=fake_provider):
+    with patch("cirno_core.providers.factory.make_provider", return_value=fake_provider):
         loop = AgentLoop.from_config(config, tool_registry=ToolRegistry())
     assert loop.model == "openai/gpt-4.1"
     assert loop.model_preset is None
@@ -389,13 +389,13 @@ def test_from_config_injects_default_preset(tmp_path) -> None:
 def test_from_config_static_preset_loader_does_not_enable_hot_reload(tmp_path) -> None:
     from unittest.mock import patch
 
-    from cirno.config.schema import Config
+    from cirno_core.config.schema import Config
     config = Config.model_validate({
         "agents": {"defaults": {"model": "openai/gpt-4.1", "workspace": str(tmp_path)}},
         "model_presets": {"fast": {"model": "openai/gpt-4.1-mini"}},
     })
     fake_provider = _provider("openai/gpt-4.1")
-    with patch("cirno.providers.factory.make_provider", return_value=fake_provider):
+    with patch("cirno_core.providers.factory.make_provider", return_value=fake_provider):
         loop = AgentLoop.from_config(config, tool_registry=ToolRegistry())
         default_runtime = loop.runtime_resolver.runtime
         resolved = loop.runtime_resolver.resolve_preset("fast")

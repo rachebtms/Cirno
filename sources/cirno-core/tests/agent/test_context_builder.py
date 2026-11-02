@@ -4,16 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from cirno.agent.context import ContextBuilder, TranscriptInput
-from cirno.runtime.context import RuntimeContextBlock
-from cirno.config.home import set_home_path
+from cirno_core.agent.context import ContextBuilder, TranscriptInput
+from cirno_core.runtime.context import RuntimeContextBlock
+from cirno_core.config.home import set_instance_path
 
 
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path):
-    set_home_path(tmp_path)
+    set_instance_path(tmp_path)
+    (tmp_path / "home").mkdir(exist_ok=True)
     yield
-    set_home_path(None)
+    set_instance_path(None)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -83,25 +84,25 @@ class TestMergeMessageContent:
 
 class TestLoadBootstrapFiles:
     def test_no_bootstrap_files(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         assert builder._load_bootstrap_files() == ""
 
     def test_empty_bootstrap_files(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("\n", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "AGENTS.md").write_text("\n", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         assert builder._load_bootstrap_files() == ""
 
     def test_agents_md(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("Be helpful.", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "AGENTS.md").write_text("Be helpful.", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         result = builder._load_bootstrap_files()
         assert "## AGENTS.md" in result
         assert "Be helpful." in result
 
     def test_multiple_bootstrap_files(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("Rules.", encoding="utf-8")
-        (tmp_path / "SOUL.md").write_text("Soul.", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "AGENTS.md").write_text("Rules.", encoding="utf-8")
+        (tmp_path / "home" / "SOUL.md").write_text("Soul.", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         result = builder._load_bootstrap_files()
         assert "## AGENTS.md" in result
         assert "## SOUL.md" in result
@@ -110,30 +111,30 @@ class TestLoadBootstrapFiles:
 
     def test_all_bootstrap_files(self, tmp_path):
         for name in ContextBuilder.BOOTSTRAP_FILES:
-            (tmp_path / name).write_text(f"Content of {name}", encoding="utf-8")
-        builder = _builder(tmp_path)
+            (tmp_path / "home" / name).write_text(f"Content of {name}", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         result = builder._load_bootstrap_files()
         for name in ContextBuilder.BOOTSTRAP_FILES:
             assert f"## {name}" in result
 
     def test_legacy_tools_md_is_not_bootstrapped(self, tmp_path):
-        (tmp_path / "TOOLS.md").write_text("workspace tool notes", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "TOOLS.md").write_text("workspace tool notes", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         result = builder._load_bootstrap_files()
         assert "TOOLS.md" not in result
         assert "workspace tool notes" not in result
 
     def test_utf8_content(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("用中文回复", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "AGENTS.md").write_text("用中文回复", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         result = builder._load_bootstrap_files()
         assert "用中文回复" in result
 
     def test_selected_project_supplies_only_agents_file(self, tmp_path):
-        agent_home = tmp_path / "agent-home"
+        agent_home = tmp_path / "agent-home" / "home"
         project = tmp_path / "project"
-        agent_home.mkdir()
-        project.mkdir()
+        agent_home.mkdir(parents=True)
+        project.mkdir(parents=True)
         (agent_home / "AGENTS.md").write_text("global project rules", encoding="utf-8")
         (agent_home / "SOUL.md").write_text("global soul", encoding="utf-8")
         (agent_home / "USER.md").write_text("global user", encoding="utf-8")
@@ -141,7 +142,7 @@ class TestLoadBootstrapFiles:
         (project / "SOUL.md").write_text("project soul collision", encoding="utf-8")
         (project / "USER.md").write_text("project user collision", encoding="utf-8")
 
-        set_home_path(agent_home)
+        set_instance_path(agent_home.parent)
         result = ContextBuilder(agent_home).build_system_prompt(workspace=project)
 
         assert "selected project rules" in result
@@ -152,35 +153,35 @@ class TestLoadBootstrapFiles:
         assert "project user collision" not in result
 
     def test_selected_project_without_agents_does_not_fall_back(self, tmp_path):
-        agent_home = tmp_path / "agent-home"
+        agent_home = tmp_path / "agent-home" / "home"
         project = tmp_path / "project"
-        agent_home.mkdir()
-        project.mkdir()
+        agent_home.mkdir(parents=True)
+        project.mkdir(parents=True)
         (agent_home / "AGENTS.md").write_text("default workspace rules", encoding="utf-8")
 
-        set_home_path(agent_home)
+        set_instance_path(agent_home.parent)
         result = ContextBuilder(agent_home).build_system_prompt(workspace=project)
 
         assert "default workspace rules" in result
 
     def test_unmodified_agents_and_user_templates_are_skipped(self, tmp_path):
-        from cirno.utils.helpers import sync_workspace_templates
+        from cirno_core.utils.helpers import sync_workspace_templates
 
         sync_workspace_templates(tmp_path, silent=True)
 
-        result = ContextBuilder(tmp_path)._load_bootstrap_files()
+        result = ContextBuilder(tmp_path / "home")._load_bootstrap_files()
 
         assert "## AGENTS.md" not in result
         assert "## USER.md" not in result
         assert "## SOUL.md" in result
 
     def test_customized_user_template_is_loaded(self, tmp_path):
-        from cirno.utils.helpers import sync_workspace_templates
+        from cirno_core.utils.helpers import sync_workspace_templates
 
         sync_workspace_templates(tmp_path, silent=True)
-        (tmp_path / "USER.md").write_text("User prefers Chinese.", encoding="utf-8")
+        (tmp_path / "home" / "USER.md").write_text("User prefers Chinese.", encoding="utf-8")
 
-        result = ContextBuilder(tmp_path)._load_bootstrap_files()
+        result = ContextBuilder(tmp_path / "home")._load_bootstrap_files()
 
         assert "## USER.md" in result
         assert "User prefers Chinese." in result
@@ -197,7 +198,7 @@ class TestIsTemplateContent:
 
     def test_content_matching_template(self):
         from importlib.resources import files as pkg_files
-        tpl = pkg_files("cirno") / "templates" / "memory" / "MEMORY.md"
+        tpl = pkg_files("cirno_core") / "templates" / "memory" / "MEMORY.md"
         if not tpl.is_file():
             pytest.skip("MEMORY.md template not bundled")
         original = tpl.read_text(encoding="utf-8")
@@ -205,7 +206,7 @@ class TestIsTemplateContent:
 
     def test_modified_content_returns_false(self):
         from importlib.resources import files as pkg_files
-        tpl = pkg_files("cirno") / "templates" / "memory" / "MEMORY.md"
+        tpl = pkg_files("cirno_core") / "templates" / "memory" / "MEMORY.md"
         if not tpl.is_file():
             pytest.skip("MEMORY.md template not bundled")
         assert ContextBuilder._is_template_content("totally different", "memory/MEMORY.md") is False
@@ -220,7 +221,7 @@ class TestBundledToolContract:
     def test_tool_contract_contains_shared_execution_policy(self):
         from importlib.resources import files as pkg_files
 
-        tpl = pkg_files("cirno") / "templates" / "agent" / "tool_contract.md"
+        tpl = pkg_files("cirno_core") / "templates" / "agent" / "tool_contract.md"
         content = tpl.read_text(encoding="utf-8")
 
         assert "clear user request as authorization" in content
@@ -229,7 +230,7 @@ class TestBundledToolContract:
         assert "Wait for tool results" in content
 
     def test_tool_contract_is_injected_without_workspace_file(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         prompt = builder.build_system_prompt()
 
         assert "# Tool Usage Notes" in prompt
@@ -243,31 +244,31 @@ class TestBundledToolContract:
 
 class TestBuildUserContent:
     def test_no_media_returns_string(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_user_content("hello", None)
         assert result == "hello"
 
     def test_empty_media_returns_string(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_user_content("hello", [])
         assert result == "hello"
 
     def test_nonexistent_media_file_returns_string(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_user_content("hello", ["/nonexistent/image.png"])
         assert result == "hello"
 
     def test_non_image_file_returns_string(self, tmp_path):
         txt = tmp_path / "doc.txt"
         txt.write_text("not an image", encoding="utf-8")
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_user_content("hello", [str(txt)])
         assert result == "hello"
 
     def test_valid_image_returns_list(self, tmp_path):
         png = tmp_path / "test.png"
         png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_user_content("hello", [str(png)])
         assert isinstance(result, list)
         assert len(result) == 3
@@ -278,13 +279,13 @@ class TestBuildUserContent:
         assert result[2]["text"] == "hello"
 
     def test_images_keep_paired_paths_in_provider_visible_content(self, tmp_path):
-        from cirno.providers.base import LLMProvider
-        from cirno.providers.openai_responses.converters import convert_user_message
+        from cirno_core.providers.base import LLMProvider
+        from cirno_core.providers.openai_responses.converters import convert_user_message
 
         paths = [tmp_path / "original.png", tmp_path / "uploaded.png"]
         for index, path in enumerate(paths):
             path.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes([index]) * 16)
-        content = _builder(tmp_path).build_user_content("compare these", [str(path) for path in paths])
+        content = _builder(tmp_path / "home").build_user_content("compare these", [str(path) for path in paths])
         clean = LLMProvider._sanitize_empty_content([{"role": "user", "content": content}])[0]
         converted = convert_user_message(clean["content"])["content"]
         image_indexes = [index for index, block in enumerate(converted) if block["type"] == "input_image"]
@@ -297,7 +298,7 @@ class TestBuildUserContent:
     def test_image_meta_includes_path(self, tmp_path):
         png = tmp_path / "test.png"
         png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_user_content("hello", [str(png)])
         assert result[1]["_meta"]["path"] == str(png)
 
@@ -309,7 +310,7 @@ class TestBuildUserContent:
 
 class TestBuildSystemPrompt:
     def test_includes_identity_section(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_system_prompt()
 
         assert "## Runtime\n" in result
@@ -317,19 +318,19 @@ class TestBuildSystemPrompt:
         assert "History log: memory/history.jsonl" in result
 
     def test_default_identity_uses_relative_agent_paths(self, tmp_path):
-        result = ContextBuilder(tmp_path)._get_identity()
+        result = ContextBuilder(tmp_path / "home")._get_identity()
 
         assert "Agent profile: SOUL.md and USER.md" in result
         assert "History log: memory/history.jsonl" in result
         assert "Custom skills: skills/{skill-name}/SKILL.md" in result
 
     def test_selected_project_identity_keeps_agent_data_in_agent_workspace(self, tmp_path):
-        agent_home = tmp_path / "agent-home"
+        agent_home = tmp_path / "agent-home" / "home"
         project = tmp_path / "project"
-        agent_home.mkdir()
-        project.mkdir()
+        agent_home.mkdir(parents=True)
+        project.mkdir(parents=True)
 
-        set_home_path(agent_home)
+        set_instance_path(agent_home.parent)
         result = ContextBuilder(agent_home)._get_identity(workspace=project)
 
         assert f"{agent_home.resolve()}/SOUL.md" in result
@@ -337,13 +338,13 @@ class TestBuildSystemPrompt:
         assert f"Custom skills: {agent_home.resolve()}/skills/" in result
 
     def test_includes_bootstrap_files(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("Be helpful and concise.", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "AGENTS.md").write_text("Be helpful and concise.", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         result = builder.build_system_prompt()
         assert "Be helpful and concise." in result
 
     def test_includes_session_summary(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         summary = {
             "text": "Previous chat about Python.",
             "last_active": "2026-08-19T10:00:00",
@@ -353,19 +354,19 @@ class TestBuildSystemPrompt:
         assert "[Archived Context Summary]" in result
 
     def test_nothing_summary_builds_the_prompt_without_archived_context(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         summary = {"text": "(nothing)", "last_active": "2026-08-19T10:00:00"}
         assert builder.build_system_prompt(session_summary=summary) == builder.build_system_prompt()
 
     def test_sections_separated_by_separator(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("Rules.", encoding="utf-8")
-        builder = _builder(tmp_path)
+        (tmp_path / "home" / "AGENTS.md").write_text("Rules.", encoding="utf-8")
+        builder = _builder(tmp_path / "home")
         summary = {"text": "Summary.", "last_active": "2026-08-19T10:00:00"}
         result = builder.build_system_prompt(session_summary=summary)
         assert "\n\n---\n\n" in result
 
     def test_no_bootstrap_no_summary(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         result = builder.build_system_prompt()
         assert "## AGENTS.md" not in result
         assert "[Archived Context Summary]" not in result
@@ -378,7 +379,7 @@ class TestBuildSystemPrompt:
 
 class TestBuildMessages:
     def test_optional_arguments_are_keyword_only(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
 
         with pytest.raises(TypeError):
             builder.build_system_prompt(["legacy-skill"])
@@ -386,7 +387,7 @@ class TestBuildMessages:
             builder.build_messages([], "hello", ["legacy-skill"])
 
     def test_basic_empty_history(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         messages = builder.build_messages([], "hello")
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
@@ -394,9 +395,9 @@ class TestBuildMessages:
         assert "hello" in str(messages[1]["content"])
 
     def test_public_builder_preserves_assistant_role_compatibility(self, tmp_path):
-        from cirno.agent import ContextBuilder as PublicContextBuilder
+        from cirno_core.agent import ContextBuilder as PublicContextBuilder
 
-        builder = PublicContextBuilder(tmp_path)
+        builder = PublicContextBuilder(tmp_path / "home")
         messages = builder.build_messages(
             history=[{"role": "assistant", "content": "previous result"}],
             current_message="subagent result",
@@ -413,7 +414,7 @@ class TestBuildMessages:
         assert "_meta" not in messages[-1]
 
     def test_compatibility_builder_merges_system_role_without_history(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
 
         messages = builder.build_messages([], "system event", current_role="system")
 
@@ -422,7 +423,7 @@ class TestBuildMessages:
         assert str(messages[0]["content"]).endswith("system event")
 
     def test_explicit_skill_reference_loads_full_instructions_for_this_turn(self, tmp_path):
-        skill_dir = tmp_path / "skills" / "review"
+        skill_dir = tmp_path / "home" / "skills" / "review"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\n"
@@ -432,7 +433,7 @@ class TestBuildMessages:
             "# Review workflow\n\nFollow the unique review checklist.",
             encoding="utf-8",
         )
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
 
         messages = builder.build_messages([], "Please $review this patch and use $review carefully.")
         plain_messages = builder.build_messages([], "Please review this patch carefully.")
@@ -451,18 +452,18 @@ class TestBuildMessages:
         ]
 
     def test_unknown_skill_reference_does_not_change_active_skills(self, tmp_path):
-        messages = _builder(tmp_path).build_messages([], "Keep the shell literal $HOME.")
+        messages = _builder(tmp_path / "home").build_messages([], "Keep the shell literal $HOME.")
 
         assert "# Active Skills" not in messages[0]["content"]
 
     def test_runtime_context_is_not_injected_by_default(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         messages = builder.build_messages([], "hello", channel="cli")
         user_msg = str(messages[-1]["content"])
         assert user_msg == "hello"
 
     def test_explicit_runtime_context_blocks_are_appended(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         messages = builder.build_messages(
             [],
             "please use @zoom tonight",
@@ -483,7 +484,7 @@ class TestBuildMessages:
         assert messages[-1]["_meta"]["runtime_context"]["sources"] == ["cli_apps"]
 
     def test_consecutive_same_role_merged(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         history = [{"role": "user", "content": "previous user message"}]
         messages = builder.build_messages(history, "new message")
         assert len(messages) == 2  # system + merged user
@@ -491,7 +492,7 @@ class TestBuildMessages:
         assert "new message" in str(messages[1]["content"])
 
     def test_structured_transcript_preserves_fresh_turn_boundary(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         transcript = TranscriptInput(
             history=[{"role": "user", "content": "previous user message"}],
             current_message="new message",
@@ -505,7 +506,7 @@ class TestBuildMessages:
         assert transcript.message_count == 3
 
     def test_current_message_can_be_built_without_history_merge(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         current = builder.build_current_message(
             "new message",
             runtime_context_blocks=[
@@ -519,7 +520,7 @@ class TestBuildMessages:
         assert current["_meta"]["runtime_context"]["sources"] == ["test"]
 
     def test_different_role_appended(self, tmp_path):
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         history = [{"role": "assistant", "content": "previous response"}]
         messages = builder.build_messages(history, "new message")
         assert len(messages) == 3  # system + assistant + user
@@ -527,7 +528,7 @@ class TestBuildMessages:
     def test_media_with_history(self, tmp_path):
         png = tmp_path / "img.png"
         png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
-        builder = _builder(tmp_path)
+        builder = _builder(tmp_path / "home")
         history = [{"role": "assistant", "content": "see this"}]
         messages = builder.build_messages(history, "check image", media=[str(png)])
         user_msg = messages[-1]["content"]
@@ -536,8 +537,8 @@ class TestBuildMessages:
 
 
 def test_memory_budget_and_checkpoint_restore_are_independent_of_dream(tmp_path, monkeypatch):
-    from cirno.memory.repository import MemoryRepository
-    home = tmp_path
+    from cirno_core.memory.repository import MemoryRepository
+    home = tmp_path / "home"
     (home / "memory").mkdir(exist_ok=True)
     original = "shared overview\n" + ("bounded memory " * 4000) + "SHARED_TAIL_NOT_INJECTED"
     (home / "memory" / "MEMORY.md").write_text(original)
@@ -547,9 +548,11 @@ def test_memory_budget_and_checkpoint_restore_are_independent_of_dream(tmp_path,
     builder = ContextBuilder(tmp_path / "separate-workspace")
     builder.memory_context_tokens = 256
     builder.checkpoint_context_tokens = 256
-    prompt = builder.build_transcript(TranscriptInput(history=[], current_message="continue"), session_key="websocket:long")[0]["content"]
+    messages = builder.build_transcript(TranscriptInput(history=[], current_message="continue"), session_key="websocket:long")
+    prompt = messages[0]["content"]
     assert "shared overview" in prompt
     assert "SHARED_TAIL_NOT_INJECTED" not in prompt
-    assert "Next: read node://n/result.tsv#L9" in prompt
+    assert "Next: read node://n/result.tsv#L9" not in prompt
+    assert "Next: read node://n/result.tsv#L9" in messages[-1]["content"]
     assert (home / "memory" / "MEMORY.md").read_text() == original
     assert not (tmp_path / "separate-workspace" / "memory").exists()

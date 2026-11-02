@@ -140,7 +140,7 @@ export class ThreadTranscript {
   private revision = 0;
   private order = 0;
 
-  constructor(messages: UIMessage[] = [], saved?: ThreadTranscriptSnapshot) {
+  constructor(messages: UIMessage[] = [], saved?: ThreadTranscriptSnapshot, received = false) {
     const checkpoint = saved ? copyThreadCheckpoint(saved) : createThreadCheckpoint(messages);
     this.projection = checkpoint.projection;
     this.sideChannelTurnIds = checkpoint.sideChannelTurnIds;
@@ -154,7 +154,7 @@ export class ThreadTranscript {
       for (const unit of saved.units) this.installUnit({ ...unit, rows: new Set(unit.rows),
         sources: new Set(unit.sources), members: copyMembers(unit.members), text: unit.text.map(copyText) });
     } else {
-      for (const row of messages) this.registerInput(row, false);
+      for (const row of messages) this.registerInput(row, received);
     }
   }
 
@@ -205,7 +205,7 @@ export class ThreadTranscript {
       return { source: `compaction:${event.compaction_id}`, members, text: null };
     }
     if (event.event === "user_message") {
-      return { source: event.provenance?.session_message?.message_id
+      return { source: event.provenance?.input_origin?.id ? `input:${event.provenance.input_origin.id}` : event.provenance?.session_message?.message_id
         ? `input:${event.provenance.session_message.message_id}` : turn ? `user:${turn}` : `replay:${event.projection_id}`,
         members, text: null };
     }

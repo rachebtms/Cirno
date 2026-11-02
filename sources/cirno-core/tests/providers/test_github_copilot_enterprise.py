@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.providers import github_copilot_provider as gc
+from cirno_core.providers import github_copilot_provider as gc
 
 
 def test_resolve_falls_back_to_default_without_env(monkeypatch):

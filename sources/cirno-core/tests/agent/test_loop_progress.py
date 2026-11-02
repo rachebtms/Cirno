@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.session_helpers import run_session, save_completed_subagent
-from cirno.agent.context import TranscriptInput
-from cirno.agent.hooks import create_file_edit_activity_hook
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.filesystem import WriteFileTool
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import (
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.hooks import create_file_edit_activity_hook
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.filesystem import WriteFileTool
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import (
     GoalStatusEvent,
     ProgressEvent,
     SessionUpdatedEvent,
@@ -22,12 +22,12 @@ from cirno.bus.outbound_events import (
     StreamEndEvent,
     TurnEndEvent,
 )
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import LLMResponse, ToolCallRequest
-from cirno.providers.factory import ProviderSnapshot
-from cirno.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
-from cirno.utils.progress_events import output_events
-from cirno.webui.metadata import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.providers.factory import ProviderSnapshot
+from cirno_core.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
+from cirno_core.utils.progress_events import output_events
+from cirno_core.session.transport_metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
 )
@@ -75,6 +75,8 @@ class TestToolEventProgress:
         ])
         loop.provider.chat_stream_with_retry = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         tool = WriteFileTool(workspace=tmp_path)
         loop.tools.prepare_call = MagicMock(
@@ -147,6 +149,8 @@ class TestToolEventProgress:
         ])
         loop.provider.chat_stream_with_retry = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.tools.prepare_call = MagicMock(
             return_value=(tool, {"path": "foo.txt", "content": "new\n"}, None),
@@ -161,7 +165,7 @@ class TestToolEventProgress:
             pass
 
         monkeypatch.setattr(
-            "cirno.agent.hooks.file_edit_activity.prepare_file_edit_trackers",
+            "cirno_core.agent.hooks.file_edit_activity.prepare_file_edit_trackers",
             prepare_file_edit_trackers,
         )
 
@@ -189,6 +193,8 @@ class TestToolEventProgress:
         ])
         loop.provider.chat_stream_with_retry = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.tools.prepare_call = MagicMock(
             return_value=(None, {"command": "printf hi > foo.txt"}, None),
@@ -229,6 +235,8 @@ class TestToolEventProgress:
         ])
         loop.provider.chat_stream_with_retry = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.tools.prepare_call = MagicMock(return_value=(None, {"command": "ls"}, None))
         loop.tools.execute = AsyncMock(return_value="file.txt")
@@ -352,6 +360,8 @@ class TestToolEventProgress:
         )
         tool = WriteFileTool(workspace=tmp_path)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[
             {"type": "function", "function": {"name": "write_file"}},
         ])
@@ -409,6 +419,8 @@ class TestToolEventProgress:
         provider.chat_with_retry = AsyncMock()
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="openai-codex/gpt-5.5")
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -448,6 +460,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="openai-codex/gpt-5.5")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -502,6 +516,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -532,6 +548,8 @@ class TestToolEventProgress:
         loop = _make_loop(tmp_path)
         loop.max_iterations = max_iterations
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         _attach_webui_runtime_events(loop, loop.bus)
         calls = 0
@@ -613,6 +631,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -656,6 +676,8 @@ class TestToolEventProgress:
         _attach_webui_runtime_events(loop, bus)
         loop.max_iterations = 1
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -744,6 +766,8 @@ class TestToolEventProgress:
         )
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -804,6 +828,8 @@ class TestToolEventProgress:
         )
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.tools.prepare_call = MagicMock(return_value=(None, {}, None))
 
@@ -849,7 +875,8 @@ class TestToolEventProgress:
 
         assert len(requests) == 2
         assert requests[0][-1]["role"] == "user"
-        assert requests[0][-1]["content"].endswith("Background research completed")
+        assert "Background research completed" in requests[0][-1]["content"]
+        assert "Input provenance supplied by the Cirno runtime" in requests[0][-1]["content"]
         assert any(
             message.get("role") == "user"
             and str(message.get("content")).startswith("Can you include the key detail?\n\n")
@@ -947,6 +974,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="openai-codex/gpt-5.5")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -994,6 +1023,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(
@@ -1078,6 +1109,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         # The blocked title call proves ordering; allow Windows CI time for turn I/O.
@@ -1128,6 +1161,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         captured: dict[str, object] = {}
@@ -1137,7 +1172,7 @@ class TestToolEventProgress:
             return False
 
         monkeypatch.setattr(
-            "cirno.session.webui_turns.maybe_generate_webui_title_after_turn",
+            "cirno_core.session.webui_turns.maybe_generate_webui_title_after_turn",
             fake_title_after_turn,
         )
         scheduled_title: list[object] = []
@@ -1181,8 +1216,8 @@ class TestToolEventProgress:
         tmp_path: Path,
         metadata: dict[str, object],
     ) -> None:
-        from cirno.session.manager import SessionManager
-        from cirno.session.webui_turns import maybe_generate_webui_title_after_turn
+        from cirno_core.session.manager import SessionManager
+        from cirno_core.session.webui_turns import maybe_generate_webui_title_after_turn
 
         sessions = SessionManager(tmp_path)
         session = sessions.get_or_create("websocket:chat1")
@@ -1221,6 +1256,8 @@ class TestToolEventProgress:
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         _attach_webui_runtime_events(loop, bus)
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
         session = loop.sessions.get_or_create("websocket:chat1")
         session.metadata["webui"] = True
@@ -1263,7 +1300,7 @@ class TestToolEventProgress:
             raise AssertionError("command-only turns should not generate titles")
 
         monkeypatch.setattr(
-            "cirno.session.webui_turns.maybe_generate_webui_title_after_turn",
+            "cirno_core.session.webui_turns.maybe_generate_webui_title_after_turn",
             fake_title_after_turn,
         )
         scheduled: list[object] = []
@@ -1287,6 +1324,8 @@ class TestToolEventProgress:
         provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="Done", tool_calls=[]))
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
         loop.tools.unregister("message")
+        loop.tools.unregister("control_session")
+        loop.tools.unregister("control_goal")
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         await run_session(loop, InboundMessage(

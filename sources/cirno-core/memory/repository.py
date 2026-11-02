@@ -15,7 +15,7 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from cirno.config.home import get_home_path
+from cirno_core.config.home import get_home_path
 
 LAYERS = {"event", "knowledge", "task", "source", "profile"}
 KINDS = {"observation", "hypothesis", "fact", "lesson", "checkpoint", "source"}
@@ -84,12 +84,12 @@ class MemoryRepository:
         self.home = (home or get_home_path()).resolve()
         self.root = self.home / "memory"
         self.root.mkdir(parents=True, exist_ok=True)
-        from cirno.memory import storage as memory_storage
+        from cirno_core.memory import storage as memory_storage
         memory_storage.initialize(self.root)
         self.path = self.root / "catalog.sqlite3"
 
     def connect(self, *, vectors=False):
-        from cirno.memory.storage import connect
+        from cirno_core.memory.storage import connect
         return connect(self.root, vectors=vectors)
 
     def _body_path(self, record: dict) -> Path:

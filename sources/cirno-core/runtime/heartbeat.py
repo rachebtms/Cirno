@@ -2,9 +2,9 @@
 
 from dataclasses import replace
 
-from cirno.bus.events import InboundMessage
-from cirno.session.recovery import PENDING_FOLLOWUP_ID_KEY, PENDING_FOLLOWUPS_KEY
-from cirno.webui.instance_api import ensure_global_session
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY, PENDING_FOLLOWUPS_KEY
+from cirno_core.session.global_session import ensure_global_session
 
 
 async def enqueue_heartbeat(sessions, bus, content: str) -> bool:

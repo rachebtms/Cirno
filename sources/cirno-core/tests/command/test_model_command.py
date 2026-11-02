@@ -3,21 +3,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.agent.goals.permission import goal_mutation_allowed
-from cirno.agent.loop import AgentLoop
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.command.builtin import (
+from cirno_core.agent.goals.permission import goal_mutation_allowed
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.command.builtin import (
     build_help_text,
     builtin_command_palette,
     cmd_goal,
     cmd_model,
     register_builtin_commands,
 )
-from cirno.command.router import CommandContext, CommandRouter
-from cirno.config.schema import ModelPresetConfig
-from cirno.session.history_visibility import HIDDEN_HISTORY_META
-from cirno.session.model_selection import (
+from cirno_core.command.router import CommandContext, CommandRouter
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
+from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
     model_preset_from_metadata,
 )

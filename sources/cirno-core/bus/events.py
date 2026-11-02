@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from cirno.bus.delivery import DeliveryRequest
+from cirno_core.bus.delivery import DeliveryRequest
 
 if TYPE_CHECKING:
-    from cirno.bus.agent_events import AgentEvent
+    from cirno_core.bus.agent_events import AgentEvent
 
 # Optional ``OutboundMessage.metadata`` key for structured, channel-agnostic UI
 # payloads. Value is JSON-serializable with at least ``kind``; rich clients may

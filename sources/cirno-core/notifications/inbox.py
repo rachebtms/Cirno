@@ -9,14 +9,14 @@ import sqlite3
 import time
 from contextlib import contextmanager
 
-from cirno.config.home import get_home_path
+from cirno_core.config.paths import get_data_dir
 
 CATEGORIES = ("operations", "conversations", "system")
 
 
 class NotificationInbox:
-    def __init__(self, home=None):
-        self.path = (home or get_home_path()) / "notifications" / "inbox.sqlite3"
+    def __init__(self, state_dir=None):
+        self.path = (state_dir or get_data_dir()) / "notifications" / "inbox.sqlite3"
 
     @contextmanager
     def connect(self):
@@ -135,7 +135,7 @@ class NotificationInbox:
                        (int(time.time() * 1000), "question:" + match[1], session_key))
 
     def sync_pairing(self):
-        from cirno.pairing.store import list_pending
+        from cirno_core.pairing.store import list_pending
         pending = list_pending(strict=True)
         identifiers = []
         for item in pending:
@@ -154,9 +154,9 @@ class NotificationInbox:
 
     @staticmethod
     def prepare(message):
-        from cirno.bus.events import OUTBOUND_META_AGENT_UI
-        from cirno.bus.outbound_events import TurnEndEvent
-        from cirno.bus.agent_events import ContextCompactionEvent, RecoveryStateEvent
+        from cirno_core.bus.events import OUTBOUND_META_AGENT_UI
+        from cirno_core.bus.outbound_events import TurnEndEvent
+        from cirno_core.bus.agent_events import ContextCompactionEvent, RecoveryStateEvent
         if message.metadata.get("_temporary_chat") or message.metadata.get("_persist_transcript") is False:
             return
         key = message.metadata.get("_session_key") or f"{message.channel}:{message.chat_id}"

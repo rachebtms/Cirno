@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from cirno.storage.instance import InstanceData
+from cirno_core.storage.instance import InstanceData
 from pydantic import BaseModel, Field
 
 
@@ -43,7 +43,7 @@ class Nodes:
             str(node.port),
         ]
         if node.host_key:
-            known_hosts = self.data.home / "nodes" / (str(node.id) + ".known_hosts")
+            known_hosts = self.data.state_dir / "nodes" / (str(node.id) + ".known_hosts")
             known_hosts.parent.mkdir(parents=True, exist_ok=True)
             known_hosts.write_text(node.host_key.strip() + "\n", encoding="utf-8")
             args += ["-o", "UserKnownHostsFile=" + str(known_hosts)]
@@ -92,7 +92,7 @@ class Nodes:
     ) -> str:
         environment = None
         if password is not None:
-            helper = self.data.home / "nodes" / "askpass"
+            helper = self.data.state_dir / "nodes" / "askpass"
             helper.parent.mkdir(parents=True, exist_ok=True)
             helper.write_text(
                 "#!/bin/sh\nprintf '%s\\n' \"$CIRNO_NODE_PASSWORD\"\n", encoding="utf-8"

@@ -1,6 +1,6 @@
 """Tests for subagent announce text shaping on external channel surfaces."""
 
-from cirno.utils.subagent_channel_display import scrub_subagent_announce_body
+from cirno_core.utils.subagent_channel_display import scrub_subagent_announce_body
 
 
 def test_scrub_subagent_keeps_header_and_result_only() -> None:

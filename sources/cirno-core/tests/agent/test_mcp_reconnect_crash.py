@@ -19,11 +19,11 @@ import time
 import httpx
 import pytest
 
-from cirno.agent.tools import mcp as mcp_module
-from cirno.agent.tools.mcp import MCPProvider, MCPToolWrapper
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.schema import MCPServerConfig
-from cirno.security import network as security_network
+from cirno_core.agent.tools import mcp as mcp_module
+from cirno_core.agent.tools.mcp import MCPProvider, MCPToolWrapper
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.schema import MCPServerConfig
+from cirno_core.security import network as security_network
 
 # Leave enough headroom for reconnect handshakes on slower CI hosts; each test
 # still waits beyond this deadline explicitly before exercising recovery.

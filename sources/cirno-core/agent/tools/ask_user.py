@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
-from cirno.agent.tools.base import ToolResult, tool_parameters
-from cirno.agent.tools.message import MessageTool
-from cirno.agent.tools.schema import ArraySchema, ObjectSchema, StringSchema, tool_parameters_schema
+from cirno_core.agent.tools.base import ToolResult, tool_parameters
+from cirno_core.agent.tools.message import MessageTool
+from cirno_core.agent.tools.schema import ArraySchema, ObjectSchema, StringSchema, tool_parameters_schema
 
 
 def _question_fields():

@@ -14,20 +14,20 @@ from typing import Any, Literal
 
 from loguru import logger
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import (
     ToolContext,
     current_request_session_key,
     tool_log_content_allowed,
 )
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.agent.tools.shell_config import ExecToolConfig
-from cirno.agent.tools.shell_output import ShellOutputFilter
+from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.agent.tools.shell_output import ShellOutputFilter
 
 DEFAULT_YIELD_MS = 1000
 MAX_YIELD_MS = 30_000
@@ -238,7 +238,7 @@ class _ExecSession:
         finally:
             stopped.cancel()
             await asyncio.gather(stopped, return_exceptions=True)
-        from cirno.agent.tools.shell import (
+        from cirno_core.agent.tools.shell import (
             ExecTool,
             _reap_pid,  # pyright: ignore[reportPrivateUsage]
         )
@@ -413,7 +413,7 @@ class _ExecSession:
         # kill() replaces it on an explicit retry.
 
     async def _kill(self) -> None:
-        from cirno.agent.tools.shell import ExecTool
+        from cirno_core.agent.tools.shell import ExecTool
 
         if self._process_tree:
             await ExecTool._kill_process_tree(self.process)  # pyright: ignore[reportPrivateUsage]
@@ -682,7 +682,7 @@ class ExecSessionManager:
         *,
         stdin: int = asyncio.subprocess.PIPE,
     ) -> asyncio.subprocess.Process:
-        from cirno.agent.tools.shell import ExecTool
+        from cirno_core.agent.tools.shell import ExecTool
 
         return await ExecTool._spawn(  # pyright: ignore[reportPrivateUsage]
             command, cwd, env, shell_program, login,

@@ -2,10 +2,10 @@ import asyncio
 import json
 
 import pytest
-from cirno.agent.tools.ask_user import AskUserTool
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.message import capture_message_deliveries, current_conversation_has_delivery
-from cirno.bus.events import OUTBOUND_META_AGENT_UI
+from cirno_core.agent.tools.ask_user import AskUserTool
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.message import capture_message_deliveries, current_conversation_has_delivery
+from cirno_core.bus.events import OUTBOUND_META_AGENT_UI
 
 
 @pytest.mark.asyncio

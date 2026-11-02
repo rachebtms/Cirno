@@ -2,19 +2,19 @@
 
 import json
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.tools.schema import (
     ArraySchema,
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.memory.repository import MemoryRepository
-from cirno.nodes.service import Nodes
-from cirno.security.workspace_policy import resolve_allowed_path
-from cirno.skills.history import inspect_skill
+from cirno_core.memory.repository import MemoryRepository
+from cirno_core.nodes.service import Nodes
+from cirno_core.security.workspace_policy import resolve_allowed_path
+from cirno_core.skills.history import inspect_skill
 
 
 @tool_parameters(
@@ -214,11 +214,11 @@ class MemoryTool(Tool):
                                  enqueue=not self.maintenance, observed_at=observed_at, **access)
             if action != "search":
                 raise ValueError("Unknown memory action")
-            from cirno.config.loader import load_config
+            from cirno_core.config.loader import load_config
             config = load_config().agents.defaults
             filters = dict(scope=scope, layer=layer, tags=tags, include_history=include_history,
                            offset=offset, since=since, until=until, time_field=time_field, time_zone=time_zone or config.timezone, purpose=purpose, expand_links=expand_links, **access)
-            from cirno.memory.search import search
+            from cirno_core.memory.search import search
             return search(repo, query, config.memory, mode=mode, limit=limit, **filters)
         try:
             return json.dumps(await asyncio.to_thread(run), ensure_ascii=False)

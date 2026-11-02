@@ -14,7 +14,7 @@ it("requires confirmation and uses the existing session reset command", async ()
   expect(send).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
   await waitFor(() => expect(cleared).toHaveBeenCalledOnce());
-  expect(send).toHaveBeenCalledWith("global", "/new", 30_000);
+  expect(send).toHaveBeenCalledWith("global", "/clear", 30_000);
 });
 it("keeps the dialog open and shows the actual failure without clearing locally", async () => {
   const cleared = vi.fn();

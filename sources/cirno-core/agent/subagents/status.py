@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Literal
 
-from cirno.providers.base import LLMUsage
+from cirno_core.providers.base import LLMUsage
 
 SubagentState = Literal["queued", "running", "stopping", "done", "incomplete", "error", "cancelled", "interrupted"]
 

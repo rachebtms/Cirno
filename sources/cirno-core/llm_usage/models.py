@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cirno.llm_usage.context import LLMUsageSource
-from cirno.llm_usage.types import LLMUsage
+from cirno_core.llm_usage.context import LLMUsageSource
+from cirno_core.llm_usage.types import LLMUsage
 
 
 @dataclass(frozen=True, slots=True)

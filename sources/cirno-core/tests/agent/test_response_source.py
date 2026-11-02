@@ -9,21 +9,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.runner_helpers import failed_test_consolidator
-from cirno.agent.progress_hook import AgentProgressHook
-from cirno.agent.runner import AgentRunner, AgentRunSpec
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.turn_delivery import TurnDeliveryFactory
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.outbound_events import StreamDeltaEvent, StreamEndEvent
-from cirno.bus.queue import MessageBus
-from cirno.channels.websocket.runtime import WebSocketChannel
-from cirno.config.schema import Config, ModelPresetConfig
-from cirno.bus.agent_events import EventSink, ResponseSource, ResponseSourceEvent
-from cirno.providers.base import LLMProvider, LLMResponse, ProviderCallContext
-from cirno.providers.factory import make_provider, provider_signature
-from cirno.providers.fallback_provider import FallbackProvider
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.webui.transcript import WebUITranscriptRecorder
+from cirno_core.agent.progress_hook import AgentProgressHook
+from cirno_core.agent.runner import AgentRunner, AgentRunSpec
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.outbound_events import StreamDeltaEvent, StreamEndEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_server.channels.websocket.runtime import WebSocketChannel
+from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.bus.agent_events import EventSink, ResponseSource, ResponseSourceEvent
+from cirno_core.providers.base import LLMProvider, LLMResponse, ProviderCallContext
+from cirno_core.providers.factory import make_provider, provider_signature
+from cirno_core.providers.fallback_provider import FallbackProvider
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.session.transcript import WebUITranscriptRecorder
 
 
 class AnswerProvider(LLMProvider):
@@ -66,7 +66,7 @@ async def test_actual_candidate_is_delivered_and_replayed(history,
     tmp_path,
     monkeypatch,
 ):
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     bus, turn = delivery(streaming=streaming)
     candidates = [AnswerProvider(
         f"provider-{i}", fail=i < failures,
@@ -296,7 +296,7 @@ def test_factory_captures_names_even_when_models_and_settings_are_identical():
 
 
 def test_old_history_and_malformed_identity_are_not_guessed(history, tmp_path, monkeypatch):
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     records = [
         {"event": "message", "text": "legacy"},
         {"event": "message", "text": "invalid", "response_sources": [{"model": "gpt"}]},
@@ -351,7 +351,7 @@ async def test_runner_records_each_provider_when_streaming_times_out_and_recover
 
 @pytest.mark.parametrize("temporary", [False, True])
 async def test_websocket_wire_and_disk_replay_preserve_sources(history, tmp_path, monkeypatch, temporary):
-    monkeypatch.setattr("cirno.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     gateway = MagicMock()
     gateway.media.rewrite_local_markdown_images.side_effect = lambda text: text
     gateway.transcripts = WebUITranscriptRecorder(history.sessions)

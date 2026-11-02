@@ -12,10 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
-from cirno.providers.base import ProviderConversationState
-from cirno.session.display_history import HistoryFact, HistoryKind, HistoryReader
-from cirno.session.history_visibility import is_hidden_history_message
-from cirno.session.manager import (
+from cirno_core.providers.base import ProviderConversationState
+from cirno_core.session.display_history import HistoryFact, HistoryKind, HistoryReader, is_model_input_fact
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.session.manager import (
     Session,
     SessionInfo,
     SessionMetadataPayload,
@@ -23,8 +23,8 @@ from cirno.session.manager import (
     message_preview_text,
     metadata_title,
 )
-from cirno.session.summary import is_summary_checkpoint
-from cirno.session.types import PARENT_SESSION_KEY
+from cirno_core.session.summary import is_summary_checkpoint
+from cirno_core.session.types import PARENT_SESSION_KEY
 
 _CHECKPOINT = "runtime_checkpoint"
 _INPUTS = ("pending_user_followups",)
@@ -468,7 +468,7 @@ class SqliteSessionStore:
                 db.execute(
                     """UPDATE history_turns SET record_count=record_count+1, byte_count=byte_count+?,
                        user_count=user_count+?, completed=? WHERE session_key=? AND ordinal=?""",
-                    (len(record.encode("utf-8")), int(fact.kind is HistoryKind.INPUT),
+                    (len(record.encode("utf-8")), int(is_model_input_fact(fact)),
                      int(completed), key, ordinal),
                 )
                 position += 1
@@ -482,8 +482,8 @@ class SqliteSessionStore:
             if encoded:
                 db.execute("UPDATE history_heads SET revision=revision+1 WHERE session_key=?", (key,))
 
-    def copy_history_prefix(self, source_key: str, target: Session, before_input: int) -> bool:
-        """Copy a display prefix alongside its canonical fork, in the caller's transaction."""
+    def history_prefix(self, source_key: str, before_input: int) -> list[HistoryFact] | None:
+        """Read a display prefix using the same model-input boundary as a fork."""
         def select(reader: HistoryReader) -> list[HistoryFact] | None:
             revision = reader.revision
             if revision is None or revision[1] < 0:
@@ -493,14 +493,18 @@ class SqliteSessionStore:
             for fact in reader.all_facts():
                 if fact.kind is HistoryKind.FORK_BOUNDARY:
                     continue
-                if fact.kind is HistoryKind.INPUT:
+                if is_model_input_fact(fact):
                     if inputs == before_input:
                         return copied
                     inputs += 1
                 copied.append(fact)
             return copied if inputs == before_input else None
 
-        facts = self.project_history(source_key, select)
+        return self.project_history(source_key, select)
+
+    def copy_history_prefix(self, source_key: str, target: Session, before_input: int) -> bool:
+        """Copy a display prefix alongside its canonical fork, in the caller's transaction."""
+        facts = self.history_prefix(source_key, before_input)
         if facts is None:
             return False
         facts.append(HistoryFact(HistoryKind.FORK_BOUNDARY, created_at_ms=int(target.created_at.timestamp() * 1000)))

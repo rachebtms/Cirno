@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import LLMProvider
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import LLMProvider
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def make_loop(
     *,
     model: str = "test-model",
     context_window_tokens: int = 128_000,
-    session_ttl_minutes: int = 0,
+    idle_compact_after_minutes: int = 0,
     tools_config=None,
     model_presets: dict | None = None,
     hooks: list | None = None,
@@ -67,7 +67,7 @@ def make_loop(
         workspace=tmp_path,
         model=model,
         context_window_tokens=context_window_tokens,
-        session_ttl_minutes=session_ttl_minutes,
+        idle_compact_after_minutes=idle_compact_after_minutes,
         idle_compact_min_tokens=0,
         idle_compact_keep_recent_tokens=0,
     )
@@ -79,8 +79,8 @@ def make_loop(
         kwargs["hooks"] = hooks
 
     if patch_deps:
-        with patch("cirno.agent.loop.ContextBuilder"), \
-             patch("cirno.agent.loop.SubagentManager") as mock_sub_mgr:
+        with patch("cirno_core.agent.loop.ContextBuilder"), \
+             patch("cirno_core.agent.loop.SubagentManager") as mock_sub_mgr:
             mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
             return AgentLoop(**kwargs)
     return AgentLoop(**kwargs)

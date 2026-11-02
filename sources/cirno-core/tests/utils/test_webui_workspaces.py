@@ -2,14 +2,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.security.workspace_access import (
+from cirno_core.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScopeError,
     default_workspace_scope,
 )
-from cirno.session.manager import SessionManager
-from cirno.session.sqlite_store import SqliteSessionStore
-from cirno.webui.workspaces import (
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.sqlite_store import SqliteSessionStore
+from cirno_server.webui.workspaces import (
     WebUIWorkspaceController,
     read_webui_workspace_state,
     webui_workspace_state_path,
@@ -19,7 +19,7 @@ from cirno.webui.workspaces import (
 
 
 def test_workspace_state_defaults_when_file_missing(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
 
     state = read_webui_workspace_state()
 
@@ -28,7 +28,7 @@ def test_workspace_state_defaults_when_file_missing(tmp_path, monkeypatch) -> No
 
 
 def test_workspace_payload_is_config_data_dir_scoped(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     default.mkdir()
 
@@ -48,7 +48,7 @@ def test_workspace_payload_hides_project_selection_when_unavailable(
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     default.mkdir()
 
@@ -62,7 +62,7 @@ def test_workspace_payload_hides_project_selection_when_unavailable(
 
 
 def test_workspace_payload_uses_webui_default_access_mode(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     default.mkdir()
 
@@ -81,7 +81,7 @@ def test_workspace_payload_uses_webui_default_access_mode(tmp_path, monkeypatch)
 
 
 async def test_webui_default_access_applies_to_unscoped_old_sessions(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     default.mkdir()
     sessions = SessionManager(tmp_path / "sessions")
@@ -105,7 +105,7 @@ async def test_webui_default_access_applies_to_unscoped_old_sessions(tmp_path, m
 
 
 def test_indexed_scope_preserves_missing_and_explicit_null_semantics(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     default.mkdir()
     write_webui_default_access_mode("full")
@@ -132,7 +132,7 @@ def test_indexed_scope_preserves_missing_and_explicit_null_semantics(tmp_path, m
 
 
 async def test_webui_default_access_does_not_override_explicit_session_scope(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     project = tmp_path / "project"
     default.mkdir()
@@ -156,7 +156,7 @@ async def test_scope_for_session_key_reads_metadata_without_full_history(
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     project = tmp_path / "project"
     default.mkdir()
@@ -182,7 +182,7 @@ async def test_scope_for_session_key_reads_metadata_without_full_history(
 
 
 async def test_new_chat_scope_is_persisted_only_after_first_message(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     project = tmp_path / "project"
     default.mkdir()
@@ -211,7 +211,7 @@ async def test_new_chat_scope_is_persisted_only_after_first_message(tmp_path, mo
 
 
 async def test_missing_bound_project_does_not_allow_rebinding_to_default(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     project = tmp_path / "project"
     project.mkdir()
     sessions = SessionManager(tmp_path / "sessions")
@@ -228,7 +228,7 @@ async def test_missing_bound_project_does_not_allow_rebinding_to_default(tmp_pat
 
 
 def test_scope_for_session_key_always_reads_the_active_store(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     project = tmp_path / "project"
     default.mkdir()
@@ -276,7 +276,7 @@ def test_scope_for_session_key_always_reads_the_active_store(tmp_path, monkeypat
 
 
 async def test_remote_existing_chat_can_reduce_its_workspace_access(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     project = tmp_path / "project"
     default.mkdir()
@@ -324,7 +324,7 @@ async def test_new_chat_allows_project_selection_in_either_access_mode(
     project_name: str,
     access_mode: str,
 ) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     other = tmp_path / "other"
     default.mkdir()
@@ -353,7 +353,7 @@ async def test_project_selection_can_remain_disabled_for_untrusted_connections(
     tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     other = tmp_path / "other"
     default.mkdir()
@@ -380,7 +380,7 @@ async def test_project_selection_can_remain_disabled_for_untrusted_connections(
 
 
 async def test_recent_projects_survive_controller_restart_without_changing_access(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default = tmp_path / "default"
     project = tmp_path / "project"
     default.mkdir()
@@ -405,7 +405,7 @@ async def test_recent_projects_survive_controller_restart_without_changing_acces
 
 
 def test_favorites_keep_pin_order_across_restart_and_can_remove_deleted_folder(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path / "webui")
     default, alpha, beta = (tmp_path / name for name in ("default", "alpha", "beta"))
     for folder in (default, alpha, beta):
         folder.mkdir()

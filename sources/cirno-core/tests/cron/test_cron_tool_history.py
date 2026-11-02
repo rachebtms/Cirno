@@ -6,11 +6,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from cirno.agent.tools.cron import CronTool
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.cron import service as cron_service
-from cirno.cron.service import CronJobSkippedError, CronService
-from cirno.cron.types import CronSchedule
+from cirno_core.agent.tools.cron import CronTool
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.cron import service as cron_service
+from cirno_core.cron.service import CronJobSkippedError, CronService
+from cirno_core.cron.types import CronSchedule
 
 
 def _registry(service: CronService) -> ToolRegistry:

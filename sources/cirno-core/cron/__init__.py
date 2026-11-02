@@ -2,10 +2,10 @@
 
 from typing import TYPE_CHECKING, Any
 
-from cirno.cron.types import CronJob, CronSchedule
+from cirno_core.cron.types import CronJob, CronSchedule
 
 if TYPE_CHECKING:
-    from cirno.cron.service import CronService
+    from cirno_core.cron.service import CronService
 
 __all__ = ["CronService", "CronJob", "CronSchedule"]
 

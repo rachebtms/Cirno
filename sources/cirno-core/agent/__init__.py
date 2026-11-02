@@ -6,8 +6,8 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from cirno.agent.context import ContextBuilder
-    from cirno.agent.hook import (
+    from cirno_core.agent.context import ContextBuilder
+    from cirno_core.agent.hook import (
         AgentHook,
         AgentHookContext,
         AgentRunHookContext,
@@ -15,24 +15,24 @@ if TYPE_CHECKING:
         AgentTurnHookFactory,
         CompositeHook,
     )
-    from cirno.agent.loop import AgentLoop
-    from cirno.memory.consolidation import MemoryStore
-    from cirno.skills.loader import SkillsLoader
-    from cirno.agent.subagents.manager import SubagentManager
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.memory.consolidation import MemoryStore
+    from cirno_core.skills.loader import SkillsLoader
+    from cirno_core.agent.subagents.manager import SubagentManager
 
 
 _EXPORTS = {
-    "AgentHook": "cirno.agent.hook",
-    "AgentHookContext": "cirno.agent.hook",
-    "AgentRunHookContext": "cirno.agent.hook",
-    "AgentTurnHookContext": "cirno.agent.hook",
-    "AgentTurnHookFactory": "cirno.agent.hook",
-    "AgentLoop": "cirno.agent.loop",
-    "CompositeHook": "cirno.agent.hook",
-    "ContextBuilder": "cirno.agent.context",
-    "MemoryStore": "cirno.memory.consolidation",
-    "SkillsLoader": "cirno.skills.loader",
-    "SubagentManager": "cirno.agent.subagents.manager",
+    "AgentHook": "cirno_core.agent.hook",
+    "AgentHookContext": "cirno_core.agent.hook",
+    "AgentRunHookContext": "cirno_core.agent.hook",
+    "AgentTurnHookContext": "cirno_core.agent.hook",
+    "AgentTurnHookFactory": "cirno_core.agent.hook",
+    "AgentLoop": "cirno_core.agent.loop",
+    "CompositeHook": "cirno_core.agent.hook",
+    "ContextBuilder": "cirno_core.agent.context",
+    "MemoryStore": "cirno_core.memory.consolidation",
+    "SkillsLoader": "cirno_core.skills.loader",
+    "SubagentManager": "cirno_core.agent.subagents.manager",
 }
 
 

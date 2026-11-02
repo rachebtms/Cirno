@@ -8,7 +8,7 @@ export const INBOX_CATEGORIES = ["operations", "conversations", "system"] as con
 export type InboxCategory = typeof INBOX_CATEGORIES[number];
 export interface InboxNotice {
   seq: number; id: string; category: InboxCategory; kind: string; status: string;
-  session_key: string | null; body: string; data: { code?: string; media?: string[]; session_title?: string };
+  session_key: string | null; body: string; data: { approval_id?: string; operation?: string; arguments?: Record<string, unknown>; code?: string; media?: string[]; session_title?: string };
   created_at: number; read_at: number | null;
 }
 export interface InboxPage {

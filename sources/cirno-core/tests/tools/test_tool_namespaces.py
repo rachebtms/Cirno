@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from cirno.agent.ptc.registry import PtcToolRegistry, RunCodeTool
-from cirno.agent.tools.ask_user import AskUserTool
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.filesystem import ReadFileTool
-from cirno.agent.tools.instance_features import MemoryTool, NodeTool
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.webui.instance_api import instance_action
+from cirno_core.agent.ptc.registry import PtcToolRegistry, RunCodeTool
+from cirno_core.agent.tools.ask_user import AskUserTool
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.filesystem import ReadFileTool
+from cirno_core.agent.tools.instance_features import MemoryTool, NodeTool
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_server.webui.instance_api import instance_action
 
 
 def test_public_names_are_grouped_and_actions_have_small_schemas():
@@ -51,7 +51,7 @@ async def test_model_and_settings_search_share_the_retrieval_service(monkeypatch
         calls.append((query, config, filters))
         return {"memories": []}
 
-    monkeypatch.setattr("cirno.memory.search.search", search)
+    monkeypatch.setattr("cirno_core.memory.search.search", search)
     sessions = SimpleNamespace(
         state=SimpleNamespace(read_metadata=AsyncMock(return_value={"metadata": {}}))
     )
@@ -107,7 +107,7 @@ async def test_question_strings_are_not_silently_coerced():
 
 
 def test_skill_history_reads_do_not_create_snapshots(tmp_path):
-    from cirno.skills.history import inspect_skill
+    from cirno_core.skills.history import inspect_skill
 
     directory = tmp_path / "skills" / "sample"
     directory.mkdir(parents=True)
@@ -143,8 +143,8 @@ def test_flat_plugin_schema_is_preserved():
 
 
 def test_conversation_tool_selection_and_ptc_keep_delivery_scoped():
-    from cirno.agent.tools.message import MessageTool
-    from cirno.agent.tools.selection import conversation_tools
+    from cirno_core.agent.tools.message import MessageTool
+    from cirno_core.agent.tools.selection import conversation_tools
 
     registry = ToolRegistry()
     registry.register(MessageTool())
@@ -160,7 +160,7 @@ def test_conversation_tool_selection_and_ptc_keep_delivery_scoped():
 
 @pytest.mark.parametrize("content", ['{"apps":', '[]', '{"apps": []}'])
 def test_damaged_app_registry_is_not_treated_as_empty_or_overwritten(tmp_path, content):
-    from cirno.apps.cli import CliAppError, CliAppManager
+    from cirno_core.apps.cli import CliAppError, CliAppManager
 
     manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / "apps")
     manager.installed_path.parent.mkdir()

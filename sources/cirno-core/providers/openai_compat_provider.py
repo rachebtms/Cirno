@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 from loguru import logger
 
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     LLMUsage,
@@ -31,21 +31,21 @@ from cirno.providers.base import (
     parse_tool_arguments,
     tool_arguments_json_for_replay,
 )
-from cirno.providers.images import prepare_inline_images
-from cirno.providers.model_api import (
+from cirno_core.providers.images import prepare_inline_images
+from cirno_core.providers.model_api import (
     ModelAPICapabilities,
     ResponsesCapabilities,
     hosted_web_search_enabled,
     is_direct_openai_base,
     is_hosted_web_search_tool,
 )
-from cirno.providers.openai_responses import ResponsesBackend, responses_state_matches
-from cirno.providers.registry import KIMI_K3_MODELS
+from cirno_core.providers.openai_responses import ResponsesBackend, responses_state_matches
+from cirno_core.providers.registry import KIMI_K3_MODELS
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI as AsyncOpenAIType
 
-    from cirno.providers.registry import ProviderSpec
+    from cirno_core.providers.registry import ProviderSpec
 
 # Module-level placeholder — set lazily by _ensure_client on first real
 # use, or replaced by tests via ``patch(...)``.  Kept as a plain name so
@@ -622,20 +622,32 @@ class OpenAICompatProvider(LLMProvider):
 
         def _mark(msg: dict[str, Any]) -> dict[str, Any]:
             content = msg.get("content")
-            if isinstance(content, str):
+            if isinstance(content, str) and content:
                 return {**msg, "content": [
                     {"type": "text", "text": content, "cache_control": cache_marker},
                 ]}
             if isinstance(content, list) and content:
                 nc = list(cast(list[dict[str, Any]], content))
-                nc[-1] = {**nc[-1], "cache_control": cache_marker}
-                return {**msg, "content": nc}
+                cacheable = next((index for index in range(len(nc) - 1, -1, -1)
+                                  if nc[index].get("type") in {"text", "image_url"}
+                                  and (nc[index].get("type") != "text" or nc[index].get("text"))), None)
+                if cacheable is not None:
+                    nc[cacheable] = {**nc[cacheable], "cache_control": cache_marker}
+                    return {**msg, "content": nc}
             return msg
 
         if new_messages and new_messages[0].get("role") == "system":
             new_messages[0] = _mark(new_messages[0])
-        if len(new_messages) >= 3:
-            new_messages[-2] = _mark(new_messages[-2])
+        # Cache the complete input, including a first-turn document or the
+        # latest tool result. Marking only the penultimate message leaves this
+        # suffix uncached when the next tool round appends to it.
+        for index in range(len(new_messages) - 1, -1, -1):
+            if new_messages[index].get("role") == "system":
+                continue
+            marked = _mark(new_messages[index])
+            if marked is not new_messages[index]:
+                new_messages[index] = marked
+                break
 
         new_tools = tools
         if tools:

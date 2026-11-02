@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from cirno.bus.events import INBOUND_META_TURN_ID
+from cirno_core.bus.events import INBOUND_META_TURN_ID
 
 RESTART_NOTIFY_CHANNEL_ENV = "CIRNO_RESTART_NOTIFY_CHANNEL"
 RESTART_NOTIFY_CHAT_ID_ENV = "CIRNO_RESTART_NOTIFY_CHAT_ID"

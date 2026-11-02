@@ -7,7 +7,7 @@ import { CirnoClient } from "@/lib/cirno-client";
 import type { RuntimeConfigValue, SettingsPayload } from "@/lib/types";
 import { ClientProvider } from "@/providers/ClientProvider";
 
-const path = "agents.defaults.session_ttl_minutes";
+const path = "agents.defaults.idle_compact_after_minutes";
 const storageKey = "fixture.idle-compaction-minutes";
 const client = new CirnoClient({ url: "ws://127.0.0.1:1", reconnect: false });
 let failNext = false;

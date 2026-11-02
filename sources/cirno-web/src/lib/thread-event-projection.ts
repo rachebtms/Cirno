@@ -866,6 +866,7 @@ export function projectThreadEvent(
   };
 
   if (event.event === "user_message") {
+    if (event.provenance?.input_origin?.id && state.messages.some(message => message.inputOrigin?.id === event.provenance?.input_origin?.id)) return state;
     if (event.provenance?.session_message) {
       const messageId = event.provenance.session_message.message_id?.trim();
       if (!messageId || state.messages.some(
@@ -897,6 +898,7 @@ export function projectThreadEvent(
       ...(event.cli_apps?.length ? { cliApps: event.cli_apps } : {}),
       ...(event.mcp_presets?.length ? { mcpPresets: event.mcp_presets } : {}),
       ...(event.session_mentions?.length ? { sessionMentions: event.session_mentions } : {}),
+      ...(event.provenance?.input_origin ? { inputOrigin: event.provenance.input_origin } : {}),
       ...(event.provenance?.session_message
         ? { sessionMessage: event.provenance.session_message }
         : {}),

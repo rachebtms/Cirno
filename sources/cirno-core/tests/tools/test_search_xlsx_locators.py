@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 
-from cirno.agent.tools.search import GrepTool
+from cirno_core.agent.tools.search import GrepTool
 
 
 @pytest.mark.parametrize(

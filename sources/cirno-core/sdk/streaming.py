@@ -7,8 +7,8 @@ from collections.abc import AsyncIterator
 from contextlib import suppress
 from copy import deepcopy
 
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.sdk.types import (
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.sdk.types import (
     STREAM_EVENT_REASONING_COMPLETED,
     STREAM_EVENT_REASONING_DELTA,
     STREAM_EVENT_TEXT_COMPLETED,

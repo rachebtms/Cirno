@@ -4,7 +4,7 @@ PTC lets a model combine tool calls and filter their results inside a bounded Py
 
 ## Enable PTC
 
-PTC is off by default. Enable the `</>` option in the new-conversation header. The mode is saved per conversation across refreshes and gateway restarts. Temporary conversations retain it only for their existing in-memory lifetime. An existing conversation displays its mode; the mode is not changed during execution.
+PTC is off by default. Enable the `</>` option in the new-conversation header. The mode is saved per conversation across refreshes and service restarts. Temporary conversations retain it only for their existing in-memory lifetime. An existing conversation displays its mode; the mode is not changed during execution.
 
 The model directly receives only `ptc__run(code, description, timeout?)`, plus the available tool SDK. Programs are asynchronous Python function bodies with top-level `await` and `return`:
 

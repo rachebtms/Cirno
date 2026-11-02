@@ -1,4 +1,4 @@
-"""Tests for lazy provider exports from cirno.providers."""
+"""Tests for lazy provider exports from cirno_core.providers."""
 
 from __future__ import annotations
 
@@ -7,28 +7,28 @@ import sys
 
 
 def test_importing_providers_package_is_lazy(monkeypatch) -> None:
-    original_package = sys.modules["cirno.providers"]
-    monkeypatch.delitem(sys.modules, "cirno.providers", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.anthropic_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.openai_compat_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.openai_codex_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.xai_oauth", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.xai_grok_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.github_copilot_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.azure_openai_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.bedrock_provider", raising=False)
+    original_package = sys.modules["cirno_core.providers"]
+    monkeypatch.delitem(sys.modules, "cirno_core.providers", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.anthropic_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.openai_compat_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.openai_codex_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.xai_oauth", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.xai_grok_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.github_copilot_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.azure_openai_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.bedrock_provider", raising=False)
 
     try:
-        providers = importlib.import_module("cirno.providers")
+        providers = importlib.import_module("cirno_core.providers")
 
-        assert "cirno.providers.anthropic_provider" not in sys.modules
-        assert "cirno.providers.openai_compat_provider" not in sys.modules
-        assert "cirno.providers.openai_codex_provider" not in sys.modules
-        assert "cirno.providers.xai_oauth" not in sys.modules
-        assert "cirno.providers.xai_grok_provider" not in sys.modules
-        assert "cirno.providers.github_copilot_provider" not in sys.modules
-        assert "cirno.providers.azure_openai_provider" not in sys.modules
-        assert "cirno.providers.bedrock_provider" not in sys.modules
+        assert "cirno_core.providers.anthropic_provider" not in sys.modules
+        assert "cirno_core.providers.openai_compat_provider" not in sys.modules
+        assert "cirno_core.providers.openai_codex_provider" not in sys.modules
+        assert "cirno_core.providers.xai_oauth" not in sys.modules
+        assert "cirno_core.providers.xai_grok_provider" not in sys.modules
+        assert "cirno_core.providers.github_copilot_provider" not in sys.modules
+        assert "cirno_core.providers.azure_openai_provider" not in sys.modules
+        assert "cirno_core.providers.bedrock_provider" not in sys.modules
         assert providers.__all__ == [
             "LLMProvider",
             "LLMResponse",
@@ -42,24 +42,24 @@ def test_importing_providers_package_is_lazy(monkeypatch) -> None:
             "BedrockProvider",
         ]
     finally:
-        # Importing a replacement subpackage also replaces cirno.providers on the
+        # Importing a replacement subpackage also replaces cirno_core.providers on the
         # parent package. Restore both views so this isolation test cannot pollute
         # later tests that resolve a module through a dotted monkeypatch target.
         monkeypatch.undo()
-        setattr(sys.modules["cirno"], "providers", original_package)
+        setattr(sys.modules["cirno_core"], "providers", original_package)
 
 
 def test_explicit_provider_import_still_works(monkeypatch) -> None:
-    original_package = sys.modules["cirno.providers"]
-    monkeypatch.delitem(sys.modules, "cirno.providers", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno.providers.anthropic_provider", raising=False)
+    original_package = sys.modules["cirno_core.providers"]
+    monkeypatch.delitem(sys.modules, "cirno_core.providers", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.anthropic_provider", raising=False)
 
     try:
         namespace: dict[str, object] = {}
-        exec("from cirno.providers import AnthropicProvider", namespace)
+        exec("from cirno_core.providers import AnthropicProvider", namespace)
 
         assert namespace["AnthropicProvider"].__name__ == "AnthropicProvider"
-        assert "cirno.providers.anthropic_provider" in sys.modules
+        assert "cirno_core.providers.anthropic_provider" in sys.modules
     finally:
         monkeypatch.undo()
-        setattr(sys.modules["cirno"], "providers", original_package)
+        setattr(sys.modules["cirno_core"], "providers", original_package)

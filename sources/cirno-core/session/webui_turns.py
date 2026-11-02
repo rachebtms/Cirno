@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import json
 import time
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
@@ -10,10 +11,10 @@ from dataclasses import dataclass, replace
 from typing import Any, cast
 from uuid import uuid4
 
-from cirno.agent.tools.context import current_request_context
-from cirno.agent.turn_delivery import TurnRoute
-from cirno.bus.events import INBOUND_META_LOCAL_MEDIA, InboundMessage
-from cirno.bus.outbound_events import (
+from cirno_core.agent.tools.context import current_request_context
+from cirno_core.agent.turn_delivery import TurnRoute
+from cirno_core.bus.events import INBOUND_META_LOCAL_MEDIA, InboundMessage
+from cirno_core.bus.outbound_events import (
     GoalStateSyncEvent,
     GoalStatusEvent,
     RuntimeModelUpdatedEvent,
@@ -23,8 +24,8 @@ from cirno.bus.outbound_events import (
     UserInputEvent,
     outbound_message_for_event,
 )
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import (
     GoalStateChanged,
     RuntimeEventContext,
     RuntimeModelChanged,
@@ -35,30 +36,30 @@ from cirno.bus.runtime_events import (
     TurnRuntimeAdmitted,
     UserInputAccepted,
 )
-from cirno.llm_usage.context import llm_usage_source
-from cirno.providers.base import LLMProvider, LLMUsage
-from cirno.providers.fallback_provider import FallbackModelObserver, FallbackModelSelection
-from cirno.runtime.context import public_history_message
-from cirno.session.display_history import HISTORY_GENERATION_METADATA_KEY
-from cirno.session.goal_state import goal_state_ws_blob
-from cirno.session.history_visibility import is_hidden_history_message
-from cirno.session.keys import CIRNO_SESSION_KEY
-from cirno.session.manager import Session, SessionManager
-from cirno.session.session_handles import session_handle_for_name
-from cirno.session.session_messages import (
+from cirno_core.llm_usage.context import llm_usage_source
+from cirno_core.providers.base import LLMProvider, LLMUsage
+from cirno_core.providers.fallback_provider import FallbackModelObserver, FallbackModelSelection
+from cirno_core.runtime.context import public_history_message
+from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
+from cirno_core.session.goal_state import goal_state_ws_blob
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.session.keys import CIRNO_SESSION_KEY
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.session_handles import session_handle_for_name
+from cirno_core.session.session_messages import (
     SessionMessageEnvelope,
     session_message_envelope,
 )
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.utils.helpers import strip_think, truncate_text
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.webui.metadata import (
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.utils.helpers import strip_think, truncate_text
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.session.transport_metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
 )
-from cirno.webui.recovery import RecoveryCoordinator
-from cirno.webui.session_identity import is_webui_session_key, webui_session_key
-from cirno.webui.transcript import WebUITranscriptRecorder, append_session_message_input
+from cirno_core.session.display_recovery import RecoveryCoordinator
+from cirno_core.session.session_identity import is_webui_session_key, webui_session_key
+from cirno_core.session.transcript import WebUITranscriptRecorder, append_session_message_input
 from loguru import logger
 
 WEBUI_SESSION_METADATA_KEY = "webui"
@@ -674,7 +675,7 @@ class WebuiTurnCoordinator:
     async def _handle_user_input_accepted(self, event: UserInputAccepted) -> None:
         ctx = event.context
         if ctx.channel == "telegram" and ctx.session_key == CIRNO_SESSION_KEY:
-            from cirno.webui.instance_api import ensure_global_session
+            from cirno_core.session.global_session import ensure_global_session
 
             await ensure_global_session(self.sessions)
             session = await self.sessions.state.get_header(CIRNO_SESSION_KEY)
@@ -733,6 +734,30 @@ class WebuiTurnCoordinator:
         ))
 
     async def _handle_session_turn_started(self, event: SessionTurnStarted) -> None:
+        if (event.origin and event.origin["kind"] != "conversation" and event.content
+                and (event.origin["kind"] != "continuation" or event.context.metadata.get("_show_continuation_input") is True)
+                and is_webui_session_key(event.context.session_key)):
+            import hashlib
+            from cirno_core.session.presentation_history import fact_from_record
+            origin = dict(event.origin)
+            identifier = hashlib.sha256(json.dumps([origin, event.content], sort_keys=True).encode()).hexdigest()[:24]
+            # A replay uses the same turn/source identity. Do not duplicate its input row.
+            source_id = f"system-input:{identifier}"
+            origin["id"] = source_id
+            key = event.context.session_key
+            generation = event.context.session_generation
+            record = {"event": "user", "text": event.content, "turn_id": event.context.metadata.get(WEBUI_TURN_METADATA_KEY) or source_id,
+                      "input_origin": origin, "created_at_ms": int(time.time() * 1000)}
+            header = await self.sessions.state.read_header(key)
+            if header is not None:
+                accepted = not header.policy.persist or await self.sessions.state.append_internal_input(
+                    key, fact_from_record(record), identifier=source_id, expected_generation=generation)
+                if accepted:
+                    await self.bus.publish_outbound(outbound_message_for_event(
+                        channel="websocket", chat_id=key.split(":", 1)[1],
+                        event=UserInputEvent(content=event.content, created_at_ms=record["created_at_ms"], provenance={"input_origin": origin}),
+                        metadata=event.context.metadata,
+                    ))
         if (self._is_websocket_event(event.context)
                 and event.context.metadata.get(WEBUI_SESSION_METADATA_KEY) is True):
             await self.sessions.state.update_metadata(

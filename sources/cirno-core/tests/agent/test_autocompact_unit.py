@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.autocompact import AutoCompact
-from cirno.bus.agent_events import NO_EVENTS, ContextCompactionEvent, EventSink
-from cirno.session.manager import Session, SessionManager
+from cirno_core.agent.autocompact import AutoCompact
+from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent, EventSink
+from cirno_core.session.manager import Session, SessionManager
 
 
 def _mock_sessions():
@@ -65,7 +65,7 @@ def _make_autocompact(
     return AutoCompact(
         sessions=sessions,
         consolidator=consolidator,
-        session_ttl_minutes=ttl,
+        idle_compact_after_minutes=ttl,
         session_lock=defaultdict(asyncio.Lock).__getitem__,
     )
 
@@ -452,7 +452,7 @@ class TestArchiveDelegates:
         ac = AutoCompact(
             sessions=sessions,
             consolidator=consolidator,
-            session_ttl_minutes=15,
+            idle_compact_after_minutes=15,
             bind_events=bind,
             session_lock=defaultdict(asyncio.Lock).__getitem__,
         )

@@ -13,7 +13,7 @@
     },
     "error": {
       "title": "Không thể kết nối tới cirno",
-      "gatewayHint": "Hãy chắc chắn gateway đang chạy (`cirno gateway`) và trình duyệt này có thể truy cập địa chỉ WebUI của gateway."
+      "serverHint": "Hãy chắc chắn Cirno server đang chạy (`cirno`) và trình duyệt này có thể truy cập địa chỉ WebUI của Cirno server."
     },
     "auth": {
       "title": "Kết nối với cirno",
@@ -30,7 +30,7 @@
     },
     "account": {
       "section": "Tài khoản",
-      "logoutHint": "Ngắt kết nối trình duyệt này với gateway.",
+      "logoutHint": "Ngắt kết nối trình duyệt này với Cirno server.",
       "logout": "Đăng xuất"
     },
     "system": {
@@ -54,7 +54,7 @@
     },
     "pairing": {
       "haveCode": "Bạn đã nhận được mã?",
-      "deliveryFailed": "Không thể gửi mã ghép nối. Hãy kiểm tra quyền gửi tin nhắn của bot và nhật ký gateway, rồi gửi thêm một tin nhắn riêng để thử lại.",
+      "deliveryFailed": "Không thể gửi mã ghép nối. Hãy kiểm tra quyền gửi tin nhắn của bot và nhật ký Cirno server, rồi gửi thêm một tin nhắn riêng để thử lại.",
       "deliverySending": "Đang gửi mã ghép nối đến cuộc trò chuyện. Nếu chưa nhận được, hãy gửi thêm một tin nhắn riêng cho bot để thử lại.",
       "title": "Ghép tài khoản",
       "description": "Nhập mã ghép nhận được trong cuộc trò chuyện.",
@@ -132,103 +132,103 @@
       "fields": {
         "agents_defaults_timezone_mode": {
           "label": "Múi giờ hệ thống",
-          "help": "Tắt để chọn múi giờ.\n\nTắt để chọn múi giờ thủ công."
+          "help": "Tắt để chọn múi giờ thủ công."
         },
         "agents_defaults_timezone": {
           "label": "Múi giờ",
-          "help": "Độ lệch UTC theo ngày hiện tại.\n\nChọn múi giờ. Độ lệch UTC được tính theo ngày hiện tại."
+          "help": "Chọn múi giờ. Độ lệch UTC được tính theo ngày hiện tại."
         },
         "agents_defaults_dream_enabled": {
           "label": "Sắp xếp bộ nhớ",
-          "help": "Tự động sắp xếp bộ nhớ; tắt vẫn giữ bộ nhớ có sẵn.\n\nTự động sắp xếp thông tin hữu ích từ cuộc trò chuyện. Bộ nhớ hiện có vẫn được sử dụng khi tắt."
+          "help": "Tự động sắp xếp thông tin hữu ích từ cuộc trò chuyện. Bộ nhớ hiện có vẫn được sử dụng khi tắt."
         },
-        "gateway_heartbeat_enabled": {
+        "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
         },
-        "gateway_heartbeat_interval_s": {
+        "agents_defaults_heartbeat_interval_s": {
           "label": "Heartbeat interval (seconds)",
           "help": "Restart to apply."
         },
         "agents_defaults_max_tool_iterations": {
           "label": "Số lượt công cụ",
-          "help": "Số lượt công cụ tối đa mỗi câu trả lời.\n\nSố lần trao đổi tối đa giữa mô hình và công cụ trong một lượt."
+          "help": "Số lần trao đổi tối đa giữa mô hình và công cụ trong một lượt."
         },
         "agents_defaults_max_concurrent_subagents": {
           "label": "Subagent đồng thời",
-          "help": "Số subagent chạy đồng thời tối đa.\n\nSố tác nhân phụ tối đa chạy cùng lúc."
+          "help": "Số tác nhân phụ tối đa chạy cùng lúc."
         },
         "agents_defaults_max_tool_result_chars": {
           "label": "Độ dài kết quả",
-          "help": "Giới hạn ký tự mỗi kết quả công cụ gửi đến mô hình.\n\nGiới hạn đầu ra công cụ được đưa vào ngữ cảnh mô hình."
+          "help": "Giới hạn đầu ra công cụ được đưa vào ngữ cảnh mô hình."
         },
         "agents_defaults_provider_retry_mode": {
           "label": "Tiếp tục thử lại",
-          "help": "Thử lại khi lỗi có thể khắc phục; tắt để dùng cách thử lại tiêu chuẩn.\n\nTự động thử lại khi yêu cầu gửi đến mô hình gặp lỗi tạm thời. Tắt tùy chọn này để giới hạn số lần thử lại."
+          "help": "Tự động thử lại khi yêu cầu gửi đến mô hình gặp lỗi tạm thời. Tắt tùy chọn này để giới hạn số lần thử lại."
         },
-        "agents_defaults_tool_hint_max_length": {
+        "agents_defaults_tool_status_summary_max_chars": {
           "label": "Độ dài tóm tắt",
-          "help": "Giới hạn ký tự tóm tắt hoạt động công cụ.\n\nĐộ dài tối đa của gợi ý ngắn về hoạt động công cụ."
+          "help": "Độ dài tối đa của gợi ý ngắn về hoạt động công cụ."
         },
-        "tools_max_session_messages_per_minute": {
-          "label": "Tần suất tin nhắn",
-          "help": "Số tin nhắn công cụ gửi đến một phiên mỗi phút tối đa.\n\nGiới hạn tần suất công cụ gửi tin nhắn vào cuộc trò chuyện."
+        "tools_max_outgoing_session_messages_per_minute": {
+          "label": "Giới hạn gửi giữa hội thoại (tin/phút)",
+          "help": "Tổng số tin mỗi hội thoại nguồn gửi đến các hội thoại khác trong cửa sổ trượt 60 giây. Không giới hạn tin của người dùng."
         },
         "tools_exec_enable": {
           "label": "Công cụ shell",
-          "help": "Cho phép agent chạy lệnh Shell.\n\nCho phép tác nhân chạy lệnh shell."
+          "help": "Cho phép tác nhân chạy lệnh shell."
         },
         "tools_file_enable": {
           "label": "Công cụ tệp",
-          "help": "Cho phép công cụ đọc và chỉnh sửa tệp tích hợp.\n\nCho phép dùng công cụ đọc và chỉnh sửa tệp tích hợp."
+          "help": "Cho phép dùng công cụ đọc và chỉnh sửa tệp tích hợp."
         },
         "tools_web_enable": {
           "label": "Truy cập web",
-          "help": "Cho phép tìm kiếm web và đọc trang.\n\nCho phép tìm kiếm và tải nội dung trang web."
+          "help": "Cho phép tìm kiếm và tải nội dung trang web."
         },
         "tools_cli_apps_enable": {
           "label": "Ứng dụng CLI",
-          "help": "Cho phép cài đặt, quản lý và chạy ứng dụng CLI.\n\nCho phép tác nhân quản lý và chạy ứng dụng dòng lệnh."
+          "help": "Cho phép tác nhân quản lý và chạy ứng dụng dòng lệnh."
         },
         "tools_my_enable": {
           "label": "Xem cấu hình",
-          "help": "Cho phép agent xem cấu hình của mình.\n\nCho phép tác nhân xem cấu hình của mình."
+          "help": "Cho phép tác nhân xem cấu hình của mình."
         },
         "tools_my_allow_set": {
           "label": "Sửa cấu hình",
-          "help": "Cho phép agent thay đổi cấu hình của mình.\n\nCho phép công cụ tự quản lý cập nhật cấu hình."
+          "help": "Cho phép công cụ tự quản lý cập nhật cấu hình."
         },
         "tools_exec_path_prepend": {
           "label": "Ưu tiên PATH",
-          "help": "Tìm trong các thư mục này trước.\n\nCác thư mục thêm vào đầu PATH. Phân cách bằng dấu chấm phẩy trên Windows hoặc dấu hai chấm trên macOS và Linux."
+          "help": "Các thư mục thêm vào đầu PATH. Phân cách bằng dấu chấm phẩy trên Windows hoặc dấu hai chấm trên macOS và Linux."
         },
         "tools_exec_path_append": {
           "label": "Bổ sung PATH",
-          "help": "Tìm trong các thư mục này sau cùng.\n\nCác thư mục thêm vào cuối PATH. Phân cách bằng dấu chấm phẩy trên Windows hoặc dấu hai chấm trên macOS và Linux."
+          "help": "Các thư mục thêm vào cuối PATH. Phân cách bằng dấu chấm phẩy trên Windows hoặc dấu hai chấm trên macOS và Linux."
         },
         "tools_exec_sandbox": {
           "label": "Hộp cát lệnh",
-          "help": "Cô lập tiến trình lệnh; cần hệ thống hỗ trợ.\n\nDùng bwrap trên Linux hoặc Seatbelt trên macOS. Chỉ kiểm tra không gian làm việc không thể cô lập tiến trình."
+          "help": "Dùng bwrap trên Linux hoặc Seatbelt trên macOS. Chỉ kiểm tra không gian làm việc không thể cô lập tiến trình."
         },
         "tools_exec_sandbox_ro_binds": {
           "label": "Đường dẫn chỉ đọc",
-          "help": "Thêm đường dẫn chỉ đọc, mỗi dòng một mục.\n\nĐường dẫn gắn thêm ở chế độ chỉ đọc, mỗi dòng một đường dẫn."
+          "help": "Đường dẫn gắn thêm ở chế độ chỉ đọc, mỗi dòng một đường dẫn."
         },
         "tools_exec_sandbox_rw_binds": {
           "label": "Đường dẫn cho phép ghi",
-          "help": "Thêm đường dẫn cho phép ghi, mỗi dòng một mục.\n\nĐường dẫn gắn thêm cho phép ghi, mỗi dòng một đường dẫn."
+          "help": "Đường dẫn gắn thêm cho phép ghi, mỗi dòng một đường dẫn."
         },
         "tools_exec_allowed_env_keys": {
           "label": "Biến môi trường",
-          "help": "Thêm biến truyền cho lệnh, mỗi dòng một tên.\n\nCác biến môi trường bổ sung được truyền cho lệnh, mỗi dòng một tên. Các biến cơ bản cần cho hoạt động vẫn được truyền."
+          "help": "Các biến môi trường bổ sung được truyền cho lệnh, mỗi dòng một tên. Các biến cơ bản cần cho hoạt động vẫn được truyền."
         },
         "tools_exec_allow_patterns": {
           "label": "Lệnh được phép",
-          "help": "Chỉ chạy lệnh khớp hoàn toàn với quy tắc cho phép.\n\nMỗi dòng một biểu thức chính quy. Khi có quy tắc, từng phần của lệnh phải khớp hoàn toàn với ít nhất một quy tắc. Lệnh được phép sẽ bỏ qua quy tắc chặn tích hợp và bổ sung, nhưng vẫn chịu giới hạn mạng và không gian làm việc."
+          "help": "Mỗi dòng một biểu thức chính quy. Khi có quy tắc, từng phần của lệnh phải khớp hoàn toàn với ít nhất một quy tắc. Lệnh được phép sẽ bỏ qua quy tắc chặn tích hợp và bổ sung, nhưng vẫn chịu giới hạn mạng và không gian làm việc."
         },
         "tools_exec_deny_patterns": {
           "label": "Lệnh bị chặn",
-          "help": "Chặn lệnh khớp với các quy tắc này.\n\nQuy tắc chặn bổ sung dưới dạng biểu thức chính quy, mỗi dòng một quy tắc. Quy tắc cho phép được ưu tiên hơn cả quy tắc chặn tích hợp và bổ sung."
+          "help": "Quy tắc chặn bổ sung dưới dạng biểu thức chính quy, mỗi dòng một quy tắc. Quy tắc cho phép được ưu tiên hơn cả quy tắc chặn tích hợp và bổ sung."
         },
         "network_proxy": {
           "label": "Proxy chung",
@@ -240,55 +240,43 @@
         },
         "tools_web_user_agent": {
           "label": "Header User-Agent",
-          "help": "User-Agent cho yêu cầu web; để trống để dùng mặc định.\n\nHeader User-Agent tùy chỉnh cho yêu cầu web. Để trống để dùng giá trị mặc định."
+          "help": "Header User-Agent tùy chỉnh cho yêu cầu web. Để trống để dùng giá trị mặc định."
         },
         "tools_restrict_to_workspace": {
           "label": "Giới hạn vùng làm việc",
-          "help": "Giới hạn vùng làm việc chung; quyền trò chuyện WebUI được đặt riêng.\n\nChính sách công cụ toàn cục. Quyền của từng cuộc trò chuyện WebUI được đặt riêng."
+          "help": "Chính sách công cụ toàn cục. Quyền của từng cuộc trò chuyện WebUI được đặt riêng."
         },
         "tools_ssrf_whitelist": {
           "label": "IP được phép",
-          "help": "IP hoặc dải CIDR được phép, mỗi dòng một mục.\n\nIP hoặc dải CIDR được miễn bảo vệ yêu cầu ra ngoài, mỗi dòng một mục."
+          "help": "IP hoặc dải CIDR được miễn bảo vệ yêu cầu ra ngoài, mỗi dòng một mục."
         },
         "tools_webui_allow_remote_package_install": {
           "label": "Cài đặt từ xa",
-          "help": "Cho phép cài gói và kỹ năng từ xa; đặt trên máy chạy gateway.\n\nCho phép cài gói và kỹ năng từ WebUI từ xa. Cài đặt này phải được thay đổi trên máy chạy gateway."
+          "help": "Cho phép cài gói và kỹ năng từ WebUI từ xa. Cài đặt này phải được thay đổi trên máy chạy Cirno server."
         },
         "tools_cli_apps_install_timeout": {
           "label": "Thời hạn cài đặt",
-          "help": "Số giây cài ứng dụng CLI tối đa.\n\nThời gian tối đa để cài ứng dụng CLI."
+          "help": "Thời gian tối đa để cài ứng dụng CLI."
         },
         "tools_cli_apps_run_timeout": {
           "label": "Thời hạn chạy",
-          "help": "Số giây chạy lệnh CLI tối đa.\n\nThời gian chạy tối đa của lệnh ứng dụng CLI."
+          "help": "Thời gian chạy tối đa của lệnh ứng dụng CLI."
         },
         "tools_cli_apps_catalog_ttl_seconds": {
           "label": "Thời gian cache",
-          "help": "Số giây cache danh sách ứng dụng CLI.\n\nThời gian giữ danh mục ứng dụng CLI trong bộ nhớ đệm."
-        },
-        "gateway_host": {
-          "label": "Địa chỉ gateway",
-          "help": "Địa chỉ gateway; đặt địa chỉ lắng nghe WebUI riêng.\n\nĐịa chỉ gateway dùng để nhận kết nối. Địa chỉ WebSocket và WebUI được cấu hình trong Kênh → WebSocket."
-        },
-        "gateway_port": {
-          "label": "Cổng gateway",
-          "help": "Cổng gateway; tham số khởi chạy được ưu tiên.\n\nCổng được lưu. Tham số dòng lệnh được ưu tiên."
-        },
-        "gateway_restart_mode": {
-          "label": "Chế độ khởi động lại",
-          "help": "Chọn cách khởi động lại; Tự động dựa theo môi trường.\n\nCách khởi động lại tiến trình. Chế độ tự động chọn theo môi trường máy chủ."
+          "help": "Thời gian giữ danh mục ứng dụng CLI trong bộ nhớ đệm."
         },
         "agents_defaults_dream_interval_h": {
           "label": "Dream interval (hours)",
-          "help": "Restart to apply. A cron expression overrides the interval."
+          "help": "Tổng hợp khi rảnh hoặc theo khoảng thời gian cố định."
         },
         "agents_defaults_dream_model_override": {
           "label": "Dream model",
           "help": "Chọn mô hình riêng cho Dream; để trống để dùng mô hình hiện tại."
         },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Idle memory check (seconds)",
-          "help": "Restart to apply."
+          "label": "Khoảng kiểm tra nén ngữ cảnh khi nhàn rỗi (giây)",
+          "help": "Tần suất kiểm tra hội thoại để nén ngữ cảnh; khác với thời gian không hoạt động. Khởi động lại để áp dụng."
         },
         "network_request_timeout_s": {
           "label": "Compatible API request timeout (seconds)",
@@ -372,7 +360,27 @@
         },
         "tools_exec_max_runtime": {
           "label": "Thời gian chạy lệnh",
-          "help": "Giới hạn thời gian chạy mặc định cho lệnh shell.\n\nĐầu ra và việc chờ đợi không kéo dài giới hạn này. Chọn Không giới hạn thời gian để bỏ giới hạn thời gian chạy."
+          "help": "Đầu ra và việc chờ đợi không kéo dài giới hạn này. Chọn Không giới hạn thời gian để bỏ giới hạn thời gian chạy."
+        },
+        "server_health_host": {
+          "label": "Địa chỉ Cirno server",
+          "help": "Địa chỉ Cirno server dùng để nhận kết nối. Địa chỉ WebSocket và WebUI được cấu hình trong Kênh → WebSocket."
+        },
+        "server_health_port": {
+          "label": "Cổng Cirno server",
+          "help": "Cổng được lưu. Tham số dòng lệnh được ưu tiên."
+        },
+        "server_restart_mode": {
+          "label": "Chế độ khởi động lại",
+          "help": "Cách khởi động lại tiến trình. Chế độ tự động chọn theo môi trường máy chủ."
+        },
+        "agents_defaults_resume_message": {
+          "label": "Lời nhắc tiếp tục",
+          "help": "Chỉ dẫn gửi tới mô hình khi chọn Tiếp tục hoặc dùng /resume."
+        },
+        "agents_defaults_resume_show_message": {
+          "label": "Hiện lời nhắc tiếp tục",
+          "help": "Hiện chỉ dẫn tiếp tục dưới dạng đầu vào hệ thống có nhãn nguồn."
         }
       },
       "groups": {
@@ -389,15 +397,11 @@
           "help": "Bật hoặc tắt tự động sắp xếp bộ nhớ."
         },
         "heartbeat": {
-          "title": "Heartbeat"
+          "title": "Nhịp đánh thức tác tử"
         },
         "execution": {
           "title": "Giới hạn chạy",
           "help": "Đặt giới hạn công cụ và thử lại yêu cầu."
-        },
-        "sessions": {
-          "title": "Cuộc trò chuyện",
-          "help": "Đặt chia sẻ trò chuyện giữa các nền tảng."
         },
         "tools": {
           "title": "Công cụ tích hợp",
@@ -423,8 +427,8 @@
           "title": "Giới hạn CLI",
           "help": "Đặt thời hạn cài đặt, chạy và thời gian cache danh sách.\n\nGiới hạn thời gian cài đặt, thực thi và lưu đệm danh mục."
         },
-        "gateway": {
-          "title": "Gateway",
+        "server": {
+          "title": "Cirno server",
           "help": "Đặt cách triển khai và khởi động lại."
         },
         "api": {
@@ -449,6 +453,16 @@
         },
         "requests": {
           "title": "Model connection"
+        },
+        "coordination": {
+          "title": "Phối hợp hội thoại"
+        },
+        "activity": {
+          "title": "Hiển thị thực thi"
+        },
+        "resume": {
+          "title": "Tiếp tục tác vụ đã dừng",
+          "help": "Gửi yêu cầu mô hình mới với ngữ cảnh đã lưu, không chạy lại các công cụ đã hoàn tất."
         }
       },
       "save": "Lưu thay đổi",
@@ -474,7 +488,7 @@
       "manual": "Thủ công",
       "standard": "Tiêu chuẩn",
       "persistent": "Liên tục",
-      "unavailable": "Cập nhật gateway để chỉnh sửa các cài đặt này.",
+      "unavailable": "Cập nhật Cirno server để chỉnh sửa các cài đặt này.",
       "advancedOptions": "Tùy chọn nâng cao",
       "idle": "Khi rảnh",
       "interval": "Khoảng cố định"
@@ -503,7 +517,7 @@
       "voice": "Giọng nói",
       "browser": "Tìm kiếm web",
       "channels": "Thiết lập kênh",
-      "runtime": "Máy chủ và nhịp tim",
+      "runtime": "Máy chủ",
       "advanced": "Quyền truy cập",
       "memory": "Thư viện bộ nhớ",
       "cliApps": "Ứng dụng CLI",
@@ -522,7 +536,11 @@
       "execution": "Mục tiêu và thực thi",
       "shell": "Thực thi Shell",
       "network": "Mạng và thử lại",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "account": "Tài khoản",
+      "heartbeat": "Nhịp đánh thức tác tử",
+      "coordination": "Phối hợp hội thoại",
+      "regional": "Thời gian và khu vực"
     },
     "sections": {
       "interface": "Giao diện",
@@ -607,7 +625,7 @@
       "restart": "Khởi động lại cirno",
       "configPath": "Đường dẫn cấu hình",
       "activePreset": "Cấu hình đặt trước đang dùng",
-      "gateway": "Gateway",
+      "gateway": "Cirno server",
       "restartState": "Trạng thái khởi động lại",
       "pendingChanges": "Thay đổi chờ áp dụng",
       "selectedPreset": "Bộ thiết lập đã chọn",
@@ -642,7 +660,7 @@
       "language": "Chọn ngôn ngữ giao diện.",
       "provider": "Chọn nhà cung cấp cho yêu cầu mới.",
       "model": "Chọn mô hình cho bộ thiết lập này.",
-      "configPath": "Tệp cấu hình gateway hiện tại đang dùng.",
+      "configPath": "Tệp cấu hình Cirno server hiện tại đang dùng.",
       "selectedPreset": "Sửa bộ thiết lập đã lưu trong Mô hình.",
       "presetModel": "Đổi mô hình và nhà cung cấp trong Mô hình.",
       "activityMode": "Chọn cách mặc định hiển thị chi tiết xử lý.",
@@ -1475,7 +1493,7 @@
       "deleteConfirmAction": "Xóa kỹ năng",
       "instructionsTitle": "Hướng dẫn kỹ năng",
       "setupRequired": "Cần thiết lập",
-      "setupDescription": "Cài gói phụ thuộc trên máy gateway rồi kiểm tra lại.\n\nCài các gói còn thiếu trên máy chạy cirno rồi kiểm tra lại.",
+      "setupDescription": "Cài gói phụ thuộc trên máy Cirno server rồi kiểm tra lại.\n\nCài các gói còn thiếu trên máy chạy cirno rồi kiểm tra lại.",
       "copySetupCommand": "Sao chép lệnh",
       "checkAgain": "Kiểm tra lại",
       "marketplaceSearchFailed": "Không thể tìm kiếm trong các kho kỹ năng.",
@@ -1565,6 +1583,20 @@
       "webuiUrl": "Web UI address (optional)",
       "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
       "settingsLink": "Configure Telegram notifications"
+    },
+    "account": {
+      "owner": "Chủ sở hữu phiên bản",
+      "changePassword": "Đổi mật khẩu",
+      "currentPassword": "Mật khẩu hiện tại",
+      "newPassword": "Mật khẩu mới",
+      "help": "Nhập mật khẩu hiện tại để thay đổi. Các phiên trình duyệt khác sẽ bị đăng xuất.",
+      "saved": "Đã đổi mật khẩu. Trình duyệt này vẫn đăng nhập.",
+      "unavailable": "Cài đặt tài khoản khả dụng khi đăng ký và đăng nhập bằng trình duyệt.",
+      "loading": "Đang tải tài khoản…",
+      "retry": "Thử lại"
+    },
+    "heartbeat": {
+      "help": "Kiểm tra HEARTBEAT.md định kỳ và đánh thức Cirno khi có tác vụ. Độc lập với việc kiểm tra sức khỏe dịch vụ."
     }
   },
   "chat": {
@@ -1920,6 +1952,26 @@
           "pairing": {
             "title": "Ghép nối",
             "description": "Quản lý yêu cầu ghép."
+          },
+          "resume": {
+            "title": "Tiếp tục tác vụ",
+            "description": "Tiếp tục yêu cầu đã dừng từ ngữ cảnh đã lưu."
+          },
+          "clear": {
+            "title": "Xóa ngữ cảnh Cirno",
+            "description": "Xóa cuộc trò chuyện Cirno cá nhân, không hoàn tác thay đổi tệp."
+          },
+          "temporary": {
+            "title": "Hội thoại tạm thời",
+            "description": "Chọn chế độ tạm trước tin nhắn đầu tiên."
+          },
+          "ptc": {
+            "title": "Chế độ PTC",
+            "description": "Chọn gọi công cụ bằng chương trình trước tin nhắn đầu tiên."
+          },
+          "access": {
+            "title": "Chế độ truy cập",
+            "description": "Chọn mặc định, AI xét duyệt hoặc toàn quyền."
           }
         },
         "badges": {
@@ -1931,7 +1983,12 @@
           "goalReady": "Bắt đầu mục tiêu duy trì",
           "history": "Hiển thị tin nhắn gần đây",
           "stopRunning": "Đang chạy"
-        }
+        },
+        "controlRunning": "Dừng tác vụ trước khi đổi tùy chọn.",
+        "accessUsage": "Cách dùng: /access default|review|full",
+        "modelUsage": "Nhập tên mô hình đã cấu hình sau /model.",
+        "creationOnly": "Chọn tùy chọn trước tin nhắn đầu tiên trong hội thoại mới.",
+        "toggleUsage": "Cách dùng: {{command}} on|off"
       },
       "encoding": "Đang xử lý…",
       "remove": "Xóa tệp đính kèm",
@@ -1972,7 +2029,9 @@
         "full": "Toàn quyền truy cập",
         "fullShort": "Toàn quyền",
         "defaultDescription": "Chỉ đọc, sửa tệp và chạy lệnh trong thư mục làm việc.",
-        "fullDescription": "Cho phép truy cập tệp và chạy lệnh ngoài thư mục làm việc."
+        "fullDescription": "Cho phép truy cập tệp và chạy lệnh ngoài thư mục làm việc.",
+        "review": "AI xét duyệt",
+        "reviewDescription": "Giữ các giới hạn mặc định. AI độc lập xét từng thao tác bị chặn mà không dùng bộ nhớ Cirno; trường hợp không rõ sẽ gửi tới hộp thư để bạn duyệt. AI có thể sai, gây lộ tệp hoặc thực thi lệnh có hại."
       },
       "goalStatus": {
         "blocked": "Bị chặn",
@@ -2001,6 +2060,47 @@
       "title": "Xóa cuộc trò chuyện Cirno",
       "description": "Dừng tác vụ hiện tại và xóa tin nhắn cùng ngữ cảnh của cuộc trò chuyện này. Bộ nhớ đã lưu và các cuộc trò chuyện khác được giữ lại.",
       "confirm": "Xóa cuộc trò chuyện"
+    },
+    "inputSources": {
+      "heartbeat": "Nhịp đánh thức",
+      "scheduled_task": "Tác vụ đã lên lịch",
+      "trigger": "Trình kích hoạt",
+      "conversation": "Tin nhắn hội thoại",
+      "subagent": "Kết quả tác tử con",
+      "continuation": "Tiếp tục tự động",
+      "system": "Sự kiện hệ thống",
+      "supervision": "Cirno đã cập nhật cuộc trò chuyện này"
+    },
+    "supervision": {
+      "changed": "Cirno đã cập nhật cuộc trò chuyện này",
+      "actions": {
+        "stop": "Đã dừng cuộc trò chuyện",
+        "continue": "Đã tiếp tục cuộc trò chuyện",
+        "goal_create": "Đã tạo Goal",
+        "goal_set": "Đã thay thế Goal",
+        "goal_update": "Đã cập nhật cài đặt Goal",
+        "goal_stop": "Đã dừng Goal",
+        "goal_pause": "Đã tạm dừng Goal",
+        "goal_resume": "Đã tiếp tục Goal",
+        "goal_delete": "Đã xóa Goal",
+        "goal_wait": "Đã đặt Goal chờ"
+      },
+      "fields": {
+        "objective": "Mục tiêu",
+        "ui_summary": "Nhãn hiển thị",
+        "recap": "Tiến độ đã lưu",
+        "continuation_limit": "Giới hạn tiếp tục tự động",
+        "wake_after_seconds": "Chờ (giây)"
+      }
+    },
+    "historyEffects": {
+      "title": "Thay đổi trong thư mục làm việc vẫn giữ nguyên",
+      "description": "Phân nhánh hoặc sửa chỉ thay đổi ngữ cảnh trò chuyện, không hoàn tác lệnh hay chỉnh sửa tệp trước đó. Chạy lại có thể gây xung đột hoặc mất tệp. Hãy kiểm tra tệp trước khi tiếp tục."
+    },
+    "historyEdit": {
+      "text": "Tin nhắn đã sửa",
+      "description": "Thay thế tin nhắn này và ngữ cảnh sau đó rồi thực hiện yêu cầu đã sửa. Tệp đính kèm được giữ lại.",
+      "submit": "Lưu và gửi"
     }
   },
   "message": {
@@ -2228,7 +2328,8 @@
     "automationSourceFallback": "Tự động hóa",
     "automationTriggered": "Tự động kích hoạt",
     "expandStep": "Mở rộng bước",
-    "collapseStep": "Thu gọn bước"
+    "collapseStep": "Thu gọn bước",
+    "edit": "Sửa tin nhắn"
   },
   "recovery": {
     "actionFailed": "Khôi phục thất bại. Hãy thử lại.",
@@ -2284,7 +2385,7 @@
     "failed": "Không thể sao chép. Vui lòng thử lại.",
     "unavailable": "Không thể xác định tệp. Bạn có thể sao chép tham chiếu gốc.",
     "loading": "Đang xác định tệp…",
-    "gatewayPath": "Đường dẫn thuộc máy chạy gateway."
+    "serverPath": "Đường dẫn thuộc máy chạy Cirno server."
   },
   "filePreview": {
     "displayMode": "Chế độ hiển thị",
@@ -2295,7 +2396,7 @@
     "close": "Đóng xem trước tệp",
     "loading": "Đang tải bản xem trước...",
     "failed": "Không thể xem trước tệp này.",
-    "routeMissing": "Xem trước tệp cần gateway mới nhất. Hãy khởi động lại cirno gateway rồi thử lại.",
+    "routeMissing": "Xem trước tệp cần Cirno server mới nhất. Hãy khởi động lại cirno rồi thử lại.",
     "resize": "Đổi kích thước bản xem trước tệp",
     "truncated": "Bản xem trước bị cắt vì tệp này lớn."
   },
@@ -2352,11 +2453,11 @@
     },
     "workspaceScopeRejected": {
       "title": "Không gian làm việc không thay đổi",
-      "body": "Gateway đã từ chối dự án hoặc chế độ truy cập này. Chọn dự án hiện có hoặc chế độ truy cập khác rồi thử lại."
+      "body": "Cirno server đã từ chối dự án hoặc chế độ truy cập này. Chọn dự án hiện có hoặc chế độ truy cập khác rồi thử lại."
     },
     "turnRejected": {
       "title": "Tin nhắn chưa được gửi",
-      "body": "Gateway đã từ chối tin nhắn này. Hãy kiểm tra nội dung hoặc tệp đính kèm rồi thử lại."
+      "body": "Cirno server đã từ chối tin nhắn này. Hãy kiểm tra nội dung hoặc tệp đính kèm rồi thử lại."
     },
     "modelRequestFailed": {
       "authenticationTitle": "Xác thực nhà cung cấp mô hình thất bại",
@@ -2538,7 +2639,7 @@
     "jobs": "Tác vụ từ xa",
     "refresh": "Làm mới",
     "refreshList": "Làm mới danh sách",
-    "noJobs": "Agent có thể bắt đầu tác vụ bằng công cụ nút. Bản ghi nằm trong Home, toàn bộ đầu ra nằm trên nút.",
+    "noJobs": "Agent có thể bắt đầu tác vụ bền vững qua SSH. Bản ghi theo dõi lưu trong trạng thái máy chủ; đầu ra đầy đủ lưu trên Node.",
     "readStatus": "Kiểm tra trạng thái",
     "stop": "Dừng",
     "memorySources": "Nguồn ký ức",
@@ -2598,7 +2699,8 @@
       "dream": "Hợp nhất bộ nhớ",
       "turn": "Lượt chạy hội thoại",
       "message": "Tin nhắn",
-      "report": "Báo cáo công việc"
+      "report": "Báo cáo công việc",
+      "approval": "Phê duyệt thao tác"
     },
     "status": {
       "pending": "Đang chờ",
@@ -2651,7 +2753,9 @@
       "storage_failed": "Không thể lưu tài khoản. Kiểm tra bộ nhớ máy chủ.",
       "password_mismatch": "Mật khẩu không khớp.",
       "connection_failed": "Không thể kết nối Cirno. Kiểm tra mạng và thử lại.",
-      "request_failed": "Yêu cầu thất bại. Vui lòng thử lại."
+      "request_failed": "Yêu cầu thất bại. Vui lòng thử lại.",
+      "incorrect_password": "Mật khẩu hiện tại không đúng.",
+      "unauthorized": "Vui lòng đăng nhập lại."
     }
   }
 }

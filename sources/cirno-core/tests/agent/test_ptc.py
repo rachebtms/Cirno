@@ -4,12 +4,12 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.agent.ptc.registry import PtcToolRegistry
-from cirno.agent.tools.base import Tool
-from cirno.agent.tools.execution import execute_tool_calls
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.providers.base import ToolCallRequest
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.agent.ptc.registry import PtcToolRegistry
+from cirno_core.agent.tools.base import Tool
+from cirno_core.agent.tools.execution import execute_tool_calls
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.providers.base import ToolCallRequest
 
 
 class ExampleTool(Tool):
@@ -115,10 +115,10 @@ async def test_stop_cancels_nested_tool_without_replaying():
 async def test_session_enables_sdk_only_for_ptc_and_preserves_tool_result(tmp_path):
     from unittest.mock import MagicMock
 
-    from cirno.agent.context import TranscriptInput
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
-    from cirno.providers.base import LLMResponse
+    from cirno_core.agent.context import TranscriptInput
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.providers.base import LLMResponse
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
     provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -146,7 +146,7 @@ async def test_json_helper_import_is_available_without_loading_host_modules():
 
 
 async def test_parallel_ptc_sessions_keep_their_request_contexts():
-    from cirno.agent.tools.context import RequestContext, current_request_context, request_context
+    from cirno_core.agent.tools.context import RequestContext, current_request_context, request_context
     async def execute_in(chat):
         tool = ExampleTool()
         async def execute(value):

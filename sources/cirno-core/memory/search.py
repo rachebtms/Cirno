@@ -14,6 +14,6 @@ def search(repo, query, config, *, mode="bm25", limit=10, **filters):
                   "warning_code": "lexical_only",
                   "warning": "Original evidence, task state and historical records use BM25; vectors index active knowledge and profiles only"}
     else:
-        from cirno.memory.embedding import search as semantic_search
+        from cirno_core.memory.embedding import search as semantic_search
         result = semantic_search(repo, query, config, mode=mode, limit=limit, **filters)
     return {**result, "requested_mode": mode, "time_zone": filters.get("time_zone", "UTC")}

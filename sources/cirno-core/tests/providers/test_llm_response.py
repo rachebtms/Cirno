@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from cirno.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
 
 
 def _response(finish_reason: str, *, with_tool_call: bool = True) -> LLMResponse:

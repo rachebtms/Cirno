@@ -2,14 +2,14 @@
 
 from typing import Literal
 
-from cirno.bus.outbound_events import (
+from cirno_core.bus.outbound_events import (
     FileEditEvent,
     ProgressEvent,
     RetryStatusEvent,
     StreamDeltaEvent,
     StreamEndEvent,
 )
-from cirno.bus.agent_events import (
+from cirno_core.bus.agent_events import (
     AgentEvent,
     ContextCompactionEvent,
     RecoveryStateEvent,

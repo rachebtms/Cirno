@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from cirno.bus.events import OutboundMessage
-from cirno.bus.outbound_events import (
+from cirno_core.bus.events import OutboundMessage
+from cirno_core.bus.outbound_events import (
     ContextCompactionEvent,
     ProgressEvent,
     StreamDeltaEvent,

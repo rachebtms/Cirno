@@ -9,11 +9,11 @@ from typing import Any, cast, overload
 from pydantic import BaseModel, ValidationError
 from pydantic_settings import SettingsError
 
-from cirno.config.errors import ConfigIssue, ConfigLoadError, validation_issues
-from cirno.config.home import get_home_path
-from cirno.config.network import NetworkConfig
-from cirno.config.schema import Config
-from cirno.utils.file_io import write_text_atomic
+from cirno_core.config.errors import ConfigIssue, ConfigLoadError, validation_issues
+from cirno_core.config.home import get_instance_path
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.schema import Config
+from cirno_core.utils.file_io import write_text_atomic
 
 # Global variable to store current config path (for multi-instance support)
 _current_config_path: Path | None = None
@@ -34,7 +34,7 @@ def get_config_path() -> Path:
     """Get the configuration file path."""
     if _current_config_path:
         return _current_config_path
-    return get_home_path() / "config.json"
+    return get_instance_path() / "config.json"
 
 
 def load_config(config_path: Path | None = None) -> Config:
@@ -130,7 +130,7 @@ def load_config(config_path: Path | None = None) -> Config:
 
 def _apply_ssrf_whitelist(config: Config) -> None:
     """Apply SSRF whitelist from config to the network security module."""
-    from cirno.security.network import configure_ssrf_whitelist
+    from cirno_core.security.network import configure_ssrf_whitelist
 
     configure_ssrf_whitelist(config.tools.ssrf_whitelist)
 

@@ -4,4 +4,4 @@ The runtime renders templates under `templates/agent/` and loads editable profil
 
 `Home/prompts/dream.md` can override Dream instructions. Run `/dream-prompt init` to create an editable copy of the default. Delete or empty the override to use the bundled instructions again. Dream still enforces its restricted tools, scope and per-input confirmation requirements.
 
-`templates/legacy/SOUL.md` is an exact-match migration fixture. The context builder recognizes an unchanged old Home profile and substitutes the current bundled `SOUL.md` in memory. It is not loaded as current guidance or offered as an editable template. Preserve its exact content so old installations can still be recognized; customized user profiles are retained.
+Profile files are loaded directly from the instance's `home/` directory. This release has no legacy profile importer or automatic migration of earlier instance layouts.

@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.filesystem import ReadFileTool
-from cirno.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.filesystem import ReadFileTool
+from cirno_core.agent.tools.registry import ToolRegistry
 
 
 class _FakeTool(Tool):

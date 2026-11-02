@@ -14,21 +14,21 @@ from typing import Any, cast
 import httpx
 from loguru import logger
 
-from cirno import __version__
-from cirno.providers.base import (
+from cirno_core import __version__
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     LLMUsage,
     ToolCallRequest,
 )
-from cirno.providers.oauth_catalog_cache import (
+from cirno_core.providers.oauth_catalog_cache import (
     OAuthCatalogAuthRequiredError,
     OAuthModelCatalog,
     OAuthModelCatalogSnapshot,
 )
-from cirno.providers.openai_responses import ResponsesBackend
-from cirno.providers.registry import ProviderModelSpec, find_by_name
-from cirno.providers.xai_oauth import (
+from cirno_core.providers.openai_responses import ResponsesBackend
+from cirno_core.providers.registry import ProviderModelSpec, find_by_name
+from cirno_core.providers.xai_oauth import (
     XAI_CLIENT_VERSION,
     XAIOAuthReauthRequiredError,
     get_xai_oauth_login_status,

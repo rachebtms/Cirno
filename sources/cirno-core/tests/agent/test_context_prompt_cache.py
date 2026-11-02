@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from cirno.agent.context import ContextBuilder
-from cirno.runtime.context import RuntimeContextBlock
+from cirno_core.agent.context import ContextBuilder
+from cirno_core.runtime.context import RuntimeContextBlock
 
 
 class _FakeDatetime(real_datetime):
@@ -24,13 +24,15 @@ class _FakeDatetime(real_datetime):
 def _make_workspace(tmp_path: Path) -> Path:
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True)
-    from cirno.config.home import set_home_path
-    set_home_path(workspace)
-    return workspace
+    from cirno_core.config.home import set_instance_path
+    set_instance_path(workspace)
+    home = workspace / "home"
+    home.mkdir()
+    return home
 
 
 def test_bootstrap_files_are_backed_by_templates() -> None:
-    template_dir = pkg_files("cirno") / "templates"
+    template_dir = pkg_files("cirno_core") / "templates"
 
     for filename in ContextBuilder.BOOTSTRAP_FILES:
         assert (template_dir / filename).is_file(), f"missing bootstrap template: {filename}"
@@ -112,7 +114,7 @@ def test_provider_context_appended_after_user_content(tmp_path) -> None:
 
 def test_execution_rules_in_system_prompt(tmp_path) -> None:
     """Execution rules should appear in the system prompt via the default templates."""
-    from cirno.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.helpers import sync_workspace_templates
 
     workspace = _make_workspace(tmp_path)
     sync_workspace_templates(workspace, silent=True)
@@ -126,7 +128,7 @@ def test_execution_rules_in_system_prompt(tmp_path) -> None:
 @pytest.mark.parametrize("legacy_workspace", [False, True])
 def test_scheduling_contract_reaches_fresh_and_legacy_workspaces(tmp_path, legacy_workspace) -> None:
     """Default files can be skipped and old files must not hide the current contract."""
-    from cirno.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.helpers import sync_workspace_templates
 
     workspace = _make_workspace(tmp_path)
     agents_path = workspace / "AGENTS.md"
@@ -159,9 +161,9 @@ def test_scheduling_contract_reaches_fresh_and_legacy_workspaces(tmp_path, legac
 
 def test_default_soul_template_keeps_execution_policy_in_tool_contract() -> None:
     """SOUL owns personality while the always-injected contract owns execution policy."""
-    soul = (pkg_files("cirno") / "templates" / "SOUL.md").read_text(encoding="utf-8")
+    soul = (pkg_files("cirno_core") / "templates" / "SOUL.md").read_text(encoding="utf-8")
     contract = (
-        pkg_files("cirno") / "templates" / "agent" / "tool_contract.md"
+        pkg_files("cirno_core") / "templates" / "agent" / "tool_contract.md"
     ).read_text(encoding="utf-8")
 
     assert "## Execution Rules" not in soul
@@ -231,7 +233,7 @@ def test_memory_skill_is_lazy_loaded_from_skills_index(tmp_path) -> None:
 
 
 def test_fresh_workspace_omits_default_prompt_scaffolding(tmp_path) -> None:
-    from cirno.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.helpers import sync_workspace_templates
 
     workspace = _make_workspace(tmp_path)
     sync_workspace_templates(workspace, silent=True)
@@ -247,7 +249,7 @@ def test_fresh_workspace_omits_default_prompt_scaffolding(tmp_path) -> None:
 def test_template_memory_md_is_skipped(tmp_path) -> None:
     """Template content is omitted while memory locations remain available."""
     workspace = _make_workspace(tmp_path)
-    from cirno.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.helpers import sync_workspace_templates
     sync_workspace_templates(workspace, silent=True)
 
     builder = ContextBuilder(workspace)
@@ -261,7 +263,7 @@ def test_template_memory_md_is_skipped(tmp_path) -> None:
 def test_customized_memory_md_is_injected(tmp_path, monkeypatch) -> None:
     """A Dream-populated MEMORY.md should be injected normally."""
     workspace = _make_workspace(tmp_path)
-    from cirno.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.helpers import sync_workspace_templates
     sync_workspace_templates(workspace, silent=True)
 
     (workspace / "memory" / "MEMORY.md").write_text(
@@ -283,3 +285,46 @@ def test_customized_memory_md_is_injected(tmp_path, monkeypatch) -> None:
     assert prompt.count("# Long-term Memory") == 1
     assert "User prefers dark mode" in prompt
     assert calls == 1
+
+
+def test_checkpoint_updates_preserve_system_and_replayed_prefix(tmp_path) -> None:
+    from cirno_core.memory.repository import MemoryRepository
+    from cirno_core.runtime.context import RUNTIME_CONTEXT_MESSAGE_META, RUNTIME_CONTEXT_HISTORY_META
+    from cirno_core.session.manager import Session
+
+    workspace = _make_workspace(tmp_path)
+    builder = ContextBuilder(workspace)
+    repo = MemoryRepository(workspace)
+    saved = repo.checkpoint("websocket:task", "Milestone A", "test:milestone")
+    first = builder.build_messages([], "work", session_key="websocket:task")
+    assert "Milestone A" in first[-1]["content"]
+    assert "Milestone A" not in first[0]["content"]
+    session = Session(key="websocket:task")
+    session.add_message("user", first[-1]["content"], **{
+        RUNTIME_CONTEXT_HISTORY_META: first[-1]["_meta"][RUNTIME_CONTEXT_MESSAGE_META],
+    })
+    session.add_message("assistant", "done A")
+    repo.checkpoint("websocket:task", "Milestone B", "test:milestone", expected_revision=saved["revision"])
+    second = builder.build_messages(session.get_history(), "continue", session_key=session.key)
+    assert second[0] == first[0]
+    assert second[1]["content"] == first[1]["content"]
+    assert "Milestone B" in second[-1]["content"]
+    assert "Milestone B" not in second[0]["content"]
+    assert "Milestone B" not in second[1]["content"]
+
+
+def test_skill_discovery_order_does_not_change_system_prompt(tmp_path, monkeypatch) -> None:
+    workspace = _make_workspace(tmp_path)
+    for name in ("zulu", "alpha"):
+        directory = workspace / "skills" / name
+        directory.mkdir(parents=True)
+        (directory / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {name} task\n---\n{name} body")
+    builder = ContextBuilder(workspace)
+    first = builder.build_system_prompt()
+    original_iterdir = Path.iterdir
+
+    def reversed_iterdir(path):
+        return iter(reversed(list(original_iterdir(path))))
+
+    monkeypatch.setattr(Path, "iterdir", reversed_iterdir)
+    assert builder.build_system_prompt() == first

@@ -1,8 +1,8 @@
 import pytest
 
-from cirno.agent.tools.base import Tool
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.base import Tool
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.loader import ToolLoader
 
 
 class _CoreOnlyTool(Tool):
@@ -64,7 +64,7 @@ class _UniversalTool(Tool):
 
 @pytest.mark.asyncio
 async def test_loader_filters_by_scope():
-    from cirno.agent.tools.registry import ToolRegistry
+    from cirno_core.agent.tools.registry import ToolRegistry
 
     loader = ToolLoader(test_classes=[_CoreOnlyTool, _SubagentOnlyTool, _UniversalTool])
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from watchfiles import Change
 
-import cirno.config.watcher as config_watcher
+import cirno_core.config.watcher as config_watcher
 
 
 @pytest.mark.asyncio

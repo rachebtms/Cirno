@@ -9,34 +9,34 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
-from cirno.bus.delivery import DeliveryRequest
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.notification_delivery import notification_is_deliverable
-from cirno.bus.outbound_events import (
+from cirno_core.bus.delivery import DeliveryRequest
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.notification_delivery import notification_is_deliverable
+from cirno_core.bus.outbound_events import (
     RetryStatusEvent,
     StreamDeltaEvent,
     StreamedResponseEvent,
     StreamEndEvent,
 )
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import RuntimeEventPublisher
-from cirno.channels.notification_routes import notification_metadata, system_reply_metadata
-from cirno.bus.agent_events import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import RuntimeEventPublisher
+from cirno_core.notifications.routes import notification_metadata, system_reply_metadata
+from cirno_core.bus.agent_events import (
     AgentEvent,
     ContextCompactionEvent,
     EventSink,
     ResponseSource,
     ResponseSourceEvent,
 )
-from cirno.providers.base import LLMUsage
-from cirno.session.display_history import HISTORY_GENERATION_METADATA_KEY
-from cirno.session.keys import (
+from cirno_core.providers.base import LLMUsage
+from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
+from cirno_core.session.keys import (
     is_internal_session,
 )
-from cirno.utils.helpers import strip_think
+from cirno_core.utils.helpers import strip_think
 
 if TYPE_CHECKING:
-    from cirno.utils.llm_runtime import LLMRuntime
+    from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 @dataclass(frozen=True)

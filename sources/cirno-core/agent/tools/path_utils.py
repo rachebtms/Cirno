@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from cirno.config.paths import get_media_dir
-from cirno.security.workspace_policy import resolve_allowed_path
+from cirno_core.config.paths import get_media_dir
+from cirno_core.security.workspace_policy import resolve_allowed_path
 
 
 def resolve_workspace_path(

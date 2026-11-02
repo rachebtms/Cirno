@@ -28,7 +28,7 @@ EOF
     exit 1
 fi
 
-if [ "$CIRNO_DOCKER_BOOTSTRAP" = "1" ] && [ "$1" = "gateway" ]; then
+if [ "$CIRNO_DOCKER_BOOTSTRAP" = "1" ]; then
     # Explicit config selectors belong to the CLI; bootstrap only the default instance.
     initialize_default=1
     for argument in "$@"; do
@@ -38,7 +38,7 @@ if [ "$CIRNO_DOCKER_BOOTSTRAP" = "1" ] && [ "$1" = "gateway" ]; then
     done
     if [ "$initialize_default" = "1" ]; then
         config="$dir/config.json"
-        python -m cirno.cli.docker_bootstrap "$config" || exit 1
+        python -m cirno_server.cli.docker_bootstrap "$config" || exit 1
         set -- "$@" --config "$config"
     fi
 fi

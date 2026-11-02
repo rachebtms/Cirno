@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, TypedDict, cast
 
-from cirno.session.history_visibility import is_hidden_history_message
+from cirno_core.session.history_visibility import is_hidden_history_message
 
 SUMMARY_CONTINUATION_TEXT = (
     "Continue the active task from the working-memory checkpoint above."

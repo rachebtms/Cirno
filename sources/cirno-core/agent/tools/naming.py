@@ -1,8 +1,8 @@
 """Namespaced model-facing tools over stable implementation identifiers.
 
 Double underscores are accepted by function-calling APIs. PTC and the UI render
-these as dots. Old identifiers remain usable for persisted calls and Python SDK
-callers; only the namespaced surface is advertised to the model.
+these as dots. Python implementation identifiers are mapped at the registry boundary; only
+the namespaced surface is advertised to the model.
 """
 
 from __future__ import annotations

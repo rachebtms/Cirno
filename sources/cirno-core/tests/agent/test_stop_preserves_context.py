@@ -17,9 +17,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agent.session_helpers import mock_session_manager, run_session
-from cirno.agent.loop import AgentLoop
-from cirno.bus.queue import MessageBus
-from cirno.session.recovery import RUNTIME_CHECKPOINT_KEY
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.queue import MessageBus
+from cirno_core.session.recovery import RUNTIME_CHECKPOINT_KEY
 
 
 def _make_provider():
@@ -36,9 +36,9 @@ def _make_loop(tmp_path: Path) -> AgentLoop:
     """Create a real AgentLoop with mocked provider — avoids patching __init__."""
     bus = MessageBus()
     provider = _make_provider()
-    with patch("cirno.agent.loop.ContextBuilder"), \
-         patch("cirno.agent.loop.SessionManager", side_effect=mock_session_manager), \
-         patch("cirno.agent.loop.SubagentManager") as mock_subagent_manager:
+    with patch("cirno_core.agent.loop.ContextBuilder"), \
+         patch("cirno_core.agent.loop.SessionManager", side_effect=mock_session_manager), \
+         patch("cirno_core.agent.loop.SubagentManager") as mock_subagent_manager:
         mock_subagent_manager.return_value.cancel_by_session = AsyncMock(return_value=0)
         return AgentLoop(bus=bus, provider=provider, workspace=tmp_path)
 
@@ -50,8 +50,8 @@ async def test_dispatch_cancellation_restores_checkpoint():
     unwinds, so the next turn can see the partial work.
 
     """
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -59,9 +59,9 @@ async def test_dispatch_cancellation_restores_checkpoint():
     workspace = MagicMock()
     workspace.__truediv__ = MagicMock(return_value=MagicMock())
 
-    with patch("cirno.agent.loop.ContextBuilder"), \
-         patch("cirno.agent.loop.SessionManager", side_effect=mock_session_manager), \
-         patch("cirno.agent.loop.SubagentManager") as mock_subagent_manager:
+    with patch("cirno_core.agent.loop.ContextBuilder"), \
+         patch("cirno_core.agent.loop.SessionManager", side_effect=mock_session_manager), \
+         patch("cirno_core.agent.loop.SubagentManager") as mock_subagent_manager:
         mock_subagent_manager.return_value.cancel_by_session = AsyncMock(return_value=0)
         loop = AgentLoop(bus=bus, provider=provider, workspace=workspace)
 
@@ -118,7 +118,7 @@ async def test_dispatch_cancellation_restores_checkpoint():
 
 @pytest.mark.asyncio
 async def test_dispatch_cancellation_keeps_checkpoint_for_gateway_shutdown(tmp_path: Path) -> None:
-    """Gateway shutdown preserves the checkpoint; an explicit stop restores it."""
+    """Server shutdown preserves the checkpoint; an explicit stop restores it."""
     loop = _make_loop(tmp_path)
     loop.preserve_inflight_turns_on_shutdown()
     checkpoint_key = RUNTIME_CHECKPOINT_KEY
@@ -140,7 +140,7 @@ async def test_dispatch_cancellation_keeps_checkpoint_for_gateway_shutdown(tmp_p
 
     loop._process_message = _cancel  # type: ignore[method-assign]
 
-    from cirno.bus.events import InboundMessage
+    from cirno_core.bus.events import InboundMessage
 
     with pytest.raises(asyncio.CancelledError):
         await run_session(loop,

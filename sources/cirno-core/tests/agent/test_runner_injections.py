@@ -10,10 +10,10 @@ import pytest
 
 from agent.runner_helpers import make_run_spec
 from agent.session_helpers import run_session, visible_message
-from cirno.agent.context import TranscriptInput
-from cirno.agent.tools.context import RequestContext
-from cirno.config.schema import AgentDefaults
-from cirno.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.tools.context import RequestContext
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -29,15 +29,15 @@ def _make_injection_callback(queue: asyncio.Queue):
 
 
 def _make_loop(tmp_path, *, recovery_admission=None):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
 
-    with patch("cirno.agent.loop.ContextBuilder"), \
-         patch("cirno.agent.loop.SubagentManager") as mock_sub_mgr:
+    with patch("cirno_core.agent.loop.ContextBuilder"), \
+         patch("cirno_core.agent.loop.SubagentManager") as mock_sub_mgr:
         mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
         mock_sub_mgr.return_value.close = AsyncMock()
         loop = AgentLoop(
@@ -51,7 +51,7 @@ def _make_loop(tmp_path, *, recovery_admission=None):
 @pytest.mark.asyncio
 async def test_drain_injections_returns_empty_when_no_callback():
     """No injection_callback → empty list."""
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -69,8 +69,8 @@ async def test_drain_injections_returns_empty_when_no_callback():
 @pytest.mark.asyncio
 async def test_drain_injections_extracts_content_from_inbound_messages():
     """Should extract .content from InboundMessage objects."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -100,8 +100,8 @@ async def test_drain_injections_extracts_content_from_inbound_messages():
 @pytest.mark.asyncio
 async def test_drain_injections_keeps_entire_callback_snapshot():
     """A callback snapshot is never split by an arbitrary message count."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -130,8 +130,8 @@ async def test_drain_injections_keeps_entire_callback_snapshot():
 @pytest.mark.asyncio
 async def test_drain_injections_skips_empty_content():
     """Messages with blank content should be filtered out."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -159,7 +159,7 @@ async def test_drain_injections_skips_empty_content():
 @pytest.mark.asyncio
 async def test_drain_injections_filters_empty_dict_payloads():
     """Pre-normalized dict injections should obey the same empty-content guard."""
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -197,7 +197,7 @@ async def test_drain_injections_skips_objects_with_none_content():
     """Objects exposing content=None should be skipped rather than stringified."""
     from types import SimpleNamespace
 
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -223,7 +223,7 @@ async def test_drain_injections_skips_objects_with_none_content():
 @pytest.mark.asyncio
 async def test_drain_injections_handles_callback_exception():
     """If the callback raises, return empty list (error is logged)."""
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     runner = AgentRunner()
@@ -245,8 +245,8 @@ async def test_drain_injections_handles_callback_exception():
 @pytest.mark.asyncio
 async def test_checkpoint1_injects_after_tool_execution():
     """Follow-up messages are injected after tool execution, before next LLM call."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -301,8 +301,8 @@ async def test_checkpoint1_injects_after_tool_execution():
 @pytest.mark.asyncio
 async def test_terminal_wait_does_not_block_next_iteration_after_tools():
     """Background waits begin only after a no-tool response is ready to finish."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     second_request_started = asyncio.Event()
@@ -380,7 +380,7 @@ async def test_terminal_wait_does_not_block_next_iteration_after_tools():
 @pytest.mark.asyncio
 async def test_goal_continuation_precedes_terminal_wait():
     """An active sustained goal keeps running without joining background work."""
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -425,9 +425,9 @@ async def test_goal_continuation_precedes_terminal_wait():
 @pytest.mark.asyncio
 async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
     """After final response, if injections exist, stream_end should get resuming=True."""
-    from cirno.agent.hook import AgentHook, AgentHookContext
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -484,8 +484,8 @@ async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
 @pytest.mark.asyncio
 async def test_injected_followup_starts_new_length_recovery_chain():
     """A follow-up gets a fresh recovery budget and no content from the prior answer."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     responses = [
@@ -532,8 +532,8 @@ async def test_injected_followup_starts_new_length_recovery_chain():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("max_iterations", [1, 3])
 async def test_truncated_answer_followup_requires_remaining_iteration(max_iterations):
-    from cirno.agent.hook import AgentHook, AgentHookContext
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     tools = MagicMock()
@@ -589,8 +589,8 @@ async def test_truncated_answer_followup_requires_remaining_iteration(max_iterat
 @pytest.mark.asyncio
 async def test_checkpoint2_preserves_final_response_in_history_before_followup():
     """A follow-up injected after a final answer must still see that answer in history."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -645,9 +645,9 @@ async def test_checkpoint2_preserves_final_response_in_history_before_followup()
 @pytest.mark.asyncio
 async def test_loop_injected_followup_preserves_image_media(tmp_path):
     """Mid-turn follow-ups with images should keep multimodal content."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     image_path = tmp_path / "followup.png"
     image_path.write_bytes(base64.b64decode(
@@ -704,10 +704,10 @@ async def test_loop_injected_followup_preserves_image_media(tmp_path):
 
 @pytest.mark.asyncio
 async def test_pending_injection_resolves_its_own_runtime_context(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
-    from cirno.runtime.context import (
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.runtime.context import (
         RUNTIME_CONTEXT_MESSAGE_META,
         RuntimeContextBlock,
         public_history_message,
@@ -838,10 +838,10 @@ async def test_pending_injection_resolves_its_own_runtime_context(tmp_path):
 
 @pytest.mark.asyncio
 async def test_subagent_pending_injection_is_hidden_history_and_not_merged(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
-    from cirno.session.history_visibility import HIDDEN_HISTORY_META
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
 
     bus = MessageBus()
     provider = MagicMock()
@@ -902,7 +902,7 @@ async def test_subagent_pending_injection_is_hidden_history_and_not_merged(tmp_p
 @pytest.mark.asyncio
 async def test_model_request_merges_injected_user_messages_without_losing_media():
     """The model copy may merge follow-ups while the raw transcript keeps each event."""
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -971,8 +971,8 @@ async def test_model_request_merges_injected_user_messages_without_losing_media(
 
 def test_runner_append_keeps_recovery_followups_separate() -> None:
     """Each raw follow-up keeps its own recovery identity."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.session.recovery import PENDING_FOLLOWUP_ID_KEY
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY
 
     messages = [{"role": "user", "content": "first", PENDING_FOLLOWUP_ID_KEY: "one"}]
     AgentRunner._append_injected_messages(
@@ -985,9 +985,9 @@ def test_runner_append_keeps_recovery_followups_separate() -> None:
 
 
 def test_model_request_merge_preserves_runtime_markers_with_media() -> None:
-    from cirno.agent.context_governance import ContextGovernor
-    from cirno.agent.runner import AgentRunner
-    from cirno.runtime.context import (
+    from cirno_core.agent.context_governance import ContextGovernor
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.runtime.context import (
         RUNTIME_CONTEXT_HISTORY_META,
         RUNTIME_CONTEXT_MESSAGE_META,
         RuntimeContextBlock,
@@ -1041,8 +1041,8 @@ def test_model_request_merge_preserves_runtime_markers_with_media() -> None:
 @pytest.mark.asyncio
 async def test_injection_cycles_are_not_stopped_by_an_arbitrary_cap():
     """Every pending snapshot runs until the normal iteration budget is reached."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1082,7 +1082,7 @@ async def test_injection_cycles_are_not_stopped_by_an_arbitrary_cap():
 @pytest.mark.asyncio
 async def test_no_injections_flag_is_false_by_default():
     """had_injections should be False when no injection callback or no messages."""
-    from cirno.agent.runner import AgentRunner
+    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
 
@@ -1110,7 +1110,7 @@ async def test_no_injections_flag_is_false_by_default():
 @pytest.mark.asyncio
 async def test_websocket_followup_is_admitted_before_recovery_queue(tmp_path):
     """Recovery admission runs before a newer WebUI message is injected."""
-    from cirno.bus.events import InboundMessage
+    from cirno_core.bus.events import InboundMessage
 
     admission = MagicMock()
     admission.admit = AsyncMock(return_value=True)
@@ -1143,7 +1143,7 @@ async def test_websocket_followup_is_admitted_before_recovery_queue(tmp_path):
 @pytest.mark.asyncio
 async def test_mid_turn_subagent_result_does_not_resolve_a_new_turn_route(tmp_path):
     """Injected results stay inside the active turn instead of opening a side turn."""
-    from cirno.bus.events import InboundMessage
+    from cirno_core.bus.events import InboundMessage
 
     loop = _make_loop(tmp_path)
     route_policy = MagicMock(side_effect=lambda _msg, _key, route: route)
@@ -1180,9 +1180,9 @@ async def test_mid_turn_subagent_result_does_not_resolve_a_new_turn_route(tmp_pa
 @pytest.mark.asyncio
 async def test_pending_queue_batches_full_snapshot_before_first_model_call(tmp_path):
     """All messages waiting at the checkpoint enter one model request in order."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -1241,9 +1241,9 @@ async def test_pending_queue_batches_full_snapshot_before_first_model_call(tmp_p
 @pytest.mark.asyncio
 async def test_pending_queue_snapshot_excludes_messages_arriving_during_conversion(tmp_path):
     """A checkpoint is a finite snapshot even when message conversion awaits."""
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -1314,9 +1314,9 @@ async def test_pending_queue_snapshot_excludes_messages_arriving_during_conversi
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancel_conversion", [False, True])
 async def test_pending_snapshot_rolls_back_before_later_arrivals(tmp_path, cancel_conversion):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
 
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
@@ -1371,10 +1371,10 @@ async def test_pending_snapshot_rolls_back_before_later_arrivals(tmp_path, cance
 
 @pytest.mark.asyncio
 async def test_persistent_conversion_error_does_not_drop_later_session_inputs(tmp_path):
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
-    from cirno.bus.runtime_events import TurnCompleted
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.bus.runtime_events import TurnCompleted
 
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
@@ -1419,7 +1419,7 @@ async def test_persistent_conversion_error_does_not_drop_later_session_inputs(tm
 @pytest.mark.asyncio
 async def test_session_inbox_is_installed_before_worker_start(tmp_path, monkeypatch):
     """A preloaded burst has one FIFO path before the worker can be scheduled."""
-    from cirno.bus.events import InboundMessage, OutboundMessage
+    from cirno_core.bus.events import InboundMessage, OutboundMessage
 
     loop = _make_loop(tmp_path)
     first_started = asyncio.Event()
@@ -1480,10 +1480,10 @@ async def test_busy_session_burst_reaches_next_model_call_as_one_ordered_batch(
     """Messages accumulated during a model call share its next request snapshot."""
     from loguru import logger
 
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.bus.queue import MessageBus
-    from cirno.session.manager import SessionPolicy
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.session.manager import SessionPolicy
 
     records = []
     sink = logger.add(lambda message: records.append(message.record))
@@ -1578,7 +1578,7 @@ async def test_busy_session_burst_reaches_next_model_call_as_one_ordered_batch(
 @pytest.mark.asyncio
 async def test_session_worker_processes_leftovers_without_republishing(tmp_path):
     """Messages left by one turn stay on the same FIFO worker."""
-    from cirno.bus.events import InboundMessage, OutboundMessage
+    from cirno_core.bus.events import InboundMessage, OutboundMessage
 
     loop = _make_loop(tmp_path)
     session_key = "cli:c"
@@ -1609,8 +1609,8 @@ async def test_session_worker_processes_leftovers_without_republishing(tmp_path)
 @pytest.mark.asyncio
 async def test_drain_injections_after_recoverable_tool_error():
     """A tool error and injected follow-up continue in the same runner conversation."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1668,8 +1668,8 @@ async def test_drain_injections_after_recoverable_tool_error():
 @pytest.mark.asyncio
 async def test_drain_injections_on_llm_error():
     """A follow-up after an error stays raw and reaches the next model request."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1742,8 +1742,8 @@ async def test_drain_injections_on_llm_error():
 @pytest.mark.asyncio
 async def test_drain_injections_on_empty_final_response():
     """Pending injections should be drained when the runner exits due to empty response."""
-    from cirno.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1796,14 +1796,14 @@ async def test_drain_injections_on_empty_final_response():
 @pytest.mark.parametrize("failed_stop_reason", ["error", "empty_final_response"])
 async def test_late_injection_recovery_completes_and_delivers_reply(failed_stop_reason):
     """Input arriving after failure bookkeeping must not poison a recovered turn."""
-    from cirno.agent.hook import AgentHook
-    from cirno.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner
-    from cirno.agent.tools.registry import ToolRegistry
-    from cirno.agent.turn_delivery import TurnDeliveryFactory
-    from cirno.bus.events import InboundMessage, OutboundMessage
-    from cirno.bus.queue import MessageBus
-    from cirno.bus.runtime_events import TurnCompleted
-    from cirno.providers.base import LLMProvider
+    from cirno_core.agent.hook import AgentHook
+    from cirno_core.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner
+    from cirno_core.agent.tools.registry import ToolRegistry
+    from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+    from cirno_core.bus.events import InboundMessage, OutboundMessage
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.bus.runtime_events import TurnCompleted
+    from cirno_core.providers.base import LLMProvider
 
     failed_responses = (
         [LLMResponse(content="temporary failure", finish_reason="error")]
@@ -1875,9 +1875,9 @@ async def test_late_injection_recovery_completes_and_delivers_reply(failed_stop_
 @pytest.mark.asyncio
 async def test_max_iterations_without_finalization_keeps_late_injection_queued():
     """Never consume a user message when no later model request can observe it."""
-    from cirno.agent.hook import AgentHook
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.hook import AgentHook
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1929,9 +1929,9 @@ async def test_max_iterations_without_finalization_keeps_late_injection_queued()
 @pytest.mark.asyncio
 async def test_max_iterations_finalization_keeps_late_injection_queued():
     """New input waits for a turn with tools instead of entering no-tools finalization."""
-    from cirno.agent.hook import AgentHook
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.hook import AgentHook
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1999,8 +1999,8 @@ async def test_max_iterations_finalization_keeps_late_injection_queued():
 @pytest.mark.asyncio
 async def test_error_path_is_not_stopped_by_an_arbitrary_injection_cap():
     """Error recovery consumes every arrived snapshot until no follow-up remains."""
-    from cirno.agent.runner import AgentRunner
-    from cirno.bus.events import InboundMessage
+    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}

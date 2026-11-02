@@ -6,21 +6,21 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from cirno.config.schema import (
+from cirno_core.config.schema import (
     Config,
     InlineFallbackConfig,
     ModelPresetConfig,
     ProviderConfig,
     RequestOverrides,
 )
-from cirno.providers.base import GenerationSettings, LLMProvider
-from cirno.providers.fallback_provider import FallbackProvider
-from cirno.providers.registry import ProviderSpec, find_by_name
-from cirno.providers.request_overrides import apply_request_overrides
-from cirno.providers.routing import resolve_automatic_model_api as resolve_automatic_model_api
-from cirno.providers.routing import resolve_model_api as resolve_model_api
-from cirno.providers.routing import resolve_provider_route
-from cirno.providers.routing import validate_provider_setup as validate_provider_setup
+from cirno_core.providers.base import GenerationSettings, LLMProvider
+from cirno_core.providers.fallback_provider import FallbackProvider
+from cirno_core.providers.registry import ProviderSpec, find_by_name
+from cirno_core.providers.request_overrides import apply_request_overrides
+from cirno_core.providers.routing import resolve_automatic_model_api as resolve_automatic_model_api
+from cirno_core.providers.routing import resolve_model_api as resolve_model_api
+from cirno_core.providers.routing import resolve_provider_route
+from cirno_core.providers.routing import validate_provider_setup as validate_provider_setup
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ def _make_provider_core(
     proxy = config.network.resolve_proxy(p.use_proxy) if p else None
 
     if backend == "openai_codex":
-        from cirno.providers.openai_codex_provider import OpenAICodexProvider
+        from cirno_core.providers.openai_codex_provider import OpenAICodexProvider
 
         provider = OpenAICodexProvider(
             default_model=model,
@@ -85,7 +85,7 @@ def _make_provider_core(
             provider_name=provider_name,
         )
     elif backend == "xai_grok":
-        from cirno.providers.xai_grok_provider import XAIGrokProvider
+        from cirno_core.providers.xai_grok_provider import XAIGrokProvider
 
         provider = XAIGrokProvider(
             default_model=model,
@@ -94,7 +94,7 @@ def _make_provider_core(
             provider_name=provider_name,
         )
     elif backend == "azure_openai":
-        from cirno.providers.azure_openai_provider import AzureOpenAIProvider
+        from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
 
         if p is None or p.api_base is None:
             raise RuntimeError("validated Azure provider setup is missing api_base")
@@ -105,14 +105,14 @@ def _make_provider_core(
             provider_name=provider_name,
         )
     elif backend == "github_copilot":
-        from cirno.providers.github_copilot_provider import GitHubCopilotProvider
+        from cirno_core.providers.github_copilot_provider import GitHubCopilotProvider
 
         provider = GitHubCopilotProvider(
             default_model=model, provider_name=provider_name,
             model_api=setup.model_api,
         )
     elif backend == "anthropic":
-        from cirno.providers.anthropic_provider import AnthropicProvider
+        from cirno_core.providers.anthropic_provider import AnthropicProvider
 
         custom_spec = spec if spec and spec.backend == "openai_compat" else None
         api_key = p.api_key if p else None
@@ -130,7 +130,7 @@ def _make_provider_core(
             provider_name=provider_name,
         )
     elif backend == "bedrock":
-        from cirno.providers.bedrock_provider import BedrockProvider
+        from cirno_core.providers.bedrock_provider import BedrockProvider
 
         provider = BedrockProvider(
             api_key=p.api_key if p else None,
@@ -142,7 +142,7 @@ def _make_provider_core(
             provider_name=provider_name,
         )
     else:
-        from cirno.providers.openai_compat_provider import OpenAICompatProvider
+        from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
         provider = OpenAICompatProvider(
             api_key=p.api_key if p else None,
@@ -231,7 +231,7 @@ def make_provider(
 
 def build_unconfigured_provider_snapshot(config: Config, setup_error: str) -> ProviderSnapshot:
     """Build a non-networking runtime while provider/model setup is incomplete."""
-    from cirno.providers.unconfigured_provider import UnconfiguredProvider
+    from cirno_core.providers.unconfigured_provider import UnconfiguredProvider
 
     preset = config.resolve_preset()
     provider = UnconfiguredProvider(preset.model)
@@ -358,7 +358,7 @@ def load_provider_snapshot(
     *,
     preset_name: str | None = None,
 ) -> ProviderSnapshot:
-    from cirno.config.loader import load_config, resolve_config_env_vars
+    from cirno_core.config.loader import load_config, resolve_config_env_vars
 
     return build_provider_snapshot(
         resolve_config_env_vars(

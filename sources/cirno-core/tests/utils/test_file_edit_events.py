@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from cirno.agent.tools.apply_patch import ApplyPatchTool
-from cirno.agent.tools.filesystem import EditFileTool, WriteFileTool
-from cirno.utils.file_edit_events import (
+from cirno_core.agent.tools.apply_patch import ApplyPatchTool
+from cirno_core.agent.tools.filesystem import EditFileTool, WriteFileTool
+from cirno_core.utils.file_edit_events import (
     FileDiff,
     FileEditResult,
     build_file_edit_end_event,

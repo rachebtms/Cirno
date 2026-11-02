@@ -2,10 +2,10 @@
 
 from unittest.mock import patch
 
-from cirno.config.schema import Config, ProvidersConfig
-from cirno.providers.factory import make_provider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import PROVIDERS, find_by_name
+from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.providers.factory import make_provider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import PROVIDERS, find_by_name
 
 
 def test_orcarouter_config_field_exists() -> None:
@@ -91,7 +91,7 @@ def test_legacy_custom_provider_named_orcarouter_keeps_prefix_stripping() -> Non
         },
     })
 
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = make_provider(config)
 
     assert isinstance(provider, OpenAICompatProvider)
@@ -110,7 +110,7 @@ def test_legacy_custom_provider_named_orcarouter_keeps_prefix_stripping() -> Non
 
 def test_orcarouter_preserves_model_api_id() -> None:
     spec = find_by_name("orcarouter")
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(
             api_key="sk-orca-test-key",
             default_model="anthropic/claude-sonnet-4.6",

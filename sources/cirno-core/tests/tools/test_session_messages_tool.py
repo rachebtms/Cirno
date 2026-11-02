@@ -5,16 +5,16 @@ from unittest.mock import patch
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.session_messages import (
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.session_messages import (
     SendSessionMessageTool,
     SessionMessageError,
 )
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import ToolsConfig
-from cirno.session.manager import SessionManager
-from cirno.session.session_handles import SessionHandle, SessionHandleResolver
-from cirno.session.session_messages import (
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import ToolsConfig
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.session_handles import SessionHandle, SessionHandleResolver
+from cirno_core.session.session_messages import (
     SESSION_MESSAGE_METADATA_KEY,
     session_message_envelope,
 )
@@ -62,7 +62,7 @@ def test_config_and_tool_schema_keep_only_the_basic_reply_contract(
         bus=MessageBus(),
     )
 
-    assert ToolsConfig.model_fields["max_session_messages_per_minute"].default == 6
+    assert ToolsConfig.model_fields["max_outgoing_session_messages_per_minute"].default == 6
     assert tool.parameters["required"] == ["to", "content", "expect_reply"]
     timeout = tool.parameters["properties"]["reply_timeout_seconds"]
     assert (timeout["minimum"], timeout["maximum"]) == (5, 60)
@@ -130,7 +130,7 @@ async def test_rate_limit_is_per_source_session_and_uses_a_rolling_minute(
     tool = SendSessionMessageTool(
         sessions=sessions,
         bus=MessageBus(),
-        max_messages_per_minute=1,
+        max_outgoing_messages_per_minute=1,
         clock=lambda: now,
     )
     target = _handle(sessions, "websocket:target").name
@@ -180,7 +180,7 @@ async def test_rate_limit_releases_expired_source_state_and_keeps_recent_sources
     tool = SendSessionMessageTool(
         sessions=sessions,
         bus=MessageBus(),
-        max_messages_per_minute=2,
+        max_outgoing_messages_per_minute=2,
         clock=lambda: now,
     )
     target = _handle(sessions, "websocket:target").name
@@ -286,7 +286,7 @@ async def test_reply_timeout_observes_background_delivery_failure(
         raise RuntimeError("queue unavailable")
 
     bus.publish_inbound = fail_publish
-    with patch("cirno.agent.tools.session_messages.logger") as logger:
+    with patch("cirno_core.agent.tools.session_messages.logger") as logger:
         scheduler.calls[0][1].fire()
         await asyncio.sleep(0)
         await asyncio.sleep(0)

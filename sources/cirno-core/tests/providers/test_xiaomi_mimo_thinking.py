@@ -22,9 +22,9 @@ from typing import Any
 
 import pytest
 
-from cirno.config.schema import ProvidersConfig
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import PROVIDERS
+from cirno_core.config.schema import ProvidersConfig
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import PROVIDERS
 
 
 def _mimo_spec():
@@ -146,7 +146,7 @@ def test_mimo_reasoning_effort_unset_preserves_provider_default():
 
 
 # ---------------------------------------------------------------------------
-# Gateway path: MiMo routed through OpenRouter (no spec.thinking_style)
+# Server path: MiMo routed through OpenRouter (no spec.thinking_style)
 # ---------------------------------------------------------------------------
 
 

@@ -5,13 +5,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.skills.loader import SkillsLoader
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.command.builtin import cmd_skill, register_builtin_commands
-from cirno.command.router import CommandContext, CommandRouter
-from cirno.config.schema import ModelPresetConfig
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.skills.loader import SkillsLoader
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.command.builtin import cmd_skill, register_builtin_commands
+from cirno_core.command.router import CommandContext, CommandRouter
+from cirno_core.config.schema import ModelPresetConfig
 
 
 def _provider(default_model: str = "test-model") -> MagicMock:
@@ -60,7 +60,7 @@ def _loop_with_skills(tmp_path: Path) -> AgentLoop:
     """Create a loop with an empty builtin dir so only workspace skills appear."""
     loop = _make_loop(tmp_path)
     empty_builtin = tmp_path / "empty_builtin"
-    empty_builtin.mkdir()
+    empty_builtin.mkdir(parents=True)
     loop.context.skills = SkillsLoader(tmp_path, builtin_skills_dir=empty_builtin)
     return loop
 
@@ -74,8 +74,8 @@ async def test_skill_command_no_skills(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_skill_command_lists_names_and_descriptions(tmp_path: Path) -> None:
-    ws_skills = tmp_path / "skills"
-    ws_skills.mkdir()
+    ws_skills = tmp_path / "home" / "skills"
+    ws_skills.mkdir(parents=True)
     _write_skill(ws_skills, "weather", description="Get current weather and forecasts")
     _write_skill(ws_skills, "cron", description="Schedule recurring tasks")
 
@@ -92,8 +92,8 @@ async def test_skill_command_lists_names_and_descriptions(tmp_path: Path) -> Non
 
 @pytest.mark.asyncio
 async def test_skill_command_excludes_disabled(tmp_path: Path) -> None:
-    ws_skills = tmp_path / "skills"
-    ws_skills.mkdir()
+    ws_skills = tmp_path / "home" / "skills"
+    ws_skills.mkdir(parents=True)
     _write_skill(ws_skills, "alpha", description="Alpha skill")
     _write_skill(ws_skills, "beta", description="Beta skill")
 
@@ -108,8 +108,8 @@ async def test_skill_command_excludes_disabled(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_skill_command_fallback_description(tmp_path: Path) -> None:
-    ws_skills = tmp_path / "skills"
-    ws_skills.mkdir()
+    ws_skills = tmp_path / "home" / "skills"
+    ws_skills.mkdir(parents=True)
     _write_skill(ws_skills, "plain", description="", body="# Plain Skill\n")
 
     loop = _loop_with_skills(tmp_path)
@@ -141,4 +141,4 @@ async def test_skill_command_registered_on_router(tmp_path: Path) -> None:
 @pytest.fixture(autouse=True)
 def _select_test_home(tmp_path, monkeypatch):
     """Keep these Home-file scenarios independent of the developer instance."""
-    monkeypatch.setattr("cirno.config.home._home_path", tmp_path)
+    monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path)

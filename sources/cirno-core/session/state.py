@@ -13,19 +13,19 @@ from dataclasses import fields, replace
 from datetime import datetime
 from typing import Any, TypeVar, cast
 
-from cirno.bus.events import InboundMessage
-from cirno.session.display_history import HistoryFact, HistoryKind, HistoryReader
-from cirno.session.keys import is_dream_session
-from cirno.session.manager import (
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.display_history import HistoryFact, HistoryKind, HistoryReader
+from cirno_core.session.keys import is_dream_session
+from cirno_core.session.manager import (
     Session,
     SessionIdentity,
     SessionPolicy,
     fork_session,
 )
-from cirno.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno.session.sqlite_store import SessionConflictError, SqliteSessionStore
-from cirno.session.types import PARENT_SESSION_KEY, SessionTypes
-from cirno.utils.cancellation import shield_and_drain
+from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
+from cirno_core.session.sqlite_store import SessionConflictError, SqliteSessionStore
+from cirno_core.session.types import PARENT_SESSION_KEY, SessionTypes
+from cirno_core.utils.cancellation import shield_and_drain
 
 _T = TypeVar("_T")
 _PENDING_KEY = "pending_user_turn"
@@ -518,7 +518,7 @@ class SessionState:
             setattr(draft, item.name, getattr(fresh, item.name))
 
     def _apply_turn(self, draft: Session) -> tuple[Session, int]:
-        from cirno.session.recovery import PENDING_FOLLOWUPS_KEY, acknowledge_pending_followups
+        from cirno_core.session.recovery import PENDING_FOLLOWUPS_KEY, acknowledge_pending_followups
 
         baseline = draft._baseline  # pyright: ignore[reportPrivateUsage]
         if baseline is None:
@@ -731,6 +731,24 @@ class SessionState:
             operation_name="append_history",
         )
 
+    async def append_internal_input(self, key: str, fact: HistoryFact, *, identifier: str, expected_generation: str | None) -> bool:
+        """Atomically persist an internal input and its replay receipt."""
+        import hashlib
+        digest = hashlib.sha256(fact.encode().encode()).hexdigest()
+        receipt_id = "internal-display:" + identifier
+        def write() -> bool:
+            header = self._store.load(key, history=False)
+            if header is None or expected_generation is not None and header.generation != expected_generation:
+                raise SessionConflictError("internal input belongs to a deleted or replaced session")
+            generation = header.generation
+            if self._store.inbox_receipt(key, generation, receipt_id) is not None:
+                return False
+            self._store.append_history(key, [fact], expected_generation=generation)
+            self._store.record_inbox_receipt(key, generation, receipt_id, receipt_id, digest)
+            self._store.mark_inbox_read(key, generation, [receipt_id])
+            return True
+        return await self._execute(key, lambda: self._store.run_write(write), operation_name="append_internal_input")
+
     async def record_delivery(
         self,
         key: str,
@@ -759,7 +777,7 @@ class SessionState:
         if message.channel != "websocket" and not message.metadata.get("_session_message") and not message.metadata.get("_heartbeat"):
             return None
 
-        from cirno.session.recovery import record_pending_followup
+        from cirno_core.session.recovery import record_pending_followup
 
         payload = deepcopy(message)
 
@@ -777,8 +795,8 @@ class SessionState:
                     session = Session(key=key)
                 if payload.session_generation is not None and session.generation != payload.session_generation:
                     raise SessionConflictError("follow-up belongs to a replaced session")
-                from cirno.session.session_messages import session_message_envelope
-                from cirno.session.recovery import PENDING_FOLLOWUP_ID_KEY
+                from cirno_core.session.session_messages import session_message_envelope
+                from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY
                 envelope = session_message_envelope(payload.metadata)
                 receipt_id = None
                 digest = None
@@ -823,7 +841,7 @@ class SessionState:
         return await self._execute(key, commit, operation_name="queue_followup")
 
     async def acknowledge_followups(self, key: str, identifiers: Sequence[str]) -> None:
-        from cirno.session.recovery import acknowledge_pending_followups
+        from cirno_core.session.recovery import acknowledge_pending_followups
 
         values = tuple(identifiers)
         def change(session):
@@ -936,7 +954,7 @@ class SessionState:
 
     async def ensure_session_handles(self) -> dict[str, str]:
         """Allocate stable public handles through the runtime mutation owner."""
-        from cirno.session.session_handles import (
+        from cirno_core.session.session_handles import (
             SESSION_HANDLE_METADATA_KEY,
             allocate_session_handles,
         )
@@ -1014,6 +1032,78 @@ class SessionState:
                 self._policies.pop(key, None)
                 self._retired.add(key)
         await self._execute(key, discard, operation_name="discard")
+
+    async def edit_user_input(self, key: str, turn_id: str, content: str) -> InboundMessage:
+        """Rewind a human prompt and durably queue its replacement atomically.
+
+        The new generation revokes queued work and old snapshots. File changes
+        and external tool side effects are deliberately outside this transaction.
+        """
+        if not isinstance(turn_id, str) or not turn_id or not isinstance(content, str) or not content.strip():
+            raise ValueError("A saved user turn and non-empty replacement text are required.")
+        from cirno_core.bus.events import INBOUND_META_TURN_ID
+        from cirno_core.session.history_visibility import is_hidden_history_message
+        from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY, record_pending_followup
+        from cirno_core.session.session_identity import webui_chat_id
+        from cirno_core.session.transcript import session_display_facts
+        from uuid import uuid4
+
+        chat_id = webui_chat_id(key)
+        if not chat_id:
+            raise ValueError("Message editing requires a saved Web conversation.")
+
+        def commit() -> InboundMessage:
+            def write() -> tuple[Session, InboundMessage]:
+                source = self._load(key)
+                if source is None or not source.policy.persist:
+                    raise ValueError("The conversation no longer exists or is temporary.")
+                if source.metadata.get(_PENDING_KEY) or source.metadata.get(_CHECKPOINT_KEY):
+                    raise SessionConflictError("Stop the conversation before editing a message.")
+                selected = None
+                index = 0
+                for message in source.messages:
+                    if message.get("role") != "user" or is_hidden_history_message(message):
+                        continue
+                    if message.get(INBOUND_META_TURN_ID) == turn_id:
+                        selected = message
+                        break
+                    index += 1
+                if selected is None or selected.get("input_origin") or selected.get("_command"):
+                    raise ValueError("Only a saved human message can be edited; reload the conversation if it changed.")
+                original_fact = self._store.project_history(key, lambda history: next(
+                    (fact for _, _, fact in history.navigation() if fact.kind is HistoryKind.INPUT and fact.turn_id == turn_id), None))
+                original_fields = dict(original_fact.content) if original_fact else {}
+                if original_fields.get("input_origin") or original_fields.get("session_message"):
+                    raise ValueError("Agent and system inputs cannot be edited as human messages.")
+                target = fork_session(source, key, index)
+                assert target is not None
+                for name in ("title", "title_user_edited", "session_handle"):
+                    if name in source.metadata:
+                        target.metadata[name] = deepcopy(source.metadata[name])
+                facts = self._store.history_prefix(key, index)
+                if facts is None:
+                    facts = session_display_facts(target)
+                message = InboundMessage(channel="websocket", sender_id="webui:owner", chat_id=chat_id,
+                    content=content, media=list(selected.get("media") or original_fields.get("media_paths") or []), session_key_override=key,
+                    require_existing_session=True, session_generation=target.generation,
+                    metadata={"webui": True, "_wants_stream": True,
+                              INBOUND_META_TURN_ID: uuid4().hex, "_history_generation": target.generation,
+                              **{name: original_fields[name] for name in ("cli_apps", "mcp_presets", "session_mentions", "local_media_paths") if name in original_fields}})
+                identifier = record_pending_followup(target, message)
+                assert identifier is not None
+                message.metadata[PENDING_FOLLOWUP_ID_KEY] = identifier
+                self._store.delete(key)
+                self._commit(target)
+                if facts:
+                    self._store.append_history(key, facts, expected_generation=target.generation)
+                return target, message
+            target, message = self._store.run_write(write)
+            self._publish(target)
+            return message
+        message = await self._execute(key, commit, operation_name="edit_user_input")
+        if self._on_delete is not None:
+            self._on_delete(key)
+        return message
 
     async def fork(
         self, source_key: str, target_key: str, before_user_index: int,
@@ -1173,7 +1263,7 @@ class SessionState:
                     session.metadata = deepcopy(old.metadata)
                 for name in (*_RESERVED_KEYS, "webui_recovery", "_last_summary", "_stopped_at_iteration_limit",
                              "goal_state", "thread_goal", "_sustained_goal_continuation_rounds",
-                             "work_report", "work_report_pending"):
+                             "work_report", "work_report_pending", "supervision_events"):
                     session.metadata.pop(name, None)
                 if session.policy.persist:
                     self._store.delete(key)

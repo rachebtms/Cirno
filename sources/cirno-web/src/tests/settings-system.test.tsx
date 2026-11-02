@@ -98,7 +98,7 @@ describe("Settings system domains", () => {
     });
     const sidebar = screen.getByRole("complementary");
     const restart = within(sidebar).getByRole("button", { name: "Restart" });
-    for (const section of ["Web search", "Models", "Permissions", "Server & heartbeat"]) {
+    for (const section of ["Web search", "Models", "Permissions", "Server"]) {
       fireEvent.click(within(sidebar).getByRole("button", { name: section }));
       await waitFor(() => {
         expect(screen.getAllByRole("button", { name: "Restart" })).toEqual([restart]);

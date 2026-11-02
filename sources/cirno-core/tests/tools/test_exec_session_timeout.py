@@ -4,9 +4,9 @@ import asyncio
 import re
 import sys
 
-from cirno.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
-from cirno.agent.tools.registry import is_tool_error_result
-from cirno.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
+from cirno_core.agent.tools.registry import is_tool_error_result
+from cirno_core.agent.tools.shell import ExecTool
 
 
 def _session_id(result: str) -> str:

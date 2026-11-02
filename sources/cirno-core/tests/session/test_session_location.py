@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from cirno.config.loader import load_config
-from cirno.session.manager import SessionManager
+from cirno_core.config.loader import load_config
+from cirno_core.session.manager import SessionManager
 
 
 def test_sessions_are_stored_outside_workspace(tmp_path: Path) -> None:
@@ -84,7 +84,7 @@ def test_sessions_follow_active_custom_config_data_root(
     monkeypatch.setenv("HOME", str(default_home))
     config = load_config(custom_config)
     data_dir = config.runtime_data_dir
-    assert data_dir == custom_instance
+    assert data_dir == custom_instance / "state"
 
     manager = SessionManager(
         workspace=tmp_path / "workspace-b",
@@ -94,7 +94,7 @@ def test_sessions_follow_active_custom_config_data_root(
     session.add_message("user", "custom-instance")
     manager.save(session)
 
-    assert manager.sessions_dir.parent == custom_instance / "sessions"
+    assert manager.sessions_dir.parent == custom_instance / "state" / "sessions"
     assert (manager.sessions_dir / "sessions.sqlite3").exists()
     assert not (default_home / ".cirno" / "sessions").exists()
 

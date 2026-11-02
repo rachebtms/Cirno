@@ -2,15 +2,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import (
     GenerationSettings,
     LLMResponse,
     ProviderConversationState,
     ToolCallRequest,
 )
-from cirno.session.summary import SUMMARY_CONTINUATION_TEXT
+from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT
 
 
 def _make_loop(

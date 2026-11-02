@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cirno.memory.consolidation import _HISTORY_ENTRY_HARD_CAP, MemoryStore
+from cirno_core.memory.consolidation import _HISTORY_ENTRY_HARD_CAP, MemoryStore
 
 
 @pytest.fixture
@@ -224,7 +224,7 @@ class TestHistoryWithCursor:
         def failing_replace(*args, **kwargs):
             raise RuntimeError("Simulated failure")
 
-        monkeypatch.setattr('cirno.utils.atomic_file.replace_atomic', failing_replace)
+        monkeypatch.setattr('cirno_core.utils.atomic_file.replace_atomic', failing_replace)
 
         with pytest.raises(RuntimeError):
             store._write_entries(entries)
@@ -252,7 +252,7 @@ class TestAppendHistoryHardCap:
         """Repeated oversized writes should warn only on the first occurrence."""
         records: list[str] = []
         monkeypatch.setattr(
-            "cirno.memory.consolidation.logger.warning",
+            "cirno_core.memory.consolidation.logger.warning",
             lambda message, *args: records.append(message.format(*args)),
         )
         huge = "x" * (_HISTORY_ENTRY_HARD_CAP + 1)

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from itertools import chain, islice
 from typing import Iterable, Literal
 
-from cirno.utils.document import LocatedDocumentLine
+from cirno_core.utils.document import LocatedDocumentLine
 
 
 class MatchTooLargeError(ValueError):

@@ -2,9 +2,9 @@
 
 from unittest.mock import patch
 
-from cirno.config.schema import Config, ProvidersConfig
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import PROVIDERS, find_by_name
+from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import PROVIDERS, find_by_name
 
 
 def test_novita_config_field_exists() -> None:
@@ -75,7 +75,7 @@ def test_novita_gateway_routes_unprefixed_models_when_configured() -> None:
 
 def test_novita_preserves_model_api_id() -> None:
     spec = find_by_name("novita")
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(
             api_key="novita-key",
             default_model="deepseek-v4-pro",

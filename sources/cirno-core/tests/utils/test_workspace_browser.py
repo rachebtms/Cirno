@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from cirno.security.workspace_access import WorkspaceScopeError
-from cirno.webui.workspace_browser import browse_workspace_directories
+from cirno_core.security.workspace_access import WorkspaceScopeError
+from cirno_server.webui.workspace_browser import browse_workspace_directories
 
 
 def test_directory_browser_filters_folders_and_exposes_navigation(tmp_path: Path) -> None:

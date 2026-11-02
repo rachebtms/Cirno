@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from cirno.bus.events import InboundMessage
-from cirno.session.goal_state import goal_state_raw, parse_goal_state
-from cirno.session.sqlite_store import SessionConflictError
-from cirno.session.turn_continuation import _goal_continuation_prompt
+from cirno_core.bus.events import InboundMessage
+from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.turn_continuation import _goal_continuation_prompt
 from loguru import logger
 
 
@@ -30,8 +30,8 @@ async def _wake_goal(loop, key, now):
         return
     metadata = session.metadata
     goal = parse_goal_state(goal_state_raw(metadata)) or {}
-    from cirno.agent.work_reports import deliver_work_report, record_goal_report
-    from cirno.agent.tools.session_messages import SessionMessageError
+    from cirno_core.agent.work_reports import deliver_work_report, record_goal_report
+    from cirno_core.agent.tools.session_messages import SessionMessageError
 
     report = metadata.get("work_report")
     if goal.get("report_to"):

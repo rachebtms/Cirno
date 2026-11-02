@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, TypedDict, cast
 
-from cirno.runtime.context import public_history_message
-from cirno.session.history_visibility import is_hidden_history_message
-from cirno.session.manager import SessionManager
+from cirno_core.runtime.context import public_history_message
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.session.manager import SessionManager
 
 
 class SessionMessage(TypedDict):

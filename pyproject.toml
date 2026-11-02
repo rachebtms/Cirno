@@ -1,13 +1,12 @@
 [project]
 name = "cirno-ai"
-version = "0.1.2"
+version = "0.1.3"
 description = "A lightweight personal AI assistant framework"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Xubin Ren"},
-    {name = "the cirno contributors"}
+    {name = "Cirno contributors"}
 ]
 keywords = ["ai", "agent", "chatbot"]
 classifiers = [
@@ -22,57 +21,20 @@ license-files = [
     "THIRD_PARTY_NOTICES.md",
 ]
 
-dependencies = [
-    "typer>=0.20.0,<1.0.0",
-    "anthropic>=0.100.0,<1.0.0",
-    "pydantic>=2.12.0,<3.0.0",
-    "pydantic-settings>=2.12.0,<3.0.0",
-    "websockets>=15.0,<17.0",
-    "httpx[socks]>=0.28.0,<1.0.0",
-    "aiohttp>=3.14.3,<4.0.0",
-    "yarl>=1.17.0,<2.0.0",
-    "cryptography>=46.0.0",
-    "ddgs>=9.16.1,<10.0.0",
-    "oauth-cli-kit>=0.1.6,<1.0.0",
-    "loguru>=0.7.3,<1.0.0",
-    "readability-lxml>=0.8.4,<1.0.0",
-    "lxml-html-clean>=0.4.0,<1.0.0",
-    "rich>=14.0.0,<15.0.0",
-    "pillow>=13.0.0,<14.0.0",
-    "croniter>=6.0.0,<7.0.0",
-    "setproctitle>=1.3.7,<2.0.0; sys_platform != 'win32'",
-    "mcp>=1.26.0,<2.0.0",
-    "json-repair>=0.57.0,<1.0.0",
-    "chardet>=3.0.2,<6.0.0",
-    "openai>=2.8.0",
-    "tiktoken>=0.12.0,<1.0.0",
-    "jinja2>=3.1.0,<4.0.0",
-    "dulwich>=1.2.20,<2.0.0",
-    "rapidfuzz>=3.14.6,<4.0.0",
-    "pyyaml>=6.0,<7.0.0",
-    "filelock>=3.25.2",
-    "watchfiles>=1.1.1,<2.0.0",
-    "packaging>=24.0",
-    "tzdata>=2025.2",
-    "tzlocal>=5.3.1,<6.0.0",
-    "defusedxml>=0.7.1,<1.0.0",
-    "pypdf>=6.21.3,<7.0.0",
-    "python-docx>=1.1.0,<2.0.0",
-    "openpyxl>=3.1.0,<4.0.0",
-    "python-pptx>=1.0.0,<2.0.0",
-]
+dependencies = ["cirno-server==0.1.3"]
 
 [project.optional-dependencies]
-memory-embedding = ["onnxruntime>=1.20,<2", "tokenizers>=0.21,<1", "numpy>=1.26,<3"]
+memory-embedding = [
+    "cirno-core[memory-embedding]==0.1.3",
+]
 azure = [
-    "azure-identity>=1.19.0,<2.0.0",
+    "cirno-core[azure]==0.1.3",
 ]
 bedrock = [
-    "boto3>=1.43.0",
-    "botocore>=1.43.0,<2.0.0",
+    "cirno-core[bedrock]==0.1.3",
 ]
 olostep = [
-    "olostep>=0.1.0; python_version < '3.14'",
+    "cirno-core[olostep]==0.1.3",
 ]
 dev = [
     "hatchling",
@@ -88,38 +50,17 @@ dev = [
 ]
 
 [project.scripts]
-cirno = "cirno.cli.entry:main"
-
-# Third-party tool plugins register here.  Built-in tools are discovered
-# automatically via pkgutil scanning in ToolLoader.discover().
-# [project.entry-points."cirno.tools"]
-# my_plugin = "my_package.plugins:MyTool"
+cirno = "cirno_server.cli.entry:main"
 
 [build-system]
-requires = ["hatchling", "editables", "filelock>=3.25.2"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.hooks.custom]
-# Implementation lives in the conventional `hatch_build.py` at the repo root.
-
-[tool.hatch.build]
-include = ["sources/cirno-core/**/*.py", "sources/cirno-core/cli/assets/dock-icon.png", "sources/cirno-core/webui/mcp/presets.json", "sources/cirno-core/agent/tools/names.json", "sources/cirno-core/templates/**/*.md", "sources/cirno-core/skills/**/*", "sources/cirno-core/web/dist/**/*"]
-artifacts = ["sources/cirno-core/web/dist/**/*"]
-
 [tool.hatch.build.targets.wheel]
-packages = ["sources/cirno-core"]
-exclude = ["sources/cirno-core/**/tests/**", "**/__pycache__/**", "**/*.py[cod]"]
-dev-mode-dirs = ["."]
-
-[tool.hatch.build.targets.wheel.sources]
-"sources/cirno-core" = "cirno"
+packages = ["sources/cirno"]
 
 [tool.hatch.build.targets.sdist]
-include = ["sources/cirno-core/", "documents/**/*.md", "documents/**/*.json", "hatch_build.py", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml"]
-exclude = ["sources/cirno-core/**/tests/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.ruff_cache/**"]
+include = ["sources/cirno", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml"]
 
 [tool.ruff]
 line-length = 100
@@ -132,9 +73,10 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 # The source directory is remapped to the valid installed package name cirno.
 "sources/cirno-core/**" = ["N999"]
+"sources/cirno-server/**" = ["N999"]
 
 [tool.basedpyright]
-include = ["sources/cirno-core"]
+include = ["sources/cirno-core", "sources/cirno-server", "sources/cirno"]
 exclude = ["**/tests"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
@@ -142,10 +84,10 @@ pythonVersion = "3.11"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["sources/cirno-core/tests", "sources/cirno-core/channels"]
+testpaths = ["sources/cirno-core/tests", "sources/cirno-server/tests", "sources/cirno-server/channels"]
 
 [tool.coverage.run]
-source = ["cirno"]
+source = ["cirno_core", "cirno_server", "cirno"]
 omit = ["tests/*", "**/tests/*"]
 
 [tool.coverage.report]

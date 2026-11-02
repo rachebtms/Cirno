@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from cirno.utils.helpers import atomic_write_text
+from cirno_core.utils.helpers import atomic_write_text
 
 
 def safe_run_record_name(run_id: str) -> str:

@@ -5,17 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from cirno.agent.hook import (
+from cirno_core.agent.hook import (
     AgentHook,
     AgentHookContext,
     AgentRunHookContext,
     AgentTurnHookContext,
 )
-from cirno.agent.tools.naming import implementation_name
-from cirno.bus.outbound_events import FileEditEvent
-from cirno.bus.agent_events import EventSink
-from cirno.providers.base import ToolCallRequest
-from cirno.utils.file_edit_events import (
+from cirno_core.agent.tools.naming import implementation_name
+from cirno_core.bus.outbound_events import FileEditEvent
+from cirno_core.bus.agent_events import EventSink
+from cirno_core.providers.base import ToolCallRequest
+from cirno_core.utils.file_edit_events import (
     FileEditResult,
     FileEditTracker,
     build_file_edit_end_event,

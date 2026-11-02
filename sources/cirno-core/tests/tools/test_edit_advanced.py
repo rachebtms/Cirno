@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from cirno.agent.tools.filesystem import EditFileTool, ReadFileTool
+from cirno_core.agent.tools.filesystem import EditFileTool, ReadFileTool
 
 # ---------------------------------------------------------------------------
 # Delete-line newline cleanup

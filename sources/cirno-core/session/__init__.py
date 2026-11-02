@@ -1,5 +1,5 @@
 """Session management module."""
 
-from cirno.session.manager import Session, SessionManager
+from cirno_core.session.manager import Session, SessionManager
 
 __all__ = ["SessionManager", "Session"]

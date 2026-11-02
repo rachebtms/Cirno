@@ -135,7 +135,7 @@ describe("Settings capabilities", () => {
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.runtime_config.update", { values: { "network.proxy": address } }, 20_000,
     ));
-    fireEvent.click(screen.getByRole("button", { name: "Server & heartbeat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Server" }));
     fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
     expect(screen.getByLabelText("Shared proxy", { selector: "input" })).toHaveValue("http://new-proxy.example:7890");
     expect(screen.getByLabelText("Username")).toHaveValue("user");

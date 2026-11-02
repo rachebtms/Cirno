@@ -12,10 +12,10 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from cirno.agent import plugins as agent_plugins
-from cirno.skills.loader import SkillsLoader
-from cirno.apps.cli import service as cli_service
-from cirno.apps.cli.service import CliAppError, CliAppManager, CliAppsRuntimeConfig, cli_app_skill_path
+from cirno_core.agent import plugins as agent_plugins
+from cirno_core.skills.loader import SkillsLoader
+from cirno_core.apps.cli import service as cli_service
+from cirno_core.apps.cli.service import CliAppError, CliAppManager, CliAppsRuntimeConfig, cli_app_skill_path
 
 
 @pytest.fixture(autouse=True)
@@ -248,7 +248,7 @@ def test_installed_payload_enriches_apps_from_cached_catalog(
         }
     })
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda entry_point: "/bin/installed-gimp" if entry_point == "installed-gimp" else None,
     )
 
@@ -330,7 +330,7 @@ def test_optional_extension_registry_failure_does_not_break_payload(
     def fail_get(*args, **kwargs):
         raise RuntimeError("network unavailable")
 
-    monkeypatch.setattr("cirno.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
 
     payload = manager.payload()
 
@@ -345,7 +345,7 @@ def test_payload_cache_only_does_not_fetch_catalog(tmp_path: Path, monkeypatch: 
     def fail_get(*args, **kwargs):
         raise AssertionError("network should not be used")
 
-    monkeypatch.setattr("cirno.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
 
     payload = manager.payload(cache_only=True)
 
@@ -433,7 +433,7 @@ def test_payload_cache_only_without_cache_returns_empty(tmp_path: Path, monkeypa
     def fail_get(*args, **kwargs):
         raise AssertionError("network should not be used")
 
-    monkeypatch.setattr("cirno.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
 
     payload = manager.payload(cache_only=True)
 
@@ -460,7 +460,7 @@ def test_install_dispatches_safe_pip_and_installs_skill(
         "_fetch_skill_content",
         lambda app: "---\nname: cli-anything-gimp\ndescription: GIMP\n---\n# GIMP\n",
     )
-    from cirno.config.home import get_home_path
+    from cirno_core.config.home import get_home_path
     legacy = get_home_path() / "skills" / "cli-app-gimp" / "SKILL.md"
     legacy.parent.mkdir(parents=True)
     legacy.write_text("legacy", encoding="utf-8")
@@ -487,7 +487,7 @@ def test_run_argv_logs_command_exit_and_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from cirno.apps.cli import service as cli_service
+    from cirno_core.apps.cli import service as cli_service
 
     manager = _manager(tmp_path)
     records: list[str] = []
@@ -557,7 +557,7 @@ def test_install_records_available_cli_without_reinstalling(
 
     monkeypatch.setattr(manager, "_run_argv", fail_run)
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: str(resolved) if command == "lark-cli" else None,
     )
 
@@ -623,7 +623,7 @@ def test_install_recovers_stale_npm_global_directory(
 
     monkeypatch.setattr(manager, "_run_argv", fake_run)
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: npm if command == "npm" else None,
     )
 
@@ -658,11 +658,11 @@ def test_install_records_entry_point_path_and_pip_distribution(
         lambda app: "---\nname: cli-anything-gimp\ndescription: GIMP\n---\n# GIMP\n",
     )
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: str(resolved) if command == "cli-anything-gimp" else None,
     )
     monkeypatch.setattr(
-        "cirno.apps.cli.service.importlib_metadata.distributions",
+        "cirno_core.apps.cli.service.importlib_metadata.distributions",
         lambda: [
             SimpleNamespace(
                 entry_points=[
@@ -703,7 +703,7 @@ def test_fetch_skill_content_rejects_untrusted_urls(
     def fail_get(*args, **kwargs):
         raise AssertionError("untrusted skill URL should not be fetched")
 
-    monkeypatch.setattr("cirno.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
 
     assert manager._fetch_skill_content({
         "name": "evil",
@@ -733,7 +733,7 @@ def test_fetch_skill_content_allows_cli_anything_raw_skill_url(
         seen.append(url)
         return Response()
 
-    monkeypatch.setattr("cirno.apps.cli.service.httpx.get", fake_get)
+    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fake_get)
 
     content = manager._fetch_skill_content({
         "name": "gimp",
@@ -764,7 +764,7 @@ def test_fetch_skill_content_uses_extension_raw_base_for_relative_skills(
         seen.append(url)
         return Response()
 
-    monkeypatch.setattr("cirno.apps.cli.service.httpx.get", fake_get)
+    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fake_get)
 
     content = manager._fetch_skill_content({
         "name": "hyperframes",
@@ -785,7 +785,7 @@ def test_uninstall_removes_installed_state_and_generated_skill(
     manager = _manager(tmp_path)
     _seed_catalog(manager)
     manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
-    from cirno.apps.cli.service import cli_app_skill_path
+    from cirno_core.apps.cli.service import cli_app_skill_path
     skill_dir = cli_app_skill_path("gimp").parent
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text("# GIMP\n", encoding="utf-8")
@@ -869,7 +869,7 @@ def test_uninstall_keeps_state_when_entry_point_still_available(
     )
     monkeypatch.setattr(manager, "_pip_available", staticmethod(lambda: True))
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/local/bin/cli-anything-gimp" if command == "cli-anything-gimp" else None,
     )
 
@@ -959,7 +959,7 @@ def test_run_installed_cli_uses_argv_without_shell(
     _seed_catalog(manager)
     resolved = str(tmp_path / "bin" / "cli-anything-gimp")
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda entry: resolved if entry == "cli-anything-gimp" else None,
     )
 
@@ -975,7 +975,7 @@ def test_run_installed_cli_uses_argv_without_shell(
             stderr="",
         )
 
-    monkeypatch.setattr("cirno.apps.cli.service.subprocess.run", fake_run)
+    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
     manager._save_installed(
         {
             "gimp": {
@@ -1001,7 +1001,7 @@ def test_run_reports_created_artifacts(
     _seed_catalog(manager)
     resolved = str(tmp_path / "bin" / "cli-anything-gimp")
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda entry: resolved if entry == "cli-anything-gimp" else None,
     )
 
@@ -1010,7 +1010,7 @@ def test_run_reports_created_artifacts(
         (cwd / "diagram.png").write_bytes(b"\x89PNG\r\n\x1a\nimage")
         return subprocess.CompletedProcess(argv, 0, stdout="done", stderr="")
 
-    monkeypatch.setattr("cirno.apps.cli.service.subprocess.run", fake_run)
+    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
     manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
 
     result = manager.run("gimp", ["render"])
@@ -1043,7 +1043,7 @@ def test_install_uses_uv_pip_when_pip_unavailable(
 
     monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
     monkeypatch.setattr(manager, "_run_argv", fake_run)
@@ -1068,7 +1068,7 @@ def test_update_uses_uv_pip_reinstall_when_pip_unavailable(
     manager = _manager(tmp_path)
     monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
 
@@ -1104,7 +1104,7 @@ def test_uninstall_uses_uv_pip_when_pip_unavailable(
 
     monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
-        "cirno.apps.cli.service.shutil.which",
+        "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
     monkeypatch.setattr(manager, "_run_argv", fake_run)

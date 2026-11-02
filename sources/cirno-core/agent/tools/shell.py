@@ -18,9 +18,9 @@ from urllib.parse import unquote
 
 from loguru import logger
 
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.context import ToolContext, current_request_session_key
-from cirno.agent.tools.exec_session import (
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.context import ToolContext, current_request_session_key
+from cirno_core.agent.tools.exec_session import (
     DEFAULT_EXEC_SESSION_MANAGER,
     DEFAULT_MAX_OUTPUT_CHARS,
     DEFAULT_YIELD_MS,
@@ -30,17 +30,17 @@ from cirno.agent.tools.exec_session import (
     clamp_session_int,
     format_session_poll,
 )
-from cirno.agent.tools.sandbox import wrap_command
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.sandbox import wrap_command
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.agent.tools.shell_config import ExecToolConfig
-from cirno.config.paths import get_media_dir
-from cirno.security.workspace_access import current_scope_allows_loopback, current_tool_workspace
-from cirno.security.workspace_policy import is_path_within
+from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.config.paths import get_media_dir
+from cirno_core.security.workspace_access import current_scope_allows_loopback, current_tool_workspace
+from cirno_core.security.workspace_policy import is_path_within
 
 _IS_WINDOWS = sys.platform == "win32"
 _PROCESS_TREE_OWNER_ATTR = "_cirno_process_tree_owner"
@@ -376,6 +376,18 @@ class ExecTool(Tool):
                 )
             return timeout
         return self.timeout or None
+
+    def approval_reason(self, params: dict[str, Any]) -> str | None:
+        command = (["rg", *params["args"]] if self.name == "rg" else params.get("command") or params.get("cmd"))
+        if not command:
+            return None
+        try:
+            prepared = self._prepare_command(
+                command, params.get("working_dir") or params.get("workdir"),
+                params.get("max_runtime", params.get("timeout")), params.get("shell"), params.get("login"))
+        except ValueError:
+            return None  # Normal parameter validation reports the error; it grants no access.
+        return str(prepared) if isinstance(prepared, str) else None
 
     def _prepare_command(
         self,
@@ -750,7 +762,7 @@ class ExecTool(Tool):
 
     @staticmethod
     def _create_windows_job() -> _ProcessTreeOwner:
-        from cirno.agent.tools._windows_job import WindowsJob
+        from cirno_core.agent.tools._windows_job import WindowsJob
 
         return WindowsJob.create()
 
@@ -845,7 +857,7 @@ class ExecTool(Tool):
             if self.allow_patterns:
                 return ToolResult.error("Error: Command blocked by allowlist filter (not in allowlist)")
 
-        from cirno.security.network import contains_internal_url
+        from cirno_core.security.network import contains_internal_url
         if contains_internal_url(
             cmd,
             allow_loopback=current_scope_allows_loopback(

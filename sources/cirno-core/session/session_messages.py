@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Any, TypedDict, cast
 
-from cirno.session.session_handles import normalize_session_handle
+from cirno_core.session.session_handles import normalize_session_handle
 
 SESSION_MESSAGE_METADATA_KEY = "_session_message"
 

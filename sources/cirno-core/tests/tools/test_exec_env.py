@@ -6,8 +6,8 @@ import sys
 
 import pytest
 
-from cirno.agent.tools.exec_session import ExecSessionManager
-from cirno.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.exec_session import ExecSessionManager
+from cirno_core.agent.tools.shell import ExecTool
 
 _UNIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="Unix shell commands")
 

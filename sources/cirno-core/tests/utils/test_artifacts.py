@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from cirno.config.loader import set_config_path
-from cirno.utils.artifacts import (
+from cirno_core.config.loader import set_config_path
+from cirno_core.utils.artifacts import (
     ArtifactError,
     decode_image_data_url,
     store_generated_image_artifact,
@@ -44,7 +44,7 @@ def test_store_generated_image_artifact_writes_image_and_sidecar(tmp_path: Path)
 
     image_path = Path(artifact["path"])
     assert image_path.is_file()
-    assert image_path.parent == tmp_path / "media" / "generated" / "2026-05-08"
+    assert image_path.parent == tmp_path / "state" / "media" / "generated" / "2026-05-08"
     assert artifact["id"].startswith("img_")
     assert artifact["mime"] == "image/png"
 

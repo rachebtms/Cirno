@@ -4,8 +4,8 @@ from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 
-from cirno.agent.tools.base import Tool
-from cirno.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.base import Tool
+from cirno_core.agent.tools.loader import ToolLoader
 
 
 def test_loader_discovers_entry_point_tools(tmp_path, monkeypatch):
@@ -52,7 +52,7 @@ def test_loader_discovers_entry_point_tools(tmp_path, monkeypatch):
         "[other.tools]\nother_plugin = test_tool_plugin:FakeTool\n", encoding="utf-8",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr("cirno.agent.tools.loader.entry_points", entry_points)
+    monkeypatch.setattr("cirno_core.agent.tools.loader.entry_points", entry_points)
     discovered = ToolLoader()._discover_plugins()
 
     assert "my_plugin" in discovered
@@ -82,7 +82,7 @@ def test_loader_skips_abstract_entry_point_tools():
 
     mock_ep.load.return_value = _AbstractTool
 
-    with patch("cirno.agent.tools.loader.entry_points", return_value=[mock_ep]):
+    with patch("cirno_core.agent.tools.loader.entry_points", return_value=[mock_ep]):
         loader = ToolLoader()
         discovered = loader._discover_plugins()
 

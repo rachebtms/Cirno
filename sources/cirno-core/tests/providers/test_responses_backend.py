@@ -8,11 +8,11 @@ from types import SimpleNamespace
 import pytest
 from aiohttp import web
 
-from cirno.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno.providers.base import ProviderCallContext
-from cirno.providers.github_copilot_provider import GitHubCopilotProvider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import ModelAPICapabilities, find_by_name
+from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
+from cirno_core.providers.base import ProviderCallContext
+from cirno_core.providers.github_copilot_provider import GitHubCopilotProvider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import ModelAPICapabilities, find_by_name
 
 
 @pytest.fixture
@@ -94,7 +94,7 @@ async def test_adapters_replay_tool_results_and_reasoning(responses_peer, monkey
         monkeypatch.setenv("CIRNO_COPILOT_BASE_URL", f"{url}/v1")
         monkeypatch.setenv("CIRNO_COPILOT_TOKEN_URL", f"{url}/copilot_token")
         monkeypatch.setattr(
-            "cirno.providers.github_copilot_provider._load_github_token",
+            "cirno_core.providers.github_copilot_provider._load_github_token",
             lambda: SimpleNamespace(access="github-fixture"),
         )
         provider = GitHubCopilotProvider(default_model="github-copilot/gpt-5.4-mini")

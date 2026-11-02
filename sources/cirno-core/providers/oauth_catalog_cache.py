@@ -11,7 +11,7 @@ from typing import Literal, cast
 import httpx
 from loguru import logger
 
-from cirno.providers.registry import ProviderModelSpec
+from cirno_core.providers.registry import ProviderModelSpec
 
 CatalogSource = Literal["remote", "cache", "stale", "fallback"]
 CatalogErrorKind = Literal["auth_required", "unavailable"]

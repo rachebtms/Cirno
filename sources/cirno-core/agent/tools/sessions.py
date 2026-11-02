@@ -10,12 +10,12 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import ToolContext, current_request_session_key
-from cirno.agent.tools.schema import StringSchema, tool_parameters_schema
-from cirno.session.history import SessionHistoryReader
-from cirno.session.manager import SessionManager
-from cirno.session.session_handles import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import ToolContext, current_request_session_key
+from cirno_core.agent.tools.schema import StringSchema, tool_parameters_schema
+from cirno_core.session.history import SessionHistoryReader
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.session_handles import (
     SessionHandleResolver,
     normalize_session_handle,
 )

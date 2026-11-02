@@ -13,22 +13,22 @@ from zipfile import ZipFile
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.memory.consolidation import Consolidator
-from cirno.agent.subagents.manager import SubagentManager
-from cirno.agent.tools.registry import is_tool_error_result
-from cirno.agent.tools.search import FindFilesTool, GrepTool
-from cirno.agent.tools.web import WebSearchTool
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import WebSearchConfig
-from cirno.providers.base import GenerationSettings
-from cirno.security.workspace_access import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.agent.subagents.manager import SubagentManager
+from cirno_core.agent.tools.registry import is_tool_error_result
+from cirno_core.agent.tools.search import FindFilesTool, GrepTool
+from cirno_core.agent.tools.web import WebSearchTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import WebSearchConfig
+from cirno_core.providers.base import GenerationSettings
+from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     default_workspace_scope,
     reset_workspace_scope,
 )
-from cirno.utils.document import extract_text
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.document import extract_text
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 @pytest.mark.asyncio
@@ -343,7 +343,7 @@ async def test_grep_searches_xlsx_with_sheet_cell_locator(
 ) -> None:
     from openpyxl import Workbook
 
-    monkeypatch.setattr("cirno.config.loader._current_config_path", tmp_path / "config.json")
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", tmp_path / "config.json")
     workbook_path = tmp_path / "people.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -452,7 +452,7 @@ async def test_grep_searches_xlsx_beyond_attachment_preview_limit(
 ) -> None:
     from openpyxl import Workbook
 
-    from cirno.utils import document as document_utils
+    from cirno_core.utils import document as document_utils
 
     workbook_path = tmp_path / "long.xlsx"
     workbook = Workbook()
@@ -778,7 +778,7 @@ async def test_search_tools_reject_paths_outside_workspace(tmp_path: Path) -> No
 
 @pytest.mark.parametrize("use_rg", [True, False])
 def test_agent_loop_registers_search_backend(tmp_path: Path, monkeypatch, use_rg) -> None:
-    monkeypatch.setattr("cirno.agent.tools.rg.RgTool.enabled", lambda ctx: use_rg)
+    monkeypatch.setattr("cirno_core.agent.tools.rg.RgTool.enabled", lambda ctx: use_rg)
     bus = MessageBus()
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -793,7 +793,7 @@ def test_agent_loop_registers_search_backend(tmp_path: Path, monkeypatch, use_rg
 @pytest.mark.asyncio
 @pytest.mark.parametrize("use_rg", [True, False])
 async def test_subagent_registers_search_backend(tmp_path: Path, monkeypatch, use_rg) -> None:
-    monkeypatch.setattr("cirno.agent.tools.rg.RgTool.enabled", lambda ctx: use_rg)
+    monkeypatch.setattr("cirno_core.agent.tools.rg.RgTool.enabled", lambda ctx: use_rg)
     bus = MessageBus()
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -834,7 +834,7 @@ async def test_subagent_registers_search_backend(tmp_path: Path, monkeypatch, us
 
 def test_subagent_prompt_respects_disabled_skills(tmp_path: Path) -> None:
     bus = MessageBus()
-    from cirno.config.home import get_home_path
+    from cirno_core.config.home import get_home_path
     skills_dir = get_home_path() / "skills"
     (skills_dir / "alpha").mkdir(parents=True)
     (skills_dir / "alpha" / "SKILL.md").write_text("---\nname: alpha\ndescription: Hidden skill\n---\nhidden\n", encoding="utf-8")
@@ -1049,7 +1049,7 @@ async def test_grep_marks_a_long_line_already_present_as_context(tmp_path):
 
 @pytest.mark.parametrize("mode", ["content", "count", "files_with_matches"])
 async def test_grep_closes_document_stream_and_preserves_locators(tmp_path, monkeypatch, mode):
-    from cirno.utils.document import DocumentLineSource, LocatedDocumentLine
+    from cirno_core.utils.document import DocumentLineSource, LocatedDocumentLine
 
     (tmp_path / "source.pdf").write_bytes(b"placeholder")
     visited = []
@@ -1065,7 +1065,7 @@ async def test_grep_closes_document_stream_and_preserves_locators(tmp_path, monk
             closed.append(True)
 
     monkeypatch.setattr(
-        "cirno.agent.tools.search.open_document_line_source",
+        "cirno_core.agent.tools.search.open_document_line_source",
         lambda *_args, **_kwargs: DocumentLineSource(document_lines(), "pages=2-3"),
     )
     result = await GrepTool(workspace=tmp_path).execute(

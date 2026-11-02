@@ -12,25 +12,25 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from loguru import logger
 
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMResponse,
     ProviderConversationState,
     resolve_stream_idle_timeout_s,
 )
-from cirno.providers.images import prepare_inline_images
-from cirno.providers.openai_responses.compaction import (
+from cirno_core.providers.images import prepare_inline_images
+from cirno_core.providers.openai_responses.compaction import (
     retained_compaction_messages,
     split_compaction_input,
 )
-from cirno.providers.openai_responses.converters import convert_tools
-from cirno.providers.openai_responses.parsing import (
+from cirno_core.providers.openai_responses.converters import convert_tools
+from cirno_core.providers.openai_responses.parsing import (
     ResponsesStreamCapture,
     consume_responses_events,
     iter_sdk_events,
     iter_sse,
     parse_response_output,
 )
-from cirno.providers.openai_responses.state import (
+from cirno_core.providers.openai_responses.state import (
     attach_responses_state,
     build_responses_compaction_state,
     is_compaction_compatibility_error,
@@ -42,7 +42,7 @@ from cirno.providers.openai_responses.state import (
 )
 
 if TYPE_CHECKING:
-    from cirno.providers.openai_responses.websocket import ResponsesWebSocketSession
+    from cirno_core.providers.openai_responses.websocket import ResponsesWebSocketSession
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +88,7 @@ class ResponsesBackend:
         on_thinking_delta: Callable[[str], Awaitable[None]] | None = None,
         on_tool_call_delta: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> LLMResponse | None:
-        from cirno.providers.openai_responses.websocket import ResponsesWebSocketSession
+        from cirno_core.providers.openai_responses.websocket import ResponsesWebSocketSession
 
         options = self.websocket_options
         if options is None:

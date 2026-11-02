@@ -13,24 +13,24 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import RequestContext, ToolContext, current_request_context
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import RequestContext, ToolContext, current_request_context
+from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.runtime.context import RuntimeContextBlock
-from cirno.session.manager import SessionManager
-from cirno.session.session_handles import (
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.runtime.context import RuntimeContextBlock
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.session_handles import (
     SessionHandleResolver,
     normalize_session_handle,
     session_handle_for_name,
 )
-from cirno.session.session_messages import (
+from cirno_core.session.session_messages import (
     SESSION_MESSAGE_METADATA_KEY,
     SessionMessageEnvelope,
     session_message_envelope,
@@ -79,14 +79,14 @@ class SendSessionMessageTool(Tool):
         *,
         sessions: SessionManager,
         bus: MessageBus,
-        max_messages_per_minute: int = 6,
+        max_outgoing_messages_per_minute: int = 6,
         schedule_later: Callable[[float, Callable[[], None]], _CancelHandle] | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._bus = bus
         self._sessions = sessions
         self._handles = SessionHandleResolver(sessions)
-        self._max_messages_per_minute = max_messages_per_minute
+        self._max_outgoing_messages_per_minute = max_outgoing_messages_per_minute
         self._schedule_later = schedule_later
         self._clock = clock or time.monotonic
         self._sent_at: OrderedDict[str, deque[float]] = OrderedDict()
@@ -101,7 +101,7 @@ class SendSessionMessageTool(Tool):
         return cls(
             sessions=ctx.sessions,
             bus=ctx.bus,
-            max_messages_per_minute=ctx.config.max_session_messages_per_minute,
+            max_outgoing_messages_per_minute=ctx.config.max_outgoing_session_messages_per_minute,
         )
 
     @classmethod
@@ -143,7 +143,7 @@ class SendSessionMessageTool(Tool):
         reply_timeout_seconds: int | None = None,
         **kwargs: Any,
     ) -> str:
-        from cirno.utils.helpers import strip_think
+        from cirno_core.utils.helpers import strip_think
 
         request = current_request_context()
         if request is None or not request.session_key:
@@ -189,7 +189,7 @@ class SendSessionMessageTool(Tool):
         except ValueError as exc:
             raise SessionMessageError(str(exc)) from exc
         if target_handle.strip().lstrip("@").casefold() == "cirno":
-            from cirno.webui.instance_api import ensure_global_session
+            from cirno_core.session.global_session import ensure_global_session
             target = await self._handles.ahandle_for_session(await ensure_global_session(self._sessions))
         else:
             target = await self._handles.aresolve(target_name)
@@ -219,9 +219,9 @@ class SendSessionMessageTool(Tool):
                 sent_at = deque[float]()
             while sent_at and sent_at[0] <= cutoff:
                 sent_at.popleft()
-            if len(sent_at) >= self._max_messages_per_minute:
+            if len(sent_at) >= self._max_outgoing_messages_per_minute:
                 raise SessionMessageError(
-                    f"session message rate limit reached ({self._max_messages_per_minute}/minute)",
+                    f"session message rate limit reached ({self._max_outgoing_messages_per_minute}/minute)",
                 )
 
             message = InboundMessage(
@@ -236,7 +236,7 @@ class SendSessionMessageTool(Tool):
             )
             from dataclasses import replace
 
-            from cirno.session.recovery import PENDING_FOLLOWUP_ID_KEY
+            from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY
             identifier = await self._sessions.state.queue_followup(target.session_key, message)
             if identifier is None:
                 return f"@{target.name}"

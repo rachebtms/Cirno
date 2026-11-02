@@ -5,27 +5,27 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.memory.consolidation import (
+from cirno_core.memory.consolidation import (
     _ARCHIVE_TOOL_RESULT,
     _HISTORY_ENTRY_HARD_CAP,
     Consolidator,
     MemoryStore,
 )
-from cirno.bus.agent_events import AgentEvent, ContextCompactionEvent, EventSink
-from cirno.providers.base import (
+from cirno_core.bus.agent_events import AgentEvent, ContextCompactionEvent, EventSink
+from cirno_core.providers.base import (
     GenerationSettings,
     LLMResponse,
     ProviderConversationState,
     ToolCallRequest,
 )
-from cirno.runtime.context import (
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RuntimeContextBlock,
     append_runtime_context,
 )
-from cirno.session.manager import Session
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.utils.prompt_templates import render_template
+from cirno_core.session.manager import Session
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.prompt_templates import render_template
 
 _ARCHIVE_PROMPT = render_template("agent/consolidator_archive.md", strip=True)
 
@@ -520,7 +520,7 @@ class TestConsolidatorArchiveErrorHandling:
         runtime = replace(runtime, context_window_tokens=128_000)
         consolidator.store.raw_archive = MagicMock()
         monkeypatch.setattr(
-            "cirno.memory.consolidation.render_template",
+            "cirno_core.memory.consolidation.render_template",
             MagicMock(side_effect=RuntimeError("template failed")),
         )
         session = Session(key="test:template")
@@ -590,7 +590,7 @@ class TestCompactIdleSession:
     @pytest.fixture
     def real_consolidator(self, store, mock_provider):
         """Create a Consolidator with a real SessionManager (not a mock)."""
-        from cirno.session.manager import SessionManager
+        from cirno_core.session.manager import SessionManager
 
         sessions = SessionManager(store.workspace)
         return Consolidator(
@@ -1546,7 +1546,7 @@ class TestRawArchiveChunks:
 
     @pytest.mark.parametrize("boundary", ["A ", "\n\n", "<think>PRIVATE</think>"])
     def test_raw_chunks_preserve_sanitized_boundaries(self, store, boundary):
-        from cirno.utils.helpers import strip_think
+        from cirno_core.utils.helpers import strip_think
 
         message = {"role": "assistant", "content": ""}
         prefix_len = len(store._format_messages([{**message, "content": "x"}])) - 1

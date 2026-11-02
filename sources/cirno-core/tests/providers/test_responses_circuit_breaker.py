@@ -4,14 +4,14 @@ import time
 
 import pytest
 
-from cirno.providers.base import ProviderCallContext
-from cirno.providers.openai_compat_provider import (
+from cirno_core.providers.base import ProviderCallContext
+from cirno_core.providers.openai_compat_provider import (
     _RESPONSES_FAILURE_THRESHOLD,
     _RESPONSES_PROBE_INTERVAL_S,
     OpenAICompatProvider,
 )
-from cirno.providers.openai_responses.state import build_responses_state
-from cirno.providers.registry import (
+from cirno_core.providers.openai_responses.state import build_responses_state
+from cirno_core.providers.registry import (
     ModelAPICapabilities,
     ProviderSpec,
     ResponsesCapabilities,

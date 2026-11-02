@@ -1,10 +1,10 @@
-"""JSON Schema fragment types: all subclass :class:`~cirno.agent.tools.base.Schema` for descriptions and constraints on tool parameters.
+"""JSON Schema fragment types: all subclass :class:`~cirno_core.agent.tools.base.Schema` for descriptions and constraints on tool parameters.
 
-- ``to_json_schema()``: returns a dict compatible with :meth:`~cirno.agent.tools.base.Schema.validate_json_schema_value` /
-  :class:`~cirno.agent.tools.base.Tool`.
+- ``to_json_schema()``: returns a dict compatible with :meth:`~cirno_core.agent.tools.base.Schema.validate_json_schema_value` /
+  :class:`~cirno_core.agent.tools.base.Tool`.
 - ``validate_value(value, path)``: validates a single value against this schema; returns a list of error messages (empty means valid).
 
-Shared validation and fragment normalization are on the class methods of :class:`~cirno.agent.tools.base.Schema`.
+Shared validation and fragment normalization are on the class methods of :class:`~cirno_core.agent.tools.base.Schema`.
 
 Note: Python does not allow subclassing ``bool``, so booleans use :class:`BooleanSchema`.
 """
@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from cirno.agent.tools.base import Schema
+from cirno_core.agent.tools.base import Schema
 
 
 class StringSchema(Schema):

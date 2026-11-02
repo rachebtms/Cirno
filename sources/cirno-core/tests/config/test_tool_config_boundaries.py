@@ -8,8 +8,8 @@ import pytest
 def test_config_base_import_does_not_load_config_schema():
     code = """
 import sys
-from cirno.config.base import Base
-print("cirno.config.schema" in sys.modules)
+from cirno_core.config.base import Base
+print("cirno_core.config.schema" in sys.modules)
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
@@ -29,25 +29,25 @@ import sys
 class RuntimeImportBlocker(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path, target=None):
         config_modules = {
-            'cirno.agent', 'cirno.agent.tools',
-            'cirno.agent.tools.cli_apps_config',
-            'cirno.agent.tools.filesystem_config',
-            'cirno.agent.tools.self_config',
-            'cirno.agent.tools.shell_config',
-            'cirno.agent.tools.web_config',
+            'cirno_core.agent', 'cirno_core.agent.tools',
+            'cirno_core.agent.tools.cli_apps_config',
+            'cirno_core.agent.tools.filesystem_config',
+            'cirno_core.agent.tools.self_config',
+            'cirno_core.agent.tools.shell_config',
+            'cirno_core.agent.tools.web_config',
         }
         if fullname in config_modules:
             return None
         forbidden = (
-            'cirno.agent', 'cirno.api', 'cirno.apps', 'cirno.channels',
-            'cirno.cli', 'cirno.session', 'cirno.webui', 'cirno.providers.base',
+            'cirno_core.agent', 'cirno.api', 'cirno_core.apps', 'cirno_server.channels',
+            'cirno_server.cli', 'cirno_core.session', 'cirno_server.webui', 'cirno_core.providers.base',
         )
         if any(fullname == name or fullname.startswith(name + '.') for name in forbidden):
             raise AssertionError('configuration imported runtime implementation: ' + fullname)
 
 sys.meta_path.insert(0, RuntimeImportBlocker())
-from cirno.config import Config
-from cirno.config.schema import ModelPresetConfig
+from cirno_core.config import Config
+from cirno_core.config.schema import ModelPresetConfig
 
 config = Config.model_validate({'tools': {
     'exec': {'max_runtime': 37},
@@ -66,15 +66,15 @@ assert ModelPresetConfig(model='example').to_generation_settings().max_tokens ==
 def test_public_tool_contracts_can_be_imported_without_agent_execution():
     code = """
 import sys
-from cirno.agent.tools import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.base import Tool as BaseTool
+from cirno_core.agent.tools import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.base import Tool as BaseTool
 
 assert Tool is BaseTool
 assert callable(tool_parameters)
 assert ToolResult
-assert 'cirno.agent.loop' not in sys.modules
-assert 'cirno.agent.runner' not in sys.modules
-assert 'cirno.agent.tools.shell' not in sys.modules
+assert 'cirno_core.agent.loop' not in sys.modules
+assert 'cirno_core.agent.runner' not in sys.modules
+assert 'cirno_core.agent.tools.shell' not in sys.modules
 """
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
@@ -91,9 +91,9 @@ assert 'cirno.agent.tools.shell' not in sys.modules
     ],
 )
 def test_tool_config_imports_keep_the_same_public_class(module, names):
-    contracts = import_module(f"cirno.agent.tools.{module}_config")
-    aggregate = import_module("cirno.config.schema")
-    implementation = import_module(f"cirno.agent.tools.{module}")
+    contracts = import_module(f"cirno_core.agent.tools.{module}_config")
+    aggregate = import_module("cirno_core.config.schema")
+    implementation = import_module(f"cirno_core.agent.tools.{module}")
     for name in names:
         assert getattr(implementation, name) is getattr(contracts, name)
         assert getattr(aggregate, name) is getattr(contracts, name)

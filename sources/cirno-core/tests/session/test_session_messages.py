@@ -1,4 +1,4 @@
-from cirno.session.session_messages import (
+from cirno_core.session.session_messages import (
     SESSION_MESSAGE_METADATA_KEY,
     SessionMessageEnvelope,
     session_message_envelope,

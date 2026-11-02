@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from cirno.config.errors import ConfigLoadError
-from cirno.config.loader import load_config, resolve_config_env_vars
+from cirno_core.config.errors import ConfigLoadError
+from cirno_core.config.loader import load_config, resolve_config_env_vars
 
 
 def test_load_config_missing_file_uses_defaults(tmp_path) -> None:
@@ -11,7 +11,7 @@ def test_load_config_missing_file_uses_defaults(tmp_path) -> None:
     config = load_config(config_path)
 
     assert config.agents.defaults.model
-    assert config.runtime_data_dir == config_path.parent
+    assert config.runtime_data_dir == config_path.parent / "state"
 
 
 def test_env_resolution_preserves_config_runtime_data_dir(
@@ -24,7 +24,7 @@ def test_env_resolution_preserves_config_runtime_data_dir(
 
     config = resolve_config_env_vars(load_config(config_path), config_path=config_path)
 
-    assert config.runtime_data_dir == config_path.parent
+    assert config.runtime_data_dir == config_path.parent / "state"
 
 
 def test_load_config_reports_malformed_environment_safely(

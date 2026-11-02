@@ -3,8 +3,8 @@
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from cirno.memory.consolidation import MemoryStore
-from cirno.session.manager import SessionManager
+from cirno_core.memory.consolidation import MemoryStore
+from cirno_core.session.manager import SessionManager
 
 
 class TestDreamSessionKey:
@@ -16,7 +16,7 @@ class TestDreamSessionKey:
 
     def test_unique_across_calls(self):
         now = datetime(2026, 5, 28, 10, 0, 0)
-        with patch("cirno.memory.consolidation.datetime") as mock_dt:
+        with patch("cirno_core.memory.consolidation.datetime") as mock_dt:
             mock_dt.now.side_effect = [now, now + timedelta(seconds=1)]
             k1 = MemoryStore.dream_session_key()
             k2 = MemoryStore.dream_session_key()

@@ -18,42 +18,42 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 from uuid import uuid4
 
-from cirno.agent.context import TranscriptInput
-from cirno.agent.tools.naming import implementation_name
-from cirno.bus.agent_events import NO_EVENTS, ContextCompactionEvent, EventSink
-from cirno.providers.base import (
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.tools.naming import implementation_name
+from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent, EventSink
+from cirno_core.providers.base import (
     CONTEXT_SAFETY_BUFFER,
     LLMResponse,
     LLMUsage,
     ProviderCallContext,
     ProviderConversationState,
 )
-from cirno.providers.conversation_state import (
+from cirno_core.providers.conversation_state import (
     ProviderConversationStateController,
     allows_conversation_message_merge,
 )
-from cirno.runtime.context import (
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_MESSAGE_META,
     detach_runtime_context,
     reattach_runtime_context,
 )
-from cirno.session.history_visibility import is_hidden_history_message
-from cirno.session.summary import (
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.session.summary import (
     SUMMARY_CONTINUATION_TEXT,
     SessionSummaryCheckpoint,
 )
-from cirno.utils.cancellation import shield_and_drain
-from cirno.utils.helpers import (
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.helpers import (
     estimate_prompt_tokens_chain,
     maybe_persist_tool_result,
     truncate_text,
 )
-from cirno.utils.runtime import ensure_nonempty_tool_result
+from cirno_core.utils.runtime import ensure_nonempty_tool_result
 from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno.agent.tools.registry import ToolRegistry
-    from cirno.providers.base import LLMProvider
+    from cirno_core.agent.tools.registry import ToolRegistry
+    from cirno_core.providers.base import LLMProvider
 
 TranscriptBuilder = Callable[[TranscriptInput], list[dict[str, Any]]]
 SummaryTranscriptBuilder = Callable[[str], list[dict[str, Any]]]

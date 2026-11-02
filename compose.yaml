@@ -1,7 +1,6 @@
 services:
-  cirno-gateway:
+  cirno:
     image: ghcr.io/rachebtms/cirno:latest
-    command: ["gateway", "--foreground"]
     restart: unless-stopped
     environment:
       CIRNO_DOCKER_BOOTSTRAP: "1"

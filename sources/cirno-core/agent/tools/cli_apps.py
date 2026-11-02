@@ -6,20 +6,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.cli_apps_config import CliAppsToolConfig
-from cirno.agent.tools.context import RequestContext, ToolContext
-from cirno.agent.tools.schema import (
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.cli_apps_config import CliAppsToolConfig
+from cirno_core.agent.tools.context import RequestContext, ToolContext
+from cirno_core.agent.tools.schema import (
     ArraySchema,
     BooleanSchema,
     IntegerSchema,
     StringSchema,
     tool_parameters_schema,
 )
-from cirno.apps.cli import CliAppError, CliAppManager, CliAppsRuntimeConfig
-from cirno.apps.cli.utils import runtime_lines_for_request
-from cirno.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
-from cirno.security.workspace_access import current_tool_workspace
+from cirno_core.apps.cli import CliAppError, CliAppManager, CliAppsRuntimeConfig
+from cirno_core.apps.cli.utils import runtime_lines_for_request
+from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
+from cirno_core.security.workspace_access import current_tool_workspace
 
 
 @tool_parameters(

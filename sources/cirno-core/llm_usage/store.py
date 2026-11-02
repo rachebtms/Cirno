@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from cirno.llm_usage.models import LLMCallRecord
+from cirno_core.llm_usage.models import LLMCallRecord
 
 SCHEMA_VERSION = 1
 MAX_DAYS_RETAINED = 400

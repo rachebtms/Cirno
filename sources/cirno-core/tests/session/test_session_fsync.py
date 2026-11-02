@@ -1,6 +1,6 @@
 """Durability configuration is applied to every SQLite connection."""
 
-from cirno.session.manager import SessionManager
+from cirno_core.session.manager import SessionManager
 
 
 def test_every_transaction_uses_full_synchronous_and_foreign_keys(tmp_path):

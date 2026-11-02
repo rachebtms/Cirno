@@ -20,7 +20,7 @@ def runtime_lines_for_request(
     """Return CLI App annotations from an immutable request snapshot."""
     structured = metadata.get("cli_apps") if isinstance(metadata, Mapping) else None
     if isinstance(structured, list):
-        from cirno.apps.cli.service import cli_app_skill_path
+        from cirno_core.apps.cli.service import cli_app_skill_path
 
         structured_items = cast(list[Any], structured)
         mentions = [
@@ -41,7 +41,7 @@ def runtime_lines_for_request(
             ]
     if "@" not in text:
         return []
-    from cirno.apps.cli import CliAppError, CliAppManager
+    from cirno_core.apps.cli import CliAppError, CliAppManager
 
     try:
         mentions = cast(

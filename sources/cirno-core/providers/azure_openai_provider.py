@@ -2,7 +2,7 @@
 
 Uses ``AsyncOpenAI`` pointed at ``https://{endpoint}/openai/v1/`` which
 routes to the Responses API (``/responses``).  Reuses shared conversion
-helpers from :mod:`cirno.providers.openai_responses`.
+helpers from :mod:`cirno_core.providers.openai_responses`.
 
 Authentication
 --------------
@@ -25,13 +25,13 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     ProviderCallContext,
     ProviderConversationState,
 )
-from cirno.providers.openai_responses import ResponsesBackend, responses_state_matches
+from cirno_core.providers.openai_responses import ResponsesBackend, responses_state_matches
 
 _AZURE_OPENAI_SCOPE = "https://cognitiveservices.azure.com/.default"
 

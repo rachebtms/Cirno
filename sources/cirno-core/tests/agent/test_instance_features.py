@@ -9,29 +9,29 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from cirno.agent.goals.permission import goal_mutation_permission
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.long_task import CreateGoalTool, UpdateGoalTool
-from cirno.agent.tools.coordination import CreateSessionTool
-from cirno.agent.tools.instance_features import MemoryTool
-from cirno.agent.goals.scheduler import wake_due_goals
-from cirno.bus.queue import MessageBus
-from cirno.config.home import set_home_path
-from cirno.config.schema import Config
-from cirno.storage.instance import InstanceData
-from cirno.nodes.service import Nodes
-from cirno.session.manager import SessionManager
-from cirno.session.turn_continuation import clear_internal_continuation_state, _goal_continuation_available
-from cirno.skills.history import snapshot_skill, skill_versions
-from cirno.webui.instance_api import instance_action
+from cirno_core.agent.goals.permission import goal_mutation_permission
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.long_task import CreateGoalTool, UpdateGoalTool
+from cirno_core.agent.tools.coordination import CreateSessionTool
+from cirno_core.agent.tools.instance_features import MemoryTool
+from cirno_core.agent.goals.scheduler import wake_due_goals
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.home import set_instance_path
+from cirno_core.config.schema import Config
+from cirno_core.storage.instance import InstanceData
+from cirno_core.nodes.service import Nodes
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.turn_continuation import clear_internal_continuation_state, _goal_continuation_available
+from cirno_core.skills.history import snapshot_skill, skill_versions
+from cirno_server.webui.instance_api import instance_action
 
 
 @pytest.fixture
 def home(tmp_path):
     path = tmp_path / 'home'
-    set_home_path(path)
+    set_instance_path(path)
     yield path
-    set_home_path(None)
+    set_instance_path(None)
 
 
 @pytest.fixture
@@ -155,7 +155,7 @@ async def test_memory_keeps_sources_and_scopes_in_home(sessions, home):
         assert '中文检索' in record['content']
         assert record['message_id'] == 'message-1'
         assert record['turn_id'] == 'turn-1'
-        assert (home / 'memory/entries' / (saved['id']+'.md')).exists()
+        assert (home / 'home' / 'memory/entries' / (saved['id']+'.md')).exists()
         assert json.loads(await tool.execute(action='search', query='中文', purpose='evidence'))['memories'][0]['id'] == saved['id']
     await sessions.state.get('websocket:two')
     await sessions.state.update_metadata('websocket:two', {'title':'Two'})
@@ -164,7 +164,7 @@ async def test_memory_keeps_sources_and_scopes_in_home(sessions, home):
 
 
 async def test_memory_tool_defaults_to_knowledge_and_restricts_dream_confirmation(sessions, home):
-    from cirno.memory.repository import MemoryRepository
+    from cirno_core.memory.repository import MemoryRepository
     tool = MemoryTool(sessions)
     with context():
         event = json.loads(await tool.execute(action='save', content='Historical widget setting', source='test:user', tags=['widget'], observed_at='2024-02-29T12:00:00Z'))
@@ -173,7 +173,7 @@ async def test_memory_tool_defaults_to_knowledge_and_restricts_dream_confirmatio
         assert json.loads(await tool.execute(action='tags'))['tags'] == [{'name': 'widget', 'count': 1}]
         denied = await tool.execute(action='confirm', memory_id=event['id'], input_revision=1, outcome='skipped', reason='Ordinary execution cannot settle Dream')
         assert getattr(denied, 'is_error', False)
-    repo = MemoryRepository(home)
+    repo = MemoryRepository(home / "home")
     token, _ = repo.pending()
     dream = MemoryTool(sessions, maintenance=True, owner_access=dict(session_key='websocket:one', project_id=None, maintenance=False), evidence_ids={event['id']}, batch_token=token)
     with context():
@@ -184,7 +184,7 @@ async def test_memory_tool_defaults_to_knowledge_and_restricts_dream_confirmatio
 
 
 def test_skill_history_preserves_versions_without_rollback(home):
-    directory = home / 'skills' / 'example'
+    directory = home / 'home' / 'skills' / 'example'
     directory.mkdir(parents=True)
     (directory / 'SKILL.md').write_text('---\nname: example\ndescription: Example skill\n---\nOriginal instructions\n')
     script = directory / 'run.py'
@@ -210,7 +210,7 @@ def test_percent_threshold_validation_and_model_inheritance():
 
 async def test_node_output_is_bounded_and_ssh_failure_is_visible(home):
     import sys
-    nodes = Nodes(InstanceData(home))
+    nodes = Nodes(InstanceData(home / "state"))
     out = await nodes._run([sys.executable, '-c', 'import sys; sys.stdout.write("x"*3000000)'])
     assert len(out) == 64000
     with pytest.raises(RuntimeError, match='specific failure'):
@@ -221,9 +221,9 @@ async def test_node_output_is_bounded_and_ssh_failure_is_visible(home):
 
 async def test_stop_cancels_the_live_goal_and_scheduler_does_not_restart_it(home):
     from unittest.mock import MagicMock
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
     from agent.session_helpers import stop_loop
 
     waiting = asyncio.Event()
@@ -273,11 +273,11 @@ async def test_wait_and_round_count_survive_a_new_storage_owner(home):
 
 
 async def test_model_percentage_uses_each_model_window_and_skips_short_context(sessions):
-    from cirno.agent.autocompact import AutoCompact
+    from cirno_core.agent.autocompact import AutoCompact
     runtime=SimpleNamespace(context_window_tokens=10000,idle_compact_percent=20,idle_compact_keep_percent=5)
     key='websocket:one'
     consolidator=SimpleNamespace(estimate_session_prompt_tokens=lambda *args,**kwargs:(1000,'test'),compact_idle_session=AsyncMock(return_value='Summary'))
-    compact=AutoCompact(sessions=sessions,consolidator=consolidator,session_ttl_minutes=15,session_lock=lambda key:asyncio.Lock(),trigger_percent=30,keep_percent=3)
+    compact=AutoCompact(sessions=sessions,consolidator=consolidator,idle_compact_after_minutes=15,session_lock=lambda key:asyncio.Lock(),trigger_percent=30,keep_percent=3)
     compact._is_expired = lambda *args, **kwargs: True
     await compact._archive(key,runtime=runtime)
     consolidator.compact_idle_session.assert_not_awaited()
@@ -291,8 +291,8 @@ async def test_model_percentage_uses_each_model_window_and_skips_short_context(s
 
 
 async def test_dream_cannot_mix_project_evidence_or_update_shared_memory(sessions, home):
-    from cirno.memory.repository import MemoryRepository
-    repo = MemoryRepository(home)
+    from cirno_core.memory.repository import MemoryRepository
+    repo = MemoryRepository(home / "home")
     own = repo.save('project A fact', source='test:a', session_key='websocket:one', project_id='p1', scope='project')
     other = repo.save('project B fact', source='test:b', session_key='websocket:two', project_id='p2', scope='project')
     shared = repo.save('shared preference', source='test:user', session_key='user', scope='user', layer='knowledge')

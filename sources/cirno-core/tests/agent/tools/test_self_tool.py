@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.runtime_control import AgentRuntimeControl
-from cirno.agent.tools.self import MyTool
-from cirno.agent.tools.shell import ExecToolConfig
-from cirno.agent.tools.web import WebSearchConfig, WebToolsConfig
-from cirno.config.schema import ModelPresetConfig
-from cirno.providers.base import LLMUsage
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.runtime_control import AgentRuntimeControl
+from cirno_core.agent.tools.self import MyTool
+from cirno_core.agent.tools.shell import ExecToolConfig
+from cirno_core.agent.tools.web import WebSearchConfig, WebToolsConfig
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.providers.base import LLMUsage
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -580,8 +580,8 @@ class TestSubagentHookStatus:
     @pytest.mark.asyncio
     async def test_after_iteration_updates_status(self):
         """after_iteration should copy iteration, tool_events, usage to status."""
-        from cirno.agent.hook import AgentHookContext
-        from cirno.agent.subagents.manager import SubagentStatus, _SubagentHook
+        from cirno_core.agent.hook import AgentHookContext
+        from cirno_core.agent.subagents.manager import SubagentStatus, _SubagentHook
 
         status = SubagentStatus(
             task_id="test",
@@ -607,8 +607,8 @@ class TestSubagentHookStatus:
     @pytest.mark.asyncio
     async def test_after_iteration_with_error(self):
         """after_iteration should set status.error when context has an error."""
-        from cirno.agent.hook import AgentHookContext
-        from cirno.agent.subagents.manager import SubagentStatus, _SubagentHook
+        from cirno_core.agent.hook import AgentHookContext
+        from cirno_core.agent.subagents.manager import SubagentStatus, _SubagentHook
 
         status = SubagentStatus(
             task_id="test",
@@ -898,7 +898,7 @@ class TestRequestContext:
             session_key="feishu:oc_abc123",
         )
 
-        with patch("cirno.agent.tools.self.logger.info") as info:
+        with patch("cirno_core.agent.tools.self.logger.info") as info:
             with request_context(ctx):
                 tool._audit("modify", "temperature = 0.2")
 

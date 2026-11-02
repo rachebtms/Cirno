@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.utils.prompt_templates import render_template
+from cirno_core.utils.prompt_templates import render_template
 
 _ARCHIVE_PROMPT = render_template("agent/consolidator_archive.md", strip=True)
 
@@ -18,9 +18,9 @@ class TestNewCommandArchival:
 
     @staticmethod
     def _make_loop(tmp_path: Path):
-        from cirno.agent.loop import AgentLoop
-        from cirno.bus.queue import MessageBus
-        from cirno.providers.base import GenerationSettings, LLMResponse
+        from cirno_core.agent.loop import AgentLoop
+        from cirno_core.bus.queue import MessageBus
+        from cirno_core.providers.base import GenerationSettings, LLMResponse
 
         bus = MessageBus()
         provider = MagicMock(aclose=AsyncMock())
@@ -46,7 +46,7 @@ class TestNewCommandArchival:
         tmp_path: Path,
     ) -> None:
         """/new clears session immediately; archive is fire-and-forget."""
-        from cirno.bus.events import InboundMessage
+        from cirno_core.bus.events import InboundMessage
 
         loop = self._make_loop(tmp_path)
         session = loop.sessions.get_or_create("cli:test")
@@ -84,7 +84,7 @@ class TestNewCommandArchival:
         self,
         tmp_path: Path,
     ) -> None:
-        from cirno.bus.events import InboundMessage
+        from cirno_core.bus.events import InboundMessage
 
         loop = self._make_loop(tmp_path)
         loop.set_runtime_context_window(128_000)
@@ -119,7 +119,7 @@ class TestNewCommandArchival:
 
     @pytest.mark.asyncio
     async def test_new_clears_session_and_responds(self, tmp_path: Path) -> None:
-        from cirno.bus.events import InboundMessage
+        from cirno_core.bus.events import InboundMessage
 
         loop = self._make_loop(tmp_path)
         session = loop.sessions.get_or_create("cli:test")
@@ -147,7 +147,7 @@ class TestNewCommandArchival:
     @pytest.mark.asyncio
     async def test_aclose_drains_background_tasks(self, tmp_path: Path) -> None:
         """aclose waits for background tasks to complete."""
-        from cirno.bus.events import InboundMessage
+        from cirno_core.bus.events import InboundMessage
 
         loop = self._make_loop(tmp_path)
         session = loop.sessions.get_or_create("cli:test")

@@ -4,29 +4,29 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.coordination import SetSessionTitleTool
-from cirno.agent.tools.session_messages import SendSessionMessageTool
-from cirno.bus.queue import MessageBus
-from cirno.config.home import set_home_path
-from cirno.runtime.heartbeat import enqueue_heartbeat
-from cirno.storage.instance import InstanceData
-from cirno.nodes.service import Nodes
-from cirno.session.manager import SessionManager
-from cirno.session.recovery import pending_followups
-from cirno.webui.instance_api import instance_action
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.coordination import SetSessionTitleTool
+from cirno_core.agent.tools.session_messages import SendSessionMessageTool
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.home import set_instance_path
+from cirno_core.runtime.heartbeat import enqueue_heartbeat
+from cirno_core.storage.instance import InstanceData
+from cirno_core.nodes.service import Nodes
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.recovery import pending_followups
+from cirno_server.webui.instance_api import instance_action
 
 
 @pytest.fixture
 async def setup(tmp_path):
     home = tmp_path / "home"
-    set_home_path(home)
+    set_instance_path(home)
     sessions = SessionManager(home / "workspace", sessions_root=home / "sessions")
     await sessions.state.get("websocket:work")
     bus = MessageBus()
     yield home, sessions, bus
     await sessions.state.aclose()
-    set_home_path(None)
+    set_instance_path(None)
 
 
 async def test_heartbeat_queues_once_and_survives_restart(setup):
@@ -78,7 +78,7 @@ async def test_agent_titles_notify_sidebar_and_preserve_manual_titles(setup):
 
 async def test_password_nodes_redact_and_preserve_credentials(setup, monkeypatch):
     home, sessions, bus = setup
-    data = InstanceData(home)
+    data = InstanceData(home / "state")
     nodes = Nodes(data)
     saved = nodes.save_node(
         {
@@ -110,9 +110,9 @@ async def test_password_nodes_redact_and_preserve_credentials(setup, monkeypatch
 
 
 async def test_full_access_write_is_not_limited_to_home_exceptions(setup):
-    from cirno.agent.tools.context import ToolContext
-    from cirno.agent.tools.filesystem import WriteFileTool
-    from cirno.config.schema import ToolsConfig
+    from cirno_core.agent.tools.context import ToolContext
+    from cirno_core.agent.tools.filesystem import WriteFileTool
+    from cirno_core.config.schema import ToolsConfig
 
     home, _, _ = setup
     workspace = home / "workspace"
@@ -128,8 +128,8 @@ async def test_full_access_write_is_not_limited_to_home_exceptions(setup):
 async def test_heartbeat_run_consumes_journal_and_delivers_tool_reply(setup):
     from unittest.mock import MagicMock
 
-    from cirno.agent.loop import AgentLoop
-    from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
 
     home, _, bus = setup
     provider = MagicMock(aclose=AsyncMock())
@@ -150,8 +150,8 @@ async def test_heartbeat_run_consumes_journal_and_delivers_tool_reply(setup):
         ]
     )
     loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model")
-    from cirno.agent.turn_delivery import TurnDeliveryFactory
-    from cirno.session.webui_turns import WebuiTurnRoutePolicy
+    from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+    from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
     loop.turn_delivery_factory = TurnDeliveryFactory(bus, route_policy=WebuiTurnRoutePolicy(loop.sessions))
     try:
         await enqueue_heartbeat(loop.sessions, bus, "Send one useful update")
@@ -180,10 +180,10 @@ async def test_heartbeat_run_consumes_journal_and_delivers_tool_reply(setup):
 async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_key, background):
     from unittest.mock import MagicMock
 
-    from cirno.agent.loop import AgentLoop
-    from cirno.bus.events import InboundMessage
-    from cirno.providers.base import GenerationSettings, LLMResponse
-    from cirno.webui.instance_api import ensure_global_session
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.providers.base import GenerationSettings, LLMResponse
+    from cirno_core.session.global_session import ensure_global_session
 
     home, _, bus = setup
     provider = MagicMock(aclose=AsyncMock())
@@ -225,9 +225,9 @@ async def test_project_is_bound_before_chat_attach(setup):
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
-    from cirno.webui.inbound_commands import WebUICommandRouter
+    from cirno_server.webui.inbound_commands import WebUICommandRouter
     home, sessions, _ = setup
-    project = InstanceData(home).save('projects', {'name':'Independent project'})
+    project = InstanceData(home / "state").save('projects', {'name':'Independent project'})
     scope = SimpleNamespace(payload=lambda: {'kind':'directory','path':str(home/'workspace')})
     router = object.__new__(WebUICommandRouter)
     transport = SimpleNamespace(webui_attach=MagicMock(), webui_send_event=AsyncMock())
@@ -250,7 +250,7 @@ async def test_project_is_bound_before_chat_attach(setup):
 
 
 async def test_fixed_cirno_name_and_role_prompt_use_session_identity(setup):
-    from cirno.agent.tools.coordination import CreateSessionTool
+    from cirno_core.agent.tools.coordination import CreateSessionTool
 
     _, sessions, bus = setup
     await sessions.state.get("websocket:global")  # No is_global flag is needed.
@@ -268,7 +268,7 @@ async def test_fixed_cirno_name_and_role_prompt_use_session_identity(setup):
         channel="websocket", chat_id="work", session_key="websocket:work",
     ))
     assert "Use conversations__set_title early" in ordinary.content
-    from cirno.session.webui_turns import maybe_generate_webui_title
+    from cirno_core.session.webui_turns import maybe_generate_webui_title
     provider = AsyncMock()
     await sessions.state.update_metadata(context.session_key, {"webui": True})
     assert not await maybe_generate_webui_title(
@@ -315,8 +315,8 @@ async def test_manual_rename_wins_when_tool_is_already_in_flight(setup, monkeypa
 
 @pytest.mark.parametrize("recreate", [False, True])
 async def test_stale_goal_tools_cannot_recreate_or_mutate_conversation(setup, recreate):
-    from cirno.agent.goals.permission import goal_mutation_permission
-    from cirno.agent.tools.long_task import CreateGoalTool, GetGoalTool, UpdateGoalTool
+    from cirno_core.agent.goals.permission import goal_mutation_permission
+    from cirno_core.agent.tools.long_task import CreateGoalTool, GetGoalTool, UpdateGoalTool
 
     _, sessions, _ = setup
     header = await sessions.state.read_header("websocket:work")
@@ -346,7 +346,7 @@ async def test_interrupted_node_submission_records_unknown_outcome(setup, monkey
     import asyncio
 
     home, _, _ = setup
-    nodes = Nodes(InstanceData(home))
+    nodes = Nodes(InstanceData(home / "state"))
     execute = AsyncMock(return_value="SSH login banner\n42")
     if failure == "cancelled":
         execute.side_effect = asyncio.CancelledError()
@@ -360,8 +360,8 @@ async def test_interrupted_node_submission_records_unknown_outcome(setup, monkey
 
 
 async def test_inflight_goal_completion_cannot_overwrite_user_pause(setup, monkeypatch):
-    from cirno.agent.tools.long_task import UpdateGoalTool
-    from cirno.agent.tools.registry import ToolRegistry
+    from cirno_core.agent.tools.long_task import UpdateGoalTool
+    from cirno_core.agent.tools.registry import ToolRegistry
 
     _, sessions, bus = setup
     header = await sessions.state.read_header("websocket:work")
@@ -406,9 +406,9 @@ async def test_reset_keeps_cirno_identity_but_discards_old_goal_and_reports(setu
 
 
 async def test_goal_continuation_enables_webui_execution_stream(setup):
-    from cirno.agent.turn_delivery import TurnDeliveryFactory
-    from cirno.bus.events import InboundMessage
-    from cirno.session.webui_turns import WebuiTurnRoutePolicy
+    from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
 
     _, sessions, bus = setup
     await sessions.state.update_metadata("websocket:work", {"webui": True})

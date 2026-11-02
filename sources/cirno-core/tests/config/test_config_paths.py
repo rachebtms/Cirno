@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from cirno.config.paths import (
+from cirno_core.config.paths import (
     get_cron_dir,
     get_data_dir,
     get_logs_dir,
@@ -13,20 +13,20 @@ from cirno.config.paths import (
 
 def test_runtime_dirs_follow_config_path(monkeypatch, tmp_path: Path) -> None:
     config_file = tmp_path / "instance-a" / "config.json"
-    monkeypatch.setattr("cirno.config.paths.get_config_path", lambda: config_file)
+    monkeypatch.setattr("cirno_core.config.paths.get_config_path", lambda: config_file)
 
-    assert get_data_dir() == config_file.parent
-    assert get_runtime_subdir("cron") == config_file.parent / "cron"
-    assert get_cron_dir() == config_file.parent / "cron"
-    assert get_logs_dir() == config_file.parent / "logs"
+    assert get_data_dir() == config_file.parent / "state"
+    assert get_runtime_subdir("cron") == config_file.parent / "state" / "cron"
+    assert get_cron_dir() == config_file.parent / "state" / "cron"
+    assert get_logs_dir() == config_file.parent / "state" / "logs"
 
 
 def test_media_dir_supports_channel_namespace(monkeypatch, tmp_path: Path) -> None:
     config_file = tmp_path / "instance-b" / "config.json"
-    monkeypatch.setattr("cirno.config.paths.get_config_path", lambda: config_file)
+    monkeypatch.setattr("cirno_core.config.paths.get_config_path", lambda: config_file)
 
-    assert get_media_dir() == config_file.parent / "media"
-    assert get_media_dir("telegram") == config_file.parent / "media" / "telegram"
+    assert get_media_dir() == config_file.parent / "state" / "media"
+    assert get_media_dir("telegram") == config_file.parent / "state" / "media" / "telegram"
 
 
 def test_workspace_path_is_explicitly_resolved() -> None:

@@ -34,7 +34,7 @@ export function networkSafetyFormFromPayload(payload: SettingsPayload): NetworkS
 }
 
 export function visibleWebuiDefaultAccessMode(mode: string | null | undefined): WebuiDefaultAccessMode {
-  return mode === "full" ? "full" : "default";
+  return mode === "full" || mode === "review" ? mode : "default";
 }
 
 export function AdvancedSettings({
@@ -106,6 +106,7 @@ export function AdvancedSettings({
               value={form.webuiDefaultAccessMode}
               options={[
                 { value: "default", label: tx("settings.values.defaultPermission", "Default Permission") },
+                { value: "review", label: tx("thread.composer.workspace.review", "AI review") },
                 { value: "full", label: tx("settings.values.fullAccess", "Full Access") },
               ]}
               onChange={(webuiDefaultAccessMode) =>
@@ -116,6 +117,7 @@ export function AdvancedSettings({
               }
             />
           </SettingsRow>
+          {form.webuiDefaultAccessMode === "review" && <p className="px-4 text-xs leading-relaxed text-destructive">{tx("thread.composer.workspace.reviewDescription", "")}</p>}
           <RestartSettingsFooter
             autoSave
             error={Boolean(error)}

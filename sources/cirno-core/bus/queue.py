@@ -8,10 +8,10 @@ from typing import Any, TypeVar, overload
 
 from loguru import logger
 
-from cirno.bus.events import InboundMessage, OutboundMessage
-from cirno.bus.outbound_events import outbound_message_for_event
-from cirno.bus.agent_events import AgentEvent
-from cirno.runtime.admission import RuntimeAdmission
+from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.outbound_events import outbound_message_for_event
+from cirno_core.bus.agent_events import AgentEvent
+from cirno_core.runtime.admission import RuntimeAdmission
 
 _EventT = TypeVar("_EventT", bound=AgentEvent)
 EventHandler = Callable[[AgentEvent], Awaitable[None] | None]

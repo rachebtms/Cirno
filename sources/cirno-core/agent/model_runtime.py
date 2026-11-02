@@ -10,10 +10,10 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import cast
 
-from cirno.agent import model_presets as preset_helpers
-from cirno.config.schema import Config, ModelPresetConfig
-from cirno.providers.base import LLMProvider
-from cirno.providers.factory import (
+from cirno_core.agent import model_presets as preset_helpers
+from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.factory import (
     ProviderSnapshot,
     build_isolated_provider_snapshot,
     build_provider_snapshot,
@@ -21,8 +21,8 @@ from cirno.providers.factory import (
     provider_signature,
     validate_provider_setup,
 )
-from cirno.providers.request_overrides import isolate_request_overrides
-from cirno.utils.llm_runtime import LLMRuntime, runtime_from_provider_snapshot
+from cirno_core.providers.request_overrides import isolate_request_overrides
+from cirno_core.utils.llm_runtime import LLMRuntime, runtime_from_provider_snapshot
 
 
 def _override_key(value: object, active: set[int] | None = None) -> tuple[object, ...] | None:

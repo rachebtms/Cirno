@@ -7,8 +7,8 @@ from typing import Any, cast
 
 from loguru import logger
 
-from cirno.providers.base import LLMResponse, LLMUsage, ProviderConversationState
-from cirno.providers.openai_responses.converters import convert_messages
+from cirno_core.providers.base import LLMResponse, LLMUsage, ProviderConversationState
+from cirno_core.providers.openai_responses.converters import convert_messages
 
 RESPONSES_STATE_KIND = "openai_responses"
 RESPONSES_STATE_VERSION = 1

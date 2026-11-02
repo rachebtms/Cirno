@@ -6,15 +6,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.session_helpers import stop_loop
-from cirno.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
-from cirno.agent.loop import AgentLoop
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
-from cirno.runtime.context import public_history_messages
-from cirno.session.goal_state import GOAL_STATE_KEY
-from cirno.session.history_visibility import is_hidden_history_message
-from cirno.session.manager import SessionManager
+from cirno_core.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.runtime.context import public_history_messages
+from cirno_core.session.goal_state import GOAL_STATE_KEY
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.session.manager import SessionManager
 
 
 @pytest.mark.parametrize("command", [
@@ -172,8 +172,8 @@ async def test_goal_at_iteration_limit_stays_queued_for_a_tool_capable_turn(tmp_
 
 
 async def test_generated_goal_input_survives_pending_followup_recovery(tmp_path):
-    from cirno.command.router import CommandContext
-    from cirno.session.recovery import pending_followups
+    from cirno_core.command.router import CommandContext
+    from cirno_core.session.recovery import pending_followups
 
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"

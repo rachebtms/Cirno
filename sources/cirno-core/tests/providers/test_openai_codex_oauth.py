@@ -9,8 +9,8 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import pytest
 from oauth_cli_kit.models import OAuthToken
 
-import cirno.providers.openai_codex_oauth as codex_oauth
-from cirno.providers.openai_codex_oauth import (
+import cirno_core.providers.openai_codex_oauth as codex_oauth
+from cirno_core.providers.openai_codex_oauth import (
     OpenAICodexOAuthError,
     OpenAICodexOAuthInputError,
     complete_openai_codex_oauth_login,

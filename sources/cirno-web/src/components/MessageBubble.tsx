@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Activity, Check, ChevronRight, CircleAlert, Clock3, Copy, Quote, Wrench } from "lucide-react";
+import { Activity, Check, ChevronRight, CircleAlert, Clock3, Copy, Quote, Wrench, SquarePen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DisclosureContent } from "@/components/ui/disclosure";
 
@@ -147,6 +147,7 @@ interface MessageBlockMenuActionsProps {
   message: UIMessage;
   isTurnStreaming?: boolean;
   onForkFromHere?: () => void;
+  onEdit?: () => void;
   activity?: MessageBlockMenuActivity;
   sheet?: boolean;
 }
@@ -156,12 +157,14 @@ export function MessageBlockMenuActions({
   message,
   isTurnStreaming = false,
   onForkFromHere,
+  onEdit,
   activity,
   sheet = false,
 }: MessageBlockMenuActionsProps) {
   const { t } = useTranslation();
   const content = messageCopyContent(message, t);
   const hasText = content.trim().length > 0;
+  const showEdit = message.role === "user" && !message.inputOrigin && !message.sessionMessage && !isTurnStreaming && onEdit !== undefined;
   const showFork = message.role === "assistant"
     && !message.isStreaming
     && !isTurnStreaming
@@ -185,14 +188,19 @@ export function MessageBlockMenuActions({
         data-message-block-menu-actions
         className={cn("flex max-w-full flex-col items-start gap-1", sheet ? "w-full" : "w-max")}
       >
-        {(!sheet && hasText) || showFork || activity ? (
+        {(!sheet && hasText) || showFork || showEdit || activity ? (
           <div
             data-message-block-toolbar
             className={cn("flex w-full flex-wrap gap-x-1 gap-y-1", sheet ? "flex-col items-stretch" : "items-center")}
           >
-            {(!sheet && hasText) || showFork ? (
+            {(!sheet && hasText) || showFork || showEdit ? (
               <div className="flex min-h-[var(--message-block-control-size)] items-center gap-0.5">
                 {!sheet && hasText ? <MessageCopyButton message={message} /> : null}
+                {showEdit ? <HoverHint content={t("message.edit")} side="top"><button type="button" onClick={onEdit}
+                  aria-label={t("message.edit")} data-message-edit-action
+                  className={cn("inline-flex h-[var(--message-block-control-size)] w-[var(--message-block-action-width)] items-center justify-center rounded-control text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", sheet && "w-full justify-start gap-2 px-2 text-sm")}>
+                  <SquarePen className="h-3.5 w-3.5" />{sheet ? <span>{t("message.edit")}</span> : null}
+                </button></HoverHint> : null}
                 {showFork ? (
                   <HoverHint content={t("message.forkFromHere")} side="top" align="center">
                       <button
@@ -431,6 +439,30 @@ export function MessageBubble({
 
   if (message.kind === "trace") {
     return <TraceGroup message={message} />;
+  }
+
+  if (message.role === "user" && message.inputOrigin?.kind === "supervision" && message.sessionMessage) {
+    const origin = message.inputOrigin;
+    const action = t(`thread.supervision.actions.${origin.action?.replaceAll(".", "_")}`, { defaultValue: t("thread.supervision.changed") });
+    const fields = Object.entries(origin.values ?? {}).map(([key, value]) =>
+      `${t(`thread.supervision.fields.${key}`)}: ${value}`,
+    );
+    return <IncomingSessionMessage
+      message={{ ...message, content: [action, ...fields].join("\n\n") }}
+      contextMenu={contextMenu} onOpenFilePreview={onOpenFilePreview}
+    />;
+  }
+
+  if (message.role === "user" && message.inputOrigin) {
+    return (
+      <details data-system-input className="mr-auto w-full min-w-0 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3 text-ui">
+        <summary className="cursor-pointer select-none text-muted-foreground">
+          {t(`thread.inputSources.${message.inputOrigin.kind}`)}
+          {message.inputOrigin.kind !== "heartbeat" && message.inputOrigin.label ? ` · ${message.inputOrigin.label}` : ""}
+        </summary>
+        <div className="mt-3 min-w-0 break-words text-reading"><MarkdownText onOpenFilePreview={onOpenFilePreview}>{message.content}</MarkdownText></div>
+      </details>
+    );
   }
 
   if (message.role === "user" && message.sessionMessage) {

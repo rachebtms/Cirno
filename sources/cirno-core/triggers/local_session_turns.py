@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from cirno.session.automation_spec import (
+from cirno_core.session.automation_spec import (
     AutomationTurnSpec,
     automation_trigger,
 )

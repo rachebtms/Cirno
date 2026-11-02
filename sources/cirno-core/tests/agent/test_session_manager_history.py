@@ -1,11 +1,11 @@
-from cirno.runtime.context import (
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RuntimeContextBlock,
     append_runtime_context,
 )
-from cirno.session.history_visibility import HIDDEN_HISTORY_META
-from cirno.session.manager import Session, SessionManager
-from cirno.session.summary import SUMMARY_CONTINUATION_TEXT
+from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
+from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT
 
 
 def _assert_no_orphans(history: list[dict]) -> None:
@@ -730,7 +730,7 @@ def test_get_history_respects_max_tokens(monkeypatch):
 
     token_map = {"u1": 50, "a1": 50, "u2": 50, "a2": 50, "u3": 50, "a3": 50}
     monkeypatch.setattr(
-        "cirno.session.manager.estimate_message_tokens",
+        "cirno_core.session.manager.estimate_message_tokens",
         lambda message: token_map.get(message.get("content"), 0),
     )
 
@@ -750,7 +750,7 @@ def test_get_history_recovers_user_when_token_slice_would_be_assistant_only(monk
     )
     token_map = {"u1": 100, "a1": 100, "u2": 100, "a2": 100}
     monkeypatch.setattr(
-        "cirno.session.manager.estimate_message_tokens",
+        "cirno_core.session.manager.estimate_message_tokens",
         lambda message: token_map.get(message.get("content"), 0),
     )
 

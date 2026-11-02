@@ -11,21 +11,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from cirno.skills.metadata import (
+from cirno_core.skills.metadata import (
     BUILTIN_SKILLS_DIR as BUILTIN_SKILLS_DIR,
 )
-from cirno.skills.metadata import (
+from cirno_core.skills.metadata import (
     SKILL_FRONTMATTER as _STRIP_SKILL_FRONTMATTER,
 )
-from cirno.skills.metadata import (
+from cirno_core.skills.metadata import (
     parse_skill_metadata as parse_skill_metadata,
 )
-from cirno.skills.metadata import (
+from cirno_core.skills.metadata import (
     valid_skill_metadata as valid_skill_metadata,
 )
-from cirno.skills.metadata import BUILTIN_DOCUMENTS_DIR
-from cirno.config.home import get_home_path
-from cirno.runtime.context import RuntimeContextBlock
+from cirno_core.skills.metadata import BUILTIN_DOCUMENTS_DIR
+from cirno_core.config.home import get_home_path
+from cirno_core.runtime.context import RuntimeContextBlock
 
 _SKILL_REFERENCE = re.compile(r"(?<![\w$])\$([A-Za-z0-9_-]+)")
 
@@ -108,7 +108,7 @@ class SkillsLoader:
         return skills
 
     def _discover_skills(self) -> list[dict[str, str]]:
-        from cirno.agent.plugins import enabled_agent_plugin_skill_documents
+        from cirno_core.agent.plugins import enabled_agent_plugin_skill_documents
 
         plugin_skills = enabled_agent_plugin_skill_documents(self.workspace)
         disabled = set(self.disabled_skills)
@@ -137,7 +137,7 @@ class SkillsLoader:
         if disabled:
             skills = [s for s in skills if s["name"] not in disabled]
 
-        return skills
+        return sorted(skills, key=lambda skill: skill["name"])
 
     def load_skill(self, name: str) -> str | None:
         """
@@ -313,7 +313,7 @@ class SkillsLoader:
         """Return whether a skill can run and why not when it cannot."""
         directory = get_home_path() / "skills" / name
         if directory.is_dir():
-            from cirno.skills.history import snapshot_skill
+            from cirno_core.skills.history import snapshot_skill
             validation = snapshot_skill(directory, document_content=self.load_skill(name))
             if validation is None:
                 return False, "SKILL.md is missing"

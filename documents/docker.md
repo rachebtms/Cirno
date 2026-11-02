@@ -6,7 +6,7 @@ The repository workflow `.github/workflows/container.yml` is configured to verif
 
 - Pull requests run frontend and backend checks and build an AMD64 image for a startup smoke test. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.1.2` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.1.3` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
@@ -20,14 +20,14 @@ Use the repository's minimal `compose.yaml` to run the published image:
 
 ```sh
 docker compose up -d
-docker compose logs cirno-gateway
+docker compose logs cirno
 ```
 
-The example publishes only the Web UI port and persists Home. Model providers, Telegram and other features are configured in the browser. There are no default CPU or memory limits.
+The example publishes only the Web UI port and persists the instance root. Model providers, Telegram and other features are configured in the browser. There are no default CPU or memory limits.
 
-Open `http://localhost:8765`. On a new Home, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. The next page configures model providers and model configurations; this step can be deferred to Settings. No terminal setup code or generated password is required. The Home directory is mounted from `~/.cirno`; it contains configuration, profiles, memory, skills and runtime records. Existing configuration is preserved on restart.
+Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. The next page configures model providers and model configurations; this step can be deferred to Settings. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.2`; otherwise track `latest`. Optional memory embeddings are disabled by default. A container image build does not bundle an embedding model.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.3`; otherwise track `latest`. Optional memory embeddings are disabled by default. A container image build does not bundle an embedding model.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
@@ -35,10 +35,10 @@ The workflow smoke test starts the server, checks its health endpoint and Web UI
 
 ## Networking and authentication
 
-Compose publishes the Web interface on port 8765. The gateway health endpoint stays inside the container. New instances enable `channels.websocket.browserSetup` and use browser registration. The first person to register becomes the instance owner: keep a new deployment private until you have registered, and use HTTPS when sending credentials over an untrusted network.
+Compose publishes the Web interface on port 8765. The server health endpoint stays inside the container. New instances enable `channels.websocket.browserSetup` and use browser registration. The first person to register becomes the instance owner: keep a new deployment private until you have registered, and use HTTPS when sending credentials over an untrusted network.
 
-Owner credentials and browser sessions are stored in `webui-auth.sqlite3` beside the instance configuration, outside the workspace. Passwords use salted scrypt hashes; session tokens are also hashed in storage. Login uses an HttpOnly, SameSite=Strict cookie with a 30-day lifetime. Signing out revokes that browser session. The account, sessions and onboarding progress survive service restarts.
+Owner credentials and browser sessions are stored in `state/webui-auth.sqlite3` under the instance root, outside the workspace. Passwords use salted scrypt hashes; session tokens are also hashed in storage. Login uses an HttpOnly, SameSite=Strict cookie with a 30-day lifetime. Signing out revokes that browser session. The account, sessions and onboarding progress survive service restarts.
 
-An explicitly supplied `CIRNO_WEB_TOKEN` retains shared-password authentication for a new Home instead of browser registration. Existing `config.json` files keep their previous authentication mode. Changing that environment variable does not reset an existing account or password. Configure model credentials in the browser or reference environment variables in configuration.
+An explicitly supplied `CIRNO_WEB_TOKEN` retains shared-password authentication for a new instance instead of browser registration. Existing `config.json` files keep their previous authentication mode. Changing that environment variable does not reset an existing account or password. Configure model credentials in the browser or reference environment variables in configuration.
 
-The entrypoint fixes ownership of the mounted Home and drops to the Cirno user. Full Access refers to the container's files and processes, including explicitly mounted paths. `compose.bwrap.yaml` is an optional override for the Bubblewrap command sandbox; it adds privileges and unconfines AppArmor/seccomp for that mode. The default Compose configuration does not use that override.
+The entrypoint fixes ownership of the mounted instance root and drops to the Cirno user. Full Access refers to the container's files and processes, including explicitly mounted paths. `compose.bwrap.yaml` is an optional override for the Bubblewrap command sandbox; it adds privileges and unconfines AppArmor/seccomp for that mode. The default Compose configuration does not use that override.

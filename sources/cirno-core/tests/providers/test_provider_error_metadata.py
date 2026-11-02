@@ -2,9 +2,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.providers.anthropic_provider import AnthropicProvider
-from cirno.providers.base import LLMProvider, LLMResponse
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.base import LLMProvider, LLMResponse
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 def _fake_response(

@@ -9,15 +9,15 @@ import pytest
 from agent.runner_helpers import failed_test_consolidator
 from openai import AsyncOpenAI
 
-from cirno.agent.hook import AgentHook
-from cirno.memory.consolidation import MemoryArchiver, MemoryStore
-from cirno.agent.runner import AgentRunner, AgentRunSpec
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import ModelAPICapabilities, find_by_name
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.agent.hook import AgentHook
+from cirno_core.memory.consolidation import MemoryArchiver, MemoryStore
+from cirno_core.agent.runner import AgentRunner, AgentRunSpec
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
+from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import ModelAPICapabilities, find_by_name
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 class _EventStream(httpx.AsyncByteStream):

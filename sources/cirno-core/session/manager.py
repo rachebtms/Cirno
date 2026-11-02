@@ -11,28 +11,28 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, TypedDict, TypeVar, cast
 from uuid import uuid4
 
-from cirno.providers.base import ProviderConversationState
-from cirno.runtime.context import (
+from cirno_core.providers.base import ProviderConversationState
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     public_history_message,
 )
-from cirno.session.display_history import HistoryFact, HistoryReader
-from cirno.session.history_visibility import HIDDEN_HISTORY_META, is_hidden_history_message
-from cirno.session.location import SessionLocation
-from cirno.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno.session.summary import SUMMARY_CONTINUATION_TEXT, is_summary_checkpoint
-from cirno.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY, SessionTypes
-from cirno.utils.helpers import (
+from cirno_core.session.display_history import HistoryFact, HistoryReader
+from cirno_core.session.history_visibility import HIDDEN_HISTORY_META, is_hidden_history_message
+from cirno_core.session.location import SessionLocation
+from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
+from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT, is_summary_checkpoint
+from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY, SessionTypes
+from cirno_core.utils.helpers import (
     content_with_media_breadcrumbs,
     estimate_message_tokens,
     find_legal_message_start,
     recent_message_start_index,
     strip_think,
 )
-from cirno.utils.subagent_channel_display import scrub_subagent_announce_body
+from cirno_core.utils.subagent_channel_display import scrub_subagent_announce_body
 
 if TYPE_CHECKING:
-    from cirno.session.state import SessionState
+    from cirno_core.session.state import SessionState
 
 _T = TypeVar("_T")
 SESSION_CACHE_MAX_SIZE = 128
@@ -49,6 +49,7 @@ _FORK_VOLATILE_METADATA_KEYS = {
     "work_report_pending",
     "delegation_source",
     "delegated_by",
+    "supervision_events",
     "pending_user_turn",
     "pending_user_followups",
     "runtime_checkpoint",
@@ -410,6 +411,7 @@ def fork_session(source: Session, target_key: str, before_user_index: int) -> Se
         updated_at=now,
         metadata=metadata,
         last_archived=last_archived,
+        policy=source.policy,
     )
     return target
 
@@ -423,7 +425,7 @@ class SessionManager:
         *,
         sessions_root: Path | None = None,
     ):
-        from cirno.session.sqlite_store import SqliteSessionStore
+        from cirno_core.session.sqlite_store import SqliteSessionStore
 
         self.workspace = workspace
         self.location = SessionLocation(workspace, sessions_root=sessions_root)
@@ -438,7 +440,7 @@ class SessionManager:
     def state(self) -> SessionState:
         """The asynchronous owner of session state transitions."""
         if self._state is None:
-            from cirno.session.state import SessionState
+            from cirno_core.session.state import SessionState
 
             self._state = SessionState(self._store, on_delete=self._notify_delete, types=self.types)
         return self._state
@@ -617,7 +619,7 @@ class SessionManager:
 
     def ensure_session_handles_offline(self) -> dict[str, str]:
         """Allocate missing handles during offline administration."""
-        from cirno.session.session_handles import (
+        from cirno_core.session.session_handles import (
             SESSION_HANDLE_METADATA_KEY,
             allocate_session_handles,
         )

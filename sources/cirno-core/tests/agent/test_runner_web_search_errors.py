@@ -13,11 +13,11 @@ from ddgs.exceptions import TimeoutException
 from ddgs.http_client import HttpClient
 
 from agent.runner_helpers import make_run_spec
-from cirno.agent.runner import AgentRunner
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.agent.tools.web import WebSearchTool
-from cirno.config.schema import AgentDefaults, WebSearchConfig
-from cirno.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.web import WebSearchTool
+from cirno_core.config.schema import AgentDefaults, WebSearchConfig
+from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 
 @pytest.mark.asyncio

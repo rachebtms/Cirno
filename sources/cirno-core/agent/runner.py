@@ -10,8 +10,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar, cast
 
-from cirno.agent.context import TranscriptInput
-from cirno.agent.context_governance import (
+from cirno_core.agent.context import TranscriptInput
+from cirno_core.agent.context_governance import (
     ContextCompactionState,
     ContextGovernanceConfig,
     ContextGovernor,
@@ -20,38 +20,38 @@ from cirno.agent.context_governance import (
     ProviderCompactionConsolidator,
     TranscriptBuilder,
 )
-from cirno.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext
-from cirno.agent.tools.context import tool_log_content_allowed
-from cirno.agent.tools.execution import execute_tool_calls
-from cirno.agent.tools.message import current_conversation_has_delivery, reset_message_delivery_segment
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.bus.agent_events import NO_EVENTS, EventSink
-from cirno.llm_usage.context import (
+from cirno_core.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext
+from cirno_core.agent.tools.context import tool_log_content_allowed
+from cirno_core.agent.tools.execution import execute_tool_calls
+from cirno_core.agent.tools.message import current_conversation_has_delivery, reset_message_delivery_segment
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.bus.agent_events import NO_EVENTS, EventSink
+from cirno_core.llm_usage.context import (
     LLMUsageSource,
     bind_llm_usage_source,
     reset_llm_usage_source,
     source_from_session_key,
 )
-from cirno.providers.base import (
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     LLMUsage,
     ProviderCallContext,
     ProviderConversationState,
 )
-from cirno.providers.conversation_state import ProviderConversationStateController
-from cirno.session.history_visibility import is_hidden_history_message
-from cirno.session.summary import SessionSummaryCheckpoint
-from cirno.utils.helpers import (
+from cirno_core.providers.conversation_state import ProviderConversationStateController
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.session.summary import SessionSummaryCheckpoint
+from cirno_core.utils.helpers import (
     build_assistant_message,
     estimate_message_tokens,
     estimate_prompt_tokens_chain,
     extract_reasoning,
     strip_reasoning_tags,
 )
-from cirno.utils.llm_runtime import LLMRuntime
-from cirno.utils.prompt_templates import render_template
-from cirno.utils.runtime import (
+from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.prompt_templates import render_template
+from cirno_core.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
     build_budget_exhausted_finalization_message,
     build_finalization_retry_message,

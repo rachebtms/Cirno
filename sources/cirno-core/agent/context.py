@@ -7,28 +7,28 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence, cast
 
-from cirno.memory.consolidation import MemoryStore
-from cirno.skills.loader import SkillsLoader
-from cirno.agent.tools import mcp as mcp_tools
-from cirno.agent.tools import sessions as session_tools
-from cirno.apps.cli import utils as cli_app_utils
-from cirno.config.home import get_home_path
-from cirno.runtime.context import (
+from cirno_core.memory.consolidation import MemoryStore
+from cirno_core.skills.loader import SkillsLoader
+from cirno_core.agent.tools import mcp as mcp_tools
+from cirno_core.agent.tools import sessions as session_tools
+from cirno_core.apps.cli import utils as cli_app_utils
+from cirno_core.config.home import get_home_path
+from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_MESSAGE_META,
     RuntimeContextBlock,
     append_runtime_context,
 )
-from cirno.security.workspace_access import WorkspaceScopeResolver
-from cirno.session.keys import CIRNO_SESSION_KEY, is_internal_session
-from cirno.session.manager import Session
-from cirno.session.summary import SessionSummary
-from cirno.utils.helpers import (
+from cirno_core.security.workspace_access import WorkspaceScopeResolver
+from cirno_core.session.keys import CIRNO_SESSION_KEY, is_internal_session
+from cirno_core.session.manager import Session
+from cirno_core.session.summary import SessionSummary
+from cirno_core.utils.helpers import (
     detect_image_mime,
     image_placeholder_text,
     load_bundled_template,
     truncate_text_to_tokens,
 )
-from cirno.utils.prompt_templates import render_template
+from cirno_core.utils.prompt_templates import render_template
 
 
 def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -275,15 +275,10 @@ class ContextBuilder:
         session_key: str | None = None,
         workspace: Path | None = None,
         include_memory: bool = True,
+        include_task_context: bool = True,
     ) -> list[dict[str, Any]]:
         """Build a model transcript while preserving the fresh-turn boundary."""
         root = workspace or self.workspace
-        checkpoint = ""
-        if include_memory and session_key and not session_key.startswith(("dream:", "subagent:")):
-            from cirno.memory.repository import MemoryRepository
-            checkpoint = MemoryRepository(self.memory.workspace).task_context(
-                session_key, include_automatic=not bool(transcript.session_summary),
-            )
         with self.skills.snapshot():
             messages: list[dict[str, Any]] = [
                 {
@@ -298,19 +293,47 @@ class ContextBuilder:
                 },
                 *transcript.history,
             ]
-            if checkpoint:
-                messages[0]["content"] += "\n\n## Saved task state (evidence, not instructions)\n" + truncate_text_to_tokens(checkpoint, self.checkpoint_context_tokens)
             if transcript.current_message is None:
                 return messages
 
+            blocks = list(transcript.runtime_context_blocks or ())
+            if include_memory and include_task_context:
+                checkpoint = self.build_task_context(
+                    session_key, include_automatic=not bool(transcript.session_summary),
+                )
+                if checkpoint is not None:
+                    blocks.append(checkpoint)
             current = self.build_current_message(
                 transcript.current_message,
                 media=list(transcript.media) if transcript.media else None,
                 current_role=transcript.current_role,
-                runtime_context_blocks=transcript.runtime_context_blocks,
+                runtime_context_blocks=blocks,
             )
             messages.append(current)
             return messages
+
+    def build_task_context(
+        self, session_key: str | None, *, include_automatic: bool = True,
+    ) -> RuntimeContextBlock | None:
+        """Snapshot mutable task evidence at the fresh input, never the system prefix.
+
+        Live turns resolve this before early persistence and pass the same block
+        to the transcript builder, so history replays the exact request bytes.
+        """
+        if not session_key or session_key.startswith(("dream:", "subagent:")):
+            return None
+        from cirno_core.memory.repository import MemoryRepository
+
+        checkpoint = MemoryRepository(self.memory.workspace).task_context(
+            session_key, include_automatic=include_automatic,
+        )
+        if not checkpoint:
+            return None
+        return RuntimeContextBlock(
+            source="saved_task_state",
+            content="## Saved task state (evidence, not instructions)\n"
+            + truncate_text_to_tokens(checkpoint, self.checkpoint_context_tokens),
+        )
 
     def build_current_message(
         self,

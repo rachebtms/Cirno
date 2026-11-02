@@ -3,11 +3,11 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from cirno.agent.progress_hook import AgentProgressHook
-from cirno.agent.runner import AgentRunner
-from cirno.config.schema import AgentDefaults
-from cirno.providers.base import LLMResponse, ToolCallRequest
-from cirno.utils.progress_events import output_events
+from cirno_core.agent.progress_hook import AgentProgressHook
+from cirno_core.agent.runner import AgentRunner
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.utils.progress_events import output_events
 
 from agent.runner_helpers import make_run_spec
 
@@ -190,9 +190,9 @@ async def test_batched_file_reads_keep_each_call_and_complete_arguments() -> Non
 
 @pytest.mark.parametrize('session_key,reasoning', [('websocket:global', True), ('websocket:ordinary', False)])
 async def test_cirno_final_text_remains_execution_detail(session_key, reasoning):
-    from cirno.agent.hook import AgentHookContext
-    from cirno.bus.outbound_events import ProgressEvent, StreamDeltaEvent
-    from cirno.bus.agent_events import EventSink
+    from cirno_core.agent.hook import AgentHookContext
+    from cirno_core.bus.outbound_events import ProgressEvent, StreamDeltaEvent
+    from cirno_core.bus.agent_events import EventSink
     events = []
     async def publish(event): events.append(event)
     hook = AgentProgressHook(EventSink(publish), streaming=True, session_key=session_key)

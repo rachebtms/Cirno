@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cirno.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell import ExecTool
 
 
 def test_deny_patterns_block_rm_rf():

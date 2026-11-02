@@ -2,12 +2,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.command.builtin import cmd_pairing
-from cirno.command.router import CommandContext
-from cirno.pairing import store
-from cirno.pairing.events import PairingChanged
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.command.builtin import cmd_pairing
+from cirno_core.command.router import CommandContext
+from cirno_core.pairing import store
+from cirno_core.pairing.events import PairingChanged
 
 
 @pytest.mark.asyncio

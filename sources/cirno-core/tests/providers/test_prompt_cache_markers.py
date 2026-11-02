@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from cirno.providers.anthropic_provider import AnthropicProvider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 def _openai_tools(*names: str) -> list[dict[str, Any]]:
@@ -85,3 +85,44 @@ def test_openai_compat_marks_only_tail_without_mcp() -> None:
         _openai_tools("read_file", "write_file"),
     )
     assert _marked_openai_tool_names(marked_tools) == ["write_file"]
+
+
+def test_cache_markers_include_first_user_input_and_do_not_mutate_it() -> None:
+    from copy import deepcopy
+
+    messages = [{"role": "system", "content": "stable rules"}, {"role": "user", "content": "long document"}]
+    original = deepcopy(messages)
+    marked, _ = OpenAICompatProvider._apply_cache_control(messages, None)
+    assert "cache_control" in marked[-1]["content"][-1]
+    _, native, _ = AnthropicProvider._apply_cache_control("stable rules", messages[1:], None)
+    assert "cache_control" in native[-1]["content"][-1]
+    assert messages == original
+
+
+def test_cache_markers_include_latest_tool_result() -> None:
+    messages = [
+        {"role": "user", "content": "inspect"},
+        {"role": "assistant", "content": "", "tool_calls": []},
+        {"role": "tool", "tool_call_id": "read-1", "content": "large tool result"},
+    ]
+    marked, _ = OpenAICompatProvider._apply_cache_control(messages, None)
+    assert marked[-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert marked[1] == messages[1]
+    native_messages = [
+        {"role": "user", "content": "inspect"},
+        {"role": "assistant", "content": [{"type": "tool_use", "id": "read-1", "name": "read", "input": {}}]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "read-1", "content": "large tool result"}]},
+    ]
+    _, marked_native, _ = AnthropicProvider._apply_cache_control("rules", native_messages, None)
+    assert "cache_control" in marked_native[-1]["content"][-1]
+    assert "cache_control" not in native_messages[-1]["content"][-1]
+
+
+def test_anthropic_cache_marker_does_not_target_thinking_or_empty_text() -> None:
+    messages = [
+        {"role": "user", "content": "question"},
+        {"role": "assistant", "content": [{"type": "thinking", "thinking": "private", "signature": "sig"}, {"type": "text", "text": ""}]},
+    ]
+    _, marked, _ = AnthropicProvider._apply_cache_control("rules", messages, None)
+    assert marked[0]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert marked[1] == messages[1]

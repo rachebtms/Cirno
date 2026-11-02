@@ -1,6 +1,6 @@
 """Session keys remain distinct even when their display filenames collide."""
 
-from cirno.session.manager import Session, SessionManager
+from cirno_core.session.manager import Session, SessionManager
 
 
 def test_colliding_display_names_roundtrip_independently(tmp_path):

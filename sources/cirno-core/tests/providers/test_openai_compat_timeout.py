@@ -1,8 +1,7 @@
 from unittest.mock import patch, sentinel
 
-from cirno.providers import openai_compat_provider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import ProviderSpec
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import ProviderSpec
 
 
 def _assert_openai_compat_timeout(timeout) -> None:
@@ -10,7 +9,7 @@ def _assert_openai_compat_timeout(timeout) -> None:
 
 
 async def test_openai_compat_provider_defers_sdk_client_until_first_use() -> None:
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI") as mock_async_openai:
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI") as mock_async_openai:
         provider = OpenAICompatProvider(api_key="test-key", api_base="https://example.com/v1")
         mock_async_openai.assert_not_called()
         await provider._ensure_client()
@@ -34,7 +33,7 @@ async def test_openai_compat_provider_sets_timeout_on_local_http_client() -> Non
     )
 
     with (
-        patch("cirno.providers.openai_compat_provider.AsyncOpenAI") as mock_async_openai,
+        patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI") as mock_async_openai,
         patch(
             "httpx.AsyncClient",
             return_value=sentinel.http_client,
@@ -56,7 +55,7 @@ async def test_openai_compat_provider_sets_timeout_on_local_http_client() -> Non
 async def test_openai_compat_provider_timeout_can_be_overridden_by_env(monkeypatch) -> None:
     monkeypatch.setenv("CIRNO_OPENAI_COMPAT_TIMEOUT_S", "45")
 
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI") as mock_async_openai:
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI") as mock_async_openai:
         provider = OpenAICompatProvider(api_key="test-key", api_base="https://example.com/v1")
         await provider._ensure_client()
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from cirno.config.schema import Config, ProviderConfig
-from cirno.providers.factory import provider_signature
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.config.schema import Config, ProviderConfig
+from cirno_core.providers.factory import provider_signature
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 class TestExtraQuerySchema:
@@ -44,7 +44,7 @@ class TestExtraQueryBuildClient:
     def test_build_client_passes_default_query(self) -> None:
         mock_client = MagicMock()
         with patch(
-            "cirno.providers.openai_compat_provider.AsyncOpenAI",
+            "cirno_core.providers.openai_compat_provider.AsyncOpenAI",
             return_value=mock_client,
         ) as mock_async_openai:
             provider = OpenAICompatProvider(
@@ -59,7 +59,7 @@ class TestExtraQueryBuildClient:
     def test_build_client_passes_no_default_query_when_empty(self) -> None:
         mock_client = MagicMock()
         with patch(
-            "cirno.providers.openai_compat_provider.AsyncOpenAI",
+            "cirno_core.providers.openai_compat_provider.AsyncOpenAI",
             return_value=mock_client,
         ) as mock_async_openai:
             provider = OpenAICompatProvider(api_key="test")

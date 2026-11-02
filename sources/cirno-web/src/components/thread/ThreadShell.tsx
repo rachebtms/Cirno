@@ -1,3 +1,6 @@
+import { scopeWithAccessMode } from "@/lib/workspace";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { QuestionReplyProvider, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
 import { formatQuestionAnswer } from "@/lib/user-question";
 import type { UserQuestion } from "@/lib/types";
@@ -568,6 +571,11 @@ export function ThreadShell({
   const [heroGreetingKey, setHeroGreetingKey] = useState(randomHeroGreetingKey);
   const [submittedViewportTurnId, setSubmittedViewportTurnId] = useState<string | null>(null);
   const [browserDirty, setBrowserDirty] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<UIMessage | null>(null);
+  const [editedText, setEditedText] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [pendingForkIndex, setPendingForkIndex] = useState<number | null>(null);
   const [pendingPreviewAction, setPendingPreviewAction] = useState<(() => void) | null>(null);
   const guardPreview = (action: () => void) => { if (browserDirty) setPendingPreviewAction(() => action); else action(); };
   const previewStoreKey = previewSessionKey ?? "new:files";
@@ -640,6 +648,7 @@ export function ThreadShell({
       forkBoundaryMessageCount,
     },
     refreshHistory,
+    resetHistory,
     loadOlder,
     loadTraceDetails: loadBodyTraceDetails,
     streamError,
@@ -909,8 +918,8 @@ export function ThreadShell({
   const availableSlashCommands = useMemo(
     () => temporary
       ? slashCommands.filter(({ command }) => command === "/model" || command === "/stop")
-      : slashCommands,
-    [slashCommands, temporary],
+      : slashCommands.filter(({ command }) => command !== "/clear" || session?.key === "websocket:global"),
+    [slashCommands, temporary, session?.key],
   );
   const modelBadge = useMemo(
     () => toModelBadgeInfo(modelName, settings, activeModelPreset),
@@ -974,12 +983,13 @@ export function ThreadShell({
     return client.onSessionUpdate((updatedChatId, scope) => {
       if (updatedChatId !== chatId) return;
       if (scope === "metadata") return;
+      if (scope === "reset") { resetHistory(); return; }
       // A turn-end thread refresh can arrive while the viewport is easing the
       // final layout change. User-driven scrolling already disables following,
       // so keep an active programmatic follow alive across canonical hydration.
       refreshHistory();
     });
-  }, [chatId, client, historyKey, refreshHistory]);
+  }, [chatId, client, historyKey, refreshHistory, resetHistory]);
 
   const wasPageHiddenRef = useRef(document.visibilityState === "hidden");
   useEffect(() => {
@@ -1106,8 +1116,35 @@ export function ThreadShell({
     };
   }, [getToken]);
 
+  const [controlError, setControlError] = useState("");
+  const handleComposerControl = useCallback((content: string): boolean | null => {
+    const [rawName, ...parts] = content.trim().split(/\s+/);
+    const name = rawName.toLowerCase();
+    const argument = parts.join(" ").toLowerCase();
+    if (!["/temporary", "/ptc", "/access", ...(!session ? ["/model"] : [])].includes(name.toLowerCase())) return null;
+    setControlError("");
+    if (turnActive || hasPendingToolCalls) { setControlError(t("thread.composer.slash.controlRunning")); return false; }
+    if (name === "/access") {
+      const mode = ({ default: "restricted", restricted: "restricted", review: "review", full: "full" } as const)[argument as "default" | "restricted" | "review" | "full"];
+      if (!mode || !workspaceScope || !onWorkspaceScopeChange) { setControlError(t("thread.composer.slash.accessUsage")); return false; }
+      onWorkspaceScopeChange(scopeWithAccessMode(workspaceScope, mode)); return true;
+    }
+    if (name === "/model" && !argument) return null;
+    if (name === "/model") {
+      const selected = ["default", ...configuredPresetNames].find(value => value.toLowerCase() === parts.join(" ").toLowerCase());
+      if (!selected) { setControlError(t("thread.composer.slash.modelUsage")); return false; }
+      handleModelPresetChange(selected); return true;
+    }
+    const change = name === "/ptc" ? onPtcModeEnabledChange : onTemporaryChatEnabledChange;
+    if (session || !change) { setControlError(t("thread.composer.slash.creationOnly")); return false; }
+    if (argument !== "on" && argument !== "off") { setControlError(t("thread.composer.slash.toggleUsage", { command: name })); return false; }
+    change(argument === "on"); return true;
+  }, [session, turnActive, hasPendingToolCalls, t, workspaceScope, onWorkspaceScopeChange, configuredPresetNames, handleModelPresetChange, onPtcModeEnabledChange, onTemporaryChatEnabledChange]);
+
   const handleWelcomeSend = useCallback(
     async (content: string, images?: SendAttachment[], options?: SendOptions) => {
+      const control = handleComposerControl(content);
+      if (control !== null) return control;
       if (booting) return false;
       setBooting(true);
       let finish!: (accepted: boolean) => void;
@@ -1127,7 +1164,7 @@ export function ThreadShell({
       setPendingFirstTargetChatId(newId);
       return delivery;
     },
-    [booting, client, draftKey, draftStore, localModelPreset, onCreateChat, persistDraft, withWorkspaceScope, workspaceScope],
+    [handleComposerControl, booting, client, draftKey, draftStore, localModelPreset, onCreateChat, persistDraft, withWorkspaceScope, workspaceScope],
   );
 
   const inspectAttachment = useCallback(async (path: string) => {
@@ -1140,6 +1177,8 @@ export function ThreadShell({
 
   const handleThreadSend = useCallback(
     (content: string, images?: SendAttachment[], options?: SendOptions) => {
+      const control = handleComposerControl(content);
+      if (control !== null) return control;
       setRestoredFirstDraft((current) => current?.chatId === chatId ? { ...current, error: "" } : current);
       const submitted = send(content, images, withWorkspaceScope(options));
       if (
@@ -1153,7 +1192,7 @@ export function ThreadShell({
       }
       return submitted?.delivery ? submitted.delivery.then(() => true) : submitted !== null;
     },
-    [chatId, send, withWorkspaceScope],
+    [handleComposerControl, chatId, send, withWorkspaceScope],
   );
 
   const answerQuestion = useCallback((question: UserQuestion, answer: string) =>
@@ -1318,7 +1357,7 @@ export function ThreadShell({
     };
   }, [previewOpen]);
 
-  const handleForkFromMessage = useCallback(
+  const forkFromSavedContext = useCallback(
     async (beforeUserIndex: number) => {
       if (!chatId || !onForkChat) return;
       const forkedChatId = await onForkChat(chatId, beforeUserIndex);
@@ -1327,6 +1366,35 @@ export function ThreadShell({
     },
     [chatId, onForkChat],
   );
+  const handleForkFromMessage = useCallback((index: number) => {
+    if (displayMessages.some(message => message.toolEvents?.length || message.fileEdits?.length || message.traceDetail?.traceCount)) {
+      setPendingForkIndex(index);
+    } else {
+      void forkFromSavedContext(index);
+    }
+  }, [displayMessages, forkFromSavedContext]);
+  useEffect(() => setPendingForkIndex(null), [chatId]);
+
+  const beginMessageEdit = useCallback((message: UIMessage) => {
+    setEditingMessage(message); setEditedText(message.content); setEditError("");
+  }, []);
+  const editingHasToolEffects = useMemo(() => {
+    if (!editingMessage) return false;
+    const index = displayMessages.findIndex(message => message.id === editingMessage.id);
+    return displayMessages.slice(index + 1).some(message => message.toolEvents?.length || message.fileEdits?.length || message.traceDetail?.traceCount);
+  }, [displayMessages, editingMessage]);
+  const submitMessageEdit = async () => {
+    if (!session?.key || !editingMessage?.turnId || !editedText.trim() || editBusy) return;
+    setEditBusy(true); setEditError("");
+    try {
+      const result = await client.requestMutation<{ turn_id: string }>("instance.action", { action: "conversations.edit", values: {
+        session_key: session.key, turn_id: editingMessage.turnId, content: editedText,
+      } });
+      setEditingMessage(null);
+      resetHistory(result.turn_id);
+    } catch (reason) { setEditError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setEditBusy(false); }
+  };
 
   const composer = (
     <div className={composerVariant === "hero" ? "thread-composer-stack is-hero" : "thread-composer-stack"}>
@@ -1360,6 +1428,7 @@ export function ThreadShell({
         <p role="alert" className="px-3 text-sm text-destructive">{restoredFirstDraft.error}</p>
       ) : null}
       <SubagentTaskDock inputKey={latestSubagentInputKey(displayMessages)} />
+      {controlError && <p role="alert" className="px-3 text-sm text-destructive">{controlError}</p>}
       {modelPresetError && <p role="alert" className="px-3 text-sm text-destructive">{modelPresetError}</p>}
       <UserQuestionQueue isStreaming={turnActive} onStop={stop}>
       {session ? (
@@ -1511,7 +1580,7 @@ export function ThreadShell({
       hideSidebarToggle={hideSidebarToggle}
       hideThemeButton={hideThemeButton}
       hideTitle={hideHeaderTitle}
-      actions={<>{headerActions}{session?.key === "websocket:global" && <ClearConversationButton client={client} chatId={session.chatId} onCleared={refreshHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="host-no-drag h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
+      actions={<>{headerActions}{session?.key === "websocket:global" && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="host-no-drag h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
         onClick={() => guardPreview(() => { cancelPreviewClose(); openBrowser(); })}><FolderOpen className="h-4 w-4" /></Button></HoverHint></>}
       minimal={!session && !loading}
       promptNavigatorAction={promptNavigatorAction}
@@ -1588,6 +1657,7 @@ export function ThreadShell({
             onLoadTraceDetails={messagesReady ? loadTraceDetails : undefined}
             onOpenFilePreview={previewSessionKey ? openFilePreview : undefined}
             onForkFromMessage={onForkChat ? handleForkFromMessage : undefined}
+            onEditMessage={!temporary ? beginMessageEdit : undefined}
             onQuoteSelection={session ? handleQuoteSelection : undefined}
           />
           </FileActionsProvider>
@@ -1633,6 +1703,26 @@ export function ThreadShell({
         </FileActionsProvider>
       ) : null}
     </section>
+    <Dialog open={editingMessage !== null} onOpenChange={open => { if (!open && !editBusy) setEditingMessage(null); }}>
+      <DialogContent><DialogHeader><DialogTitle>{t("message.edit")}</DialogTitle>
+        <DialogDescription>{t("thread.historyEdit.description")}</DialogDescription></DialogHeader>
+        {editingHasToolEffects ? <p role="alert" className="text-sm text-destructive">{t("thread.historyEffects.description")}</p> : null}
+        <Textarea aria-label={t("thread.historyEdit.text")} value={editedText} onChange={event => setEditedText(event.target.value)}
+          disabled={editBusy} className="min-h-36 max-h-[45dvh] resize-y rounded-control text-reading" />
+        {editError ? <p role="alert" className="text-sm text-destructive break-words">{editError}</p> : null}
+        <DialogFooter><Button variant="outline" disabled={editBusy} onClick={() => setEditingMessage(null)}>{t("files.cancel")}</Button>
+          <Button disabled={editBusy || !editedText.trim()} onClick={() => void submitMessageEdit()}>{t("thread.historyEdit.submit")}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <AlertDialog open={pendingForkIndex !== null} onOpenChange={open => { if (!open) setPendingForkIndex(null); }}>
+      <AlertDialogContent data-history-effects-warning>
+        <AlertDialogHeader><AlertDialogTitle>{t("thread.historyEffects.title")}</AlertDialogTitle>
+          <AlertDialogDescription className="text-destructive">{t("thread.historyEffects.description")}</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel>{t("files.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { if (pendingForkIndex !== null) void forkFromSavedContext(pendingForkIndex); setPendingForkIndex(null); }}>{t("message.forkFromHere")}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <AlertDialog open={pendingPreviewAction !== null} onOpenChange={open => { if (!open) setPendingPreviewAction(null); }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("files.discardTitle")}</AlertDialogTitle><AlertDialogDescription>{t("files.discardDescription")}</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel>{t("files.cancel")}</AlertDialogCancel><AlertDialogAction onClick={() => { setBrowserDirty(false); pendingPreviewAction?.(); setPendingPreviewAction(null); }}>{t("files.discard")}</AlertDialogAction></AlertDialogFooter>

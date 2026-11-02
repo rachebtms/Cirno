@@ -1,6 +1,6 @@
 """Tests for AnthropicProvider._merge_consecutive."""
 
-from cirno.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
 
 
 class TestMergeConsecutive:

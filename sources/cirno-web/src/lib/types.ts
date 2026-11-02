@@ -46,6 +46,8 @@ export interface UIMediaAttachment {
   name?: string;
 }
 
+export interface UIInputOrigin { kind: "heartbeat" | "scheduled_task" | "trigger" | "conversation" | "subagent" | "continuation" | "system" | "supervision"; action?: string; values?: Record<string, string | number>; label: string; id?: string; session_key?: string; received_at?: string; }
+
 interface UIMessageSource { kind: "cron" | "local_trigger" | "trigger" | string; label?: string; }
 
 interface TurnUsage {
@@ -176,6 +178,7 @@ export interface UIMessage {
   source?: UIMessageSource;
   /** Structured provenance for a message delivered by another session. */
   sessionMessage?: UISessionMessage;
+  inputOrigin?: UIInputOrigin;
   /** Stable protocol metadata for grouping all activity emitted by one user turn. */
   turnId?: string;
   turnPhase?: UITurnPhase;
@@ -477,8 +480,8 @@ export interface ChatSummary {
   handle?: SessionHandle | null;
 }
 
-export type WorkspaceAccessMode = "restricted" | "full";
-export type WebuiDefaultAccessMode = "default" | "full";
+export type WorkspaceAccessMode = "restricted" | "review" | "full";
+export type WebuiDefaultAccessMode = "default" | "review" | "full";
 
 export interface WorkspaceScopePayload {
   project_path: string;
@@ -718,7 +721,7 @@ export interface SettingsPayload {
     reasoning_effort: string | null;
     api?: ModelAPIConfig | null;
     timezone: string;
-    tool_hint_max_length: number;
+    tool_status_summary_max_chars: number;
   };
   model_presets: Array<{
     name: string;
@@ -813,8 +816,8 @@ export interface SettingsPayload {
   runtime: {
     config_path: string;
     workspace_path: string;
-    gateway_host: string;
-    gateway_port: number;
+    health_host: string;
+    health_port: number;
     heartbeat: {
       enabled: boolean;
       interval_s: number;
@@ -1443,7 +1446,7 @@ export type InboundEvent =
       cli_apps?: UICliAppAttachment[];
       mcp_presets?: UIMcpPresetAttachment[];
       session_mentions?: SessionMention[];
-      provenance?: { session_message?: UISessionMessage };
+      provenance?: { session_message?: UISessionMessage; input_origin?: UIInputOrigin };
     } & InboundTurnMetadata)
   | ({
       event: "message";

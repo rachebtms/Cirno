@@ -1,6 +1,6 @@
 """Typed outbound events carried by :class:`OutboundMessage`.
 
-The message bus still transports :class:`cirno.bus.events.OutboundMessage`
+The message bus still transports :class:`cirno_core.bus.events.OutboundMessage`
 because channels need chat routing fields. Runtime/UI semantics live on the
 message's explicit ``event`` field rather than in reserved metadata flags.
 """
@@ -11,13 +11,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
-from cirno.bus.events import OutboundMessage
-from cirno.bus.agent_events import AgentEvent
-from cirno.bus.agent_events import ContextCompactionEvent as ContextCompactionEvent
-from cirno.bus.agent_events import RecoveryStateEvent as RecoveryStateEvent
-from cirno.bus.agent_events import RetryStatusEvent as RetryStatusEvent
-from cirno.bus.agent_events import RetryWaitEvent as RetryWaitEvent
-from cirno.providers.base import LLMUsage
+from cirno_core.bus.events import OutboundMessage
+from cirno_core.bus.agent_events import AgentEvent
+from cirno_core.bus.agent_events import ContextCompactionEvent as ContextCompactionEvent
+from cirno_core.bus.agent_events import RecoveryStateEvent as RecoveryStateEvent
+from cirno_core.bus.agent_events import RetryStatusEvent as RetryStatusEvent
+from cirno_core.bus.agent_events import RetryWaitEvent as RetryWaitEvent
+from cirno_core.providers.base import LLMUsage
 
 
 @dataclass(frozen=True)
@@ -84,6 +84,7 @@ class GoalStateSyncEvent(AgentEvent):
 @dataclass(frozen=True)
 class SessionUpdatedEvent(AgentEvent):
     scope: str | None = None
+    workspace_scope: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

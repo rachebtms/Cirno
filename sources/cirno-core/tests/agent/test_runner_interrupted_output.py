@@ -8,16 +8,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.runner_helpers import make_run_spec
-from cirno.agent.progress_hook import AgentProgressHook
-from cirno.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER, AgentRunner
-from cirno.config.schema import ModelPresetConfig
-from cirno.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from cirno.providers.fallback_provider import FallbackProvider
-from cirno.providers.model_api import ModelAPICapabilities
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.openai_responses import parse_response_output
-from cirno.providers.unconfigured_provider import UnconfiguredProvider
-from cirno.utils.progress_events import output_events
+from cirno_core.agent.progress_hook import AgentProgressHook
+from cirno_core.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER, AgentRunner
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.providers.fallback_provider import FallbackProvider
+from cirno_core.providers.model_api import ModelAPICapabilities
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.openai_responses import parse_response_output
+from cirno_core.providers.unconfigured_provider import UnconfiguredProvider
+from cirno_core.utils.progress_events import output_events
 
 
 @pytest.mark.asyncio

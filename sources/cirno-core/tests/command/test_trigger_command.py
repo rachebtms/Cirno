@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno.bus.events import InboundMessage
-from cirno.command.builtin import build_help_text, register_builtin_commands
-from cirno.command.router import CommandContext, CommandRouter
-from cirno.triggers.local_store import LocalTriggerStore
+from cirno_core.bus.events import InboundMessage
+from cirno_core.command.builtin import build_help_text, register_builtin_commands
+from cirno_core.command.router import CommandContext, CommandRouter
+from cirno_core.triggers.local_store import LocalTriggerStore
 
 
 @pytest.mark.asyncio

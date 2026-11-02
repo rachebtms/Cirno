@@ -9,7 +9,7 @@ import {
   ModelsIcon,
 } from "@/components/icons/product-icons";
 import { Fragment, useRef, useState } from "react";
-import { BookOpen, Brain, UserRound, Wrench, Server, MessagesSquare, Bell, BookOpenText, Activity, Archive, Moon, Search, Play, Terminal, Network, Link, Check, ChevronDown, ChevronLeft, LogOut, Loader2, type LucideIcon } from "lucide-react";
+import { BookOpen, Brain, UserRound, Wrench, Server, MessagesSquare, Bell, BookOpenText, Activity, Archive, Moon, Search, Play, Terminal, Network, Link, Check, ChevronDown, ChevronLeft, LogOut, Loader2, KeyRound, HeartPulse, Globe, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -30,6 +30,8 @@ import { cn } from "@/lib/utils";
 
 const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string; group: string }> = [
   { key: "overview", icon: OverviewIcon, fallback: "Overview", group: "general" },
+  { key: "account", icon: KeyRound, fallback: "Account", group: "general" },
+  { key: "regional", icon: Globe, fallback: "Time & region", group: "general" },
   { key: "appearance", icon: AppearanceIcon, fallback: "Appearance", group: "interface" },
   { key: "reading", icon: BookOpenText, fallback: "Text & reading", group: "interface" },
   { key: "activity", icon: Activity, fallback: "Execution display", group: "interface" },
@@ -41,6 +43,8 @@ const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fal
   { key: "dream", icon: Moon, fallback: "Dream consolidation", group: "agent" },
   { key: "memory-search", icon: Search, fallback: "Memory retrieval", group: "agent" },
   { key: "execution", icon: Play, fallback: "Goals & execution", group: "agent" },
+  { key: "coordination", icon: MessagesSquare, fallback: "Conversation coordination", group: "agent" },
+  { key: "heartbeat", icon: HeartPulse, fallback: "Heartbeat", group: "agent" },
   { key: "apps", icon: Wrench, fallback: "Tools & CLI Apps", group: "agent" },
   { key: "shell", icon: Terminal, fallback: "Shell execution", group: "agent" },
   { key: "skills", icon: BookOpen, fallback: "Skills", group: "agent" },
@@ -51,8 +55,8 @@ const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fal
   { key: "channels", icon: MessagesSquare, fallback: "Channel setup", group: "connections" },
   { key: "network", icon: Network, fallback: "Network & retries", group: "system" },
   { key: "advanced", icon: AdvancedIcon, fallback: "Permissions", group: "system" },
-  { key: "runtime", icon: SystemIcon, fallback: "Server & heartbeat", group: "system" },
-  { key: "about", icon: AboutIcon, fallback: "About", group: "system" },
+  { key: "runtime", icon: SystemIcon, fallback: "Server", group: "system" },
+    { key: "about", icon: AboutIcon, fallback: "About", group: "system" },
 ];
 
 export function standaloneSectionTitle(section: SettingsSectionKey): string {

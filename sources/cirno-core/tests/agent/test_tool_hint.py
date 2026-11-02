@@ -1,7 +1,7 @@
-"""Tests for tool hint formatting (cirno.utils.tool_hints)."""
+"""Tests for tool hint formatting (cirno_core.utils.tool_hints)."""
 
-from cirno.providers.base import ToolCallRequest
-from cirno.utils.tool_hints import format_tool_hints
+from cirno_core.providers.base import ToolCallRequest
+from cirno_core.utils.tool_hints import format_tool_hints
 
 
 def _tc(name: str, args) -> ToolCallRequest:
@@ -259,7 +259,7 @@ class TestToolHintMixedFolding:
         assert len(parts) == 5
 
 
-class TestToolHintMaxLength:
+class TestToolStatusSummaryMaxChars:
     """Test max_length parameter controls truncation of tool hints."""
 
     def test_exec_explicit_max_length_limits_hint(self):

@@ -2,7 +2,7 @@
 
 These lock down two behaviors:
 
-1. ``cirno.utils.helpers.sanitize_surrogates`` / ``sanitize_surrogates_deep``
+1. ``cirno_core.utils.helpers.sanitize_surrogates`` / ``sanitize_surrogates_deep``
    produce strings that can round-trip through ``str.encode('utf-8')`` even
    when the input contains unpaired surrogates.
 
@@ -16,10 +16,9 @@ These lock down two behaviors:
 
 from __future__ import annotations
 
-import pytest
 
-from cirno.providers.base import LLMProvider
-from cirno.utils.helpers import (
+from cirno_core.providers.base import LLMProvider
+from cirno_core.utils.helpers import (
     sanitize_surrogates,
     sanitize_surrogates_deep,
 )
@@ -161,18 +160,3 @@ class TestProviderSanitizeEmptyContent:
         assert cleaned[0]["content"] == "You are a 🐱 assistant."
         assert cleaned[1]["content"] == "🤖 fixed?"
         assert cleaned[2]["content"][0]["text"] == "answer with a lone \ufffd half and paired 🤖"
-
-
-class TestBackwardCompatReExport:
-    def test_cli_reexport_points_to_shared_helper(self):
-        """The CLI module continues to expose ``_sanitize_surrogates`` as a
-        thin alias so existing imports (e.g. ``SafeFileHistory`` in the
-        legacy tests) keep working."""
-        from cirno.cli.commands import _sanitize_surrogates as cli_alias
-
-        assert cli_alias is sanitize_surrogates
-        assert cli_alias("hello \ud83e\udd16") == "hello 🤖"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

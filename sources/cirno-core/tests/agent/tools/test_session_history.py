@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.sessions import ReadSessionTool, SearchSessionsTool
-from cirno.session.manager import SessionManager
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.sessions import ReadSessionTool, SearchSessionsTool
+from cirno_core.session.manager import SessionManager
 
 
 @pytest.mark.asyncio

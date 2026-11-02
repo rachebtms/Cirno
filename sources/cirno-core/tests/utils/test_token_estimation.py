@@ -4,8 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from cirno.utils import helpers, token_encoding
-from cirno.utils.helpers import (
+from cirno_core.utils import helpers, token_encoding
+from cirno_core.utils.helpers import (
     estimate_message_tokens,
     estimate_prompt_tokens,
     estimate_prompt_tokens_chain,

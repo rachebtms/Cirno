@@ -21,23 +21,18 @@ ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 RUN uv venv --seed "$VIRTUAL_ENV"
 
-# Install Python dependencies without building the project (cached layer).
-# Source and documentation changes only invalidate the final package install.
+# Build the three local distributions together; none is fetched from PyPI.
 ARG CIRNO_EXTRAS=
-COPY pyproject.toml ./
-RUN set -- && \
-    for extra in $(printf '%s' "$CIRNO_EXTRAS" | tr ',' ' '); do \
-        set -- "$@" --extra "$extra"; \
-    done && \
-    uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache -r pyproject.toml "$@"
-
-# Copy the full source and install
-COPY README.md LICENSE THIRD_PARTY_NOTICES.md hatch_build.py ./
+COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY documents/ documents/
+COPY sources/cirno/ sources/cirno/
 COPY sources/cirno-core/ sources/cirno-core/
+COPY sources/cirno-server/ sources/cirno-server/
 COPY sources/deployment/install_channel_dependencies.py scripts/
 COPY --from=webui-builder /app/build/webui/ build/webui/
-RUN CIRNO_SKIP_WEBUI_BUILD=1 uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache --no-deps .
+RUN if [ -n "$CIRNO_EXTRAS" ]; then project=".[$CIRNO_EXTRAS]"; else project="."; fi && \
+    CIRNO_SKIP_WEBUI_BUILD=1 uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache \
+    ./sources/cirno-core ./sources/cirno-server "$project"
 
 # Preinstall selected channel dependencies from their manifests. A comma-separated
 # list selects dependencies for the included channels.
@@ -65,8 +60,8 @@ ENV HOME=/home/cirno
 # Include Python crash diagnostics in container logs.
 ENV PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
 
-# Gateway health endpoint and optional WebUI/WebSocket channel ports
+# Service health endpoint and Web UI/WebSocket port
 EXPOSE 18790 8765
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD ["status"]
+CMD []

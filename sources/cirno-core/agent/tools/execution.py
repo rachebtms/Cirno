@@ -9,14 +9,14 @@ from dataclasses import replace
 from functools import cache
 from typing import Any, cast
 
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.agent.ptc.registry import PtcCallGate, PtcToolRegistry, RunCodeTool
-from cirno.agent.tools.context import tool_log_content_allowed
-from cirno.agent.tools.file_state import file_read_context
-from cirno.agent.tools.naming import implementation_name
-from cirno.agent.tools.registry import ToolRegistry, is_tool_error_result, with_tool_error_hint
-from cirno.providers.base import ToolCallRequest
-from cirno.utils.runtime import (
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.agent.ptc.registry import PtcCallGate, PtcToolRegistry, RunCodeTool
+from cirno_core.agent.tools.context import tool_log_content_allowed
+from cirno_core.agent.tools.file_state import file_read_context
+from cirno_core.agent.tools.naming import implementation_name
+from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result, with_tool_error_hint
+from cirno_core.providers.base import ToolCallRequest
+from cirno_core.utils.runtime import (
     repeated_external_lookup_error,
     repeated_workspace_violation_error,
 )
@@ -157,36 +157,39 @@ async def _execute_tool_call(
             return handled
         return payload, event
 
-    await hook.before_execute_tool(context, tool_call, tool, params)
+    from cirno_core.agent.tools.context import current_request_context
+    from cirno_core.agent.approval.service import operation_access
     try:
-        with (
-            file_read_context(tool_call.id, read_results)
-            if implementation_name(tool_call.name) == "read_file" else nullcontext()
-        ):
-            if isinstance(tool, RunCodeTool) and isinstance(tools, PtcToolRegistry):
-                gate = PtcCallGate()
+        async with operation_access(tool, params, current_request_context()) as params:
+            await hook.before_execute_tool(context, tool_call, tool, params)
+            with (
+                file_read_context(tool_call.id, read_results)
+                if implementation_name(tool_call.name) == "read_file" else nullcontext()
+            ):
+                if isinstance(tool, RunCodeTool) and isinstance(tools, PtcToolRegistry):
+                    gate = PtcCallGate()
 
-                async def dispatch(name, arguments, identity):
-                    nested_tool = tools.native.get(name)
-                    async with gate.enter(bool(nested_tool and nested_tool.concurrency_safe)):
-                        nested = ToolCallRequest(id=f"{tool_call.id}:ptc:{identity}", name=name, arguments=arguments)
-                        nested_context = replace(context, tool_calls=[nested], response=None, streamed_content=True)
-                        await hook.before_execute_tools(nested_context)
-                        value, event = await _execute_tool_call(
-                            tools.native, nested, external_lookup_counts, workspace_violation_counts,
-                            hook, nested_context, read_results,
-                        )
-                        nested_context.tool_results = [value]
-                        nested_context.tool_events = [event]
-                        await hook.after_iteration(nested_context)
-                        return value, event["status"] == "error"
+                    async def dispatch(name, arguments, identity):
+                        nested_tool = tools.native.get(name)
+                        async with gate.enter(bool(nested_tool and nested_tool.concurrency_safe)):
+                            nested = ToolCallRequest(id=f"{tool_call.id}:ptc:{identity}", name=name, arguments=arguments)
+                            nested_context = replace(context, tool_calls=[nested], response=None, streamed_content=True)
+                            await hook.before_execute_tools(nested_context)
+                            value, event = await _execute_tool_call(
+                                tools.native, nested, external_lookup_counts, workspace_violation_counts,
+                                hook, nested_context, read_results,
+                            )
+                            nested_context.tool_results = [value]
+                            nested_context.tool_events = [event]
+                            await hook.after_iteration(nested_context)
+                            return value, event["status"] == "error"
 
-                result = await tool.run(**params, dispatch=dispatch,
-                                        names=[item["function"]["name"] for item in tools.native.get_definitions()])
-            elif tool is not None:
-                result = await tool.execute(**params)
-            else:
-                result = await tools.execute(tool_call.name, params)
+                    result = await tool.run(**params, dispatch=dispatch,
+                                            names=[item["function"]["name"] for item in tools.native.get_definitions()])
+                elif tool is not None:
+                    result = await tool.execute(**params)
+                else:
+                    result = await tools.execute(tool_call.name, params)
     except asyncio.CancelledError:
         if isinstance(tool, RunCodeTool):
             await hook.on_provider_tool_event(context, {

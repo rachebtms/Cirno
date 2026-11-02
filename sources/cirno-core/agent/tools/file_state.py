@@ -75,7 +75,7 @@ class FileStates:
 
     def record_write(self, path: str | Path) -> None:
         """Invalidate a prior read after a write; a write summary is not file content."""
-        from cirno.skills.history import capture_skill_path
+        from cirno_core.skills.history import capture_skill_path
         capture_skill_path(Path(path))
         self._state.pop(str(Path(path).resolve()), None)
 

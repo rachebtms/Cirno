@@ -1,10 +1,10 @@
 import sys
 
-from cirno.agent.tools.apply_patch import ApplyPatchTool
-from cirno.agent.tools.exec_session import ExecSessionTool, ListExecSessionsTool
-from cirno.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
-from cirno.agent.tools.search import FindFilesTool, GrepTool
-from cirno.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.apply_patch import ApplyPatchTool
+from cirno_core.agent.tools.exec_session import ExecSessionTool, ListExecSessionsTool
+from cirno_core.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
+from cirno_core.agent.tools.search import FindFilesTool, GrepTool
+from cirno_core.agent.tools.shell import ExecTool
 
 
 def test_coding_tool_descriptions_steer_editing_priority() -> None:

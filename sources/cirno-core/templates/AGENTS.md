@@ -15,7 +15,7 @@ This file stores agent-wide workflow conventions in Cirno Home. Project-specific
 
 ## Heartbeat Tasks
 
-`HEARTBEAT.md` is checked periodically by the protected heartbeat cron job that `cirno gateway` registers when `gateway.heartbeat.enabled` is true. Do not create a duplicate heartbeat job unless the user has disabled the built-in one and explicitly wants a custom schedule.
+`HEARTBEAT.md` is checked periodically by the protected heartbeat cron job that `cirno` registers when `agents.defaults.heartbeat.enabled` is true. Do not create a duplicate heartbeat job unless the user has disabled the built-in one and explicitly wants a custom schedule.
 
 - Use `files__patch` for normal task-list updates, especially when adding, removing, or changing multiple lines.
 - Use `files__edit` only for small exact replacements copied from the current `HEARTBEAT.md`.

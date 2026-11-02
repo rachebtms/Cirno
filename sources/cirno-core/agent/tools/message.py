@@ -2,21 +2,21 @@
 
 # pyright: reportIncompatibleMethodOverride=false
 
-from cirno.session.keys import CIRNO_SESSION_KEY
+from cirno_core.session.keys import CIRNO_SESSION_KEY
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any, cast
 
-from cirno.agent.tools.base import Tool, ToolResult, tool_parameters
-from cirno.agent.tools.context import ToolContext, current_request_context
-from cirno.agent.tools.path_utils import resolve_workspace_path
-from cirno.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
-from cirno.bus.delivery import DeliveryRequest
-from cirno.bus.events import OUTBOUND_META_AGENT_UI, OutboundMessage
-from cirno.config.paths import get_workspace_path
-from cirno.security.workspace_access import current_tool_workspace
+from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.context import ToolContext, current_request_context
+from cirno_core.agent.tools.path_utils import resolve_workspace_path
+from cirno_core.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
+from cirno_core.bus.delivery import DeliveryRequest
+from cirno_core.bus.events import OUTBOUND_META_AGENT_UI, OutboundMessage
+from cirno_core.config.paths import get_workspace_path
+from cirno_core.security.workspace_access import current_tool_workspace
 from loguru import logger
 
 _CURRENT_MESSAGE_SENDS: ContextVar[set[tuple[str, str]] | None] = ContextVar(
@@ -168,7 +168,7 @@ class MessageTool(Tool):
         _agent_ui: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> str:  # pyright: ignore[reportIncompatibleMethodOverride]
-        from cirno.utils.helpers import strip_think
+        from cirno_core.utils.helpers import strip_think
 
         content = strip_think(content)
 

@@ -9,16 +9,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from agent.session_helpers import run_session
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.events import InboundMessage
-from cirno.bus.outbound_events import ContextCompactionEvent
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import TurnCompleted
-from cirno.command.builtin import cmd_compact, cmd_stop
-from cirno.command.router import CommandContext
-from cirno.providers.base import GenerationSettings, LLMResponse, ProviderConversationState
-from cirno.runtime.context import public_history_message
-from cirno.session.history_visibility import is_hidden_history_message
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import ContextCompactionEvent
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import TurnCompleted
+from cirno_core.command.builtin import cmd_compact, cmd_stop
+from cirno_core.command.router import CommandContext
+from cirno_core.providers.base import GenerationSettings, LLMResponse, ProviderConversationState
+from cirno_core.runtime.context import public_history_message
+from cirno_core.session.history_visibility import is_hidden_history_message
 
 
 @pytest.fixture

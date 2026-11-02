@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-from cirno.agent.tools.file_state import file_read_context
-from cirno.agent.tools.filesystem import EditFileTool, ReadFileTool
+from cirno_core.agent.tools.file_state import file_read_context
+from cirno_core.agent.tools.filesystem import EditFileTool, ReadFileTool
 
 
 def test_read_file_force_bypasses_dedup(tmp_path):

@@ -6,14 +6,14 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
-from cirno.agent.hook import AgentHookContext
-from cirno.bus.outbound_events import (
+from cirno_core.agent.hook import AgentHookContext
+from cirno_core.bus.outbound_events import (
     FileEditEvent,
     ProgressEvent,
     StreamDeltaEvent,
     StreamEndEvent,
 )
-from cirno.bus.agent_events import NO_EVENTS, AgentEvent, EventSink
+from cirno_core.bus.agent_events import NO_EVENTS, AgentEvent, EventSink
 
 
 def _on_progress_accepts(cb: Callable[..., Any], name: str) -> bool:

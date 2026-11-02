@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cirno.session.goal_state import (
+from cirno_core.session.goal_state import (
     GOAL_STATE_KEY,
     MAX_GOAL_OBJECTIVE_CHARS,
     explicit_goal_requested,

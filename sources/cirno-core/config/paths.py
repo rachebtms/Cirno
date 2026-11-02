@@ -4,23 +4,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cirno.config.home import get_home_path
-from cirno.utils.file_io import ensure_dir
+from cirno_core.config.home import get_instance_path
+from cirno_core.utils.file_io import ensure_dir
 
 
 def get_config_path() -> Path:
     """Get the configuration file path (lazy import to break circular dependency).
 
-    Delegates to ``cirno.config.loader.get_config_path`` at call time so
+    Delegates to ``cirno_core.config.loader.get_config_path`` at call time so
     that importing this module never triggers a circular import during startup.
     """
-    from cirno.config.loader import get_config_path as _loader_get_config_path
+    from cirno_core.config.loader import get_config_path as _loader_get_config_path
     return _loader_get_config_path()
 
 
 def get_data_dir() -> Path:
     """Return the instance-level runtime data directory."""
-    return ensure_dir(get_config_path().parent)
+    return ensure_dir(get_config_path().parent / "state")
 
 
 def get_runtime_subdir(name: str) -> Path:
@@ -51,12 +51,12 @@ def get_webui_dir() -> Path:
 
 def get_workspace_path(workspace: str | Path | None = None) -> Path:
     """Resolve and ensure the agent workspace path."""
-    path = Path(workspace).expanduser() if workspace else get_home_path() / "workspace"
+    path = Path(workspace).expanduser() if workspace else get_instance_path() / "workspace"
     return ensure_dir(path)
 
 
 def is_default_workspace(workspace: str | Path | None) -> bool:
     """Return whether a workspace resolves to cirno's default workspace path."""
-    current = Path(workspace).expanduser() if workspace is not None else get_home_path() / "workspace"
-    default = get_home_path() / "workspace"
+    current = Path(workspace).expanduser() if workspace is not None else get_instance_path() / "workspace"
+    default = get_instance_path() / "workspace"
     return current.resolve(strict=False) == default.resolve(strict=False)

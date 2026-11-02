@@ -6,7 +6,7 @@ import logging
 
 from websockets.exceptions import InvalidMessage
 
-from cirno.webui.websocket_logging import (
+from cirno_server.webui.websocket_logging import (
     OPENING_HANDSHAKE_FAILED_MESSAGE,
     WebSocketHandshakeNoiseFilter,
 )

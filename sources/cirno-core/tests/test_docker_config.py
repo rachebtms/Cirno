@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from cirno.channels.websocket.runtime import WebSocketConfig
-from cirno.config.loader import load_config, resolve_config_env_vars
+from cirno_server.channels.websocket.runtime import WebSocketConfig
+from cirno_core.config.loader import load_config, resolve_config_env_vars
 
 
 def _initialize(path: Path, web_token: str = "", api_key: str = "") -> subprocess.CompletedProcess[str]:
     env = dict(os.environ, CIRNO_WEB_TOKEN=web_token, CIRNO_API_KEY=api_key)
     return subprocess.run(
-        [sys.executable, "-m", "cirno.cli.docker_bootstrap", str(path)],
+        [sys.executable, "-m", "cirno_server.cli.docker_bootstrap", str(path)],
         env=env, capture_output=True, text=True,
     )
 
@@ -26,7 +26,7 @@ def test_first_boot_generates_valid_container_config(tmp_path):
     assert result.returncode == 0, result.stderr
     config = resolve_config_env_vars(load_config(path))
     ws = WebSocketConfig.model_validate(config.channels.model_dump()["websocket"])
-    assert config.gateway.host == ws.host == "0.0.0.0"
+    assert config.server.health_host == ws.host == "0.0.0.0"
     assert ws.enabled and ws.websocket_requires_token
     assert ws.browser_setup
     assert not ws.token_issue_secret
@@ -65,7 +65,7 @@ def test_failed_write_does_not_leave_an_existing_config(tmp_path):
     # replacement boundary rather than only validating the input template.
     from unittest.mock import patch
 
-    from cirno.cli.docker_bootstrap import initialize_config
+    from cirno_server.cli.docker_bootstrap import initialize_config
 
     path = tmp_path / "config.json"
     with patch.object(Path, "replace", side_effect=PermissionError("read-only mount")):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-from cirno.providers.base import tool_arguments_json_for_replay
+from cirno_core.providers.base import tool_arguments_json_for_replay
 
 
 def _as_json_object(value: object) -> dict[str, Any] | None:

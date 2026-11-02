@@ -10,17 +10,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agent.runner_helpers import make_run_spec
-from cirno.agent.hook import AgentHook, AgentHookContext
-from cirno.agent.runner import AgentRunner
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.context import ToolContext
-from cirno.agent.tools.execution import execute_tool_calls
-from cirno.agent.tools.loader import ToolLoader
-from cirno.agent.tools.registry import ToolRegistry
-from cirno.config.schema import AgentDefaults
-from cirno.providers.base import LLMResponse, ToolCallRequest
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.openai_responses.parsing import parse_response_output
+from cirno_core.agent.hook import AgentHook, AgentHookContext
+from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.context import ToolContext
+from cirno_core.agent.tools.execution import execute_tool_calls
+from cirno_core.agent.tools.loader import ToolLoader
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.schema import AgentDefaults
+from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.openai_responses.parsing import parse_response_output
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -39,9 +39,9 @@ async def test_nested_arguments_reach_mcp_without_rewriting_model_history(schema
     from mcp.types import TextContent
     from mcp.types import Tool as MCPTool
 
-    from cirno.agent.loop import AgentLoop
-    from cirno.agent.tools.mcp import MCPToolWrapper
-    from cirno.session.manager import Session
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.tools.mcp import MCPToolWrapper
+    from cirno_core.session.manager import Session
 
     server = Server("nested-arguments-test")
     received = []
@@ -200,7 +200,7 @@ def _load_entry_point_plugin(tool_cls: type[Tool], tmp_path) -> ToolRegistry:
     mock_ep.load.return_value = tool_cls
 
     registry = ToolRegistry()
-    with patch("cirno.agent.tools.loader.entry_points", return_value=[mock_ep]):
+    with patch("cirno_core.agent.tools.loader.entry_points", return_value=[mock_ep]):
         ToolLoader(test_classes=[]).load(
             ToolContext(config=None, workspace=str(tmp_path)),
             registry,
@@ -413,7 +413,7 @@ async def test_runner_rejects_near_miss_tool_name_without_executing():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("arguments", ['{path:"notes.txt"}', "null"])
 async def test_runner_rejects_openai_compat_invalid_arguments_without_executing(arguments):
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         parsed = OpenAICompatProvider()._parse({
             "choices": [{
                 "message": {

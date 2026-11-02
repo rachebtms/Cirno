@@ -18,24 +18,26 @@ from loguru import logger
 @pytest.fixture(autouse=True)
 def _isolate_tokenizer_warmup(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep tests deterministic and out of the user's tokenizer cache and network."""
-    monkeypatch.setattr("cirno.utils.token_encoding._encoding", None)
-    monkeypatch.setattr("cirno.utils.token_encoding._warmup_thread", Thread())
+    monkeypatch.setattr("cirno_core.utils.token_encoding._encoding", None)
+    monkeypatch.setattr("cirno_core.utils.token_encoding._warmup_thread", Thread())
 
 
 @pytest.fixture(autouse=True)
 def _isolate_tool_entry_points(monkeypatch: pytest.MonkeyPatch) -> None:
     """Only load external tool plugins explicitly provided by the test."""
-    monkeypatch.setattr("cirno.agent.tools.loader.entry_points", lambda **_kwargs: ())
+    monkeypatch.setattr("cirno_core.agent.tools.loader.entry_points", lambda **_kwargs: ())
 
 
 @pytest.fixture(autouse=True)
 def _isolate_cirno_log_activation() -> Iterator[None]:
     """Keep CLI log settings from leaking into later tests in the same process."""
-    logger.enable("cirno")
+    logger.enable("cirno_core")
+    logger.enable("cirno_server")
     try:
         yield
     finally:
-        logger.enable("cirno")
+        logger.enable("cirno_core")
+        logger.enable("cirno_server")
 
 
 @pytest.fixture(autouse=True)
@@ -43,9 +45,9 @@ def _isolate_runtime_stores(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[None]:
     """Isolate writable stores without making a directory for pure tests."""
-    import cirno.llm_usage.service as llm_usage
-    import cirno.pairing.store as pairing_store
-    import cirno.session.location as session_location
+    import cirno_core.llm_usage.service as llm_usage
+    import cirno_core.pairing.store as pairing_store
+    import cirno_core.session.location as session_location
 
     # A sibling of tmp_path stays outside any test's agent workspace. mkdir is
     # deferred until a store is used and remains safe for concurrent callers.
@@ -54,8 +56,8 @@ def _isolate_runtime_stores(
     # not read or write the developer's instance through their default paths.
     monkeypatch.setenv("HOME", str(data_root / "user"))
     monkeypatch.setenv("USERPROFILE", str(data_root / "user"))
-    monkeypatch.setattr("cirno.config.home._home_path", None)
-    monkeypatch.setattr("cirno.config.loader._current_config_path", None)
+    monkeypatch.setattr("cirno_core.config.home._instance_path", None)
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", None)
 
     def data_dir() -> Path:
         data_root.mkdir(parents=True, exist_ok=True)
@@ -189,18 +191,18 @@ class DisplayHistoryFixture:
     """Explicit offline setup plus snapshot reads for history projection tests."""
 
     def __init__(self, workspace: Path) -> None:
-        from cirno.session.manager import SessionManager
+        from cirno_core.session.manager import SessionManager
 
         self.sessions = SessionManager(workspace)
 
     async def metadata(self, chat_id, metadata=None):
-        from cirno.session.display_history import HISTORY_GENERATION_METADATA_KEY
+        from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 
         session = await self.sessions.state.get_header(f"websocket:{chat_id}")
         return {**(metadata or {}), HISTORY_GENERATION_METADATA_KEY: session.generation}
 
     async def message(self, **kwargs):
-        from cirno.bus.events import OutboundMessage
+        from cirno_core.bus.events import OutboundMessage
 
         kwargs["metadata"] = await self.metadata(kwargs["chat_id"], kwargs.get("metadata"))
         return OutboundMessage(**kwargs)
@@ -210,12 +212,12 @@ class DisplayHistoryFixture:
         await getattr(channel, method)(chat_id, *args, **kwargs)
 
     def append(self, key, record):
-        from cirno.webui.transcript import append_transcript_object
+        from cirno_core.session.transcript import append_transcript_object
 
         append_transcript_object(key, record, sessions=self.sessions)
 
     def _project(self, name, key, *args, **kwargs):
-        from cirno.webui import transcript
+        from cirno_core.session import transcript
 
         return self.sessions.project_history(key, lambda snapshot: getattr(transcript, name)(
             key, *args, history=snapshot, **kwargs,
@@ -250,4 +252,4 @@ async def history(tmp_path: Path):
 @pytest.fixture(autouse=True)
 def _isolate_agent_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Agent profiles and skills belong to an isolated Home in every test."""
-    monkeypatch.setattr("cirno.config.home._home_path", tmp_path / "home")
+    monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path / "home")

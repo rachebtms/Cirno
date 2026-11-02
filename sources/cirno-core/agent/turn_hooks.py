@@ -8,14 +8,14 @@ from typing import Any
 
 from loguru import logger
 
-from cirno.agent.hook import (
+from cirno_core.agent.hook import (
     AgentHook,
     AgentTurnHookContext,
     AgentTurnHookFactory,
     CompositeHook,
 )
-from cirno.agent.progress_hook import AgentProgressHook
-from cirno.bus.agent_events import NO_EVENTS, EventSink
+from cirno_core.agent.progress_hook import AgentProgressHook
+from cirno_core.bus.agent_events import NO_EVENTS, EventSink
 
 
 @dataclass(slots=True)

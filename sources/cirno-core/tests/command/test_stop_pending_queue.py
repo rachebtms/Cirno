@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.bus.events import OutboundMessage
-from cirno.command.builtin import cmd_stop
-from cirno.command.router import CommandContext
+from cirno_core.bus.events import OutboundMessage
+from cirno_core.command.builtin import cmd_stop
+from cirno_core.command.router import CommandContext
 
 
 @pytest.mark.asyncio

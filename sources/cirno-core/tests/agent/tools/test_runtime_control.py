@@ -9,26 +9,26 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.agent.tools.context import RequestContext, request_context
-from cirno.agent.tools.runtime_control import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.tools.context import RequestContext, request_context
+from cirno_core.agent.tools.runtime_control import (
     RUNTIME_COMMAND_KEYS,
     RUNTIME_SNAPSHOT_KEYS,
     AgentRuntimeControl,
     RuntimeControl,
 )
-from cirno.agent.tools.self import MyTool, MyToolConfig
-from cirno.bus.queue import MessageBus
-from cirno.config.schema import ToolsConfig
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.runtime.context import RUNTIME_CONTEXT_END, RUNTIME_CONTEXT_TAG
-from cirno.security.workspace_access import (
+from cirno_core.agent.tools.self import MyTool, MyToolConfig
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import ToolsConfig
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.runtime.context import RUNTIME_CONTEXT_END, RUNTIME_CONTEXT_TAG
+from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     build_workspace_scope,
     reset_workspace_scope,
 )
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 def _make_loop(
@@ -674,7 +674,7 @@ async def test_subagent_check_without_session_cannot_enumerate_tasks(tmp_path, s
 
 
 async def test_subagent_check_retained_results_and_receipts_are_scoped_and_detached(tmp_path, runtime):
-    from cirno.agent.runner import AgentRunResult
+    from cirno_core.agent.runner import AgentRunResult
 
     loop = _make_loop(tmp_path)
     manager = loop.subagents

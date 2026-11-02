@@ -8,21 +8,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.session_helpers import save_completed_subagent
-from cirno.agent.loop import AgentLoop
-from cirno.agent.turn_delivery import TurnDeliveryFactory
-from cirno.bus.events import InboundMessage
-from cirno.bus.queue import MessageBus
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
-from cirno.session.manager import SessionManager
-from cirno.session.recovery import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.queue import MessageBus
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.recovery import (
     PENDING_USER_TURN_KEY,
     RECOVERY_METADATA_KEY,
     REQUEST_ORIGIN_METADATA_KEY,
     RUNTIME_CHECKPOINT_KEY,
 )
-from cirno.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
-from cirno.webui.recovery import RecoveryCoordinator
-from cirno.webui.transcript import WebUITranscriptRecorder
+from cirno_core.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
+from cirno_core.session.display_recovery import RecoveryCoordinator
+from cirno_core.session.transcript import WebUITranscriptRecorder
 
 
 @pytest.mark.asyncio
@@ -303,6 +303,36 @@ async def test_recovery_distinguishes_explicit_stop_from_gateway_shutdown(
             assert restored.metadata[RECOVERY_METADATA_KEY]["status"] == "awaiting_user"
             assert restored.metadata[RECOVERY_METADATA_KEY]["reason"] == "restart_requires_confirmation"
         else:
-            assert RECOVERY_METADATA_KEY not in restored.metadata
+            assert restored.metadata[RECOVERY_METADATA_KEY]["status"] == "awaiting_user"
+            assert restored.metadata[RECOVERY_METADATA_KEY]["reason"] == "user_stopped"
+            assert restored.metadata[RECOVERY_METADATA_KEY].get("can_continue", True) is True
     finally:
         await restarted.state.aclose()
+
+
+@pytest.mark.parametrize("show_message", [False, True])
+async def test_stopped_request_resume_uses_configured_input_and_preserves_goal_progress(tmp_path, show_message):
+    from cirno_core.config.schema import ResumeConfig
+    from cirno_core.bus.input_origin import input_origin
+    sessions = SessionManager(tmp_path)
+    bus = MessageBus()
+    session = await sessions.state.import_messages("websocket:resume", [{"role": "user", "content": "Complete the task"}], metadata={
+        "webui": True, "goal_state": {"goal_id": "saved-goal", "objective": "Complete task", "status": "stopped", "recap": "Half done"},
+        "_sustained_goal_continuation_rounds": 3,
+    })
+    recovery = RecoveryCoordinator(sessions, bus, resume_settings=ResumeConfig(message="Check the saved result and finish the next step.", show_message=show_message))
+    try:
+        await recovery.turn_stopped(session.key)
+        await recovery.resume_session(session.key)
+        message = await bus.consume_inbound()
+        assert message.content == "Check the saved result and finish the next step."
+        assert message.metadata["_show_continuation_input"] is show_message
+        assert message.metadata["_skip_user_persist"] is True
+        assert input_origin(message)["kind"] == "continuation"
+        saved = await sessions.state.read(session.key)
+        assert saved.metadata["goal_state"]["status"] == "active"
+        assert saved.metadata["goal_state"]["recap"] == "Half done"
+        assert saved.metadata["_sustained_goal_continuation_rounds"] == 3
+        assert len(saved.messages) == 1
+    finally:
+        await sessions.state.aclose()

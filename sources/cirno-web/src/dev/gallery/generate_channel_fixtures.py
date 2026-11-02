@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 def render_fixtures() -> str:
-    from cirno.channels.registry import discover_plugins
+    from cirno_server.channels.registry import discover_plugins
 
     plugins = discover_plugins()
     lines = [

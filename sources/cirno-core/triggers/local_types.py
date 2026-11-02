@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from cirno.utils.dict_keys import get_camel_snake as _get
+from cirno_core.utils.dict_keys import get_camel_snake as _get
 
 TriggerStatus = Literal["ok", "error"]
 

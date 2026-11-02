@@ -2,9 +2,9 @@
 
 from unittest.mock import patch
 
-from cirno.config.schema import Config, ProvidersConfig
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
-from cirno.providers.registry import PROVIDERS, find_by_name
+from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.registry import PROVIDERS, find_by_name
 
 
 def test_edenai_config_field_exists() -> None:
@@ -49,7 +49,7 @@ def test_edenai_forced_provider_uses_default_api_base() -> None:
 
 def test_edenai_preserves_model_id_and_reasoning_effort() -> None:
     spec = find_by_name("edenai")
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(
             api_key="eden-key",
             default_model="anthropic/claude-sonnet-4-5",

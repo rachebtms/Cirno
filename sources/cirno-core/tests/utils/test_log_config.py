@@ -2,7 +2,7 @@ from io import StringIO
 
 from loguru import logger
 
-from cirno.utils.log_config import add_console_log_sink
+from cirno_core.utils.log_config import add_console_log_sink
 
 
 def test_console_log_sink_includes_context_and_escapes_message_newlines() -> None:

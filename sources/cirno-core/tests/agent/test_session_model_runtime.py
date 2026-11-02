@@ -2,19 +2,19 @@ import asyncio
 
 import pytest
 
-from cirno.agent.loop import AgentLoop
-from cirno.bus.queue import MessageBus
-from cirno.bus.runtime_events import RuntimeModelChanged
-from cirno.config.schema import ModelPresetConfig
-from cirno.sdk.assistant import Cirno
-from cirno.providers.base import GenerationSettings, LLMProvider, LLMResponse
-from cirno.providers.factory import ProviderSnapshot
-from cirno.sdk.types import SessionSnapshot
-from cirno.session.model_selection import (
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.bus.queue import MessageBus
+from cirno_core.bus.runtime_events import RuntimeModelChanged
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.sdk.assistant import Cirno
+from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse
+from cirno_core.providers.factory import ProviderSnapshot
+from cirno_core.sdk.types import SessionSnapshot
+from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
     model_preset_from_metadata,
 )
-from cirno.utils.llm_runtime import LLMRuntime
+from cirno_core.utils.llm_runtime import LLMRuntime
 
 
 class RecordingProvider(LLMProvider):

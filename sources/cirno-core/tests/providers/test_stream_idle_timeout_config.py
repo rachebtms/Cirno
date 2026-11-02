@@ -8,15 +8,15 @@ import httpx
 import pytest
 from openai.types.chat import ChatCompletionChunk
 
-import cirno.providers.openai_codex_provider as codex_provider
-from cirno.providers.anthropic_provider import AnthropicProvider
-from cirno.providers.base import (
+import cirno_core.providers.openai_codex_provider as codex_provider
+from cirno_core.providers.anthropic_provider import AnthropicProvider
+from cirno_core.providers.base import (
     DEFAULT_STREAM_IDLE_TIMEOUT_S,
     MAX_STREAM_IDLE_TIMEOUT_S,
     resolve_stream_idle_timeout_s,
 )
-from cirno.providers.bedrock_provider import BedrockProvider
-from cirno.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.bedrock_provider import BedrockProvider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 class _AsyncStream:

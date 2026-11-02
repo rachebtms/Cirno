@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
-from cirno.agent.tools.base import Tool, ToolResult
-from cirno.agent.tools.naming import definitions
+from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.naming import definitions
 
 if TYPE_CHECKING:
-    from cirno.runtime.context import RuntimeContextProvider
+    from cirno_core.runtime.context import RuntimeContextProvider
 
 _ERROR_HINT = (
     "\n\n[Consider this result in the context of the user's goal "

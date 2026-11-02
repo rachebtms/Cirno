@@ -6,7 +6,7 @@ Adding a new provider:
   2. Add a field to ProvidersConfig in config/schema.py.
   Done. Env vars, config matching, status display all derive from here.
 
-Order matters — it controls match priority and fallback. Gateways first.
+Order matters — it controls match priority and fallback. Servers first.
 Every entry writes out all fields so you can copy-paste as a template.
 """
 
@@ -17,14 +17,14 @@ from typing import Any
 
 from pydantic.alias_generators import to_snake
 
-from cirno.providers.model_api import ModelAPICapabilities as ModelAPICapabilities
-from cirno.providers.model_api import ProviderAPI as ProviderAPI
-from cirno.providers.model_api import RequestAPI as RequestAPI
-from cirno.providers.model_api import ResponsesCapabilities as ResponsesCapabilities
-from cirno.providers.model_api import hosted_web_search_enabled as hosted_web_search_enabled
-from cirno.providers.model_api import is_direct_openai_base as is_direct_openai_base
-from cirno.providers.model_api import is_hosted_web_search_tool as is_hosted_web_search_tool
-from cirno.providers.model_api import is_hosted_web_search_type as is_hosted_web_search_type
+from cirno_core.providers.model_api import ModelAPICapabilities as ModelAPICapabilities
+from cirno_core.providers.model_api import ProviderAPI as ProviderAPI
+from cirno_core.providers.model_api import RequestAPI as RequestAPI
+from cirno_core.providers.model_api import ResponsesCapabilities as ResponsesCapabilities
+from cirno_core.providers.model_api import hosted_web_search_enabled as hosted_web_search_enabled
+from cirno_core.providers.model_api import is_direct_openai_base as is_direct_openai_base
+from cirno_core.providers.model_api import is_hosted_web_search_tool as is_hosted_web_search_tool
+from cirno_core.providers.model_api import is_hosted_web_search_type as is_hosted_web_search_type
 
 
 @dataclass(frozen=True)
@@ -108,7 +108,7 @@ class ProviderSpec:
     # "reasoning_split" — {"reasoning_split": true/false}  (MiniMax)
     thinking_style: str = ""
 
-    # Gateway-native reasoning control to pair with model-level thinking styles.
+    # Server-native reasoning control to pair with model-level thinking styles.
     # "reasoning_effort" — {"reasoning": {"effort": <none|minimal|...>}}
     #                      (OpenRouter)
     gateway_reasoning_style: str = ""
@@ -261,8 +261,8 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         backend="bedrock",
         is_direct=True,
     ),
-    # === Gateways (detected by api_key / api_base, not model name) =========
-    # Gateways can route any model, so they win in fallback.
+    # === Servers (detected by api_key / api_base, not model name) =========
+    # Servers can route any model, so they win in fallback.
     # OpenRouter: global gateway, keys start with "sk-or-"
     ProviderSpec(
         name="openrouter",

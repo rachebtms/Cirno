@@ -63,7 +63,7 @@ export function InboxView({ onBack, onSelect, onSettings, returnKey }: {
     setCategory(value === "all" ? undefined : value as InboxCategory);
   }
   function icon(notice: InboxNotice) {
-    const Icon = notice.kind === "pairing" ? ShieldCheck : notice.category === "operations" ? CircleHelp : notice.category === "system" ? Settings2 : MessageCircle;
+    const Icon = (notice.kind === "pairing" || notice.kind === "approval") ? ShieldCheck : notice.category === "operations" ? CircleHelp : notice.category === "system" ? Settings2 : MessageCircle;
     return <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />;
   }
   return <section className="flex h-full min-h-0 min-w-0 flex-col bg-background" aria-label={t("inbox.title")}>
@@ -97,6 +97,10 @@ export function InboxView({ onBack, onSelect, onSettings, returnKey }: {
               <time className="ms-auto text-[11px] text-muted-foreground" dateTime={new Date(notice.created_at).toISOString()}>{new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: "short", timeStyle: "short" }).format(notice.created_at)}</time>
             </div>
             {notice.data.session_title && <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{notice.data.session_title}</p>}
+            {notice.kind === "approval" && notice.data.operation && <details className="rounded-xl border border-border/40 p-3 text-xs">
+              <summary className="cursor-pointer font-medium">{notice.data.operation}</summary>
+              <pre className="mt-2 whitespace-pre-wrap break-words font-mono [overflow-wrap:anywhere]">{JSON.stringify(notice.data.arguments, null, 2)}</pre>
+            </details>}
             {notice.body && <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">{notice.body}</p>}
             <div className="flex flex-wrap items-center gap-2">
               {notice.session_key && <Button variant="ghost" size="sm" disabled={!!busy || notice.status === "unavailable"} className="-ms-2 text-muted-foreground" onClick={() => void run(notice.id, async () => {
@@ -105,6 +109,9 @@ export function InboxView({ onBack, onSelect, onSettings, returnKey }: {
                 if (!target.session_key) throw new Error(t("inbox.conversationUnavailable"));
                 onSelect(target.session_key);
               })}><ExternalLink className="me-1.5 h-3.5 w-3.5" />{t(notice.kind === "question" && notice.status === "pending" ? "inbox.answer" : "inbox.openConversation")}</Button>}
+              {notice.kind === "approval" && notice.status === "pending" && ([true, false] as const).map((approved) => <Button key={String(approved)} variant={approved ? "default" : "ghost"} size="sm" disabled={!!busy} onClick={() => void run(notice.id, async () => {
+                await client.requestMutation("instance.action", { action: "approvals.decide", values: { id: notice.data.approval_id, approved } }); await refresh();
+              })}>{t(approved ? "inbox.approve" : "inbox.deny")}</Button>)}
               {notice.kind === "pairing" && notice.status === "pending" && (["approve", "deny"] as const).map((action) => <Button key={action} variant={action === "approve" ? "default" : "ghost"} size="sm" disabled={!!busy} onClick={() => void run(notice.id, async () => { await runPairingAction(client, action, notice.data.code!); await refresh(); })}>{t(`inbox.${action}`)}</Button>)}
               {!notice.read_at && <Button variant="ghost" size="sm" disabled={!!busy} className="text-xs text-muted-foreground" onClick={() => void run(notice.id, () => markRead([notice.id]))}>{t("inbox.markRead")}</Button>}
             </div>

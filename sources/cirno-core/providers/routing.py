@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cirno.config.schema import Config, ModelAPIConfig, ModelPresetConfig, ProviderConfig
-from cirno.providers.model_api import ModelAPICapabilities, ProviderAPI, RequestAPI
-from cirno.providers.registry import ProviderSpec, create_dynamic_spec, find_by_name
-from cirno.providers.request_overrides import (
+from cirno_core.config.schema import Config, ModelAPIConfig, ModelPresetConfig, ProviderConfig
+from cirno_core.providers.model_api import ModelAPICapabilities, ProviderAPI, RequestAPI
+from cirno_core.providers.registry import ProviderSpec, create_dynamic_spec, find_by_name
+from cirno_core.providers.request_overrides import (
     apply_request_overrides,
     isolate_request_overrides,
     request_override_fields,
@@ -175,7 +175,7 @@ def resolve_automatic_model_api(
         return setup.provider_name, spec.request_apis[0]
     provider_config = setup.provider_config
     if setup.backend == "github_copilot":
-        from cirno.providers.github_copilot_provider import cached_github_copilot_model_api
+        from cirno_core.providers.github_copilot_provider import cached_github_copilot_model_api
 
         api = cached_github_copilot_model_api(
             setup.model, config.network.resolve_proxy(provider_config.use_proxy) if provider_config else None,

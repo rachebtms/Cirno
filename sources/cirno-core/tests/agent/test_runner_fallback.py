@@ -10,17 +10,17 @@ import httpx
 import pytest
 from loguru import logger
 
-from cirno.config.schema import ModelPresetConfig
-from cirno.bus.agent_events import RetryStatusEvent
-from cirno.providers.base import (
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.bus.agent_events import RetryStatusEvent
+from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
     ProviderCallContext,
     ProviderConversationState,
 )
-from cirno.providers.conversation_state import ProviderConversationStateController
-from cirno.providers.fallback_provider import FallbackModelSelection, FallbackProvider
-from cirno.providers.openai_responses import resolve_compact_threshold
+from cirno_core.providers.conversation_state import ProviderConversationStateController
+from cirno_core.providers.fallback_provider import FallbackModelSelection, FallbackProvider
+from cirno_core.providers.openai_responses import resolve_compact_threshold
 
 
 def _make_response(
@@ -134,7 +134,7 @@ class _FakeProvider(LLMProvider):
 
 
 def test_fallback_models_default_empty() -> None:
-    from cirno.config.schema import AgentDefaults
+    from cirno_core.config.schema import AgentDefaults
 
     defaults = AgentDefaults()
 
@@ -142,7 +142,7 @@ def test_fallback_models_default_empty() -> None:
 
 
 def test_fallback_models_accept_preset_refs_and_inline_configs() -> None:
-    from cirno.config.schema import Config, InlineFallbackConfig
+    from cirno_core.config.schema import Config, InlineFallbackConfig
 
     config = Config.model_validate({
         "agents": {
@@ -171,7 +171,7 @@ def test_fallback_models_accept_preset_refs_and_inline_configs() -> None:
 
 
 async def test_fallback_preserves_the_operation_event_sink():
-    from cirno.bus.agent_events import EventSink
+    from cirno_core.bus.agent_events import EventSink
 
     async def observe(event):
         pass
@@ -193,7 +193,7 @@ async def test_fallback_preserves_the_operation_event_sink():
 
 
 def test_fallback_model_preset_ref_must_exist() -> None:
-    from cirno.config.schema import Config
+    from cirno_core.config.schema import Config
 
     with pytest.raises(ValueError, match="fallback_models.*not found"):
         Config.model_validate({
@@ -203,8 +203,8 @@ def test_fallback_model_preset_ref_must_exist() -> None:
 
 
 def test_provider_signature_tracks_fallback_presets_and_provider_config() -> None:
-    from cirno.config.schema import Config
-    from cirno.providers.factory import provider_signature
+    from cirno_core.config.schema import Config
+    from cirno_core.providers.factory import provider_signature
 
     base = {
         "agents": {
@@ -249,8 +249,8 @@ def test_provider_signature_tracks_fallback_presets_and_provider_config() -> Non
 
 
 def test_provider_snapshot_uses_smallest_fallback_context_window() -> None:
-    from cirno.config.schema import Config
-    from cirno.providers.factory import build_provider_snapshot
+    from cirno_core.config.schema import Config
+    from cirno_core.providers.factory import build_provider_snapshot
 
     config = Config.model_validate({
         "agents": {
@@ -277,7 +277,7 @@ def test_provider_snapshot_uses_smallest_fallback_context_window() -> None:
         },
     })
 
-    with patch("cirno.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         snapshot = build_provider_snapshot(config)
 
     assert snapshot.context_window_tokens == 64000
@@ -286,8 +286,8 @@ def test_provider_snapshot_uses_smallest_fallback_context_window() -> None:
 
 
 def test_factory_injects_configured_identity_into_primary_and_fallback_leaves() -> None:
-    from cirno.config.schema import Config
-    from cirno.providers.factory import build_provider_snapshot
+    from cirno_core.config.schema import Config
+    from cirno_core.providers.factory import build_provider_snapshot
 
     config = Config.model_validate({
         "agents": {
@@ -321,8 +321,8 @@ def test_factory_injects_configured_identity_into_primary_and_fallback_leaves() 
 
 
 def test_inline_fallback_reasoning_effort_does_not_inherit_primary() -> None:
-    from cirno.config.schema import Config, InlineFallbackConfig
-    from cirno.providers.factory import provider_signature
+    from cirno_core.config.schema import Config, InlineFallbackConfig
+    from cirno_core.providers.factory import provider_signature
 
     config = Config.model_validate({
         "agents": {
@@ -470,7 +470,7 @@ class TestFallbackWhenPrimaryRaises:
         )
 
         retry = fb.chat_stream_with_retry if stream else fb.chat_with_retry
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock) as sleep:
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock) as sleep:
             result = await retry(messages=[{"role": "user", "content": "hi"}], model="primary-model")
 
         assert result.content == "fallback ok"
@@ -923,7 +923,7 @@ class TestFallbackOnPrimaryError:
             fallback_model_observer=_observe,
         )
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock) as sleep:
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock) as sleep:
             result = await fb.chat_with_retry(
                 messages=[{"role": "user", "content": "hi"}],
                 model="primary-model",
@@ -1086,7 +1086,7 @@ class TestFailoverOnEmptyChoices:
     @pytest.mark.asyncio
     async def test_empty_choices_text_fallback(self) -> None:
         """_should_fallback should return True for 'API returned empty choices'."""
-        from cirno.providers.fallback_provider import FallbackProvider
+        from cirno_core.providers.fallback_provider import FallbackProvider
 
         response = _make_response(
             "Error: API returned empty choices.",
@@ -1099,7 +1099,7 @@ class TestFailoverOnEmptyChoices:
     @pytest.mark.asyncio
     async def test_empty_choices_no_error_kind_text_fallback(self) -> None:
         """_should_fallback should also match via text token when error_kind is None."""
-        from cirno.providers.fallback_provider import FallbackProvider
+        from cirno_core.providers.fallback_provider import FallbackProvider
 
         response = _make_response(
             "Error: API returned empty choices.",
@@ -1151,7 +1151,7 @@ class TestFailoverOnTransientError:
 class TestRetryBeforeFailover:
     @pytest.mark.parametrize("stream", [False, True])
     async def test_scoped_retry_events_preserve_fallback_chain_ownership(self, stream):
-        from cirno.bus.agent_events import EventSink, RetryWaitEvent
+        from cirno_core.bus.agent_events import EventSink, RetryWaitEvent
 
         primary = _FakeProvider("primary", _retryable_error("primary unavailable"))
         fallback = _FakeProvider("fallback", _make_response("fallback ok"))
@@ -1159,7 +1159,7 @@ class TestRetryBeforeFailover:
                                     MagicMock(return_value=fallback))
         observe = AsyncMock()
         call = provider.chat_stream_with_retry if stream else provider.chat_with_retry
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await call(
                 [{"role": "user", "content": "hi"}],
                 provider_context=ProviderCallContext(events=EventSink(observe)),
@@ -1173,7 +1173,7 @@ class TestRetryBeforeFailover:
         assert statuses == ["cleared", "waiting", "waiting", "waiting", "cleared"]
 
     async def test_scoped_persistent_retry_includes_chain_wait_and_one_terminal(self):
-        from cirno.bus.agent_events import EventSink, RetryWaitEvent
+        from cirno_core.bus.agent_events import EventSink, RetryWaitEvent
 
         primary = _FakeProvider("primary", _retryable_error("primary unavailable"))
         fallback = _FakeProvider("fallback", _retryable_error("fallback unavailable"))
@@ -1181,7 +1181,7 @@ class TestRetryBeforeFailover:
                                     MagicMock(return_value=fallback))
         provider._PERSISTENT_IDENTICAL_ERROR_LIMIT = 2
         observe = AsyncMock()
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hi"}], retry_mode="persistent",
                 provider_context=ProviderCallContext(events=EventSink(observe)),
@@ -1207,7 +1207,7 @@ class TestRetryBeforeFailover:
         factory = MagicMock()
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hi"}],
                 retry_mode=retry_mode,
@@ -1232,7 +1232,7 @@ class TestRetryBeforeFailover:
         async def _record_status(status: RetryStatusEvent) -> None:
             retry_statuses.append(status)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hi"}],
                 on_retry_wait=retry_events,
@@ -1272,7 +1272,7 @@ class TestRetryBeforeFailover:
         async def _record_status(status: RetryStatusEvent) -> None:
             retry_statuses.append(status)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hi"}],
                 on_retry_wait=retry_events,
@@ -1303,7 +1303,7 @@ class TestRetryBeforeFailover:
         async def record(status: RetryStatusEvent) -> None:
             statuses.append(status)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hello"}], on_retry_status=record,
             )
@@ -1334,7 +1334,7 @@ class TestRetryBeforeFailover:
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
         provider._PERSISTENT_IDENTICAL_ERROR_LIMIT = 2
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hi"}],
                 retry_mode="persistent",
@@ -1359,8 +1359,8 @@ class TestRetryBeforeFailover:
         provider._PERSISTENT_IDENTICAL_ERROR_LIMIT = 2
 
         with (
-            patch("cirno.providers.fallback_provider.time.monotonic", return_value=100.0),
-            patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock),
+            patch("cirno_core.providers.fallback_provider.time.monotonic", return_value=100.0),
+            patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock),
         ):
             result = await provider.chat_with_retry(
                 [{"role": "user", "content": "hi"}],
@@ -1399,7 +1399,7 @@ class TestRetryBeforeFailover:
             factory,
         )
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry([{"role": "user", "content": "hi"}])
 
         assert result.content == "fallback a ok"
@@ -1421,7 +1421,7 @@ class TestRetryBeforeFailover:
         recovered = AsyncMock()
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_stream_with_retry(
                 [{"role": "user", "content": "hi"}],
                 on_content_delta=streamed,
@@ -1444,7 +1444,7 @@ class TestRetryBeforeFailover:
         factory = MagicMock(return_value=fallback)
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_stream_with_retry(
                 [{"role": "user", "content": "hi"}]
             )
@@ -1468,7 +1468,7 @@ class TestRetryBeforeFailover:
         streamed = AsyncMock()
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
 
-        with patch("cirno.providers.base.asyncio.sleep", new_callable=AsyncMock):
+        with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_stream_with_retry(
                 [{"role": "user", "content": "hi"}],
                 on_content_delta=streamed,
@@ -1967,7 +1967,7 @@ class TestCircuitBreaker:
 
 class TestGenerationForwarded:
     def test(self) -> None:
-        from cirno.providers.base import GenerationSettings
+        from cirno_core.providers.base import GenerationSettings
         primary = _FakeProvider("primary")
         primary.generation = GenerationSettings(temperature=0.5, max_tokens=1024)
         fb = FallbackProvider(

@@ -2,15 +2,15 @@
 
 import pytest
 
-from cirno.memory.consolidation import MemoryStore
-from cirno.config.schema import ModelPresetConfig
-from cirno.providers.base import LLMResponse
-from cirno.security.workspace_access import (
+from cirno_core.memory.consolidation import MemoryStore
+from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.providers.base import LLMResponse
+from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     default_workspace_scope,
     reset_workspace_scope,
 )
-from cirno.utils.prompt_templates import render_template
+from cirno_core.utils.prompt_templates import render_template
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ class TestBuildDreamPrompt:
 
         # A live lease prevents two Dream runs from processing the same batch.
         assert store.build_dream_prompt() is None
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         repo = MemoryRepository(store.workspace)
         with repo.connect() as db:
             claimed = db.execute("SELECT memory_id,claimed_revision FROM dream_queue WHERE lease=?", (store._dream_batch_token,)).fetchall()
@@ -140,7 +140,7 @@ class TestBuildDreamPrompt:
         assert "entry-08" in prompt
         assert "entry-09" not in prompt
 
-        from cirno.memory.repository import MemoryRepository
+        from cirno_core.memory.repository import MemoryRepository
         repo = MemoryRepository(store.workspace)
         with repo.connect() as db:
             claimed = db.execute("SELECT memory_id,claimed_revision FROM dream_queue WHERE lease=?", (store._dream_batch_token,)).fetchall()
@@ -397,9 +397,9 @@ class TestEphemeralDirect:
         """Factory fixture that builds a minimal AgentLoop with mocked deps."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from cirno.agent.loop import AgentLoop
-        from cirno.memory.consolidation import MemoryStore
-        from cirno.bus.queue import MessageBus
+        from cirno_core.agent.loop import AgentLoop
+        from cirno_core.memory.consolidation import MemoryStore
+        from cirno_core.bus.queue import MessageBus
 
         store = MemoryStore(tmp_path)
         store.write_soul("# Soul")
@@ -416,7 +416,7 @@ class TestEphemeralDirect:
         )
 
         with (
-            patch("cirno.agent.loop.SubagentManager") as mock_sub,
+            patch("cirno_core.agent.loop.SubagentManager") as mock_sub,
         ):
             mock_sub.return_value.cancel_by_session = AsyncMock(return_value=0)
             loop = AgentLoop(
@@ -468,9 +468,9 @@ class TestEphemeralDirect:
         from copy import deepcopy
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from cirno.agent.loop import AgentLoop
-        from cirno.bus.queue import MessageBus
-        from cirno.providers.base import GenerationSettings
+        from cirno_core.agent.loop import AgentLoop
+        from cirno_core.bus.queue import MessageBus
+        from cirno_core.providers.base import GenerationSettings
 
         store = MemoryStore(tmp_path)
         store.write_memory("# Memory")
@@ -492,7 +492,7 @@ class TestEphemeralDirect:
         async def _silent(*_args, **_kwargs):
             pass
 
-        with patch("cirno.agent.runner.deepcopy", wraps=deepcopy) as copy_state:
+        with patch("cirno_core.agent.runner.deepcopy", wraps=deepcopy) as copy_state:
             response = await loop.process_direct(
                 prompt, session_key=MemoryStore.dream_session_key(), ephemeral=True,
                 tools=store.build_dream_tools(), on_progress=_silent,
@@ -567,7 +567,7 @@ class TestEphemeralDirect:
         """A soft tool error is model input, not a second run-level failure state."""
         from unittest.mock import AsyncMock
 
-        from cirno.providers.base import ToolCallRequest
+        from cirno_core.providers.base import ToolCallRequest
 
         loop, store = _make_loop
         loop.provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -606,8 +606,8 @@ class TestEphemeralDirect:
         """Dream must only see the batch selected by build_dream_prompt."""
         from unittest.mock import MagicMock
 
-        from cirno.agent.loop import AgentLoop
-        from cirno.bus.queue import MessageBus
+        from cirno_core.agent.loop import AgentLoop
+        from cirno_core.bus.queue import MessageBus
 
         store = MemoryStore(tmp_path)
         for i in range(60):
@@ -656,15 +656,15 @@ class TestEphemeralDirect:
         """Dream gets durable files from system context without losing its session record."""
         from unittest.mock import MagicMock
 
-        from cirno.agent.loop import AgentLoop
-        from cirno.bus.queue import MessageBus
+        from cirno_core.agent.loop import AgentLoop
+        from cirno_core.bus.queue import MessageBus
 
         markers = {
             "SOUL.md": "DREAM_SOUL_MARKER",
             "USER.md": "DREAM_USER_MARKER",
             "memory/MEMORY.md": "DREAM_MEMORY_MARKER",
         }
-        from cirno.config.home import get_home_path
+        from cirno_core.config.home import get_home_path
         store = MemoryStore(get_home_path())
         store.write_soul(markers["SOUL.md"])
         store.write_user(markers["USER.md"])
@@ -719,10 +719,10 @@ class TestEphemeralHooks:
         """Build an AgentLoop with a spy hook to verify hook firing behavior."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from cirno.agent.hook import AgentHook
-        from cirno.agent.loop import AgentLoop
-        from cirno.bus.queue import MessageBus
-        from cirno.providers.base import LLMResponse
+        from cirno_core.agent.hook import AgentHook
+        from cirno_core.agent.loop import AgentLoop
+        from cirno_core.bus.queue import MessageBus
+        from cirno_core.providers.base import LLMResponse
 
         bus = MessageBus()
         provider = MagicMock()
@@ -743,7 +743,7 @@ class TestEphemeralHooks:
         spy.after_iteration = AsyncMock(return_value=None)
 
         with (
-            patch("cirno.agent.loop.SubagentManager") as mock_sub,
+            patch("cirno_core.agent.loop.SubagentManager") as mock_sub,
         ):
             mock_sub.return_value.cancel_by_session = AsyncMock(return_value=0)
             loop = AgentLoop(
