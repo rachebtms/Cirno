@@ -1,4 +1,5 @@
-FROM node:24-bookworm-slim AS webui-builder
+# The browser bundle is architecture-independent; never run Node under QEMU.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS webui-builder
 
 WORKDIR /app/sources/cirno-web
 COPY sources/cirno-web/package.json sources/cirno-web/package-lock.json ./

@@ -4,7 +4,7 @@ The repository workflow `.github/workflows/container.yml` is configured to verif
 
 ## Publication
 
-- Pull requests run frontend and backend checks and build an AMD64 image for a startup smoke test. They do not log in to the registry or publish.
+- Pull requests run frontend and backend checks and build AMD64 and ARM64 images on native runners for startup smoke tests. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
 - Version tags such as `v0.1.3` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
@@ -12,7 +12,9 @@ The repository workflow `.github/workflows/container.yml` is configured to verif
 
 Publication uses the workflow's `GITHUB_TOKEN` with `packages: write`; no Docker Hub password or personal access token is needed. OCI source labels associate the package with this repository. If the package is initially private, make it public in the GitHub package settings to allow anonymous server pulls.
 
-The code and workflow must first be committed and pushed to GitHub. A workflow file present only in a local checkout does not start Actions. The checks job is a release gate: test failures prevent the container publication job from running.
+The code and workflow must first be committed and pushed to GitHub. A workflow file present only in a local checkout does not start Actions. The checks job is a release gate: test failures prevent container builds. AMD64 and ARM64 images build in parallel on `ubuntu-24.04` and `ubuntu-24.04-arm`. Each image must pass startup verification before its digest is uploaded. A final job publishes the multi-platform manifest only after both architectures succeed.
+
+Backend tests run with two workers, and Python dependency downloads are cached alongside the existing npm and Docker build caches. The architecture-independent browser bundle builds on the build host's native architecture. CI uses native runners for both architectures and does not use QEMU.
 
 ## Deploy
 
@@ -31,7 +33,7 @@ To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.3`; otherwise
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
-The workflow smoke test starts the server, checks its health endpoint and Web UI, and verifies that PID 1 runs as the non-root Cirno user. ARM64 is built for publication; the startup smoke test runs on AMD64.
+The workflow smoke test starts the server, checks its health endpoint and Web UI, and verifies that PID 1 runs as the non-root Cirno user. Startup, registration and Web UI checks run on both AMD64 and ARM64.
 
 ## Networking and authentication
 

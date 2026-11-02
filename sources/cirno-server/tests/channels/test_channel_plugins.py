@@ -1222,7 +1222,7 @@ def test_repository_dependency_installer_reports_conflict_after_fallback(monkeyp
     failures = dependencies.ensure_repository_channel_dependencies(set(plugins), plugins)
 
     assert failures == {
-        "first": "Channel dependencies could not be installed. Check gateway logs."
+        "first": "Channel dependencies could not be installed. Check server logs."
     }
 
 
