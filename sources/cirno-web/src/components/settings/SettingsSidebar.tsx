@@ -56,6 +56,7 @@ const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fal
   { key: "channels", icon: MessagesSquare, fallback: "Channel setup", group: "connections" },
   { key: "network", icon: Network, fallback: "Network & retries", group: "system" },
   { key: "advanced", icon: AdvancedIcon, fallback: "Permissions", group: "system" },
+  { key: "backup", icon: Archive, fallback: "Backup & restore", group: "system" },
   { key: "runtime", icon: SystemIcon, fallback: "Server", group: "system" },
     { key: "about", icon: AboutIcon, fallback: "About", group: "system" },
 ];

@@ -48,6 +48,9 @@ def start(
         set_config_path(config.expanduser().resolve())
     path = get_config_path()
     try:
+        from cirno_server.backup.archive import Backups
+        if Backups(path).apply_pending():
+            console.print("Cirno backup restored. Sign in with the restored account.")
         fresh = not path.exists()
         settings = load_config(path)
         websocket = WebSocketConfig.model_validate(getattr(settings.channels, "websocket", {}) or {})

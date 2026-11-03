@@ -261,8 +261,6 @@ class Session:
                 message = public_history_message(message)
             content = message.get("content", "")
             role = message.get("role")
-            if role == "assistant" and isinstance(content, str):
-                content = _sanitize_assistant_replay_text(content)
             # Synthesize an ``[image: path]`` breadcrumb from the persisted
             # ``media`` kwarg so LLM replay still sees *something* where the
             # image used to be. Without this, an image-only user turn

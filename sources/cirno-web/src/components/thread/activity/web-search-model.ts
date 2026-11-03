@@ -4,7 +4,7 @@ import type { TFunction } from "i18next";
 import { canonicalToolTrace, formatToolCallTrace } from "@/lib/tool-traces";
 import type { ToolProgressEvent } from "@/lib/types";
 
-import { redactActivityText, safeActivityDetail } from "./activity-text";
+import { redactActivityText, safeActivityDetail, toolActivityDetails } from "./activity-text";
 import { displayWebHost, formatCompactWebUrl, parseSafeActivityHttpUrl } from "./web-url";
 
 export type WebSearchStatus = "running" | "done" | "error";
@@ -23,6 +23,7 @@ export interface WebSearchRunModel {
   target: WebSearchTarget;
   status: WebSearchStatus;
   sources: WebSearchSource[];
+  detailsText?: string;
   error?: string;
 }
 
@@ -68,6 +69,7 @@ function webSearchRunFromEvent(event: ToolProgressEvent): WebSearchRunModel | nu
   return {
     key: event.call_id ? `call:${event.call_id}` : formatToolCallTrace(event) ?? `${name}:${query}`,
     query,
+    detailsText: toolActivityDetails(formatToolCallTrace(event) ?? name, event.result, readableError(event.error)),
     target,
     status,
     sources: status === "done" && target === "web" ? webSearchSources(event.result) : [],

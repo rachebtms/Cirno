@@ -1,6 +1,6 @@
-"""Opt-in semantic search. Model inference lives only in a disposable CPU child.
+"""Opt-in semantic search through a disposable CPU child or external API.
 
-The default gateway imports neither numpy, tokenizers nor ONNX Runtime. Vector
+The default server imports neither numpy, tokenizers nor ONNX Runtime. Vector
 rows are streamed from SQLite; no corpus matrix or permanent model is resident.
 """
 from __future__ import annotations
@@ -80,6 +80,8 @@ class EmbeddingWorker:
 
 
 def _fingerprint(config):
+    if config.embedding_provider == "api":
+        return hashlib.sha256(json.dumps(["api-char-chunks-v1", config.embedding_api_base.rstrip("/"), config.embedding_api_model, config.embedding_api_chunk_chars]).encode()).hexdigest()
     digest = hashlib.sha256(b"bge-token-chunks-224-stride-192-v1")
     for value in (config.embedding_model_path, config.embedding_tokenizer_path):
         with Path(value).expanduser().open("rb") as stream:
@@ -89,11 +91,11 @@ def _fingerprint(config):
 
 
 def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
-    """Index at most 32 token chunks per explicit search, then stream cosine scores."""
+    """Index at most 32 chunks per explicit search, then stream cosine scores."""
     neighbor_limit = filters.pop("expand_links", 3)
     lexical = repo.search(query, limit=limit, expand_links=neighbor_limit, **filters)
     if not config.embedding_enabled:
-        return {**lexical, "warning_code": "disabled", "warning": "Local semantic retrieval is disabled; using BM25"}
+        return {**lexical, "warning_code": "disabled", "warning": "Semantic retrieval is disabled; using BM25"}
     if not _LOCK.acquire(blocking=False):
         return {**lexical, "warning_code": "busy", "warning": "Embedding worker is busy; using BM25"}
     try:
@@ -128,8 +130,12 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
                     PRIMARY KEY(memory_id,fingerprint,chunk_index)
                 );
             """)
-        with EmbeddingWorker(config) as worker:
+        from cirno_core.memory.embedding_api import APIEmbeddingWorker
+        worker_type = APIEmbeddingWorker if config.embedding_provider == "api" else EmbeddingWorker
+        with worker_type(config) as worker:
             query_vector = worker.request([query[:2000]])["vectors"][0]
+            if config.embedding_provider == "api":
+                fingerprint += ":" + str(len(query_vector))
             budget = 32
             with repo.connect(vectors=True) as db:
                 rows = db.execute(f"""SELECT m.body,e.content_hash,e.next_chunk FROM memories m

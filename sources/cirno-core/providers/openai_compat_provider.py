@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 from loguru import logger
 
+from cirno_core.providers.reasoning_history import prepare_reasoning_history
 from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
@@ -687,8 +688,10 @@ class OpenAICompatProvider(LLMProvider):
         self,
         messages: list[dict[str, Any]],
         model: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """Strip non-standard keys, normalize tool_call IDs."""
+        messages = prepare_reasoning_history(self, messages, tools=tools)
         sanitized = LLMProvider._sanitize_request_messages(messages, _ALLOWED_MSG_KEYS)
         id_map: dict[str, str] = {}
         pending_tool_ids: dict[str, deque[str]] = {}
@@ -697,13 +700,6 @@ class OpenAICompatProvider(LLMProvider):
             metadata = self._spec.model_metadata(model or self.default_model)
             force_string_content = metadata is None or "image" not in metadata.input_modalities
         normalize_tool_ids = self._should_normalize_tool_call_ids()
-        strip_reasoning = bool(
-            self._spec
-            and getattr(self._spec, "strip_history_reasoning_content", False)
-        )
-        if strip_reasoning:
-            for msg in sanitized:
-                msg.pop("reasoning_content", None)
         if self._spec and self._spec.name == "gemini":
             sanitized = self._ensure_gemini_thought_signatures(sanitized)
 
@@ -918,7 +914,7 @@ class OpenAICompatProvider(LLMProvider):
             "model": model_name,
             "messages": self._sanitize_messages(
                 self._sanitize_empty_content(messages),
-                model_name,
+                model_name, tools=tools,
             ),
         }
 
@@ -1236,7 +1232,7 @@ class OpenAICompatProvider(LLMProvider):
         model_name = self._request_model_name(model_name)
         sanitized_messages = self._sanitize_messages(
             self._sanitize_empty_content(messages),
-            model_name,
+            model_name, tools=tools,
         )
         sanitized_state = (
             provider_context.conversation_state
@@ -1247,7 +1243,7 @@ class OpenAICompatProvider(LLMProvider):
             sanitized_state = sanitized_state.with_pending_messages(
                 self._sanitize_messages(
                     self._sanitize_empty_content(sanitized_state.pending_messages),
-                    model_name,
+                    model_name, tools=tools,
                 )
             )
         supports_reasoning_none = bool(

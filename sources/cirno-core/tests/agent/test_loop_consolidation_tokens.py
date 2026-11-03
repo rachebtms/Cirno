@@ -170,7 +170,7 @@ async def test_ephemeral_tool_loop_pressure_summarizes_before_next_model_call(
         nonlocal normal_calls
         contents = [str(message.get("content")) for message in messages]
         if contents and "SNIP" in contents[-1]:
-            return LLMResponse(content="Tool-loop checkpoint.", tool_calls=[])
+            return LLMResponse(content="## Task\nresearch\n## State\nTool-loop checkpoint.\n## Next\ncontinue", tool_calls=[])
         normal_calls += 1
         if normal_calls <= 2:
             return LLMResponse(

@@ -695,24 +695,11 @@ def test_get_history_does_not_paste_assistant_media_paths_into_replay():
     assert history == [{"role": "assistant", "content": "来了 🎨"}]
 
 
-def test_get_history_sanitizes_existing_assistant_replay_artifacts():
-    session = Session(key="test:polluted-assistant")
-    session.messages.append(
-        {
-            "role": "assistant",
-            "content": (
-                "[Message Time: 2026-05-09 00:33:48]\n"
-                "来了 🎨\n"
-                "[image: /home/user/.cirno/media/generated/img_old.png]\n\n"
-                "generate_image(\"16:9\")\n"
-                "message(\"来了 🎨\")"
-            ),
-        }
-    )
-
-    history = session.get_history(max_messages=500)
-
-    assert history == [{"role": "assistant", "content": "来了 🎨"}]
+def test_get_history_preserves_assistant_bytes_for_prompt_cache():
+    session = Session(key="websocket:global")
+    text = '  An example:\nmessage("hello")\n\n'
+    session.messages.extend([{"role": "user", "content": "Show an example"}, {"role": "assistant", "content": text}])
+    assert session.get_history()[-1]["content"] == text
 
 
 def test_get_history_respects_max_tokens(monkeypatch):

@@ -60,6 +60,7 @@ export interface AgentSettingsDraft {
   idleCompactKeepPercent?: number | null;
   temperature: number;
   reasoningEffort: string;
+  reasoningHistory?: "auto" | "preserve" | "omit";
   api: ModelAPIConfig | null;
   extraHeaders: string;
   extraQuery: string;
@@ -104,6 +105,7 @@ export const DEFAULT_AGENT_SETTINGS_DRAFT: AgentSettingsDraft = {
   contextWindowTokens: 200_000,
   temperature: 0.1,
   reasoningEffort: "",
+  reasoningHistory: "auto",
   api: null,
   extraHeaders: "",
   extraQuery: "",
@@ -133,6 +135,7 @@ export function agentDraftFromPayload(
     idleCompactKeepPercent: activePreset?.idle_compact_keep_percent ?? null,
     temperature: activePreset?.temperature ?? payload.agent.temperature,
     reasoningEffort: activePreset?.reasoning_effort ?? "",
+    reasoningHistory: activePreset?.reasoning_history ?? "auto",
     api: activePreset ? activePreset.api ?? null : payload.agent.api ?? null,
     extraHeaders: providerJsonValue(activePreset?.extra_headers),
     extraQuery: providerJsonValue(activePreset?.extra_query),
@@ -404,6 +407,7 @@ export function ModelsSettings({
     idleCompactKeepPercent: preset.idle_compact_keep_percent ?? null,
     temperature: preset.temperature,
       reasoningEffort: preset.reasoning_effort ?? "",
+      reasoningHistory: preset.reasoning_history ?? "auto",
       api: preset.api ?? null,
       extraHeaders: providerJsonValue(preset.extra_headers),
       extraQuery: providerJsonValue(preset.extra_query),
@@ -554,6 +558,14 @@ export function ModelsSettings({
           value={form.reasoningEffort}
           onChange={(reasoningEffort) => setForm((prev) => ({ ...prev, reasoningEffort }))}
         />
+      </SettingsRow>
+      <SettingsRow title={t("settings.models.reasoningHistory")} description={t("settings.models.reasoningHistoryHelp")}>
+        <ProviderPicker triggerProps={{ "aria-label": t("settings.models.reasoningHistory") }}
+          value={form.reasoningHistory ?? "auto"} emptyLabel={t("settings.models.reasoningHistoryOptions.auto")}
+          providers={(["auto", "preserve", "omit"] as const)
+            .filter(value => value !== "omit" || !(form.provider === "deepseek" || form.provider === "auto" && selectedPreset?.resolved_provider === "deepseek"))
+            .map(value => ({ name: value, label: t(`settings.models.reasoningHistoryOptions.${value}`) }))}
+          onChange={(value) => setForm(previous => ({ ...previous, reasoningHistory: value as "auto" | "preserve" | "omit" }))} />
       </SettingsRow>
       <Dialog open={advancedOpen} onOpenChange={(open) => {
         if (!open && !creating && edits.needsCompletion()) {

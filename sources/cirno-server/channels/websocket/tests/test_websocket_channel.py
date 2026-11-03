@@ -775,7 +775,8 @@ async def test_discard_temporary_chat_does_not_detach_persistent_chat(bus, tmp_p
 
 
 @pytest.mark.asyncio
-async def test_send_session_updated_broadcasts_to_other_webui_connections(bus) -> None:
+@pytest.mark.parametrize("target_subscribed", [False, True])
+async def test_send_session_updated_broadcasts_to_other_webui_connections(bus, target_subscribed) -> None:
     class Conn:
         remote_address = None
 
@@ -788,9 +789,10 @@ async def test_send_session_updated_broadcasts_to_other_webui_connections(bus) -
     channel = _ch(bus)
     active_conn = Conn()
     other_conn = Conn()
-    channel._attach(active_conn, "chat-a")
+    active_chat = "chat-a" if target_subscribed else "global"
+    channel._attach(active_conn, active_chat)
     channel._attach(other_conn, "chat-b")
-    assert sorted(channel._subs) == ["chat-a", "chat-b"]
+    assert sorted(channel._subs) == sorted([active_chat, "chat-b"])
     assert sum(len(conns) for conns in channel._subs.values()) == 2
 
     await channel.send(OutboundMessage(

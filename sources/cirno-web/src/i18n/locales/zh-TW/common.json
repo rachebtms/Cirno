@@ -315,8 +315,8 @@
           "help": "每次閒置維護檢查的檔案數量。"
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "本機語意檢索",
-          "help": "可選的獨立 CPU 程序。預設仍用 BM25，需先安裝 memory-embedding 可選相依套件。"
+          "label": "語意檢索",
+          "help": "可選向量檢索，搭配 BM25。可選擇本地 CPU 模型或外部 API。API 模式會傳送查詢與記憶片段至指定服務，預設關閉。"
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "ONNX 模型路徑",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "審批逾時（秒）",
           "help": "逾時後將操作轉交給你審批。"
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "執行中壓縮門檻（%）",
+          "help": "依目前模型的上下文視窗計算，每次模型請求前檢查，包含工具執行後。始終預留輸出與安全空間；100 表示最大安全輸入預算。不影響閒置壓縮。"
+        },
+        "channels_send_progress": {
+          "label": "過程訊息",
+          "help": "向已連線通道傳送助手的中間說明。Web UI 執行詳情仍可查看。"
+        },
+        "channels_send_tool_hints": {
+          "label": "工具狀態訊息",
+          "help": "向已連線通道傳送簡短工具狀態。"
+        },
+        "channels_show_reasoning": {
+          "label": "思考訊息",
+          "help": "向支援的通道傳送思考過程。Web UI 詳情展開方式另行設定。"
+        },
+        "channels_show_compaction_notices": {
+          "label": "自動壓縮通知",
+          "help": "向已連線通道傳送自動上下文壓縮通知。Web UI 壓縮事件仍可見。"
+        },
+        "channels_send_max_retries": {
+          "label": "訊息投遞嘗試次數",
+          "help": "包含第一次的嘗試上限。0 表示不重試，仍投遞一次。"
+        },
+        "tools_exec_idle_timeout": {
+          "label": "命令靜默逾時（秒）",
+          "help": "命令無輸出達此時間後執行下列動作。0 關閉偵測。不是會話閒置計時。"
+        },
+        "tools_exec_idle_action": {
+          "label": "命令靜默後的動作",
+          "help": "「回報並繼續」保持命令執行；「終止命令」將其停止。無輸出的研究工作通常應繼續執行。"
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "可要求的最長命令時限（秒）",
+          "help": "模型可為單一命令要求的最長時限。預設命令時限另行設定；預設值 0 表示不限時間。"
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "壓縮輸出預算（Token）",
+          "help": "壓縮的獨立輸出預算，包含思考，且不超過模型輸出上限。"
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "壓縮思考強度",
+          "help": "降低強度可為交接正文保留空間。繼承使用會話模型設定；不支援的值依提供商規則映射。"
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "檢查點提醒門檻（%）",
+          "help": "達到主動壓縮輸入預算的此百分比時，提醒 Agent 儲存任務狀態。不會中斷產生中的請求。"
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "API 基礎位址",
+          "help": "相容 OpenAI 的基礎位址，例如 https://host/v1，或完整 /embeddings 位址。支援自架 HTTP 服務。"
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "API 金鑰",
+          "help": "儲存在實例設定中，現有金鑰不會回顯。無需認證的服務可留空。"
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "嵌入模型",
+          "help": "服務支援的模型名稱。更改位址、模型或分塊大小會使用獨立索引。"
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "分塊大小（字元）",
+          "help": "外部 API 使用重疊字元分塊。服務輸入上限較小時可調低；每次檢索最多索引 32 塊。"
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "嵌入服務",
+          "help": "可選向量檢索，搭配 BM25。可選擇本地 CPU 模型或外部 API。API 模式會傳送查詢與記憶片段至指定服務，預設關閉。"
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "AI 審批",
           "help": "AI 審批存取模式使用獨立模型審查操作，不載入對話記憶。無法確定時交由你審批。"
+        },
+        "active-context": {
+          "title": "任務執行中"
+        },
+        "channel-output": {
+          "title": "通道訊息投遞"
+        },
+        "command-limits": {
+          "title": "命令時間限制"
+        },
+        "compaction-generation": {
+          "title": "壓縮交接產生"
+        },
+        "embedding": {
+          "title": "嵌入服務"
         }
       },
       "save": "儲存變更",
@@ -510,7 +593,18 @@
       "unavailable": "更新閘道後可編輯這些設定。",
       "advancedOptions": "進階選項",
       "idle": "閒置時",
-      "interval": "固定間隔"
+      "interval": "固定間隔",
+      "report": "回報並繼續",
+      "terminate": "終止命令",
+      "compactionEffortOptions": {
+        "inherit": "繼承模型設定",
+        "low": "低",
+        "none": "關閉思考"
+      },
+      "embeddingProviders": {
+        "local": "本地 CPU 模型",
+        "api": "外部 API"
+      }
     },
     "backToChat": "返回聊天",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "Agent 心跳",
       "coordination": "對話協作",
       "regional": "時間與地區",
-      "approval": "AI 審批"
+      "approval": "AI 審批",
+      "backup": "備份與還原"
     },
     "sections": {
       "interface": "介面",
@@ -964,7 +1059,14 @@
       "idleCompactPercent": "閒置壓縮触發門檻（%）",
       "idleCompactKeepPercent": "近期上下文保留門檻（%）",
       "compactPercentHint": "按此模型上下文視窗計算；留空繼承全域設定。触發門檻 0 表示禁用閒置壓縮。",
-      "inheritGlobal": "繼承全域設定"
+      "inheritGlobal": "繼承全域設定",
+      "reasoningHistory": "歷史思考回傳",
+      "reasoningHistoryHelp": "控制明文思考回傳。自動依介面處理，原生簽章狀態始終保留。DeepSeek 工具請求必須保留歷史思考；被忽略的歷史不計入下一輪輸入，但已產生的 Token 仍會計費。",
+      "reasoningHistoryOptions": {
+        "auto": "自動",
+        "preserve": "保留",
+        "omit": "不回傳"
+      }
     },
     "timezone": {
       "select": "選擇時區",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "定期檢查 HEARTBEAT.md，其中有任務時喚醒 Cirno Agent。服務健康檢查是獨立功能。"
+    },
+    "backup": {
+      "instance": "完整實例",
+      "everything": "全部 Cirno 資料",
+      "everythingHelp": "包含所有設定與憑據、MCP 和 Tools 組態、記憶、人格檔案、會話、歷史、已儲存的上下文、Goal、Skills、通知及已持久化的使用者套件。",
+      "credentials": "備份包含登入憑據和 API 金鑰，請妥善保存。匯出或還原前請先結束執行中的任務。",
+      "extra": "額外檔案與目錄",
+      "extraHelp": "可選擇額外路徑。建議項目會掃描歷史 Workspace 與常用 CLI 的登入、設定及套件目錄，不讀取憑據內容。",
+      "included": "已隨實例自動備份",
+      "workspace": "曾使用的 Workspace",
+      "toolData": "CLI 設定、登入狀態或套件",
+      "path": "檔案或目錄的絕對路徑",
+      "add": "新增路徑",
+      "remove": "移除",
+      "export": "匯出備份",
+      "import": "匯入備份",
+      "working": "處理中…",
+      "downloadReady": "下載備份",
+      "pending": "還原已準備就緒，重新啟動後套用；也可以取消。",
+      "restart": "立即重新啟動",
+      "cancel": "取消",
+      "restoreTitle": "還原備份",
+      "restoreHelp": "此操作會取代目前的 Cirno 實例並重新啟動服務，之後需使用備份中的帳號登入。Agent 修改的外部檔案只有包含在備份中才會還原。",
+      "version": "版本",
+      "source": "原實例位置",
+      "destination": "還原至實例",
+      "skip": "留空則略過",
+      "extrasRestore": "可調整額外路徑以符合目前伺服器。額外目錄以合併方式還原：覆蓋同名檔案，保留無關檔案。套件及外部工具需要相容的系統與 CPU 架構。",
+      "restore": "還原並重新啟動"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "上下文已壓縮",
       "attempts": "共尝试 {{count}} 次",
       "errorUnavailable": "這条旧記錄未儲存具体錯誤原因。",
-      "attempt": "第 {{number}} 次尝试"
+      "attempt": "第 {{number}} 次尝试",
+      "evidenceCheckpoint": "已儲存證據交接",
+      "evidenceCheckpointHelp": "模型摘要未完成、無法使用或遺漏任務狀態，已改為保留有上限的原文證據交接。完整原始記錄仍然保留。"
     },
     "loadingConversation": "正在載入會話…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "輸出速度",
         "firstToken": "首字延遲",
         "tokensPerSecond": "{{value}} token/秒",
-        "estimated": "按壓縮後的上下文估算，下一次回復後更新用量。",
+        "estimated": "依目前上下文與正在產生的思考、文字及工具資料估算，模型回報實際用量後校準。",
         "unavailable": "目前上下文用量未記錄，圖表顯示的是此前請求用量。"
       },
       "queued": {

@@ -49,3 +49,11 @@ describe("compaction attempts", () => {
     expect(projectThreadEvents(replay)[0].compaction?.error).toBe(failed.error);
   });
 });
+
+it("explains an evidence fallback instead of claiming a model summary succeeded", () => {
+  const event = decodeNotification({ event: "context_compaction", chat_id: "chat", compaction_id: "fallback", phase: "succeeded", evidence_checkpoint: true });
+  expect(event).not.toBeNull();
+  render(<ContextCompactionNotice compaction={{ id: "fallback", phase: "succeeded", evidence_checkpoint: true }} />);
+  expect(screen.getByText("Evidence checkpoint saved")).toBeInTheDocument();
+  expect(screen.getByText(/complete source records remain archived/)).toBeInTheDocument();
+});

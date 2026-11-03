@@ -728,7 +728,7 @@ def _estimate_prompt_tokens_with_source(
         if tc:
             parts.append(json.dumps(tc, ensure_ascii=False))
 
-        rc = msg.get("reasoning_content")
+        rc = msg.get("reasoning_content") or extract_reasoning(None, msg.get("thinking_blocks"), None)[0]
         if isinstance(rc, str) and rc:
             parts.append(rc)
 
@@ -793,7 +793,7 @@ def estimate_message_tokens(message: dict[str, Any]) -> int:
     if message.get("tool_calls"):
         parts.append(json.dumps(message["tool_calls"], ensure_ascii=False))
 
-    rc = message.get("reasoning_content")
+    rc = message.get("reasoning_content") or extract_reasoning(None, message.get("thinking_blocks"), None)[0]
     if isinstance(rc, str) and rc:
         parts.append(rc)
 
@@ -816,6 +816,8 @@ def estimate_prompt_tokens_chain(
     tools: list[dict[str, Any]] | None = None,
 ) -> tuple[int, str]:
     """Estimate prompt tokens via provider, tiktoken, then a byte heuristic."""
+    from cirno_core.providers.reasoning_history import prepare_reasoning_history
+    messages = prepare_reasoning_history(provider, messages, tools=tools, for_count=True)
     provider_counter = getattr(provider, "estimate_prompt_tokens", None)
     if callable(provider_counter):
         with suppress(Exception):

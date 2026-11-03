@@ -1,5 +1,19 @@
 import type { TFunction } from "i18next";
 
+export function toolActivityDetails(call: string, result?: unknown, error?: string): string {
+  const match = /^([a-zA-Z0-9_.-]+)\(([\s\S]*)\)$/.exec(call);
+  if (match) {
+    try {
+      const args = JSON.parse(match[2] || "{}");
+      const fields = Object.entries(args).map(([key, value]) => typeof value === "string"
+        ? `${key}:\n${value}` : `${key}: ${JSON.stringify(value, null, 2)}`);
+      call = [match[1].replace(/__/g, "."), ...fields].join("\n\n");
+    } catch { /* Keep incomplete streaming arguments verbatim. */ }
+  }
+  const output = result == null ? "" : typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  return redactActivityText([call, output, error].filter(Boolean).join("\n\n"));
+}
+
 export function redactActivityText(value: string): string {
   return value
     .replace(/(https?:\/\/)[^/@\s]+@/gi, "$1<redacted>@")

@@ -734,8 +734,8 @@ class TestAutoCompactEdgeCases:
         session_after = loop.sessions.get_or_create("cli:test")
         assert len(session_after.messages) == 13
         assert session_after.get_history(max_messages=12) == []
-        assert loop.auto_compact._summaries["cli:test"]["text"] == "(nothing)"
-        assert session_after.metadata["_last_summary"]["text"] == "(nothing)"
+        assert loop.auto_compact._summaries["cli:test"]["text"].startswith("[RAW]")
+        assert session_after.metadata["_last_summary"]["text"] == loop.auto_compact._summaries["cli:test"]["text"]
 
         await loop.aclose()
 

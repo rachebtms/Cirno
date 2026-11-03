@@ -26,6 +26,8 @@ Coordination messages are journaled before delivery and deduplicated by stable I
 
 Only Cirno receives `conversations.control` and `goals.control`. It can stop/continue other saved Web conversations and inspect or change their Goals while preserving progress and continuation counts. `goals.control` has no completion action: the executing worker must verify and finish its own Goal. Each control is recorded with the `@cirno` source.
 
+`conversations.control(action="get", to="@handle")` reads a worker's workspace, PTC mode and selected model preset, including the available preset names. `action="configure"` changes any combination of `workspace`, `ptc_mode` and `model_preset` on an idle conversation. Stop active work first, configure it, then continue when ready. Workspace must be an existing absolute server directory; `~/` is accepted. Model names use the configured preset catalog, and `default` restores the instance's active model. Changes are persisted together and broadcast to the Web UI. Configuration does not restart work, move files, clear history, alter the Goal or Project membership, or switch its Default/AI review/Full Access mode. Ordinary conversations do not receive this supervisory capability.
+
 `conversations.set_title` lets the model set a concise title in the user's language. Automatic title generation is also available; manual titles and Cirno's identity are preserved.
 
 ## Heartbeat
@@ -39,3 +41,11 @@ Memory, profiles and Skills belong to Home rather than workspaces. See [memory a
 Dream can extract or improve a reusable workflow under `Home/skills/<name>/`. Its restricted file tools cannot modify application code. Home Skills are checked for identity metadata and Python/shell syntax before being offered as available. Syntax validation does not execute scripts or prove behavior.
 
 File-tool edits preserve versions under `Home/skills-history/<name>/<revision>/`; UI deletion also preserves the current version. Unchanged content reuses its revision. `skills.validate`, `skills.history` and Settings → Skills expose validation and history paths. The model can read old files and deliberately edit the current Skill. There is no automatic rollback.
+
+## Context compaction during active work
+
+Settings → Context compaction separates the active-work trigger from idle compaction. `agents.defaults.activeCompactPercent` is the percentage of the selected model's context window checked before every request, including tool rounds. The effective budget is the smaller of that percentage and the window minus reserved output and the safety buffer. The default, 100, preserves the maximum safe input budget; it never removes the output reserve. Lower values compact earlier. The active threshold does not change the idle timer or idle retention percentage.
+
+`MEMORY.md` remains automatically injected, now as a persisted snapshot on fresh input when it changes. Dream updates no longer rewrite the system prefix or historical requests. Coordination records also stay on fresh inputs. Personality/tool/model changes and actual context compaction can still change request prefixes. Cache hit rates depend on new input volume and provider behavior; they are not guaranteed to exceed a fixed percentage.
+
+Tool activity supports short summaries and expandable complete arguments, commands, results and errors, including nested PTC calls. Secret-like values are redacted for display. Nodes cross the local workspace boundary: Default access permits listing saved records, AI approvals review exact remote operations, and Full Access executes them directly. Remote connection settings are bound to a review; a local script is never treated as evidence for a similarly named remote script. Uninspected remote scripts require the owner to decide.

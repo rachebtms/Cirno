@@ -1016,6 +1016,7 @@ export function projectThreadEvent(
         ...(event.error !== undefined ? { error: event.error } : {}),
         ...(event.context_tokens !== undefined ? { context_tokens: event.context_tokens } : {}),
         ...(event.context_window_tokens !== undefined ? { context_window_tokens: event.context_window_tokens } : {}),
+        ...(event.evidence_checkpoint ? { evidence_checkpoint: true } : {}),
         ...(event.context_estimated !== undefined ? { context_estimated: event.context_estimated } : {}),
         ...(!options.persisted ? { announce: true } : {}),
       },

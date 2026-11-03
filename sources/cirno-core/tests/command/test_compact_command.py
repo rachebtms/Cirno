@@ -29,7 +29,7 @@ async def loop(tmp_path):
     provider.generation = GenerationSettings(max_tokens=100)
     provider.can_resume_conversation_state.return_value = True
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
-        content="Portable checkpoint.",
+        content="## Task\nInspect\n## State\nPortable checkpoint.\n## Next\nWait for input.",
         finish_reason="stop",
     ))
     loop = AgentLoop(
@@ -142,7 +142,7 @@ async def test_compact_emits_one_lifecycle_and_keeps_the_session(loop, command) 
     assert is_hidden_history_message(reloaded.messages[-1])
     assert reloaded.last_archived == 2
     assert reloaded.get_history() == []
-    assert reloaded.metadata["_last_summary"]["text"] == "Portable checkpoint."
+    assert reloaded.metadata["_last_summary"]["text"] == "## Task\nInspect\n## State\nPortable checkpoint.\n## Next\nWait for input."
     assert len(loop.consolidator.store.read_unprocessed_history(0)) == 1
 
     response = await loop._process_message(msg, runtime=loop.llm_runtime())
@@ -185,7 +185,10 @@ async def test_compacted_session_waits_for_new_input_without_continuation(
     loop.sessions.invalidate(key)
     loop.auto_compact._summaries.clear()
     reloaded = loop.sessions.get_or_create(key)
-    assert reloaded.metadata["_last_summary"]["text"] == summary
+    if summary == "(nothing)":
+        assert reloaded.metadata["_last_summary"]["text"].startswith("[RAW]")
+    else:
+        assert reloaded.metadata["_last_summary"]["text"] == summary
     assert reloaded.last_archived == 2
     assert reloaded.get_history() == []
     loop.provider.chat_stream_with_retry.assert_awaited_once()
@@ -197,7 +200,7 @@ async def test_compacted_session_waits_for_new_input_without_continuation(
     assert response.content == "Hello!"
     loop.provider.chat_stream_with_retry.assert_awaited_once()
     sent = loop.provider.chat_stream_with_retry.call_args.kwargs["messages"]
-    expected_summary = reloaded.metadata["_last_summary"] if summary != "(nothing)" else None
+    expected_summary = reloaded.metadata["_last_summary"]
     assert sent[0] == {
         "role": "system",
         "content": loop.context.build_system_prompt(channel="cli", session_summary=expected_summary),
@@ -464,7 +467,7 @@ async def test_idle_and_manual_compact_share_persisted_checkpoint(loop) -> None:
     assert len(reloaded.messages) == 43
     assert is_hidden_history_message(reloaded.messages[-1])
     assert reloaded.get_history() == []
-    assert reloaded.metadata["_last_summary"]["text"] == "Portable checkpoint."
+    assert reloaded.metadata["_last_summary"]["text"] == "## Task\nInspect\n## State\nPortable checkpoint.\n## Next\nWait for input."
 
     reloaded = await loop.sessions.state.get(key)
     reloaded.add_message("user", "next question")

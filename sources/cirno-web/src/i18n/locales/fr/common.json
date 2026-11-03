@@ -315,8 +315,8 @@
           "help": "Fichiers vérifiés par passe de maintenance inactive."
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "Recherche sémantique locale",
-          "help": "Processus CPU isolé et facultatif ; BM25 reste le défaut. Installer l’option memory-embedding."
+          "label": "Recherche sémantique",
+          "help": "Vecteurs facultatifs avec BM25. Choisissez CPU local ou API externe. L’API reçoit les requêtes et fragments de mémoire ; désactivée par défaut."
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "Chemin du modèle ONNX",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "Délai de révision (secondes)",
           "help": "Une fois le délai dépassé, votre approbation est demandée."
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "Seuil de compactage actif (%)",
+          "help": "Pourcentage du contexte du modèle sélectionné. Vérifié avant chaque requête, y compris après un outil. Une réserve pour la sortie et la sécurité reste protégée ; 100 utilise le maximum sûr. Indépendant du compactage à vide."
+        },
+        "channels_send_progress": {
+          "label": "Messages de progression",
+          "help": "Envoie les explications intermédiaires aux canaux. Les détails restent disponibles dans l’interface web."
+        },
+        "channels_send_tool_hints": {
+          "label": "État des outils",
+          "help": "Envoie de brefs états d’exécution aux canaux."
+        },
+        "channels_show_reasoning": {
+          "label": "Messages de raisonnement",
+          "help": "Envoie le raisonnement aux canaux compatibles. L’affichage détaillé web se règle séparément."
+        },
+        "channels_show_compaction_notices": {
+          "label": "Avis de compactage automatique",
+          "help": "Envoie les avis aux canaux. Les événements de compactage restent visibles sur le web."
+        },
+        "channels_send_max_retries": {
+          "label": "Tentatives d’envoi",
+          "help": "Maximum incluant la première tentative. 0 désactive les nouvelles tentatives, pas l’envoi initial."
+        },
+        "tools_exec_idle_timeout": {
+          "label": "Délai sans sortie (secondes)",
+          "help": "Après ce délai sans sortie, applique l’action suivante. 0 désactive la détection. Distinct de l’inactivité de la conversation."
+        },
+        "tools_exec_idle_action": {
+          "label": "Action après silence",
+          "help": "Signaler laisse la commande tourner ; terminer l’arrête. Pour une recherche sans sortie, préférez Signaler."
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "Durée maximale demandée (secondes)",
+          "help": "Limite maximale que le modèle peut demander pour une commande. La durée par défaut se règle séparément ; 0 y signifie sans limite."
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "Budget de sortie de condensation (jetons)",
+          "help": "Budget distinct incluant le raisonnement, limité par la sortie du modèle."
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "Effort de condensation",
+          "help": "Un effort réduit réserve de la place au résumé. Hériter utilise le réglage de la conversation ; le fournisseur adapte les valeurs non prises en charge."
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "Seuil du rappel (%)",
+          "help": "Invite à sauvegarder l’état à ce pourcentage du budget d’entrée actif. N’interrompt pas une requête en cours."
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "URL de base API",
+          "help": "URL compatible OpenAI, telle que https://host/v1, ou adresse /embeddings complète. HTTP auto-hébergé est pris en charge."
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "Clé API",
+          "help": "Enregistrée dans la configuration ; les clés existantes sont masquées. Laissez vide sans authentification."
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "Modèle d’embeddings",
+          "help": "Identifiant du service. Changer l’adresse, le modèle ou la taille des fragments utilise un index distinct."
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "Taille du fragment (caractères)",
+          "help": "Fragments de caractères avec chevauchement. Réduisez pour une limite d’entrée faible. Jusqu’à 32 fragments sont indexés par recherche."
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "Service d’embeddings",
+          "help": "Vecteurs facultatifs avec BM25. Choisissez CPU local ou API externe. L’API reçoit les requêtes et fragments de mémoire ; désactivée par défaut."
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "Approbations IA",
           "help": "En mode de révision IA, un modèle indépendant examine les opérations sans charger la mémoire de la conversation. Les cas incertains vous sont soumis."
+        },
+        "active-context": {
+          "title": "Pendant une tâche"
+        },
+        "channel-output": {
+          "title": "Envoi aux canaux"
+        },
+        "command-limits": {
+          "title": "Durée des commandes"
+        },
+        "compaction-generation": {
+          "title": "Génération du point de reprise"
+        },
+        "embedding": {
+          "title": "Service d’embeddings"
         }
       },
       "save": "Enregistrer les modifications",
@@ -510,7 +593,18 @@
       "unavailable": "Mettez à jour la passerelle pour modifier ces paramètres.",
       "advancedOptions": "Options avancées",
       "idle": "À l’inactivité",
-      "interval": "Intervalle fixe"
+      "interval": "Intervalle fixe",
+      "report": "Signaler et continuer",
+      "terminate": "Terminer la commande",
+      "compactionEffortOptions": {
+        "inherit": "Hériter du modèle",
+        "low": "Faible",
+        "none": "Sans raisonnement"
+      },
+      "embeddingProviders": {
+        "local": "Modèle CPU local",
+        "api": "API externe"
+      }
     },
     "backToChat": "Retour au chat",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "Réveil périodique de l’agent",
       "coordination": "Coordination des conversations",
       "regional": "Heure et région",
-      "approval": "Approbations IA"
+      "approval": "Approbations IA",
+      "backup": "Sauvegarde et restauration"
     },
     "sections": {
       "interface": "Interface utilisateur",
@@ -964,7 +1059,14 @@
       "idleCompactPercent": "Seuil de compactage après inactivité (%)",
       "idleCompactKeepPercent": "Contexte récent conservé (%)",
       "inheritGlobal": "Hériter des réglages globaux",
-      "compactPercentHint": "Pourcentage de la fenêtre de contexte du modèle. Vide : hériter ; seuil à 0 : désactiver le compactage après inactivité."
+      "compactPercentHint": "Pourcentage de la fenêtre de contexte du modèle. Vide : hériter ; seuil à 0 : désactiver le compactage après inactivité.",
+      "reasoningHistory": "Historique du raisonnement",
+      "reasoningHistoryHelp": "Contrôle le renvoi du raisonnement en texte. Automatique suit l’API et conserve l’état signé. DeepSeek avec outils exige sa conservation. L’historique ignoré ne compte pas dans l’entrée suivante ; les jetons générés restent facturés.",
+      "reasoningHistoryOptions": {
+        "auto": "Automatique",
+        "preserve": "Conserver",
+        "omit": "Omettre"
+      }
     },
     "timezone": {
       "select": "Choisir un fuseau horaire",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "Vérifie périodiquement HEARTBEAT.md et réveille Cirno si des tâches y figurent. Ce mécanisme est distinct du contrôle de santé du service."
+    },
+    "backup": {
+      "instance": "Instance complète",
+      "everything": "Toutes les données Cirno",
+      "everythingHelp": "Inclut réglages et identifiants, MCP, outils, mémoires, personnalité, conversations, historique, contexte enregistré, Goals, Skills, notifications et paquets persistants.",
+      "credentials": "Contient des identifiants et clés API. Conservez-la en privé. Terminez les tâches actives avant de sauvegarder ou restaurer.",
+      "extra": "Fichiers et dossiers supplémentaires",
+      "extraHelp": "Propose les anciens espaces de travail et emplacements de connexion, configuration et paquets CLI, sans lire les identifiants.",
+      "included": "Inclus automatiquement",
+      "workspace": "Espace de travail utilisé",
+      "toolData": "Configuration, connexion ou paquets CLI",
+      "path": "Chemin absolu du fichier ou dossier",
+      "add": "Ajouter un chemin",
+      "remove": "Supprimer",
+      "export": "Exporter la sauvegarde",
+      "import": "Importer une sauvegarde",
+      "working": "Traitement…",
+      "downloadReady": "Télécharger la sauvegarde",
+      "pending": "Restauration prête. Redémarrez pour l’appliquer ou annulez-la.",
+      "restart": "Redémarrer maintenant",
+      "cancel": "Annuler",
+      "restoreTitle": "Restaurer une sauvegarde",
+      "restoreHelp": "Remplace l’instance actuelle et redémarre le service. Connectez-vous ensuite avec le compte sauvegardé. Les fichiers externes ne sont restaurés que s’ils sont inclus.",
+      "version": "Version",
+      "source": "Instance d’origine",
+      "destination": "Destination",
+      "skip": "Vide pour ignorer",
+      "extrasRestore": "Les chemins supplémentaires sont modifiables. Les fichiers correspondants sont écrasés et les autres conservés. Les paquets et outils exigent un système et un processeur compatibles.",
+      "restore": "Restaurer et redémarrer"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "Contexte compressé",
       "attempts": "{{count}} tentatives",
       "attempt": "Tentative {{number}}",
-      "errorUnavailable": "Ce relevé ne contient pas la cause de l’erreur."
+      "errorUnavailable": "Ce relevé ne contient pas la cause de l’erreur.",
+      "evidenceCheckpoint": "Point de reprise factuel enregistré",
+      "evidenceCheckpointHelp": "Le résumé était indisponible, incomplet ou sans état de travail. Une sélection limitée des éléments sources est conservée ; les archives complètes restent disponibles."
     },
     "loadingConversation": "Chargement de la conversation…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "Débit de sortie",
         "firstToken": "Premier jeton",
         "tokensPerSecond": "{{value}} jetons/s",
-        "estimated": "Estimation du contexte compacté ; la prochaine réponse actualisera l’utilisation.",
+        "estimated": "Estimation du contexte et de la sortie en cours, corrigée avec l’usage réel après la réponse.",
         "unavailable": "L’utilisation actuelle du contexte n’a pas été enregistrée. Le graphique montre les requêtes précédentes."
       },
       "queued": {

@@ -998,6 +998,7 @@ def model_settings_payload(
                 "idle_compact_keep_percent": preset.idle_compact_keep_percent,
                 "temperature": preset.temperature,
                 "reasoning_effort": preset.reasoning_effort,
+                "reasoning_history": preset.reasoning_history,
                 "api": preset.api.model_dump(mode="json") if preset.api is not None else None,
                 **{
                     field: request_settings.redact_request_secrets(getattr(preset, field))
@@ -1024,6 +1025,7 @@ def model_settings_payload(
             "context_window_tokens": effective_preset.context_window_tokens,
             "temperature": effective_preset.temperature,
             "reasoning_effort": effective_preset.reasoning_effort,
+            "reasoning_history": effective_preset.reasoning_history,
             "api": (
                 effective_preset.api.model_dump(mode="json")
                 if effective_preset.api is not None else None
@@ -1065,10 +1067,19 @@ def _preset_with_request_updates(
             if value is not None and not 0 <= value <= 100:
                 raise WebUISettingsError(f"{snake} must be between 0 and 100")
             updates[snake] = value
+    history = query_first_alias(query, "reasoning_history", "reasoningHistory")
+    if history is not None and history not in {"auto", "preserve", "omit"}:
+        raise WebUISettingsError("Choose Automatic, Preserve or Omit for reasoning history")
     percentage_updates = {key: updates.pop(key) for key in tuple(updates) if key.startswith("idle_compact_")}
     # The provider validator already owns structured JSON validation and safe errors.
     validated = request_settings.validate_request_config(None, updates)
     candidate = preset.model_copy(update={**{key: getattr(validated, key) for key in updates}, **percentage_updates})
+    if history is not None:
+        candidate = candidate.model_copy(update={"reasoning_history": history})
+    if candidate.reasoning_history == "omit":
+        route = resolve_provider_route(config, preset=candidate)
+        if route.spec is not None and route.spec.name == "deepseek":
+            raise WebUISettingsError("DeepSeek tool requests require reasoning history. Select Automatic or Preserve.")
     trigger = candidate.idle_compact_percent if candidate.idle_compact_percent is not None else config.agents.defaults.idle_compact_percent
     keep = candidate.idle_compact_keep_percent if candidate.idle_compact_keep_percent is not None else config.agents.defaults.idle_compact_keep_percent
     if trigger > 0 and keep >= trigger:

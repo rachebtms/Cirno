@@ -9,8 +9,8 @@ export function ContextCompactionNotice({ compaction }: { compaction: UIContextC
     ? `thread.compaction.reasons.${attempt.reason}.${attempt.phase}`
     : `thread.compaction.${attempt.phase}`);
   const attempts = compaction.attempts ?? [compaction];
-  const title = titleFor(compaction);
-  const expandable = attempts.length > 1 || compaction.phase === "failed";
+  const title = compaction.evidence_checkpoint ? t("thread.compaction.evidenceCheckpoint") : titleFor(compaction);
+  const expandable = attempts.length > 1 || compaction.phase === "failed" || compaction.evidence_checkpoint === true;
 
   return <div role={compaction.announce ? "status" : undefined}
     aria-live={compaction.announce ? "polite" : undefined} aria-busy={compaction.phase === "started"}
@@ -25,6 +25,7 @@ export function ContextCompactionNotice({ compaction }: { compaction: UIContextC
         <ol className="mt-2 space-y-2 rounded-control bg-muted/40 p-3 text-left text-muted-foreground">
           {attempts.map((attempt, index) => <li key={attempt.id} className="break-words">
             <p>{t("thread.compaction.attempt", { number: index + 1 })} · {titleFor(attempt)}</p>
+            {attempt.evidence_checkpoint ? <p>{t("thread.compaction.evidenceCheckpointHelp")}</p> : null}
             {attempt.phase === "failed" ? <p className="whitespace-pre-wrap text-destructive/80">{attempt.error || t("thread.compaction.errorUnavailable")}</p> : null}
           </li>)}
         </ol>

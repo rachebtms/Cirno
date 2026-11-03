@@ -550,7 +550,8 @@ def test_memory_budget_and_checkpoint_restore_are_independent_of_dream(tmp_path,
     builder.checkpoint_context_tokens = 256
     messages = builder.build_transcript(TranscriptInput(history=[], current_message="continue"), session_key="websocket:long")
     prompt = messages[0]["content"]
-    assert "shared overview" in prompt
+    assert "shared overview" not in prompt
+    assert "shared overview" in messages[-1]["content"]
     assert "SHARED_TAIL_NOT_INJECTED" not in prompt
     assert "Next: read node://n/result.tsv#L9" not in prompt
     assert "Next: read node://n/result.tsv#L9" in messages[-1]["content"]

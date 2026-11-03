@@ -57,6 +57,7 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management.
 - Web search, Nodes, MCP: independently configured agent connections.
 - Telegram: personal account binding and server-side notification preferences. Channel setup configures the Telegram bot token and Web transport.
+- Backup & restore: complete instance archives, optional extra directories and import preview.
 - Account, Network & retries, Permissions, Server: network policy, access controls and service settings.
 
 The **Add MCP server** panel sits above the MCP catalog, with custom connection and JSON import actions. Custom MCP servers can be edited from **MCP → Manage → Connection → Edit MCP configuration**. The JSON editor loads the saved configuration, including arguments, environment variables, request headers, tool scope and timeouts. Saving updates the same server and reloads its connection. JSON import and configuration editors support indentation with **Format JSON**; invalid JSON is shown as an error without discarding the draft.
@@ -112,3 +113,7 @@ Use message actions to branch or edit an idle human message. Context changes do 
 ## Mobile reconnection and refresh
 
 Returning to the foreground checks the WebSocket connection and reloads the server's conversation state, including reasoning and tool activity missed while the browser was suspended. A stale connection reconnects through the normal authenticated path. The top-right refresh button reloads the page in desktop browsers and installed mobile Web apps, including iPhone Home Screen apps. Reloading the page does not stop the server's task or send the previous prompt again.
+
+## Long tasks and embeddings
+
+See [Model context and long-running work](model-context.md) for per-model reasoning replay, active/idle compaction, checkpoint generation and visible progress. See [Memory retrieval](memory-retrieval.md) for local CPU and external API embeddings. Both vector modes remain optional; BM25 is available without an embedding service.

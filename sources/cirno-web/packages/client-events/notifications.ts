@@ -20,6 +20,7 @@ export interface ContextCompaction {
   context_tokens?: number
   context_window_tokens?: number
   context_estimated?: boolean
+  evidence_checkpoint?: boolean
   phase: "started" | "succeeded" | "failed" | "cancelled"
 }
 
@@ -45,6 +46,7 @@ export type NotificationEvent =
       context_tokens?: number
       context_window_tokens?: number
       context_estimated?: boolean
+      evidence_checkpoint?: boolean
     }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -91,6 +93,7 @@ export function decodeNotification(value: unknown): NotificationEvent | null | u
     && (value.reason === undefined || isCompactionReason(value.reason))
     && optional(value.error, "string")
     && optional(value.context_estimated, "boolean")
+    && optional(value.evidence_checkpoint, "boolean")
     && [value.context_tokens, value.context_window_tokens].every(tokens => tokens === undefined
       || (typeof tokens === "number" && Number.isFinite(tokens) && tokens >= 0))
     ? value as unknown as NotificationEvent : null

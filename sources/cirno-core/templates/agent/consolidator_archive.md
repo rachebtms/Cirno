@@ -36,7 +36,16 @@ When space is limited, prioritize user corrections and preferences, then solutio
 
 ## Output
 
-Return one concise retained fact per line in this form:
-- [mark] fact
+Return a working-state handoff with these exact headings:
 
-Use `(nothing)` when neither the previous checkpoint nor the current conversation contains a qualifying fact or active working state.
+## Task
+The current user-authorized objective and constraints.
+
+## State
+Verified results, completed operations and exact artifact references. Distinguish hypotheses and unverified model working notes from confirmed results. Preserve the newest decision and unfinished line of investigation, including when most recent assistant messages contain only reasoning.
+
+## Next
+The next concrete action, pending operations, unresolved questions and blockers. State explicitly if the task is complete.
+
+## Retained facts
+Use `- [mark] fact` with the marks above for other useful facts. Write `(none)` for an empty section. Never return `(nothing)` for a session containing task evidence. Do not execute tools. Return the checkpoint directly rather than continuing the original task.

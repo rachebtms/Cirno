@@ -33,6 +33,10 @@ class ProviderSnapshot:
     model_preset: str | None = None
     idle_compact_percent: float | None = None
     idle_compact_keep_percent: float | None = None
+    active_compact_percent: int = 100
+    compaction_max_tokens: int = 8192
+    compaction_reasoning_effort: str = "low"
+    checkpoint_reminder_percent: int = 85
 
 
 def _resolve_model_preset(
@@ -161,6 +165,7 @@ def _make_provider_core(
     provider._CHAT_RETRY_DELAYS = tuple(min(2 ** attempt, 60) for attempt in range(config.network.provider_max_retries))
     provider.request_timeout_s = config.network.request_timeout_s
     provider.generation = preset.to_generation_settings()
+    provider.reasoning_history = preset.reasoning_history
     return provider
 
 
@@ -181,6 +186,7 @@ def _inline_fallback_preset(
             fallback.temperature if fallback.temperature is not None else primary.temperature
         ),
         reasoning_effort=fallback.reasoning_effort,
+        reasoning_history=fallback.reasoning_history,
         api=fallback.api,
         extra_headers=fallback.extra_headers,
         extra_query=fallback.extra_query,
@@ -239,6 +245,7 @@ def build_unconfigured_provider_snapshot(config: Config, setup_error: str) -> Pr
     provider._CHAT_RETRY_DELAYS = tuple(min(2 ** attempt, 60) for attempt in range(config.network.provider_max_retries))
     provider.request_timeout_s = config.network.request_timeout_s
     provider.generation = preset.to_generation_settings()
+    provider.reasoning_history = preset.reasoning_history
     return ProviderSnapshot(
         provider=provider,
         model=preset.model,
@@ -271,8 +278,11 @@ def _preset_provider_signature(
         preset.temperature,
         preset.reasoning_effort,
         preset.context_window_tokens,
+        preset.reasoning_history,
         preset.idle_compact_percent,
         preset.idle_compact_keep_percent,
+        config.agents.defaults.active_compact_percent,
+        config.agents.defaults.compaction.model_dump_json(),
         preset.api.model_dump_json() if preset.api is not None else None,
         config.network.resolve_proxy(provider_config.use_proxy) if provider_config else None,
         provider_config.thinking_style if provider_config else None,
@@ -326,6 +336,10 @@ def build_provider_snapshot(
         model_preset=selected_preset,
         idle_compact_percent=resolved.idle_compact_percent,
         idle_compact_keep_percent=resolved.idle_compact_keep_percent,
+        active_compact_percent=config.agents.defaults.active_compact_percent,
+        compaction_max_tokens=config.agents.defaults.compaction.max_tokens,
+        compaction_reasoning_effort=config.agents.defaults.compaction.reasoning_effort,
+        checkpoint_reminder_percent=config.agents.defaults.compaction.checkpoint_reminder_percent,
     )
 
 

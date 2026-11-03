@@ -25,6 +25,7 @@ import {
   compactActivityPath,
   formatActivityTarget,
   redactShellCommand,
+  toolActivityDetails,
 } from "@/components/thread/activity/activity-text";
 import { FileEditGroup, type FileEditSummary } from "@/components/thread/activity/FileEditRow";
 import { GenericToolRun } from "@/components/thread/activity/GenericToolRun";
@@ -88,6 +89,7 @@ interface CliRunSummary {
   workingDir?: string;
   status: CliRunStatus;
   error?: string;
+  detailsText?: string;
 }
 
 type CliRunStatus = "running" | "done" | "error";
@@ -101,6 +103,7 @@ interface McpRunSummary {
   args: unknown;
   status: McpRunStatus;
   error?: string;
+  detailsText?: string;
 }
 
 function countActivity(
@@ -643,6 +646,7 @@ function ActivityTraceList({
         trace,
         status: explicitState?.status === "running" && !active ? "done" : explicitState?.status ?? fallbackStatus,
         error: explicitState?.error,
+        result: explicitState?.result,
       };
       const previous = genericItems[genericItems.length - 1];
       if (previous && !canGroupGenericToolRuns(previous, item)) flushGenericItems(String(index));
@@ -821,6 +825,7 @@ function ActivityTraceRow({
         href={trace.url}
         host={trace.host}
         displayUrl={trace.detail}
+        detailsText={toolActivityDetails(line, state?.result, state?.error)}
         active={rowActive}
         tone={status === "error" ? "error" : status === "done" ? "success" : "active"}
       />
@@ -834,6 +839,7 @@ function ActivityTraceRow({
       label={trace.kind === "search" ? trace.label : formatActivityTarget(t, trace.label, trace.detail)}
       detail={trace.kind === "search" ? trace.detail : trace.aside}
       labelClassName={trace.kind === "search" && trace.detail ? "max-w-[50%]" : undefined}
+      detailsText={toolActivityDetails(line, state?.result, state?.error)}
     />
   );
 }
@@ -989,11 +995,11 @@ function cliRunFromEvent(event: ToolProgressEvent): CliRunSummary | null {
   if (!CLI_RUN_TOOL_NAMES.has(name)) return null;
   const argsObject = parseToolEventArguments(event);
   const key = event.call_id ? `call:${event.call_id}` : `${name}:${JSON.stringify(argsObject)}`;
-  return cliRunFromArguments(argsObject, {
+  return { ...cliRunFromArguments(argsObject, {
     key,
     status: cliRunStatusFromPhase(event.phase),
     error: cliRunError(event),
-  });
+  }), detailsText: toolActivityDetails(formatToolCallTrace(event) ?? name, event.result, cliRunError(event)) };
 }
 
 function cliRunMapByTraceLine(message: UIMessage): Map<string, CliRunSummary> {
@@ -1092,11 +1098,12 @@ function mcpRunFromEvent(event: ToolProgressEvent): McpRunSummary | null {
   if (!MCP_TOOL_NAME_RE.test(name)) return null;
   const argsObject = parseToolEventArguments(event);
   const key = event.call_id ? `call:${event.call_id}` : `${name}:${JSON.stringify(argsObject)}`;
-  return mcpRunFromToolName(name, argsObject, {
+  const run = mcpRunFromToolName(name, argsObject, {
     key,
     status: cliRunStatusFromPhase(event.phase),
     error: cliRunError(event),
   });
+  return run && { ...run, detailsText: toolActivityDetails(formatToolCallTrace(event) ?? name, event.result, cliRunError(event)) };
 }
 
 function mcpRunMapByTraceLine(message: UIMessage): Map<string, McpRunSummary> {
@@ -1266,6 +1273,7 @@ function CliRunRow({ run, active, app }: { run: CliRunSummary; active: boolean; 
       active={rowActive}
       tone={failed ? "error" : rowActive ? "active" : run.status === "done" ? "success" : "neutral"}
       label={label}
+      detailsText={run.detailsText ?? toolActivityDetails(`${run.name}(${JSON.stringify(run.args)})`, undefined, run.error)}
       detail={args}
       detailClassName="font-mono text-[12px]"
       marker={(
@@ -1344,6 +1352,7 @@ function McpRunRow({ run, active, preset }: { run: McpRunSummary; active: boolea
       active={rowActive}
       tone={failed ? "error" : rowActive ? "active" : run.status === "done" ? "success" : "neutral"}
       label={label}
+      detailsText={run.detailsText ?? toolActivityDetails(`${run.toolName}(${JSON.stringify(run.args)})`, undefined, run.error)}
       detail={displayName}
       marker={(
         <span

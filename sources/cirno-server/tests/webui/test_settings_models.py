@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
-from cirno_core.config.schema import Config
+from cirno_core.config.schema import Config, ModelPresetConfig
 from cirno_core.providers.registry import find_by_name
 from cirno_server.webui.settings.models import (
     WebUISettingsError,
@@ -366,3 +366,14 @@ def test_known_reasoning_efforts_preserve_default_none_and_custom_roundtrips() -
                if row["name"] == unknown)
     assert row["reasoning_effort"] == "future-effort"
     assert row["reasoning_effort_values"] == ["", "low", "medium", "high"]
+
+
+def test_model_reasoning_replay_is_persisted_and_required_for_deepseek_tools():
+    config = Config()
+    config.providers.deepseek.api_key = 'fixture'
+    config.model_presets['research'] = ModelPresetConfig(model='deepseek-flash', provider='deepseek')
+    assert update_model_configuration(config, {'name': ['research'], 'reasoning_history': ['preserve']}, oauth_status=_oauth_status)
+    assert config.model_presets['research'].reasoning_history == 'preserve'
+    with pytest.raises(WebUISettingsError, match='require reasoning history'):
+        update_model_configuration(config, {'name': ['research'], 'reasoning_history': ['omit']}, oauth_status=_oauth_status)
+    assert config.model_presets['research'].reasoning_history == 'preserve'

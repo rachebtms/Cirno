@@ -327,8 +327,8 @@
           "help": "Files checked per idle maintenance pass."
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "Local semantic retrieval",
-          "help": "Optional isolated CPU worker. BM25 remains the default. Install the memory-embedding extra first."
+          "label": "Semantic retrieval",
+          "help": "Optional vectors alongside BM25. Choose local CPU inference or an external API. API mode sends queries and memory chunks to the configured service; disabled by default."
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "ONNX model path",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "Review timeout (seconds)",
           "help": "A timeout sends the operation to you for approval."
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "Active compaction trigger (%)",
+          "help": "Percentage of the selected model’s context window. Checked before each model request, including tool rounds. Output space and a safety reserve are always protected; 100 uses the maximum safe input budget. This does not change idle compaction."
+        },
+        "channels_send_progress": {
+          "label": "Progress messages",
+          "help": "Send intermediate assistant text to connected channels. Web UI execution details remain available."
+        },
+        "channels_send_tool_hints": {
+          "label": "Tool status messages",
+          "help": "Send short tool activity updates to connected channels."
+        },
+        "channels_show_reasoning": {
+          "label": "Reasoning messages",
+          "help": "Send reasoning updates when the channel supports them. Web UI detail expansion is controlled separately."
+        },
+        "channels_show_compaction_notices": {
+          "label": "Automatic compaction notices",
+          "help": "Send automatic context compaction notices to connected channels. Web UI compaction events remain visible."
+        },
+        "channels_send_max_retries": {
+          "label": "Delivery attempts",
+          "help": "Maximum delivery attempts, including the first. 0 disables retries, not delivery."
+        },
+        "tools_exec_idle_timeout": {
+          "label": "Command silence timeout (seconds)",
+          "help": "Time without command output before applying the action below. 0 disables silence detection. This is not the conversation idle timer."
+        },
+        "tools_exec_idle_action": {
+          "label": "After command silence",
+          "help": "Report keeps the command running; terminate stops it. Quiet research jobs should normally use Report."
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "Maximum requested command duration (seconds)",
+          "help": "Largest time limit the model may request for one command. The default command duration is configured separately; 0 there means no time limit."
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "Checkpoint output budget (tokens)",
+          "help": "Separate output budget for compaction, including reasoning. Limited by the model’s output budget."
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "Checkpoint reasoning effort",
+          "help": "Use lower effort to leave room for the checkpoint text. Inherit uses the conversation model’s effort; unsupported values follow the provider’s mapping."
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "Checkpoint reminder (%)",
+          "help": "Remind the agent to save task state before this percentage of the active input budget. This does not interrupt a running model request."
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "API base URL",
+          "help": "OpenAI-compatible base URL, such as https://host/v1, or a full /embeddings endpoint. Self-hosted HTTP endpoints are supported."
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "API key",
+          "help": "Stored privately in the instance configuration. Existing keys are masked; leave empty for a service without authentication."
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "Embedding model",
+          "help": "The model identifier accepted by your embedding service. Changing the endpoint, model or chunk size uses a separate index."
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "Chunk size (characters)",
+          "help": "Overlapping character chunks for the external API. Lower this if the service has a small input limit. Up to 32 chunks are indexed per search."
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "Embedding service",
+          "help": "Optional vectors alongside BM25. Choose local CPU inference or an external API. API mode sends queries and memory chunks to the configured service; disabled by default."
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "AI approvals",
           "help": "An independent model reviews operations in AI Review access mode without loading conversation memory. Uncertain decisions go to you."
+        },
+        "active-context": {
+          "title": "During a task"
+        },
+        "channel-output": {
+          "title": "Channel delivery"
+        },
+        "command-limits": {
+          "title": "Command time limits"
+        },
+        "compaction-generation": {
+          "title": "Checkpoint generation"
+        },
+        "embedding": {
+          "title": "Embedding service"
         }
       },
       "save": "Save changes",
@@ -510,7 +593,18 @@
       "unavailable": "Update the Cirno server to edit these settings.",
       "advancedOptions": "Advanced options",
       "idle": "When idle",
-      "interval": "Fixed interval"
+      "interval": "Fixed interval",
+      "report": "Report, keep running",
+      "terminate": "Terminate command",
+      "compactionEffortOptions": {
+        "inherit": "Inherit model setting",
+        "low": "Low",
+        "none": "No thinking"
+      },
+      "embeddingProviders": {
+        "local": "Local CPU model",
+        "api": "External API"
+      }
     },
     "backToChat": "Back to chat",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "Agent heartbeat",
       "coordination": "Conversation coordination",
       "regional": "Time & region",
-      "approval": "AI approvals"
+      "approval": "AI approvals",
+      "backup": "Backup & restore"
     },
     "sections": {
       "interface": "Interface",
@@ -633,7 +728,14 @@
       "idleCompactPercent": "Idle compaction trigger (%)",
       "idleCompactKeepPercent": "Recent context retention (%)",
       "compactPercentHint": "Percentage of this model’s context window. Leave blank to inherit; a 0 trigger disables idle compaction.",
-      "inheritGlobal": "Inherit global settings"
+      "inheritGlobal": "Inherit global settings",
+      "reasoningHistory": "Reasoning history",
+      "reasoningHistoryHelp": "Controls plaintext reasoning replay. Automatic follows the API; native signed state stays intact. DeepSeek tool requests require preservation. Ignored history does not count toward the next input; generated tokens are still billed.",
+      "reasoningHistoryOptions": {
+        "auto": "Automatic",
+        "preserve": "Preserve",
+        "omit": "Omit"
+      }
     },
     "notifications": {
       "scope": "This browser",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "Periodically check HEARTBEAT.md and wake the Cirno agent when it contains tasks. This is separate from the service health endpoint."
+    },
+    "backup": {
+      "instance": "Complete instance",
+      "everything": "All Cirno data",
+      "everythingHelp": "Includes all settings and credentials, MCP and Tools configuration, memories, personality files, conversations, history, saved context, Goals, Skills, notifications and persistent user packages.",
+      "credentials": "Backups contain login credentials and API keys. Store them privately. Stop active tasks before exporting or restoring.",
+      "extra": "Extra files and folders",
+      "extraHelp": "Choose additional paths. Suggestions scan existing workspaces and common CLI login, configuration and package locations without reading credentials.",
+      "included": "Included automatically with the instance",
+      "workspace": "Previously used workspace",
+      "toolData": "CLI configuration, login or packages",
+      "path": "Absolute file or folder path",
+      "add": "Add path",
+      "remove": "Remove",
+      "export": "Export backup",
+      "import": "Import backup",
+      "working": "Working…",
+      "downloadReady": "Download backup",
+      "pending": "A restore is staged. Restart to apply it, or cancel it.",
+      "restart": "Restart now",
+      "cancel": "Cancel",
+      "restoreTitle": "Restore backup",
+      "restoreHelp": "This replaces the current Cirno instance and restarts the service. Sign in with the account stored in the backup afterward. Existing files modified by agents are not reverted unless included in this backup.",
+      "version": "Version",
+      "source": "Original instance",
+      "destination": "Restore instance",
+      "skip": "Leave blank to skip",
+      "extrasRestore": "Optional paths can be changed for this server. Extra folders are merged: matching files are overwritten; unrelated existing files remain. Packages and external tools require a compatible OS and architecture.",
+      "restore": "Restore and restart"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "Context compacted",
       "attempts": "{{count}} attempts",
       "errorUnavailable": "This record does not include an error reason.",
-      "attempt": "Attempt {{number}}"
+      "attempt": "Attempt {{number}}",
+      "evidenceCheckpoint": "Evidence checkpoint saved",
+      "evidenceCheckpointHelp": "The model summary was unavailable, incomplete or omitted task state. A bounded evidence handoff was retained instead; complete source records remain archived."
     },
     "loadingConversation": "Loading conversation…",
     "empty": {
@@ -1885,7 +2018,7 @@
         "outputSpeed": "Output speed",
         "firstToken": "Time to first token",
         "tokensPerSecond": "{{value}} tok/s",
-        "estimated": "Estimated from the compacted context; the next response will update usage.",
+        "estimated": "Estimated from the current context and streaming output; provider usage recalibrates it after the response.",
         "unavailable": "Current context usage was not recorded. The chart shows previous requests."
       },
       "queued": {

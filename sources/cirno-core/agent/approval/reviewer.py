@@ -20,6 +20,19 @@ AI approval can be wrong. Do not infer authority from an agent, Heartbeat, sched
 def operation_evidence(tool_name, params, workspace):
     """Read only explicitly referenced scripts; bind their bytes to the decision."""
     scripts = []
+    remote = None
+    if tool_name == "node":
+        from cirno_core.nodes.service import Nodes
+
+        nodes = Nodes()
+        node_id = params.get("node_id")
+        if params.get("job_id"):
+            job = nodes.data.get("node_jobs", params["job_id"])
+            node_id = job["node_id"]
+        node = nodes.node(node_id)
+        remote = nodes.public_node(node.model_dump())
+        # Bind approval to the connection configuration without exposing credentials.
+        remote["configuration_sha256"] = hashlib.sha256(node.model_dump_json().encode()).hexdigest()
     command = params.get("command") or params.get("cmd")
     tokens = command if isinstance(command, list) else shlex.split(command or "")
     cwd = Path(params.get("working_dir") or params.get("workdir") or workspace).expanduser()
@@ -27,6 +40,9 @@ def operation_evidence(tool_name, params, workspace):
         cwd = Path(workspace) / cwd
     for value in tokens:
         if not isinstance(value, str) or Path(value).suffix.lower() not in {".sh", ".bash", ".py", ".js", ".mjs"}:
+            continue
+        if remote is not None:
+            scripts.append({"path": value, "unavailable": "Remote script contents require owner inspection; local files are not evidence for an SSH command."})
             continue
         path = Path(value).expanduser()
         path = (path if path.is_absolute() else cwd / path).resolve()
@@ -45,7 +61,10 @@ def operation_evidence(tool_name, params, workspace):
             scripts.append({"path": str(path), "unavailable": str(error)})
     targets = [item["path"] for item in params.get("edits", [])] if "edits" in params else [params["path"]] if "path" in params else []
     resolved = [str((Path(value).expanduser() if Path(value).expanduser().is_absolute() else Path(workspace) / value).resolve()) for value in targets]
-    return {"tool": tool_name, "arguments": params, "workspace": str(workspace), "scripts": scripts, "resolved_paths": resolved}
+    evidence = {"tool": tool_name, "arguments": params, "workspace": str(workspace), "scripts": scripts, "resolved_paths": resolved}
+    if remote is not None:
+        evidence["remote_target"] = remote
+    return evidence
 
 
 async def review_operation(runtime, *, human_request, operation, timeout_seconds=30):

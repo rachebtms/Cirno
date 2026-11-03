@@ -176,7 +176,7 @@ const RenameDialog = lazy(async () => {
 });
 
 const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
-  "approval", "account", "heartbeat", "coordination", "regional",
+  "approval", "account", "backup", "heartbeat", "coordination", "regional",
   "reading", "activity", "context", "dream", "memory-search", "execution", "shell", "network", "telegram",
   "capabilities",
   "overview",

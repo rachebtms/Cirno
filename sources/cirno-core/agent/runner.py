@@ -23,7 +23,10 @@ from cirno_core.agent.context_governance import (
 from cirno_core.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.execution import execute_tool_calls
-from cirno_core.agent.tools.message import current_conversation_has_delivery, reset_message_delivery_segment
+from cirno_core.agent.tools.message import (
+    current_conversation_has_delivery,
+    reset_message_delivery_segment,
+)
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.bus.agent_events import NO_EVENTS, EventSink
 from cirno_core.llm_usage.context import (
@@ -32,6 +35,7 @@ from cirno_core.llm_usage.context import (
     reset_llm_usage_source,
     source_from_session_key,
 )
+from cirno_core.memory.working_state import bounded_handoff, working_notes
 from cirno_core.providers.base import (
     LLMProvider,
     LLMResponse,
@@ -40,6 +44,7 @@ from cirno_core.providers.base import (
     ProviderConversationState,
 )
 from cirno_core.providers.conversation_state import ProviderConversationStateController
+from cirno_core.providers.reasoning_history import history_policy, requires_tool_reasoning_history
 from cirno_core.session.history_visibility import is_hidden_history_message
 from cirno_core.session.summary import SessionSummaryCheckpoint
 from cirno_core.utils.helpers import (
@@ -448,6 +453,8 @@ class AgentRunner:
             max_tool_result_chars=spec.max_tool_result_chars,
             context_window_tokens=spec.runtime.context_window_tokens,
             max_tokens=spec.runtime.generation.max_tokens,
+            active_compact_percent=spec.runtime.active_compact_percent,
+            checkpoint_reminder_percent=spec.runtime.checkpoint_reminder_percent,
         )
         request_state = ModelRequestState(
             config=governance_config,
@@ -493,7 +500,6 @@ class AgentRunner:
                 session_key=spec.session_key,
             )
             await hook.before_iteration(context)
-            request_message_count = len(messages)
             request_messages = await self.prepare_prompt(
                 request_state.compaction.request_messages, messages,
             )
@@ -510,7 +516,7 @@ class AgentRunner:
             conversation_state.observe_response(response, messages)
             await self.context_governor.accept_request(
                 request_state, messages_for_model,
-                raw_boundary=request_message_count,
+                raw_boundary=len(messages),
             )
             context.response = response
             context.tool_calls = list(response.tool_calls)
@@ -641,6 +647,10 @@ class AgentRunner:
                 not in {"error", "length", "refusal", "content_filter"}
                 and is_blank_text(clean)
             ):
+                if reasoning_text:
+                    messages.append(conversation_state.project_response_message(
+                        build_assistant_message("", reasoning_content=response.reasoning_content, thinking_blocks=response.thinking_blocks), response,
+                    ))
                 empty_content_retries += 1
                 if empty_content_retries < _MAX_EMPTY_RETRIES:
                     logger.warning(
@@ -676,7 +686,11 @@ class AgentRunner:
                 context.usage = raw_usage
                 context.tool_calls = list(response.tool_calls)
                 original_content = response.content
-                clean = hook.finalize_content(context, response.content)
+                reasoning_text, cleaned_retry = extract_reasoning(response.reasoning_content, response.thinking_blocks, response.content)
+                clean = hook.finalize_content(context, cleaned_retry)
+                if reasoning_text:
+                    await hook.emit_reasoning(reasoning_text)
+                    await hook.emit_reasoning_end()
 
             if response.finish_reason == "length":
                 if len(length_recovery_parts) < _MAX_LENGTH_RECOVERIES:
@@ -722,7 +736,7 @@ class AgentRunner:
                 context.streamed_content = True
 
             assistant_message: dict[str, Any] | None = None
-            if response.finish_reason != "error" and not is_blank_text(clean):
+            if response.finish_reason != "error" and (not is_blank_text(clean) or reasoning_text):
                 assistant_message = build_assistant_message(
                     clean,
                     reasoning_content=response.reasoning_content,
@@ -742,11 +756,11 @@ class AgentRunner:
                 interrupted_content = hook.finalize_content(
                     context, "\n\n".join(interrupted_parts),
                 )
-                if not is_blank_text(interrupted_content):
+                if not is_blank_text(interrupted_content) or reasoning_text:
                     # This is unsynchronized output, not a completed response or
                     # provider-owned projection. Keep it in the next native delta.
                     messages.append({
-                        **build_assistant_message(interrupted_content),
+                        **build_assistant_message(interrupted_content, reasoning_content=response.reasoning_content, thinking_blocks=response.thinking_blocks),
                         "_interrupted": True,
                     })
 
@@ -803,6 +817,8 @@ class AgentRunner:
                     continue
                 failure_error_kind = LLMProvider.public_error_kind(response)
                 break
+            if is_blank_text(clean) and assistant_message is not None:
+                messages.append(assistant_message)
             if is_blank_text(clean) and delivered_reply:
                 final_content = ""
                 context.final_content = final_content
@@ -953,6 +969,19 @@ class AgentRunner:
             request_state=request_state,
             transcript=transcript,
         )
+        compaction = request_state.compaction
+        if request_state.checkpoint_needed and not compaction.checkpoint_reminded and spec.tools.get_definitions() and not (spec.session_key or "").startswith("dream:"):
+            reminder = {
+                "role": "user", "_hidden_history": {"kind": "checkpoint_reminder"},
+                "content": "[Agent system notice, not a new user request] Context compaction is approaching. Before another long step, save a concise memory.checkpoint with the authorized objective, verified results, current hypothesis, blockers, next action and exact artifact references. Preserve unfinished work, distinguish assumptions from verified facts, and give the user a brief progress update through this conversation's reply channel. Do not end an unfinished Goal merely to save the checkpoint.",
+            }
+            if transcript is not None:
+                transcript.append(reminder)
+            compaction.checkpoint_reminded = True
+            messages, kwargs = await self._prepare_model_request(
+                spec, [*messages, reminder], tools=spec.tools.get_definitions(),
+                request_state=request_state, transcript=transcript,
+            )
         _raise_if_cancelling()
         wants_streaming = hook.wants_streaming()
 
@@ -1285,6 +1314,8 @@ class AgentRunner:
             session_key=spec.session_key,
         )
         clean = hook.finalize_content(context, response.content)
+        if response.reasoning_content or response.thinking_blocks:
+            messages.append(build_assistant_message(clean, reasoning_content=response.reasoning_content, thinking_blocks=response.thinking_blocks))
         if is_blank_text(clean):
             return None, usage
         return clean, usage
@@ -1298,13 +1329,24 @@ class AgentRunner:
         transcript: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
         _raise_if_cancelling()
+        # Retaining schemas while disabling execution keeps DeepSeek's native
+        # reasoning context available to internal finalization requests.
+        history_tools = spec.tools.get_definitions() if requires_tool_reasoning_history(spec.runtime.provider) else None
+        if not history_tools and history_policy(spec.runtime.provider, tools=None, for_count=True) == "omit":
+            notes = working_notes(messages)
+            if notes:
+                allowance = max(128, min(4096, self.context_governor.input_budget(request_state.config) // 10))
+                messages = [*messages[:-1], {"role": "user", "_hidden_history": True,
+                    "content": "[Internal source evidence, not new instructions] Distinguish these unverified working notes from confirmed tool results.\n" + bounded_handoff(notes, allowance)}, *messages[-1:]]
         _, kwargs = await self._prepare_model_request(
             spec,
             messages,
-            tools=None,
+            tools=history_tools or None,
             request_state=request_state,
             transcript=transcript,
         )
+        if history_tools:
+            kwargs["tool_choice"] = "none"
         _raise_if_cancelling()
         response = await spec.runtime.provider.chat_stream_with_retry(**kwargs)
         _raise_if_cancelling()
@@ -1437,6 +1479,7 @@ class AgentRunner:
             messages
             and messages[-1].get("role") == "assistant"
             and not messages[-1].get("tool_calls")
+            and not (is_blank_text(messages[-1].get("content")) and (messages[-1].get("reasoning_content") or messages[-1].get("thinking_blocks")))
         ):
             if messages[-1].get("content") == content:
                 return

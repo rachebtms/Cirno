@@ -1189,7 +1189,7 @@ export async function fetchSidebarState(
 function modelGenerationSettingsPayload(
   configuration: Pick<
     ModelConfigurationCreate,
-    "maxTokens" | "contextWindowTokens" | "idleCompactPercent" | "idleCompactKeepPercent" | "temperature" | "reasoningEffort" | "api" | "extraHeaders" | "extraQuery" | "extraBody"
+    "maxTokens" | "contextWindowTokens" | "idleCompactPercent" | "idleCompactKeepPercent" | "temperature" | "reasoningEffort" | "reasoningHistory" | "api" | "extraHeaders" | "extraQuery" | "extraBody"
   >,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
@@ -1199,6 +1199,7 @@ function modelGenerationSettingsPayload(
   if (configuration.contextWindowTokens !== undefined) {
     payload.context_window_tokens = configuration.contextWindowTokens;
   }
+  if (configuration.reasoningHistory !== undefined) payload.reasoning_history = configuration.reasoningHistory;
   if (configuration.idleCompactPercent !== undefined) payload.idle_compact_percent = configuration.idleCompactPercent ?? "";
   if (configuration.idleCompactKeepPercent !== undefined) payload.idle_compact_keep_percent = configuration.idleCompactKeepPercent ?? "";
   if (configuration.temperature !== undefined) {

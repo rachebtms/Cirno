@@ -356,6 +356,8 @@ class WebSocketChannel(BaseChannel):
 
         self.gateway = gateway
         self._uploads = gateway.uploads
+        from cirno_server.backup.http import BackupHTTP
+        self._backups = BackupHTTP(gateway.settings.config.path, self._uploads, bus, gateway.session_manager, maintenance=gateway.maintenance)
         self._outbound = WebUIOutboundDelivery(
             self,
             media=gateway.media,
@@ -672,6 +674,8 @@ class WebSocketChannel(BaseChannel):
 
         async def handle_binary(request: web.BaseRequest) -> web.StreamResponse:
             try:
+                if request.path.startswith("/api/backups/"):
+                    return await self._backups.handle(request)
                 with self.bus.admission.activity():
                     if request.path.startswith("/api/auth/"):
                         response = await self.gateway.http.auth.handle(request)
@@ -687,6 +691,7 @@ class WebSocketChannel(BaseChannel):
         async def prune_uploads() -> None:
             while not stop_event.is_set():
                 self._uploads.store.prune()
+                self._backups.prune()
                 try:
                     await asyncio.wait_for(stop_event.wait(), timeout=30)
                 except TimeoutError:

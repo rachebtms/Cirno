@@ -21,6 +21,8 @@ from cirno_core.bus.outbound_events import (
 from cirno_core.bus.runtime_events import GoalStateChanged, RuntimeEventContext
 from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
 from cirno_core.session.keys import CIRNO_SESSION_KEY
+from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY, model_preset_from_metadata
+from cirno_core.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY, validate_workspace_scope_payload
 from cirno_core.session.session_identity import is_webui_session_key
 from cirno_core.session.session_handles import SessionHandleResolver
 from cirno_core.session.sqlite_store import SessionConflictError
@@ -57,8 +59,10 @@ class ConversationControl:
             return ToolResult.error("Target conversation was not found. Use conversations__search to find its @handle.")
         if target.session_key == CIRNO_SESSION_KEY or not is_webui_session_key(target.session_key):
             return ToolResult.error("Supervisory controls require another Web conversation; Cirno cannot stop itself.")
-        if action not in ({"get", "create", "set", "update", "stop", "pause", "resume", "delete", "wait"} if goal else {"stop", "continue"}):
+        if action not in ({"get", "create", "set", "update", "stop", "pause", "resume", "delete", "wait"} if goal else {"get", "configure", "stop", "continue"}):
             return ToolResult.error("Unsupported supervisory action.")
+        if not goal and action != "configure" and values:
+            return ToolResult.error("Configuration fields require action=configure.")
         return await shield_and_drain(self._apply(target, action, goal, values, request))
 
     async def _apply(self, target, action, goal, values, request):
@@ -67,6 +71,10 @@ class ConversationControl:
             session = await self.loop.sessions.state.read_header(key)
             if session is None or not session.policy.persist:
                 return ToolResult.error("The target conversation no longer exists or is temporary.")
+            if not goal and action == "get":
+                return json.dumps({"to": "@" + target.name, **self._configuration(session)}, ensure_ascii=False)
+            if not goal and action == "configure":
+                return await self._configure(session, target, values)
             if goal and action == "get":
                 with request_context(dataclasses.replace(request, session_key=key, session_generation=session.generation)):
                     return await GetGoalTool(self.loop.sessions).execute()
@@ -113,6 +121,64 @@ class ConversationControl:
                                "result": str(result), "cancelled_tasks": cancelled,
                                "continuation_queued": should_continue}, ensure_ascii=False)
 
+    def _configuration(self, session: Session) -> dict[str, Any]:
+        scope = self.loop.workspace_scopes.for_turn(channel="websocket", message_metadata={}, session_metadata=session.metadata)
+        return {
+            "workspace_scope": scope.payload(), "ptc_mode": session.metadata.get("ptc_mode") is True,
+            "model_preset": model_preset_from_metadata(session.metadata) or "default",
+            "available_model_presets": sorted({"default", *self.loop.runtime_resolver.model_presets}),
+        }
+
+    async def _configure(self, session: Session, target: SessionHandle, values: dict[str, Any]) -> str:
+        key = session.key
+        lock = self.loop._get_session_lock(key)
+        if key in self.loop._pending_queues or lock.locked() or any(not task.done() for task in self.loop._active_tasks.get(key, ())):
+            return ToolResult.error("The target conversation is running. Use stop, configure, then continue when ready.")
+        if not values or values.keys() - {"workspace", "ptc_mode", "model_preset"}:
+            return ToolResult.error("configure requires workspace, ptc_mode or model_preset; other settings are not supported.")
+        async with lock:
+            fresh = await self.loop.sessions.state.read_header(key)
+            if fresh is None or fresh.generation != session.generation:
+                raise SessionConflictError("The target was deleted or replaced during configuration.")
+            updates, remove, applied = {}, [], {}
+            try:
+                if "workspace" in values:
+                    path = values["workspace"]
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("workspace must be an existing absolute directory")
+                    current = self.loop.workspace_scopes.for_turn(channel="websocket", message_metadata={}, session_metadata=fresh.metadata)
+                    changed = validate_workspace_scope_payload(
+                        {"project_path": path, "access_mode": current.access_mode},
+                        default_workspace=self.loop.workspace,
+                        default_restrict_to_workspace=current.restrict_to_workspace, source_channel="websocket",
+                    )
+                    updates[WORKSPACE_SCOPE_METADATA_KEY] = changed.payload()
+                    applied["workspace"] = str(changed.project_path)
+                if "ptc_mode" in values:
+                    if not isinstance(values["ptc_mode"], bool):
+                        raise ValueError("ptc_mode must be a boolean")
+                    updates["ptc_mode"] = applied["ptc_mode"] = values["ptc_mode"]
+                if "model_preset" in values:
+                    name = values["model_preset"]
+                    if not isinstance(name, str) or not name.strip():
+                        raise ValueError("model_preset must name a configured model or default")
+                    if name.strip().casefold() == "default":
+                        remove.append(SESSION_MODEL_PRESET_METADATA_KEY)
+                        applied["model_preset"] = "default"
+                    else:
+                        runtime = self.loop.runtime_resolver.resolve_preset(name)
+                        updates[SESSION_MODEL_PRESET_METADATA_KEY] = applied["model_preset"] = runtime.model_preset
+            except (KeyError, ValueError) as error:
+                return ToolResult.error(str(error))
+            await self.loop.sessions.state.update_metadata(key, updates, remove=remove, expected_generation=fresh.generation)
+            fresh.metadata.update(updates)
+            for name in remove:
+                fresh.metadata.pop(name, None)
+            await self._audit(fresh, target, "configure", applied, uuid4().hex,
+                              workspace_scope=updates.get(WORKSPACE_SCOPE_METADATA_KEY))
+            return json.dumps({"to": "@" + target.name, "action": "configure", "continuation_queued": False,
+                               **self._configuration(fresh)}, ensure_ascii=False)
+
     @staticmethod
     def _validate_goal(action: str, prior: dict | None, values: dict) -> str | None:
         if values.get("objective") and len(values["objective"]) > 4000:
@@ -155,7 +221,7 @@ class ConversationControl:
             await self.loop.sessions.state.mutate_metadata(session.key, report_to_cirno, expected_generation=session.generation)
         return result
 
-    async def _audit(self, session: Session, target: SessionHandle, action: str, values: dict, event_id: str) -> None:
+    async def _audit(self, session: Session, target: SessionHandle, action: str, values: dict, event_id: str, *, workspace_scope=None) -> None:
         source = await SessionHandleResolver(self.loop.sessions).ahandle_for_session(CIRNO_SESSION_KEY)
         assert source is not None
         text = "Cirno supervisory operation: " + json.dumps({"action": action, **values}, ensure_ascii=False)
@@ -178,4 +244,4 @@ class ConversationControl:
             session_metadata=current["metadata"],
         ))
         await self.loop.bus.publish_outbound(outbound_message_for_event(
-            channel="websocket", chat_id=session.key.split(":", 1)[1], event=SessionUpdatedEvent(scope="metadata"), metadata={}))
+            channel="websocket", chat_id=session.key.split(":", 1)[1], event=SessionUpdatedEvent(scope="metadata", workspace_scope=workspace_scope), metadata={}))

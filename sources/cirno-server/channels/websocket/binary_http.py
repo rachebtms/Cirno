@@ -2,7 +2,8 @@
 
 GET (including WebSocket upgrades) remains on websockets' existing parser and
 handshake path. Other methods go directly to aiohttp's bounded streaming HTTP
-parser on the same socket, without proxying or changing the authenticated peer.
+parser on the same socket. Backup downloads also use aiohttp for bounded-memory
+file streaming, without proxying or changing the authenticated peer.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ class BinaryHTTPBridge:
                 # This bridge remains the transport protocol while delegating
                 # HTTP parsing to RequestHandler on the same transport.
                 connection = cast(_BridgeConnection, request.transport.get_protocol())
-                connection.request_started()
+                connection.request_started(backup=request.path.startswith("/api/backups/"))
             return await handler(request)
 
         self.http_server = web.Server(request_started, auto_decompress=False, keepalive_timeout=5)
@@ -74,9 +75,12 @@ class _BridgeConnection(ServerConnection):
 
     def data_received(self, data: bytes) -> None:
         if not self._selected:
-            needed = 4 - len(self._prefix)
+            backup_prefix = b"GET /api/backups/"
+            needed = len(backup_prefix) - len(self._prefix)
             self._prefix.extend(data[:needed])
             if len(self._prefix) < 4:
+                return
+            if backup_prefix.startswith(self._prefix) and len(self._prefix) < len(backup_prefix):
                 return
             data = bytes(self._prefix) + data[needed:]
             self._prefix.clear()
@@ -84,7 +88,7 @@ class _BridgeConnection(ServerConnection):
             self._bridge.pending_connections.discard(self)
             if self._prefix_timeout is not None:
                 self._prefix_timeout.cancel()
-            if data.startswith(b"GET "):
+            if data.startswith(b"GET ") and not data.startswith(backup_prefix):
                 super().connection_made(self.transport)
             else:
                 # Incomplete headers retain their own short deadline. A parsed
@@ -99,11 +103,11 @@ class _BridgeConnection(ServerConnection):
         else:
             super().data_received(data)
 
-    def request_started(self) -> None:
+    def request_started(self, *, backup=False) -> None:
         if self._prefix_timeout is not None:
             self._prefix_timeout.cancel()
         self._prefix_timeout = asyncio.get_running_loop().call_later(
-            _HTTP_CONNECTION_TIMEOUT_S, self.transport.close,
+            86400 if backup else _HTTP_CONNECTION_TIMEOUT_S, self.transport.close,
         )
 
     def eof_received(self) -> None:

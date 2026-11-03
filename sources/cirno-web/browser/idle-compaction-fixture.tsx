@@ -19,6 +19,24 @@ const initial: SettingsPayload = {
   ])),
 };
 initial.runtime_config![path] = Number(localStorage.getItem(storageKey) ?? 720);
+const section = new URLSearchParams(location.search).get("section");
+if (section === "models") {
+  initial.model_presets = [{ name: "primary", is_default: false, model: "gpt-5.4", provider: "openai", resolved_provider: "openai", active: true, max_tokens: 8192, temperature: 0.1, reasoning_effort: "low", reasoning_history: "auto", context_window_tokens: 200_000 }];
+  initial.model_call_order = ["primary"];
+}
+if (section === "memory-search") Object.assign(initial.runtime_config!, {
+  "agents.defaults.memory.embedding_enabled": true,
+  "agents.defaults.memory.embedding_provider": "api",
+  "agents.defaults.memory.embedding_api_base": "https://embedding.example/v1",
+  "agents.defaults.memory.embedding_api_model": "research-embedding",
+  "agents.defaults.memory.embedding_api_key": "••••••••",
+  "agents.defaults.memory.embedding_api_chunk_chars": 768,
+});
+Object.assign(initial.runtime_config!, {
+  "agents.defaults.compaction.max_tokens": 8192,
+  "agents.defaults.compaction.reasoning_effort": "low",
+  "agents.defaults.compaction.checkpoint_reminder_percent": 85,
+});
 let persisted = initial;
 
 client.requestMutation = async <T,>(action: string, payload?: Record<string, unknown>): Promise<T> => {
@@ -57,7 +75,7 @@ export function IdleCompactionFixture() {
         <button onClick={() => { failNext = true; }}>Fail next save</button>
         <output aria-label="Persisted minutes">{String(snapshot.runtime_config?.[path])}</output>
       </div>
-      <SettingsView themePreference="light" initialSection="runtime" initialSettings={initial}
+      <SettingsView themePreference="light" initialSection={section === "memory-search" ? "memory-search" : section === "models" ? "models" : "context"} initialSettings={initial}
         onSettingsChange={setSnapshot} onChangeTheme={() => {}} onBackToChat={() => {}}
         onModelNameChange={() => {}} onRestart={() => {}} />
     </div>

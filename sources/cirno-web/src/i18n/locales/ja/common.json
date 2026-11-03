@@ -315,8 +315,8 @@
           "help": "待機中の保守で確認するファイル数です。"
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "ローカル意味検索",
-          "help": "任意の独立 CPU プロセスです。標準は BM25。memory-embedding の追加依存が必要です。"
+          "label": "意味検索",
+          "help": "BM25 と併用する任意のベクトル検索です。ローカル CPU または外部 API を選びます。API には検索と記憶の断片を送信します。既定は無効です。"
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "ONNX モデルのパス",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "審査のタイムアウト（秒）",
           "help": "タイムアウトした操作はあなたの承認に回されます。"
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "実行中の圧縮しきい値 (%)",
+          "help": "使用中のモデルのコンテキスト容量に対する割合です。ツール実行後も各リクエスト前に確認します。出力と安全用の余裕は常に確保し、100 は安全な入力上限を使います。待機中の圧縮とは別です。"
+        },
+        "channels_send_progress": {
+          "label": "進捗メッセージ",
+          "help": "接続先に途中の説明を送信します。Web UI の実行詳細は引き続き表示できます。"
+        },
+        "channels_send_tool_hints": {
+          "label": "ツール状態メッセージ",
+          "help": "接続先に短いツール実行状況を送信します。"
+        },
+        "channels_show_reasoning": {
+          "label": "思考メッセージ",
+          "help": "対応する接続先に思考過程を送信します。Web UI の詳細表示設定とは別です。"
+        },
+        "channels_show_compaction_notices": {
+          "label": "自動圧縮の通知",
+          "help": "接続先に自動圧縮の通知を送信します。Web UI の圧縮イベントは引き続き表示されます。"
+        },
+        "channels_send_max_retries": {
+          "label": "配信試行回数",
+          "help": "初回を含む上限です。0 は再試行なしで、初回の配信は行います。"
+        },
+        "tools_exec_idle_timeout": {
+          "label": "コマンド無出力タイムアウト（秒）",
+          "help": "この時間出力がない場合に下の動作を行います。0 は検出を無効にします。会話の待機時間とは別です。"
+        },
+        "tools_exec_idle_action": {
+          "label": "出力がない場合の動作",
+          "help": "報告では実行を続け、終了では停止します。出力の少ない研究ジョブには通常、報告を使います。"
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "要求可能なコマンド最長時間（秒）",
+          "help": "モデルが単一コマンドに指定できる最長時間です。既定の実行時間は別設定で、既定値 0 は時間無制限です。"
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "圧縮の出力予算（トークン）",
+          "help": "推論を含む圧縮専用の予算です。モデルの出力上限を超えません。"
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "圧縮時の推論強度",
+          "help": "強度を下げて要約本文の余地を確保します。継承は会話の設定を使い、未対応の値は提供元が変換します。"
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "保存の通知しきい値（%）",
+          "help": "アクティブな入力予算のこの割合で、エージェントに作業状態の保存を促します。実行中の要求は中断しません。"
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "API ベース URL",
+          "help": "https://host/v1 など OpenAI 互換の URL、または完全な /embeddings エンドポイント。自己ホストの HTTP も使えます。"
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "API キー",
+          "help": "インスタンス設定に保存し、既存キーは非表示です。認証不要なら空欄にします。"
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "埋め込みモデル",
+          "help": "サービスのモデル名です。URL、モデル、分割サイズを変えると別の索引を使います。"
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "分割サイズ（文字）",
+          "help": "外部 API 用の重複する文字分割です。入力制限が小さい場合は減らします。検索ごとに最大 32 分割を索引化します。"
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "埋め込みサービス",
+          "help": "BM25 と併用する任意のベクトル検索です。ローカル CPU または外部 API を選びます。API には検索と記憶の断片を送信します。既定は無効です。"
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "AI 承認",
           "help": "AI 承認モードでは独立したモデルが会話の記憶を読み込まずに操作を審査します。不明な場合はあなたに確認します。"
+        },
+        "active-context": {
+          "title": "タスク実行中"
+        },
+        "channel-output": {
+          "title": "チャネルへの配信"
+        },
+        "command-limits": {
+          "title": "コマンドの時間制限"
+        },
+        "compaction-generation": {
+          "title": "引き継ぎの生成"
+        },
+        "embedding": {
+          "title": "埋め込みサービス"
         }
       },
       "save": "変更を保存",
@@ -510,7 +593,18 @@
       "unavailable": "これらの設定を編集するにはCirno サーバーを更新してください。",
       "advancedOptions": "詳細オプション",
       "idle": "待機中",
-      "interval": "一定間隔"
+      "interval": "一定間隔",
+      "report": "報告して続行",
+      "terminate": "コマンドを終了",
+      "compactionEffortOptions": {
+        "inherit": "モデル設定を継承",
+        "low": "低",
+        "none": "推論なし"
+      },
+      "embeddingProviders": {
+        "local": "ローカル CPU モデル",
+        "api": "外部 API"
+      }
     },
     "backToChat": "チャットに戻る",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "エージェントのハートビート",
       "coordination": "会話の連携",
       "regional": "日時と地域",
-      "approval": "AI 承認"
+      "approval": "AI 承認",
+      "backup": "バックアップと復元"
     },
     "sections": {
       "interface": "インターフェース",
@@ -964,7 +1059,14 @@
       "idleCompactPercent": "アイドル時の圧縮開始率（%）",
       "idleCompactKeepPercent": "最近の文脈の保持率（%）",
       "inheritGlobal": "全体設定を継承",
-      "compactPercentHint": "このモデルの文脈ウィンドウに対する割合です。空欄は全体設定を継承し、開始率 0 はアイドル圧縮を無効にします。"
+      "compactPercentHint": "このモデルの文脈ウィンドウに対する割合です。空欄は全体設定を継承し、開始率 0 はアイドル圧縮を無効にします。",
+      "reasoningHistory": "推論履歴",
+      "reasoningHistoryHelp": "平文の推論履歴の再送を制御します。自動は API に従い、署名付きの状態は保持します。DeepSeek のツール要求では保持が必要です。無視される履歴は次の入力に含まれませんが、生成済みトークンは課金されます。",
+      "reasoningHistoryOptions": {
+        "auto": "自動",
+        "preserve": "保持",
+        "omit": "送信しない"
+      }
     },
     "timezone": {
       "select": "タイムゾーンを選択",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "HEARTBEAT.md を定期確認し、タスクがあれば Cirno を起動します。サービスの稼働確認とは別の機能です。"
+    },
+    "backup": {
+      "instance": "インスタンス全体",
+      "everything": "すべての Cirno データ",
+      "everythingHelp": "設定と認証情報、MCP・ツール設定、記憶、人格ファイル、会話と履歴、保存済みコンテキスト、Goal、Skills、通知、永続化されたユーザーパッケージを含みます。",
+      "credentials": "ログイン情報や API キーを含むため、非公開で保管してください。書き出しや復元の前に実行中のタスクを終了してください。",
+      "extra": "追加のファイルとフォルダー",
+      "extraHelp": "過去の作業場所や CLI のログイン・設定・パッケージの保存先を検索して候補を表示します。認証情報の内容は読みません。",
+      "included": "インスタンスに自動で含まれます",
+      "workspace": "使用した作業場所",
+      "toolData": "CLI 設定・ログイン・パッケージ",
+      "path": "ファイルまたはフォルダーの絶対パス",
+      "add": "パスを追加",
+      "remove": "削除",
+      "export": "バックアップを書き出す",
+      "import": "バックアップを読み込む",
+      "working": "処理中…",
+      "downloadReady": "バックアップをダウンロード",
+      "pending": "復元の準備ができました。再起動して適用するか、キャンセルしてください。",
+      "restart": "今すぐ再起動",
+      "cancel": "キャンセル",
+      "restoreTitle": "バックアップを復元",
+      "restoreHelp": "現在の Cirno を置き換えて再起動します。その後はバックアップ内のアカウントでログインします。外部ファイルはバックアップに含まれる場合のみ復元されます。",
+      "version": "バージョン",
+      "source": "元のインスタンス",
+      "destination": "復元先",
+      "skip": "空欄ならスキップ",
+      "extrasRestore": "追加パスは変更できます。同名ファイルは上書きし、無関係な既存ファイルは残します。パッケージや外部ツールには互換性のある OS と CPU が必要です。",
+      "restore": "復元して再起動"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "コンテキストを圧縮しました",
       "attempts": "{{count}} 回の試行",
       "attempt": "試行 {{number}}",
-      "errorUnavailable": "この記録にはエラーの原因がありません。"
+      "errorUnavailable": "この記録にはエラーの原因がありません。",
+      "evidenceCheckpoint": "根拠の引き継ぎを保存",
+      "evidenceCheckpointHelp": "モデル要約を生成できないか、未完了または作業状態が欠落していたため、範囲を限定した元の根拠を保持しました。完全な原記録は保存されています。"
     },
     "loadingConversation": "会話を読み込み中…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "出力速度",
         "firstToken": "最初のトークンまで",
         "tokensPerSecond": "{{value}} token/秒",
-        "estimated": "圧縮後の文脈から推定しています。次の応答で使用量が更新されます。",
+        "estimated": "現在のコンテキストと生成中の出力から推定し、応答後にプロバイダーの使用量で補正します。",
         "unavailable": "現在の文脈使用量は未記録です。グラフは過去の要求を示します。"
       },
       "queued": {

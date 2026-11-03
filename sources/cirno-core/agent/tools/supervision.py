@@ -2,7 +2,7 @@
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import current_request_context
-from cirno_core.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
+from cirno_core.agent.tools.schema import BooleanSchema, IntegerSchema, StringSchema, tool_parameters_schema
 from cirno_core.session.goal_state import MAX_GOAL_OBJECTIVE_CHARS
 from cirno_core.session.keys import CIRNO_SESSION_KEY
 
@@ -28,7 +28,10 @@ class _SupervisionTool(Tool):
 
 @tool_parameters(tool_parameters_schema(
     to=StringSchema("Target conversation @handle; must be another persistent conversation.", min_length=1),
-    action=StringSchema("stop cancels current execution and stops its Goal without deleting progress. continue runs from saved context, resuming a stopped Goal if present. No tool side effects are undone.", enum=("stop", "continue")),
+    action=StringSchema("get reads configuration and available model presets. configure changes an idle conversation's workspace, PTC mode or model preset; stop a running conversation first, then continue when ready. stop cancels execution and stops its Goal without deleting progress. continue runs from saved context. No previous tool effects are undone.", enum=("get", "configure", "stop", "continue")),
+    workspace=StringSchema("configure only: existing absolute working directory on the server (~/ is accepted). Existing files stay in their original locations; access mode and Project membership are preserved.", min_length=1),
+    ptc_mode=BooleanSchema(description="configure only: enable or disable programmatic tool calling for subsequent turns."),
+    model_preset=StringSchema("configure only: configured model preset name from get; default follows the instance's active model. Changes only the target conversation.", min_length=1),
     required=["to", "action"],
 ))
 class ControlSessionTool(_SupervisionTool):
@@ -38,7 +41,7 @@ class ControlSessionTool(_SupervisionTool):
 
     @property
     def description(self):
-        return "Cirno only: stop or continue another conversation's execution. Control only user-authorized work. Progress and environment changes remain. Continuing a running conversation does not start a second worker."
+        return "Cirno only: inspect or configure another conversation's workspace, PTC mode and model preset, or stop/continue its execution. Configuration requires an idle conversation. Control only user-authorized work. Preserve history and files; configuration does not restart work or change the access mode."
 
 
 @tool_parameters(tool_parameters_schema(

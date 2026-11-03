@@ -1,7 +1,7 @@
 export interface RuntimeConfigField {
   group: string;
   path: string;
-  kind: "toggle" | "text" | "nullable" | "number" | "duration" | "boolean" | "select" | "list" | "multiline" | "preset" | "idle-compaction";
+  kind: "toggle" | "password" | "text" | "nullable" | "number" | "duration" | "boolean" | "select" | "list" | "multiline" | "preset" | "idle-compaction";
   options?: string[];
   when?: { path: string; value: string | boolean | string[] };
   manual?: boolean;
@@ -16,6 +16,11 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
   { id: "heartbeat", page: "heartbeat" },
   { id: "requests", page: "network" },
   { id: "memory", page: "memory" },
+  { id: "embedding", page: "memory-search" },
+  { id: "active-context", page: "context" },
+  { id: "compaction-generation", page: "context" },
+  { id: "channel-output", page: "activity" },
+  { id: "command-limits", page: "shell", enabledBy: "tools.exec.enable" },
   { id: "chat", page: "advanced" },
   { id: "workspace", page: "execution" },
   { id: "approval", page: "approval" },
@@ -35,6 +40,18 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
 
 export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "workspace", path: "agents.defaults.workspace", kind: "text", manual: true },
+  { group: "compaction-generation", path: "agents.defaults.compaction.max_tokens", kind: "number", min: 512, max: 32768 },
+  { group: "compaction-generation", path: "agents.defaults.compaction.reasoning_effort", kind: "select", options: ["inherit", "low", "none"] },
+  { group: "compaction-generation", path: "agents.defaults.compaction.checkpoint_reminder_percent", kind: "number", min: 1, max: 100 },
+  { group: "active-context", path: "agents.defaults.active_compact_percent", kind: "number", min: 1, max: 100 },
+  { group: "channel-output", path: "channels.send_progress", kind: "boolean" },
+  { group: "channel-output", path: "channels.send_tool_hints", kind: "boolean" },
+  { group: "channel-output", path: "channels.show_reasoning", kind: "boolean" },
+  { group: "channel-output", path: "channels.show_compaction_notices", kind: "boolean" },
+  { group: "channel-output", path: "channels.send_max_retries", kind: "number", min: 0, max: 10 },
+  { group: "command-limits", path: "tools.exec.idle_timeout", kind: "number", min: 0 },
+  { group: "command-limits", path: "tools.exec.idle_action", kind: "select", options: ["report", "terminate"] },
+  { group: "command-limits", path: "tools.exec.max_runtime_limit", kind: "number", min: 1 },
   { group: "approval", path: "agents.defaults.approval.enabled", kind: "boolean" },
   { group: "approval", path: "agents.defaults.approval.model_override", kind: "preset" },
   { group: "approval", path: "agents.defaults.approval.timeout_seconds", kind: "number", min: 1, max: 300 },
@@ -47,11 +64,16 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   {"group": "memory", "path": "agents.defaults.memory.context_tokens", "kind": "number", "min": 256, "max": 16000},
   {"group": "memory", "path": "agents.defaults.memory.checkpoint_tokens", "kind": "number", "min": 256, "max": 8000},
   {"group": "memory", "path": "agents.defaults.memory.index_scan_batch", "kind": "number", "min": 10, "max": 1000},
-  {"group": "memory", "path": "agents.defaults.memory.embedding_enabled", "kind": "boolean"},
-  {"group": "memory", "path": "agents.defaults.memory.embedding_model_path", "kind": "text", "when": {"path": "agents.defaults.memory.embedding_enabled", "value": true}},
-  {"group": "memory", "path": "agents.defaults.memory.embedding_tokenizer_path", "kind": "text", "when": {"path": "agents.defaults.memory.embedding_enabled", "value": true}},
-  {"group": "memory", "path": "agents.defaults.memory.embedding_max_rss_mb", "kind": "number", "min": 50, "max": 200, "when": {"path": "agents.defaults.memory.embedding_enabled", "value": true}},
-  {"group": "memory", "path": "agents.defaults.memory.embedding_timeout_seconds", "kind": "number", "min": 1, "max": 120, "when": {"path": "agents.defaults.memory.embedding_enabled", "value": true}},
+  {"group": "embedding", "path": "agents.defaults.memory.embedding_enabled", "kind": "boolean"},
+  { group: "embedding", path: "agents.defaults.memory.embedding_provider", kind: "select", options: ["local", "api"], when: { path: "agents.defaults.memory.embedding_enabled", value: true } },
+  { group: "embedding", path: "agents.defaults.memory.embedding_api_base", kind: "text", when: { path: "agents.defaults.memory.embedding_provider", value: "api" } },
+  { group: "embedding", path: "agents.defaults.memory.embedding_api_key", kind: "password", when: { path: "agents.defaults.memory.embedding_provider", value: "api" } },
+  { group: "embedding", path: "agents.defaults.memory.embedding_api_model", kind: "text", when: { path: "agents.defaults.memory.embedding_provider", value: "api" } },
+  { group: "embedding", path: "agents.defaults.memory.embedding_api_chunk_chars", kind: "number", min: 128, max: 4096, when: { path: "agents.defaults.memory.embedding_provider", value: "api" } },
+  {"group": "embedding", "path": "agents.defaults.memory.embedding_model_path", "kind": "text", "when": {"path": "agents.defaults.memory.embedding_provider", "value": "local"}},
+  {"group": "embedding", "path": "agents.defaults.memory.embedding_tokenizer_path", "kind": "text", "when": {"path": "agents.defaults.memory.embedding_provider", "value": "local"}},
+  {"group": "embedding", "path": "agents.defaults.memory.embedding_max_rss_mb", "kind": "number", "min": 50, "max": 200, "when": {"path": "agents.defaults.memory.embedding_provider", "value": "local"}},
+  {"group": "embedding", "path": "agents.defaults.memory.embedding_timeout_seconds", "kind": "number", "min": 1, "max": 120, "when": {"path": "agents.defaults.memory.embedding_enabled", "value": true}},
   {"group": "memory", "path": "agents.defaults.dream.interval_h", "kind": "number", "min": 1, "max": 168, "when": {"path": "agents.defaults.dream.mode", "value": "interval"}},
   {"group": "memory", "path": "agents.defaults.dream.model_override", "kind": "preset"},
   {"group": "memory", "path": "agents.defaults.idle_compact_check_interval_seconds", "kind": "number", "min": 10, "max": 3600},

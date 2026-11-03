@@ -10,6 +10,7 @@ interface WebActivityRowProps {
   href: string;
   host: string;
   displayUrl: string;
+  detailsText?: string;
   active?: boolean;
   tone?: ActivityStepTone;
 }
@@ -19,12 +20,14 @@ export function WebActivityRow({
   href,
   host,
   displayUrl,
+  detailsText,
   active = false,
   tone = active ? "active" : "neutral",
 }: WebActivityRowProps) {
   return (
     <ActivityStep
       marker={<WebFavicon host={host} active={active} />}
+      detailsText={detailsText}
       active={active}
       tone={tone}
       label={(

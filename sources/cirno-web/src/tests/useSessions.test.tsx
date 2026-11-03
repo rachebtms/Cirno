@@ -64,6 +64,23 @@ function wrap(
 }
 
 describe("useSessions", () => {
+  it("refreshes supervisory workspace, PTC and model changes without opening the target", async () => {
+    const original = {
+      key: "websocket:worker", channel: "websocket", chatId: "worker", createdAt: null, updatedAt: null,
+      preview: "Worker", modelPreset: "fast", ptcMode: false,
+      workspaceScope: { project_path: "/projects/old", project_name: "old", access_mode: "restricted" as const },
+    };
+    vi.mocked(api.listSessions).mockResolvedValueOnce([original]);
+    const client = fakeClient();
+    const { result } = renderHook(() => useSessions(), { wrapper: wrap(client) });
+    await waitFor(() => expect(result.current.sessions[0]?.modelPreset).toBe("fast"));
+    const configured = { ...original, modelPreset: "Research", ptcMode: true,
+      workspaceScope: { ...original.workspaceScope, project_path: "/projects/new", project_name: "new" } };
+    vi.mocked(api.listSessions).mockResolvedValue([configured]);
+    act(() => client.emitSessionUpdate("worker", "metadata"));
+    await waitFor(() => expect(result.current.sessions[0]).toEqual(configured));
+  });
+
   it("preserves the server's session-list failure reason", async () => {
     vi.mocked(api.listSessions).mockRejectedValueOnce(new api.ApiError(500, "Session database is locked"));
     const { result } = renderHook(() => useSessions(), { wrapper: wrap(fakeClient()) });

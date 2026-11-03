@@ -94,7 +94,6 @@ class ContextBuilder:
         session_key: str | None = None,
         session_summary: SessionSummary | None = None,
         workspace: Path | None = None,
-        include_memory: bool = True,
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         root = workspace or self.workspace
@@ -113,11 +112,6 @@ class ContextBuilder:
                 f"Working directory: {project_path}\n"
                 "Use it as the default root for project files and relative tool paths."
             )
-
-        if include_memory:
-            memory = self.memory.read_memory(max_chars=self.memory_context_tokens * 8)
-            if memory and not self._is_template_content(memory, "memory/MEMORY.md"):
-                parts.append(truncate_text_to_tokens(memory, self.memory_context_tokens))
 
         with self.skills.snapshot():
             active_skills = self.skills.get_always_skills()
@@ -276,6 +270,7 @@ class ContextBuilder:
         workspace: Path | None = None,
         include_memory: bool = True,
         include_task_context: bool = True,
+        include_memory_context: bool = True,
     ) -> list[dict[str, Any]]:
         """Build a model transcript while preserving the fresh-turn boundary."""
         root = workspace or self.workspace
@@ -288,7 +283,6 @@ class ContextBuilder:
                         session_key=session_key,
                         session_summary=transcript.session_summary,
                         workspace=root,
-                        include_memory=include_memory,
                     ),
                 },
                 *transcript.history,
@@ -297,6 +291,10 @@ class ContextBuilder:
                 return messages
 
             blocks = list(transcript.runtime_context_blocks or ())
+            if include_memory and include_memory_context:
+                memory = self.build_memory_context(transcript.history)
+                if memory is not None:
+                    blocks.append(memory)
             if include_memory and include_task_context:
                 checkpoint = self.build_task_context(
                     session_key, include_automatic=not bool(transcript.session_summary),
@@ -311,6 +309,24 @@ class ContextBuilder:
             )
             messages.append(current)
             return messages
+
+    def build_memory_context(self, history: Sequence[Mapping[str, Any]]) -> RuntimeContextBlock | None:
+        """Append changed shared memory without rewriting the cached system/history."""
+        from cirno_core.runtime.context import RUNTIME_CONTEXT_HISTORY_META
+
+        memory = self.memory.read_memory(max_chars=self.memory_context_tokens * 8)
+        if self._is_template_content(memory, "memory/MEMORY.md"):
+            memory = ""
+        content = "## Current MEMORY.md snapshot\n" + (
+            truncate_text_to_tokens(memory, self.memory_context_tokens) if memory else "(empty)"
+        ) + "\n[/MEMORY.md snapshot]"
+        for message in reversed(history):
+            marker = message.get(RUNTIME_CONTEXT_HISTORY_META) or (message.get("_meta") or {}).get(RUNTIME_CONTEXT_MESSAGE_META)
+            if not isinstance(marker, dict) or "memory_snapshot" not in marker.get("sources", []):
+                continue
+            rendered = marker.get("suffix") or "\n\n".join(block.get("text", "") for block in marker.get("blocks", []))
+            return None if content in rendered else RuntimeContextBlock(source="memory_snapshot", content=content)
+        return RuntimeContextBlock(source="memory_snapshot", content=content) if memory else None
 
     def build_task_context(
         self, session_key: str | None, *, include_automatic: bool = True,

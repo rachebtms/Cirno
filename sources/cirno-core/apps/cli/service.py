@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 import httpx
 from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
 from cirno_core.apps.protocol import app_manifest, compact_dict
+from cirno_core.utils.tool_environment import TOOL_ENV_KEYS
 from cirno_core.config.home import get_home_path
 from cirno_core.config.paths import get_runtime_subdir
 from cirno_core.security.workspace_policy import is_path_within
@@ -854,6 +855,11 @@ class CliAppManager:
 
         return find_spec("pip") is not None
 
+    @staticmethod
+    def _pip_interpreter() -> str:
+        venv = os.environ.get("CIRNO_SHELL_VENV")
+        return str(Path(venv) / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")) if venv else sys.executable
+
     def _pip_install_argv(self, app: dict[str, Any], *, update: bool = False) -> list[str]:
         install_cmd = str(app.get("install_cmd") or "")
         if not _is_pip_install_command(install_cmd) or _has_shell_meta(install_cmd):
@@ -862,9 +868,9 @@ class CliAppManager:
         args = tokens[2:] if tokens[:2] == ["pip", "install"] else tokens[4:]
         pip_available = self._pip_available()
         if pip_available:
-            prefix = [sys.executable, "-m", "pip", "install"]
+            prefix = [self._pip_interpreter(), "-m", "pip", "install"]
         elif shutil.which("uv"):
-            prefix = ["uv", "pip", "install", "--python", sys.executable]
+            prefix = ["uv", "pip", "install", "--python", self._pip_interpreter()]
         else:
             raise CliAppError("pip is not available and uv is not installed")
         if update:
@@ -880,9 +886,9 @@ class CliAppManager:
         installed_entry: dict[str, Any] | None = None,
     ) -> list[str]:
         if self._pip_available():
-            prefix = [sys.executable, "-m", "pip", "uninstall", "-y"]
+            prefix = [self._pip_interpreter(), "-m", "pip", "uninstall", "-y"]
         elif shutil.which("uv"):
-            prefix = ["uv", "pip", "uninstall", "--python", sys.executable]
+            prefix = ["uv", "pip", "uninstall", "--python", self._pip_interpreter()]
         else:
             raise CliAppError("pip is not available and uv is not installed")
         distribution = str((installed_entry or {}).get("pip_distribution") or "").strip()
@@ -1017,6 +1023,11 @@ class CliAppManager:
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "PYTHONUNBUFFERED": "1",
         }
+        env.update({key: os.environ[key] for key in TOOL_ENV_KEYS if key in os.environ})
+        venv = os.environ.get("CIRNO_SHELL_VENV")
+        if venv:
+            env["VIRTUAL_ENV"] = venv
+            env["PATH"] = str(Path(venv) / "bin") + os.pathsep + env["PATH"]
         # Desktop CLIs use this directory to locate the running application.
         if "XDG_RUNTIME_DIR" in os.environ:
             env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]

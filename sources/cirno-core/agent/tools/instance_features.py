@@ -14,6 +14,7 @@ from cirno_core.agent.tools.schema import (
 from cirno_core.memory.repository import MemoryRepository
 from cirno_core.nodes.service import Nodes
 from cirno_core.security.workspace_policy import resolve_allowed_path
+from cirno_core.security.workspace_access import current_workspace_scope
 from cirno_core.skills.history import inspect_skill
 
 
@@ -45,7 +46,12 @@ class NodeTool(Tool):
 
     @property
     def description(self):
-        return "Use configured Nodes through SSH only. Execute short commands, transfer files, or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. Unknown submissions must be inspected before retrying."
+        return "Use configured Nodes through SSH only. Remote operations require AI approval or Full Access; Default permits listing saved records only. Execute short commands, transfer files, or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. Unknown submissions must be inspected before retrying."
+
+    def approval_reason(self, params):
+        if params.get("action") != "list":
+            return "SSH operations cross the local workspace boundary and require approval for the exact Node, command or transfer."
+        return None
 
     async def execute(
         self,
@@ -57,6 +63,9 @@ class NodeTool(Tool):
         remote_path=None,
         **kwargs,
     ):
+        scope = current_workspace_scope()
+        if action != "list" and scope and scope.access_mode != "full":
+            return ToolResult.error("SSH operations require AI approval or Full Access. No remote operation was executed.")
         nodes = Nodes()
         try:
             if action == "list":
@@ -106,7 +115,7 @@ class NodeTool(Tool):
         layer=StringSchema(enum=["event", "knowledge", "task", "source", "profile", "all"]),
         title=StringSchema(max_length=160),
         tags=ArraySchema(StringSchema(max_length=80), max_items=20),
-        mode=StringSchema(enum=["bm25", "semantic", "hybrid"], description="BM25 by default. Semantic/hybrid explicitly starts the optional CPU worker for distilled knowledge; no reranker."),
+        mode=StringSchema(enum=["bm25", "semantic", "hybrid"], description="BM25 by default. Semantic/hybrid explicitly uses the configured local CPU worker or external embedding API for distilled knowledge; no reranker."),
         query=StringSchema("BM25 query in Chinese or English, or exact memory ID."),
         memory_id=StringSchema("Memory ID to read or update."),
         based_on=StringSchema("Evidence memory ID. Derived memory inherits its visibility scope."),

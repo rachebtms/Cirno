@@ -113,8 +113,10 @@ export function ThreadMessages({
   const messageListRef = useRef<HTMLDivElement>(null);
   const mobileActions = useMediaQuery("(max-width: 767px)");
   const units = useMemo(
-    () => buildDisplayUnits(messages),
-    [messages],
+    () => buildDisplayUnits(defaultActivityCollapsed ? messages : messages.map(message =>
+      message.activityKind === "model" && message.content.trim()
+        ? { ...message, activityKind: undefined, turnPhase: "answer" as const } : message)),
+    [defaultActivityCollapsed, messages],
   );
   const forkBoundaryAfterUnitIndex = useMemo(
     () => unitIndexAfterMessageCount(units, forkBoundaryMessageCount),

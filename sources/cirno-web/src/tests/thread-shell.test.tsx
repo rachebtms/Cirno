@@ -1132,7 +1132,7 @@ describe("ThreadShell", () => {
     expect(client.requestMutation).toHaveBeenCalledWith("session.context_usage", { session_key: "websocket:measure-old" });
     fireEvent.click(trigger);
     expect(await screen.findByText("≈ 1,234 / 512,000")).toBeVisible();
-    expect(screen.getByText("Estimated from the compacted context; the next response will update usage.")).toBeVisible();
+    expect(screen.getByText("Estimated from the current context and streaming output; provider usage recalibrates it after the response.")).toBeVisible();
     expect(client.sendMessage).not.toHaveBeenCalled();
   });
 

@@ -1517,6 +1517,8 @@ def _client_projection_event(
             value = record.get(field)
             if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
                 projected[field] = value
+        if record.get("evidence_checkpoint") is True:
+            projected["evidence_checkpoint"] = True
         estimated = record.get("context_estimated")
         if isinstance(estimated, bool):
             projected["context_estimated"] = estimated

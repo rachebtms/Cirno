@@ -47,7 +47,7 @@ Start with the [documentation index](documents/README.md). It covers [memory](do
 
 ## Releases
 
-The current version is **0.1.4**. See the [release notes](documents/releases/0.1.4.md). Existing 0.1.3 instances can upgrade by replacing the image while keeping the same instance volume. See the [upgrade steps](documents/docker.md#upgrading-from-013). Layouts from versions before 0.1.3 are not automatically migrated.
+The current version is **0.1.5**. See the [release notes](documents/releases/0.1.5.md). Existing 0.1.3 and 0.1.4 instances can upgrade by replacing the image while keeping the same instance volume. See the [upgrade steps](documents/docker.md#upgrading-from-013). Layouts from versions before 0.1.3 are not automatically migrated.
 
 ## Attribution and updates
 

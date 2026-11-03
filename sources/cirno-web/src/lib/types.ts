@@ -719,6 +719,7 @@ export interface SettingsPayload {
     idle_compact_keep_percent?: number | null;
     temperature: number;
     reasoning_effort: string | null;
+    reasoning_history?: "auto" | "preserve" | "omit";
     api?: ModelAPIConfig | null;
     timezone: string;
     tool_status_summary_max_chars: number;
@@ -736,6 +737,7 @@ export interface SettingsPayload {
     idle_compact_keep_percent?: number | null;
     temperature: number;
     reasoning_effort: string | null;
+    reasoning_history?: "auto" | "preserve" | "omit";
     reasoning_effort_values?: string[];
     api?: ModelAPIConfig | null;
     extra_headers?: Record<string, string> | null;
@@ -1310,6 +1312,7 @@ export interface ModelConfigurationCreate {
   idleCompactKeepPercent?: number | null;
   temperature?: number;
   reasoningEffort?: string | null;
+  reasoningHistory?: "auto" | "preserve" | "omit";
   api?: ModelAPIConfig | null;
   extraHeaders?: string;
   extraQuery?: string;
@@ -1327,6 +1330,7 @@ export interface ModelConfigurationUpdate {
   idleCompactKeepPercent?: number | null;
   temperature?: number;
   reasoningEffort?: string | null;
+  reasoningHistory?: "auto" | "preserve" | "omit";
   api?: ModelAPIConfig | null;
   extraHeaders?: string;
   extraQuery?: string;

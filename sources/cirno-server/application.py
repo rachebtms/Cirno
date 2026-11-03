@@ -723,6 +723,7 @@ def _run_claimed_server(
         local_trigger_store=trigger_store,
         webui_runtime_model_name=_webui_runtime_model_name,
         webui_context_usage=agent.estimate_session_context_usage,
+        webui_maintenance=agent.maintenance,
         webui_refresh_runtime_config=_webui_refresh_runtime_config,
         webui_cron_pending_job_ids=agent.pending_cron_job_ids_for_session,
         webui_local_trigger_pending_ids=agent.pending_local_trigger_ids_for_session,

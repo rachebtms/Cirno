@@ -1,13 +1,18 @@
 import { implementationToolName, publicToolName, toolAction } from "@/lib/tool-names";
 import type { TFunction } from "i18next";
 
-import { compactActivityPath, redactActivityText } from "./activity-text";
+import { compactActivityPath, redactActivityText, toolActivityDetails } from "./activity-text";
 
 export type GenericToolStatus = "running" | "done" | "error";
 export type ToolFamily = "content-search" | "file-search" | "list" | "read" | "memory" | "generic";
 
 interface ToolField {
   key:
+    | "command"
+    | "node_id"
+    | "job_id"
+    | "remote_path"
+    | "local_path"
     | "query"
     | "args"
     | "pattern"
@@ -33,12 +38,14 @@ export interface GenericToolTrace {
   groupKey: string;
   fields: ToolField[];
   collectedSource: boolean;
+  detailsText?: string;
 }
 
 export interface GenericToolRunItem {
   trace: GenericToolTrace;
   status: GenericToolStatus;
   error?: string;
+  result?: unknown;
 }
 
 export interface GenericToolPresentation {
@@ -113,6 +120,7 @@ export function parseGenericToolTrace(line: string): GenericToolTrace | null {
     groupKey,
     fields,
     collectedSource,
+    detailsText: toolActivityDetails(line),
   };
 }
 
@@ -181,6 +189,7 @@ function safeFields(args: unknown): ToolField[] {
   const record = args as Record<string, unknown>;
   const fields: ToolField[] = [];
   for (const key of [
+    "command", "node_id", "job_id", "remote_path", "local_path",
     "query",
     "pattern",
     "glob",
@@ -330,6 +339,8 @@ function activityDetail(items: GenericToolRunItem[], family: ToolFamily, name: s
   if (family === "memory") return quote(fieldValue(trace, "query"));
 
   switch (name) {
+    case "node":
+      return safeText(fieldValue(trace, "command") || fieldValue(trace, "remote_path") || fieldValue(trace, "job_id") || fieldValue(trace, "node_id"));
     case "spawn":
     case "subagent":
       return safeText(fieldValue(trace, "label"));

@@ -2222,3 +2222,19 @@ describe("Settings models", () => {
     });
   });
 });
+
+it("persists a model's reasoning replay policy separately from thinking effort", async () => {
+  let payload = settingsPayload();
+  vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(payload)));
+  requestMutationMock.mockImplementation(async (_action, args) => {
+    payload = { ...payload, model_presets: payload.model_presets.map(preset => ({ ...preset, reasoning_history: args.reasoning_history ?? preset.reasoning_history })) };
+    return payload;
+  });
+  renderSettingsView({ initialSection: "models" });
+  await togglePresetEditor();
+  await openPopover(screen.getByLabelText("Reasoning history"));
+  fireEvent.click(screen.getByRole("option", { name: "Preserve" }));
+  fireEvent.click(presetSaveButton());
+  await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith("settings.model_configuration.update", { name: "primary", reasoning_history: "preserve" }, 20_000));
+  await waitFor(() => expect(presetSaveButton()).toBeDisabled());
+});

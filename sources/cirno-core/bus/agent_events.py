@@ -48,6 +48,7 @@ class ContextCompactionEvent(AgentEvent):
     context_tokens: int | None = None
     context_window_tokens: int | None = None
     context_estimated: bool | None = None
+    evidence_checkpoint: bool = False
 
 
 @dataclass(frozen=True)

@@ -285,6 +285,7 @@ export function useSettingsController({
       (form.idleCompactKeepPercent ?? null) !== (selectedPreset.idle_compact_keep_percent ?? null) ||
       form.temperature !== selectedPreset.temperature ||
       form.reasoningEffort !== (selectedPreset.reasoning_effort ?? "") ||
+      (form.reasoningHistory ?? "auto") !== (selectedPreset.reasoning_history ?? "auto") ||
       modelAPISelection(form.api) !== modelAPISelection(selectedPreset.api) ||
       form.extraHeaders !== providerJsonValue(selectedPreset.extra_headers) ||
       form.extraQuery !== providerJsonValue(selectedPreset.extra_query) ||

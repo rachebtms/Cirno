@@ -128,7 +128,7 @@ async def _archive(
 
 
 class TestTurnTranscriptSummary:
-    @pytest.mark.parametrize("summary", ["replacement checkpoint", "(nothing)"])
+    @pytest.mark.parametrize("summary", ["replacement checkpoint"])
     async def test_uses_exact_accepted_prefix_and_existing_archiver(
         self,
         consolidator,
@@ -321,7 +321,7 @@ class TestConsolidatorSummarize:
         assert call["model"] == admitted.model
         assert call["temperature"] == 0.25
         assert call["max_tokens"] == 321
-        assert call["reasoning_effort"] == "medium"
+        assert call["reasoning_effort"] == "low"
 
     async def test_summarize_appends_to_history(
         self, consolidator, mock_provider, store, runtime
@@ -953,7 +953,7 @@ class TestCompactIdleSession:
         assert reloaded.metadata["_last_summary"]["text"] == fallback
 
     @pytest.mark.asyncio
-    async def test_nothing_replaces_previous_checkpoint(
+    async def test_nothing_keeps_previous_checkpoint_and_new_evidence(
         self,
         real_consolidator,
         mock_provider,
@@ -982,7 +982,8 @@ class TestCompactIdleSession:
             runtime=runtime,
         )
 
-        assert result == "(nothing)"
+        assert result != "(nothing)"
+        assert "[RAW]" in result
         sessions.invalidate("cli:nothing-after-summary")
         reloaded = sessions.get_or_create("cli:nothing-after-summary")
         assert reloaded.last_archived == 5
@@ -1129,10 +1130,10 @@ class TestCompactIdleSession:
         assert reloaded.metadata == {}
 
     @pytest.mark.asyncio
-    async def test_nothing_commits_checkpoint_once_without_raw_archive(
+    async def test_nothing_uses_evidence_checkpoint_once(
         self, real_consolidator, mock_provider, runtime
     ):
-        """A model's decision to retain nothing is a successful replacement."""
+        """A contentless summary must not erase saved conversation evidence."""
         mock_provider.chat_stream_with_retry.return_value = MagicMock(
             content="(nothing)", finish_reason="stop"
         )
@@ -1149,12 +1150,13 @@ class TestCompactIdleSession:
         second = await real_consolidator.compact_idle_session(
             "cli:nothing", runtime=runtime
         )
-        assert result == "(nothing)"
+        assert result != "(nothing)"
+        assert "[RAW]" in result
         assert second == ""
 
         reloaded = sessions.get_or_create("cli:nothing")
         assert reloaded.metadata["_last_summary"]["text"] == result
-        assert real_consolidator.store.read_unprocessed_history(0) == []
+        assert real_consolidator.store.read_unprocessed_history(0)
         assert reloaded.last_archived == 20
         assert reloaded.get_history() == []
         mock_provider.chat_stream_with_retry.assert_awaited_once()
@@ -1269,7 +1271,7 @@ class TestCompactIdleSession:
         tools = [{"type": "function", "function": {"name": "lookup"}}]
         real_consolidator.archiver._get_tool_definitions.return_value = tools
         mock_provider.chat_stream_with_retry.return_value = LLMResponse(
-            content="Overview from the temporary turn.",
+            content="## Task\nlookup\n## State\nOverview from the temporary turn.\n## Next\ncomplete",
             finish_reason="stop",
         )
         sessions = real_consolidator.sessions
@@ -1284,7 +1286,7 @@ class TestCompactIdleSession:
             runtime=runtime,
         )
 
-        assert result == "Overview from the temporary turn."
+        assert result == "## Task\nlookup\n## State\nOverview from the temporary turn.\n## Next\ncomplete"
         call = mock_provider.chat_stream_with_retry.call_args.kwargs
         sent_messages = call["messages"]
         assert [message["role"] for message in sent_messages] == [
@@ -1309,7 +1311,7 @@ class TestCompactIdleSession:
         )
         entries = store.read_unprocessed_history(since_cursor=0)
         assert [entry["content"] for entry in entries] == [
-            "Overview from the temporary turn."
+            "## Task\nlookup\n## State\nOverview from the temporary turn.\n## Next\ncomplete"
         ]
 
     @pytest.mark.asyncio

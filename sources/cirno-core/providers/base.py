@@ -352,6 +352,8 @@ _SYNTHETIC_USER_CONTENT = "(conversation continued)"
 class LLMProvider(ABC):
     """Base class for LLM providers."""
 
+    reasoning_history: str = "auto"
+
     _CHAT_RETRY_DELAYS = (1, 2, 4)
     _PERSISTENT_MAX_DELAY = 60
     _PERSISTENT_IDENTICAL_ERROR_LIMIT = 10

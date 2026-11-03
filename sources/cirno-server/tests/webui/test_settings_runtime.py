@@ -254,3 +254,36 @@ def test_default_workspace_and_approval_settings_roundtrip(tmp_path):
     assert saved.agents.defaults.approval.timeout_seconds == 45
     assert result["requires_restart"]
     assert not workspace.exists()  # A settings edit does not move or create task files.
+
+
+def test_active_compaction_channel_delivery_and_command_silence_are_editable(tmp_path):
+    path = tmp_path / 'config.json'
+    save_config(Config(), path)
+    values = {'agents.defaults.active_compact_percent': 75, 'channels.show_reasoning': False,
+              'tools.exec.idle_timeout': 600, 'tools.exec.idle_action': 'terminate'}
+    update_runtime_config_settings(values, config_path=path)
+    loaded = load_config(path)
+    assert loaded.agents.defaults.active_compact_percent == 75
+    assert loaded.channels.show_reasoning is False
+    assert loaded.tools.exec.idle_timeout == 600
+    assert loaded.tools.exec.idle_action == 'terminate'
+    before = path.read_bytes()
+    with pytest.raises(WebUISettingsError):
+        update_runtime_config_settings({'agents.defaults.active_compact_percent': 0}, config_path=path)
+    assert path.read_bytes() == before
+    with pytest.raises(WebUISettingsError):
+        update_runtime_config_settings({'tools.exec.max_runtime_limit': 10}, config_path=path)
+    assert path.read_bytes() == before
+
+def test_embedding_settings_mask_preserve_rotate_and_clear_api_key():
+    from cirno_server.webui.settings.runtime import runtime_config_payload, update_runtime_config
+    config = Config()
+    key = 'agents.defaults.memory.embedding_api_key'
+    assert update_runtime_config(config, {key: 'private-value'})
+    masked = runtime_config_payload(config)[key]
+    assert masked != 'private-value' and masked
+    assert not update_runtime_config(config, {key: masked})
+    assert update_runtime_config(config, {key: 'replacement-value'})
+    assert config.agents.defaults.memory.embedding_api_key == 'replacement-value'
+    assert update_runtime_config(config, {key: ''})
+    assert runtime_config_payload(config)[key] == ''

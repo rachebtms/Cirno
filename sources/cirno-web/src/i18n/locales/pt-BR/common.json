@@ -315,8 +315,8 @@
           "help": "Arquivos verificados por rodada de manutenção ociosa."
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "Busca semântica local",
-          "help": "Processo CPU opcional e isolado; BM25 é o padrão. Instale a opção memory-embedding."
+          "label": "Busca semântica",
+          "help": "Vetores opcionais com BM25. Escolha CPU local ou API externa. A API recebe consultas e trechos de memória; desativada por padrão."
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "Caminho do modelo ONNX",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "Tempo limite de revisão (segundos)",
           "help": "Quando o tempo acabar, a operação será enviada para sua aprovação."
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "Limite de compactação ativa (%)",
+          "help": "Porcentagem do contexto do modelo escolhido. Verificada antes de cada solicitação, inclusive após ferramentas. A reserva de saída e segurança é sempre mantida; 100 usa o máximo seguro. Não altera a compactação por inatividade."
+        },
+        "channels_send_progress": {
+          "label": "Mensagens de progresso",
+          "help": "Envia explicações intermediárias aos canais. Os detalhes continuam disponíveis na interface web."
+        },
+        "channels_send_tool_hints": {
+          "label": "Estado das ferramentas",
+          "help": "Envia atualizações curtas das ferramentas aos canais."
+        },
+        "channels_show_reasoning": {
+          "label": "Mensagens de raciocínio",
+          "help": "Envia o raciocínio aos canais compatíveis. Os detalhes web são configurados separadamente."
+        },
+        "channels_show_compaction_notices": {
+          "label": "Avisos de compactação automática",
+          "help": "Envia avisos aos canais. Os eventos web continuam visíveis."
+        },
+        "channels_send_max_retries": {
+          "label": "Tentativas de entrega",
+          "help": "Máximo incluindo a primeira tentativa. 0 desativa novas tentativas, não o envio inicial."
+        },
+        "tools_exec_idle_timeout": {
+          "label": "Tempo sem saída do comando (segundos)",
+          "help": "Após esse tempo sem saída, aplica a ação abaixo. 0 desativa a detecção. Não é a inatividade da conversa."
+        },
+        "tools_exec_idle_action": {
+          "label": "Ação após silêncio",
+          "help": "Relatar mantém a execução; encerrar interrompe. Para pesquisas sem saída, normalmente use Relatar."
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "Duração máxima solicitada (segundos)",
+          "help": "Maior limite que o modelo pode pedir para um comando. A duração padrão é separada; nela 0 significa sem limite."
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "Orçamento de saída da compactação (tokens)",
+          "help": "Orçamento separado, incluindo raciocínio, limitado pela saída do modelo."
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "Esforço na compactação",
+          "help": "Reduza o esforço para reservar espaço para o resumo. Herdar usa a configuração da conversa; o provedor adapta valores não suportados."
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "Limiar do lembrete (%)",
+          "help": "Solicita salvar o estado nesta porcentagem do orçamento de entrada ativo. Não interrompe uma solicitação em andamento."
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "URL base da API",
+          "help": "URL compatível com OpenAI, como https://host/v1, ou endpoint /embeddings completo. Aceita HTTP auto-hospedado."
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "Chave da API",
+          "help": "Salva na configuração; chaves existentes ficam ocultas. Deixe vazia sem autenticação."
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "Modelo de embeddings",
+          "help": "Identificador do serviço. Alterar endereço, modelo ou tamanho dos trechos usa outro índice."
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "Tamanho do trecho (caracteres)",
+          "help": "Trechos de caracteres sobrepostos. Reduza para limites de entrada menores. Até 32 trechos são indexados por busca."
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "Serviço de embeddings",
+          "help": "Vetores opcionais com BM25. Escolha CPU local ou API externa. A API recebe consultas e trechos de memória; desativada por padrão."
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "Aprovações de IA",
           "help": "No modo de revisão por IA, um modelo independente analisa operações sem carregar a memória da conversa. Casos incertos são encaminhados a você."
+        },
+        "active-context": {
+          "title": "Durante uma tarefa"
+        },
+        "channel-output": {
+          "title": "Entrega aos canais"
+        },
+        "command-limits": {
+          "title": "Limites de comandos"
+        },
+        "compaction-generation": {
+          "title": "Geração do ponto de retomada"
+        },
+        "embedding": {
+          "title": "Serviço de embeddings"
         }
       },
       "save": "Salvar alterações",
@@ -510,7 +593,18 @@
       "unavailable": "Atualize o Cirno server para editar estas configurações.",
       "advancedOptions": "Opções avançadas",
       "idle": "Quando ocioso",
-      "interval": "Intervalo fixo"
+      "interval": "Intervalo fixo",
+      "report": "Relatar e continuar",
+      "terminate": "Encerrar comando",
+      "compactionEffortOptions": {
+        "inherit": "Herdar do modelo",
+        "low": "Baixo",
+        "none": "Sem raciocínio"
+      },
+      "embeddingProviders": {
+        "local": "Modelo CPU local",
+        "api": "API externa"
+      }
     },
     "backToChat": "Voltar para a conversa",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "Ativação periódica do agente",
       "coordination": "Coordenação de conversas",
       "regional": "Hora e região",
-      "approval": "Aprovações de IA"
+      "approval": "Aprovações de IA",
+      "backup": "Backup e restauração"
     },
     "sections": {
       "interface": "Interface do usuário",
@@ -633,7 +728,14 @@
       "idleCompactPercent": "Limiar de compactação por inatividade (%)",
       "idleCompactKeepPercent": "Contexto recente mantido (%)",
       "inheritGlobal": "Herdar configurações globais",
-      "compactPercentHint": "Porcentagem da janela do modelo. Em branco: herdar; limiar 0: desativar a compactação por inatividade."
+      "compactPercentHint": "Porcentagem da janela do modelo. Em branco: herdar; limiar 0: desativar a compactação por inatividade.",
+      "reasoningHistory": "Histórico de raciocínio",
+      "reasoningHistoryHelp": "Controla o reenvio do raciocínio em texto. Automático segue a API e mantém o estado assinado. DeepSeek com ferramentas exige preservação. Histórico ignorado não conta na próxima entrada; tokens gerados continuam sendo cobrados.",
+      "reasoningHistoryOptions": {
+        "auto": "Automático",
+        "preserve": "Preservar",
+        "omit": "Omitir"
+      }
     },
     "notifications": {
       "scope": "Este navegador",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "Verifica HEARTBEAT.md periodicamente e ativa Cirno quando há tarefas. É independente da verificação de saúde do serviço."
+    },
+    "backup": {
+      "instance": "Instância completa",
+      "everything": "Todos os dados do Cirno",
+      "everythingHelp": "Inclui configurações e credenciais, MCP, ferramentas, memórias, personalidade, conversas, histórico, contexto salvo, Goals, Skills, notificações e pacotes persistentes.",
+      "credentials": "Contém credenciais e chaves API. Guarde em local privado. Finalize as tarefas ativas antes de exportar ou restaurar.",
+      "extra": "Arquivos e pastas adicionais",
+      "extraHelp": "Sugere espaços de trabalho anteriores e locais de login, configuração e pacotes CLI, sem ler as credenciais.",
+      "included": "Incluído automaticamente",
+      "workspace": "Espaço de trabalho utilizado",
+      "toolData": "Configuração, login ou pacotes CLI",
+      "path": "Caminho absoluto do arquivo ou pasta",
+      "add": "Adicionar caminho",
+      "remove": "Remover",
+      "export": "Exportar backup",
+      "import": "Importar backup",
+      "working": "Processando…",
+      "downloadReady": "Baixar backup",
+      "pending": "Restauração preparada. Reinicie para aplicar ou cancele.",
+      "restart": "Reiniciar agora",
+      "cancel": "Cancelar",
+      "restoreTitle": "Restaurar backup",
+      "restoreHelp": "Substitui a instância atual e reinicia o serviço. Depois, entre com a conta do backup. Arquivos externos só são restaurados se estiverem incluídos.",
+      "version": "Versão",
+      "source": "Instância original",
+      "destination": "Destino",
+      "skip": "Deixe vazio para ignorar",
+      "extrasRestore": "Os caminhos adicionais podem ser alterados. Arquivos correspondentes são sobrescritos e os demais preservados. Pacotes e ferramentas exigem sistema e CPU compatíveis.",
+      "restore": "Restaurar e reiniciar"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "Contexto compactado",
       "attempts": "{{count}} tentativas",
       "attempt": "Tentativa {{number}}",
-      "errorUnavailable": "Este registro não inclui a causa do erro."
+      "errorUnavailable": "Este registro não inclui a causa do erro.",
+      "evidenceCheckpoint": "Ponto de retomada de evidências salvo",
+      "evidenceCheckpointHelp": "O resumo estava indisponível, incompleto ou sem o estado da tarefa. Uma seleção limitada de evidências foi preservada; os registros originais completos continuam arquivados."
     },
     "loadingConversation": "Carregando conversa…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "Velocidade de saída",
         "firstToken": "Primeiro token",
         "tokensPerSecond": "{{value}} tok/s",
-        "estimated": "Estimativa do contexto compactado; a próxima resposta atualizará o uso.",
+        "estimated": "Estimativa do contexto e da saída em andamento, ajustada com o uso real após a resposta.",
         "unavailable": "O uso atual do contexto não foi registrado. O gráfico mostra solicitações anteriores."
       },
       "queued": {

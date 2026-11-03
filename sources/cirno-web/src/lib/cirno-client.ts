@@ -727,6 +727,19 @@ export class CirnoClient {
     }
   }
 
+  async backupRequest<T>(action: "catalog" | "export" | "upload" | "restore" | "cancel", body: Blob | Record<string, unknown> = {}): Promise<T> {
+    if (!this.upload || this.socket?.readyState !== WS_OPEN) throw new Error("Reconnect to Cirno before transferring backups.");
+    const url = new URL(`/api/backups/${action}`, typeof window !== "undefined" ? window.location.href : this.currentUrl);
+    const response = await fetch(url, {
+      method: "POST", headers: { Authorization: `Bearer ${this.upload.token}`,
+        "Content-Type": body instanceof Blob ? "application/gzip" : "application/json" },
+      body: body instanceof Blob ? body : JSON.stringify(body),
+    });
+    const result = await response.json() as T & { error?: string };
+    if (!response.ok) throw new Error(result.error || `Backup request failed (${response.status})`);
+    return result;
+  }
+
   async sendAttachments(
     chatId: string, content: string, media: OutboundMedia[],
     options?: Parameters<CirnoClient["sendMessage"]>[3],

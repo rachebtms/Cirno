@@ -80,10 +80,25 @@ class MemoryConfig(Base):
     checkpoint_tokens: int = Field(default=2000, ge=256, le=8000)
     index_scan_batch: int = Field(default=100, ge=10, le=1000)
     embedding_enabled: bool = False
+    embedding_provider: Literal["local", "api"] = "local"
+    embedding_api_base: str = ""
+    embedding_api_key: str = Field(default="", repr=False)
+    embedding_api_model: str = ""
+    embedding_api_chunk_chars: int = Field(default=768, ge=128, le=4096)
     embedding_model_path: str = ""
     embedding_tokenizer_path: str = ""
     embedding_max_rss_mb: int = Field(default=200, ge=50, le=200)
     embedding_timeout_seconds: int = Field(default=30, ge=1, le=120)
+
+    @field_validator("embedding_api_base")
+    @classmethod
+    def _embedding_api_url(cls, value):
+        if value:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(value)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise ValueError("Use an http(s) embedding API URL without credentials, query or fragment")
+        return value.rstrip("/")
 
 
 class ProviderAPIConfig(Base):
@@ -117,6 +132,15 @@ class ModelAPIConfig(ProviderAPIConfig):
         return self
 
 
+
+class CompactionConfig(Base):
+    """Small, independent checkpoint-generation budget."""
+
+    max_tokens: int = Field(default=8192, ge=512, le=32768)
+    reasoning_effort: Literal["inherit", "low", "none"] = "low"
+    checkpoint_reminder_percent: int = Field(default=85, ge=1, le=100)
+
+
 class RequestOverrides(Base):
     """Optional request differences; omitted fields inherit connection defaults."""
 
@@ -134,6 +158,7 @@ class InlineFallbackConfig(RequestOverrides):
     context_window_tokens: int | None = None
     temperature: float | None = None
     reasoning_effort: str | None = None
+    reasoning_history: Literal["auto", "preserve", "omit"] = "auto"
     api: ModelAPIConfig | None = None
 
 
@@ -149,6 +174,7 @@ class ModelPresetConfig(RequestOverrides):
     context_window_tokens: int = 200_000
     temperature: float = 0.1
     reasoning_effort: str | None = None
+    reasoning_history: Literal["auto", "preserve", "omit"] = "auto"
     api: ModelAPIConfig | None = None
 
     idle_compact_percent: float | None = Field(default=None, ge=0, le=100)
@@ -219,6 +245,7 @@ class AgentDefaults(Base):
         serialization_alias="toolStatusSummaryMaxChars",
     )  # Max characters for channel tool status summaries (e.g. "$ cd …/project && npm test")
     reasoning_effort: str | None = None  # low / medium / high / xhigh / max / adaptive / none — LLM thinking effort; None preserves the provider default
+    reasoning_history: Literal["auto", "preserve", "omit"] = "auto"
     api: ModelAPIConfig | None = None
     timezone: str = "UTC"  # Effective IANA timezone, e.g. "Asia/Shanghai"
     timezone_mode: Literal["auto", "manual"] = "auto"
@@ -234,9 +261,11 @@ class AgentDefaults(Base):
         ge=0,
     )  # Minimum interval in seconds between scans for idle sessions
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
+    compaction: CompactionConfig = Field(default_factory=CompactionConfig)
     dream: DreamConfig = Field(default_factory=DreamConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     idle_compact_percent: float = Field(default=20, ge=0, le=100)
+    active_compact_percent: int = Field(default=100, ge=1, le=100)
     idle_compact_keep_percent: float = Field(default=5, ge=0, le=100)
     idle_compact_min_tokens: int = Field(default=32_000, ge=0)
     idle_compact_keep_recent_tokens: int = Field(default=8_000, ge=0)
@@ -545,7 +574,7 @@ class Config(BaseSettings):
         return ModelPresetConfig(
             model=d.model, provider=d.provider, max_tokens=d.max_tokens,
             context_window_tokens=d.context_window_tokens,
-            temperature=d.temperature, reasoning_effort=d.reasoning_effort, api=d.api,
+            temperature=d.temperature, reasoning_effort=d.reasoning_effort, reasoning_history=d.reasoning_history, api=d.api,
             idle_compact_percent=d.idle_compact_percent, idle_compact_keep_percent=d.idle_compact_keep_percent,
         )
 

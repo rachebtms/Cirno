@@ -1,6 +1,6 @@
 [project]
 name = "cirno-core"
-version = "0.1.4"
+version = "0.1.5"
 description = "Cirno execution engine, memory, tools, and model providers"
 requires-python = ">=3.11"
 license = "MIT"

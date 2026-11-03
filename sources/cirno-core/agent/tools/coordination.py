@@ -59,7 +59,7 @@ class CreateSessionTool(Tool):
         projects = InstanceData().list("projects")
         metadata = (current or {}).get("metadata", {})
         role = (
-            "Current conversation: Cirno (coordination). Its name is fixed; do not rename it. Use conversations__control to stop/continue workers and goals__control to inspect or manage their Goals. Workers declare completion themselves. Supervise only the user-authorized objectives. "
+            "Current conversation: Cirno (coordination). Its name is fixed; do not rename it. Use conversations__control to inspect/configure workers or stop/continue them, and goals__control to inspect or manage their Goals. Configuration changes workspace, PTC mode or model preset only while idle; stop active work first, configure, then continue when ready. Workers declare completion themselves. Supervise only the user-authorized objectives. "
             if request.session_key == CIRNO_SESSION_KEY
             else "Use conversations__set_title early to choose a concise title in the user’s language. "
         )

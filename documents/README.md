@@ -4,12 +4,14 @@ These guides describe the current Cirno implementation. The Python service owns 
 
 ## Use Cirno
 
-- [Install, run and configure](configuration.md)
 - [Configuration](configuration.md): model providers, settings, channels, Projects and Nodes.
 - [Docker deployment and publishing](docker.md): local builds, image publication and persistent data.
 - [Home and workspaces](home-and-workspaces.md): profiles, storage and working directories.
 - [Goals and coordination](goals-and-dream.md): sustained work, delegation, heartbeat and Skills.
 - [Notification inbox](notification-inbox.md): action requests, conversation reports and system notices.
+- [Backup and restore](backups.md): complete instance archives, extra directories and restoration.
+- [Model context and long-running work](model-context.md)
+- [Memory retrieval](memory-retrieval.md)
 
 ## Behavior and architecture
 
@@ -30,8 +32,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.1.5](releases/0.1.5.md): recoverable long-task context, external embeddings, complete backups and supervisor controls.
 - [0.1.4](releases/0.1.4.md): mobile recovery, workspace and AI review settings, MCP editing, remote installation and persistent full images.
-
 - [0.1.3](releases/0.1.3.md): package boundaries, instance storage, account passwords, conversation controls and independent operation review.
 - [0.1.2](releases/0.1.2.md): useful Overview shortcuts and removal of obsolete migration and compatibility paths.
 - [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.

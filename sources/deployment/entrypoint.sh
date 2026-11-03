@@ -39,11 +39,19 @@ if [ "${CIRNO_FULL_IMAGE:-}" = "1" ]; then
     if [ ! -e "$HOME/.config" ] && [ ! -L "$HOME/.config" ]; then
         ln -s "$dir/state/cli/config" "$HOME/.config"
     fi
-    for tool in xurl ssh summarize mcporter; do
+    for tool in xurl ssh summarize mcporter aws cargo local; do
         mkdir -p "$dir/state/cli/$tool"
         chmod 700 "$dir/state/cli/$tool"
         if [ ! -e "$HOME/.$tool" ] && [ ! -L "$HOME/.$tool" ]; then
             ln -s "$dir/state/cli/$tool" "$HOME/.$tool"
+        fi
+    done
+    for file in git-credentials netrc; do
+        if [ ! -e "$dir/state/cli/$file" ]; then
+            (umask 077; touch "$dir/state/cli/$file") || exit 1
+        fi
+        if [ ! -e "$HOME/.$file" ] && [ ! -L "$HOME/.$file" ]; then
+            ln -s "$dir/state/cli/$file" "$HOME/.$file"
         fi
     done
 fi

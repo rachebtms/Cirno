@@ -6,7 +6,7 @@ The repository workflow `.github/workflows/container.yml` is configured to verif
 
 - Pull requests run frontend and backend checks and build AMD64 and ARM64 images on native runners for startup smoke tests. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.1.4` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.1.5` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
@@ -29,7 +29,7 @@ The example publishes only the Web UI port and persists the instance root. Model
 
 Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. The next page configures model providers and model configurations; this step can be deferred to Settings. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.4`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.5`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
@@ -37,10 +37,10 @@ The workflow smoke test starts the server, checks its health endpoint and Web UI
 
 ## Upgrading from 0.1.3
 
-Version 0.1.4 uses the same configuration, account and database layout as 0.1.3. Keep the same instance mount (`~/.cirno:/home/cirno/.cirno` in the example); there is no data migration or new registration step.
+Version 0.1.5 uses the same instance, account and database layout as 0.1.3 and 0.1.4. New configuration fields use defaults. Keep the same instance mount (`~/.cirno:/home/cirno/.cirno` in the example); there is no data migration or new registration step.
 
 1. Stop the service and back up the entire mounted instance directory. Also back up workspaces mounted outside that directory.
-2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.1.4`, or `ghcr.io/rachebtms/cirno:0.1.4-full` for the full variant. Preserve your volumes, ports, environment and reverse-proxy network configuration.
+2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.1.5`, or `ghcr.io/rachebtms/cirno:0.1.5-full` for the full variant. Preserve your volumes, ports, environment and reverse-proxy network configuration.
 3. Pull and recreate the service:
 
    ```sh
@@ -51,7 +51,7 @@ Version 0.1.4 uses the same configuration, account and database layout as 0.1.3.
 
    If you use Compose overrides, pass the same `-f` files to each command. With `compose.full.yaml`, set the pinned full-image tag in that override because it takes precedence over the base file.
 
-4. Refresh the browser or installed Web app and check Settings → About for 0.1.4. Sign in with the existing account.
+4. Refresh the browser or installed Web app and check Settings → About for 0.1.5. Sign in with the existing account.
 
 Recreating the container interrupts its current process; do this between active operations. Saved progress remains in the instance volume. Packages and files written only into the old container's writable layer do not survive replacement. The full image supplies the bundled tools and persists user Python packages and supported CLI configuration for subsequent recreations. Do not delete or replace the existing instance volume during an upgrade.
 
@@ -101,3 +101,9 @@ Owner credentials and browser sessions are stored in `state/webui-auth.sqlite3` 
 An explicitly supplied `CIRNO_WEB_TOKEN` retains shared-password authentication for a new instance instead of browser registration. Existing `config.json` files keep their previous authentication mode. Changing that environment variable does not reset an existing account or password. Configure model credentials in the browser or reference environment variables in configuration.
 
 The entrypoint fixes ownership of the mounted instance root and drops to the Cirno user. Full Access refers to the container's files and processes, including explicitly mounted paths. `compose.bwrap.yaml` is an optional override for the Bubblewrap command sandbox; it adds privileges and unconfines AppArmor/seccomp for that mode. The default Compose configuration does not use that override.
+
+## Complete backups
+
+The Web UI includes [Backup & restore](backups.md). It archives the instance and selected external folders; historical workspaces and common CLI credential/package directories are suggested automatically. It is included in both v0.1.5 image variants.
+
+CLI Apps in the full image use the same persistent user Python environment and non-secret directory environment as shell tools. This keeps market-installed Python packages and tools using XDG, npm, uv or pipx paths inside the instance volume. CLI processes do not inherit provider API keys. SSH, Git credential files, `.aws`, `.cargo` and `.local` locations are also linked into instance storage on a fresh full-image container. Existing external locations are offered as optional backup paths.

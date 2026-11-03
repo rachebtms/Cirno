@@ -315,8 +315,8 @@
           "help": "유휴 유지관리마다 확인하는 파일 수입니다."
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "로컬 의미 검색",
-          "help": "선택적 독립 CPU 프로세스입니다. 기본은 BM25이며 memory-embedding 추가 설치가 필요합니다."
+          "label": "의미 검색",
+          "help": "BM25와 함께 사용하는 선택적 벡터 검색입니다. 로컬 CPU 또는 외부 API를 선택합니다. API에는 검색어와 기억 조각을 전송하며 기본값은 꺼짐입니다."
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "ONNX 모델 경로",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "검토 제한 시간(초)",
           "help": "시간이 초과되면 사용자에게 승인을 요청합니다."
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "실행 중 압축 기준 (%)",
+          "help": "현재 모델의 컨텍스트 창에 대한 비율입니다. 도구 실행 후에도 매 요청 전에 확인합니다. 출력 및 안전 여유는 항상 확보하며 100은 안전한 최대 입력량을 사용합니다. 유휴 압축과는 별개입니다."
+        },
+        "channels_send_progress": {
+          "label": "진행 메시지",
+          "help": "연결된 채널로 중간 설명을 보냅니다. Web UI 실행 세부 정보는 계속 볼 수 있습니다."
+        },
+        "channels_send_tool_hints": {
+          "label": "도구 상태 메시지",
+          "help": "연결된 채널로 간단한 도구 상태를 보냅니다."
+        },
+        "channels_show_reasoning": {
+          "label": "추론 메시지",
+          "help": "지원하는 채널로 추론 과정을 보냅니다. Web UI 상세 표시 설정과는 별개입니다."
+        },
+        "channels_show_compaction_notices": {
+          "label": "자동 압축 알림",
+          "help": "연결된 채널로 자동 압축 알림을 보냅니다. Web UI 압축 이벤트는 계속 표시됩니다."
+        },
+        "channels_send_max_retries": {
+          "label": "전송 시도 횟수",
+          "help": "첫 시도를 포함한 최대 횟수입니다. 0은 재시도만 끄며 첫 전송은 수행합니다."
+        },
+        "tools_exec_idle_timeout": {
+          "label": "명령 무출력 제한 (초)",
+          "help": "이 시간 동안 출력이 없으면 아래 동작을 수행합니다. 0은 감지를 끕니다. 대화 유휴 시간과는 다릅니다."
+        },
+        "tools_exec_idle_action": {
+          "label": "명령 무출력 시 동작",
+          "help": "보고는 명령을 계속 실행하고 종료는 중지합니다. 조용한 연구 작업은 일반적으로 보고를 사용하세요."
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "요청 가능한 명령 최대 시간 (초)",
+          "help": "모델이 단일 명령에 요청할 수 있는 최대 시간입니다. 기본 명령 시간은 별도로 설정하며 기본값 0은 무제한입니다."
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "압축 출력 예산(토큰)",
+          "help": "추론을 포함한 압축 전용 예산입니다. 모델 출력 한도를 넘지 않습니다."
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "압축 추론 강도",
+          "help": "강도를 낮춰 요약 본문 공간을 확보합니다. 상속은 대화 설정을 사용하며 미지원 값은 제공자가 변환합니다."
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "체크포인트 알림 기준(%)",
+          "help": "활성 입력 예산이 이 비율에 도달하면 작업 상태 저장을 알립니다. 실행 중인 요청은 중단하지 않습니다."
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "API 기본 URL",
+          "help": "https://host/v1 같은 OpenAI 호환 URL 또는 전체 /embeddings 주소입니다. 자체 호스팅 HTTP도 지원합니다."
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "API 키",
+          "help": "인스턴스 설정에 저장하며 기존 키는 숨깁니다. 인증이 없으면 비워 두세요."
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "임베딩 모델",
+          "help": "서비스가 지원하는 모델 이름입니다. 주소, 모델 또는 조각 크기 변경 시 별도 색인을 사용합니다."
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "조각 크기(문자)",
+          "help": "외부 API에 겹치는 문자 조각을 보냅니다. 입력 한도가 작으면 줄이세요. 검색당 최대 32개를 색인합니다."
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "임베딩 서비스",
+          "help": "BM25와 함께 사용하는 선택적 벡터 검색입니다. 로컬 CPU 또는 외부 API를 선택합니다. API에는 검색어와 기억 조각을 전송하며 기본값은 꺼짐입니다."
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "AI 승인",
           "help": "AI 승인 모드에서는 독립 모델이 대화 기억 없이 작업을 검토합니다. 불확실하면 사용자에게 승인을 요청합니다."
+        },
+        "active-context": {
+          "title": "작업 실행 중"
+        },
+        "channel-output": {
+          "title": "채널 메시지 전송"
+        },
+        "command-limits": {
+          "title": "명령 시간 제한"
+        },
+        "compaction-generation": {
+          "title": "체크포인트 생성"
+        },
+        "embedding": {
+          "title": "임베딩 서비스"
         }
       },
       "save": "변경 사항 저장",
@@ -510,7 +593,18 @@
       "unavailable": "이 설정을 편집하려면 Cirno 서버를 업데이트하세요.",
       "advancedOptions": "고급 옵션",
       "idle": "유휴 시",
-      "interval": "고정 간격"
+      "interval": "고정 간격",
+      "report": "보고 후 계속 실행",
+      "terminate": "명령 종료",
+      "compactionEffortOptions": {
+        "inherit": "모델 설정 상속",
+        "low": "낮음",
+        "none": "추론 끄기"
+      },
+      "embeddingProviders": {
+        "local": "로컬 CPU 모델",
+        "api": "외부 API"
+      }
     },
     "backToChat": "채팅으로 돌아가기",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "에이전트 하트비트",
       "coordination": "대화 협업",
       "regional": "시간 및 지역",
-      "approval": "AI 승인"
+      "approval": "AI 승인",
+      "backup": "백업 및 복원"
     },
     "sections": {
       "interface": "인터페이스",
@@ -964,7 +1059,14 @@
       "idleCompactPercent": "유휴 압축 시작 비율(%)",
       "idleCompactKeepPercent": "최근 문맥 유지 비율(%)",
       "inheritGlobal": "전역 설정 상속",
-      "compactPercentHint": "이 모델의 문맥 창에 대한 비율입니다. 비우면 전역 설정을 상속하며 시작 비율 0은 유휴 압축을 끕니다."
+      "compactPercentHint": "이 모델의 문맥 창에 대한 비율입니다. 비우면 전역 설정을 상속하며 시작 비율 0은 유휴 압축을 끕니다.",
+      "reasoningHistory": "추론 기록",
+      "reasoningHistoryHelp": "일반 텍스트 추론 기록의 재전송을 제어합니다. 자동은 API 규칙을 따르며 서명된 상태는 유지합니다. DeepSeek 도구 요청은 기록 보존이 필요합니다. 무시된 기록은 다음 입력에서 제외되지만 생성된 토큰은 과금됩니다.",
+      "reasoningHistoryOptions": {
+        "auto": "자동",
+        "preserve": "보존",
+        "omit": "전송하지 않음"
+      }
     },
     "timezone": {
       "select": "시간대 선택",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "HEARTBEAT.md를 주기적으로 확인하고 작업이 있으면 Cirno를 깨웁니다. 서비스 상태 확인과는 별개입니다."
+    },
+    "backup": {
+      "instance": "전체 인스턴스",
+      "everything": "모든 Cirno 데이터",
+      "everythingHelp": "설정과 자격 증명, MCP 및 도구 설정, 기억, 성격 파일, 대화와 기록, 저장된 컨텍스트, Goal, Skills, 알림 및 영구 저장된 사용자 패키지를 포함합니다.",
+      "credentials": "로그인 정보와 API 키가 포함됩니다. 비공개로 보관하세요. 내보내거나 복원하기 전에 실행 중인 작업을 종료하세요.",
+      "extra": "추가 파일 및 폴더",
+      "extraHelp": "기존 작업 공간과 CLI 로그인·설정·패키지 경로를 검색해 추천합니다. 자격 증명 내용은 읽지 않습니다.",
+      "included": "인스턴스에 자동 포함됨",
+      "workspace": "사용했던 작업 공간",
+      "toolData": "CLI 설정, 로그인 또는 패키지",
+      "path": "파일 또는 폴더의 절대 경로",
+      "add": "경로 추가",
+      "remove": "제거",
+      "export": "백업 내보내기",
+      "import": "백업 가져오기",
+      "working": "처리 중…",
+      "downloadReady": "백업 다운로드",
+      "pending": "복원이 준비되었습니다. 재시작하여 적용하거나 취소하세요.",
+      "restart": "지금 재시작",
+      "cancel": "취소",
+      "restoreTitle": "백업 복원",
+      "restoreHelp": "현재 Cirno 인스턴스를 교체하고 재시작합니다. 이후 백업의 계정으로 로그인하세요. 외부 파일은 백업에 포함된 경우에만 복원됩니다.",
+      "version": "버전",
+      "source": "원래 인스턴스",
+      "destination": "복원 위치",
+      "skip": "빈칸이면 건너뛰기",
+      "extrasRestore": "추가 경로를 변경할 수 있습니다. 같은 이름의 파일은 덮어쓰고 무관한 기존 파일은 유지합니다. 패키지와 외부 도구는 호환되는 OS와 CPU가 필요합니다.",
+      "restore": "복원 후 재시작"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "컨텍스트를 압축했습니다",
       "attempts": "{{count}}회 시도",
       "attempt": "시도 {{number}}",
-      "errorUnavailable": "이 기록에는 오류 원인이 없습니다."
+      "errorUnavailable": "이 기록에는 오류 원인이 없습니다.",
+      "evidenceCheckpoint": "근거 체크포인트 저장됨",
+      "evidenceCheckpointHelp": "모델 요약이 없거나 미완성 또는 작업 상태가 누락되어 제한된 원문 근거를 대신 보존했습니다. 전체 원본 기록은 유지됩니다."
     },
     "loadingConversation": "대화 불러오는 중…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "출력 속도",
         "firstToken": "첫 토큰 지연",
         "tokensPerSecond": "{{value}} token/초",
-        "estimated": "압축된 문맥의 추정값입니다. 다음 응답에서 사용량이 갱신됩니다.",
+        "estimated": "현재 컨텍스트와 생성 중인 출력으로 추정하며 응답 후 실제 사용량으로 보정합니다。",
         "unavailable": "현재 문맥 사용량이 기록되지 않았습니다. 차트는 이전 요청을 표시합니다."
       },
       "queued": {

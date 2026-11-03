@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cirno_core.agent.context import ContextBuilder
+from cirno_core.agent.context import ContextBuilder, TranscriptInput
 from cirno_core.runtime.context import RuntimeContextBlock
 
 
@@ -280,7 +280,9 @@ def test_customized_memory_md_is_injected(tmp_path, monkeypatch) -> None:
         return read_memory(**kwargs)
 
     monkeypatch.setattr(builder.memory, "read_memory", tracked_read_memory)
-    prompt = builder.build_system_prompt()
+    messages = builder.build_messages([], "hello")
+    prompt = messages[-1]["content"]
+    assert "User prefers dark mode" not in messages[0]["content"]
 
     assert prompt.count("# Long-term Memory") == 1
     assert "User prefers dark mode" in prompt
@@ -328,3 +330,24 @@ def test_skill_discovery_order_does_not_change_system_prompt(tmp_path, monkeypat
 
     monkeypatch.setattr(Path, "iterdir", reversed_iterdir)
     assert builder.build_system_prompt() == first
+
+
+@pytest.mark.parametrize("session_key", ["websocket:global", "websocket:worker"])
+def test_dream_memory_update_extends_cached_history_and_deduplicates(tmp_path, session_key):
+    from cirno_core.runtime.context import RUNTIME_CONTEXT_MESSAGE_META, RUNTIME_CONTEXT_HISTORY_META
+    workspace = _make_workspace(tmp_path)
+    (workspace / "memory").mkdir()
+    path = workspace / "memory" / "MEMORY.md"
+    path.write_text("Shared fact A")
+    builder = ContextBuilder(workspace)
+    first = builder.build_transcript(TranscriptInput(history=[], current_message="hello"), session_key=session_key)
+    assert "Shared fact A" in first[-1]["content"]
+    persisted = {"role": "user", "content": first[-1]["content"], RUNTIME_CONTEXT_HISTORY_META: first[-1]["_meta"][RUNTIME_CONTEXT_MESSAGE_META]}
+    assert builder.build_memory_context([persisted]) is None
+    path.write_text("Shared fact B")
+    second = builder.build_messages([persisted, {"role": "assistant", "content": "done"}], "continue", session_key=session_key)
+    assert first[0] == second[0]
+    assert second[1]["content"] == first[-1]["content"]
+    assert "Shared fact B" in second[-1]["content"]
+    path.write_text("")
+    assert "(empty)" in builder.build_memory_context([persisted]).content

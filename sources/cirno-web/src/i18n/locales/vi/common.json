@@ -315,8 +315,8 @@
           "help": "Số tệp kiểm tra mỗi lần bảo trì khi rảnh."
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "Tìm kiếm ngữ nghĩa cục bộ",
-          "help": "Tiến trình CPU độc lập, tùy chọn; mặc định vẫn là BM25. Cần cài tùy chọn memory-embedding."
+          "label": "Tìm kiếm ngữ nghĩa",
+          "help": "Vector tùy chọn cùng BM25. Chọn CPU cục bộ hoặc API ngoài. API nhận truy vấn và các đoạn bộ nhớ; mặc định tắt."
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "Đường dẫn mô hình ONNX",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "Thời gian xét duyệt tối đa (giây)",
           "help": "Khi hết thời gian, thao tác sẽ được chuyển cho bạn phê duyệt."
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "Ngưỡng nén khi đang chạy (%)",
+          "help": "Tỷ lệ cửa sổ ngữ cảnh của mô hình đã chọn. Kiểm tra trước mỗi yêu cầu, kể cả sau khi gọi công cụ. Luôn chừa chỗ cho đầu ra và an toàn; 100 dùng mức đầu vào tối đa an toàn. Không thay đổi nén khi rảnh."
+        },
+        "channels_send_progress": {
+          "label": "Tin nhắn tiến trình",
+          "help": "Gửi giải thích trung gian đến các kênh. Chi tiết thực thi vẫn có trên giao diện web."
+        },
+        "channels_send_tool_hints": {
+          "label": "Trạng thái công cụ",
+          "help": "Gửi cập nhật ngắn về công cụ đến các kênh."
+        },
+        "channels_show_reasoning": {
+          "label": "Tin nhắn suy luận",
+          "help": "Gửi suy luận đến kênh có hỗ trợ. Việc mở rộng chi tiết web được đặt riêng."
+        },
+        "channels_show_compaction_notices": {
+          "label": "Thông báo nén tự động",
+          "help": "Gửi thông báo đến các kênh. Sự kiện nén web vẫn hiển thị."
+        },
+        "channels_send_max_retries": {
+          "label": "Số lần gửi thử",
+          "help": "Tối đa gồm lần đầu. 0 tắt thử lại, không tắt lần gửi đầu."
+        },
+        "tools_exec_idle_timeout": {
+          "label": "Thời gian lệnh không có đầu ra (giây)",
+          "help": "Sau thời gian không có đầu ra này, áp dụng hành động bên dưới. 0 tắt phát hiện. Khác với thời gian rảnh của cuộc trò chuyện."
+        },
+        "tools_exec_idle_action": {
+          "label": "Hành động khi lệnh im lặng",
+          "help": "Báo cáo giữ lệnh chạy; dừng sẽ kết thúc lệnh. Tác vụ nghiên cứu ít đầu ra thường nên dùng Báo cáo."
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "Thời hạn lệnh tối đa được yêu cầu (giây)",
+          "help": "Thời hạn lớn nhất mô hình có thể yêu cầu cho một lệnh. Thời hạn mặc định được đặt riêng; 0 ở đó là không giới hạn."
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "Ngân sách đầu ra nén (token)",
+          "help": "Ngân sách riêng gồm cả suy luận, không vượt giới hạn đầu ra của mô hình."
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "Mức suy luận khi nén",
+          "help": "Giảm mức để dành chỗ cho nội dung tóm tắt. Kế thừa dùng thiết lập cuộc trò chuyện; nhà cung cấp ánh xạ giá trị không hỗ trợ."
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "Ngưỡng nhắc lưu trạng thái (%)",
+          "help": "Nhắc tác nhân lưu trạng thái ở tỷ lệ này của ngân sách đầu vào đang dùng. Không ngắt yêu cầu đang chạy."
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "URL cơ sở API",
+          "help": "URL tương thích OpenAI như https://host/v1, hoặc endpoint /embeddings đầy đủ. Hỗ trợ HTTP tự lưu trữ."
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "Khóa API",
+          "help": "Lưu trong cấu hình; khóa hiện có được che. Để trống nếu không cần xác thực."
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "Mô hình embedding",
+          "help": "Tên mô hình dịch vụ. Đổi địa chỉ, mô hình hoặc kích thước đoạn sẽ dùng chỉ mục riêng."
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "Kích thước đoạn (ký tự)",
+          "help": "Các đoạn ký tự có phần chồng lấn. Giảm nếu giới hạn đầu vào nhỏ. Tối đa 32 đoạn được lập chỉ mục mỗi lần tìm."
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "Dịch vụ embedding",
+          "help": "Vector tùy chọn cùng BM25. Chọn CPU cục bộ hoặc API ngoài. API nhận truy vấn và các đoạn bộ nhớ; mặc định tắt."
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "Phê duyệt AI",
           "help": "Trong chế độ xét duyệt AI, mô hình độc lập xem xét thao tác mà không tải bộ nhớ cuộc trò chuyện. Trường hợp chưa rõ sẽ chuyển cho bạn."
+        },
+        "active-context": {
+          "title": "Trong khi chạy tác vụ"
+        },
+        "channel-output": {
+          "title": "Gửi đến kênh"
+        },
+        "command-limits": {
+          "title": "Giới hạn lệnh"
+        },
+        "compaction-generation": {
+          "title": "Tạo điểm tiếp tục"
+        },
+        "embedding": {
+          "title": "Dịch vụ embedding"
         }
       },
       "save": "Lưu thay đổi",
@@ -510,7 +593,18 @@
       "unavailable": "Cập nhật Cirno server để chỉnh sửa các cài đặt này.",
       "advancedOptions": "Tùy chọn nâng cao",
       "idle": "Khi rảnh",
-      "interval": "Khoảng cố định"
+      "interval": "Khoảng cố định",
+      "report": "Báo cáo và tiếp tục",
+      "terminate": "Dừng lệnh",
+      "compactionEffortOptions": {
+        "inherit": "Kế thừa thiết lập mô hình",
+        "low": "Thấp",
+        "none": "Tắt suy luận"
+      },
+      "embeddingProviders": {
+        "local": "Mô hình CPU cục bộ",
+        "api": "API ngoài"
+      }
     },
     "backToChat": "Quay lại chat",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "Nhịp đánh thức tác tử",
       "coordination": "Phối hợp hội thoại",
       "regional": "Thời gian và khu vực",
-      "approval": "Phê duyệt AI"
+      "approval": "Phê duyệt AI",
+      "backup": "Sao lưu và khôi phục"
     },
     "sections": {
       "interface": "Giao diện",
@@ -964,7 +1059,14 @@
       "idleCompactPercent": "Ngưỡng nén khi nhàn rỗi (%)",
       "idleCompactKeepPercent": "Ngữ cảnh gần đây được giữ (%)",
       "inheritGlobal": "Kế thừa cài đặt chung",
-      "compactPercentHint": "Tỷ lệ cửa sổ ngữ cảnh của mô hình. Để trống để kế thừa; ngưỡng 0 tắt nén khi nhàn rỗi."
+      "compactPercentHint": "Tỷ lệ cửa sổ ngữ cảnh của mô hình. Để trống để kế thừa; ngưỡng 0 tắt nén khi nhàn rỗi.",
+      "reasoningHistory": "Lịch sử suy luận",
+      "reasoningHistoryHelp": "Điều khiển việc gửi lại suy luận dạng văn bản. Tự động tuân theo API và giữ trạng thái có chữ ký. DeepSeek dùng công cụ yêu cầu giữ lịch sử. Lịch sử bị bỏ qua không tính vào đầu vào tiếp theo; token đã tạo vẫn bị tính phí.",
+      "reasoningHistoryOptions": {
+        "auto": "Tự động",
+        "preserve": "Giữ lại",
+        "omit": "Không gửi"
+      }
     },
     "timezone": {
       "select": "Chọn múi giờ",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "Kiểm tra HEARTBEAT.md định kỳ và đánh thức Cirno khi có tác vụ. Độc lập với việc kiểm tra sức khỏe dịch vụ."
+    },
+    "backup": {
+      "instance": "Toàn bộ phiên bản",
+      "everything": "Tất cả dữ liệu Cirno",
+      "everythingHelp": "Gồm cài đặt và thông tin đăng nhập, MCP, công cụ, ký ức, tính cách, hội thoại, lịch sử, ngữ cảnh đã lưu, Goal, Skills, thông báo và gói người dùng đã lưu bền vững.",
+      "credentials": "Chứa thông tin đăng nhập và khóa API. Hãy giữ riêng tư. Kết thúc tác vụ đang chạy trước khi xuất hoặc khôi phục.",
+      "extra": "Tệp và thư mục bổ sung",
+      "extraHelp": "Đề xuất không gian làm việc cũ cùng vị trí đăng nhập, cấu hình và gói CLI, không đọc nội dung thông tin đăng nhập.",
+      "included": "Đã tự động bao gồm",
+      "workspace": "Không gian làm việc đã dùng",
+      "toolData": "Cấu hình, đăng nhập hoặc gói CLI",
+      "path": "Đường dẫn tuyệt đối đến tệp hoặc thư mục",
+      "add": "Thêm đường dẫn",
+      "remove": "Xóa",
+      "export": "Xuất bản sao lưu",
+      "import": "Nhập bản sao lưu",
+      "working": "Đang xử lý…",
+      "downloadReady": "Tải bản sao lưu",
+      "pending": "Đã chuẩn bị khôi phục. Khởi động lại để áp dụng hoặc hủy.",
+      "restart": "Khởi động lại ngay",
+      "cancel": "Hủy",
+      "restoreTitle": "Khôi phục bản sao lưu",
+      "restoreHelp": "Thay thế phiên bản Cirno hiện tại và khởi động lại dịch vụ. Sau đó đăng nhập bằng tài khoản trong bản sao lưu. Tệp bên ngoài chỉ được khôi phục nếu có trong bản sao lưu.",
+      "version": "Phiên bản",
+      "source": "Vị trí gốc",
+      "destination": "Vị trí khôi phục",
+      "skip": "Để trống để bỏ qua",
+      "extrasRestore": "Có thể đổi đường dẫn bổ sung. Ghi đè tệp trùng tên, giữ các tệp khác. Gói và công cụ cần hệ điều hành và CPU tương thích.",
+      "restore": "Khôi phục và khởi động lại"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "Đã nén ngữ cảnh",
       "attempts": "{{count}} lần thử",
       "attempt": "Lần thử {{number}}",
-      "errorUnavailable": "Bản ghi này không có nguyên nhân lỗi."
+      "errorUnavailable": "Bản ghi này không có nguyên nhân lỗi.",
+      "evidenceCheckpoint": "Đã lưu điểm tiếp tục từ bằng chứng",
+      "evidenceCheckpointHelp": "Tóm tắt không khả dụng, chưa hoàn tất hoặc thiếu trạng thái công việc. Đã giữ một phần bằng chứng nguồn có giới hạn; bản gốc đầy đủ vẫn được lưu."
     },
     "loadingConversation": "Đang tải cuộc trò chuyện…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "Tốc độ đầu ra",
         "firstToken": "Độ trễ token đầu",
         "tokensPerSecond": "{{value}} token/giây",
-        "estimated": "Ước tính từ ngữ cảnh đã nén; phản hồi tiếp theo sẽ cập nhật mức sử dụng.",
+        "estimated": "Ước tính từ ngữ cảnh và đầu ra đang tạo; hiệu chỉnh theo mức dùng thực tế sau phản hồi.",
         "unavailable": "Chưa ghi nhận mức sử dụng ngữ cảnh hiện tại. Biểu đồ hiển thị các yêu cầu trước."
       },
       "queued": {

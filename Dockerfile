@@ -55,6 +55,7 @@ ENV CIRNO_FULL_IMAGE=1 \
     CIRNO_SHELL_VENV=/home/cirno/.cirno/state/tools/python \
     TEA_CONFIG_DIR=/home/cirno/.cirno/state/cli/config/tea \
     PIP_CACHE_DIR=/home/cirno/.cirno/state/cli/cache/pip \
+    NPM_CONFIG_CACHE=/home/cirno/.cirno/state/cli/cache/npm \
     NPM_CONFIG_USERCONFIG=/home/cirno/.cirno/state/cli/config/npmrc \
     BASH_ENV=/etc/profile.d/cirno-tools.sh \
     CIRNO_AGENTS__DEFAULTS__MEMORY__EMBEDDING_MODEL_PATH=/opt/cirno/models/bge-small-zh-v1.5/model_quantized.onnx \
@@ -85,7 +86,7 @@ WORKDIR /app
 # Keep the runtime environment writable by the non-root cirno user. Enabled
 # channels may install their manifest-declared dependencies at startup.
 ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="$CIRNO_SHELL_VENV/bin:/app/.venv/bin:$PATH"
 RUN uv venv --seed "$VIRTUAL_ENV"
 
 # Build the three local distributions together; none is fetched from PyPI.

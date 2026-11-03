@@ -23,7 +23,7 @@ import {
   type GenericToolStatus,
   type ToolFamily,
 } from "@/components/thread/activity/generic-tool-model";
-import { formatActivityTarget } from "@/components/thread/activity/activity-text";
+import { formatActivityTarget, toolActivityDetails } from "@/components/thread/activity/activity-text";
 
 interface GenericToolRunModel {
   status: GenericToolStatus;
@@ -45,6 +45,7 @@ export function GenericToolRun({ items }: { items: GenericToolRunItem[] }) {
       tone={model.status === "error" ? "error" : model.status === "done" ? "success" : "active"}
       label={action}
       detail={model.aside}
+      detailsText={items.map((item) => toolActivityDetails(item.trace.detailsText ?? "", item.result, item.error)).filter(Boolean).join("\n\n") || undefined}
     />
   );
 }

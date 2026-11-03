@@ -44,9 +44,9 @@ export function useRuntimeConfigSettings(
     if (invalidField && saving === null) document.getElementById(`runtime-${invalidField}`)?.focus();
   }, [invalidField, saving]);
   const value = (path: string): Draft => drafts[path] ?? displayValue(settings?.runtime_config?.[path]);
-  const visible = (field: RuntimeConfigField) => !field.when || (Array.isArray(field.when.value)
+  const visible = (field: RuntimeConfigField) => (!field.path.includes(".memory.embedding_") || field.path.endsWith(".embedding_enabled") || value("agents.defaults.memory.embedding_enabled") === true) && (!field.when || (Array.isArray(field.when.value)
     ? field.when.value.includes(String(value(field.when.path)))
-    : value(field.when.path) === field.when.value);
+    : value(field.when.path) === field.when.value));
   const dirty = (field: RuntimeConfigField) =>
     drafts[field.path] !== undefined && drafts[field.path] !== displayValue(settings?.runtime_config?.[field.path]);
   const discard = (group: string) => {
@@ -183,7 +183,7 @@ export function RuntimeConfigSettings({
   const memoryField = (field: RuntimeConfigField) => {
     if (!memoryPage || page === "memory") return true;
     if (page === "dream") return field.path.includes(".dream.");
-    const context = field.path.includes("idle_compact") || field.path.endsWith("idle_compact_after_minutes")
+    const context = field.path.includes(".compaction.") || field.path.includes("_compact_") || field.path.endsWith("idle_compact_after_minutes")
       || field.path.endsWith("checkpoint_tokens") || field.path.endsWith("release_archived_runtime");
     return page === "context" ? context : !context && !field.path.includes(".dream.");
   };
@@ -278,11 +278,13 @@ export function RuntimeConfigSettings({
                                 value={String(current) || "__none__"} emptyLabel={tr("none")}
                                 providers={options.map((option) => ({ name: option || "__none__", label:
                                   !option ? tr(field.kind === "preset" ? "activeModel" : "none")
-                                    : ["auto", "manual", "standard", "persistent", "idle", "interval"].includes(option) ? tr(option) : option,
+                                    : field.path === "agents.defaults.compaction.reasoning_effort" ? tr(`compactionEffortOptions.${option}`)
+                                    : field.path === "agents.defaults.memory.embedding_provider" ? tr(`embeddingProviders.${option}`)
+                                    : ["auto", "manual", "standard", "persistent", "idle", "interval", "report", "terminate"].includes(option) ? tr(option) : option,
                                 }))}
                                 onChange={(next) => state.change(field, next === "__none__" ? "" : next)} />
                             ) : (
-                              <Input {...common} type={field.kind === "number" ? "number" : "text"}
+                              <Input {...common} type={field.kind === "number" ? "number" : field.kind === "password" ? "password" : "text"}
                                 min={field.min} max={field.max} step={1}
                                 value={String(current)} className="h-9 rounded-full text-[13px]" autoComplete="off"
                                 onChange={(event) => state.change(field, event.target.value)} />

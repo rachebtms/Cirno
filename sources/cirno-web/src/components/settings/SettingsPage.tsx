@@ -1,3 +1,4 @@
+import { BackupSettings } from "@/components/settings/system/BackupSettings";
 import { AccountSettings } from "@/components/settings/account/AccountSettings";
 import { NodesSettings, MemorySourcesSettings, SkillHistorySettings } from "@/components/settings/InstanceFeaturesSettings";
 import { HomeFilesSettings } from "@/components/settings/capabilities/HomeFilesSettings";
@@ -399,6 +400,8 @@ export function SettingsPage({
       case "coordination":
       case "regional":
         return runtimeConfiguration(section);
+      case "backup":
+        return <BackupSettings client={controller.client} onRestart={restartViaSettingsSurface} />;
       case "runtime":
         return (
           <div className="settings-stack">

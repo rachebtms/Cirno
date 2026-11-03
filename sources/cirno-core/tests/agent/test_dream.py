@@ -653,7 +653,7 @@ class TestEphemeralDirect:
         assert "entry-60" not in request_text
 
     async def test_dream_turn_injects_memory_files_once_and_persists_session(self, tmp_path):
-        """Dream gets durable files from system context without losing its session record."""
+        """Dream receives current files once without rewriting the shared memory prefix."""
         from unittest.mock import MagicMock
 
         from cirno_core.agent.loop import AgentLoop
@@ -706,8 +706,9 @@ class TestEphemeralDirect:
         system_prompt = str(messages[0]["content"])
         request_text = "\n".join(str(message.get("content", "")) for message in messages)
         for marker in [*markers.values(), "DREAM_AGENTS_MARKER"]:
-            assert marker in system_prompt
+            assert marker in request_text
             assert request_text.count(marker) == 1
+        assert "DREAM_MEMORY_MARKER" not in system_prompt
         assert loop.sessions.read_session_snapshot(session_key) is not None
 
 

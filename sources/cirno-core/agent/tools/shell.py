@@ -41,15 +41,10 @@ from cirno_core.agent.tools.shell_config import ExecToolConfig
 from cirno_core.config.paths import get_media_dir
 from cirno_core.security.workspace_access import current_scope_allows_loopback, current_tool_workspace
 from cirno_core.security.workspace_policy import is_path_within
+from cirno_core.utils.tool_environment import TOOL_ENV_KEYS
 
 _IS_WINDOWS = sys.platform == "win32"
 _PROCESS_TREE_OWNER_ATTR = "_cirno_process_tree_owner"
-_TOOL_ENV_KEYS = (
-    "PATH", "VIRTUAL_ENV", "BASH_ENV", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
-    "NVM_DIR", "GOPATH", "GOBIN", "BUN_INSTALL", "HF_HOME", "GH_CONFIG_DIR", "TEA_CONFIG_DIR",
-    "GIT_CONFIG_GLOBAL", "NPM_CONFIG_PREFIX", "NPM_CONFIG_USERCONFIG", "PIP_CACHE_DIR",
-    "UV_TOOL_DIR", "UV_TOOL_BIN_DIR", "PIPX_HOME", "PIPX_BIN_DIR",
-)
 
 
 class _ProcessTreeOwner(Protocol):
@@ -815,7 +810,7 @@ class ExecTool(Tool):
                 "ProgramFiles(x86)": os.environ.get("ProgramFiles(x86)", ""),
                 "ProgramW6432": os.environ.get("ProgramW6432", ""),
             }
-            for key in (*_TOOL_ENV_KEYS, *self.allowed_env_keys):
+            for key in (*TOOL_ENV_KEYS, *self.allowed_env_keys):
                 val = os.environ.get(key)
                 if val is not None:
                     env[key] = val
@@ -827,7 +822,7 @@ class ExecTool(Tool):
             "TERM": os.environ.get("TERM", "dumb"),
             "PYTHONUNBUFFERED": "1",
         }
-        for key in (*_TOOL_ENV_KEYS, *self.allowed_env_keys):
+        for key in (*TOOL_ENV_KEYS, *self.allowed_env_keys):
             val = os.environ.get(key)
             if val is not None:
                 env[key] = val

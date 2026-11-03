@@ -10,15 +10,25 @@ from typing import Any, cast
 
 from cirno_core.config.schema import Config
 from cirno_server.webui.settings.contracts import WebUISettingsError
+from cirno_server.webui.settings.requests import redact_request_secrets
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 # Only these leaves may be read or patched through this surface. Model/provider,
-# channel, and secret configuration keep their dedicated mutation contracts.
+# and channel configuration keep dedicated mutation contracts. The embedding API
+# key is masked on this surface and restored only through the shared secret helpers.
 RUNTIME_CONFIG_PATHS = (
     "agents.defaults.workspace",
     "agents.defaults.approval.enabled",
     "agents.defaults.approval.model_override",
     "agents.defaults.approval.timeout_seconds",
+    "channels.send_progress",
+    "channels.send_tool_hints",
+    "channels.show_reasoning",
+    "channels.show_compaction_notices",
+    "channels.send_max_retries",
+    "tools.exec.idle_timeout",
+    "tools.exec.idle_action",
+    "tools.exec.max_runtime_limit",
     "agents.defaults.dream.max_tool_iterations",
     "agents.defaults.memory.release_archived_runtime",
     "agents.defaults.dream.mode",
@@ -29,6 +39,11 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.memory.checkpoint_tokens",
     "agents.defaults.memory.index_scan_batch",
     "agents.defaults.memory.embedding_enabled",
+    "agents.defaults.memory.embedding_provider",
+    "agents.defaults.memory.embedding_api_base",
+    "agents.defaults.memory.embedding_api_key",
+    "agents.defaults.memory.embedding_api_model",
+    "agents.defaults.memory.embedding_api_chunk_chars",
     "agents.defaults.memory.embedding_model_path",
     "agents.defaults.memory.embedding_tokenizer_path",
     "agents.defaults.memory.embedding_max_rss_mb",
@@ -38,6 +53,10 @@ RUNTIME_CONFIG_PATHS = (
     'agents.defaults.dream.model_override',
     'agents.defaults.idle_compact_check_interval_seconds',
     'agents.defaults.idle_compact_percent',
+    'agents.defaults.active_compact_percent',
+    'agents.defaults.compaction.max_tokens',
+    'agents.defaults.compaction.reasoning_effort',
+    'agents.defaults.compaction.checkpoint_reminder_percent',
     'agents.defaults.idle_compact_keep_percent',
     'agents.defaults.heartbeat.enabled',
     'agents.defaults.heartbeat.interval_s',
@@ -98,7 +117,7 @@ def _parent(config: Config, path: str) -> tuple[BaseModel, str]:
 
 def runtime_config_payload(config: Config) -> dict[str, Any]:
     return {
-        path: getattr(parent, leaf)
+        path: (redact_request_secrets(getattr(parent, leaf), secret=True) if path.endswith(".embedding_api_key") else getattr(parent, leaf))
         for path in RUNTIME_CONFIG_PATHS
         for parent, leaf in [_parent(config, path)]
     }
@@ -114,6 +133,9 @@ def update_runtime_config(
     candidate = config.model_copy(deep=True)
     for path, value in values.items():
         parent, leaf = _parent(candidate, path)
+        if path.endswith(".embedding_api_key"):
+            from cirno_server.webui.settings.requests import restore_request_secrets
+            value = restore_request_secrets(value, getattr(parent, leaf), secret=True)
         if isinstance(value, float) and not math.isfinite(value):
             raise WebUISettingsError(f"{path}: enter a finite number")
         try:
@@ -156,16 +178,14 @@ def update_runtime_config(
                 raise WebUISettingsError(f"{path}: must be at least {minimum}")
     if "server.health_port" in values and validated.server.health_port > 65535:
         raise WebUISettingsError("server.health_port: must be at most 65535")
-    if "tools.exec.max_runtime" in values:
+    if {"tools.exec.max_runtime", "tools.exec.max_runtime_limit"} & values.keys():
         limit = validated.tools.exec.max_runtime_limit
         if validated.tools.exec.max_runtime > limit:
             raise WebUISettingsError(
                 f"tools.exec.max_runtime: enter 1–{limit} seconds, or 0 for no time limit"
             )
-        if path in values:
-            parent, leaf = _parent(validated, path)
-            if not str(getattr(parent, leaf)).strip():
-                raise WebUISettingsError(f"{path}: must not be empty")
+    if "server.health_host" in values and not validated.server.health_host.strip():
+        raise WebUISettingsError("server.health_host: must not be empty")
     if "tools.exec.sandbox" in values and validated.tools.exec.sandbox not in {"", "bwrap", "seatbelt"}:
         raise WebUISettingsError("tools.exec.sandbox: choose no sandbox, bwrap, or seatbelt")
     if "tools.ssrf_whitelist" in values:
@@ -187,12 +207,13 @@ def update_runtime_config(
             validated.network.resolve_proxy(True)
         except ValueError as exc:
             raise WebUISettingsError(str(exc)) from None
-    before = runtime_config_payload(config)
-    after = runtime_config_payload(validated)
+    before = config.model_dump()
+    after = validated.model_dump()
     if before == after:
         return False
     config.agents = validated.agents
     config.tools = validated.tools
     config.network = validated.network
     config.server = validated.server
+    config.channels = validated.channels
     return True

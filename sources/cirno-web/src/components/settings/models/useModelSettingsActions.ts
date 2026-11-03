@@ -206,6 +206,7 @@ export function useModelSettingsActions({
           contextWindowTokens: form.contextWindowTokens,
           temperature: form.temperature,
           reasoningEffort: form.reasoningEffort || null,
+          reasoningHistory: form.reasoningHistory ?? "auto",
           api: form.api ?? undefined,
           ...(settings.model_request_overrides_supported ? {
             extraHeaders: form.extraHeaders,
@@ -270,6 +271,7 @@ export function useModelSettingsActions({
           normalizeContextWindowTokens(selectedPreset.context_window_tokens)
             ? form.contextWindowTokens
             : undefined,
+        reasoningHistory: (form.reasoningHistory ?? "auto") !== (selectedPreset.reasoning_history ?? "auto") ? form.reasoningHistory ?? "auto" : undefined,
         idleCompactPercent: (form.idleCompactPercent ?? null) !== (selectedPreset.idle_compact_percent ?? null) ? form.idleCompactPercent ?? null : undefined,
         idleCompactKeepPercent: (form.idleCompactKeepPercent ?? null) !== (selectedPreset.idle_compact_keep_percent ?? null) ? form.idleCompactKeepPercent ?? null : undefined,
         temperature:

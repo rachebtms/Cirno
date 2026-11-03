@@ -315,8 +315,8 @@
           "help": "Berkas yang diperiksa tiap pemeliharaan saat diam."
         },
         "agents_defaults_memory_embedding_enabled": {
-          "label": "Pencarian semantik lokal",
-          "help": "Proses CPU terpisah dan opsional; BM25 tetap bawaan. Pasang opsi memory-embedding."
+          "label": "Pencarian semantik",
+          "help": "Vektor opsional bersama BM25. Pilih CPU lokal atau API eksternal. API menerima kueri dan potongan memori; nonaktif secara bawaan."
         },
         "agents_defaults_memory_embedding_model_path": {
           "label": "Lokasi model ONNX",
@@ -393,6 +393,74 @@
         "agents_defaults_approval_timeout_seconds": {
           "label": "Batas waktu tinjauan (detik)",
           "help": "Setelah waktu habis, tindakan diteruskan kepada Anda untuk disetujui."
+        },
+        "agents_defaults_active_compact_percent": {
+          "label": "Ambang pemadatan aktif (%)",
+          "help": "Persentase jendela konteks model terpilih. Diperiksa sebelum setiap permintaan, termasuk setelah alat berjalan. Ruang keluaran dan cadangan aman selalu dilindungi; 100 memakai batas masukan aman. Tidak mengubah pemadatan saat menganggur."
+        },
+        "channels_send_progress": {
+          "label": "Pesan kemajuan",
+          "help": "Kirim penjelasan sementara ke kanal. Detail eksekusi tetap tersedia di antarmuka web."
+        },
+        "channels_send_tool_hints": {
+          "label": "Pesan status alat",
+          "help": "Kirim pembaruan singkat aktivitas alat ke kanal."
+        },
+        "channels_show_reasoning": {
+          "label": "Pesan penalaran",
+          "help": "Kirim penalaran ke kanal yang mendukungnya. Perluasan detail web diatur terpisah."
+        },
+        "channels_show_compaction_notices": {
+          "label": "Notifikasi pemadatan otomatis",
+          "help": "Kirim pemberitahuan ke kanal. Peristiwa pemadatan web tetap terlihat."
+        },
+        "channels_send_max_retries": {
+          "label": "Percobaan pengiriman",
+          "help": "Maksimum termasuk percobaan pertama. 0 mematikan pengulangan, bukan pengiriman awal."
+        },
+        "tools_exec_idle_timeout": {
+          "label": "Batas tanpa keluaran (detik)",
+          "help": "Setelah tidak ada keluaran selama waktu ini, terapkan tindakan berikut. 0 mematikan deteksi. Berbeda dari waktu menganggur percakapan."
+        },
+        "tools_exec_idle_action": {
+          "label": "Tindakan setelah hening",
+          "help": "Laporkan membiarkan perintah berjalan; hentikan mengakhirinya. Untuk riset tanpa keluaran, biasanya gunakan Laporkan."
+        },
+        "tools_exec_max_runtime_limit": {
+          "label": "Durasi maksimum yang diminta (detik)",
+          "help": "Batas terbesar yang dapat diminta model untuk satu perintah. Durasi bawaan diatur terpisah; 0 di sana berarti tanpa batas."
+        },
+        "agents_defaults_compaction_max_tokens": {
+          "label": "Anggaran output pemadatan (token)",
+          "help": "Anggaran terpisah termasuk penalaran, dibatasi oleh output model."
+        },
+        "agents_defaults_compaction_reasoning_effort": {
+          "label": "Upaya penalaran pemadatan",
+          "help": "Turunkan upaya agar ringkasan mendapat ruang. Warisi memakai pengaturan percakapan; penyedia memetakan nilai yang tidak didukung."
+        },
+        "agents_defaults_compaction_checkpoint_reminder_percent": {
+          "label": "Ambang pengingat (%)",
+          "help": "Mengingatkan agen menyimpan status pada persentase anggaran input aktif ini. Tidak memutus permintaan yang berjalan."
+        },
+        "agents_defaults_memory_embedding_api_base": {
+          "label": "URL dasar API",
+          "help": "URL kompatibel OpenAI seperti https://host/v1, atau endpoint /embeddings lengkap. HTTP mandiri didukung."
+        },
+        "agents_defaults_memory_embedding_api_key": {
+          "label": "Kunci API",
+          "help": "Disimpan dalam konfigurasi; kunci lama disamarkan. Kosongkan jika tanpa autentikasi."
+        },
+        "agents_defaults_memory_embedding_api_model": {
+          "label": "Model embedding",
+          "help": "Nama model layanan. Perubahan alamat, model atau ukuran potongan menggunakan indeks terpisah."
+        },
+        "agents_defaults_memory_embedding_api_chunk_chars": {
+          "label": "Ukuran potongan (karakter)",
+          "help": "Potongan karakter bertumpang tindih. Kurangi jika batas input kecil. Maksimal 32 potongan diindeks per pencarian."
+        },
+        "agents_defaults_memory_embedding_provider": {
+          "label": "Layanan embedding",
+          "help": "Vektor opsional bersama BM25. Pilih CPU lokal atau API eksternal. API menerima kueri dan potongan memori; nonaktif secara bawaan."
         }
       },
       "groups": {
@@ -482,6 +550,21 @@
         "approval": {
           "title": "Persetujuan AI",
           "help": "Dalam mode tinjauan AI, model independen meninjau tindakan tanpa memuat memori percakapan. Keputusan yang tidak pasti diteruskan kepada Anda."
+        },
+        "active-context": {
+          "title": "Saat tugas berjalan"
+        },
+        "channel-output": {
+          "title": "Pengiriman kanal"
+        },
+        "command-limits": {
+          "title": "Batas waktu perintah"
+        },
+        "compaction-generation": {
+          "title": "Pembuatan titik lanjut"
+        },
+        "embedding": {
+          "title": "Layanan embedding"
         }
       },
       "save": "Simpan perubahan",
@@ -510,7 +593,18 @@
       "unavailable": "Perbarui Cirno server untuk mengedit pengaturan ini.",
       "advancedOptions": "Opsi lanjutan",
       "idle": "Saat diam",
-      "interval": "Interval tetap"
+      "interval": "Interval tetap",
+      "report": "Laporkan dan lanjutkan",
+      "terminate": "Hentikan perintah",
+      "compactionEffortOptions": {
+        "inherit": "Warisi pengaturan model",
+        "low": "Rendah",
+        "none": "Tanpa penalaran"
+      },
+      "embeddingProviders": {
+        "local": "Model CPU lokal",
+        "api": "API eksternal"
+      }
     },
     "backToChat": "Kembali ke chat",
     "sidebar": {
@@ -560,7 +654,8 @@
       "heartbeat": "Heartbeat agen",
       "coordination": "Koordinasi percakapan",
       "regional": "Waktu & wilayah",
-      "approval": "Persetujuan AI"
+      "approval": "Persetujuan AI",
+      "backup": "Cadangkan dan pulihkan"
     },
     "sections": {
       "interface": "Antarmuka",
@@ -964,7 +1059,14 @@
       "idleCompactPercent": "Ambang pemadatan saat menganggur (%)",
       "idleCompactKeepPercent": "Konteks terbaru yang dipertahankan (%)",
       "inheritGlobal": "Warisi pengaturan global",
-      "compactPercentHint": "Persentase jendela konteks model. Kosong: warisi; ambang 0: nonaktifkan pemadatan saat menganggur."
+      "compactPercentHint": "Persentase jendela konteks model. Kosong: warisi; ambang 0: nonaktifkan pemadatan saat menganggur.",
+      "reasoningHistory": "Riwayat penalaran",
+      "reasoningHistoryHelp": "Mengatur pengiriman ulang penalaran teks. Otomatis mengikuti API dan mempertahankan status bertanda tangan. DeepSeek dengan alat memerlukan riwayat. Riwayat yang diabaikan tidak masuk input berikutnya; token yang dihasilkan tetap ditagih.",
+      "reasoningHistoryOptions": {
+        "auto": "Otomatis",
+        "preserve": "Pertahankan",
+        "omit": "Jangan kirim"
+      }
     },
     "timezone": {
       "select": "Pilih zona waktu",
@@ -1620,6 +1722,35 @@
     },
     "heartbeat": {
       "help": "Memeriksa HEARTBEAT.md secara berkala dan membangunkan Cirno jika ada tugas. Terpisah dari pemeriksaan kesehatan layanan."
+    },
+    "backup": {
+      "instance": "Seluruh instans",
+      "everything": "Semua data Cirno",
+      "everythingHelp": "Mencakup pengaturan dan kredensial, MCP, alat, memori, kepribadian, percakapan, riwayat, konteks tersimpan, Goal, Skills, notifikasi, dan paket pengguna yang disimpan permanen.",
+      "credentials": "Berisi kredensial dan kunci API. Simpan secara pribadi. Selesaikan tugas aktif sebelum mengekspor atau memulihkan.",
+      "extra": "File dan folder tambahan",
+      "extraHelp": "Menyarankan ruang kerja lama serta lokasi login, konfigurasi, dan paket CLI tanpa membaca isi kredensial.",
+      "included": "Disertakan otomatis",
+      "workspace": "Ruang kerja yang pernah digunakan",
+      "toolData": "Konfigurasi, login, atau paket CLI",
+      "path": "Jalur absolut file atau folder",
+      "add": "Tambah jalur",
+      "remove": "Hapus",
+      "export": "Ekspor cadangan",
+      "import": "Impor cadangan",
+      "working": "Memproses…",
+      "downloadReady": "Unduh cadangan",
+      "pending": "Pemulihan siap. Mulai ulang untuk menerapkan atau batalkan.",
+      "restart": "Mulai ulang sekarang",
+      "cancel": "Batal",
+      "restoreTitle": "Pulihkan cadangan",
+      "restoreHelp": "Mengganti instans saat ini dan memulai ulang layanan. Masuk dengan akun dalam cadangan sesudahnya. File luar hanya dipulihkan jika termasuk dalam cadangan.",
+      "version": "Versi",
+      "source": "Instans asal",
+      "destination": "Tujuan",
+      "skip": "Kosongkan untuk melewati",
+      "extrasRestore": "Jalur tambahan dapat diubah. File yang sama ditimpa, file lain tetap ada. Paket dan alat memerlukan OS serta CPU yang kompatibel.",
+      "restore": "Pulihkan dan mulai ulang"
     }
   },
   "chat": {
@@ -1765,7 +1896,9 @@
       "succeeded": "Konteks dipadatkan",
       "attempts": "{{count}} percobaan",
       "attempt": "Percobaan {{number}}",
-      "errorUnavailable": "Catatan ini tidak memuat penyebab kesalahan."
+      "errorUnavailable": "Catatan ini tidak memuat penyebab kesalahan.",
+      "evidenceCheckpoint": "Titik lanjut bukti tersimpan",
+      "evidenceCheckpointHelp": "Ringkasan tidak tersedia, tidak lengkap atau kehilangan status tugas. Bukti sumber terbatas dipertahankan; catatan asli lengkap tetap diarsipkan."
     },
     "loadingConversation": "Memuat percakapan…",
     "empty": {
@@ -1879,7 +2012,7 @@
         "outputSpeed": "Kecepatan keluaran",
         "firstToken": "Latensi token pertama",
         "tokensPerSecond": "{{value}} token/dtk",
-        "estimated": "Perkiraan dari konteks yang dipadatkan; respons berikutnya memperbarui penggunaan.",
+        "estimated": "Perkiraan konteks dan keluaran yang sedang dibuat; dikalibrasi dengan penggunaan aktual setelah respons.",
         "unavailable": "Penggunaan konteks saat ini belum tercatat. Grafik menampilkan permintaan sebelumnya."
       },
       "queued": {

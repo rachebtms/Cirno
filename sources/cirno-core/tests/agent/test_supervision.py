@@ -67,7 +67,128 @@ async def test_direct_tool_and_service_calls_reject_non_cirno_and_stale_source(s
             assert result.is_error
             result = await loop.conversation_control.execute(handle, "stop")
             assert result.is_error
+            for action, values in (("get", {}), ("configure", {"ptc_mode": True})):
+                assert (await loop.tools.get("control_session").execute(to=handle, action=action, **values)).is_error
+                assert (await loop.conversation_control.execute(handle, action, **values)).is_error
     assert (await loop.tools.get("control_session").execute(to="@cirno", action="stop")).is_error
+
+
+async def test_get_configuration_is_read_only_and_lists_model_presets(supervision):
+    loop, sessions, handle, admitted, _ = supervision
+    before = await sessions.state.read_metadata("websocket:worker")
+    result = json.loads(await loop.tools.get("control_session").execute(to=handle, action="get"))
+    assert result["workspace_scope"]["project_path"] == str(loop.workspace)
+    assert result["model_preset"] == "default"
+    assert result["available_model_presets"] == ["default"]
+    assert result["ptc_mode"] is False
+    assert (await sessions.state.read_metadata("websocket:worker"))["metadata"] == before["metadata"]
+    admitted.assert_not_awaited()
+
+
+async def test_configure_persists_worker_settings_preserving_history_goal_and_access(supervision, tmp_path):
+    from cirno_core.bus.outbound_events import SessionUpdatedEvent
+    from cirno_core.config.schema import ModelPresetConfig
+    from cirno_core.security.workspace_access import build_workspace_scope
+    from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
+
+    loop, sessions, handle, admitted, _ = supervision
+    key = "websocket:worker"
+    loop.workspace.mkdir(exist_ok=True)
+    old_file = loop.workspace / "existing.txt"
+    old_file.write_text("Keep this file in the old workspace")
+    new_workspace = tmp_path / "another-workspace"
+    new_workspace.mkdir()
+    loop.runtime_resolver._model_presets["Research"] = ModelPresetConfig(model="research-model")
+    await sessions.state.import_messages(key, [{"role": "user", "content": "Original task"}, {"role": "assistant", "content": "Saved progress"}])
+    metadata = {"workspace_scope": build_workspace_scope(loop.workspace, "review").payload(), "project_id": "same-project",
+                "goal_state": {"goal_id": "g", "status": "stopped", "objective": "Finish task"}, "_sustained_goal_continuation_rounds": 3}
+    await sessions.state.update_metadata(key, metadata)
+
+    result = json.loads(await loop.tools.get("control_session").execute(
+        to=handle, action="configure", workspace=str(new_workspace), ptc_mode=True, model_preset="research"))
+    assert result["workspace_scope"]["project_path"] == str(new_workspace)
+    assert result["workspace_scope"]["access_mode"] == "review"
+    assert result["model_preset"] == "Research" and result["ptc_mode"] is True
+    assert result["continuation_queued"] is False
+    stored = await sessions.state.read(key)
+    assert stored.metadata[SESSION_MODEL_PRESET_METADATA_KEY] == "Research"
+    for name, value in metadata.items():
+        if name != "workspace_scope":
+            assert stored.metadata[name] == value
+    assert [message["content"] for message in stored.messages] == ["Original task", "Saved progress"]
+    assert old_file.read_text() == "Keep this file in the old workspace"
+    assert not (new_workspace / old_file.name).exists()
+    assert (await loop.runtime_for_session(stored)).model == "research-model"
+    assert loop.llm_runtime().model == "test"
+    selected_tools = conversation_tools(loop.tools, key, ptc_mode=stored.metadata["ptc_mode"])
+    assert "control_session" not in selected_tools.tool_names
+    assert "conversations__control" not in selected_tools.sdk_prompt()
+    assert stored.metadata["supervision_events"][-1]["source"] == "@cirno"
+    events = [await asyncio.wait_for(loop.bus.consume_outbound(), 1) for _ in range(loop.bus.outbound_size)]
+    update = next(message.event for message in events if isinstance(message.event, SessionUpdatedEvent))
+    assert update.workspace_scope["project_path"] == str(new_workspace)
+    admitted.assert_not_awaited()
+
+    restarted = SessionManager(loop.workspace, sessions_root=tmp_path / "state/sessions")
+    restored = await restarted.state.read(key)
+    assert restored.metadata["ptc_mode"] is True
+    assert restored.metadata[SESSION_MODEL_PRESET_METADATA_KEY] == "Research"
+    assert restored.metadata["workspace_scope"]["project_path"] == str(new_workspace)
+    await loop.tools.get("control_session").execute(to=handle, action="configure", model_preset="default", ptc_mode=False)
+    restored = await sessions.state.read(key)
+    assert SESSION_MODEL_PRESET_METADATA_KEY not in restored.metadata
+    assert restored.metadata["ptc_mode"] is False
+    assert (await loop.runtime_for_session(restored)).model == "test"
+
+
+@pytest.mark.parametrize("values", [
+    {}, {"workspace": "relative/path"}, {"workspace": "/cirno-test-missing-path"},
+    {"ptc_mode": "false"}, {"ptc_mode": True, "model_preset": "missing"},
+    {"model_preset": ""}, {"access_mode": "full"},
+])
+async def test_invalid_configuration_is_rejected_without_partial_changes(supervision, values):
+    loop, sessions, handle, admitted, _ = supervision
+    before = await sessions.state.read_metadata("websocket:worker")
+    result = await loop.tools.get("control_session").execute(to=handle, action="configure", **values)
+    assert result.is_error
+    assert (await sessions.state.read_metadata("websocket:worker"))["metadata"] == before["metadata"]
+    admitted.assert_not_awaited()
+
+
+async def test_running_worker_must_be_stopped_before_configuration(supervision):
+    loop, sessions, handle, admitted, _ = supervision
+    worker = asyncio.create_task(asyncio.Event().wait())
+    loop._track_active_task("websocket:worker", worker)
+    await asyncio.sleep(0)
+    result = await loop.tools.get("control_session").execute(to=handle, action="configure", ptc_mode=True)
+    assert result.is_error and "stop" in result
+    assert not worker.done()
+    assert "ptc_mode" not in (await sessions.state.read_metadata("websocket:worker"))["metadata"]
+    await loop.tools.get("control_session").execute(to=handle, action="stop")
+    assert worker.cancelled()
+    result = json.loads(await loop.tools.get("control_session").execute(to=handle, action="configure", ptc_mode=True))
+    assert result["ptc_mode"] is True
+    admitted.assert_not_awaited()
+    await loop.tools.get("control_session").execute(to=handle, action="continue")
+    admitted.assert_awaited_once()
+
+
+@pytest.mark.parametrize("queued", [False, True])
+async def test_configuration_rejects_pending_or_locked_execution(supervision, queued):
+    loop, _, handle, _, _ = supervision
+    key = "websocket:worker"
+    lock = loop._get_session_lock(key)
+    if queued:
+        loop._pending_queues[key] = asyncio.Queue()
+    else:
+        await lock.acquire()
+    try:
+        result = await loop.conversation_control.execute(handle, "configure", ptc_mode=True)
+        assert result.is_error and "running" in result
+    finally:
+        if lock.locked():
+            lock.release()
+        loop._pending_queues.pop(key, None)
 
 
 async def test_stop_cancels_only_target_and_preserves_goal_and_context(supervision):

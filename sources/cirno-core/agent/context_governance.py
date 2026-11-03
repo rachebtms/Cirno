@@ -21,6 +21,7 @@ from uuid import uuid4
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.tools.naming import implementation_name
 from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent, EventSink
+from cirno_core.memory.working_state import EvidenceCheckpoint
 from cirno_core.providers.base import (
     CONTEXT_SAFETY_BUFFER,
     LLMResponse,
@@ -132,6 +133,8 @@ class ContextGovernanceConfig:
     max_tool_result_chars: int
     context_window_tokens: int | None = None
     max_tokens: int | None = None
+    active_compact_percent: int = 100
+    checkpoint_reminder_percent: int = 85
 
 
 @dataclass(slots=True)
@@ -146,6 +149,7 @@ class ContextCompactionState:
     consolidate_history: HistoryConsolidator
     consolidate_provider_compaction: ProviderCompactionConsolidator | None
     summary_checkpoint: SessionSummaryCheckpoint | None = None
+    checkpoint_reminded: bool = False
 
     @classmethod
     def from_transcript(
@@ -255,6 +259,7 @@ class ModelRequestState:
     messages: list[dict[str, Any]] | None = None
     tool_definitions: list[dict[str, Any]] | None = None
     provider_compaction_applied: bool = False
+    checkpoint_needed: bool = False
     compacted_tool_results: set[str] = field(default_factory=set)
     events: EventSink = NO_EVENTS
 
@@ -513,6 +518,7 @@ class ContextGovernor:
         usage_prefixes_messages: bool,
         tool_definitions: list[dict[str, Any]] | None,
         request_context_tokens: int | None = None,
+        minimum_percent: int = 100,
     ) -> tuple[int, str] | None:
         """Return the authoritative measurement when a request is pressured."""
         if not config.context_window_tokens:
@@ -544,7 +550,7 @@ class ContextGovernor:
             ):
                 measured = usage.context_tokens
                 source = "prior provider usage plus pending messages"
-        if budget > 0 and measured < budget:
+        if budget > 0 and measured < budget * minimum_percent / 100:
             return None
         return measured, source
 
@@ -656,11 +662,12 @@ class ContextGovernor:
                 )
 
             compaction.active_summary = summary
+            compaction.checkpoint_reminded = False
             # Fresh user input defines the next task. Only ongoing work without
             # new user input needs a temporary instruction to resume after H is replaced.
             continuation = (
                 []
-                if any(message.get("role") == "user" for message in delta_messages)
+                if any(message.get("role") == "user" and not is_hidden_history_message(message) for message in delta_messages)
                 else [{"role": "user", "content": SUMMARY_CONTINUATION_TEXT}]
             )
             summary_transcript = await self.prepare_in_background(
@@ -716,6 +723,7 @@ class ContextGovernor:
                 context_tokens=context_tokens,
                 context_window_tokens=state.config.context_window_tokens,
                 context_estimated=True,
+                evidence_checkpoint=isinstance(summary, EvidenceCheckpoint),
             ),
         )
         return prepared
@@ -763,7 +771,11 @@ class ContextGovernor:
             usage_prefixes_messages=usage_prefixes_messages,
             tool_definitions=tool_definitions,
             request_context_tokens=request_context_tokens,
+            minimum_percent=state.config.checkpoint_reminder_percent,
         )
+        state.checkpoint_needed = pressure is not None and pressure[0] < self.input_budget(state.config) - 512
+        if pressure is not None and pressure[0] < self.input_budget(state.config):
+            pressure = None
         provider_context = (
             state.conversation.prepare_request(
                 transcript,
@@ -831,7 +843,10 @@ class ContextGovernor:
         max_output = config.max_tokens if isinstance(config.max_tokens, int) else (
             provider_max_tokens if isinstance(provider_max_tokens, int) else 4096
         )
-        budget = config.context_window_tokens - max_output - CONTEXT_SAFETY_BUFFER
+        budget = min(
+            config.context_window_tokens - max_output - CONTEXT_SAFETY_BUFFER,
+            int(config.context_window_tokens * config.active_compact_percent / 100),
+        )
         return budget if budget > 0 else 0
 
     @staticmethod

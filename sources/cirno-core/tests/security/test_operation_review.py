@@ -251,3 +251,48 @@ async def test_independent_review_uses_selected_preset_and_timeout(review, monke
     assert evaluate.call_args.args == (selected,)
     assert evaluate.call_args.kwargs["timeout_seconds"] == 73
     response.assert_not_called()
+
+
+@pytest.mark.parametrize('mode', ['restricted', 'review', 'full'])
+async def test_nodes_execute_obeys_access_and_review(review, monkeypatch, mode):
+    from cirno_core.agent.tools.instance_features import NodeTool
+    from cirno_core.nodes.service import Nodes
+    from cirno_core.agent.tools.context import request_context
+    service, request, response, target, sessions, bus = review
+    node = Nodes().save_node({'name': 'Research', 'host': 'lab.example', 'username': 'worker'})
+    execute = AsyncMock(return_value='remote result')
+    monkeypatch.setattr(Nodes, 'execute', execute)
+    scope = build_workspace_scope(request.workspace, mode, source_channel='websocket')
+    request = replace(request, workspace_scope=scope)
+    params = {'action': 'execute', 'node_id': node['id'], 'command': 'printf hello'}
+    token = bind_workspace_scope(scope)
+    try:
+        with request_context(request):
+            async with operation_access(NodeTool(), params, request):
+                result = await NodeTool().execute(**params)
+        if mode == 'restricted':
+            assert result.is_error
+            execute.assert_not_awaited()
+        else:
+            execute.assert_awaited_once_with(node['id'], 'printf hello')
+        assert response.await_count == (1 if mode == 'review' else 0)
+        if mode == 'review':
+            import json
+            evidence = json.loads(response.call_args.kwargs['messages'][1]['content'])['operation']
+            assert evidence['remote_target']['host'] == 'lab.example'
+            assert 'password' not in evidence['remote_target']
+    finally:
+        reset_workspace_scope(token)
+
+
+async def test_remote_script_requires_human_not_a_local_lookalike(review, monkeypatch):
+    from cirno_core.agent.tools.instance_features import NodeTool
+    from cirno_core.nodes.service import Nodes
+    service, request, response, target, sessions, bus = review
+    node = Nodes().save_node({'name': 'Research', 'host': 'lab.example', 'username': 'worker'})
+    (request.workspace / 'task.py').write_text('print("safe locally")')
+    params = {'action': 'execute', 'node_id': node['id'], 'command': 'python task.py'}
+    with pytest.raises(PermissionError, match='pending'):
+        async with operation_access(NodeTool(), params, request):
+            pytest.fail('No remote effects before approval')
+    response.assert_not_awaited()

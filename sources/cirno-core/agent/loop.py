@@ -1324,6 +1324,7 @@ class AgentLoop:
             workspace=effective_scope.project_path,
             include_memory=session.policy.persist if session is not None else True,
             include_task_context=False,
+            include_memory_context=False,
         )
         if request_context is None:
             request_ctx = dataclasses.replace(
@@ -2401,6 +2402,10 @@ class AgentLoop:
             ctx.runtime_context_blocks = await self._resolve_runtime_context_for_turn(ctx)
         if source_block := origin_context(ctx.msg):
             ctx.runtime_context_blocks = [source_block, *ctx.runtime_context_blocks]
+        if session.policy.persist:
+            memory = await self.runner.prepare_prompt(self.context.build_memory_context, session.messages[session.last_archived:])
+            if memory is not None:
+                ctx.runtime_context_blocks.append(memory)
         if session.policy.persist and not ctx.ephemeral:
             checkpoint = await self.runner.prepare_prompt(
                 self.context.build_task_context, ctx.session_key,

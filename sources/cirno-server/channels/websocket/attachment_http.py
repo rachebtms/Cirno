@@ -35,6 +35,9 @@ class AttachmentHTTP:
         if owner:
             self.store.discard_owner(owner)
 
+    def authorized(self, token: str) -> bool:
+        return bool(token) and token in self._tokens
+
     async def handle(self, request: web.BaseRequest) -> web.StreamResponse:
         # Never reflect credentials, enable CORS, accept cookies, or reuse the
         # one-shot WS handshake token. The capability is valid on one live WS.

@@ -52,6 +52,7 @@ class ServerServices:
     local_trigger_store: LocalTriggerStore | None
     cron_pending_job_ids: Callable[[str], set[str]] | None
     local_trigger_pending_ids: Callable[[str], set[str]] | None
+    maintenance: Callable[[], Any] | None = None
 
 
 def build_gateway_services(
@@ -66,6 +67,7 @@ def build_gateway_services(
     runtime_model_name: Callable[[], str | None] | None,
     refresh_runtime_config: Callable[[], None] | None = None,
     context_usage: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
+    maintenance: Callable[[], Any] | None = None,
     runtime_surface: str,
     runtime_capabilities_overrides: dict[str, Any] | None,
     disabled_skills: set[str] | None = None,
@@ -154,6 +156,7 @@ def build_gateway_services(
     )
     endpoint = WebUIServerEndpoint(config=config, http=http, tokens=tokens)
     return ServerServices(
+        maintenance=maintenance,
         http=http,
         endpoint=endpoint,
         settings=settings,

@@ -90,3 +90,23 @@ def test_child_process_receives_runtime_dir_without_api_keys(
     expected["XDG_RUNTIME_DIR"] = runtime_dir if sys.platform != "win32" else None
     assert json.dumps(expected) in output
     assert all(value not in output for value in secrets.values())
+
+
+def test_cli_apps_share_persistent_tool_locations(monkeypatch, tmp_path):
+    import os
+    from pathlib import Path
+    from cirno_core.utils.tool_environment import TOOL_ENV_KEYS
+    values = {key: str(tmp_path / key) for key in TOOL_ENV_KEYS if key not in {'PATH', 'BASH_ENV', 'VIRTUAL_ENV'}}
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv('OPENAI_API_KEY', 'never-export-this')
+    manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / 'cli-apps')
+    env = manager._subprocess_env()
+    assert all(env[key] == value for key, value in values.items())
+    assert env['VIRTUAL_ENV'] == values['CIRNO_SHELL_VENV']
+    assert env['PATH'].split(os.pathsep)[0] == str(Path(values['CIRNO_SHELL_VENV']) / 'bin')
+    assert 'OPENAI_API_KEY' not in env
+    argv = manager._pip_install_argv({'install_cmd': 'pip install sample-package'})
+    assert manager._pip_interpreter() in argv
+    assert sys.executable not in argv
+    assert manager._pip_interpreter() in manager._pip_uninstall_argv({'name': 'sample', 'pip_package': 'sample-package'})

@@ -76,10 +76,12 @@ Catalog, search and queue writes use attached SQLite databases and rollback-jour
 
 Back up the entire instance root while the service is stopped; Agent Home is its `home/` subdirectory. Catalog and Dream databases contain authoritative state. Search and vectors are derived indexes; after losing the text index, perform a full rebuild in Settings. Vector chunks regenerate on explicit searches. Markdown alone cannot restore scopes, revisions, links or processing state. Evidence and revisions do not expire automatically, so disk usage grows with history.
 
-## Optional CPU embeddings
+## Optional embeddings
 
-Install the `memory-embedding` extra, then configure a local BGE-small INT8 ONNX model and matching `tokenizer.json` in Settings → Memory retrieval. Model files are not downloaded automatically. The worker uses normalized CLS vectors and one CPU thread. ONNX Runtime, NumPy and tokenizers stay out of the default server process.
+For the local engine, install the `memory-embedding` extra, then configure a local BGE-small INT8 ONNX model and matching `tokenizer.json` in Settings → Memory retrieval. Model files are not downloaded automatically. The worker uses normalized CLS vectors and one CPU thread. ONNX Runtime, NumPy and tokenizers stay out of the default server process.
 
 Explicit semantic/hybrid retrieval launches a disposable worker. Vectors are cached on disk by model and content fingerprints; similarity scoring streams stored vectors. Only distilled knowledge and shared profiles are embedded. Long records use 224-token windows with a 192-token stride and retain character offsets. Each search generates at most 32 chunks, with at most eight per worker response. Remaining progress is persisted for the next explicit search. A record ranks by its best matching chunk. Hybrid retrieval uses reciprocal-rank fusion.
 
 Missing dependencies, invalid models, a busy worker, timeout or an RSS-limit violation return BM25 results with a reason. The default worker budget is 200 MiB, checked through process RSS sampling. Embeddings remain disabled by default. The worker budget alone does not enforce a total-service limit. Deployments can set their own resource limits. Historical local benchmark results are archived under `references/`, not treated as a current performance guarantee.
+
+The API engine uses an OpenAI-compatible embeddings endpoint instead of a local model. It shares the same on-disk vector index, scope filtering and hybrid search. API requests send the query and selected knowledge chunks to the configured service; no local inference libraries are loaded. The endpoint, model and chunk size identify the index. API failures return BM25 results with a visible reason. See [Memory retrieval](../memory-retrieval.md) for configuration and privacy details.

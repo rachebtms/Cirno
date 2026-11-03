@@ -28,6 +28,10 @@ class LLMRuntime:
     snapshot_signature: tuple[object, ...] | None = None
     idle_compact_percent: float | None = None
     idle_compact_keep_percent: float | None = None
+    active_compact_percent: int = 100
+    compaction_max_tokens: int = 8192
+    compaction_reasoning_effort: str = "low"
+    checkpoint_reminder_percent: int = 85
 
     @classmethod
     def capture(
@@ -98,11 +102,17 @@ def runtime_from_provider_snapshot(
             snapshot_signature=snapshot.signature,
             idle_compact_percent=snapshot.idle_compact_percent,
             idle_compact_keep_percent=snapshot.idle_compact_keep_percent,
+            active_compact_percent=snapshot.active_compact_percent,
+            compaction_max_tokens=snapshot.compaction_max_tokens,
+            compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
+            checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent,
         )
-    return LLMRuntime.capture(
+    return replace(LLMRuntime.capture(
         snapshot.provider,
         snapshot.model,
         context_window_tokens=snapshot.context_window_tokens,
         model_preset=snapshot.model_preset,
         snapshot_signature=snapshot.signature,
-    )
+    ), active_compact_percent=snapshot.active_compact_percent,
+       compaction_max_tokens=snapshot.compaction_max_tokens, compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
+       checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent)

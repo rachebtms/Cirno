@@ -23,6 +23,7 @@ export function WebSearchRun({ run, turnActive }: { run: WebSearchRunModel; turn
         icon={status === "error" ? AlertCircle : WebSearchIcon}
         active={active}
         tone={status === "error" ? "error" : status === "done" ? "success" : "active"}
+        detailsText={run.detailsText}
         label={presentation.label}
         detail={presentation.detail}
         labelClassName={presentation.detail ? "max-w-[50%]" : undefined}

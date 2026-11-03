@@ -65,6 +65,20 @@ describe("ThreadMessages", () => {
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("keeps ordinary progress visible while Cirno internal text stays collapsed", async () => {
+    await preloadMarkdownText();
+    const messages: UIMessage[] = [
+      { id: "user", role: "user", content: "Investigate", createdAt: 1 },
+      { id: "update", role: "assistant", activityKind: "model", content: "Calibration verified; testing the next candidate.", createdAt: 2 },
+      { id: "tool", role: "tool", kind: "trace", content: "", traces: ['nodes__execute({"command":"test"})'], createdAt: 3 },
+    ];
+    const view = render(<ThreadMessages messages={messages} />);
+    expect(await screen.findByText("Calibration verified; testing the next candidate.")).toBeVisible();
+    view.rerender(<ThreadMessages defaultActivityCollapsed messages={messages} />);
+    expect(screen.queryByText("Calibration verified; testing the next candidate.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Worked/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("preserves native context menus and navigation on rendered reply links", async () => {
     await preloadMarkdownText();
     render(<ThreadMessages messages={[

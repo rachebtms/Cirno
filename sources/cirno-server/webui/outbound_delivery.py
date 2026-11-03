@@ -232,8 +232,7 @@ class WebUIOutboundDelivery:
                     )
             return
         if isinstance(event, SessionUpdatedEvent):
-            if recipients:
-                await self.session_updated(msg.chat_id, scope=event.scope, workspace_scope=event.workspace_scope)
+            await self.session_updated(msg.chat_id, scope=event.scope, workspace_scope=event.workspace_scope)
             return
         progress = event if isinstance(event, ProgressEvent) else None
         if progress and progress.file_edit_events:
