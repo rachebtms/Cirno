@@ -94,7 +94,7 @@ class TestBuildEnvWindows:
     }
 
     def test_expected_keys(self):
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", True):
+        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", True), patch.dict(os.environ, {}, clear=True):
             env = ExecTool()._build_env()
         assert set(env) == self._EXPECTED_KEYS
 
