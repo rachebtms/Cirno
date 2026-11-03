@@ -1619,7 +1619,6 @@ function Shell({
     try {
       const payload = await fetchWorkspaces(getToken());
       setWorkspaces(payload);
-      setWorkspaceError(null);
     } catch (error) {
       console.warn("Could not refresh workspaces", error);
     }

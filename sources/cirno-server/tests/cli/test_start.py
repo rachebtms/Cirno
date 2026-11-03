@@ -45,4 +45,4 @@ def test_help_and_version_do_not_start_service(monkeypatch):
     monkeypatch.setattr("cirno_server.cli.commands.run_server", lambda *a, **kw: pytest.fail("started"))
     runner = CliRunner()
     assert "Run Cirno and its Web UI" in runner.invoke(app, ["--help"]).output
-    assert "0.1.3" in runner.invoke(app, ["--version"]).output
+    assert "0.1.4" in runner.invoke(app, ["--version"]).output

@@ -19,7 +19,7 @@ def test_sdist_rebuild_preserves_package_resources(tmp_path: Path, package: str)
     source.mkdir(parents=True)
     for name in ("pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copyfile(original / name, source / name)
-    (source / "__init__.py").write_text('__version__ = "0.1.3"\n')
+    (source / "__init__.py").write_text('__version__ = "0.1.4"\n')
     if package == "cirno-core":
         (source / "_build_commit.txt").write_text("a" * 40 + "\n")
         required = {"cirno_core/_build_commit.txt": ("a" * 40 + "\n").encode()}

@@ -30,6 +30,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.1.4](releases/0.1.4.md): mobile recovery, workspace and AI review settings, MCP editing, remote installation and persistent full images.
+
 - [0.1.3](releases/0.1.3.md): package boundaries, instance storage, account passwords, conversation controls and independent operation review.
 - [0.1.2](releases/0.1.2.md): useful Overview shortcuts and removal of obsolete migration and compatibility paths.
 - [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.

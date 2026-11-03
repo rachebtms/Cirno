@@ -37,6 +37,6 @@ A project's own `AGENTS.md` supplies project instructions in addition to Home in
 
 Bundled Skills are part of the application. Home Skills override or extend them through the loader. File tools expose supported Home resources according to their access policy; Dream has additional maintenance permissions, while ordinary execution does not directly rewrite shared profiles. The user can edit profiles through Settings. Directory separation expresses ownership; Full Access can still access files outside the workspace.
 
-Version 0.1.3 uses this layout directly. It does not import or move files from earlier layouts. Use a fresh instance root for a new deployment and retain any earlier instance separately.
+Versions 0.1.3 and 0.1.4 use the same layout. Upgrading between them preserves the existing instance directory; replacing the container image does not require re-registration or moving files. Layouts from before 0.1.3 are not automatically imported or migrated. Keep any earlier instance separately.
 
 Back up the entire instance root with the service stopped. Copying only Agent Home does not preserve accounts, conversations or task queues. Copying only Markdown does not preserve memory scopes, revisions, links or Dream processing state. Workspaces outside the instance root require their own backups. See [memory storage](architecture/memory.md) for authoritative and rebuildable databases.
