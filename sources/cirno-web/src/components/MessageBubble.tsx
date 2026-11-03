@@ -1,13 +1,13 @@
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
-import { Activity, Check, ChevronRight, CircleAlert, Clock3, Copy, Quote, Wrench, SquarePen } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, Clock3, Copy, Quote, Wrench, SquarePen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DisclosureContent } from "@/components/ui/disclosure";
 
@@ -46,14 +46,13 @@ import type {
 
 interface MessageBubbleProps {
   message: UIMessage;
+  editor?: ReactNode;
   /** Give temporary-chat user turns the dashed private-mode treatment. */
   temporary?: boolean;
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
   slashCommands?: SlashCommand[];
   onOpenFilePreview?: (path: string) => void;
-  /** Context-menu trigger positioned against this message's visual block. */
-  contextMenu?: ReactNode;
 }
 
 function ForkArrowIcon({ className }: { className?: string }) {
@@ -116,7 +115,7 @@ function messageCopyContent(message: UIMessage, t: (key: string) => string) {
       : message.content;
 }
 
-/** The same copy behavior in the desktop menu and the mobile reply footer. */
+/** Shared copy behavior for desktop and mobile message footers. */
 export function MessageCopyButton({ message, className }: { message: UIMessage; className?: string }) {
   const { t } = useTranslation();
   const content = messageCopyContent(message, t);
@@ -131,168 +130,48 @@ export function MessageCopyButton({ message, className }: { message: UIMessage; 
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none",
       className,
     )}>
-    {copied ? <Check className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-      : <Copy className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />}
+    {copied ? <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+      : <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
   </button></HoverHint>;
 }
 
-interface MessageBlockMenuActivity {
-  label: string;
-  expanded: boolean;
-  controls: string;
-  onToggle: () => void;
-}
-
-interface MessageBlockMenuActionsProps {
+interface MessageActionsProps {
   message: UIMessage;
   isTurnStreaming?: boolean;
   onForkFromHere?: () => void;
   onEdit?: () => void;
-  activity?: MessageBlockMenuActivity;
-  sheet?: boolean;
 }
 
-/** Actions and metadata shown after opening a visual message block's context panel. */
-export function MessageBlockMenuActions({
-  message,
-  isTurnStreaming = false,
-  onForkFromHere,
-  onEdit,
-  activity,
-  sheet = false,
-}: MessageBlockMenuActionsProps) {
+/** Persistent controls beside each message's timestamp, on desktop and touch screens. */
+export function MessageActions({ message, isTurnStreaming = false, onForkFromHere, onEdit }: MessageActionsProps) {
   const { t } = useTranslation();
-  const content = messageCopyContent(message, t);
-  const hasText = content.trim().length > 0;
-  const showEdit = message.role === "user" && !message.inputOrigin && !message.sessionMessage && !isTurnStreaming && onEdit !== undefined;
-  const showFork = message.role === "assistant"
-    && !message.isStreaming
-    && !isTurnStreaming
-    && hasText
-    && onForkFromHere !== undefined;
-  const timestamp = message.role === "assistant"
-    && typeof message.completedAt === "number"
-    && Number.isFinite(message.completedAt)
-    ? message.completedAt
-    : message.createdAt;
-  const timestampLabel = typeof timestamp === "number" && Number.isFinite(timestamp)
-    ? formatMessageEndTime(timestamp)
-    : "";
-  const automationSourceLabel = message.role === "assistant"
-    && ["cron", "local_trigger", "trigger"].includes(message.source?.kind ?? "")
-    ? message.source?.label?.trim() || t("message.automationSourceFallback")
-    : "";
-
-  return (
-      <div
-        data-message-block-menu-actions
-        className={cn("flex max-w-full flex-col items-start gap-1", sheet ? "w-full" : "w-max")}
-      >
-        {(!sheet && hasText) || showFork || showEdit || activity ? (
-          <div
-            data-message-block-toolbar
-            className={cn("flex w-full flex-wrap gap-x-1 gap-y-1", sheet ? "flex-col items-stretch" : "items-center")}
-          >
-            {(!sheet && hasText) || showFork || showEdit ? (
-              <div className="flex min-h-[var(--message-block-control-size)] items-center gap-0.5">
-                {!sheet && hasText ? <MessageCopyButton message={message} /> : null}
-                {showEdit ? <HoverHint content={t("message.edit")} side="top"><button type="button" onClick={onEdit}
-                  aria-label={t("message.edit")} data-message-edit-action
-                  className={cn("inline-flex h-[var(--message-block-control-size)] w-[var(--message-block-action-width)] items-center justify-center rounded-control text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", sheet && "w-full justify-start gap-2 px-2 text-sm")}>
-                  <SquarePen className="h-3.5 w-3.5" />{sheet ? <span>{t("message.edit")}</span> : null}
-                </button></HoverHint> : null}
-                {showFork ? (
-                  <HoverHint content={t("message.forkFromHere")} side="top" align="center">
-                      <button
-                        type="button"
-                        data-message-block-fork-action
-                        data-assistant-fork-action
-                        onClick={onForkFromHere}
-                        aria-label={t("message.forkFromHere")}
-                        className={cn(
-                          "inline-flex h-[var(--message-block-control-size)] w-[var(--message-block-action-width)] items-center justify-center rounded-control",
-                          "text-muted-foreground transition-colors",
-                          "hover:text-foreground",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          "motion-reduce:transform-none",
-                          sheet && "w-full justify-start gap-2 px-2 text-sm",
-                        )}
-                      >
-                        <ForkArrowIcon className="h-3.5 w-3.5" />
-                        {sheet ? <span>{t("message.forkFromHere")}</span> : null}
-                      </button>
-                  </HoverHint>
-                ) : null}
-              </div>
-            ) : null}
-            {activity ? (
-              <button
-                type="button"
-                data-message-block-activity-action
-                onClick={activity.onToggle}
-                aria-expanded={activity.expanded}
-                aria-controls={activity.controls}
-                className={cn(
-                  "group inline-flex min-h-[var(--message-block-control-size)] self-start items-center gap-1.5 whitespace-nowrap",
-                  "text-start text-[11px] leading-4",
-                  "text-muted-foreground transition-colors hover:text-foreground",
-                  "focus-visible:outline-none",
-                  sheet && "w-full gap-2 rounded-control px-2 text-sm hover:bg-muted/70",
-                )}
-              >
-                <span
-                  data-message-block-activity-icon
-                  className={cn(
-                    "inline-flex h-[var(--message-block-control-size)] w-[var(--message-block-action-width)] shrink-0 items-center justify-center rounded-control",
-                    "transition-colors",
-                    "group-focus-visible:ring-2 group-focus-visible:ring-ring",
-                    "motion-reduce:transform-none",
-                    sheet && "w-3.5",
-                  )}
-                >
-                  <Activity className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-                </span>
-                <span>{activity.label}</span>
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <FallbackResponseSources
-          sources={message.role === "assistant" ? message.responseSources : undefined}
-          className="min-h-[var(--message-block-control-size)] gap-1"
-          badgeClassName="h-[var(--message-block-control-size)] min-h-[var(--message-block-control-size)]"
-        />
-        {timestampLabel || automationSourceLabel ? (
-          <div
-            data-message-block-metadata
-            className={cn("mt-0.5 w-full border-t border-border/45 px-1.5 pt-1 leading-4 text-muted-foreground", sheet ? "px-2 text-xs" : "text-[10px]")}
-          >
-            {timestampLabel ? (
-              <time
-                data-message-timestamp
-                data-message-created-at={message.role === "user" || undefined}
-                data-assistant-completed-at={
-                  message.role === "assistant" && timestamp === message.completedAt || undefined
-                }
-                dateTime={new Date(timestamp).toISOString()}
-                className="flex min-h-[var(--message-block-control-size)] items-center tabular-nums"
-              >
-                {timestampLabel}
-              </time>
-            ) : null}
-            {automationSourceLabel ? (
-              <span
-                data-automation-trigger
-                className="flex min-h-[var(--message-block-control-size)] flex-wrap items-baseline gap-x-2 break-words"
-              >
-                <span>{t("message.automationTriggered")}</span>{" "}
-                <span>{automationSourceLabel}</span>
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-  );
+  const hasText = messageCopyContent(message, t).trim().length > 0;
+  const user = message.role === "user";
+  const alignEnd = user && !message.inputOrigin && !message.sessionMessage;
+  const showEdit = user && !message.inputOrigin && !message.sessionMessage && !isTurnStreaming && onEdit !== undefined;
+  const showFork = !user && !message.isStreaming && !isTurnStreaming && hasText && onForkFromHere !== undefined;
+  const timestamp = !user && typeof message.completedAt === "number" && Number.isFinite(message.completedAt)
+    ? message.completedAt : message.createdAt;
+  const timestampLabel = typeof timestamp === "number" && Number.isFinite(timestamp) ? formatMessageEndTime(timestamp) : "";
+  const time = timestampLabel ? <time data-message-timestamp data-message-created-at={user || undefined}
+    data-assistant-completed-at={!user && timestamp === message.completedAt || undefined}
+    dateTime={new Date(timestamp).toISOString()} className="px-1 text-xs tabular-nums text-muted-foreground/80">{timestampLabel}</time> : null;
+  const automationSourceLabel = !user && ["cron", "local_trigger", "trigger"].includes(message.source?.kind ?? "")
+    ? message.source?.label?.trim() || t("message.automationSourceFallback") : "";
+  const actionClass = "inline-flex h-[var(--message-block-control-size)] w-[var(--message-block-action-width)] items-center justify-center rounded-control text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  return <div data-message-actions className={cn("mt-1 flex min-w-0 flex-col gap-0.5", alignEnd ? "items-end" : "items-start")}>
+    <div role="group" aria-label={t("message.actions")} data-message-block-toolbar className="flex min-w-0 flex-wrap items-center gap-0.5">
+      {alignEnd ? time : null}
+      {hasText ? <MessageCopyButton message={message} /> : null}
+      {showEdit ? <HoverHint content={t("message.edit")} side="top"><button type="button" onClick={onEdit}
+        aria-label={t("message.edit")} data-message-edit-action className={actionClass}><SquarePen className="h-4 w-4" aria-hidden /></button></HoverHint> : null}
+      {showFork ? <HoverHint content={t("message.forkFromHere")} side="top"><button type="button" onClick={onForkFromHere}
+        aria-label={t("message.forkFromHere")} data-message-block-fork-action data-assistant-fork-action className={actionClass}><ForkArrowIcon className="h-4 w-4" /></button></HoverHint> : null}
+      {!alignEnd ? time : null}
+    </div>
+    <FallbackResponseSources sources={!user ? message.responseSources : undefined} />
+    {automationSourceLabel ? <span data-automation-trigger className="text-xs text-muted-foreground">{t("message.automationTriggered")} {automationSourceLabel}</span> : null}
+  </div>;
 }
 
 function deliveryErrorCopy(
@@ -380,11 +259,9 @@ function UserDeliveryStatus({
 
 function IncomingSessionMessage({
   message,
-  contextMenu,
   onOpenFilePreview,
 }: {
   message: UIMessage;
-  contextMenu?: ReactNode;
   onOpenFilePreview?: (path: string) => void;
 }) {
   const handle = message.sessionMessage!.session;
@@ -399,7 +276,6 @@ function IncomingSessionMessage({
         <SessionHandleLabel id={handle.id}>{handleName}</SessionHandleLabel>
       </div>
       <div data-theme-surface className="relative min-w-0 rounded-floating bg-secondary/70 px-4 py-2">
-        {contextMenu}
         <div data-assistant-selectable="true" className="min-w-0">
           <MarkdownText
             preserveStreamingLayout
@@ -416,12 +292,12 @@ function IncomingSessionMessage({
 /** Render user turns as compact bubbles and assistant turns as document-like prose. */
 export function MessageBubble({
   message,
+  editor,
   temporary = false,
   cliApps = [],
   mcpPresets = [],
   slashCommands = [],
   onOpenFilePreview,
-  contextMenu,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const mentionCliApps = useMemo(
@@ -449,7 +325,7 @@ export function MessageBubble({
     );
     return <IncomingSessionMessage
       message={{ ...message, content: [action, ...fields].join("\n\n") }}
-      contextMenu={contextMenu} onOpenFilePreview={onOpenFilePreview}
+      onOpenFilePreview={onOpenFilePreview}
     />;
   }
 
@@ -469,7 +345,6 @@ export function MessageBubble({
     return (
       <IncomingSessionMessage
         message={message}
-        contextMenu={contextMenu}
         onOpenFilePreview={onOpenFilePreview}
       />
     );
@@ -516,22 +391,20 @@ export function MessageBubble({
     );
     return (
       <div
-        className="group relative ml-auto flex w-fit max-w-[min(85%,36rem)] flex-col items-end gap-1.5"
+        className={cn("group relative ml-auto flex min-w-0 flex-col items-end gap-1.5", editor ? "w-full" : "w-fit max-w-[min(85%,36rem)]")}
       >
-        {!hasText ? contextMenu : null}
         {hasImages ? <ImageGallery images={images} align="right" size="compact" /> : null}
         {!hasImages && hasMedia ? (
           <MessageMedia media={media} align="right" pending={message.deliveryStatus === "sending"} />
         ) : null}
-        {quotedContext ? (
+        {quotedContext && !editor ? (
           <UserQuotedContext
             text={quotedContext}
             label={t("thread.composer.quotedContext")}
           />
         ) : null}
-        {hasText ? (
+        {editor ?? (hasText ? (
           <div data-user-text-bubble className="relative ml-auto w-fit max-w-full min-w-0">
-            {contextMenu}
             <p
               data-theme-surface
               data-temporary-message={temporary ? "true" : undefined}
@@ -546,7 +419,7 @@ export function MessageBubble({
               {messageText}
             </p>
           </div>
-        ) : null}
+        ) : null)}
         {showDeliveryStatus ? (
             <div className="flex min-h-8 items-center justify-end gap-1.5 text-muted-foreground">
               <UserDeliveryStatus
@@ -572,7 +445,6 @@ export function MessageBubble({
       data-assistant-message
       className="group/assistant relative w-full text-reading"
     >
-      {contextMenu}
       {hasReasoning ? (
         <ReasoningBubble
           text={reasoning}

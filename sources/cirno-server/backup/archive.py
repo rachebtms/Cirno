@@ -231,12 +231,15 @@ class Backups:
                                 raise ValueError("Invalid extra-folder manifest.")
                         roots = {"instance", *[item["archive"] for item in manifest["extras"]]}
                     path = PurePosixPath(member.name)
-                    if path.is_absolute() or ".." in path.parts or member.name in names:
+                    name = path.as_posix()
+                    if path.is_absolute() or ".." in path.parts or name in names:
                         raise ValueError("Unsafe or duplicate backup path.")
-                    names.add(member.name)
+                    names.add(name)
+                    if name in {"instance", "instance/state", "instance/state/backups"} and not member.isdir():
+                        raise ValueError("Backup instance and state paths must be directories.")
                     if (
-                        member.name.startswith("instance/state/backups/")
-                        and member.name != "instance/state/backups/folders.json"
+                        name.startswith("instance/state/backups/")
+                        and name != "instance/state/backups/folders.json"
                     ):
                         raise ValueError("A backup cannot replace its restore workspace.")
                     if member.name != MANIFEST and not any(
@@ -283,12 +286,7 @@ class Backups:
                 or Path(config_name).name != config_name
             ):
                 raise ValueError("Unsafe configuration filename.")
-            from cirno_core.config.schema import Config
-
-            config = stage / "instance" / config_name
-            if config.is_symlink():
-                raise ValueError("Backup configuration must be a regular file.")
-            Config.model_validate_json(config.read_text())
+            _validate_instance(stage / "instance", config_name)
             (stage / MANIFEST).write_text(json.dumps(manifest))
             return {"id": stage.name, **manifest}
         except BaseException:
@@ -300,6 +298,7 @@ class Backups:
     def prepare_restore(self, identifier, extra_targets):
         stage = self._stage(identifier)
         manifest = json.loads((stage / MANIFEST).read_text())
+        _validate_instance(stage / "instance", manifest["config_name"])
         if not isinstance(extra_targets, dict) or extra_targets.keys() - {
             item["archive"] for item in manifest["extras"]
         }:
@@ -357,20 +356,19 @@ class Backups:
             if (self.store / "rollback").exists():
                 shutil.rmtree(self.store / "rollback")
             (self.store / "rollback-ready").unlink(missing_ok=True)
+            (self.store / "rollback-restored").unlink(missing_ok=True)
             path.unlink()
             shutil.rmtree(stage)
             return True
         manifest = json.loads((stage / MANIFEST).read_text())
         source = stage / "instance"
-        old_config = source / manifest["config_name"]
-        if old_config.name != self.config_path.name and old_config.exists():
-            old_config.rename(source / self.config_path.name)
+        _validate_instance(source, manifest["config_name"])
         # External folders are merged, never pruned. A failure keeps the live instance intact.
         for item in plan["extras"]:
             _merge(stage / item["source"], Path(item["target"]))
         rollback = self.store / "rollback"
         # An interrupted prior attempt is rolled back before retrying the intact staged copy.
-        if rollback.exists():
+        if rollback.exists() or (self.store / "rollback-restored").exists():
             _recover_rollback(rollback, self.root)
         rollback.mkdir()
         try:
@@ -385,6 +383,8 @@ class Backups:
                     child.rename(rollback / child.name)
             (self.store / "rollback-ready").touch()
             _merge(source, self.root)
+            if manifest["config_name"] != self.config_path.name:
+                (self.root / manifest["config_name"]).replace(self.config_path)
             plan["committed"] = True
             temporary = path.with_suffix(".tmp")
             temporary.write_text(json.dumps(plan))
@@ -400,25 +400,36 @@ class Backups:
         return True
 
 
+def _validate_instance(source, config_name):
+    # The live restore workspace and rollback both live below state/backups.
+    # Replacing any ancestor with a file/link would delete the recovery copy itself.
+    for relative in (".", "state", "state/backups"):
+        path = source / relative
+        if path.is_symlink() or path.exists() and not path.is_dir():
+            raise ValueError("Backup instance and state paths must be directories.")
+    config = source / config_name
+    if config.is_symlink() or not config.is_file():
+        raise ValueError("Backup configuration must be a regular file.")
+    from cirno_core.config.schema import Config
+
+    Config.model_validate_json(config.read_text())
+
+
 def _recover_rollback(rollback, root):
     ready = rollback.parent / "rollback-ready"
-    if ready.exists():
-        _clear_instance(root)
-    for child in rollback.iterdir():
-        if child.name == "state":
-            (root / "state").mkdir(exist_ok=True)
-            for state in child.iterdir():
-                target = root / "state" / state.name
-                if target.exists() or target.is_symlink():
-                    _remove(target)
-                state.rename(target)
-        else:
-            target = root / child.name
-            if target.exists() or target.is_symlink():
-                _remove(target)
-            child.rename(target)
-    shutil.rmtree(rollback)
+    restored = rollback.parent / "rollback-restored"
+    if not restored.exists():
+        if ready.exists():
+            _clear_instance(root)
+        # Keep every original until the entire recovery succeeds. Moving files
+        # out would lose them if another interruption makes us clear root again.
+        # These are live originals, including their WAL/SHM files, not snapshots.
+        _merge(rollback, root, sqlite_snapshot=False)
+        restored.touch()
+    if rollback.exists():
+        shutil.rmtree(rollback)
     ready.unlink(missing_ok=True)
+    restored.unlink(missing_ok=True)
 
 
 def _clear_instance(root):
@@ -438,13 +449,13 @@ def _remove(path):
         path.unlink()
 
 
-def _merge(source, target):
+def _merge(source, target, *, sqlite_snapshot=True):
     if source.is_dir() and not source.is_symlink():
         if target.is_symlink() or target.exists() and not target.is_dir():
             _remove(target)
         target.mkdir(parents=True, exist_ok=True)
         for child in source.iterdir():
-            _merge(child, target / child.name)
+            _merge(child, target / child.name, sqlite_snapshot=sqlite_snapshot)
         shutil.copystat(source, target)
     else:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -453,7 +464,7 @@ def _merge(source, target):
         if source.is_symlink():
             target.symlink_to(os.readlink(source))
         else:
-            if _is_sqlite(source):
+            if sqlite_snapshot and _is_sqlite(source):
                 for suffix in ("-wal", "-shm"):
                     target.with_name(target.name + suffix).unlink(missing_ok=True)
             shutil.copy2(source, target)

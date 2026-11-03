@@ -7,11 +7,11 @@ from uuid import uuid4
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import current_request_context
 from cirno_core.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
-from cirno_core.storage.instance import InstanceData
 from cirno_core.session.goal_state import MAX_GOAL_OBJECTIVE_CHARS
 from cirno_core.session.keys import CIRNO_SESSION_KEY
-from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.session.session_handles import SessionHandleResolver
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.storage.instance import InstanceData
 
 
 @tool_parameters(
@@ -80,7 +80,7 @@ class CreateSessionTool(Tool):
             report = row.get("metadata", {}).get("work_report")
             if report and report.get("target_session_key") == request.session_key:
                 item = {"work_report": {name: report.get(name) for name in (
-                    "id", "state", "summary", "artifacts", "human_action", "source_session_key", "goal_id",
+                    "id", "state", "summary", "artifacts", "human_action", "source_session_key", "goal_id", "execution",
                 )}}
                 item["work_report"]["summary"] = report["summary"][:800]
                 item["work_report"]["human_action"] = (report.get("human_action") or "")[:400]
@@ -178,8 +178,8 @@ class ReportWorkTool(Tool):
         return "Record structured work status for the delegating conversation, or Cirno. Routine progress/waiting updates records silently. Results, failure, blockers and a concrete human question wake the coordinator through its durable inbox. Does not finish or pause a Goal; use goals__update separately."
 
     async def execute(self, state, summary, artifacts=None, human_action=None, **kwargs):
-        from cirno_core.agent.work_reports import deliver_work_report, save_work_report
         from cirno_core.agent.tools.session_messages import SessionMessageError
+        from cirno_core.agent.work_reports import deliver_work_report, save_work_report
         request = current_request_context()
         if request is None or not request.session_key or not request.persist_session:
             return ToolResult.error("A persistent owning conversation is required")
@@ -187,7 +187,7 @@ class ReportWorkTool(Tool):
             report = await save_work_report(
                 self.sessions, request.session_key, state=state, summary=summary,
                 artifacts=artifacts or [], human_action=human_action,
-                expected_generation=request.session_generation,
+                expected_generation=request.session_generation, turn_id=request.turn_id,
             )
             status = await deliver_work_report(self.sessions, self.sender, request.session_key, report)
         except (ValueError, SessionMessageError) as error:

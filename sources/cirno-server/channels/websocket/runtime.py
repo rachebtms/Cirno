@@ -683,6 +683,13 @@ class WebSocketChannel(BaseChannel):
                             self.gateway.tokens.clear()
                             await asyncio.gather(*(connection.close(code=4001, reason="Account password changed")
                                                    for connection in tuple(self._webui_connections)))
+                        elif request.path == "/api/auth/logout" and response.status == 200:
+                            session = self.gateway.http.auth.cookie(request.headers)
+                            if session:
+                                self.gateway.tokens.revoke_browser_session(session)
+                                connections = tuple(connection for connection, owner in self.gateway.endpoint.browser_sessions.items()
+                                                    if owner == session)
+                                await asyncio.gather(*(connection.close(code=4001, reason="Signed out") for connection in connections))
                         return response
                     return await self._uploads.handle(request)
             except RuntimeMaintenanceError:

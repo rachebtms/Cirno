@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { MessageBlockMenuActions, MessageBubble } from "@/components/MessageBubble";
+import { MessageActions, MessageBubble } from "@/components/MessageBubble";
 import { preloadMarkdownText } from "@/components/MarkdownText";
 import { ThreadMessages } from "@/components/thread/ThreadMessages";
 import { setAppLanguage } from "@/i18n";
@@ -105,7 +105,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
 ];
 
 function menuActions(root: ParentNode = document): HTMLElement {
-  const actions = root.querySelector<HTMLElement>("[data-message-block-menu-actions]");
+  const actions = root.querySelector<HTMLElement>("[data-message-actions]");
   expect(actions).not.toBeNull();
   return actions!;
 }
@@ -177,8 +177,8 @@ describe("MessageBubble", () => {
       expect(screen.getByRole("link", { name: "docs" })).toHaveAttribute("href", "https://example.invalid/docs");
       fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
       await waitFor(() => expect(writeText).toHaveBeenNthCalledWith(1, raw));
-      fireEvent.click(within(output.closest<HTMLElement>("[data-thread-display-unit]")!).getByRole("button", { name: "Message actions" }));
-      fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+      fireEvent.click(within(output.closest<HTMLElement>("[data-thread-display-unit]")!).getByRole("button", { name: "Copy" }));
       await waitFor(() => expect(writeText).toHaveBeenNthCalledWith(2, raw));
     } finally {
       writeText.mockRestore();
@@ -200,7 +200,7 @@ describe("MessageBubble", () => {
   it.each([false, undefined])("keeps normal sources out of the block menu (fallback: %s)", (fallback) => {
     const message: UIMessage = { id: "primary", role: "assistant", content: "Hello", createdAt: 0,
       responseSources: [{ provider: "openai_codex", model: "gpt", preset: "codex", fallback }] };
-    render(<MessageBlockMenuActions message={message} />);
+    render(<MessageActions message={message} />);
     expect(screen.getByRole("button", { name: "Copy" })).toBeVisible();
     expect(screen.queryByRole("button", { name: /fallback/i })).not.toBeInTheDocument();
   });
@@ -219,7 +219,7 @@ describe("MessageBubble", () => {
     fireEvent.error(container.querySelector("img")!);
     expect(screen.getByText("grok")).toBeVisible();
     rerender(<ThreadMessages messages={[{ ...message, isStreaming: false }]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Message actions" }));
+
     expect(menuActions()).toContainElement(screen.getByText("grok"));
     expect(screen.getAllByText("grok")).toHaveLength(1);
     rerender(<ThreadMessages messages={[{ ...message, isStreaming: false, responseSources: undefined }]} />);
@@ -229,14 +229,14 @@ describe("MessageBubble", () => {
   it("explains fallback on focus and click, with the source above static metadata", async () => {
     await setAppLanguage("zh-CN");
     const description = "本条回复已切换至备用模型，由 grok 回答。";
-    const { container } = render(<MessageBlockMenuActions message={{
+    const { container } = render(<MessageActions message={{
       id: "fallback-info", role: "assistant", content: "你好", createdAt: 1,
       responseSources: [{ provider: "xai", model: "grok", preset: "grok", fallback: true }],
     }} />);
     const trigger = screen.getByRole("button", { name: description });
     const actions = menuActions(container);
-    const metadata = actions.querySelector("[data-message-block-metadata]")!;
-    expect(trigger.compareDocumentPosition(metadata) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const metadata = actions.querySelector("[data-message-timestamp]")!;
+    expect(metadata.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.focus(trigger);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(description);
     fireEvent.blur(trigger);
@@ -260,7 +260,7 @@ describe("MessageBubble", () => {
       compactReply: "empty", createdAt: 1,
     }]} />);
     expect(screen.getByText("无需压缩上下文")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "消息操作" }));
+    expect(screen.getByRole("group", { name: "消息操作" })).toBeVisible();
     expect(container).toHaveTextContent("无需压缩上下文");
     fireEvent.click(screen.getByRole("button", { name: "复制" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("无需压缩上下文"));
@@ -307,27 +307,6 @@ describe("MessageBubble", () => {
     expect(pill).toHaveTextContent("hello");
   });
 
-  it("anchors the context trigger to the text even below an image or quote", () => {
-    const message: UIMessage = {
-      id: "u-alignment", role: "user", content: "first line\nsecond line", createdAt: 0,
-    };
-    const contextMenu = <button data-message-block-menu-trigger>Message actions</button>;
-    const { container, rerender } = render(
-      <MessageBubble message={message} contextMenu={contextMenu} />,
-    );
-    const anchor = container.querySelector("[data-user-text-bubble]")!;
-    expect(anchor).toHaveClass("relative");
-    expect(screen.getByRole("button", { name: "Message actions" }).parentElement).toBe(anchor);
-
-    rerender(<MessageBubble message={{ ...message, images: [{ name: "image.png" }] }} contextMenu={contextMenu} />);
-    expect(screen.getByRole("button", { name: "Message actions" }).parentElement)
-      .toBe(container.querySelector("[data-user-text-bubble]"));
-
-    rerender(<MessageBubble message={{ ...message, content: "> [!QUOTE]\n> excerpt\n\nreply" }} contextMenu={contextMenu} />);
-    expect(screen.getByRole("button", { name: "Message actions" }).parentElement)
-      .toBe(screen.getByText("reply").parentElement);
-  });
-
   it("renders cross-session input with its public handle above a left-aligned bubble", () => {
     const message: UIMessage = {
       id: "session-message:message-1",
@@ -343,8 +322,7 @@ describe("MessageBubble", () => {
       },
     };
 
-    const contextMenu = <button data-message-block-menu-trigger>Message actions</button>;
-    const { container } = render(<MessageBubble message={message} contextMenu={contextMenu} />);
+    const { container } = render(<MessageBubble message={message} />);
 
     const row = container.querySelector("[data-session-message]")!;
     const handle = screen.getByText("@mira-0123456789");
@@ -353,7 +331,7 @@ describe("MessageBubble", () => {
     expect(handle.parentElement!.parentElement).toBe(row);
     expect(bubble).toHaveClass("relative", "rounded-floating", "bg-secondary/70", "px-4", "py-2");
     expect(bubble).toContainElement(screen.getByText("Please review this."));
-    expect(screen.getByRole("button", { name: "Message actions" }).parentElement).toBe(bubble);
+    expect(row.querySelector("[data-message-block-menu-trigger]")).toBeNull();
   });
 
   it("outlines temporary-chat user messages with a short dashed border", () => {
@@ -501,7 +479,7 @@ describe("MessageBubble", () => {
     };
 
     try {
-      render(<MessageBlockMenuActions message={message} />);
+      render(<MessageActions message={message} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Copy" }));
 
@@ -665,7 +643,7 @@ describe("MessageBubble", () => {
     };
 
     const { container } = render(
-      <MessageBlockMenuActions message={message} onForkFromHere={onForkFromHere} />,
+      <MessageActions message={message} onForkFromHere={onForkFromHere} />,
     );
 
     menuActions(container);
@@ -676,7 +654,7 @@ describe("MessageBubble", () => {
   it("keeps assistant completion time in the block menu metadata", () => {
     const completedAt = Date.UTC(2026, 6, 25, 12, 34, 56);
     const { container } = render(
-      <MessageBlockMenuActions
+      <MessageActions
         message={{
           id: "a-completed-at",
           role: "assistant",
@@ -695,9 +673,9 @@ describe("MessageBubble", () => {
     expect(time).toHaveClass("tabular-nums");
   });
 
-  it("groups actions above static timestamp metadata", () => {
+  it("keeps actions and timestamp on one toolbar", () => {
     const completedAt = Date.UTC(2026, 6, 25, 12, 34, 56);
-    const { container } = render(<MessageBlockMenuActions
+    const { container } = render(<MessageActions
       message={{ id: "a-actions", role: "assistant", content: "Finished answer",
         completedAt, createdAt: completedAt - 1_000 }}
       onForkFromHere={vi.fn()}
@@ -705,7 +683,7 @@ describe("MessageBubble", () => {
     const actions = menuActions(container);
     const copy = screen.getByRole("button", { name: "Copy" });
     const fork = screen.getByRole("button", { name: "New chat from here" });
-    const metadata = actions.querySelector("[data-message-block-metadata]")!;
+    const metadata = actions.querySelector("[data-message-timestamp]")!;
     expect(actions.querySelector("[data-message-block-toolbar]")).toContainElement(copy);
     expect(actions.querySelector("[data-message-block-toolbar]")).toContainElement(fork);
     expect(metadata).toHaveTextContent(formatMessageEndTime(completedAt));
@@ -716,7 +694,7 @@ describe("MessageBubble", () => {
   it("falls back to the assistant creation time when replay has no completion time", () => {
     const createdAt = Date.UTC(2026, 6, 25, 12, 34, 56);
     const { container } = render(
-      <MessageBlockMenuActions
+      <MessageActions
         message={{
           id: "a-created-at",
           role: "assistant",
@@ -736,7 +714,7 @@ describe("MessageBubble", () => {
   it("renders the creation time for user messages", () => {
     const createdAt = Date.UTC(2026, 6, 25, 12, 34, 56);
     const { container } = render(
-      <MessageBlockMenuActions
+      <MessageActions
         message={{
           id: "u-created-at",
           role: "user",
@@ -751,14 +729,14 @@ describe("MessageBubble", () => {
     expect(time).toHaveAttribute("dateTime", new Date(createdAt).toISOString());
     expect(time).not.toHaveAttribute("title");
     expect(time).toHaveProperty("tabIndex", -1);
-    expect(time?.parentElement).toHaveAttribute("data-message-block-metadata");
+    expect(time?.parentElement).toHaveAttribute("data-message-block-toolbar");
   });
 
   it("does not infer completion time from the assistant creation timestamp", () => {
     const createdAt = Date.UTC(2026, 6, 25, 12, 34, 0);
     const latencyMs = 13_000;
     const { container } = render(
-      <MessageBlockMenuActions
+      <MessageActions
         message={{
           id: "a-replayed-completion",
           role: "assistant",
@@ -837,7 +815,7 @@ describe("MessageBubble", () => {
       createdAt: completedAt - 1_000,
     };
 
-    const { container } = render(<MessageBlockMenuActions message={message} />);
+    const { container } = render(<MessageActions message={message} />);
 
     menuActions(container);
 
@@ -936,7 +914,7 @@ describe("MessageBubble", () => {
         cliApps: [{ name: "drawio", display_name: "Draw.io", category: "diagram", entry_point: "drawio" }],
       }]} />);
       expect(screen.getByTestId("message-cli-mention-drawio")).toHaveTextContent("@Draw.io");
-      fireEvent.click(screen.getByRole("button", { name: "Message actions" }));
+
       fireEvent.click(screen.getByRole("button", { name: "Copy" }));
       await waitFor(() => expect(copy).toHaveBeenCalledWith("Please use @drawio"));
     } finally {
@@ -981,7 +959,7 @@ describe("MessageBubble", () => {
       createdAt: Date.now(),
     };
 
-    const { container } = render(<MessageBlockMenuActions message={message} />);
+    const { container } = render(<MessageActions message={message} />);
 
     menuActions(container);
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
@@ -1010,7 +988,7 @@ describe("MessageBubble", () => {
     };
 
     try {
-      const { container } = render(<MessageBlockMenuActions message={message} />);
+      const { container } = render(<MessageActions message={message} />);
 
       menuActions(container);
       fireEvent.click(screen.getByRole("button", { name: "Copy" }));
@@ -1041,7 +1019,7 @@ describe("MessageBubble", () => {
     };
 
     try {
-      const { container } = render(<MessageBlockMenuActions message={message} />);
+      const { container } = render(<MessageActions message={message} />);
 
       menuActions(container);
       fireEvent.click(screen.getByRole("button", { name: "Copy" }));
@@ -1076,7 +1054,7 @@ describe("MessageBubble", () => {
     expect(body).toHaveClass("relative", "w-full");
     rerender(<ThreadMessages messages={[{ ...message, isStreaming: false }]} />);
     expect(container.querySelector("[data-assistant-message]")).toBe(body);
-    fireEvent.click(screen.getByRole("button", { name: "Message actions" }));
+
     expect(screen.getByRole("button", { name: "Copy" })).toBeVisible();
   });
 
@@ -1085,14 +1063,14 @@ describe("MessageBubble", () => {
       content: "I will keep working.", createdAt: Date.now() };
     const { rerender } = render(<ThreadMessages messages={[message]} isStreaming />);
     expect(screen.getByText(message.content)).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Message actions" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Message actions" })).toBeInTheDocument();
     rerender(<ThreadMessages messages={[message]} />);
-    expect(screen.getByRole("button", { name: "Message actions" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Message actions" })).toBeInTheDocument();
   });
 
   it("keeps timestamp metadata available for a media-only message", () => {
     const createdAt = Date.UTC(2026, 6, 25, 12, 34, 56);
-    const { container } = render(<MessageBlockMenuActions
+    const { container } = render(<MessageActions
       message={{ id: "a-file", role: "assistant", content: "", createdAt,
         media: [{ kind: "file", name: "report.csv", url: "/api/media/report.csv" }] }}
     />);
@@ -1430,12 +1408,12 @@ it("localizes Cirno supervisory records while retaining the @cirno source", asyn
 it("offers edit only for a saved idle human message", async () => {
   await setAppLanguage("en");
   const edit = vi.fn();
-  const { rerender } = render(<MessageBlockMenuActions message={{ id: "human-edit", role: "user", content: "Original", createdAt: 1, turnId: "human-turn" }} onEdit={edit} />);
+  const { rerender } = render(<MessageActions message={{ id: "human-edit", role: "user", content: "Original", createdAt: 1, turnId: "human-turn" }} onEdit={edit} />);
   fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
   expect(edit).toHaveBeenCalledOnce();
-  rerender(<MessageBlockMenuActions message={{ id: "human-edit", role: "user", content: "Original", createdAt: 1, turnId: "human-turn" }} isTurnStreaming onEdit={edit} />);
+  rerender(<MessageActions message={{ id: "human-edit", role: "user", content: "Original", createdAt: 1, turnId: "human-turn" }} isTurnStreaming onEdit={edit} />);
   expect(screen.queryByRole("button", { name: "Edit message" })).not.toBeInTheDocument();
-  rerender(<MessageBlockMenuActions message={{ id: "source-edit", role: "user", content: "Heartbeat", createdAt: 1, inputOrigin: { kind: "heartbeat", label: "Heartbeat" } }} onEdit={edit} />);
+  rerender(<MessageActions message={{ id: "source-edit", role: "user", content: "Heartbeat", createdAt: 1, inputOrigin: { kind: "heartbeat", label: "Heartbeat" } }} onEdit={edit} />);
   expect(screen.queryByRole("button", { name: "Edit message" })).not.toBeInTheDocument();
 });
 

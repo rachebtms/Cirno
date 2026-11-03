@@ -1,7 +1,7 @@
+import { hasToolHistory } from "@/lib/thread-inputs";
 import { liveContextUsage, visibleContextTokens } from "@/lib/live-context";
 import { scopeWithAccessMode } from "@/lib/workspace";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { InlineMessageEditor } from "@/components/thread/InlineMessageEditor";
 import { QuestionReplyProvider, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
 import { formatQuestionAnswer } from "@/lib/user-question";
 import type { UserQuestion } from "@/lib/types";
@@ -573,9 +573,15 @@ export function ThreadShell({
   const [submittedViewportTurnId, setSubmittedViewportTurnId] = useState<string | null>(null);
   const [browserDirty, setBrowserDirty] = useState(false);
   const [editingMessage, setEditingMessage] = useState<UIMessage | null>(null);
+  const [editingMessageOwner, setEditingMessageOwner] = useState<string | null>(null);
   const [editedText, setEditedText] = useState("");
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState("");
+  const editOwnerRef = useRef({ key: session?.key });
+  if (editOwnerRef.current.key !== session?.key) editOwnerRef.current = { key: session?.key };
+  useEffect(() => {
+    setEditingMessage(null); setEditingMessageOwner(null); setEditedText(""); setEditError(""); setEditBusy(false);
+  }, [session?.key]);
   const [pendingForkIndex, setPendingForkIndex] = useState<number | null>(null);
   const [pendingPreviewAction, setPendingPreviewAction] = useState<(() => void) | null>(null);
   const guardPreview = (action: () => void) => { if (browserDirty) setPendingPreviewAction(() => action); else action(); };
@@ -1370,7 +1376,7 @@ export function ThreadShell({
     [chatId, onForkChat],
   );
   const handleForkFromMessage = useCallback((index: number) => {
-    if (displayMessages.some(message => message.toolEvents?.length || message.fileEdits?.length || message.traceDetail?.traceCount)) {
+    if (displayMessages.some(hasToolHistory)) {
       setPendingForkIndex(index);
     } else {
       void forkFromSavedContext(index);
@@ -1379,24 +1385,28 @@ export function ThreadShell({
   useEffect(() => setPendingForkIndex(null), [chatId]);
 
   const beginMessageEdit = useCallback((message: UIMessage) => {
+    if (!session?.key) return;
+    setEditingMessageOwner(session.key);
     setEditingMessage(message); setEditedText(message.content); setEditError("");
-  }, []);
+  }, [session?.key]);
   const editingHasToolEffects = useMemo(() => {
     if (!editingMessage) return false;
     const index = displayMessages.findIndex(message => message.id === editingMessage.id);
-    return displayMessages.slice(index + 1).some(message => message.toolEvents?.length || message.fileEdits?.length || message.traceDetail?.traceCount);
+    return displayMessages.slice(index + 1).some(hasToolHistory);
   }, [displayMessages, editingMessage]);
   const submitMessageEdit = async () => {
-    if (!session?.key || !editingMessage?.turnId || !editedText.trim() || editBusy) return;
+    if (!session?.key || editingMessageOwner !== session.key || !editingMessage?.turnId || !editedText.trim() || editBusy || turnActive) return;
+    const owner = editOwnerRef.current;
     setEditBusy(true); setEditError("");
     try {
       const result = await client.requestMutation<{ turn_id: string }>("instance.action", { action: "conversations.edit", values: {
         session_key: session.key, turn_id: editingMessage.turnId, content: editedText,
       } });
+      if (editOwnerRef.current !== owner) return;
       setEditingMessage(null);
       resetHistory(result.turn_id);
-    } catch (reason) { setEditError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setEditBusy(false); }
+    } catch (reason) { if (editOwnerRef.current === owner) setEditError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (editOwnerRef.current === owner) setEditBusy(false); }
   };
 
   const composer = (
@@ -1660,7 +1670,13 @@ export function ThreadShell({
             onLoadTraceDetails={messagesReady ? loadTraceDetails : undefined}
             onOpenFilePreview={previewSessionKey ? openFilePreview : undefined}
             onForkFromMessage={onForkChat ? handleForkFromMessage : undefined}
-            onEditMessage={!temporary ? beginMessageEdit : undefined}
+            onEditMessage={!temporary && !editBusy ? beginMessageEdit : undefined}
+            messageEditor={editingMessage && editingMessageOwner === session?.key ? {
+              messageId: editingMessage.id,
+              content: <InlineMessageEditor value={editedText} busy={editBusy || turnActive} error={editError}
+                hasToolEffects={editingHasToolEffects} onChange={setEditedText}
+                onCancel={() => setEditingMessage(null)} onSubmit={() => void submitMessageEdit()} />,
+            } : undefined}
             onQuoteSelection={session ? handleQuoteSelection : undefined}
           />
           </FileActionsProvider>
@@ -1706,17 +1722,6 @@ export function ThreadShell({
         </FileActionsProvider>
       ) : null}
     </section>
-    <Dialog open={editingMessage !== null} onOpenChange={open => { if (!open && !editBusy) setEditingMessage(null); }}>
-      <DialogContent><DialogHeader><DialogTitle>{t("message.edit")}</DialogTitle>
-        <DialogDescription>{t("thread.historyEdit.description")}</DialogDescription></DialogHeader>
-        {editingHasToolEffects ? <p role="alert" className="text-sm text-destructive">{t("thread.historyEffects.description")}</p> : null}
-        <Textarea aria-label={t("thread.historyEdit.text")} value={editedText} onChange={event => setEditedText(event.target.value)}
-          disabled={editBusy} className="min-h-36 max-h-[45dvh] resize-y rounded-control text-reading" />
-        {editError ? <p role="alert" className="text-sm text-destructive break-words">{editError}</p> : null}
-        <DialogFooter><Button variant="outline" disabled={editBusy} onClick={() => setEditingMessage(null)}>{t("files.cancel")}</Button>
-          <Button disabled={editBusy || !editedText.trim()} onClick={() => void submitMessageEdit()}>{t("thread.historyEdit.submit")}</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
     <AlertDialog open={pendingForkIndex !== null} onOpenChange={open => { if (!open) setPendingForkIndex(null); }}>
       <AlertDialogContent data-history-effects-warning>
         <AlertDialogHeader><AlertDialogTitle>{t("thread.historyEffects.title")}</AlertDialogTitle>

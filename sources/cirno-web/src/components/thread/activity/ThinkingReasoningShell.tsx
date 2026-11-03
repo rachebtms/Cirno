@@ -8,6 +8,7 @@ interface ThinkingReasoningShellProps {
   expanded: boolean;
   contextual?: boolean;
   showHeader?: boolean;
+  renderDetails?: boolean;
   collapseLabel?: string;
   contentId?: string;
   label: string;
@@ -21,6 +22,7 @@ export function ThinkingReasoningShell({
   expanded,
   contextual = false,
   showHeader = true,
+  renderDetails = true,
   collapseLabel,
   contentId: providedContentId,
   label,
@@ -89,7 +91,7 @@ export function ThinkingReasoningShell({
         )}
       </div> : null}
 
-      {hasDetails ? (
+      {hasDetails && renderDetails ? (
         <div
           id={contentId}
           {...(!expanded ? { inert: "" } : {})}

@@ -22,34 +22,14 @@ function openAssistantBlockMenu(root: ParentNode = document): HTMLElement {
   expect(row).toBeTruthy();
   return openMessageBlockMenu(row!).trigger;
 }
-
 function assistantActionCounts(root: ParentNode = document) {
-  const counts = { copy: 0, fork: 0 };
-  for (const body of root.querySelectorAll("[data-assistant-message]")) {
-    const row = body.closest<HTMLElement>("[data-thread-display-unit]")!;
-    if (!row.querySelector("[data-message-block-menu-trigger]")) continue;
-    const { menu } = openMessageBlockMenu(row);
-    counts.copy += within(menu).queryAllByRole("button", { name: "Copy" }).length;
-    counts.fork += within(menu).queryAllByRole("button", { name: "New chat from here" }).length;
-    fireEvent.keyDown(menu, { key: "Escape" });
-  }
-  return counts;
+  return { copy: root.querySelectorAll("[data-assistant-copy-action]").length,
+    fork: root.querySelectorAll("[data-assistant-fork-action]").length };
 }
-
-function openMessageBlockMenu(root: ParentNode): {
-  trigger: HTMLElement;
-  menu: HTMLElement;
-} {
-  const trigger = root.querySelector<HTMLElement>("[data-message-block-menu-trigger]");
-  expect(trigger).not.toBeNull();
-  if (trigger?.getAttribute("aria-expanded") === "false") {
-    fireEvent.click(trigger);
-  }
-  const menu = document.querySelector<HTMLElement>(
-    '[data-message-block-menu][data-state="open"]',
-  );
+function openMessageBlockMenu(root: ParentNode): { trigger: HTMLElement; menu: HTMLElement } {
+  const menu = root.querySelector<HTMLElement>("[data-message-actions]");
   expect(menu).not.toBeNull();
-  return { trigger: trigger!, menu: menu! };
+  return { trigger: menu!.querySelector("button")!, menu: menu! };
 }
 
 describe("ThreadMessages", () => {
@@ -521,25 +501,12 @@ describe("ThreadMessages", () => {
     rerender(<ThreadMessages messages={messages} isStreaming={false} activeTurnId={null} />);
     const firstRow = firstAnswer.closest<HTMLElement>("[data-thread-display-unit]")!;
     const finalRow = finalAnswer.closest<HTMLElement>("[data-thread-display-unit]")!;
-    const firstActions = firstRow.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!;
-    const finalActions = finalRow.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!;
-    expect(firstRow).toContainElement(firstActions);
-    expect(finalRow).toContainElement(finalActions);
-    expect(firstActions).not.toBe(finalActions);
-    expect(firstRow).toHaveClass("message-context-hit-area");
-    expect(finalRow).toHaveClass("message-context-hit-area");
-    expect(finalActions).toHaveClass("absolute", "-start-[var(--message-block-trigger-offset)]", "top-0");
-    expect(finalActions.querySelector("[data-message-block-menu-highlight]")).toHaveClass(
-      "h-4",
-      "w-7",
-      "rounded-full",
-    );
-    expect(screen.queryByRole("button", { name: /worked/i })).not.toBeInTheDocument();
-    fireEvent.click(finalActions);
+    expect(firstRow.querySelector("[data-message-actions]")).toBeVisible();
+    expect(finalRow.querySelector("[data-message-actions]")).toBeVisible();
     const completedActivity = screen.getByRole("button", { name: /worked/i });
-    expect(completedActivity).toHaveClass("min-h-[var(--message-block-control-size)]");
-    expect(completedActivity).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelectorAll("[data-block-context-rail]")).toHaveLength(0);
+    expect(completedActivity).toBeVisible();
+    fireEvent.click(completedActivity);
+    expect(completedActivity).toHaveAttribute("aria-expanded", "true");
   });
 
   it("ignores a completed empty answer frame without splitting contiguous activity", () => {
@@ -647,9 +614,8 @@ describe("ThreadMessages", () => {
     const okRow = ok.closest<HTMLElement>("[data-thread-display-unit]")!;
     const finalRow = final.closest<HTMLElement>("[data-thread-display-unit]")!;
     openMessageBlockMenu(okRow);
-    expect(screen.getByRole("button", { name: /^worked/i })).toBeInTheDocument();
-    const { menu } = openMessageBlockMenu(finalRow);
-    const finalActivity = menu.querySelector<HTMLElement>("[data-message-block-activity-action]")!;
+    expect(within(okRow).getByRole("button", { name: /^worked/i })).toBeVisible();
+    const finalActivity = within(finalRow).getByRole("button", { name: /^worked/i });
     expect(finalActivity).toBeInTheDocument();
     fireEvent.click(finalActivity);
     expect(screen.getByTestId("agent-activity-content")).toHaveTextContent("Completed First");
@@ -745,414 +711,39 @@ describe("ThreadMessages", () => {
     expect(removeAllRanges).toHaveBeenCalled();
   });
 
-  it("keeps one completed activity row above the final answer", async () => {
-    const messages: UIMessage[] = [
-      {
-        id: "r1",
-        role: "assistant",
-        content: "",
-        reasoning: "thinking",
-        reasoningStreaming: false,
-        isStreaming: true,
-        createdAt: 1_000,
-      },
-      {
-        id: "t1",
-        role: "tool",
-        kind: "trace",
-        content: "search()",
-        traces: ["search()"],
-        createdAt: 2_000,
-      },
-      {
-        id: "r2",
-        role: "assistant",
-        content: "",
-        reasoning: "more thinking",
-        reasoningStreaming: false,
-        isStreaming: true,
-        createdAt: 3_000,
-      },
-      {
-        id: "a1",
-        role: "assistant",
-        content: "final answer",
-        latencyMs: 16_000,
-        createdAt: 4_000,
-      },
-    ];
-
-    const { container } = render(
-      <ThreadMessages messages={messages} isStreaming={false} />,
-    );
-    const rows = Array.from(container.firstElementChild?.children ?? []);
-
-    expect(rows).toHaveLength(2);
-    for (const className of ["mt-2", "mt-4", "mt-5"]) {
-      expect(rows[0]).not.toHaveClass(className);
-    }
-    expect(rows[1]).not.toHaveClass("mt-4");
-    const answerRow = screen.getByText("final answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const { trigger, menu } = openMessageBlockMenu(answerRow);
+  it("keeps a direct Worked disclosure above the final answer", async () => {
+    render(<ThreadMessages messages={[
+      { id: "u", role: "user", content: "Work", createdAt: 1 },
+      { id: "t", role: "tool", kind: "trace", content: "search()", traces: ["search()"], createdAt: 2 },
+      { id: "a", role: "assistant", content: "Done", createdAt: 3, latencyMs: 16000 },
+    ]} />);
     const disclosure = screen.getByRole("button", { name: "Worked for 16s" });
-    expect(menu).toHaveFocus();
-    expect(menu.querySelector("[data-message-block-copy-action]")).not.toHaveFocus();
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    const answer = screen.getByText("Done");
+    expect(disclosure).toBeVisible();
+    expect(disclosure.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    expect(disclosure).toHaveAttribute("aria-controls");
-    expect(disclosure).toHaveAttribute("data-message-block-activity-action", "true");
-    expect(disclosure).toHaveClass("min-h-[var(--message-block-control-size)]", "group", "hover:text-foreground");
-    expect(disclosure).not.toHaveClass("hover:bg-muted/60");
-    expect(menu.querySelector("[data-message-block-copy-action]")).toHaveClass(
-      "rounded-control",
-      "h-[var(--message-block-control-size)]",
-      "w-[var(--message-block-action-width)]",
-    );
-    expect(menu.querySelector("[data-message-block-copy-action]")).not.toHaveClass("touch-target");
-    expect(disclosure.querySelector("[data-message-block-activity-icon]")).toHaveClass(
-      "h-[var(--message-block-control-size)]",
-      "w-[var(--message-block-action-width)]",
-      "rounded-control",
-    );
-    expect(disclosure.querySelector("svg")).toBeInTheDocument();
-    const toolbar = menu.querySelector("[data-message-block-toolbar]");
-    expect(toolbar).toHaveClass("flex", "flex-wrap", "items-center");
-    expect(toolbar).not.toHaveClass("flex-col");
-    expect(toolbar).toContainElement(menu.querySelector("[data-message-block-copy-action]"));
-    expect(toolbar).toContainElement(disclosure);
-    const timestamp = menu.querySelector<HTMLElement>("[data-message-timestamp]")!;
-    expect(timestamp).toBeInTheDocument();
-    expect(timestamp).toHaveClass("min-h-[var(--message-block-control-size)]");
-    expect(timestamp.parentElement).toHaveClass("border-t", "text-muted-foreground");
-    expect(toolbar).not.toContainElement(timestamp);
-    expect(timestamp).not.toHaveAttribute("tabindex");
-    expect(timestamp.querySelector("svg")).not.toBeInTheDocument();
-    expect(disclosure.compareDocumentPosition(timestamp) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(menu).toHaveClass("w-max", "max-w-64", "bg-popover", "rounded-floating", "overflow-y-auto");
-    for (const className of ["min-w-[8.5rem]", "bg-popover/95", "rounded-xl"]) {
-      expect(menu).not.toHaveClass(className);
-    }
-    const menuButtons = Array.from(menu.querySelectorAll("button"));
-    expect(menuButtons.length).toBeGreaterThan(1);
-    for (const button of menuButtons) {
-      expect(button.className).toMatch(/(?:min-)?h-\[var\(--message-block-control-size\)\]/);
-    }
-    expect(rows[0].compareDocumentPosition(rows[1]) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-
     fireEvent.click(disclosure);
-
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(answerRow.querySelector("[data-contextual-activity]")?.parentElement?.parentElement)
-      .toHaveClass("mb-2");
-    expect(screen.getByTestId("agent-activity-content")).toBeInTheDocument();
-    const collapse = screen.getByRole("button", { name: /Collapse activity details/ });
-    expect(collapse).toHaveAttribute("data-contextual-activity-collapse", "true");
-    expect(collapse.querySelectorAll("svg")).toHaveLength(1);
-    const guide = answerRow.querySelector("[data-contextual-activity-guide]");
-    expect(guide).toBeInTheDocument();
-    expect(guide).toHaveClass("start-[13px]");
-    expect(screen.getByTestId("agent-activity-content")).toHaveClass("ps-6");
-    await waitFor(() => expect(collapse).toHaveFocus());
+    expect(screen.getByTestId("agent-activity-content")).toBeVisible();
+    const collapse = screen.getByRole("button", { name: /Worked for 16s.*Collapse/ });
     fireEvent.click(collapse);
-
-    expect(answerRow.querySelector("[data-contextual-activity]")?.parentElement?.parentElement)
-      .not.toHaveClass("mb-2");
-    expect(screen.queryByTestId("agent-activity-content")).not.toBeInTheDocument();
-    expect(answerRow.querySelector("[data-contextual-activity-guide]"))
-      .not.toBeInTheDocument();
-    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByTestId("agent-activity-content")).toBeNull();
+    await waitFor(() => expect(disclosure).toHaveFocus());
+    expect(within(answer.closest<HTMLElement>("[data-thread-display-unit]")!).getByRole("button", { name: "Copy" })).toBeVisible();
   });
 
-  it("activates only the hovered visual message block within one logical turn", () => {
-    const messages: UIMessage[] = [
-      {
-        id: "user",
-        role: "user",
-        content: "prompt",
-        createdAt: 500,
-      },
-      {
-        id: "tool-a",
-        role: "tool",
-        kind: "trace",
-        content: "first command",
-        traces: ["first command"],
-        createdAt: 1_000,
-      },
-      {
-        id: "answer-a",
-        role: "assistant",
-        content: "first answer",
-        createdAt: 2_000,
-      },
-      {
-        id: "tool-b",
-        role: "tool",
-        kind: "trace",
-        content: "second command",
-        traces: ["second command"],
-        createdAt: 3_000,
-      },
-      {
-        id: "answer-b",
-        role: "assistant",
-        content: "second answer",
-        createdAt: 4_000,
-      },
-    ];
-
-    const { container } = render(
-      <ThreadMessages messages={messages} isStreaming={false} />,
-    );
-    const activityA = container.querySelector<HTMLElement>(
-      '[data-thread-display-unit="activity-tool-a"]',
-    )!;
-    const answerA = screen.getByText("first answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const activityB = container.querySelector<HTMLElement>(
-      '[data-thread-display-unit="activity-tool-b"]',
-    )!;
-    const answerB = screen.getByText("second answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-
-    expect(activityA).not.toHaveAttribute("data-message-context-block");
-    expect(activityB).not.toHaveAttribute("data-message-context-block");
-    expect(answerA.dataset.messageContextBlock).toBeTruthy();
-    expect(answerB.dataset.messageContextBlock).toBeTruthy();
-    expect(answerA.dataset.messageContextBlock)
-      .not.toBe(answerB.dataset.messageContextBlock);
-    expect(answerA.querySelector("[data-contextual-activity]")).toBeInTheDocument();
-    expect(answerB.querySelector("[data-contextual-activity]")).toBeInTheDocument();
-    expect(answerA).toHaveClass("message-context-hit-area", "relative");
-    expect(answerB).toHaveClass("message-context-hit-area", "relative");
-
-    fireEvent.pointerEnter(answerA, { pointerType: "mouse" });
-    expect(answerA).toHaveAttribute("data-context-block-active", "true");
-    expect(answerB).not.toHaveAttribute("data-context-block-active");
-
-    fireEvent.pointerEnter(answerB, { pointerType: "mouse" });
-    expect(answerA).not.toHaveAttribute("data-context-block-active");
-    expect(answerB).toHaveAttribute("data-context-block-active", "true");
-
-    const answerBTrigger = answerB.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!;
-    expect(answerBTrigger).toHaveClass(
-      "-start-[var(--message-block-trigger-offset)]",
-      "h-[var(--message-block-control-size)]",
-      "w-[var(--message-block-control-size)]",
-    );
-    fireEvent.pointerLeave(answerB, {
-      pointerType: "mouse",
-      relatedTarget: answerBTrigger,
-    });
-    expect(answerB).toHaveAttribute("data-context-block-active", "true");
-    fireEvent.pointerLeave(answerB, { pointerType: "mouse" });
-    expect(answerB).not.toHaveAttribute("data-context-block-active");
-
-    fireEvent.focus(answerA.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!);
-    expect(answerA).toHaveAttribute("data-context-block-active", "true");
-    fireEvent.focus(answerBTrigger);
-    expect(answerA).not.toHaveAttribute("data-context-block-active");
-    expect(answerB).toHaveAttribute("data-context-block-active", "true");
-  });
-
-  it("uses one active visual block across user and assistant messages", () => {
-    const messages: UIMessage[] = [
-      { id: "user-a", role: "user", content: "first prompt", createdAt: 500 },
-      { id: "answer-a", role: "assistant", content: "first answer", createdAt: 1_000 },
-      { id: "user-b", role: "user", content: "second prompt", createdAt: 1_500 },
-    ];
-
-    render(<ThreadMessages messages={messages} isStreaming={false} />);
-    const userA = screen.getByText("first prompt")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const answerA = screen.getByText("first answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const userB = screen.getByText("second prompt")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-
-    expect(userA.dataset.messageContextBlock).toBeTruthy();
-    expect(userB.dataset.messageContextBlock).toBeTruthy();
-    expect(userA.dataset.messageContextBlock).not.toBe(answerA.dataset.messageContextBlock);
-    expect(userB.dataset.messageContextBlock).not.toBe(answerA.dataset.messageContextBlock);
-    expect(userA.querySelector("[data-message-block-menu-trigger]")).toBeInTheDocument();
-    expect(userB.querySelector("[data-message-block-menu-trigger]")).toBeInTheDocument();
-
-    fireEvent.pointerEnter(userA, { pointerType: "mouse" });
-    expect(userA).toHaveAttribute("data-context-block-active", "true");
-    expect(answerA).not.toHaveAttribute("data-context-block-active");
-
-    fireEvent.pointerEnter(answerA, { pointerType: "mouse" });
-    expect(userA).not.toHaveAttribute("data-context-block-active");
-    expect(answerA).toHaveAttribute("data-context-block-active", "true");
-
-    fireEvent.pointerEnter(userB, { pointerType: "mouse" });
-    expect(answerA).not.toHaveAttribute("data-context-block-active");
-    expect(userB).toHaveAttribute("data-context-block-active", "true");
-
-    const { menu: userMenu } = openMessageBlockMenu(userA);
-    expect(userMenu.querySelector("[data-message-block-copy-action]")).toBeInTheDocument();
-    expect(userMenu.querySelector("[data-message-block-fork-action]")).not.toBeInTheDocument();
-    fireEvent.focus(userA.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!);
-    expect(userA).toHaveAttribute("data-context-block-active", "true");
-    expect(userB).not.toHaveAttribute("data-context-block-active");
-  });
-
-  it("closes an open block menu after the pointer leaves its block and panel", async () => {
-    const messages: UIMessage[] = [
-      { id: "user-a", role: "user", content: "first prompt", createdAt: 500 },
-      { id: "answer-a", role: "assistant", content: "first answer", createdAt: 1_000 },
-      { id: "user-b", role: "user", content: "second prompt", createdAt: 1_500 },
-    ];
-
-    render(<ThreadMessages messages={messages} isStreaming={false} />);
-    const userA = screen.getByText("first prompt")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const userB = screen.getByText("second prompt")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-
-    fireEvent.pointerEnter(userA, { pointerType: "mouse" });
-    const { menu } = openMessageBlockMenu(userA);
-    expect(menu).toHaveAttribute(
-      "data-message-context-menu-block",
-      userA.dataset.messageContextBlock,
-    );
-
-    fireEvent.pointerLeave(userA, {
-      pointerType: "mouse",
-      relatedTarget: menu,
-    });
-    expect(menu).toHaveAttribute("data-state", "open");
-    expect(userA).toHaveAttribute("data-context-block-active", "true");
-
-    fireEvent.pointerLeave(menu, {
-      pointerType: "mouse",
-      relatedTarget: userB,
-    });
-    await waitFor(() => {
-      expect(document.querySelector('[data-message-block-menu][data-state="open"]'))
-        .not.toBeInTheDocument();
-    });
-    expect(userA).not.toHaveAttribute("data-context-block-active");
-    expect(userB).toHaveAttribute("data-context-block-active", "true");
-
-    fireEvent.pointerEnter(userA, { pointerType: "mouse" });
-    openMessageBlockMenu(userA);
-    fireEvent.pointerEnter(userB, { pointerType: "mouse" });
-    await waitFor(() => {
-      expect(document.querySelector('[data-message-block-menu][data-state="open"]'))
-        .not.toBeInTheDocument();
-    });
-    expect(userB).toHaveAttribute("data-context-block-active", "true");
-  });
-
-  it("clears completed block controls when the pointer enters an ungrouped message", () => {
-    const messages: UIMessage[] = [
-      { id: "user-a", role: "user", content: "first prompt", createdAt: 500 },
-      {
-        id: "tool-a",
-        role: "tool",
-        kind: "trace",
-        content: "first command",
-        traces: ["first command"],
-        createdAt: 1_000,
-      },
-      { id: "answer-a", role: "assistant", content: "first answer", createdAt: 2_000 },
-      { id: "user-b", role: "user", content: "current prompt", createdAt: 3_000 },
-      {
-        id: "answer-b",
-        role: "assistant",
-        content: "current answer",
-        isStreaming: true,
-        createdAt: 4_000,
-      },
-    ];
-
-    render(<ThreadMessages messages={messages} isStreaming activeTurnId={null} />);
-    const completedAnswer = screen.getByText("first answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const currentAnswer = screen.getByText("current answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-
-    fireEvent.pointerEnter(completedAnswer, { pointerType: "mouse" });
-    expect(completedAnswer).toHaveAttribute("data-context-block-active", "true");
-
-    fireEvent.pointerEnter(currentAnswer, { pointerType: "mouse" });
-    expect(completedAnswer).not.toHaveAttribute("data-context-block-active");
-  });
-
-  it("keeps only the last tapped message block controls active on touch", () => {
-    const messages: UIMessage[] = [
-      { id: "user-a", role: "user", content: "first prompt", createdAt: 500 },
-      { id: "answer-a", role: "assistant", content: "first answer", createdAt: 1_000 },
-      { id: "user-b", role: "user", content: "second prompt", createdAt: 1_500 },
-      { id: "answer-b", role: "assistant", content: "second answer", createdAt: 2_000 },
-    ];
-
-    render(<ThreadMessages messages={messages} isStreaming={false} />);
-    const answerA = screen.getByText("first answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-    const answerB = screen.getByText("second answer")
-      .closest<HTMLElement>("[data-thread-display-unit]")!;
-
-    fireEvent.pointerDown(answerA, { pointerType: "touch" });
-    fireEvent.pointerLeave(answerA, { pointerType: "touch" });
-    expect(answerA).toHaveAttribute("data-context-block-active", "true");
-
-    fireEvent.pointerDown(answerB, { pointerType: "touch" });
-    expect(answerA).not.toHaveAttribute("data-context-block-active");
-    expect(answerB).toHaveAttribute("data-context-block-active", "true");
-  });
-
-  it.each(["mouse", "touch"])("preserves the %s block when previous controls lose focus", (pointerType) => {
+  it("keeps user and assistant actions visible without opening a menu, including on touch", () => {
     render(<ThreadMessages messages={[
-      { id: "user", role: "user", content: "prompt", createdAt: 1 },
-      { id: "answer", role: "assistant", content: "answer", createdAt: 2 },
-    ]} />);
-    const user = screen.getByText("prompt").closest<HTMLElement>("[data-thread-display-unit]")!;
-    const answer = screen.getByText("answer").closest<HTMLElement>("[data-thread-display-unit]")!;
-    const trigger = user.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!;
-    fireEvent.focus(trigger);
-    if (pointerType === "touch") {
-      openMessageBlockMenu(user);
-      fireEvent.pointerDown(answer, { pointerType });
-    } else {
-      fireEvent.pointerEnter(answer, { pointerType });
-      fireEvent.pointerDown(answer, { pointerType });
-    }
-    fireEvent.blur(trigger, { relatedTarget: document.body });
-
-    expect(answer).toHaveAttribute("data-context-block-active", "true");
-    expect(user).not.toHaveAttribute("data-context-block-active");
-    expect(document.querySelector('[data-message-block-menu][data-state="open"]')).toBeNull();
-  });
-
-  it("closes the block menu with Escape from a focused copy action", async () => {
-    render(<ThreadMessages messages={[
-      { id: "answer", role: "assistant", content: "answer", createdAt: 2 },
-    ]} />);
-    const answer = screen.getByText("answer").closest<HTMLElement>("[data-thread-display-unit]")!;
-    const { menu, trigger } = openMessageBlockMenu(answer);
-    const copy = menu.querySelector<HTMLElement>("[data-message-block-copy-action]")!;
-    act(() => copy.focus());
-    expect(copy).toHaveFocus();
-    fireEvent.keyDown(copy, { key: "Escape" });
-    await waitFor(() => expect(menu).not.toBeInTheDocument());
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("clears keyboard context when focus leaves and no pointer owns a block", () => {
-    render(<ThreadMessages messages={[
-      { id: "answer", role: "assistant", content: "answer", createdAt: 2 },
-    ]} />);
-    const answer = screen.getByText("answer").closest<HTMLElement>("[data-thread-display-unit]")!;
-    const trigger = answer.querySelector<HTMLElement>("[data-message-block-menu-trigger]")!;
-    fireEvent.focus(trigger);
-    expect(answer).toHaveAttribute("data-context-block-active", "true");
-    fireEvent.blur(trigger, { relatedTarget: document.body });
-    expect(answer).not.toHaveAttribute("data-context-block-active");
+      { id: "user", role: "user", content: "Question", createdAt: 1, turnId: "t" },
+      { id: "answer", role: "assistant", content: "Answer", createdAt: 2, turnId: "t" },
+    ]} onEditMessage={vi.fn()} onForkFromMessage={vi.fn()} />);
+    const groups = screen.getAllByRole("group", { name: "Message actions" });
+    expect(groups).toHaveLength(2);
+    expect(within(groups[0]).getByRole("button", { name: "Edit message" })).toBeVisible();
+    expect(within(groups[1]).getByRole("button", { name: "New chat from here" })).toBeVisible();
+    fireEvent.pointerDown(groups[1], { pointerType: "touch" });
+    fireEvent.pointerLeave(groups[1], { pointerType: "touch" });
+    expect(within(groups[0]).getByRole("button", { name: "Copy" })).toBeVisible();
+    expect(document.querySelector("[data-message-block-menu]")).toBeNull();
   });
 
   it.each(["cron", "local_trigger", "trigger"])("preserves %s provenance as static menu metadata", (kind) => {
@@ -1162,11 +753,11 @@ describe("ThreadMessages", () => {
     ]} />);
     const answer = screen.getByText("automated answer").closest<HTMLElement>("[data-thread-display-unit]")!;
     const { menu } = openMessageBlockMenu(answer);
-    const metadata = menu.querySelector<HTMLElement>("[data-message-block-metadata]")!;
+    const metadata = menu;
     expect(metadata).toHaveTextContent("Triggered automatically Review schedule");
     expect(metadata.querySelector("time[datetime]")).toBeInTheDocument();
-    expect(metadata.querySelector("button, svg, [tabindex]")).toBeNull();
-    expect(metadata).toBe(menu.querySelector("[data-message-block-menu-actions]")?.lastElementChild);
+    expect(metadata.querySelector("[data-automation-trigger] button")).toBeNull();
+    expect(metadata.querySelector("[data-automation-trigger]")).toBe(menu.lastElementChild);
   });
 
   it("renders a fork boundary divider after the copied history", () => {
@@ -1725,7 +1316,7 @@ describe("ThreadMessages", () => {
     openMessageBlockMenu(answer.closest<HTMLElement>("[data-thread-display-unit]")!);
     const laterActivity = screen.getAllByRole("button", { name: /worked/i }).at(-1);
     expect(laterActivity).toBeTruthy();
-    expect(laterActivity).toHaveAttribute("data-message-block-activity-action", "true");
+    expect(laterActivity).toHaveAttribute("data-contextual-activity-disclosure", "true");
   });
 
   it("folds completed web-search activity into one row above the answer", () => {
@@ -1768,7 +1359,7 @@ describe("ThreadMessages", () => {
     openMessageBlockMenu(answer.closest<HTMLElement>("[data-thread-display-unit]")!);
     const activities = screen.getAllByRole("button", { name: /worked/i });
     expect(activities).toHaveLength(1);
-    expect(activities[0]).toHaveAttribute("data-message-block-activity-action", "true");
+    expect(activities[0]).toHaveAttribute("data-contextual-activity-disclosure", "true");
   });
 
   it("preserves a completed prior turn's order while the next turn is streaming", () => {
@@ -2110,15 +1701,15 @@ describe("ThreadMessages", () => {
       .closest<HTMLElement>("[data-thread-display-unit]")!;
     const finalAnswer = screen.getByText("second answer slice")
       .closest<HTMLElement>("[data-thread-display-unit]")!;
-    expect(firstAnswer.querySelector("[data-message-block-menu-trigger]"))
+    expect(firstAnswer.querySelector("[data-assistant-fork-action]"))
       .not.toBeInTheDocument();
-    expect(finalAnswer.querySelector("[data-message-block-menu-trigger]"))
+    expect(finalAnswer.querySelector("[data-assistant-fork-action]"))
       .not.toBeInTheDocument();
-    expect(assistantActionCounts(container)).toEqual({ copy: 1, fork: 1 });
+    expect(assistantActionCounts(container)).toEqual({ copy: 3, fork: 1 });
 
     rerender(<ThreadMessages {...props} isStreaming={false} activeTurnId={null} />);
 
-    expect(firstAnswer.querySelector("[data-message-block-menu-trigger]"))
+    expect(finalAnswer.querySelector("[data-assistant-fork-action]"))
       .toBeInTheDocument();
     expect(assistantActionCounts(container)).toEqual({ copy: 3, fork: 2 });
   });
@@ -2149,7 +1740,7 @@ describe("ThreadMessages", () => {
       />,
     );
 
-    expect(assistantActionCounts(container)).toEqual({ copy: 1, fork: 1 });
+    expect(assistantActionCounts(container)).toEqual({ copy: 2, fork: 1 });
   });
 
   it("only hides the active assistant-only automation turn", () => {
@@ -2171,7 +1762,7 @@ describe("ThreadMessages", () => {
       />,
     );
 
-    expect(assistantActionCounts(container)).toEqual({ copy: 1, fork: 0 });
+    expect(assistantActionCounts(container)).toEqual({ copy: 2, fork: 0 });
   });
 
   it("falls back to the latest user boundary for untagged active slices", () => {
@@ -2187,7 +1778,7 @@ describe("ThreadMessages", () => {
       />,
     );
 
-    expect(assistantActionCounts(container)).toEqual({ copy: 0, fork: 0 });
+    expect(assistantActionCounts(container)).toEqual({ copy: 1, fork: 0 });
   });
 
   it("falls back to the latest user boundary while the active turn id is pending", () => {
@@ -2205,7 +1796,7 @@ describe("ThreadMessages", () => {
       />,
     );
 
-    expect(assistantActionCounts(container)).toEqual({ copy: 1, fork: 1 });
+    expect(assistantActionCounts(container)).toEqual({ copy: 2, fork: 1 });
   });
 
   it("projects adjacent assistant text slices into one answer", () => {
@@ -2248,7 +1839,7 @@ describe("ThreadMessages", () => {
     const answerRow = screen.getByText("answer two")
       .closest<HTMLElement>("[data-thread-display-unit]")!;
     openMessageBlockMenu(answerRow);
-    fireEvent.click(document.querySelector("[data-message-block-fork-action]")!);
+    fireEvent.click(answerRow.querySelector("[data-message-block-fork-action]")!);
     expect(onForkFromMessage).toHaveBeenCalledWith(2);
   });
 

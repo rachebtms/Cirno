@@ -50,6 +50,7 @@ class WebUIServerEndpoint:
         self._http = http
         self._tokens = tokens
         self.webui_connections: set[ServerConnection] = set()
+        self.browser_sessions: dict[ServerConnection, str] = {}
 
     async def process_request(
         self,
@@ -116,13 +117,18 @@ class WebUIServerEndpoint:
 
     def consume_issued_token(self, connection: ServerConnection, token: str) -> bool:
         """Consume one issued token and record its WebUI audience when present."""
+        browser_session = self._tokens.browser_sessions.get(token)
         audience = self._tokens.take_issued_token_audience(token)
         if audience == "webui":
             self.webui_connections.add(connection)
+            if browser_session:
+                self.browser_sessions[connection] = browser_session
         return audience is not None
 
     def discard_connection(self, connection: ServerConnection) -> None:
         self.webui_connections.discard(connection)
+        self.browser_sessions.pop(connection, None)
 
     def clear(self) -> None:
         self.webui_connections.clear()
+        self.browser_sessions.clear()

@@ -5,10 +5,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from cirno_core.agent.goals.scheduler import wake_due_goals
 from cirno_core.agent.tools.context import RequestContext, request_context
-from cirno_core.agent.tools.coordination import CreateSessionTool, ReportWorkTool, SetSessionTitleTool
+from cirno_core.agent.tools.coordination import (
+    CreateSessionTool,
+    ReportWorkTool,
+    SetSessionTitleTool,
+)
 from cirno_core.agent.tools.long_task import UpdateGoalTool
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.agent.tools.selection import conversation_tools
@@ -350,3 +353,230 @@ async def test_delegated_instruction_is_saved_and_marked_with_its_source(setup):
     from cirno_core.session.session_handles import SessionHandleResolver
     source = await SessionHandleResolver(manager).ahandle_for_session("websocket:global")
     assert facts[0].content["session_message"]["session"] == source.public_payload()
+
+
+@pytest.mark.parametrize(("reason", "category", "output"), [
+    ("completed", None, "Verified final result"),
+    ("error", "connection", "LLM connection failed after retries"),
+    ("empty_final_response", None, ""),
+])
+async def test_runtime_reports_results_without_model_reporting_tool(setup, reason, category, output):
+    from cirno_core.agent.work_reports import record_execution_report
+    _, manager, bus = setup
+    await manager.state.update_metadata("websocket:worker", {"goal_state": None})
+    report = await record_execution_report(manager, "websocket:worker", turn_id="execution-1", stop_reason=reason,
+                                           output=output, failure_error_kind=category, model="failed-model")
+    assert report["state"] == ("ready" if reason == "completed" else "failed")
+    await deliver_work_report(manager, SendSessionMessageTool(sessions=manager, bus=bus), "websocket:worker", report)
+    incoming = await bus.consume_inbound()
+    assert incoming.session_key == "websocket:global" and not incoming.is_user_input
+    assert incoming.metadata["_work_report"]["execution"]["failure_error_kind"] == category
+    assert incoming.metadata["_work_report"]["execution"]["model"] == "failed-model"
+    same = await record_execution_report(manager, "websocket:worker", turn_id="execution-1", stop_reason=reason,
+                                         output=output, failure_error_kind=category, model="failed-model")
+    await deliver_work_report(manager, SendSessionMessageTool(sessions=manager, bus=bus), "websocket:worker", same)
+    assert bus.inbound_size == 0
+
+
+@pytest.mark.parametrize("initial_status", ["active", "waiting"])
+async def test_runtime_failure_blocks_goal_and_scheduler_keeps_detailed_failure(setup, initial_status):
+    from cirno_core.agent.work_reports import record_execution_report
+    _, manager, bus = setup
+    goal = (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]
+    await manager.state.update_metadata("websocket:worker", {"goal_state": {**goal, "status": initial_status}})
+    report = await record_execution_report(manager, "websocket:worker", turn_id="failed-turn", stop_reason="error",
+                                           output="HTTP 401: credential rejected", failure_error_kind="authentication")
+    metadata = (await manager.state.read_metadata("websocket:worker"))["metadata"]
+    assert metadata["goal_state"]["status"] == "blocked"
+    assert "credential rejected" in metadata["goal_state"]["recap"]
+    registry = ToolRegistry()
+    registry.register(SendSessionMessageTool(sessions=manager, bus=bus))
+    loop = SimpleNamespace(sessions=manager, tools=registry, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0)
+    await wake_due_goals(loop)
+    message = await bus.consume_inbound()
+    assert message.metadata["_work_report"]["id"] == report["id"]
+    assert message.metadata["_work_report"]["state"] == "failed"
+    assert message.metadata["_work_report"]["execution"]["failure_error_kind"] == "authentication"
+    await wake_due_goals(loop)
+    assert bus.inbound_size == 0
+
+
+async def test_execution_reporting_respects_goal_segments_and_ordinary_chats(setup):
+    from cirno_core.agent.work_reports import record_execution_report
+    _, manager, _ = setup
+    assert await record_execution_report(manager, "websocket:worker", turn_id="segment", stop_reason="completed", output="Working") is None
+    assert await record_execution_report(manager, "websocket:worker", turn_id="segment", stop_reason="max_iterations", continuation_pending=True) is None
+    assert await record_execution_report(manager, "websocket:worker", turn_id="stopped", stop_reason="cancelled") is None
+    await manager.state.get("websocket:ordinary")
+    assert await record_execution_report(manager, "websocket:ordinary", turn_id="ordinary", stop_reason="completed", output="Hello") is None
+    assert await record_execution_report(manager, "websocket:global", turn_id="global", stop_reason="error") is None
+
+
+@pytest.mark.parametrize("raises", [False, True])
+async def test_loop_automatically_delivers_llm_failure_to_cirno(setup, raises):
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.providers.base import GenerationSettings, LLMResponse
+    home, manager, bus = setup
+    provider = MagicMock(aclose=AsyncMock())
+    provider.get_default_model.return_value = "test-model"
+    provider.generation = GenerationSettings()
+    provider.chat_stream_with_retry = AsyncMock(
+        side_effect=RuntimeError("Provider service unavailable") if raises else None,
+        return_value=LLMResponse(content="Provider unavailable after retries", finish_reason="error", error_kind="server_error", error_status_code=503),
+    )
+    loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model", session_manager=manager)
+    try:
+        message = InboundMessage(channel="websocket", chat_id="worker", sender_id="user", content="Continue the delegated research")
+        if raises:
+            with pytest.raises(RuntimeError, match="Provider service unavailable"):
+                await loop._process_message(message)
+        else:
+            await loop._process_message(message)
+        assert bus.inbound_size == 1
+        incoming = await bus.consume_inbound()
+        report = incoming.metadata["_work_report"]
+        assert incoming.session_key == "websocket:global" and not incoming.is_user_input
+        assert report["state"] == "failed" and "unavailable" in report["summary"]
+        assert report["execution"]["model"] == "test-model"
+        if not raises:
+            assert report["execution"]["failure_error_kind"] == "server"
+        else:
+            assert report["execution"]["stage"] == "run"
+        goal = (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]
+        assert goal["status"] == "blocked" and goal["objective"] == "Verify a result"
+    finally:
+        await loop.aclose()
+
+
+@pytest.mark.parametrize("recovery_event", ["recovered", "cleared"])
+async def test_retry_notice_arrives_while_worker_is_running_and_recovers_once(setup, recovery_event):
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.agent_events import RetryStatusEvent
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.providers.base import GenerationSettings, LLMResponse
+    home, manager, bus = setup
+    provider = MagicMock(aclose=AsyncMock())
+    provider.get_default_model.return_value = "test-model"
+    provider.generation = GenerationSettings()
+    waiting, proceed = asyncio.Event(), asyncio.Event()
+
+    async def respond(**kwargs):
+        events = kwargs["provider_context"].events
+        await events.emit(RetryStatusEvent("waiting", 1, None, "timeout", next_retry_at=123))
+        await events.emit(RetryStatusEvent("waiting", 2, None, "timeout", next_retry_at=124))
+        waiting.set()
+        await proceed.wait()
+        await events.emit(RetryStatusEvent(recovery_event, 3, None, "unknown"))
+        goal = (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]
+        await manager.state.update_metadata("websocket:worker", {"goal_state": {**goal, "status": "waiting"}})
+        return LLMResponse(content="The service recovered; waiting for an experiment result")
+
+    provider.chat_stream_with_retry = AsyncMock(side_effect=respond)
+    loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model", session_manager=manager)
+    task = asyncio.create_task(loop._process_message(InboundMessage(channel="websocket", chat_id="worker", sender_id="user", content="Continue")))
+    try:
+        await asyncio.wait_for(waiting.wait(), 5)
+        assert not task.done() and bus.inbound_size == 1
+        notice = await bus.consume_inbound()
+        assert notice.metadata["_work_report"]["state"] == "waiting"
+        assert notice.metadata["_work_report"]["execution"]["failure_error_kind"] == "timeout"
+        assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]["status"] == "active"
+        proceed.set()
+        await asyncio.wait_for(task, 5)
+        assert bus.inbound_size == 1
+        recovery = await bus.consume_inbound()
+        assert recovery.metadata["_work_report"]["state"] == "progress"
+        assert recovery.metadata["_work_report"]["execution"]["retry_status"] == "recovered"
+        assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]["status"] == "waiting"
+    finally:
+        proceed.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await loop.aclose()
+
+
+async def test_undelivered_retry_health_coalesces_without_losing_results(setup):
+    from cirno_core.agent.work_reports import record_retry_report
+    from cirno_core.bus.agent_events import RetryStatusEvent
+    _, manager, _ = setup
+    result = await save_work_report(manager, "websocket:worker", state="ready", summary="Keep this verified artifact")
+    for episode in range(30):
+        latest = await record_retry_report(manager, "websocket:worker", turn_id="same-turn", episode=episode,
+                                           event=RetryStatusEvent("waiting" if episode % 2 == 0 else "recovered", 1, None, "connection"))
+    pending = (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report_pending"]
+    assert [report["id"] for report in pending] == [result["id"], latest["id"]]
+
+
+async def test_long_goal_recap_does_not_block_other_goals(setup):
+    _, manager, _ = setup
+    await manager.state.get("websocket:another")
+    await manager.state.update_metadata("websocket:another", {"goal_state": {"goal_id": "another", "status": "active", "objective": "Continue independent work"}})
+    await manager.state.update_metadata("websocket:worker", {"goal_state": {"goal_id": "done", "status": "completed", "objective": "Research", "recap": "R" * 8000, "report_to": "websocket:global"}})
+    enqueue = AsyncMock()
+    loop = SimpleNamespace(sessions=manager, tools=None, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, _enqueue_session_message=enqueue)
+    await wake_due_goals(loop)
+    enqueue.assert_awaited_once()
+    assert enqueue.call_args.args[0].session_key == "websocket:another"
+    report = (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report"]
+    assert len(report["summary"]) <= 4000 and "excerpt" in report["summary"]
+
+
+async def test_full_report_queue_drains_and_does_not_block_other_goals(setup):
+    _, manager, bus = setup
+    for index in range(20):
+        await save_work_report(manager, "websocket:worker", state="ready", summary=f"Result {index}")
+    await manager.state.get("websocket:another")
+    await manager.state.update_metadata("websocket:another", {"goal_state": {"goal_id": "another", "status": "active", "objective": "Independent work"}})
+    await manager.state.update_metadata("websocket:worker", {"goal_state": {"goal_id": "new-done", "status": "completed", "objective": "New result", "report_to": "websocket:global"}})
+    registry = ToolRegistry()
+    registry.register(SendSessionMessageTool(sessions=manager, bus=bus, max_outgoing_messages_per_minute=100))
+    enqueue = AsyncMock()
+    loop = SimpleNamespace(sessions=manager, tools=registry, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, _enqueue_session_message=enqueue)
+    await wake_due_goals(loop)
+    enqueue.assert_awaited_once()
+    metadata = (await manager.state.read_metadata("websocket:worker"))["metadata"]
+    assert not metadata["work_report_pending"]
+    assert not metadata["goal_state"].get("report_delivered")
+    assert bus.inbound_size == 20
+    await wake_due_goals(loop)
+    assert bus.inbound_size == 21
+    messages = [await bus.consume_inbound() for _ in range(21)]
+    assert messages[-1].metadata["_work_report"]["goal_id"] == "new-done"
+    assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]["report_delivered"]
+
+
+async def test_inbox_failure_preserves_success_and_retries_without_rerunning_work(setup, monkeypatch):
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.notifications.inbox import NotificationInbox
+    from cirno_core.providers.base import GenerationSettings, LLMResponse
+    home, manager, bus = setup
+    await manager.state.update_metadata("websocket:worker", {"goal_state": {}})
+    provider = MagicMock(aclose=AsyncMock())
+    provider.get_default_model.return_value = "test-model"
+    provider.generation = GenerationSettings()
+    provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="Verified result"))
+    loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model", session_manager=manager)
+    record = NotificationInbox.record
+    monkeypatch.setattr(NotificationInbox, "record", MagicMock(side_effect=OSError("Inbox disk unavailable")))
+    try:
+        response = await loop._process_message(InboundMessage(channel="websocket", chat_id="worker", sender_id="user", content="Finish research"))
+        assert response is not None and response.content == "Verified result"
+        header = await manager.state.read_metadata("websocket:worker")
+        report = header["metadata"]["work_report"]
+        assert report["state"] == "ready" and report["delivery_status"] == "queued"
+        assert report["notification_pending"] and "unavailable" in report["notification_error"]
+        assert (await bus.consume_inbound()).metadata["_work_report"]["state"] == "ready"
+        pending = header["metadata"]["work_report_pending"]
+        pending[0]["notification_retry_at"] = None
+        await manager.state.update_metadata("websocket:worker", {"work_report_pending": pending})
+        monkeypatch.setattr(NotificationInbox, "record", record)
+        await wake_due_goals(loop)
+        assert NotificationInbox().get("report:" + report["id"])["status"] == "ready"
+        assert not (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report_pending"]
+        provider.chat_stream_with_retry.assert_awaited_once()
+        assert bus.inbound_size == 0
+    finally:
+        await loop.aclose()

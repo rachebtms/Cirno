@@ -32,6 +32,7 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.1.6](releases/0.1.6.md): reliable delegated reports, retryable backup recovery, browser-session revocation and inline message editing.
 - [0.1.5](releases/0.1.5.md): recoverable long-task context, external embeddings, complete backups and supervisor controls.
 - [0.1.4](releases/0.1.4.md): mobile recovery, workspace and AI review settings, MCP editing, remote installation and persistent full images.
 - [0.1.3](releases/0.1.3.md): package boundaries, instance storage, account passwords, conversation controls and independent operation review.

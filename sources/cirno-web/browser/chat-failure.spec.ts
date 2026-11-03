@@ -60,36 +60,19 @@ for (const width of [1440, 390]) {
       await expect(page.getByText("Earlier context / 之前的上下文")).toBeVisible();
       const bubble = page.locator("[data-user-text-bubble]");
       const text = bubble.locator("p");
-      const trigger = page.locator("[data-message-block-menu-trigger]");
-      const fontSize = width === 390
-        ? { small: 15, standard: 16, large: 18 }[size]
-        : { small: 16, standard: 18, large: 20 }[size];
+      const actions = page.locator("[data-message-actions]");
+      const fontSize = { small: 14, standard: 16, large: 18 }[size];
       await expect(text).toHaveCSS("font-size", `${fontSize}px`);
-      await bubble.hover();
-      await expect(trigger).toBeVisible();
+      await expect(actions).toBeVisible();
       const bubbleBox = (await bubble.boundingBox())!;
-      const triggerBox = (await trigger.boundingBox())!;
+      const actionsBox = (await actions.boundingBox())!;
       const imageBox = (await image.boundingBox())!;
       expect(imageBox.y + imageBox.height).toBeLessThan(bubbleBox.y);
-      if (width === 390) {
-        // Narrow screens use a touch action row below the message, not a hover rail.
-        await expect(page.locator("[data-message-mobile-actions]")).toBeVisible();
-        expect(triggerBox.y).toBeGreaterThanOrEqual(bubbleBox.y + bubbleBox.height);
-        expect(triggerBox.height).toBeGreaterThanOrEqual(44);
-        await expect(trigger).toBeInViewport({ ratio: 1 });
-      } else {
-        const firstLineCenter = await text.evaluate(node => {
-          const style = getComputedStyle(node);
-          return node.getBoundingClientRect().y + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2;
-        });
-        expect(Math.abs(triggerBox.y + triggerBox.height / 2 - firstLineCenter)).toBeLessThan(1);
-      }
-      await trigger.click();
-      await expect(page.locator("[data-message-block-menu]")).toBeVisible();
-      if (width === 390) {
-        await expect(page.locator("[data-message-mobile-sheet]")).toBeInViewport({ ratio: 1 });
-      }
-      await page.screenshot({ path: info.outputPath("message-menu.png") });
+      expect(actionsBox.y).toBeGreaterThanOrEqual(bubbleBox.y + bubbleBox.height);
+      await expect(actions.getByRole("button", { name: width === 390 ? "复制" : "Copy", exact: true })).toBeInViewport({ ratio: 1 });
+      await expect(actions.locator("time")).toBeVisible();
+      await expect(page.locator("[data-message-block-menu]")).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath("message-actions.png") });
     });
   }
 }

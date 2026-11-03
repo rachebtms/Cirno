@@ -58,4 +58,31 @@ async def test_shared_listener_streams_full_backup_and_requires_capability(tmp_p
             )
             assert upload.status_code == 200, upload.text
             assert upload.json()["format"] == "cirno-instance-backup"
+            service.uploads.authorized = lambda _: False
+            assert (await client.get(url)).status_code == 401
         await bridge.shutdown()
+
+
+async def test_cancelling_a_preview_preserves_another_pending_restore(tmp_path):
+    import json
+    import shutil
+
+    save_config(Config(), tmp_path / "config.json")
+    service = BackupHTTP(tmp_path / "config.json", SimpleNamespace(authorized=lambda _: True), MessageBus(), None)
+    archive, _ = service.archive.create([])
+    previews = []
+    for index in range(2):
+        uploaded = tmp_path / f"upload-{index}.gz"
+        shutil.copy2(archive, uploaded)
+        previews.append(service.archive.inspect(uploaded))
+    service.archive.prepare_restore(previews[0]["id"], {})
+
+    class Body:
+        async def iter_chunked(self, size):
+            yield json.dumps({"id": previews[1]["id"]}).encode()
+
+    request = SimpleNamespace(method="POST", path="/api/backups/cancel", headers={"Authorization": "Bearer owner"}, content=Body())
+    assert (await service.handle(request)).status == 200
+    plan = json.loads((service.archive.store / "restore-plan.json").read_text())
+    assert plan["id"] == previews[0]["id"]
+    assert service.archive.apply_pending()

@@ -197,3 +197,29 @@ async def test_change_password_checks_credentials_revokes_other_sessions_and_soc
     async with listener(tmp_path) as url:
         async with httpx.AsyncClient(base_url=url) as browser:
             assert (await browser.post("/api/auth/login", json={"username": "owner", "password": new_password})).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_logout_revokes_own_live_and_unused_capabilities_but_preserves_other_login(tmp_path):
+    async with listener(tmp_path) as url:
+        async with httpx.AsyncClient(base_url=url) as owner, httpx.AsyncClient(base_url=url) as other:
+            await owner.post("/api/auth/register", json={"username": "owner", "password": PASSWORD})
+            await other.post("/api/auth/login", json={"username": "owner", "password": PASSWORD})
+            boot = (await owner.get("/webui/bootstrap")).json()
+            unused = (await owner.get("/webui/bootstrap")).json()
+            other_boot = (await other.get("/webui/bootstrap")).json()
+            ws_url = url.replace("http:", "ws:") + "/?token="
+            async with websockets.connect(ws_url + boot["token"]) as socket, websockets.connect(ws_url + other_boot["token"]) as other_socket:
+                await socket.recv()
+                await other_socket.recv()
+                assert (await owner.post("/api/auth/logout", json={})).status_code == 200
+                await asyncio.wait_for(socket.wait_closed(), 5)
+                assert socket.close_code == 4001
+                assert (await owner.get("/api/settings", headers={"Authorization": "Bearer " + boot["api_token"]})).status_code == 401
+                with pytest.raises(websockets.exceptions.InvalidStatus):
+                    async with websockets.connect(ws_url + unused["token"]):
+                        pytest.fail("A logged-out handshake token was accepted")
+                assert (await other.get("/api/settings", headers={"Authorization": "Bearer " + other_boot["api_token"]})).status_code == 200
+                await other_socket.send(json.dumps({"type": "webui_request", "request_id": "still-open", "action": "connection.check", "payload": {}}))
+                reply = json.loads(await asyncio.wait_for(other_socket.recv(), 5))
+                assert reply["ok"]

@@ -59,12 +59,9 @@ for (const theme of ["light", "dark"] as const) {
       }
 
       const row = page.locator("[data-thread-display-unit]").filter({ has: page.getByText("@mira", { exact: true }) });
-      await row.hover();
-      await row.getByRole("button", { name: "Message actions", exact: true }).click();
-      await expect(page.locator("[data-message-block-menu]")).toBeVisible();
+      await expect(row.getByRole("group", { name: "Message actions", exact: true })).toBeVisible();
       await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-      if (width < 768) await page.keyboard.press("Escape");
-      await (width < 768 ? row : page.locator("[data-message-block-menu]")).getByRole("button", { name: "Copy", exact: true }).click();
+      await row.getByRole("button", { name: "Copy", exact: true }).click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Looks good.");
     });
   }

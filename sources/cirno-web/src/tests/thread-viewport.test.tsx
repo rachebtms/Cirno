@@ -293,7 +293,7 @@ describe("ThreadViewport", () => {
     expect(takeUserControl).toHaveBeenCalledTimes(1);
   });
 
-  it("yields scroll control before expanding activity from a portaled message menu", () => {
+  it("yields scroll control before expanding the inline activity disclosure", () => {
     const takeUserControl = vi.spyOn(ThreadMotionCoordinator.prototype, "takeUserControl");
     render(
       <ThreadViewport
@@ -305,9 +305,8 @@ describe("ThreadViewport", () => {
         composer={<div>composer</div>}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Message actions" }));
     const disclosure = screen.getByRole("button", { name: "Worked" });
-    expect(screen.getByTestId("thread-message-region")).not.toContainElement(disclosure);
+    expect(screen.getByTestId("thread-message-region")).toContainElement(disclosure);
     takeUserControl.mockClear();
     fireEvent.click(disclosure);
     expect(takeUserControl).toHaveBeenCalledTimes(1);

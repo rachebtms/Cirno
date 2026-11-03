@@ -307,7 +307,7 @@ describe("AgentActivityCluster", () => {
       messages: activityMessages(),
       isTurnStreaming,
       hasBodyBelow: false,
-      ...(isTurnStreaming ? {} : { expanded: true, hideHeader: true }),
+      ...(isTurnStreaming ? {} : { expanded: true }),
       onExpandedChange,
     };
     const view = render(<AgentActivityCluster {...props} />);

@@ -754,9 +754,10 @@ class ServerHTTPHandler:
                 content_type="application/json; charset=utf-8",
                 extra_headers=_NO_STORE_HEADERS,
             )
-        token = self.tokens.issue_token(self.config.token_ttl_s, audience="webui")
+        browser_session = self.auth.cookie(request.headers) if self.auth.enabled else ""
+        token = self.tokens.issue_token(self.config.token_ttl_s, audience="webui", browser_session=browser_session)
         api_token = (
-            self.tokens.issue_api_token(self.config.token_ttl_s)
+            self.tokens.issue_api_token(self.config.token_ttl_s, browser_session=browser_session)
             if api_token_allowed
             else None
         )

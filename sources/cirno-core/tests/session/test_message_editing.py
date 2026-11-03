@@ -98,3 +98,26 @@ async def test_authenticated_edit_action_queues_one_real_user_request(source):
     assert message.metadata[INBOUND_META_TURN_ID] == result["turn_id"]
     assert input_origin(message) is None
     assert bus.inbound_size == 0
+
+
+async def test_failed_history_rewrite_rolls_back_original_context_and_generation(source, monkeypatch):
+    sessions, key, original = source
+    saved = await sessions.state.read(key)
+    original_facts = await sessions.state.project_history(key, lambda reader: list(reader.navigation()))
+
+    def fail(*args, **kwargs):
+        raise OSError("history write interrupted")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(sessions.state._store, "append_history", fail)
+        with pytest.raises(OSError, match="history write interrupted"):
+            await sessions.state.edit_user_input(key, "second", "Must not replace the saved turn")
+    after = await sessions.state.read(key)
+    assert after.generation == original.generation
+    assert after.messages == saved.messages
+    assert after.metadata == saved.metadata
+    assert not pending_followups(after)
+    assert await sessions.state.project_history(key, lambda reader: list(reader.navigation())) == original_facts
+    # The failed transaction must not leave a stale in-memory replacement either.
+    retry = await sessions.state.edit_user_input(key, "second", "Retry safely")
+    assert retry.content == "Retry safely"

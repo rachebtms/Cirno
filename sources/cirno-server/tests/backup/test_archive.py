@@ -130,10 +130,10 @@ def test_failed_instance_copy_restores_original_data(backup, tmp_path, monkeypat
     backup.prepare_restore(preview["id"], {})
     merge = module._merge
 
-    def fail(source, target):
+    def fail(source, target, **options):
         if source == backup.store / "staging" / preview["id"] / "instance":
             raise OSError("disk full")
-        return merge(source, target)
+        return merge(source, target, **options)
 
     monkeypatch.setattr(module, "_merge", fail)
     with pytest.raises(OSError, match="disk full"):
@@ -181,3 +181,158 @@ def test_external_sqlite_snapshot_excludes_wal_and_replaces_stale_sidecars(backu
     assert not database.with_name("login.sqlite3-shm").exists()
     with sqlite3.connect(database) as reader:
         assert reader.execute("SELECT owner FROM login").fetchone()[0] == "owner"
+
+
+@pytest.mark.parametrize("name", ["instance", "instance/state", "instance/state/backups", "instance/state/./backups"])
+@pytest.mark.parametrize("link", [False, True])
+def test_restore_workspace_ancestors_cannot_be_replaced(backup, tmp_path, name, link):
+    from cirno_server.backup.archive import FORMAT, MANIFEST
+    import json
+
+    uploaded = tmp_path / "unsafe.gz"
+    manifest = {"format": FORMAT, "schema": 1, "config_name": "config.json", "extras": []}
+    with tarfile.open(uploaded, "w:gz") as archive:
+        for path, content in [(MANIFEST, json.dumps(manifest)), ("instance/config.json", backup.config_path.read_text())]:
+            member = tarfile.TarInfo(path)
+            data = content.encode()
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+        member = tarfile.TarInfo(name)
+        if link:
+            member.type = tarfile.SYMTYPE
+            member.linkname = str(tmp_path / "elsewhere")
+            archive.addfile(member)
+        else:
+            member.size = 4
+            archive.addfile(member, io.BytesIO(b"file"))
+    with pytest.raises(ValueError, match="must be directories"):
+        backup.inspect(uploaded)
+    assert (backup.root / "home/SOUL.md").read_text() == "personality"
+    assert (backup.root / "state/context.json").read_text() == "saved reasoning"
+
+
+def test_restore_revalidates_staging_before_moving_original_data(backup, tmp_path):
+    archive, _ = backup.create([])
+    uploaded = tmp_path / "copy.gz"
+    shutil.copy2(archive, uploaded)
+    preview = backup.inspect(uploaded)
+    backup.prepare_restore(preview["id"], {})
+    state = backup._stage(preview["id"]) / "instance/state"
+    shutil.rmtree(state)
+    state.write_text("invalid state")
+    with pytest.raises(ValueError, match="must be directories"):
+        backup.apply_pending()
+    assert (backup.root / "home/SOUL.md").read_text() == "personality"
+    assert (backup.root / "state/context.json").read_text() == "saved reasoning"
+
+
+def test_restore_with_different_config_filename_remains_retryable(backup, tmp_path, monkeypatch):
+    from cirno_server.backup import archive as module
+
+    source = tmp_path / "other-instance"
+    source.mkdir()
+    save_config(Config(), source / "custom.json")
+    (source / "home").mkdir()
+    (source / "home/SOUL.md").write_text("restored personality")
+    exported, _ = Backups(source / "custom.json").create([])
+    uploaded = tmp_path / "different-name.gz"
+    shutil.copy2(exported, uploaded)
+    preview = backup.inspect(uploaded)
+    backup.prepare_restore(preview["id"], {})
+    staged = backup._stage(preview["id"]) / "instance"
+    merge = module._merge
+
+    def fail_once(source, target, **options):
+        if source == staged:
+            raise OSError("interrupted restore")
+        return merge(source, target, **options)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(module, "_merge", fail_once)
+        with pytest.raises(OSError, match="interrupted restore"):
+            backup.apply_pending()
+    assert (backup.root / "home/SOUL.md").read_text() == "personality"
+    assert (staged / "custom.json").is_file()
+    assert backup.apply_pending()
+    assert backup.config_path.is_file()
+    assert not (backup.root / "custom.json").exists()
+    assert (backup.root / "home/SOUL.md").read_text() == "restored personality"
+
+
+@pytest.mark.parametrize("ready", [False, True])
+def test_interrupted_rollback_keeps_all_originals_for_retry(backup, monkeypatch, ready):
+    from cirno_server.backup import archive as module
+
+    rollback = backup.store / "rollback"
+    rollback.mkdir(parents=True)
+    for name in ("config.json", "home"):
+        (backup.root / name).rename(rollback / name)
+    (rollback / "home/SOUL.md").write_text("original owner personality")
+    if ready:
+        # A finished move leaves the reserved backup directory in place.
+        for child in list((backup.root / "state").iterdir()):
+            if child.name != "backups":
+                (rollback / "state").mkdir(exist_ok=True)
+                child.rename(rollback / "state" / child.name)
+        (backup.root / "workspace").rename(rollback / "workspace")
+        (backup.store / "rollback-ready").touch()
+        (backup.root / "home").mkdir()
+        (backup.root / "home/SOUL.md").write_text("partially restored new personality")
+    copied = []
+    copy = module.shutil.copy2
+
+    def fail_after_one(source, target, **options):
+        if copied:
+            raise OSError("recovery interrupted")
+        copied.append(str(source))
+        return copy(source, target, **options)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(module.shutil, "copy2", fail_after_one)
+        with pytest.raises(OSError, match="recovery interrupted"):
+            module._recover_rollback(rollback, backup.root)
+    assert rollback.exists()
+    assert (rollback / "config.json").is_file()
+    assert (rollback / "home/SOUL.md").read_text() == "original owner personality"
+    module._recover_rollback(rollback, backup.root)
+    assert (backup.root / "config.json").is_file()
+    assert (backup.root / "home/SOUL.md").read_text() == "original owner personality"
+    assert (backup.root / "state/context.json").read_text() == "saved reasoning"
+    assert (backup.root / "workspace/result.md").read_text() == "result"
+
+
+def test_interrupted_rollback_cleanup_does_not_clear_recovered_data(backup, monkeypatch):
+    from cirno_server.backup import archive as module
+
+    rollback = backup.store / "rollback"
+    rollback.mkdir(parents=True)
+    (backup.root / "home").rename(rollback / "home")
+    (backup.store / "rollback-ready").touch()
+    remove = module.shutil.rmtree
+
+    def partial_cleanup(path, *args, **options):
+        if path == rollback:
+            remove(rollback / "home")
+            raise OSError("cleanup interrupted")
+        return remove(path, *args, **options)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(module.shutil, "rmtree", partial_cleanup)
+        with pytest.raises(OSError, match="cleanup interrupted"):
+            module._recover_rollback(rollback, backup.root)
+    assert (backup.store / "rollback-restored").exists()
+    module._recover_rollback(rollback, backup.root)
+    assert (backup.root / "home/SOUL.md").read_text() == "personality"
+    assert not rollback.exists()
+    assert not (backup.store / "rollback-restored").exists()
+
+
+def test_rollback_copies_original_sqlite_sidecars_without_snapshot_pruning(backup):
+    from cirno_server.backup import archive as module
+
+    rollback = backup.store / "rollback"
+    (rollback / "state").mkdir(parents=True)
+    (rollback / "state/sessions.sqlite3-wal").write_bytes(b"original uncheckpointed pages")
+    (rollback / "state/sessions.sqlite3").write_bytes(b"SQLite format 3\0" + b"original database")
+    module._recover_rollback(rollback, backup.root)
+    assert (backup.root / "state/sessions.sqlite3-wal").read_bytes() == b"original uncheckpointed pages"

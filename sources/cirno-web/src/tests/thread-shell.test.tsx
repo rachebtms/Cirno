@@ -33,8 +33,7 @@ const HERO_GREETING_PATTERN =
 async function openMessageActions(text: string): Promise<HTMLElement> {
   const message = await screen.findByText(text);
   const block = message.closest<HTMLElement>("[data-thread-display-unit]")!;
-  fireEvent.click(within(block).getByRole("button", { name: "Message actions" }));
-  return screen.findByRole("dialog", { name: "Message actions" });
+  return block;
 }
 
 function makeClient() {
@@ -1269,7 +1268,7 @@ describe("ThreadShell", () => {
       started_at: startedAt,
       turn_id: turnId,
     }));
-    expect(screen.getAllByRole("button", { name: "Message actions" })).toHaveLength(1);
+    expect(screen.getAllByRole("group", { name: "Message actions" })).toHaveLength(1);
 
     act(() => client._emitChat("assistant-only-actions", {
       event: "message",
@@ -1278,7 +1277,7 @@ describe("ThreadShell", () => {
       turn_id: turnId,
     }));
     await waitFor(() => expect(screen.getByText("new automation")).toBeInTheDocument());
-    expect(screen.getAllByRole("button", { name: "Message actions" })).toHaveLength(1);
+    expect(screen.getAllByRole("group", { name: "Message actions" })).toHaveLength(2);
     expect(screen.getByText("new automation").closest("[data-thread-display-unit]"))
       .not.toHaveAttribute("data-message-context-block");
 
@@ -1287,7 +1286,7 @@ describe("ThreadShell", () => {
       chat_id: "assistant-only-actions",
       turn_id: turnId,
     }));
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Message actions" })).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole("group", { name: "Message actions" })).toHaveLength(2));
     const newMenu = await openMessageActions("new automation");
     expect(within(newMenu).getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
@@ -2509,7 +2508,7 @@ describe("ThreadShell", () => {
     render(wrap(client, <ThreadShell session={session("edit-chat")} title="Editing" onToggleSidebar={() => {}} />));
     const menu = await openMessageActions("Original request");
     fireEvent.click(within(menu).getByRole("button", { name: "Edit message" }));
-    const editor = await screen.findByRole("dialog", { name: "Edit message" });
+    const editor = await screen.findByRole("form", { name: "Edit message" });
     fireEvent.change(within(editor).getByRole("textbox", { name: "Edited message" }), { target: { value: "Revised request" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Save and send" }));
     await waitFor(() => expect(client.requestMutation).toHaveBeenCalledWith("instance.action", {
@@ -5861,4 +5860,97 @@ describe("ThreadShell", () => {
     }
   });
 
+});
+
+it("dismisses the previous conversation's message editor after navigation", async () => {
+  const client = makeClient();
+  webuiThreadCache.clear();
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).includes("webui-thread")
+    ? httpJson(transcriptFromSimpleMessages([{ role: "user", content: String(input).includes("edit-b") ? "Request B" : "Request A", turnId: String(input).includes("edit-b") ? "turn-b" : "turn-a" }]))
+    : { ok: false, status: 404, json: async () => ({}) }));
+  const view = render(wrap(client, <ThreadShell session={session("edit-a")} title="A" onToggleSidebar={() => {}} />));
+  fireEvent.click(within(await openMessageActions("Request A")).getByRole("button", { name: "Edit message" }));
+  await screen.findByRole("form", { name: "Edit message" });
+  view.rerender(wrap(client, <ThreadShell session={session("edit-b")} title="B" onToggleSidebar={() => {}} />));
+  await screen.findByText("Request B");
+  expect(screen.queryByRole("form", { name: "Edit message" })).toBeNull();
+  expect(client.requestMutation).not.toHaveBeenCalledWith("instance.action", expect.anything());
+});
+
+it("ignores an edit response after its conversation has been replaced in the view", async () => {
+  const client = makeClient();
+  webuiThreadCache.clear();
+  let complete!: (value: never) => void;
+  client.requestMutation.mockImplementation(async (...args: unknown[]) => {
+    if (args[0] === "instance.action") return new Promise(resolve => { complete = resolve; });
+    throw new Error("No context measurement");
+  });
+  const fetch = vi.fn(async (input: RequestInfo | URL) => String(input).includes("webui-thread")
+    ? httpJson(transcriptFromSimpleMessages([{ role: "user", content: String(input).includes("late-b") ? "Preserve B" : "Edit A", turnId: "t" }]))
+    : { ok: false, status: 404, json: async () => ({}) });
+  vi.stubGlobal("fetch", fetch);
+  const view = render(wrap(client, <ThreadShell session={session("late-a")} title="A" onToggleSidebar={() => {}} />));
+  fireEvent.click(within(await openMessageActions("Edit A")).getByRole("button", { name: "Edit message" }));
+  const editor = await screen.findByRole("form", { name: "Edit message" });
+  fireEvent.click(within(editor).getByRole("button", { name: "Save and send" }));
+  await waitFor(() => expect(complete).toBeDefined());
+  view.rerender(wrap(client, <ThreadShell session={session("late-b")} title="B" onToggleSidebar={() => {}} />));
+  await screen.findByText("Preserve B");
+  const reads = fetch.mock.calls.length;
+  await act(async () => { complete({ turn_id: "edited-a" } as never); });
+  expect(screen.getByText("Preserve B")).toBeVisible();
+  expect(fetch.mock.calls.length).toBe(reads);
+});
+
+
+it("keeps failed edits in place and cancels without changing history or the composer draft", async () => {
+  const client = makeClient();
+  webuiThreadCache.clear();
+  client.requestMutation.mockImplementation(async (...args: unknown[]) => {
+    if (args[0] === "instance.action") throw new Error("Stop the conversation before editing a message.");
+    throw new Error("Context unavailable");
+  });
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).includes("webui-thread")
+    ? httpJson(transcriptFromSimpleMessages([{ role: "user", content: "Keep original question", turnId: "original" }, { role: "assistant", content: "Keep original answer", turnId: "original" }]))
+    : { ok: false, status: 404, json: async () => ({}) }));
+  render(wrap(client, <ThreadShell session={session("edit-failure")} title="Editing" onToggleSidebar={() => {}} />));
+  fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), { target: { value: "Unsent follow-up" } });
+  const row = await openMessageActions("Keep original question");
+  fireEvent.click(within(row).getByRole("button", { name: "Edit message" }));
+  const editor = await screen.findByRole("form", { name: "Edit message" });
+  expect(row).toContainElement(editor);
+  expect(row.querySelector("[data-user-text-bubble]")).toBeNull();
+  expect(within(row).queryByRole("group", { name: "Message actions" })).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.change(within(editor).getByRole("textbox"), { target: { value: "Retain failed draft" } });
+  fireEvent.click(within(editor).getByRole("button", { name: "Save and send" }));
+  await within(editor).findByText("Stop the conversation before editing a message.");
+  expect(within(editor).getByRole("textbox")).toHaveValue("Retain failed draft");
+  expect(screen.getByText("Keep original answer")).toBeVisible();
+  fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByText("Keep original question")).toBeVisible();
+  expect(screen.queryByRole("form", { name: "Edit message" })).toBeNull();
+  expect(screen.getByRole("textbox", { name: "Message input" })).toHaveValue("Unsent follow-up");
+});
+
+it("warns before editing or branching past text-only tool activity", async () => {
+  const client = makeClient();
+  webuiThreadCache.clear();
+  const payload = canonicalThreadPayload({ schemaVersion: 3, messages: [
+    { id: "q", role: "user", content: "Run the saved script", createdAt: 1000, turnId: "run" },
+    { id: "t", role: "tool", kind: "trace", content: "exec(command=script.sh)", traces: ["exec(command=script.sh)"], createdAt: 2000, turnId: "run" },
+    { id: "a", role: "assistant", content: "Finished running script", createdAt: 3000, turnId: "run" },
+  ] });
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).includes("webui-thread")
+    ? httpJson(payload) : { ok: false, status: 404, json: async () => ({}) }));
+  const onForkChat = vi.fn();
+  render(wrap(client, <ThreadShell session={session("text-tool-edit")} title="Tools" onToggleSidebar={() => {}} onForkChat={onForkChat} />));
+  fireEvent.click(within(await openMessageActions("Run the saved script")).getByRole("button", { name: "Edit message" }));
+  const editor = await screen.findByRole("form", { name: "Edit message" });
+  expect(within(editor).getByRole("note")).toHaveTextContent("does not undo earlier commands or file edits");
+  fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(within(await openMessageActions("Finished running script")).getByRole("button", { name: "New chat from here" }));
+  const warning = await screen.findByRole("alertdialog");
+  expect(warning).toHaveTextContent("does not undo earlier commands or file edits");
+  expect(onForkChat).not.toHaveBeenCalled();
 });

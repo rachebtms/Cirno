@@ -20,6 +20,8 @@ async def wake_due_goals(loop) -> None:
         except SessionConflictError:
             # Deleting/replacing one conversation must not delay other Goals.
             logger.debug("Goal scheduler skipped a changed conversation: {}", row["key"])
+        except Exception:
+            logger.exception("Goal processing failed for {}; other conversations will continue", row["key"])
 
 
 async def _wake_goal(loop, key, now):
@@ -34,8 +36,13 @@ async def _wake_goal(loop, key, now):
     from cirno_core.agent.tools.session_messages import SessionMessageError
 
     report = metadata.get("work_report")
+    report_error = None
     if goal.get("report_to"):
-        report = await record_goal_report(loop.sessions, key, goal, metadata) or report
+        try:
+            report = await record_goal_report(loop.sessions, key, goal, metadata) or report
+        except ValueError as error:
+            # Drain already saved reports even when a new report cannot be queued.
+            report_error = error
     sender = getattr(loop, "tools", None)
     sender = sender.get("send_session_message") if sender is not None else None
     if report and sender is not None:
@@ -53,11 +60,17 @@ async def _wake_goal(loop, key, now):
         except SessionMessageError as error:
             logger.warning("Work report deferred for {}: {}", key, error)
         else:
-            if status == "queued" and goal.get("status") == "completed" and not goal.get("report_delivered"):
+            if (
+                status == "queued" and report_error is None
+                and report.get("goal_id") == goal.get("goal_id")
+                and goal.get("status") == "completed" and not goal.get("report_delivered")
+            ):
                 def reported(current):
                     if parse_goal_state(goal_state_raw(current)) == goal:
                         current["goal_state"] = {**goal, "report_delivered": True}
                 await loop.sessions.state.mutate_metadata(key, reported, expected_generation=session.generation)
+    if report_error:
+        raise report_error
     if key in loop._pending_queues:
         return
     if goal.get("status") not in {"active", "waiting"}:

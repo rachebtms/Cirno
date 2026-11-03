@@ -168,13 +168,14 @@ interface AgentActivityClusterProps {
   defaultCollapsed?: boolean;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
-  /** Render only the controlled details; another control owns the disclosure label. */
+  /** Hide individual segment headers when a shared disclosure owns this cluster. */
   hideHeader?: boolean;
   /** Stable id used by an external disclosure control. */
   detailsId?: string;
 }
 
 export function AgentActivityCluster(props: AgentActivityClusterProps) {
+  const { t } = useTranslation();
   const displayMode = useFileEditDisplayMode();
   const messages = useMemo(() => coalesceActivityMessages(props.messages), [props.messages]);
   const editsByMessage = useMemo(
@@ -187,14 +188,17 @@ export function AgentActivityCluster(props: AgentActivityClusterProps) {
 
   // Diff rows break the fold so they stay visible in their original timeline position.
   const items: ReactNode[] = [];
+  let foldedCount = 0;
   let pending: UIMessage[] = [];
   const flush = (last: boolean) => {
     // A live turn still needs its status header when the last row is a diff.
     if (!pending.length && !(last && props.isTurnStreaming)) return;
+    foldedCount += 1;
     items.push(
       <FoldedAgentActivity
         {...props}
         detailsId={undefined}
+        hideHeader={props.expanded !== undefined}
         key={pending[0]?.id ?? "tail-status"}
         messages={pending}
         isTurnStreaming={last && props.isTurnStreaming}
@@ -227,9 +231,15 @@ export function AgentActivityCluster(props: AgentActivityClusterProps) {
     }
   }
   flush(true);
+  const duration = completedActivityDurationMs(messages, props.turnLatencyMs);
+  const label = duration > 0 ? t("message.activityWorkedFor", { duration: formatActivityDuration(duration) }) : t("message.activityWorked");
   return (
-    <div id={props.detailsId} className={cn("flex w-full flex-col gap-0.5", props.hasBodyBelow && "mb-2")}>
-      {items}
+    <div className={cn("flex w-full flex-col gap-0.5", props.hasBodyBelow && "mb-2")}>
+      {props.expanded !== undefined && foldedCount > 0 ? <ThinkingReasoningShell
+        active={false} expanded={props.expanded} contextual renderDetails={false}
+        contentId={props.detailsId} label={label} collapseLabel={t("message.collapseActivity")}
+        onToggle={() => props.onExpandedChange?.(!props.expanded)}>{null}</ThinkingReasoningShell> : null}
+      <div id={props.detailsId} className="flex min-w-0 flex-col gap-0.5">{items}</div>
     </div>
   );
 }
@@ -430,7 +440,7 @@ function FoldedAgentActivity({
         active={isTurnStreaming}
         expanded={outerExpanded}
         contextual={isCompletedDisclosure}
-        showHeader={!hideHeader || outerExpanded}
+        showHeader={!hideHeader}
         collapseLabel={t("message.collapseActivity")}
         contentId={detailsId}
         label={activityLabel}

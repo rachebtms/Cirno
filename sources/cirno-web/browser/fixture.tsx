@@ -43,6 +43,7 @@ import { ThemeToggleFixture } from "./theme-toggle-fixture";
 import { DisplayMathFixture } from "./display-math-fixture";
 import { AttachmentLayoutFixture } from "./attachment-layout-fixture";
 import { LoadedSessionSearchFixture } from "./loaded-session-search-fixture";
+import { MessageActionsFixture } from "./message-actions-fixture";
 import { BackupFixture } from "./backup-fixture";
 import { AppearanceFixture } from "./appearance-fixture";
 import { installSubagentDockApi, SubagentDockFixture } from "./subagent-dock-fixture";
@@ -238,7 +239,9 @@ if (["appearance", "apps"].includes(parameters.get("case") ?? "") && parameters.
   await setAppLanguage(normalizeLocale(parameters.get("lang")));
 }
 createRoot(document.getElementById("root")!).render(<TooltipProvider>
-  {parameters.get("case") === "backup"
+  {parameters.get("case") === "message-actions"
+    ? <MessageActionsFixture />
+    : parameters.get("case") === "backup"
     ? <BackupFixture />
     : parameters.get("case") === "appearance"
     ? <AppearanceFixture />

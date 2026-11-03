@@ -159,15 +159,18 @@ test.describe("answer order", () => {
       // Completed activity is folded into the answer block, not lost or still running.
       const lastBlock = last.locator("xpath=ancestor::*[@data-thread-display-unit]");
       await lastBlock.hover();
-      await lastBlock.getByRole("button", { name: "Message actions" }).click();
-      await page.locator("[data-message-block-activity-action]").click();
+      await expect(lastBlock.getByRole("group", { name: "Message actions" })).toBeVisible();
+      await lastBlock.locator("[data-contextual-activity-disclosure]").click();
       const tool = page.getByText(/Searched the web/).first();
       await expect(tool).toBeVisible();
-      const [firstNode, lastNode] = await Promise.all([first.elementHandle(), last.elementHandle()]);
-      expect(await tool.evaluate((node, [before, after]) => (
-        !!(before.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
-        && !!(node.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING)
-      ), [firstNode!, lastNode!])).toBe(true);
+      await expect.poll(async () => {
+        // Canonical hydration may replace Markdown nodes while the disclosure opens.
+        const [firstNode, lastNode] = await Promise.all([first.elementHandle(), last.elementHandle()]);
+        return tool.evaluate((node, [before, after]) => (
+          !!(before.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+          && !!(node.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING)
+        ), [firstNode!, lastNode!]);
+      }).toBe(true);
       expect(errors).toEqual([]);
     });
   }

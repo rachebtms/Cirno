@@ -30,7 +30,7 @@ class BackupHTTP:
 
     def prune(self):
         now = time.monotonic()
-        for ticket, (path, expires) in list(self.downloads.items()):
+        for ticket, (path, expires, owner) in list(self.downloads.items()):
             if expires < now:
                 path.unlink(missing_ok=True)
                 del self.downloads[ticket]
@@ -58,8 +58,8 @@ class BackupHTTP:
     async def _handle(self, request):
         if request.method == "GET" and request.path == "/api/backups/download":
             token = request.query.get("ticket", "")
-            path, expires = self.downloads.get(token, (None, 0))
-            if path is None or expires < time.monotonic():
+            path, expires, owner = self.downloads.get(token, (None, 0, ""))
+            if path is None or expires < time.monotonic() or not self.uploads.authorized(owner):
                 raise web.HTTPUnauthorized(text="Backup download expired. Export again.")
             # FileResponse streams through sendfile and supports browser range/resume.
             return web.FileResponse(
@@ -121,7 +121,7 @@ class BackupHTTP:
                     )
                 self.prune()
                 ticket = secrets.token_urlsafe(32)
-                self.downloads[ticket] = (path, time.monotonic() + 3600)
+                self.downloads[ticket] = (path, time.monotonic() + 3600, owner)
                 return web.json_response(
                     {
                         "url": "/api/backups/download?ticket=" + ticket,
@@ -138,10 +138,15 @@ class BackupHTTP:
                     )
                 return web.json_response(result)
             if action == "cancel":
-                (self.archive.store / "restore-plan.json").unlink(missing_ok=True)
                 identifier = values.get("id")
+                plan_path = self.archive.store / "restore-plan.json"
+                plan = json.loads(plan_path.read_text()) if plan_path.exists() else None
                 if identifier:
                     stage = self.archive._stage(identifier)
+                    if plan and plan["id"] == identifier:
+                        plan_path.unlink()
                     await asyncio.to_thread(shutil.rmtree, stage)
+                else:
+                    plan_path.unlink(missing_ok=True)
                 return web.json_response({"ok": True})
         raise web.HTTPNotFound()

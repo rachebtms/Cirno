@@ -39,6 +39,7 @@ export interface ThreadViewportHandle {
 }
 
 interface ThreadViewportProps {
+  messageEditor?: import("./ThreadMessages").MessageEditorSlot;
   messages: UIMessage[];
   navigation?: PromptHistoryNavigation;
   temporary?: boolean;
@@ -282,6 +283,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   onOpenFilePreview,
   onForkFromMessage,
   onEditMessage,
+  messageEditor,
   onQuoteSelection,
 }, ref) {
   const { t } = useTranslation();
@@ -1216,6 +1218,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
                   onOpenFilePreview={onOpenFilePreview}
                   onForkFromMessage={onForkFromMessage}
                   onEditMessage={onEditMessage}
+                  messageEditor={messageEditor}
                   onQuoteSelection={onQuoteSelection}
                   onActivityToggle={yieldCameraToUser}
                 />

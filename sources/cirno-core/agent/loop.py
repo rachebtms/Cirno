@@ -26,7 +26,6 @@ from cirno_core.agent.context import ContextBuilder, PersistedPromptContextResol
 from cirno_core.agent.cron_turns import CronTurnCoordinator
 from cirno_core.agent.goals.permission import GoalInputScope
 from cirno_core.agent.hook import AgentHook, AgentTurnHookFactory
-from cirno_core.memory.consolidation import Consolidator
 from cirno_core.agent.model_runtime import ModelRuntimeResolver
 from cirno_core.agent.runner import AgentRunner, AgentRunResult, AgentRunSpec
 from cirno_core.agent.subagents.manager import SubagentManager
@@ -49,7 +48,7 @@ from cirno_core.agent.turn_delivery import (
 )
 from cirno_core.agent.turn_delivery import TurnRoute as TurnRoute
 from cirno_core.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
-from cirno_core.bus.input_origin import input_origin, origin_context
+from cirno_core.bus.agent_events import NO_EVENTS, AgentEvent, EventSink
 from cirno_core.bus.events import (
     INBOUND_META_LOCAL_MEDIA,
     INBOUND_META_RUNTIME_CONTROL,
@@ -59,6 +58,7 @@ from cirno_core.bus.events import (
     InboundMessage,
     OutboundMessage,
 )
+from cirno_core.bus.input_origin import input_origin, origin_context
 from cirno_core.bus.outbound_events import (
     StreamDeltaEvent,
     StreamedResponseEvent,
@@ -69,8 +69,8 @@ from cirno_core.command import CommandContext, CommandRouter, register_builtin_c
 from cirno_core.command.router import command_text
 from cirno_core.config.network import NetworkConfig
 from cirno_core.config.schema import AgentDefaults, ModelPresetConfig
-from cirno_core.bus.agent_events import NO_EVENTS, AgentEvent, EventSink
 from cirno_core.llm_usage.context import source_from_request
+from cirno_core.memory.consolidation import Consolidator
 from cirno_core.providers.base import LLMProvider, LLMUsage, ProviderConversationState
 from cirno_core.providers.factory import ProviderSnapshot
 from cirno_core.runtime.admission import RuntimeMaintenanceError
@@ -99,7 +99,12 @@ from cirno_core.session.goal_state import (
 )
 from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
 from cirno_core.session.keys import session_key_for_channel
-from cirno_core.session.manager import SESSION_CACHE_MAX_SIZE, Session, SessionManager, SessionPolicy
+from cirno_core.session.manager import (
+    SESSION_CACHE_MAX_SIZE,
+    Session,
+    SessionManager,
+    SessionPolicy,
+)
 from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
     model_preset_from_metadata,
@@ -695,12 +700,10 @@ class AgentLoop:
         provider_snapshot_loader: Callable[..., ProviderSnapshot] | None,
     ) -> None:
         """Register the default set of tools via plugin loader."""
+        from cirno_core.agent.approval.service import OperationApproval
+        from cirno_core.agent.conversation_control import ConversationControl
         from cirno_core.agent.tools.context import ToolContext
         from cirno_core.agent.tools.loader import ToolLoader
-
-        from cirno_core.agent.conversation_control import ConversationControl
-
-        from cirno_core.agent.approval.service import OperationApproval
         self.operation_approval = OperationApproval(self.sessions, self.bus, model_resolver=self.runtime_resolver)
         self.conversation_control = ConversationControl(self)
         runtime_control = AgentRuntimeControl(self)
@@ -2087,21 +2090,40 @@ class AgentLoop:
         # A streaming callback may be present even when the final text comes from a
         # non-streaming recovery. Only the last completed segment can suppress the
         # regular outbound message.
-        if ctx.streaming:
-            publish = ctx.events.publish
-            segment_streamed_content = False
+        from cirno_core.bus.agent_events import RetryStatusEvent
+        original_events = ctx.events
+        segment_streamed_content = False
+        retry_active = False
+        retry_episode = 0
 
-            async def track_output(event: AgentEvent) -> None:
-                nonlocal segment_streamed_content
+        async def track_output(event: AgentEvent) -> None:
+            nonlocal segment_streamed_content, retry_active, retry_episode
+            if ctx.streaming:
                 if isinstance(event, StreamDeltaEvent) and event.content:
                     segment_streamed_content = True
                 elif isinstance(event, StreamEndEvent):
                     ctx.streamed_content = segment_streamed_content
                     segment_streamed_content = False
-                if publish is not None:
-                    await publish(event)
+            if original_events.publish is not None:
+                await original_events.publish(event)
+            if isinstance(event, RetryStatusEvent) and not ctx.ephemeral and ctx.commit_session:
+                if event.state == "waiting" and not retry_active:
+                    retry_active = True
+                    retry_episode += 1
+                elif event.state != "recovered" or not retry_active:
+                    return
+                else:
+                    retry_active = False
+                from cirno_core.agent.work_reports import record_retry_report
+                report = await record_retry_report(
+                    self.sessions, ctx.session_key, turn_id=ctx.turn_id, event=event, episode=retry_episode,
+                    model=ctx.runtime.model if ctx.runtime else None,
+                    model_preset=ctx.runtime.model_preset if ctx.runtime else None,
+                    expected_generation=ctx.session.generation if ctx.session else ctx.msg.session_generation,
+                )
+                await self._deliver_worker_report(ctx.session_key, report)
 
-            ctx.events = EventSink(track_output, ctx.events.accepts)
+        ctx.events = EventSink(track_output, lambda event_type: event_type is RetryStatusEvent or original_events.accepts(event_type))
 
         with logger.contextualize(turn_id=ctx.turn_id, session_key=ctx.session_key):
             await self._run_turn_stage(ctx, "restore", self._restore_turn)
@@ -2125,7 +2147,8 @@ class AgentLoop:
         started_at = time.perf_counter()
         try:
             result = await handler(ctx)
-        except Exception:
+        except Exception as error:
+            await self._report_worker_outcome(ctx, stage=name, error=error)
             duration_ms = (time.perf_counter() - started_at) * 1000
             log_content = not ctx.ephemeral and (
                 ctx.session is None
@@ -2597,6 +2620,8 @@ class AgentLoop:
             await self.sessions.state.finish_turn(session)
             if not ctx.ephemeral and session.policy.log_content:
                 await self._release_archived_runtime(ctx.session_key)
+        if ctx.commit_session and not ctx.ephemeral:
+            await self._report_worker_outcome(ctx)
         if not ctx.ephemeral:
             await self.runtime_event_publisher.session_turn_persisted(
                 ctx.msg,
@@ -2604,6 +2629,42 @@ class AgentLoop:
                 turn_id=ctx.turn_id,
                 attributes=ctx.attributes,
             )
+
+    async def _report_worker_outcome(self, ctx: TurnContext, *, stage=None, error=None) -> None:
+        try:
+            await self._record_worker_outcome(ctx, stage=stage, error=error)
+        except Exception:
+            # Reporting is auxiliary: a completed turn must never become a failed task.
+            # Existing durable reports are retried by the Goal scheduler.
+            logger.exception("Worker outcome reporting deferred for {}", ctx.session_key)
+
+    async def _record_worker_outcome(self, ctx: TurnContext, *, stage=None, error=None) -> None:
+        if ctx.ephemeral or not ctx.commit_session:
+            return
+        from cirno_core.agent.work_reports import record_execution_report
+
+        runtime = ctx.runtime
+        report = await record_execution_report(
+            self.sessions, ctx.session_key, turn_id=ctx.turn_id,
+            stop_reason="error" if error is not None else ctx.stop_reason,
+            output=f"{type(error).__name__}: {error}" if error is not None else ctx.final_content,
+            failure_error_kind=ctx.failure_error_kind,
+            model=runtime.model if runtime else None, model_preset=runtime.model_preset if runtime else None,
+            stage=stage, continuation_pending=ctx.delivery.continuation_pending,
+            expected_generation=ctx.session.generation if ctx.session else ctx.msg.session_generation,
+        )
+        await self._deliver_worker_report(ctx.session_key, report)
+
+    async def _deliver_worker_report(self, key, report) -> None:
+        from cirno_core.agent.tools.session_messages import SessionMessageError
+        from cirno_core.agent.work_reports import deliver_work_report
+
+        sender = self.tools.get("send_session_message")
+        if report is not None and sender is not None:
+            try:
+                await deliver_work_report(self.sessions, sender, key, report)
+            except SessionMessageError as delivery_error:
+                logger.warning("Execution report delivery deferred for {}: {}", key, delivery_error)
 
     async def _prepare_outbound(self, ctx: TurnContext) -> None:
         ctx.delivery.record_stop_reason(

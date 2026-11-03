@@ -30,6 +30,18 @@ Only Cirno receives `conversations.control` and `goals.control`. It can stop/con
 
 `conversations.set_title` lets the model set a concise title in the user's language. Automatic title generation is also available; manual titles and Cirno's identity are preserved.
 
+## Delegated execution results and failures
+
+Independent conversations created through delegation automatically report terminal execution results to their delegating coordinator. The runtime reports LLM/API failures, empty final answers and unexpected execution-stage exceptions even if the model cannot call `conversations.report`. Reports include the returned output or a bounded excerpt, the source conversation, stop reason, public failure category, selected model and failing stage when available. Read the saved source conversation for complete output and execution details. An execution result does not itself complete a Goal.
+
+A detailed explicit report from the same execution is reused. Segments that will automatically continue and ordinary user conversations do not generate extra result reports. API failures block unfinished Goals instead of silently marking them complete. User cancellation and pauses are respected.
+
+A retry episode and its recovery also wake the coordinator, without blocking the running Goal. Repeated attempts in the same episode are coalesced. If delivery is unavailable, pending retry/recovery updates for the same execution retain only the latest health state; result and failure reports are preserved separately. Cirno must check the latest state before acting on a delayed retry notice. These coordination-only retry updates do not create ordinary reply notifications in Inbox.
+
+Reports enter the existing durable conversation inbox and pending report queue. Failed delivery is retried without rerunning the worker; acknowledged reports are not delivered twice. Pending reports survive restart and can reach Cirno when its provider is available again. A generic Goal status notice does not overwrite a more detailed failure report. Private subagent tasks continue to report outcomes and errors to their owning conversation through the existing task-result channel.
+
+Cirno's recovery guidance asks it to inspect the worker's saved state before selecting another configured model or continuing authorized work. Unclear external side effects and missing credentials require owner attention; recovery does not authorize replaying commands or reversing an owner Stop.
+
 ## Heartbeat
 
 When enabled under Settings → Agent heartbeat, the protected heartbeat job queues active `Home/HEARTBEAT.md` instructions into Cirno. Pending checks survive restart and use the normal conversation queue. Cirno is instructed to notify only when something needs attention. Use Automations for an explicit time or interval; heartbeat is for flexible background checks.

@@ -49,7 +49,7 @@ def _resolve_version() -> str:
         return _pkg_version("cirno-ai")
     except PackageNotFoundError:
         # Source checkouts often import cirno without installed dist-info.
-        return _read_pyproject_version() or "0.1.5"
+        return _read_pyproject_version() or "0.1.6"
 
 
 __version__ = _resolve_version()
