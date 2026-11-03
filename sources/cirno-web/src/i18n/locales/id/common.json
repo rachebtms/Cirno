@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "Tampilkan pesan kelanjutan",
           "help": "Tampilkan instruksi sebagai masukan sistem berlabel dalam percakapan."
+        },
+        "agents_defaults_workspace": {
+          "label": "Folder kerja bawaan",
+          "help": "Jalur absolut pada server. Berlaku setelah dimulai ulang. Lokasi berkas dan percakapan yang ada tidak berubah."
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "Aktifkan tinjauan AI",
+          "help": "Jika dimatikan, tindakan yang memerlukan persetujuan langsung diteruskan kepada Anda."
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "Model peninjau",
+          "help": "Kosongkan untuk memakai model percakapan dengan konteks tinjauan terpisah."
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "Batas waktu tinjauan (detik)",
+          "help": "Setelah waktu habis, tindakan diteruskan kepada Anda untuk disetujui."
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "Lanjutkan tugas yang dihentikan",
           "help": "Memulai permintaan model baru dengan konteks tersimpan, tanpa mengulang panggilan alat yang selesai."
+        },
+        "workspace": {
+          "title": "Folder kerja bawaan"
+        },
+        "approval": {
+          "title": "Persetujuan AI",
+          "help": "Dalam mode tinjauan AI, model independen meninjau tindakan tanpa memuat memori percakapan. Keputusan yang tidak pasti diteruskan kepada Anda."
         }
       },
       "save": "Simpan perubahan",
@@ -536,7 +559,8 @@
       "account": "Akun",
       "heartbeat": "Heartbeat agen",
       "coordination": "Koordinasi percakapan",
-      "regional": "Waktu & wilayah"
+      "regional": "Waktu & wilayah",
+      "approval": "Persetujuan AI"
     },
     "sections": {
       "interface": "Antarmuka",
@@ -1783,7 +1807,8 @@
       "newChat": "Mulai topik baru",
       "toggleTheme": "Alihkan tema dari header",
       "settings": "Buka pengaturan",
-      "sessionInfo": "Detail sesi"
+      "sessionInfo": "Detail sesi",
+      "refresh": "Muat ulang halaman"
     },
     "sessionInfo": {
       "title": "Sesi",

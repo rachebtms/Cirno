@@ -9,7 +9,7 @@ export interface RuntimeConfigField {
   max?: number;
 }
 
-export type RuntimeConfigPage = "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
+export type RuntimeConfigPage = "approval" | "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
 
 export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabledBy?: string }[] = [
   { id: "identity", page: "regional" },
@@ -17,6 +17,8 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
   { id: "requests", page: "network" },
   { id: "memory", page: "memory" },
   { id: "chat", page: "advanced" },
+  { id: "workspace", page: "execution" },
+  { id: "approval", page: "approval" },
   { id: "execution", page: "execution" },
   { id: "resume", page: "execution" },
   { id: "coordination", page: "coordination" },
@@ -32,6 +34,10 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
 ];
 
 export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
+  { group: "workspace", path: "agents.defaults.workspace", kind: "text", manual: true },
+  { group: "approval", path: "agents.defaults.approval.enabled", kind: "boolean" },
+  { group: "approval", path: "agents.defaults.approval.model_override", kind: "preset" },
+  { group: "approval", path: "agents.defaults.approval.timeout_seconds", kind: "number", min: 1, max: 300 },
   {group: "memory", path: "agents.defaults.dream.max_tool_iterations", kind: "number", min: 1, max: 128},
   {group: "memory", path: "agents.defaults.memory.release_archived_runtime", kind: "boolean"},
   {"group": "memory", "path": "agents.defaults.dream.mode", "kind": "select", "options": ["idle", "interval"]},

@@ -188,6 +188,16 @@ export function useCirnoStream(
   const publishHistory = useCallback(() => setHistoryState(transcriptRef.current.paging), []);
   const [refreshSeq, setRefreshSeq] = useState(0);
   const refreshHistory = useCallback(() => setRefreshSeq((value) => value + 1), []);
+  useEffect(() => {
+    let connected = client.status === "open";
+    const unsubscribe = client.onStatus(status => {
+      if (status === "open" && !connected && historyKey) refreshHistory();
+      connected = status === "open";
+    });
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted && historyKey) refreshHistory(); };
+    window.addEventListener("pageshow", onPageShow);
+    return () => { unsubscribe(); window.removeEventListener("pageshow", onPageShow); };
+  }, [client, historyKey, refreshHistory]);
   const threadVisible = useThreadVisibility();
   const threadVisibleRef = useRef(threadVisible);
   threadVisibleRef.current = threadVisible;
@@ -453,7 +463,11 @@ export function useCirnoStream(
   }, [threadVisible, flushPendingStreamEvents, schedulePendingStreamFlush]);
 
   useEffect(() => {
+    let hidden = document.visibilityState === "hidden";
     const onVisibilityChange = () => {
+      const wasHidden = hidden;
+      hidden = document.visibilityState === "hidden";
+      if (wasHidden && !hidden && threadVisibleRef.current && historyKey) refreshHistory();
       if (pendingStreamEventsRef.current.length === 0) return;
       if (document.visibilityState === "visible" && threadVisibleRef.current) {
         flushPendingStreamEvents();
@@ -467,7 +481,7 @@ export function useCirnoStream(
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [flushPendingStreamEvents, schedulePendingStreamFlush]);
+  }, [flushPendingStreamEvents, schedulePendingStreamFlush, historyKey, refreshHistory]);
 
   useEffect(() => {
     if (!chatId) return;

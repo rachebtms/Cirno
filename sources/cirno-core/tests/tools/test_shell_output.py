@@ -104,3 +104,16 @@ async def test_exec_session_filters_split_sequences_and_waits_for_visible_text(t
         assert "190m" not in combined
     finally:
         await manager.close_all()
+
+
+def test_tool_environment_keeps_managed_paths_but_not_credentials(monkeypatch):
+    from cirno_core.agent.tools.shell import ExecTool
+    monkeypatch.setenv("VIRTUAL_ENV", "/state/tools/python")
+    monkeypatch.setenv("TEA_CONFIG_DIR", "/state/cli/config/tea")
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/state/cli/config")
+    monkeypatch.setenv("OPENAI_API_KEY", "private-test-key")
+    env = ExecTool()._build_env()
+    assert env["VIRTUAL_ENV"] == "/state/tools/python"
+    assert env["TEA_CONFIG_DIR"] == "/state/cli/config/tea"
+    assert env["XDG_CONFIG_HOME"] == "/state/cli/config"
+    assert "OPENAI_API_KEY" not in env

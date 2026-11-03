@@ -52,7 +52,8 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Agent heartbeat: periodic checks of `HEARTBEAT.md` and wakeups in Cirno, separate from service health checks.
 - Conversation coordination: concurrent subagents and the per-source outgoing cross-conversation message limit.
 - Time & region: automatic or manually selected timezone.
-- Goals & execution: continuation and execution limits.
+- Goals & execution: default workspace, continuation and execution limits.
+- AI approvals: independent review model, review timeout and the switch for automatic review.
 - Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management.
 - Web search, Nodes, MCP: independently configured agent connections.
 - Telegram: personal account binding and server-side notification preferences. Channel setup configures the Telegram bot token and Web transport.
@@ -100,8 +101,14 @@ Settings → Account shows the registered owner and changes the browser-login pa
 
 ## Conversation controls and access review
 
-Settings → Goals & execution configures the continuation text and its visibility. Stop preserves context; Continue or `/resume` starts another model request from saved progress. New conversation drafts accept `/temporary on|off`, `/ptc on|off` and `/model <preset>`. `/access default|review|full` selects the permission mode. Model preset names are unique ignoring case.
+Settings → Goals & execution configures the default workspace, continuation text and its visibility. The workspace setting (`agents.defaults.workspace`) accepts an absolute server path, including `~/…`. Restart when prompted to apply it to new conversations. Saving this setting does not move existing files or change existing conversations' working directories; projects can still supply their own default directory. A saved conversation continues to show its working directory as a locked selector.
 
-AI review keeps Default restrictions and reviews blocked operations independently of Cirno memory. Uncertain cases appear in Inbox → Actions. Each approval covers one exact operation; it does not grant Full Access. AI can make unsafe decisions, so this mode displays an explicit warning. See [operation review](architecture/access-review.md).
+Stop preserves context; Continue or `/resume` starts another model request from saved progress. New conversation drafts accept `/temporary on|off`, `/ptc on|off` and `/model <preset>`. Creation-only commands are omitted from established conversations' command menus. `/access default|review|full` selects the permission mode. Model preset names are unique ignoring case.
+
+AI review keeps Default restrictions and reviews blocked operations independently of Cirno memory. Settings → AI approvals selects a saved model preset (or the conversation model), sets a 1–300 second review timeout, and enables or disables automatic review. These settings live under `agents.defaults.approval` as `enabled`, `modelOverride` and `timeoutSeconds`. Disabling review sends blocked operations to the owner for approval. Timeouts, unavailable review models and uncertain cases also appear in Inbox → Actions. Each approval covers one exact operation; it does not grant Full Access. AI can make unsafe decisions, so this mode displays an explicit warning. See [operation review](architecture/access-review.md).
 
 Use message actions to branch or edit an idle human message. Context changes do not undo previous file edits, commands or external actions; tool history triggers a warning. Editing retains attachments and replaces later conversation context before sending the revised request. `/clear` resets only the fixed personal Cirno context through its dedicated control.
+
+## Mobile reconnection and refresh
+
+Returning to the foreground checks the WebSocket connection and reloads the server's conversation state, including reasoning and tool activity missed while the browser was suspended. A stale connection reconnects through the normal authenticated path. The top-right refresh button reloads the page in desktop browsers and installed mobile Web apps, including iPhone Home Screen apps. Reloading the page does not stop the server's task or send the previous prompt again.

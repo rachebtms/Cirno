@@ -107,6 +107,9 @@ export function SettingsSectionSkeleton({ section, showRestart = false }: { sect
     case "advanced":
       content = <RuntimeGroups page="advanced" />;
       break;
+    case "approval":
+      content = <RuntimeGroups page="approval" />;
+      break;
     case "about":
       content = <AboutSettingsLayout versionCheck={
         <SettingsGroup><SettingsRow title={<>

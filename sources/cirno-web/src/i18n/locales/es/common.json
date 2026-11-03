@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "Mostrar mensaje de continuación",
           "help": "Muestra la instrucción como una entrada del sistema identificada."
+        },
+        "agents_defaults_workspace": {
+          "label": "Directorio de trabajo predeterminado",
+          "help": "Ruta absoluta en el servidor. Se aplica al reiniciar. Los archivos y conversaciones existentes conservan su ubicación."
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "Activar revisión por IA",
+          "help": "Si se desactiva, las operaciones que requieren aprobación se te envían directamente."
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "Modelo de revisión",
+          "help": "Déjalo vacío para usar el modelo de la conversación con un contexto de revisión independiente."
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "Tiempo de revisión (segundos)",
+          "help": "Al agotarse el tiempo, la operación se te envía para aprobarla."
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "Continuar tareas detenidas",
           "help": "Inicia una nueva solicitud con el contexto guardado, sin repetir llamadas a herramientas ya completadas."
+        },
+        "workspace": {
+          "title": "Directorio de trabajo predeterminado"
+        },
+        "approval": {
+          "title": "Aprobaciones de IA",
+          "help": "En el modo de revisión por IA, un modelo independiente revisa las operaciones sin cargar la memoria de la conversación. Las dudas se remiten a ti."
         }
       },
       "save": "Guardar cambios",
@@ -536,7 +559,8 @@
       "account": "Cuenta",
       "heartbeat": "Latido del agente",
       "coordination": "Coordinación de conversaciones",
-      "regional": "Hora y región"
+      "regional": "Hora y región",
+      "approval": "Aprobaciones de IA"
     },
     "sections": {
       "interface": "Interfaz",
@@ -1783,7 +1807,8 @@
       "newChat": "Iniciar un tema nuevo",
       "toggleTheme": "Cambiar tema desde el encabezado",
       "settings": "Abrir configuración",
-      "sessionInfo": "Detalles de la sesión"
+      "sessionInfo": "Detalles de la sesión",
+      "refresh": "Actualizar página"
     },
     "sessionInfo": {
       "title": "Sesión",

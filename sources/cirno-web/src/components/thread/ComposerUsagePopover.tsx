@@ -63,6 +63,7 @@ export function ComposerUsagePopover({
   showLabel = false,
   compactLabel = false,
   bottomSheet = false,
+  pending = false,
 }: {
   context: ComposerContextUsage | null;
   error?: string;
@@ -70,6 +71,7 @@ export function ComposerUsagePopover({
   showLabel?: boolean;
   compactLabel?: boolean;
   bottomSheet?: boolean;
+  pending?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -79,7 +81,7 @@ export function ComposerUsagePopover({
     && context.contextTokens >= 0
     && Number.isFinite(context.contextWindowTokens)
     && (context.contextWindowTokens ?? 0) > 0;
-  if (!hasContext && normalizedRounds.length === 0 && !error) {
+  if (!hasContext && normalizedRounds.length === 0 && !error && !pending) {
     return null;
   }
 
@@ -175,7 +177,7 @@ export function ComposerUsagePopover({
           showTextLabel && "w-auto gap-1.5 px-2 text-xs",
         )}
       >
-        {contextPercentage === null ? (
+        {contextPercentage === null && !pending ? (
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[15px]">
             <path
               d="M3 12V9m5 3V5m5 7V2"

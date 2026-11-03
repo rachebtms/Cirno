@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import math
 import re
+from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.config.schema import Config
@@ -14,6 +15,10 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 # Only these leaves may be read or patched through this surface. Model/provider,
 # channel, and secret configuration keep their dedicated mutation contracts.
 RUNTIME_CONFIG_PATHS = (
+    "agents.defaults.workspace",
+    "agents.defaults.approval.enabled",
+    "agents.defaults.approval.model_override",
+    "agents.defaults.approval.timeout_seconds",
     "agents.defaults.dream.max_tool_iterations",
     "agents.defaults.memory.release_archived_runtime",
     "agents.defaults.dream.mode",
@@ -128,10 +133,16 @@ def update_runtime_config(
         location = ".".join(str(part) for part in error["loc"])
         raise WebUISettingsError(f"{location}: {error['msg']}") from None
 
-    if "agents.defaults.dream.model_override" in values:
-        model = validated.agents.defaults.dream.model_override
-        if model and model != "default" and model not in validated.model_presets:
-            raise WebUISettingsError("agents.defaults.dream.model_override: choose an existing model preset")
+    if "agents.defaults.workspace" in values:
+        workspace = validated.agents.defaults.workspace.strip()
+        if not workspace or not Path(workspace).expanduser().is_absolute():
+            raise WebUISettingsError("agents.defaults.workspace: enter an absolute directory path")
+        validated.agents.defaults.workspace = workspace
+    for purpose in ("dream", "approval"):
+        path = f"agents.defaults.{purpose}.model_override"
+        model = getattr(validated.agents.defaults, purpose).model_override
+        if path in values and model and model != "default" and model not in validated.model_presets:
+            raise WebUISettingsError(f"{path}: choose an existing model preset")
     numeric_minima = {
         "agents.defaults.max_tool_iterations": 1,
         "agents.defaults.max_tool_result_chars": 1,

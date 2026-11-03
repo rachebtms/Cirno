@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "显示继续执行消息",
           "help": "在会话中显示带系统来源标记的继续执行指令。"
+        },
+        "agents_defaults_workspace": {
+          "label": "默认工作目录",
+          "help": "服务器上的绝对目录路径。重启后生效；现有文件和会话仍保留在原位置。"
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "启用 AI 审批",
+          "help": "关闭后，需要审批的操作直接交给你处理。"
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "审批模型",
+          "help": "留空时使用当前会话的模型，但使用独立的审查上下文。"
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "审批超时（秒）",
+          "help": "超时后将操作转交给你审批。"
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "停止后的继续执行",
           "help": "从已保存的上下文继续，重新发起模型请求，不会自动重放已完成的工具调用。"
+        },
+        "workspace": {
+          "title": "默认工作目录"
+        },
+        "approval": {
+          "title": "AI 审批",
+          "help": "AI 审批访问模式使用独立模型审查操作，不加载会话记忆。无法确定时交给你审批。"
         }
       },
       "save": "保存修改",
@@ -536,7 +559,8 @@
       "account": "账户",
       "heartbeat": "Agent 心跳",
       "coordination": "会话协作",
-      "regional": "时间与地区"
+      "regional": "时间与地区",
+      "approval": "AI 审批"
     },
     "sections": {
       "interface": "界面",
@@ -1783,7 +1807,8 @@
       "newChat": "从顶部新建会话",
       "toggleTheme": "从顶部切换主题",
       "settings": "打开设置",
-      "sessionInfo": "会话详情"
+      "sessionInfo": "会话详情",
+      "refresh": "刷新页面"
     },
     "sessionInfo": {
       "title": "会话",

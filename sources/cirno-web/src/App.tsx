@@ -176,7 +176,7 @@ const RenameDialog = lazy(async () => {
 });
 
 const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
-  "account", "heartbeat", "coordination", "regional",
+  "approval", "account", "heartbeat", "coordination", "regional",
   "reading", "activity", "context", "dream", "memory-search", "execution", "shell", "network", "telegram",
   "capabilities",
   "overview",
@@ -1619,14 +1619,16 @@ function Shell({
     try {
       const payload = await fetchWorkspaces(getToken());
       setWorkspaces(payload);
-    } catch {
-      setWorkspaces(null);
+      setWorkspaceError(null);
+    } catch (error) {
+      console.warn("Could not refresh workspaces", error);
     }
   }, [getToken]);
 
   useEffect(() => {
-    void refreshWorkspaces();
-  }, [refreshWorkspaces]);
+    if (pageVisible) void refreshWorkspaces();
+    return client.onReady(() => { void refreshWorkspaces(); });
+  }, [client, pageVisible, refreshWorkspaces]);
 
   useEffect(() => {
     if (!sessionsLoaded) return;

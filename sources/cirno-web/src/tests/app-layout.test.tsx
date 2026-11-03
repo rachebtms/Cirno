@@ -978,6 +978,26 @@ describe("App layout", () => {
     await waitFor(() => expect(createChatSpy).toHaveBeenCalledWith(projectScope));
   });
 
+  it("retains the last workspace selector when reconnect refresh fails", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockFetchRoutes({
+      "/api/workspaces": {
+        schema_version: 1,
+        default_access_mode: "full",
+        default_scope: { project_path: "/tmp/workspace", project_name: "workspace", access_mode: "full", restrict_to_workspace: false },
+        controls: { can_change_project: true },
+      },
+    });
+    try {
+      render(<App />);
+      expect(await screen.findByRole("button", { name: "Switch directory" })).toHaveTextContent("workspace");
+      mockFetchRoutes({});
+      await act(async () => readyHandlers.forEach(handler => handler()));
+      await waitFor(() => expect(warning).toHaveBeenCalledWith("Could not refresh workspaces", expect.any(Error)));
+      expect(screen.getByRole("button", { name: "Switch directory" })).toHaveTextContent("workspace");
+    } finally { warning.mockRestore(); }
+  });
+
   it("uses the restricted default scope without offering project selection", async () => {
     mockFetchRoutes({
       "/api/workspaces": {

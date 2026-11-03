@@ -44,6 +44,12 @@ from cirno_core.security.workspace_policy import is_path_within
 
 _IS_WINDOWS = sys.platform == "win32"
 _PROCESS_TREE_OWNER_ATTR = "_cirno_process_tree_owner"
+_TOOL_ENV_KEYS = (
+    "PATH", "VIRTUAL_ENV", "BASH_ENV", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
+    "NVM_DIR", "GOPATH", "GOBIN", "BUN_INSTALL", "HF_HOME", "GH_CONFIG_DIR", "TEA_CONFIG_DIR",
+    "GIT_CONFIG_GLOBAL", "NPM_CONFIG_PREFIX", "NPM_CONFIG_USERCONFIG", "PIP_CACHE_DIR",
+    "UV_TOOL_DIR", "UV_TOOL_BIN_DIR", "PIPX_HOME", "PIPX_BIN_DIR",
+)
 
 
 class _ProcessTreeOwner(Protocol):
@@ -782,9 +788,8 @@ class ExecTool(Tool):
     def _build_env(self) -> dict[str, str]:
         """Build a minimal environment for subprocess execution.
 
-        On Unix, only HOME/LANG/TERM are passed by default. If callers request
-        ``login=True``, bash/zsh may source the user's profile and add PATH or
-        other variables.
+        Preserve standard tool paths and configuration locations, including the
+        configured Bash startup file. Credentials require explicit allowed keys.
 
         On Windows, ``cmd.exe`` has no login-profile mechanism, so a curated
         set of system variables (including PATH) is forwarded.  API keys and
@@ -810,7 +815,7 @@ class ExecTool(Tool):
                 "ProgramFiles(x86)": os.environ.get("ProgramFiles(x86)", ""),
                 "ProgramW6432": os.environ.get("ProgramW6432", ""),
             }
-            for key in self.allowed_env_keys:
+            for key in (*_TOOL_ENV_KEYS, *self.allowed_env_keys):
                 val = os.environ.get(key)
                 if val is not None:
                     env[key] = val
@@ -822,7 +827,7 @@ class ExecTool(Tool):
             "TERM": os.environ.get("TERM", "dumb"),
             "PYTHONUNBUFFERED": "1",
         }
-        for key in self.allowed_env_keys:
+        for key in (*_TOOL_ENV_KEYS, *self.allowed_env_keys):
             val = os.environ.get(key)
             if val is not None:
                 env[key] = val

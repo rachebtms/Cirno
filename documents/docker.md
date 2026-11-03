@@ -64,7 +64,11 @@ The full image bundles `Xenova/bge-small-zh-v1.5` at revision `75c43b069aac4d136
 
 The additional commands consume image disk space; they do not run background daemons at startup. The CI smoke test checks command execution as the non-root user, Telegram dependency availability, and actual CPU inference with the bundled model on both architectures.
 
-The normal instance volume also persists CLI configuration under `state/cli/` and user-installed npm, uv, pipx, Go, Bun and nvm tools under `state/tools/`. `nvm` is loaded for Bash commands, including the agent's non-interactive shell. New Homebrew installations or changes inside the application virtual environment belong to the container layer and are lost on recreation: add those to a derived image rather than treating the running container as the package source. Preinstalled full-image tools are restored from the image whenever the container is recreated.
+The normal instance volume also persists CLI configuration under `state/cli/` and user-installed Python, npm, uv, pipx, Go, Bun and nvm tools under `state/tools/`. In the full image, `python`, `python3`, `pip` and `uv pip` use a separate virtual environment at `/home/cirno/.cirno/state/tools/python`; packages installed there survive container recreation. Cirno itself uses `/app/.venv`, so user packages do not replace the service's dependencies. Interpreter links are refreshed at startup while retaining user packages.
+
+Gitea `tea` login configuration is stored under `state/cli/config/tea/`, GitHub `gh` configuration under `state/cli/config/gh/`, and the npm user configuration under `state/cli/config/npmrc`. XDG configuration, data and caches also point into the instance volume. Keep that volume when recreating the container to retain credentials and user packages. The native full-image smoke tests install a local Python package and a fixture Gitea login, recreate the container with the same volume, and verify both survive.
+
+`nvm` is loaded for Bash commands, including the agent's non-interactive shell. New Homebrew installations or explicit changes inside `/app/.venv` belong to the container layer and are lost on recreation: add those to a derived image rather than treating the running container as the package source. Preinstalled full-image tools are restored from the image whenever the container is recreated.
 
 Full builds have separate per-architecture caches. The tool layer is built before Cirno sources are copied, so an application change does not reinstall the whole tool collection.
 

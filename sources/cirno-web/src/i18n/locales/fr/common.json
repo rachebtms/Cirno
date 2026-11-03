@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "Afficher le message de reprise",
           "help": "Affiche cette instruction comme une entrée système identifiée."
+        },
+        "agents_defaults_workspace": {
+          "label": "Dossier de travail par défaut",
+          "help": "Chemin absolu sur le serveur. Appliqué au redémarrage. Les fichiers et conversations existants conservent leur emplacement."
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "Activer la révision IA",
+          "help": "Si désactivé, les opérations nécessitant une approbation vous sont directement soumises."
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "Modèle de révision",
+          "help": "Laisser vide pour utiliser le modèle de la conversation avec un contexte de révision indépendant."
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "Délai de révision (secondes)",
+          "help": "Une fois le délai dépassé, votre approbation est demandée."
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "Reprendre les tâches arrêtées",
           "help": "Reprend avec le contexte enregistré et une nouvelle requête au modèle, sans rejouer les outils terminés."
+        },
+        "workspace": {
+          "title": "Dossier de travail par défaut"
+        },
+        "approval": {
+          "title": "Approbations IA",
+          "help": "En mode de révision IA, un modèle indépendant examine les opérations sans charger la mémoire de la conversation. Les cas incertains vous sont soumis."
         }
       },
       "save": "Enregistrer les modifications",
@@ -536,7 +559,8 @@
       "account": "Compte",
       "heartbeat": "Réveil périodique de l’agent",
       "coordination": "Coordination des conversations",
-      "regional": "Heure et région"
+      "regional": "Heure et région",
+      "approval": "Approbations IA"
     },
     "sections": {
       "interface": "Interface utilisateur",
@@ -1783,7 +1807,8 @@
       "newChat": "Démarrer un nouveau sujet",
       "toggleTheme": "Changer le thème depuis l’en-tête",
       "settings": "Ouvrir les paramètres",
-      "sessionInfo": "Détails de la session"
+      "sessionInfo": "Détails de la session",
+      "refresh": "Actualiser la page"
     },
     "sessionInfo": {
       "title": "Session",

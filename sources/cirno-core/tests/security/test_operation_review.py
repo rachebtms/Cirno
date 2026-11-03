@@ -217,3 +217,37 @@ async def test_approval_expiry_starts_at_owner_decision(review):
     await service.decide(identifier, True)
     async with operation_access(tool, params, request):
         assert current_workspace_scope().access_mode == "full"
+
+
+async def test_disabled_ai_review_queues_owner_approval_without_model_call(review, monkeypatch):
+    from cirno_core.config.schema import Config
+    config = Config()
+    config.agents.defaults.approval.enabled = False
+    monkeypatch.setattr("cirno_core.agent.approval.service.load_config", lambda: config)
+    service, request, response, target, *_ = review
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    with pytest.raises(PermissionError, match="pending"):
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            pytest.fail("Owner approval must precede execution")
+    response.assert_not_called()
+    assert not target.exists()
+    assert service.inbox.list()["items"][0]["status"] == "pending"
+
+
+async def test_independent_review_uses_selected_preset_and_timeout(review, monkeypatch):
+    from cirno_core.config.schema import Config
+    config = Config()
+    config.agents.defaults.approval.model_override = "review-only"
+    config.agents.defaults.approval.timeout_seconds = 73
+    monkeypatch.setattr("cirno_core.agent.approval.service.load_config", lambda: config)
+    service, request, response, target, *_ = review
+    selected = object()
+    service.model_resolver = SimpleNamespace(resolve_preset=lambda name: selected if name == "review-only" else None)
+    evaluate = AsyncMock(return_value=("approve", "Exact requested operation"))
+    monkeypatch.setattr("cirno_core.agent.approval.service.review_operation", evaluate)
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+        assert current_workspace_scope().access_mode == "full"
+    assert evaluate.call_args.args == (selected,)
+    assert evaluate.call_args.kwargs["timeout_seconds"] == 73
+    response.assert_not_called()

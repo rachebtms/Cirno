@@ -11,7 +11,8 @@ const RECONNECT_READ_CONCURRENCY = 4;
 export function useReconnectRuns(client: CirnoClient, getToken: () => string): void {
   useEffect(() => {
     let controller: AbortController | null = null;
-    const unsubscribe = client.onStatus((status) => {
+    let disposed = false;
+    const recoverRuns = (status: string) => {
       controller?.abort();
       controller = null;
       if (status !== "open") return;
@@ -30,7 +31,12 @@ export function useReconnectRuns(client: CirnoClient, getToken: () => string): v
         if (!body || signal.aborted) return;
         const { completedTurnIds, snapshot } = persistedCanonicalRunState(body);
         const explicitlyCompleted = turnId !== null && completedTurnIds.includes(turnId);
-        if (!explicitlyCompleted && (snapshot.hasPendingToolCalls || snapshot.activeTurnId)) return;
+        if (!explicitlyCompleted && (snapshot.hasPendingToolCalls || snapshot.activeTurnId)) {
+          // Refresh active traces only for the run that this read actually belongs to.
+          if (turnId && snapshot.activeTurnId === turnId && client.getRunGeneration(chatId) === generation
+            && client.getRunTurnId(chatId) === turnId) webuiThreadCache.set(key, body);
+          return;
+        }
         if (turnId && !explicitlyCompleted && !snapshot.observedTurnIds.includes(turnId)) return;
         if (!client.canReconcileCanonicalCompletion(chatId, generation, completedTurnIds, snapshot)) return;
         // Preserve the result before completion fences prune queued fragments.
@@ -51,10 +57,28 @@ export function useReconnectRuns(client: CirnoClient, getToken: () => string): v
         }
       };
       void Promise.allSettled(Array.from({ length: Math.min(RECONNECT_READ_CONCURRENCY, jobs.length) }, worker));
-    });
+    };
+    const unsubscribe = client.onStatus(recoverRuns);
+    let waking = false;
+    const wake = async () => {
+      if (waking || document.visibilityState === "hidden") return;
+      waking = true;
+      try {
+        await client.resumeFromBackground();
+        if (!disposed && client.status === "open") recoverRuns("open");
+      } finally { waking = false; }
+    };
+    const onWake = () => { void wake().catch(error => console.warn("Could not restore connection", error)); };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("pageshow", onWake);
+    window.addEventListener("online", onWake);
     return () => {
+      disposed = true;
       controller?.abort();
       unsubscribe();
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("pageshow", onWake);
+      window.removeEventListener("online", onWake);
     };
   }, [client, getToken]);
 }

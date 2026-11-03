@@ -483,6 +483,8 @@ class ServerHTTPHandler:
         payload: dict[str, Any],
     ) -> Response:
         """Run one explicitly allowlisted mutation for an authenticated WebUI socket."""
+        if action == "connection.check":
+            return _http_json_response({"connected": True})
         path = self._webui_mutation_path(action, payload)
         if isinstance(path, Response):
             return path

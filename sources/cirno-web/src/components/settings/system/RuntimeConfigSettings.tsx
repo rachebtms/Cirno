@@ -208,6 +208,7 @@ export function RuntimeConfigSettings({
             <SettingsSectionTitle>{group.id === "proxy"
               ? <SettingsHint description={tr("fields.network_proxy.help")}>{title}</SettingsHint>
               : title}</SettingsSectionTitle>
+            {group.id === "approval" && <p className="settings-list-inset mb-3 text-sm leading-6 text-muted-foreground">{tr("groups.approval.help")}</p>}
             <form noValidate onSubmit={(event) => { event.preventDefault(); void state.save(group.id); }}
               onBlur={(event) => {
                 if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;

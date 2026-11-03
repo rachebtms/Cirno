@@ -1105,8 +1105,7 @@ export function ThreadComposer({
   const previousQueueRunRef = useRef({ key: pendingQueueKey, isStreaming });
   const isHero = variant === "hero";
   const projectPickerAvailable =
-    !workspaceProjectLocked
-    && !!workspaceDefaultScope
+    !!workspaceDefaultScope
     && !!onWorkspaceScopeChange
     && !!onLoadWorkspaceProjects
     && !!onBrowseWorkspaceDirectories
@@ -2329,7 +2328,7 @@ export function ThreadComposer({
   const workspaceControl = showProjectPicker ? (
     <WorkspaceProjectPicker
       layoutAnchor={workspacePickerLayoutAnchor}
-      disabled={interactionDisabled || workspaceScopeDisabled}
+      disabled={interactionDisabled || workspaceScopeDisabled || workspaceProjectLocked}
       scope={workspaceScope}
       defaultScope={workspaceDefaultScope}
       controls={workspaceControls}
@@ -2359,8 +2358,8 @@ export function ThreadComposer({
     />
   ) : null;
   const usageInMeta = mobileWorkspaceControls || compactControls;
-  const usageControl = (contextUsage || contextUsageError || recentRoundUsage.length) ? (
-    <ComposerUsagePopover error={contextUsageError} context={contextUsage} rounds={recentRoundUsage} showLabel={usageInMeta} compactLabel={mobileWorkspaceControls} bottomSheet={usageInMeta} />
+  const usageControl = (contextUsage || contextUsageError || recentRoundUsage.length || isStreaming) ? (
+    <ComposerUsagePopover pending={isStreaming} error={contextUsageError} context={contextUsage} rounds={recentRoundUsage} showLabel={usageInMeta} compactLabel={mobileWorkspaceControls} bottomSheet={usageInMeta} />
   ) : null;
   const inputTextClasses = cn(
     // Keep the overlay's CJK/Latin spacing aligned with the native textarea caret.

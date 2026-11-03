@@ -31,6 +31,14 @@ fi
 if [ "${CIRNO_FULL_IMAGE:-}" = "1" ]; then
     mkdir -p "$dir/state/cli/config" "$dir/state/cli/data" "$dir/state/cli/cache" \
         "$dir/state/tools/bin" "$dir/state/tools/npm" "$dir/state/tools/nvm"
+    if [ -f "$CIRNO_SHELL_VENV/pyvenv.cfg" ]; then
+        /app/.venv/bin/python -m venv --upgrade "$CIRNO_SHELL_VENV" || exit 1
+    else
+        /app/.venv/bin/python -m venv "$CIRNO_SHELL_VENV" || exit 1
+    fi
+    if [ ! -e "$HOME/.config" ] && [ ! -L "$HOME/.config" ]; then
+        ln -s "$dir/state/cli/config" "$HOME/.config"
+    fi
     for tool in xurl ssh summarize mcporter; do
         mkdir -p "$dir/state/cli/$tool"
         chmod 700 "$dir/state/cli/$tool"
@@ -50,9 +58,9 @@ if [ "$CIRNO_DOCKER_BOOTSTRAP" = "1" ]; then
     done
     if [ "$initialize_default" = "1" ]; then
         config="$dir/config.json"
-        python -m cirno_server.cli.docker_bootstrap "$config" || exit 1
+        /app/.venv/bin/python -m cirno_server.cli.docker_bootstrap "$config" || exit 1
         set -- "$@" --config "$config"
     fi
 fi
 
-exec cirno "$@"
+exec /app/.venv/bin/cirno "$@"

@@ -2648,3 +2648,42 @@ describe("binary attachment transport", () => {
     } finally { client.close(); vi.unstubAllGlobals(); }
   });
 });
+
+it("probes a healthy foreground socket without discarding temporary conversations", async () => {
+  const client = new CirnoClient({ url: "ws://test", socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+  client.connect();
+  const socket = lastSocket(); socket.fakeOpen();
+  const created = client.newTemporaryChat();
+  socket.fakeMessage({ event: "attached", chat_id: "temporary", temporary: true });
+  await created;
+  const delivered = vi.fn();
+  client.onTranscript("temporary", delivered);
+  const restored = client.resumeFromBackground();
+  const check = JSON.parse(socket.sent.at(-1)!);
+  expect(check.action).toBe("connection.check");
+  socket.fakeMessage({ event: "webui_response", request_id: check.request_id, ok: true, result: { connected: true } });
+  await restored;
+  expect(FakeSocket.instances).toHaveLength(1);
+  expect(client.status).toBe("open");
+  delivered.mockClear();
+  socket.fakeMessage({ event: "delta", chat_id: "temporary", text: "Still attached" });
+  expect(delivered).toHaveBeenCalledWith(expect.objectContaining({ event: "delta", text: "Still attached" }));
+  client.close();
+});
+
+it("reconnects a silently dead OPEN socket after foreground probing times out", async () => {
+  const client = new CirnoClient({ url: "ws://test", socketFactory: url => new FakeSocket(url) as unknown as WebSocket,
+    onReauth: async () => "ws://renewed" });
+  client.connect();
+  const old = lastSocket(); old.fakeOpen();
+  const restored = client.resumeFromBackground();
+  expect(client.resumeFromBackground()).toBe(restored);
+  await vi.advanceTimersByTimeAsync(5_001);
+  await restored;
+  expect(old.readyState).toBe(FakeSocket.CLOSED);
+  expect(lastSocket()).not.toBe(old);
+  expect(lastSocket().url).toBe("ws://renewed");
+  lastSocket().fakeOpen();
+  expect(client.status).toBe("open");
+  client.close();
+});

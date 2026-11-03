@@ -9,7 +9,7 @@ import {
   ModelsIcon,
 } from "@/components/icons/product-icons";
 import { Fragment, useRef, useState } from "react";
-import { BookOpen, Brain, UserRound, Wrench, Server, MessagesSquare, Bell, BookOpenText, Activity, Archive, Moon, Search, Play, Terminal, Network, Link, Check, ChevronDown, ChevronLeft, LogOut, Loader2, KeyRound, HeartPulse, Globe, type LucideIcon } from "lucide-react";
+import { BookOpen, Brain, UserRound, Wrench, Server, MessagesSquare, Bell, BookOpenText, Activity, Archive, Moon, Search, Play, Terminal, Network, Link, ShieldCheck, Check, ChevronDown, ChevronLeft, LogOut, Loader2, KeyRound, HeartPulse, Globe, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -42,6 +42,7 @@ const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fal
   { key: "context", icon: Archive, fallback: "Context compaction", group: "agent" },
   { key: "dream", icon: Moon, fallback: "Dream consolidation", group: "agent" },
   { key: "memory-search", icon: Search, fallback: "Memory retrieval", group: "agent" },
+  { key: "approval", icon: ShieldCheck, fallback: "AI approvals", group: "agent" },
   { key: "execution", icon: Play, fallback: "Goals & execution", group: "agent" },
   { key: "coordination", icon: MessagesSquare, fallback: "Conversation coordination", group: "agent" },
   { key: "heartbeat", icon: HeartPulse, fallback: "Heartbeat", group: "agent" },

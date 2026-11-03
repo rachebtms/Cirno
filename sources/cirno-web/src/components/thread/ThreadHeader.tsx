@@ -1,7 +1,7 @@
 import {
   TemporaryChatIcon,
 } from "@/components/icons/product-icons";
-import { Code2, Menu } from "lucide-react";
+import { Code2, Menu, RefreshCw } from "lucide-react";
 import { ThemeToggleIcon } from "@/components/icons/ThemeToggleIcon";
 import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -181,6 +181,13 @@ export function ThreadHeader({
             </Tooltip>
           </TooltipProvider>
         ) : null}
+        <Button variant="ghost" size="icon"
+          aria-label={t("thread.header.refresh")}
+          title={t("thread.header.refresh")}
+          onClick={() => window.location.reload()}
+          className="h-7 w-7 rounded-control text-muted-foreground hover:text-foreground">
+          <RefreshCw className="h-3.5 w-3.5" />
+        </Button>
         {!hideThemeButton ? (
           <ThemeButton
             theme={theme}

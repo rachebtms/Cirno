@@ -1,4 +1,7 @@
 [
+  "agents.defaults.approval.enabled",
+  "agents.defaults.approval.model_override",
+  "agents.defaults.approval.timeout_seconds",
   "agents.defaults.dream.batch_chars",
   "agents.defaults.dream.batch_entries",
   "agents.defaults.dream.enabled",
@@ -32,6 +35,7 @@
   "agents.defaults.timezone",
   "agents.defaults.timezone_mode",
   "agents.defaults.tool_status_summary_max_chars",
+  "agents.defaults.workspace",
   "network.provider_max_retries",
   "network.proxy",
   "network.request_timeout_s",

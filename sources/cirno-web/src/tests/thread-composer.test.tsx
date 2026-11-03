@@ -1172,8 +1172,8 @@ describe("ThreadComposer", () => {
     rerender(composer(false, "thread"));
     expect(screen.getByRole("button", { name: "Switch directory" })).toBeEnabled();
     rerender(composer(false, "thread", true));
-    expect(screen.queryByRole("button", { name: "Switch directory" })).not.toBeInTheDocument();
-    expect(container.querySelector(".thread-composer-workspace-label")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch directory" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Switch directory" })).toHaveTextContent("workspace");
     const accessAfterLock = screen.getByRole("button", { name: "Workspace access mode: Full Access" });
     await user.click(accessAfterLock);
     await user.click(screen.getByRole("menuitemradio", { name: "Default Permission" }));

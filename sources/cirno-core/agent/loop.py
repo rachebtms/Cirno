@@ -701,7 +701,7 @@ class AgentLoop:
         from cirno_core.agent.conversation_control import ConversationControl
 
         from cirno_core.agent.approval.service import OperationApproval
-        self.operation_approval = OperationApproval(self.sessions, self.bus)
+        self.operation_approval = OperationApproval(self.sessions, self.bus, model_resolver=self.runtime_resolver)
         self.conversation_control = ConversationControl(self)
         runtime_control = AgentRuntimeControl(self)
         self.register_runtime_context_provider(runtime_control.workspace_context)

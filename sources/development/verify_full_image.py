@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
+import zipfile
 
 COMMANDS = (
     "git", "git-lfs", "gh", "tea", "go", "curl", "wget", "ssh", "scp", "sftp", "rsync", "rclone",
@@ -14,6 +16,38 @@ COMMANDS = (
     "node", "npm", "npx", "bun", "summarize", "mcporter", "gog", "xurl", "ffmpeg", "yt-dlp",
     "pandoc", "pdftotext", "tesseract", "sqlite3", "brew",
 )
+
+
+def check_persistence() -> None:
+    result = subprocess.run(["python", "-c", "import cirno_persistence_probe; assert cirno_persistence_probe.value == 'survives-recreation'"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    result = subprocess.run(["tea", "logins", "list"], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0 and "ci-persistence" in result.stdout, result.stdout + result.stderr
+    print("OK persistent Python package and Gitea login configuration", flush=True)
+
+
+def prepare_persistence() -> None:
+    # A local wheel keeps this check independent of PyPI and external accounts.
+    with tempfile.TemporaryDirectory() as temporary:
+        wheel = Path(temporary) / "cirno_persistence_probe-0.0.1-py3-none-any.whl"
+        dist = "cirno_persistence_probe-0.0.1.dist-info"
+        files = {
+            "cirno_persistence_probe.py": "value = 'survives-recreation'\n",
+            f"{dist}/METADATA": "Metadata-Version: 2.1\nName: cirno-persistence-probe\nVersion: 0.0.1\n",
+            f"{dist}/WHEEL": "Wheel-Version: 1.0\nGenerator: cirno-smoke\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+        }
+        files[f"{dist}/RECORD"] = "".join(f"{name},,\n" for name in [*files, f"{dist}/RECORD"])
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name, contents in files.items():
+                archive.writestr(name, contents)
+        subprocess.run(["python", "-m", "pip", "install", "--no-index", "--no-deps", str(wheel)], check=True)
+    config = Path(os.environ["XDG_CONFIG_HOME"]) / "tea" / "config.yml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("logins:\n  - name: ci-persistence\n    url: https://gitea.invalid\n    user: ci-owner\n    token: fixture-only\n    default: true\n")
+    config.chmod(0o600)
+    import importlib.util
+    assert importlib.util.find_spec("cirno_persistence_probe") is None, "User pip packages must not replace Cirno's environment"
+    check_persistence()
 
 
 def main() -> None:
@@ -54,7 +88,11 @@ def main() -> None:
     output = json.loads(result.stdout)
     assert len(output["vectors"][0]) == 512, output
     print(f'OK bundled BGE-small INT8 inference: {output["peak_mb"]:.1f} MB peak', flush=True)
+    prepare_persistence()
 
 
 if __name__ == "__main__":
-    main()
+    if "--check-persistence" in sys.argv:
+        check_persistence()
+    else:
+        main()

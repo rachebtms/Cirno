@@ -48,7 +48,7 @@ async function notifyClient(source, data) {
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
   const visible = !data.test && windows.some((client) => client.visibilityState === "visible");
   if (!visible) {
-    await self.registration.showNotification("cirno", {
+    await self.registration.showNotification("Cirno", {
       body: data.body, tag: data.key, icon: "/brand/cirno_snowflake_icon_192.png",
       data: { url, clientId: source.id },
     });

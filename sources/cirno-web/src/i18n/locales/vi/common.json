@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "Hiện lời nhắc tiếp tục",
           "help": "Hiện chỉ dẫn tiếp tục dưới dạng đầu vào hệ thống có nhãn nguồn."
+        },
+        "agents_defaults_workspace": {
+          "label": "Thư mục làm việc mặc định",
+          "help": "Đường dẫn tuyệt đối trên máy chủ. Áp dụng sau khi khởi động lại. Tệp và cuộc trò chuyện hiện có giữ nguyên vị trí."
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "Bật xét duyệt AI",
+          "help": "Khi tắt, thao tác cần phê duyệt sẽ được gửi trực tiếp cho bạn."
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "Mô hình xét duyệt",
+          "help": "Để trống để dùng mô hình của cuộc trò chuyện với ngữ cảnh xét duyệt riêng."
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "Thời gian xét duyệt tối đa (giây)",
+          "help": "Khi hết thời gian, thao tác sẽ được chuyển cho bạn phê duyệt."
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "Tiếp tục tác vụ đã dừng",
           "help": "Gửi yêu cầu mô hình mới với ngữ cảnh đã lưu, không chạy lại các công cụ đã hoàn tất."
+        },
+        "workspace": {
+          "title": "Thư mục làm việc mặc định"
+        },
+        "approval": {
+          "title": "Phê duyệt AI",
+          "help": "Trong chế độ xét duyệt AI, mô hình độc lập xem xét thao tác mà không tải bộ nhớ cuộc trò chuyện. Trường hợp chưa rõ sẽ chuyển cho bạn."
         }
       },
       "save": "Lưu thay đổi",
@@ -536,7 +559,8 @@
       "account": "Tài khoản",
       "heartbeat": "Nhịp đánh thức tác tử",
       "coordination": "Phối hợp hội thoại",
-      "regional": "Thời gian và khu vực"
+      "regional": "Thời gian và khu vực",
+      "approval": "Phê duyệt AI"
     },
     "sections": {
       "interface": "Giao diện",
@@ -1783,7 +1807,8 @@
       "newChat": "Bắt đầu chủ đề mới",
       "toggleTheme": "Chuyển chủ đề từ header",
       "settings": "Mở cài đặt",
-      "sessionInfo": "Chi tiết phiên"
+      "sessionInfo": "Chi tiết phiên",
+      "refresh": "Tải lại trang"
     },
     "sessionInfo": {
       "title": "Phiên",

@@ -8,6 +8,7 @@ import time
 from contextlib import asynccontextmanager
 
 from cirno_core.agent.tools.naming import NAMES
+from cirno_core.config.loader import load_config
 from cirno_core.bus.events import INBOUND_META_TURN_ID, InboundMessage
 from cirno_core.bus.runtime_events import GoalStateChanged, RuntimeEventContext
 from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY
@@ -24,11 +25,12 @@ from cirno_core.session.turn_continuation import INTERNAL_CONTINUATION_META, SKI
 
 
 class OperationApproval:
-    def __init__(self, sessions, bus, *, store=None, inbox=None):
+    def __init__(self, sessions, bus, *, store=None, inbox=None, model_resolver=None):
         self.sessions = sessions
         self.bus = bus
         self.store = store or ApprovalStore()
         self.inbox = inbox or NotificationInbox()
+        self.model_resolver = model_resolver
         self._locks = {}  # Only active review tasks retain locks.
 
     async def authorize(self, tool, params, request, boundary):
@@ -67,7 +69,21 @@ class OperationApproval:
                       if item.get("role") == "user" and item.get(INBOUND_META_TURN_ID) == request.turn_id
                       and not item.get("input_origin") and not item.get("session_message")), "")
         human = human if isinstance(human, str) and len(human) <= 6000 else ""
-        decision, reason = await review_operation(request.runtime, human_request=human, operation=operation)
+        settings = (await asyncio.to_thread(load_config)).agents.defaults.approval
+        runtime = request.runtime
+        if not settings.enabled:
+            decision, reason = "human", "AI review is disabled. The owner must approve this operation."
+        else:
+            try:
+                if settings.model_override and settings.model_override != "default":
+                    if self.model_resolver is None:
+                        raise ValueError("The configured review model is unavailable")
+                    runtime = self.model_resolver.resolve_preset(settings.model_override)
+            except Exception as error:
+                decision, reason = "human", f"The review model could not be loaded: {error}"
+            else:
+                decision, reason = await review_operation(runtime, human_request=human, operation=operation,
+                                                         timeout_seconds=settings.timeout_seconds)
         fresh = await self.sessions.state.read_header(request.session_key)
         if fresh is None or fresh.generation != request.session_generation:
             raise PermissionError("The conversation changed during review; the operation was not executed.")

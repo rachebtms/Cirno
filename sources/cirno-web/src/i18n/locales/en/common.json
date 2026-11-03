@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "Show continuation message",
           "help": "Display the continuation instruction as a labeled system input in the conversation."
+        },
+        "agents_defaults_workspace": {
+          "label": "Default workspace",
+          "help": "Absolute directory on the server. Restart to apply. Existing files and conversations keep their original locations."
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "Enable AI review",
+          "help": "When disabled, operations requiring approval go directly to you."
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "Review model",
+          "help": "Leave empty to use the conversation model with a fresh review context."
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "Review timeout (seconds)",
+          "help": "A timeout sends the operation to you for approval."
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "Continue stopped tasks",
           "help": "Continue from saved context. Completed tool calls are not replayed, and generation starts a new model request."
+        },
+        "workspace": {
+          "title": "Default workspace"
+        },
+        "approval": {
+          "title": "AI approvals",
+          "help": "An independent model reviews operations in AI Review access mode without loading conversation memory. Uncertain decisions go to you."
         }
       },
       "save": "Save changes",
@@ -536,7 +559,8 @@
       "account": "Account",
       "heartbeat": "Agent heartbeat",
       "coordination": "Conversation coordination",
-      "regional": "Time & region"
+      "regional": "Time & region",
+      "approval": "AI approvals"
     },
     "sections": {
       "interface": "Interface",
@@ -1783,7 +1807,8 @@
       "newChat": "Start a new conversation",
       "toggleTheme": "Toggle theme from header",
       "settings": "Open settings",
-      "sessionInfo": "Session details"
+      "sessionInfo": "Session details",
+      "refresh": "Refresh page"
     },
     "sessionInfo": {
       "title": "Session",

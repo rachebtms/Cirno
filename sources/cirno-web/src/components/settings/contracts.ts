@@ -15,6 +15,7 @@ export type SettingsSectionKey =
   | "context"
   | "dream"
   | "memory-search"
+  | "approval"
   | "execution"
   | "shell"
   | "network"

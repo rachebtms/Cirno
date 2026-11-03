@@ -337,6 +337,7 @@ describe("durable run recovery", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(client.getRunStartedAt("inactive")).toBeNull();
     expect(client.getRunStartedAt("running")).toBe(456);
+    expect(webuiThreadCache.get("websocket:running")).toEqual(body);
     expect(client.getRunTurnId("running")).toBe("turn-running");
     expect(client.hasUnsettledRun("running")).toBe(true);
     expect(runStatus).toHaveBeenCalledTimes(3);

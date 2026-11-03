@@ -417,6 +417,7 @@ export function SettingsPage({
       case "context":
       case "dream":
       case "memory-search":
+      case "approval":
       case "execution":
       case "shell":
       case "network":

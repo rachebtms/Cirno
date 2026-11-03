@@ -180,3 +180,10 @@ describe("Mobile context usage sheet", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
+
+it("shows a context ring while the first model call has no usage yet", () => {
+  render(<ComposerUsagePopover context={null} rounds={[]} pending />);
+  expect(screen.getByTestId("composer-context-usage")).toBeInTheDocument();
+  expect(screen.getByTestId("composer-context-meter")).toBeInTheDocument();
+  expect(screen.getByTestId("composer-context-usage")).not.toHaveAccessibleName(/Context 0%/);
+});

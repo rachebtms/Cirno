@@ -62,12 +62,11 @@ class _FakeWindowsJob:
 class TestBuildEnvUnix:
 
     def test_expected_keys(self):
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", False):
+        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", False), patch.dict(
+            os.environ, {"HOME": "/home/test", "LANG": "en_US.UTF-8", "TERM": "xterm", "PATH": "/usr/bin"}, clear=True,
+        ):
             env = ExecTool()._build_env()
-        expected = {"HOME", "LANG", "TERM", "PYTHONUNBUFFERED"}
-        assert expected <= set(env)
-        if sys.platform != "win32":
-            assert set(env) == expected
+        assert set(env) == {"HOME", "LANG", "TERM", "PATH", "PYTHONUNBUFFERED"}
 
     def test_home_from_environ(self, monkeypatch):
         monkeypatch.setenv("HOME", "/Users/dev")

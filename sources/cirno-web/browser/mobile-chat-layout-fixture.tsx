@@ -34,9 +34,9 @@ export function MobileChatLayoutFixture({ parameters }: { parameters: URLSearchP
         sessionInfoAction={<Button variant="ghost" size="icon" aria-label="Session details"><CalendarClock className="h-3.5 w-3.5" /></Button>}
         promptNavigatorAction={<Button variant="ghost" size="icon" aria-label="Conversation navigation"><ListFilter className="h-3.5 w-3.5" /></Button>}
       />
-      <ThreadViewport messages={messages} isStreaming={false} conversationReady conversationKey="websocket:mobile-layout-preview"
+      <ThreadViewport messages={messages} isStreaming={parameters.has("pending")} conversationReady conversationKey="websocket:mobile-layout-preview"
         hasMoreBefore={false} showScrollToBottomButton
-        composer={<ThreadComposer variant="thread" onSend={() => {}}
+        composer={<ThreadComposer variant="thread" onSend={() => {}} isStreaming={parameters.has("pending")} activeTurnId={parameters.has("pending") ? "layout-pending" : null} onStop={() => {}}
           modelLabel="6.1-max" modelProvider="openai-codex"
           contextUsage={parameters.has("no-context") ? null : { contextTokens: 44_000, contextWindowTokens: 200_000 }}
           workspaceScope={scope} workspaceDefaultScope={initialScope} workspaceControls={catalog.controls}

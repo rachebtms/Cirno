@@ -72,7 +72,7 @@ def test_runtime_patch_persists_and_preserves_other_domains(tmp_path):
 
 @pytest.mark.parametrize("values", [
     {"channels.telegram.token": "bad"},
-    {"agents.defaults.workspace": "/not-editable-from-settings"},
+    {"agents.defaults.workspace": "relative-directory"},
     {"providers.openai.api_key": "bad"},
     {"tools.exec": {"enable": False}},
     {"agents.defaults.max_concurrent_subagents": 0},
@@ -237,3 +237,20 @@ def test_idle_compaction_config_can_be_read_and_updated(tmp_path):
     defaults = json.loads(path.read_text(encoding="utf-8"))["agents"]["defaults"]
     assert defaults["idleCompactAfterMinutes"] == 0
     assert "sessionTtlMinutes" not in defaults
+
+
+def test_default_workspace_and_approval_settings_roundtrip(tmp_path):
+    path = tmp_path / "config.json"
+    save_config(Config(), path)
+    workspace = tmp_path / "new-workspace"
+    result = update_runtime_config_settings({
+        "agents.defaults.workspace": str(workspace),
+        "agents.defaults.approval.enabled": False,
+        "agents.defaults.approval.timeout_seconds": 45,
+    }, config_path=path)
+    saved = load_config(path)
+    assert saved.workspace_path == workspace
+    assert saved.agents.defaults.approval.enabled is False
+    assert saved.agents.defaults.approval.timeout_seconds == 45
+    assert result["requires_restart"]
+    assert not workspace.exists()  # A settings edit does not move or create task files.

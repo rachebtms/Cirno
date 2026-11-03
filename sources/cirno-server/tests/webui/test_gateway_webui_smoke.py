@@ -176,6 +176,12 @@ async def test_gateway_webui_bootstrap_message_and_thread_hydration(tmp_path: Pa
             ready = await _recv_until(ws, "ready")
             assert ready["client_id"] == "smoke"
 
+            await ws.send(json.dumps({"type": "webui_request", "request_id": "foreground-check",
+                                      "action": "connection.check", "payload": {}}))
+            check = await _recv_until(ws, "webui_response")
+            assert check == {"event": "webui_response", "request_id": "foreground-check",
+                             "ok": True, "result": {"connected": True}}
+
             await ws.send(json.dumps({"type": "new_chat"}))
             attached = await _recv_until(ws, "attached")
             chat_id = attached["chat_id"]

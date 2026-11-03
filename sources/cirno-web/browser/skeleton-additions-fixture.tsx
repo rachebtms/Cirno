@@ -30,6 +30,7 @@ const skill: SkillDetail = {
 };
 const previewSettings: SettingsPayload = {
   ...settings,
+  version: { current: "0.1.3", commit: null },
   advanced: { ...settings.advanced, exec_max_runtime_limit: 86400 },
   model_presets: [{ name: "primary", model: "openai-codex/gpt-6.1-sol", provider: "openai", resolved_provider: "openai", active: true, is_default: false,
     max_tokens: 8192, context_window_tokens: 500_000, temperature: 0.1, reasoning_effort: "max" }],

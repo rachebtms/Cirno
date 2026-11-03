@@ -741,11 +741,11 @@ export function ThreadShell({
   const lastCompactionId = [...displayMessages].reverse().find(message => message.kind === "compaction"
     && message.compaction?.phase === "succeeded")?.compaction?.id;
   const [measuredContext, setMeasuredContext] = useState<{
-    key: string; compactionId: string; usage?: ComposerContextUsage; error?: string;
+    key: string; compactionId: string | undefined; usage?: ComposerContextUsage; error?: string;
   } | null>(null);
   const needsContextMeasurement = recordedContextUsage === null;
   useEffect(() => {
-    if (!previewSessionKey || !lastCompactionId || !needsContextMeasurement) return;
+    if (!previewSessionKey || !needsContextMeasurement || displayMessages.length === 0) return;
     let cancelled = false;
     void client.requestMutation<{ context_tokens: number; context_window_tokens: number; estimated: boolean }>(
       "session.context_usage", { session_key: previewSessionKey },
@@ -756,7 +756,7 @@ export function ThreadShell({
       if (!cancelled) setMeasuredContext({ key: previewSessionKey, compactionId: lastCompactionId, error: error.message });
     });
     return () => { cancelled = true; };
-  }, [client, previewSessionKey, lastCompactionId, needsContextMeasurement]);
+  }, [client, previewSessionKey, lastCompactionId, needsContextMeasurement, isStreaming, displayMessages.length]);
   const currentMeasurement = measuredContext?.key === previewSessionKey && measuredContext?.compactionId === lastCompactionId ? measuredContext : null;
   const composerContextUsage = recordedContextUsage ?? currentMeasurement?.usage ?? null;
   const composerContextError = needsContextMeasurement ? currentMeasurement?.error : undefined;
@@ -916,9 +916,10 @@ export function ThreadShell({
     [settings],
   );
   const availableSlashCommands = useMemo(
-    () => temporary
+    () => temporary && session
       ? slashCommands.filter(({ command }) => command === "/model" || command === "/stop")
-      : slashCommands.filter(({ command }) => command !== "/clear" || session?.key === "websocket:global"),
+      : slashCommands.filter(({ command }) => (!session || !["/ptc", "/temporary"].includes(command))
+        && (command !== "/clear" || session?.key === "websocket:global")),
     [slashCommands, temporary, session?.key],
   );
   const modelBadge = useMemo(

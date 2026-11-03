@@ -266,6 +266,7 @@ export class CirnoClient {
   // Set by ``close()`` so the onclose handler knows the drop was intentional
   // and must not schedule a reconnect or flip status back to "reconnecting".
   private intentionallyClosed = false;
+  private foregroundCheck: Promise<void> | null = null;
 
   constructor(private options: CirnoClientOptions) {
     this.shouldReconnect = options.reconnect ?? true;
@@ -556,6 +557,36 @@ export class CirnoClient {
     }
     this.clearTemporaryChats();
     this.setStatus("closed");
+  }
+
+  /** Mobile browsers can leave a suspended socket looking OPEN after it has died. */
+  resumeFromBackground(): Promise<void> {
+    if (this.intentionallyClosed || this.status_ === "idle" || this.status_ === "connecting") return Promise.resolve();
+    if (this.foregroundCheck) return this.foregroundCheck;
+    this.foregroundCheck = this.restoreForegroundConnection().finally(() => { this.foregroundCheck = null; });
+    return this.foregroundCheck;
+  }
+
+  private async restoreForegroundConnection(): Promise<void> {
+    const socket = this.socket;
+    if (socket?.readyState === WS_OPEN) {
+      try {
+        await this.requestMutation("connection.check", {}, 5_000);
+        if (socket !== this.socket || this.intentionallyClosed) return;
+        for (const chatId of this.knownChats) this.rawSend({ type: "attach", chat_id: chatId });
+        return;
+      } catch {
+        if (socket !== this.socket || this.intentionallyClosed) return;
+      }
+    }
+    if (!this.shouldReconnect || this.intentionallyClosed) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    if (socket) {
+      socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+      socket.close();
+    }
+    this.handleClose(undefined, true);
   }
 
   discardTemporaryChat(chatId: string): void {
@@ -1085,7 +1116,7 @@ export class CirnoClient {
     for (const handler of this.chatHandlers.get(chatId) ?? []) handler(ev);
   }
 
-  private handleClose(event?: { code?: number }): void {
+  private handleClose(event?: { code?: number }, immediate = false): void {
     this.upload = null;
     this.receipts.close();
     this.socket = null;
@@ -1136,7 +1167,7 @@ export class CirnoClient {
       this.setStatus("closed");
       return;
     }
-    this.scheduleReconnect();
+    this.scheduleReconnect(immediate ? 0 : undefined);
   }
 
   private emitError(error: StreamError): void {
@@ -1169,11 +1200,11 @@ export class CirnoClient {
     pending.reject(new Error(detail));
   }
 
-  private scheduleReconnect(): void {
+  private scheduleReconnect(delayOverride?: number): void {
     this.setStatus("reconnecting");
     const attempt = this.reconnectAttempts++;
     // Exponential backoff: 0.5s, 1s, 2s, 4s, capped.
-    const delay = Math.min(500 * 2 ** attempt, this.maxBackoffMs);
+    const delay = delayOverride ?? Math.min(500 * 2 ** attempt, this.maxBackoffMs);
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
       if (this.options.onReauth) {

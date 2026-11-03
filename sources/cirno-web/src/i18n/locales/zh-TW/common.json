@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "顯示繼續執行訊息",
           "help": "在對話中顯示帶系統來源標記的繼續執行指令。"
+        },
+        "agents_defaults_workspace": {
+          "label": "預設工作目錄",
+          "help": "伺服器上的絕對目錄路徑。重新啟動後生效；現有檔案和對話仍保留在原位置。"
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "啟用 AI 審批",
+          "help": "關閉後，需要審批的操作直接交由你處理。"
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "審批模型",
+          "help": "留空時使用目前對話的模型，但使用獨立的審查上下文。"
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "審批逾時（秒）",
+          "help": "逾時後將操作轉交給你審批。"
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "停止後繼續執行",
           "help": "從已儲存的上下文繼續，重新發起模型請求，不會自動重播已完成的工具呼叫。"
+        },
+        "workspace": {
+          "title": "預設工作目錄"
+        },
+        "approval": {
+          "title": "AI 審批",
+          "help": "AI 審批存取模式使用獨立模型審查操作，不載入對話記憶。無法確定時交由你審批。"
         }
       },
       "save": "儲存變更",
@@ -536,7 +559,8 @@
       "account": "帳戶",
       "heartbeat": "Agent 心跳",
       "coordination": "對話協作",
-      "regional": "時間與地區"
+      "regional": "時間與地區",
+      "approval": "AI 審批"
     },
     "sections": {
       "interface": "介面",
@@ -1783,7 +1807,8 @@
       "newChat": "開始新會話",
       "toggleTheme": "切換佈景會話",
       "settings": "開啟設定",
-      "sessionInfo": "對話詳細資料"
+      "sessionInfo": "對話詳細資料",
+      "refresh": "重新整理頁面"
     },
     "sessionInfo": {
       "title": "對話",

@@ -4635,7 +4635,7 @@ describe("ThreadShell", () => {
     }
   });
 
-  it("does not refresh an idle thread for visibility notifications", async () => {
+  it("refreshes an idle thread once after returning from the background", async () => {
     const client = makeClient();
     let historyCalls = 0;
     const visibilityDescriptor = Object.getOwnPropertyDescriptor(document, "visibilityState");
@@ -4678,7 +4678,7 @@ describe("ThreadShell", () => {
         await Promise.resolve();
       });
 
-      expect(historyCalls).toBe(1);
+      expect(historyCalls).toBe(2);
     } finally {
       restoreDocumentVisibility(visibilityDescriptor);
     }
@@ -5774,7 +5774,7 @@ describe("ThreadShell", () => {
     expect(screen.getByTestId("thread-header")).not.toHaveTextContent("alpha");
 
     rerender(wrap(client, <ThreadShell {...props} session={{ ...session("project-chat"), projectLocked }} />));
-    expect(screen.queryByRole("button", { name: "Switch directory" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch directory" })).toBeDisabled();
     expect(screen.getByTestId("thread-header")).not.toHaveTextContent("alpha");
     expect(screen.getByRole("button", { name: "Workspace access mode: Default Permission" })).toBeEnabled();
   });
@@ -5830,6 +5830,35 @@ describe("ThreadShell", () => {
 
     expect(client.sendMessage).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "Stop response" })).toBeInTheDocument();
+  });
+
+  it("shows first-turn context usage during reasoning before completion metadata", async () => {
+    const client = makeClient();
+    const chatId = "first-context";
+    render(wrap(client, <ThreadShell session={session(chatId)} title="First call" onToggleSidebar={() => {}} />));
+    await act(async () => {});
+    act(() => {
+      client._emitChat(chatId, { event: "goal_status", chat_id: chatId, turn_id: "first-turn", status: "running", started_at: 100 });
+      client._emitChat(chatId, { event: "reasoning_delta", chat_id: chatId, turn_id: "first-turn", text: "Working through the request" });
+    });
+    expect(await screen.findByTestId("composer-context-usage")).toBeInTheDocument();
+    expect(screen.getByTestId("composer-context-meter")).toBeInTheDocument();
+  });
+
+  it("offers creation-only commands only on the new-conversation page", async () => {
+    const client = makeClient();
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).endsWith("/api/commands")
+      ? httpJson({ commands: ["/ptc", "/temporary", "/model"].map(command => ({ command, title: command, description: command, icon: "code", lifecycle: "side_channel", accepts_args: true, arg_hint: "on|off" })) })
+      : { ok: false, status: 404, json: async () => ({}) }));
+    const view = render(wrap(client, <ThreadShell session={null} title="New" onToggleSidebar={() => {}} onPtcModeEnabledChange={() => {}} onTemporaryChatEnabledChange={() => {}} />));
+    const input = screen.getByRole("textbox", { name: "Message input" });
+    fireEvent.change(input, { target: { value: "/ptc" } });
+    expect(await screen.findByRole("option", { name: /PTC/ })).toBeInTheDocument();
+    for (const id of ["global", "ordinary"]) {
+      view.rerender(wrap(client, <ThreadShell session={session(id)} title={id} onToggleSidebar={() => {}} />));
+      fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), { target: { value: "/ptc" } });
+      expect(screen.queryByRole("option", { name: /PTC/ })).not.toBeInTheDocument();
+    }
   });
 
 });

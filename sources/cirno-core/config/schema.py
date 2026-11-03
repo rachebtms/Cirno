@@ -183,6 +183,14 @@ class ResumeConfig(Base):
         return value
 
 
+class ApprovalConfig(Base):
+    """Independent operation review; uncertain or disabled reviews go to the owner."""
+
+    enabled: bool = True
+    model_override: str | None = None
+    timeout_seconds: int = Field(default=30, ge=1, le=300)
+
+
 class AgentDefaults(Base):
     """Default agent configuration."""
 
@@ -198,6 +206,7 @@ class AgentDefaults(Base):
     fallback_models: list[FallbackCandidate] = Field(default_factory=list)
     goal_continuation_limit: int = Field(default=0, ge=0)
     resume: ResumeConfig = Field(default_factory=ResumeConfig)
+    approval: ApprovalConfig = Field(default_factory=ApprovalConfig)
     max_tool_iterations: int = 200
     max_concurrent_subagents: int = Field(default=4, ge=1)
     max_tool_result_chars: int = 16_000

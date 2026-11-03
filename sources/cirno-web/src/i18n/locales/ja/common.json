@@ -377,6 +377,22 @@
         "agents_defaults_resume_show_message": {
           "label": "再開メッセージを表示",
           "help": "再開の指示をシステム入力として会話に表示します。"
+        },
+        "agents_defaults_workspace": {
+          "label": "既定の作業ディレクトリ",
+          "help": "サーバー上の絶対パスです。再起動後に適用されます。既存のファイルと会話の場所は変わりません。"
+        },
+        "agents_defaults_approval_enabled": {
+          "label": "AI 審査を有効にする",
+          "help": "無効にすると承認が必要な操作を直接あなたに確認します。"
+        },
+        "agents_defaults_approval_model_override": {
+          "label": "審査モデル",
+          "help": "空欄の場合、会話のモデルを独立した審査コンテキストで使用します。"
+        },
+        "agents_defaults_approval_timeout_seconds": {
+          "label": "審査のタイムアウト（秒）",
+          "help": "タイムアウトした操作はあなたの承認に回されます。"
         }
       },
       "groups": {
@@ -459,6 +475,13 @@
         "resume": {
           "title": "停止したタスクの再開",
           "help": "保存したコンテキストから新しいモデルリクエストを開始します。完了したツール呼び出しは再実行しません。"
+        },
+        "workspace": {
+          "title": "既定の作業ディレクトリ"
+        },
+        "approval": {
+          "title": "AI 承認",
+          "help": "AI 承認モードでは独立したモデルが会話の記憶を読み込まずに操作を審査します。不明な場合はあなたに確認します。"
         }
       },
       "save": "変更を保存",
@@ -536,7 +559,8 @@
       "account": "アカウント",
       "heartbeat": "エージェントのハートビート",
       "coordination": "会話の連携",
-      "regional": "日時と地域"
+      "regional": "日時と地域",
+      "approval": "AI 承認"
     },
     "sections": {
       "interface": "インターフェース",
@@ -1783,7 +1807,8 @@
       "newChat": "新しいトピックを開始",
       "toggleTheme": "ヘッダーからテーマを切り替える",
       "settings": "設定を開く",
-      "sessionInfo": "セッション詳細"
+      "sessionInfo": "セッション詳細",
+      "refresh": "ページを再読み込み"
     },
     "sessionInfo": {
       "title": "セッション",

@@ -48,7 +48,7 @@ def operation_evidence(tool_name, params, workspace):
     return {"tool": tool_name, "arguments": params, "workspace": str(workspace), "scripts": scripts, "resolved_paths": resolved}
 
 
-async def review_operation(runtime, *, human_request, operation):
+async def review_operation(runtime, *, human_request, operation, timeout_seconds=30):
     if runtime is None:
         return "human", "No review model is configured."
     if any("unavailable" in script for script in operation["scripts"]):
@@ -57,7 +57,7 @@ async def review_operation(runtime, *, human_request, operation):
     if not human_request or len(evidence) > 72000:
         return "human", "The human request or bounded operation evidence is insufficient."
     try:
-        async with asyncio.timeout(30):
+        async with asyncio.timeout(timeout_seconds):
             response = await runtime.provider.chat_with_retry(
                 messages=[{"role": "system", "content": POLICY}, {"role": "user", "content": evidence}],
                 tools=[], model=runtime.model, max_tokens=768, temperature=0, reasoning_effort=None,

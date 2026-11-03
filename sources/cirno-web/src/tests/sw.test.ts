@@ -178,7 +178,7 @@ describe("browser notification worker", () => {
     const restarted = loadSw(sw.noticeStore);
     expect(await send(restarted)).toHaveBeenCalledWith("skipped");
     expect(restarted.showNotification).not.toHaveBeenCalled();
-    expect(sw.showNotification).toHaveBeenCalledWith("cirno", expect.objectContaining({
+    expect(sw.showNotification).toHaveBeenCalledWith("Cirno", expect.objectContaining({
       body: "Task completed", data: { url, clientId: "tab-1" },
     }));
   });
