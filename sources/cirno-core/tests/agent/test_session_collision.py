@@ -1,6 +1,7 @@
-"""Session keys remain distinct even when their display filenames collide."""
+"""Session keys remain distinct without filename normalization."""
 
-from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
 
 
 def test_colliding_display_names_roundtrip_independently(tmp_path):
@@ -10,7 +11,6 @@ def test_colliding_display_names_roundtrip_independently(tmp_path):
         session = Session(key=key)
         session.add_message("user", key)
         manager.save(session)
-    assert manager.safe_key(keys[0]) == manager.safe_key(keys[1])
     assert len(manager.list_sessions()) == len(keys)
     for key in keys:
         assert manager.read_session_file(key)["messages"][0]["content"] == key

@@ -7,8 +7,8 @@ from contextlib import contextmanager
 from unittest.mock import patch
 
 import pytest
-
-from cirno_core.agent.tools.web import WebFetchTool, _validate_url
+from cirno_core.agent.tools.web.fetch import WebFetchTool
+from cirno_core.agent.tools.web.network import _validate_url
 
 
 def _fake_resolve_public(hostname, port, family=0, type_=0):
@@ -46,8 +46,8 @@ class FakeClient:
 def _patched_web_fetch():
     with (
         patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public),
-        patch("cirno_core.agent.tools.web.httpx.AsyncClient", FakeClient),
-        patch("cirno_core.agent.tools.web._pinned_dns_transport", lambda: object()),
+        patch("httpx.AsyncClient", FakeClient),
+        patch("cirno_core.agent.tools.web.network._pinned_dns_transport", lambda: object()),
     ):
         yield
 

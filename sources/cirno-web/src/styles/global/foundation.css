@@ -1,0 +1,311 @@
+/* Notices and the input share one width, including the compact screen inset. */
+.thread-composer-stack {
+  --composer-content-width: 49.5rem;
+  width: 100%;
+  max-width: var(--composer-content-width);
+  margin-inline: auto;
+}
+.thread-composer-stack.is-hero {
+  --composer-content-width: 58rem;
+}
+.subagent-task-dock {
+  --subagent-handle-inset: var(--radius-panel);
+  width: calc(100% - 0.5rem - 2 * var(--subagent-handle-inset));
+  max-width: calc(var(--composer-content-width, 49.5rem) - 2 * var(--subagent-handle-inset));
+}
+.thread-composer-stack.is-hero .subagent-task-dock {
+  --subagent-handle-inset: var(--radius-prominent);
+  width: calc(100% - 2 * var(--subagent-handle-inset));
+}
+.thread-composer-stack:has(> .subagent-task-dock) .thread-composer-form {
+  padding-top: 0;
+}
+.thread-composer-notice, .thread-composer-inline-status {
+  width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+}
+@container cirno-tab (min-width: 640px) {
+  .subagent-task-dock {
+    width: calc(100% - 2 * var(--subagent-handle-inset));
+  }
+}
+
+@supports (content-visibility: auto) {
+  .apps-catalog-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 4.25rem;
+  }
+}
+
+/* Only gradient owners need interpolable colors; palette tokens remain unchanged. */
+@property --thread-history-background {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+@property --host-glass-spot {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+@property --host-glass-start {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+@property --host-glass-end {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
+/* Design tokens — HSL form, sourced from shadcn/ui's "neutral" palette. */
+@layer base {
+  :root {
+    color-scheme: light;
+    --content-link: #0369a1;
+    --content-link-hover: #075985;
+    --cirno-background: 0 0% 100%;
+    --cirno-foreground: 240 3% 12%;
+    --cirno-card: 0 0% 100%;
+    --cirno-card-foreground: 240 3% 12%;
+    --cirno-popover: 0 0% 100%;
+    --cirno-popover-foreground: 240 3% 12%;
+    --cirno-primary: 240 4% 16%;
+    --cirno-primary-foreground: 0 0% 98%;
+    --cirno-secondary: 0 0% 96.1%;
+    --cirno-secondary-foreground: 0 0% 9%;
+    --cirno-muted: 0 0% 96.1%;
+    --cirno-muted-foreground: 240 4% 40%;
+    --cirno-accent: 0 0% 96.1%;
+    --cirno-accent-foreground: 0 0% 9%;
+    --cirno-destructive: 0 73.7% 41.8%;
+    --cirno-destructive-foreground: 0 0% 98%;
+    --cirno-border: 40 8% 90.5%;
+    --cirno-input: 40 8% 90.5%;
+    --cirno-ring: 0 0% 3.9%;
+    --inline-token-highlight: #ad450b;
+    --inline-reference-highlight: rgb(244 169 73);
+    --code-comment: #62626b;
+    --code-string: #166534;
+    --code-keyword: #7e22ce;
+    --code-function: #1d4ed8;
+    --code-property: #854d0e;
+    --diff-added: rgb(16 185 129 / 0.09);
+    --diff-added-foreground: #047857;
+    --diff-deleted: rgb(244 63 94 / 0.09);
+    --diff-deleted-foreground: #be123c;
+    --usage-token: 29 86% 56%;
+    --session-handle-lightness: 0.5;
+    --session-handle-chroma: 0.12;
+    --temporary-control-active: #ef8e30;
+    --temporary-foreground: 17 88% 32%;
+    --radius: 0.4375rem;
+    /* Shared shape scale: marks, compact content, controls, and progressively larger surfaces. */
+    --radius-mark: 0.25rem;
+    --radius-compact: 0.5rem;
+    --radius-control: 0.75rem;
+    --radius-floating: 1.125rem;
+    --radius-panel: 1.375rem;
+    --radius-modal: 2rem;
+    --radius-prominent: 1.75rem;
+    --radius-pill: 9999px;
+    --corner-shape: round;
+    --content-column-width: 49.5rem;
+    --cirno-sidebar: 40 8% 96.8%;
+    --cirno-sidebar-foreground: 0 0% 3.9%;
+    --cirno-sidebar-content: 240 3% 30%;
+    --cirno-sidebar-muted-foreground: 240 2% 44%;
+    --cirno-sidebar-selected: 40 1% 89.4%;
+    --cirno-sidebar-accent: 0 0% 95.8%;
+    --cirno-sidebar-accent-foreground: 0 0% 9%;
+    --cirno-sidebar-border: 40 8% 90.5%;
+    --cirno-settings-canvas: var(--cirno-background);
+    --cirno-settings-surface: 60 6% 96.7%;
+    --automation-view-track: hsl(0 0% 91%);
+    --scrollbar-thumb: hsl(var(--cirno-muted-foreground) / 0.26);
+    --scrollbar-thumb-hover: hsl(var(--cirno-muted-foreground) / 0.42);
+  }
+
+  /* Reading roles share one scale across breakpoints and the settings preview. */
+  :root, .reading-typography {
+    --text-reading-size: 16px;
+    --text-composer-size: var(--text-reading-size);
+    --text-code-size: max(12px, calc(var(--text-reading-size) * 0.875));
+    --text-code-dense-size: max(12px, calc(var(--text-reading-size) * 0.75));
+  }
+
+  :root[data-reading-text-size="small"], .reading-typography[data-reading-text-size="small"] {
+    --text-reading-size: 14px;
+  }
+
+  :root[data-reading-text-size="large"], .reading-typography[data-reading-text-size="large"] {
+    --text-reading-size: 18px;
+  }
+
+  :root[data-reading-text-size="custom"], .reading-typography[data-reading-text-size="custom"] {
+    --text-reading-size: var(--custom-reading-size, 16px);
+  }
+
+  @media (max-width: 639px) {
+    :root, .reading-typography {
+      /* Prevent iOS from zooming the page when a smaller reading size is selected. */
+      --text-composer-size: max(16px, var(--text-reading-size));
+    }
+  }
+
+  .dark {
+    color-scheme: dark;
+    --content-link: #bae6fd;
+    --content-link-hover: #e0f2fe;
+    --cirno-background: 0 0% 19%;
+    --cirno-foreground: 240 4% 96%;
+    --cirno-card: 0 0% 22%;
+    --cirno-card-foreground: 240 4% 96%;
+    --cirno-popover: var(--cirno-card);
+    --cirno-popover-foreground: 240 4% 96%;
+    --cirno-primary: 240 5% 98%;
+    --cirno-primary-foreground: 0 0% 9%;
+    --cirno-secondary: var(--cirno-card);
+    --cirno-secondary-foreground: 0 0% 98%;
+    --cirno-muted: var(--cirno-card);
+    --cirno-muted-foreground: 0 0% 72%;
+    --cirno-accent: 0 0% 25%;
+    --cirno-accent-foreground: 0 0% 98%;
+    /* Destructive text needs contrast on dark surfaces; filled controls use a dark label. */
+    --cirno-destructive: 0 93.5% 81.8%;
+    --cirno-destructive-foreground: 0 0% 9%;
+    --cirno-border: 0 0% 28%;
+    --cirno-input: var(--cirno-border);
+    --cirno-ring: 0 0% 83.1%;
+    --inline-token-highlight: #ef8e30;
+    --inline-reference-highlight: rgb(244 169 73);
+    --code-comment: #c8c8d0;
+    --code-string: #b5d99c;
+    --code-keyword: #e3a5f7;
+    --code-function: #93c5fd;
+    --code-property: #f6c177;
+    --diff-added: rgb(110 231 183 / 0.11);
+    --diff-added-foreground: #6ee7b7;
+    --diff-deleted: rgb(253 164 175 / 0.11);
+    --diff-deleted-foreground: #fda4af;
+    --session-handle-lightness: 0.75;
+    --session-handle-chroma: 0.11;
+    --temporary-control-active: #ef8e30;
+    --temporary-foreground: 32 98% 73%;
+    --cirno-sidebar: var(--cirno-card);
+    --cirno-sidebar-foreground: 0 0% 98%;
+    --cirno-sidebar-content: 240 3% 84%;
+    --cirno-sidebar-muted-foreground: 240 2% 70%;
+    --cirno-sidebar-selected: 0 0% 29.8%;
+    --cirno-sidebar-accent: var(--cirno-background);
+    --cirno-sidebar-accent-foreground: 0 0% 98%;
+    --cirno-sidebar-border: var(--cirno-border);
+    --cirno-settings-canvas: var(--cirno-background);
+    --cirno-settings-surface: var(--cirno-card);
+    --automation-view-track: hsl(var(--cirno-muted) / 0.65);
+    --scrollbar-thumb: hsl(var(--cirno-muted-foreground) / 0.28);
+    --scrollbar-thumb-hover: hsl(var(--cirno-muted-foreground) / 0.44);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  *,
+  ::before,
+  ::after {
+    corner-shape: var(--corner-shape);
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    overflow: hidden;
+    text-autospace: normal;
+  }
+
+  /* Keep source text and editable values visually literal. */
+  pre,
+  code,
+  kbd,
+  samp,
+  .font-mono,
+  input,
+  textarea,
+  [contenteditable="true"] {
+    text-autospace: no-autospace;
+  }
+
+  #root.visual-viewport {
+    position: fixed;
+    top: var(--app-viewport-top);
+    left: 0;
+    width: 100%;
+    height: var(--app-viewport-height);
+  }
+
+  /* A landscape keyboard can leave less room than the composer needs. Keep
+     navigation reachable and scroll the composer instead of overlapping it. */
+  #root.visual-viewport .workbench-body {
+    min-height: 2.75rem;
+  }
+
+  /* Body portals share the viewport owner's short-frame state. A landscape
+     keyboard needs input and results beside each other, not stacked. */
+  @media (min-width: 640px) {
+    body:has(> #root.short-visual-viewport) .session-search-dialog {
+      flex-direction: row;
+    }
+
+    body:has(> #root.short-visual-viewport) .session-search-input {
+      width: 40%;
+      height: auto;
+      border-bottom-width: 0;
+      border-right-width: 1px;
+    }
+
+    body:has(> #root.short-visual-viewport) .session-search-label {
+      @apply sr-only;
+    }
+  }
+
+  * {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: var(--radius-pill);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::selection {
+    @apply bg-primary/15;
+  }
+}

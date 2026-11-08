@@ -13,9 +13,14 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from cirno_core.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
+from cirno_core.agent.tools.exec_session import ExecSessionTool
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell import tokens as shell_tokens
+from cirno_core.agent.tools.shell.policy import CommandPolicy
+from cirno_core.processes import launch as process_launch
+from cirno_core.processes import lifecycle as process_lifecycle
+from cirno_core.processes.environment import ExecutionEnvironment
+from cirno_core.processes.sessions import ExecSessionManager
 
 _WINDOWS_ENV_KEYS = {
     "APPDATA", "LOCALAPPDATA", "ProgramData",
@@ -62,23 +67,23 @@ class _FakeWindowsJob:
 class TestBuildEnvUnix:
 
     def test_expected_keys(self):
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", False), patch.dict(
+        with patch("cirno_core.processes.platform.IS_WINDOWS", False), patch.dict(
             os.environ, {"HOME": "/home/test", "LANG": "en_US.UTF-8", "TERM": "xterm", "PATH": "/usr/bin"}, clear=True,
         ):
-            env = ExecTool()._build_env()
+            env = ExecTool().preparation.environment.build()
         assert set(env) == {"HOME", "LANG", "TERM", "PATH", "PYTHONUNBUFFERED"}
 
     def test_home_from_environ(self, monkeypatch):
         monkeypatch.setenv("HOME", "/Users/dev")
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", False):
-            env = ExecTool()._build_env()
+        with patch("cirno_core.processes.platform.IS_WINDOWS", False):
+            env = ExecTool().preparation.environment.build()
         assert env["HOME"] == "/Users/dev"
 
     def test_secrets_excluded(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
         monkeypatch.setenv("CIRNO_TOKEN", "tok-secret")
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", False):
-            env = ExecTool()._build_env()
+        with patch("cirno_core.processes.platform.IS_WINDOWS", False):
+            env = ExecTool().preparation.environment.build()
         assert "OPENAI_API_KEY" not in env
         assert "CIRNO_TOKEN" not in env
         for v in env.values():
@@ -94,15 +99,15 @@ class TestBuildEnvWindows:
     }
 
     def test_expected_keys(self):
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", True), patch.dict(os.environ, {}, clear=True):
-            env = ExecTool()._build_env()
+        with patch("cirno_core.processes.platform.IS_WINDOWS", True), patch.dict(os.environ, {}, clear=True):
+            env = ExecTool().preparation.environment.build()
         assert set(env) == self._EXPECTED_KEYS
 
     def test_secrets_excluded(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
         monkeypatch.setenv("CIRNO_TOKEN", "tok-secret")
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", True):
-            env = ExecTool()._build_env()
+        with patch("cirno_core.processes.platform.IS_WINDOWS", True):
+            env = ExecTool().preparation.environment.build()
         assert "OPENAI_API_KEY" not in env
         assert "CIRNO_TOKEN" not in env
         for v in env.values():
@@ -110,16 +115,16 @@ class TestBuildEnvWindows:
 
     def test_path_has_sensible_default(self):
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch.dict("os.environ", {}, clear=True),
         ):
-            env = ExecTool()._build_env()
+            env = ExecTool().preparation.environment.build()
         assert "system32" in env["PATH"].lower()
 
     def test_systemroot_forwarded(self, monkeypatch):
         monkeypatch.setenv("SYSTEMROOT", r"D:\Windows")
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", True):
-            env = ExecTool()._build_env()
+        with patch("cirno_core.processes.platform.IS_WINDOWS", True):
+            env = ExecTool().preparation.environment.build()
         assert env["SYSTEMROOT"] == r"D:\Windows"
 
 
@@ -132,14 +137,14 @@ class TestArgumentVectorPath:
     def test_uses_parent_path_for_executable_lookup(self):
         parent_path = os.pathsep.join(("parent-bin", "system-bin"))
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
             patch.dict(
                 "os.environ",
                 {"PATH": parent_path, "CIRNO_SECRET_TOKEN": "super-secret-value"},
                 clear=True,
             ),
         ):
-            prepared = ExecTool()._prepare_command(["rg", "--version"])
+            prepared = ExecTool().preparation.prepare(["rg", "--version"])
 
         assert not isinstance(prepared, str)
         assert prepared.env["PATH"] == parent_path
@@ -155,11 +160,11 @@ class TestSpawnUnix:
     @pytest.mark.asyncio
     async def test_uses_bash(self):
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn("echo hi", "/tmp", {"HOME": "/tmp"})
+            await process_launch.spawn_process("echo hi", "/tmp", {"HOME": "/tmp"})
 
         args = mock_exec.call_args[0]
         assert "bash" in args[0]
@@ -173,11 +178,11 @@ class TestSpawnUnix:
     @pytest.mark.asyncio
     async def test_process_tree_starts_new_session(self):
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn(
+            await process_launch.spawn_process(
                 "echo hi",
                 "/tmp",
                 {"HOME": "/tmp"},
@@ -202,14 +207,14 @@ class TestSpawnWindows:
         job.assign_and_resume.side_effect = OSError("OpenProcess failed")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch("cirno_core.agent.tools.shell.sys", MagicMock(platform="win32")),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch("cirno_core.processes.launch.sys", MagicMock(platform="win32")),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
-            patch.object(ExecTool, "_create_windows_job", return_value=job),
+            patch.object(process_lifecycle, "create_windows_job", return_value=job),
             pytest.raises(OSError, match="OpenProcess failed"),
         ):
             mock_exec.return_value = process
-            await ExecTool._spawn("echo hi", r"C:\work", env, process_tree=True)
+            await process_launch.spawn_process("echo hi", r"C:\work", env, process_tree=True)
 
         job.terminate.assert_called_once_with()
         process.kill.assert_called_once_with()
@@ -220,11 +225,11 @@ class TestSpawnWindows:
         """Single-line commands on Windows now route through PowerShell."""
         env = {"COMSPEC": r"C:\Windows\system32\cmd.exe", "PATH": ""}
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn("dir", r"C:\work", env)
+            await process_launch.spawn_process("dir", r"C:\work", env)
 
         args = mock_exec.call_args[0]
         assert any(shell in args[0].lower() for shell in ("pwsh", "powershell"))
@@ -241,11 +246,11 @@ class TestSpawnWindows:
         """PowerShell should receive cwd and env from the caller."""
         env = {"PATH": "/usr/bin"}
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn("echo hi", r"C:\work", env)
+            await process_launch.spawn_process("echo hi", r"C:\work", env)
 
         kwargs = mock_exec.call_args[1]
         assert kwargs["cwd"] == r"C:\work"
@@ -255,11 +260,11 @@ class TestSpawnWindows:
     async def test_multiline_uses_powershell(self):
         env = {"PATH": ""}
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn('python -c "print(1)\nprint(2)"', r"C:\work", env)
+            await process_launch.spawn_process('python -c "print(1)\nprint(2)"', r"C:\work", env)
 
         args = mock_exec.call_args[0]
         assert any(shell in args[0].lower() for shell in ("pwsh", "powershell"))
@@ -278,11 +283,11 @@ class TestSpawnWindows:
         """Explicit shell='cmd' should preserve raw cmd.exe quoting semantics."""
         env = {"COMSPEC": r"C:\Windows\system32\cmd.exe", "PATH": ""}
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_shell,
         ):
             mock_shell.return_value = AsyncMock()
-            await ExecTool._spawn(
+            await process_launch.spawn_process(
                 'echo "a & b"', r"C:\work", env,
                 shell_program=r"C:\Windows\system32\cmd.exe",
             )
@@ -301,11 +306,11 @@ class TestSpawnWindows:
         """PowerShell -Command should forward native process exit codes."""
         env = {"PATH": ""}
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn("cmd /c exit 7", r"C:\work", env)
+            await process_launch.spawn_process("cmd /c exit 7", r"C:\work", env)
 
         command = mock_exec.call_args[0][-1]
         assert "cmd /c exit 7" in command
@@ -316,11 +321,11 @@ class TestSpawnWindows:
         """PowerShell should use UTF-8 for captured output, native input, and redirections."""
         env = {"PATH": ""}
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn("Write-Output 'café 你好'", r"C:\work", env)
+            await process_launch.spawn_process("Write-Output 'café 你好'", r"C:\work", env)
 
         command = mock_exec.call_args[0][-1]
         assert "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)" in command
@@ -336,11 +341,11 @@ class TestSpawnWindows:
         env = {"PATH": ""}
         command = r'"D:\Program Files\Python\python.exe" -u -c "print(1)"'
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn(command, r"C:\work", env)
+            await process_launch.spawn_process(command, r"C:\work", env)
 
         powershell_command = mock_exec.call_args[0][-1]
         assert f"\n& {command}\n" in powershell_command
@@ -351,11 +356,11 @@ class TestSpawnWindows:
         env = {"PATH": ""}
         command = r'"D:\Program Files\Git\cmd\git.exe"'
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn(command, r"C:\work", env)
+            await process_launch.spawn_process(command, r"C:\work", env)
 
         powershell_command = mock_exec.call_args[0][-1]
         assert f"\n& {command}\n" in powershell_command
@@ -372,12 +377,12 @@ class TestSpawnWindows:
             return None
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch("cirno_core.agent.tools.shell.shutil.which", side_effect=fake_which),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch("cirno_core.processes.launch.shutil.which", side_effect=fake_which),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
-            await ExecTool._spawn("dir", r"C:\work", env)
+            await process_launch.spawn_process("dir", r"C:\work", env)
 
         args = mock_exec.call_args[0]
         assert "pwsh" in args[0].lower()
@@ -406,10 +411,10 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch("cirno_core.agent.tools.shell.os.pathsep", ":"),
-            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch("cirno_core.processes.environment.os.pathsep", ":"),
+            patch.object(process_launch, "spawn_process", side_effect=capture_spawn),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(path_append="/opt/bin; echo INJECTED")
             await tool.execute(command="ls")
@@ -435,10 +440,10 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch("cirno_core.agent.tools.shell.os.pathsep", ":"),
-            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch("cirno_core.processes.environment.os.pathsep", ":"),
+            patch.object(process_launch, "spawn_process", side_effect=capture_spawn),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(path_prepend="/venv/bin; echo INJECTED")
             await tool.execute(command="python --version")
@@ -463,10 +468,10 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch("cirno_core.agent.tools.shell.os.pathsep", ":"),
-            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch("cirno_core.processes.environment.os.pathsep", ":"),
+            patch.object(process_launch, "spawn_process", side_effect=capture_spawn),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(path_prepend="/venv/bin", path_append="/usr/sbin")
             await tool.execute(command="python --version")
@@ -491,10 +496,10 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch("cirno_core.agent.tools.shell.os.pathsep", ";"),
-            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch("cirno_core.processes.environment.os.pathsep", ";"),
+            patch.object(process_launch, "spawn_process", side_effect=capture_spawn),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(path_append=r"C:\tools\bin")
             await tool.execute(command="dir")
@@ -514,11 +519,11 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch("cirno_core.agent.tools.shell.os.pathsep", ";"),
-            patch.object(ExecTool, "_build_env", return_value={"PATH": r"C:\Windows\System32"}),
-            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch("cirno_core.processes.environment.os.pathsep", ";"),
+            patch.object(ExecutionEnvironment, "build", return_value={"PATH": r"C:\Windows\System32"}),
+            patch.object(process_launch, "spawn_process", side_effect=capture_spawn),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(path_prepend=r"C:\venv\Scripts", path_append=r"C:\tools\bin")
             await tool.execute(command="python --version")
@@ -536,21 +541,18 @@ class TestSandboxPlatform:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("backend", ["bwrap", "seatbelt"])
-    async def test_sandbox_skipped_on_windows(self, backend):
-        """Configured Unix backends preserve the Windows native fallback."""
-        mock_proc = _CompletedProcess(b"ok")
-
+    async def test_unsupported_sandbox_never_runs_unsandboxed_on_windows(self, backend):
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch.object(process_launch, "spawn_process", side_effect=AssertionError("Sandbox required")) as mock_spawn,
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(sandbox=backend)
+            assert tool.approval_reason({"command": "dir"}) is None
             result = await tool.execute(command="dir")
-
-        assert "ok" in result
-        spawned_cmd = mock_spawn.call_args[0][0]
-        assert backend not in spawned_cmd
+        assert "not supported on Windows" in result
+        assert getattr(result, "is_error", False)
+        mock_spawn.assert_not_awaited()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("backend", ["bwrap", "seatbelt"])
@@ -559,10 +561,10 @@ class TestSandboxPlatform:
         mock_proc = _CompletedProcess(b"sandboxed")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch("cirno_core.agent.tools.shell.wrap_command", return_value=f"{backend} -- sh -c ls") as mock_wrap,
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch("cirno_core.agent.tools.shell.preparation.wrap_command", return_value=f"{backend} -- sh -c ls") as mock_wrap,
+            patch.object(process_launch, "spawn_process", return_value=mock_proc) as mock_spawn,
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(sandbox=backend, working_dir="/workspace")
             await tool.execute(command="ls")
@@ -580,10 +582,10 @@ class TestSandboxPlatform:
         tool_cache = tmp_path / "tool-cache"
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch("cirno_core.agent.tools.shell.wrap_command", return_value=f"{backend} -- sh -c ls") as mock_wrap,
-            patch.object(ExecTool, "_spawn", return_value=mock_proc),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch("cirno_core.agent.tools.shell.preparation.wrap_command", return_value=f"{backend} -- sh -c ls") as mock_wrap,
+            patch.object(process_launch, "spawn_process", return_value=mock_proc),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool(
                 sandbox=backend,
@@ -618,9 +620,9 @@ class TestExecuteEndToEnd:
         mock_proc = _CompletedProcess(b"hello world\r\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch.object(process_launch, "spawn_process", return_value=mock_proc) as mock_spawn,
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool()
             result = await tool.execute(command="echo hello world", yield_time_ms=yield_time_ms)
@@ -641,9 +643,9 @@ class TestExecuteEndToEnd:
         mock_proc = _CompletedProcess(b"hello world\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch.object(process_launch, "spawn_process", return_value=mock_proc) as mock_spawn,
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool()
             result = await tool.execute(command="echo hello world", yield_time_ms=yield_time_ms)
@@ -666,9 +668,9 @@ class TestExecuteEndToEnd:
             return _CompletedProcess(b"ok\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch.object(process_launch, "spawn_process", side_effect=capture_spawn),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool()
             await tool.execute(command="echo ok")
@@ -687,38 +689,38 @@ class TestExtractAbsolutePaths:
     def test_windows_drive_path(self):
         """Test extraction of standard Windows drive paths."""
         cmd = r"dir C:\Users\Public"
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert r"C:\Users\Public" in paths
 
     def test_windows_drive_path_root(self):
         """Test extraction of Windows drive root paths."""
         cmd = r"dir C:\temp"
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert any("C:\\" in p for p in paths)
 
     def test_unc_path_simple(self):
         """Test extraction of simple UNC paths."""
         cmd = r"dir \\server\share"
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert r"\\server\share" in paths
 
     def test_unc_path_with_subdirs(self):
         """Test extraction of UNC paths with subdirectories."""
         cmd = r"copy \\server\share\folder\file.txt D:\backup"
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert r"\\server\share\folder\file.txt" in paths
         assert r"D:\backup" in paths
 
     def test_unc_path_in_quotes(self):
         """Test extraction of UNC paths enclosed in quotes."""
         cmd = r'type "\\server\share\docs\readme.txt"'
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert r"\\server\share\docs\readme.txt" in paths
 
     def test_mixed_paths(self):
         """Test extraction of mixed UNC, drive, and POSIX paths."""
         cmd = r'copy \\server\data\file.txt C:\local\temp && ls /tmp'
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert r"\\server\data\file.txt" in paths
         assert any("C:\\" in p for p in paths)
         assert "/tmp" in paths
@@ -726,13 +728,13 @@ class TestExtractAbsolutePaths:
     def test_home_path(self):
         """Test extraction of home directory shortcuts."""
         cmd = "cat ~/config.txt"
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert "~/config.txt" in paths
 
     def test_no_paths(self):
         """Test command with no absolute paths."""
         cmd = "echo hello"
-        paths = ExecTool._extract_absolute_paths(cmd)
+        paths = shell_tokens.extract_absolute_paths(cmd)
         assert paths == []
 
 
@@ -748,10 +750,10 @@ class TestWindowsMultilineExec:
         mock_proc = _CompletedProcess(b"1\n2\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
-            patch.object(ExecTool, "_create_windows_job", side_effect=_FakeWindowsJob),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch.object(process_lifecycle, "create_windows_job", side_effect=_FakeWindowsJob),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             mock_exec.return_value = mock_proc
             tool = ExecTool()
@@ -768,10 +770,10 @@ class TestWindowsMultilineExec:
         mock_proc = _CompletedProcess(b"1\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
-            patch.object(ExecTool, "_create_windows_job", side_effect=_FakeWindowsJob),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch.object(process_lifecycle, "create_windows_job", side_effect=_FakeWindowsJob),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             mock_exec.return_value = mock_proc
             tool = ExecTool()
@@ -787,9 +789,9 @@ class TestWindowsMultilineExec:
         mock_proc = _CompletedProcess(b"1\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
+            patch.object(process_launch, "spawn_process", return_value=mock_proc) as mock_spawn,
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool()
             result = await tool.execute(command='python -c "print(1)"')
@@ -802,9 +804,9 @@ class TestWindowsMultilineExec:
         mock_proc = _CompletedProcess(b"1\n2\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch("cirno_core.processes.platform.IS_WINDOWS", False),
+            patch.object(process_launch, "spawn_process", return_value=mock_proc) as mock_spawn,
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             tool = ExecTool()
             result = await tool.execute(command='python -c "print(1)\nprint(2)"')
@@ -826,10 +828,10 @@ class TestResolveShellWindows:
         mock_proc = _CompletedProcess(b"hello\n")
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
-            patch.object(ExecTool, "_create_windows_job", side_effect=_FakeWindowsJob),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch.object(process_lifecycle, "create_windows_job", side_effect=_FakeWindowsJob),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             mock_exec.return_value = mock_proc
             tool = ExecTool()
@@ -846,10 +848,10 @@ class TestResolveShellWindows:
         mock_proc = _CompletedProcess(b'"a & b"\n')
 
         with (
-            patch("cirno_core.agent.tools.shell._IS_WINDOWS", True),
+            patch("cirno_core.processes.platform.IS_WINDOWS", True),
             patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_shell,
-            patch.object(ExecTool, "_create_windows_job", side_effect=_FakeWindowsJob),
-            patch.object(ExecTool, "_guard_command", return_value=None),
+            patch.object(process_lifecycle, "create_windows_job", side_effect=_FakeWindowsJob),
+            patch.object(CommandPolicy, "check", return_value=None),
         ):
             mock_shell.return_value = mock_proc
             tool = ExecTool()
@@ -862,7 +864,7 @@ class TestResolveShellWindows:
     @pytest.mark.asyncio
     async def test_shell_bash_rejected_on_windows(self):
         """shell='bash' should still be rejected on Windows."""
-        with patch("cirno_core.agent.tools.shell._IS_WINDOWS", True):
+        with patch("cirno_core.processes.platform.IS_WINDOWS", True):
             tool = ExecTool()
             result = await tool.execute(command="echo hello", shell="bash")
 

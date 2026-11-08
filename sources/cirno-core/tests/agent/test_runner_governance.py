@@ -1,39 +1,48 @@
+from __future__ import annotations
+
+from cirno_core.agent.governance import ContextGovernor
+from cirno_core.agent.governance.budget import request_extends_measured, request_pressure
+from cirno_core.agent.governance.messages import (
+    BACKFILL_CONTENT,
+    backfill_missing_tool_results,
+    drop_orphan_tool_results,
+    strip_malformed_tool_calls,
+    strip_placeholder_assistant_messages,
+)
+from cirno_core.agent.runner.recovery import drop_malformed_tool_calls
+from cirno_core.agent.runner.usage import record_request_usage
+
 """Tests for AgentRunner context governance, repair, and compaction."""
 
-from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import tiktoken
-
-from agent.runner_helpers import make_run_spec
 from cirno_core.agent.context import TranscriptInput
-from cirno_core.agent.context_governance import (
-    BACKFILL_CONTENT,
+from cirno_core.agent.governance import (
     ContextCompactionState,
     ContextGovernanceConfig,
-    ContextGovernor,
     ContextWindowExceededError,
     ModelRequestState,
-    _request_extends_measured,
 )
-from cirno_core.agent.runner import AgentRunner, AgentRunSpec
-from cirno_core.config.schema import AgentDefaults, ModelPresetConfig
+from cirno_core.agent.runner.contracts import AgentRunSpec
+from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.bus.agent_events import ContextCompactionEvent, EventSink
-from cirno_core.providers.base import (
-    GenerationSettings,
-    LLMProvider,
-    LLMResponse,
-    LLMUsage,
-    ProviderConversationState,
-    ToolCallRequest,
-)
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.providers.fallback_provider import FallbackProvider
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT
+from cirno_usage.types import LLMUsage
+
+from sources.development.testing.runtime import make_run_spec
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -102,8 +111,8 @@ async def test_provider_can_emit_without_an_event_specific_runner_callback():
     assert received == [event]
 
 
-async def test_runner_propagates_context_governance_failure():
-    from cirno_core.agent.runner import AgentRunner
+async def test_runner_propagates_context_governance_failure(monkeypatch):
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     provider.chat_stream_with_retry = AsyncMock()
@@ -115,8 +124,9 @@ async def test_runner_propagates_context_governance_failure():
     ]
 
     runner = AgentRunner()
-    runner.context_governor.prepare_for_model = MagicMock(  # type: ignore[method-assign]
-        side_effect=RuntimeError("boom")
+    monkeypatch.setattr(
+        "cirno_core.agent.governance.messages.prepare_history",
+        MagicMock(side_effect=RuntimeError("boom")),
     )
     with pytest.raises(RuntimeError, match="boom"):
         await runner.run(make_run_spec(provider,
@@ -158,7 +168,7 @@ async def test_runner_summarizes_history_and_preserves_current_input(monkeypatch
     tools.get_definitions.return_value = []
     old_answer = "old answer " * 2_000
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda _provider, _model, messages, _tools: (
             (600, "test-counter")
             if any(message.get("content") == old_answer for message in messages)
@@ -216,7 +226,7 @@ async def test_runner_rejects_oversized_delta_without_summarizable_history(monke
     tools = MagicMock()
     tools.get_definitions.return_value = []
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args, **_kwargs: (600, "test-counter"),
     )
     consolidate = AsyncMock(return_value=None)
@@ -253,7 +263,7 @@ async def test_runner_governs_history_before_summarizing_it(monkeypatch):
     tools = MagicMock()
     tools.get_definitions.return_value = []
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda _provider, _model, messages, _tools: (
             (100, "test-counter")
             if messages[0].get("content") == "fresh checkpoint"
@@ -339,7 +349,7 @@ async def test_native_compaction_uses_provider_request_boundary(
     tools.get_definitions.return_value = []
     tools.execute = AsyncMock(return_value="complete tool result")
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args: (100, "test-counter"),
     )
     consolidate = AsyncMock(return_value="portable checkpoint")
@@ -403,7 +413,7 @@ async def test_native_checkpoint_failure_does_not_relabel_completed_compaction(m
     ))
     tools = MagicMock()
     tools.get_definitions.return_value = []
-    monkeypatch.setattr("cirno_core.agent.context_governance.estimate_prompt_tokens_chain", lambda *_args: (100, "test-counter"))
+    monkeypatch.setattr("cirno_core.agent.governance.budget.estimate_prompt_tokens_chain", lambda *_args: (100, "test-counter"))
     notices: list[ContextCompactionEvent] = []
 
     async def observe(event) -> None:
@@ -458,7 +468,7 @@ async def test_runner_keeps_current_tool_exchange_outside_summary(monkeypatch):
         return (600 if has_tool_result and has_old_system else 100, "test-counter")
 
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
     consolidate = AsyncMock(return_value="fresh checkpoint")
@@ -522,7 +532,7 @@ async def test_repeated_pressure_advances_summary_boundary(monkeypatch):
         return 100, "test-counter"
 
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
     consolidate = AsyncMock(side_effect=[
@@ -584,7 +594,7 @@ async def test_runner_refuses_checkpoint_that_cannot_fit_with_delta(monkeypatch)
         return 100, "test-counter"
 
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
     consolidate = AsyncMock(return_value="small checkpoint")
@@ -624,12 +634,12 @@ async def test_runner_recovers_oversized_file_read_delta(
     # A cold/offline tokenizer must exercise the same conservative count as #5879.
     if fallback:
         monkeypatch.setattr(
-            "cirno_core.utils.helpers._get_token_encoding",
+            "cirno_core.utils.token_encoding.get_token_encoding",
             MagicMock(side_effect=RuntimeError("tokenizer unavailable")),
         )
     else:
         encoding = tiktoken.get_encoding("cl100k_base")
-        monkeypatch.setattr("cirno_core.utils.helpers._get_token_encoding", lambda: encoding)
+        monkeypatch.setattr("cirno_core.utils.token_encoding.get_token_encoding", lambda: encoding)
     paths = [tmp_path / f"result-{index}.json" for index in range(3)]
     for path in paths:
         path.write_text("record, " * 10_000, encoding="utf-8")
@@ -703,7 +713,7 @@ async def test_file_reads_that_fit_each_round_are_not_omitted(
     from cirno_core.agent.tools.registry import ToolRegistry
 
     encoding = None if fallback else tiktoken.get_encoding("cl100k_base")
-    monkeypatch.setattr("cirno_core.utils.helpers._get_token_encoding", lambda: encoding)
+    monkeypatch.setattr("cirno_core.utils.token_encoding.get_token_encoding", lambda: encoding)
     paths = [tmp_path / f"result-{index}.json" for index in range(3)]
     for path in paths:
         path.write_text("record, " * 10_000, encoding="utf-8")
@@ -746,13 +756,14 @@ async def test_file_reads_that_fit_each_round_are_not_omitted(
 async def test_recovered_file_read_results_survive_session_replay(
     tmp_path, monkeypatch, structured_transcript,
 ):
+    from cirno_core.agent.execution.persistence import TurnPersistence
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.agent.tools.filesystem import ReadFileTool
     from cirno_core.agent.tools.registry import ToolRegistry
     from cirno_core.session.manager import SessionManager
 
     monkeypatch.setattr(
-        "cirno_core.utils.helpers._get_token_encoding",
+        "cirno_core.utils.token_encoding.get_token_encoding",
         MagicMock(side_effect=RuntimeError("tokenizer unavailable")),
     )
     workspace = tmp_path / "workspace"
@@ -793,7 +804,7 @@ async def test_recovered_file_read_results_survive_session_replay(
 
     manager = SessionManager(workspace, sessions_root=tmp_path / "sessions")
     session = manager.get_or_create("test:file-replay")
-    AgentLoop.__new__(AgentLoop)._save_turn(
+    TurnPersistence(AgentLoop.__new__(AgentLoop)).save_messages(
         session, result.messages, skip=1, summary_checkpoint=result.summary_checkpoint,
     )
     manager.save(session)
@@ -826,7 +837,7 @@ async def test_recovered_file_read_results_survive_session_replay(
 @pytest.mark.asyncio
 async def test_runner_governs_messages_added_by_before_iteration_hook(monkeypatch):
     from cirno_core.agent.hook import AgentHook, AgentHookContext
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="unexpected"))
@@ -835,7 +846,7 @@ async def test_runner_governs_messages_added_by_before_iteration_hook(monkeypatc
     oversized = "hook-added-oversized-message"
 
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda _provider, _model, messages, _tools: (
             (2_000, "test-counter")
             if any(oversized in str(message.get("content")) for message in messages)
@@ -886,7 +897,7 @@ async def test_matching_reported_provider_usage_avoids_local_estimate(
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("matching provider usage must be authoritative")
         ),
@@ -935,7 +946,7 @@ async def test_changed_messages_use_local_estimate_after_reported_usage(monkeypa
     )
     estimate = MagicMock(return_value=(600, "test-counter"))
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
 
@@ -975,7 +986,7 @@ async def test_reported_usage_floor_triggers_pressure_despite_low_estimate(monke
     )
     estimate = MagicMock(return_value=(100, "test-counter"))
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
 
@@ -1037,7 +1048,7 @@ async def test_runner_does_not_compact_primary_request_from_fallback_usage(monke
     tools.execute = AsyncMock(return_value="inspection complete")
     consolidate = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args, **_kwargs: (100, "test-counter"),
     )
 
@@ -1076,7 +1087,7 @@ async def test_reported_usage_floor_stays_idle_below_budget(monkeypatch):
     )
     estimate = MagicMock(return_value=(100, "test-counter"))
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
 
@@ -1122,7 +1133,7 @@ async def test_estimated_usage_does_not_apply_reported_floor(monkeypatch):
     )
     estimate = MagicMock(return_value=(100, "test-counter"))
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
     consolidate = AsyncMock(return_value="checkpoint")
@@ -1194,7 +1205,7 @@ async def test_estimated_usage_does_not_apply_reported_floor(monkeypatch):
     ],
 )
 def test_request_extends_measured_prefix_cases(measured, current, expected):
-    assert _request_extends_measured(measured, current) is expected
+    assert request_extends_measured(measured, current) is expected
 
 
 @pytest.mark.parametrize(
@@ -1217,11 +1228,11 @@ def test_missing_usage_falls_back_to_pure_estimate(monkeypatch, estimated_tokens
     )
     estimate = MagicMock(return_value=(estimated_tokens, "test-counter"))
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
 
-    pressure = ContextGovernor().request_pressure(
+    pressure = request_pressure(
         _governance_config(provider, tools, spec),
         spec.initial_messages,
         None,
@@ -1250,7 +1261,7 @@ async def test_rewritten_request_does_not_inherit_reported_usage_floor(monkeypat
     )
     estimate = MagicMock(return_value=(100, "test-counter"))
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         estimate,
     )
 
@@ -1297,7 +1308,7 @@ async def test_provider_compaction_invalidates_cached_usage():
             messages=spec.initial_messages,
             tool_definitions=[],
         )
-        usage = await AgentRunner()._record_request_usage(
+        usage = await record_request_usage(ContextGovernor(),
             spec,
             state,
             LLMResponse(
@@ -1329,13 +1340,13 @@ def test_resumed_provider_context_avoids_full_transcript_estimate(monkeypatch):
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("resumed provider context must be authoritative")
         ),
     )
 
-    pressure = ContextGovernor().request_pressure(
+    pressure = request_pressure(
         _governance_config(provider, tools, spec),
         spec.initial_messages,
         LLMUsage.reported(input_tokens=900, output_tokens=10),
@@ -1350,7 +1361,7 @@ def test_resumed_provider_context_avoids_full_transcript_estimate(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_runner_refuses_oversized_resumed_state_without_compactor(monkeypatch):
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.can_resume_conversation_state.return_value = True
@@ -1379,7 +1390,7 @@ async def test_runner_refuses_oversized_resumed_state_without_compactor(monkeypa
         pending_messages=[current_message],
     )
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args, **_kwargs: (100, "test-counter"),
     )
     monkeypatch.setattr(
@@ -1415,14 +1426,14 @@ async def test_runner_refuses_oversized_request_without_compactor(
     context_window_tokens,
     expected_budget,
 ):
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="unexpected"))
     tools = MagicMock()
     tools.get_definitions.return_value = []
     monkeypatch.setattr(
-        "cirno_core.agent.context_governance.estimate_prompt_tokens_chain",
+        "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda *_args, **_kwargs: (2_000, "test-counter"),
     )
 
@@ -1461,7 +1472,7 @@ async def test_backfill_missing_tool_results_inserts_error():
         },
         {"role": "tool", "tool_call_id": "call_a", "name": "exec", "content": "ok"},
     ]
-    result = ContextGovernor.backfill_missing_tool_results(messages)
+    result = backfill_missing_tool_results(messages)
     tool_msgs = [m for m in result if m.get("role") == "tool"]
     assert len(tool_msgs) == 2
     backfilled = [m for m in tool_msgs if m.get("tool_call_id") == "call_b"]
@@ -1486,7 +1497,7 @@ def test_drop_orphan_tool_results_removes_unmatched_tool_messages():
         {"role": "assistant", "content": "after tool"},
     ]
 
-    cleaned = ContextGovernor.drop_orphan_tool_results(messages)
+    cleaned = drop_orphan_tool_results(messages)
 
     assert cleaned == [
         {"role": "system", "content": "system"},
@@ -1518,13 +1529,13 @@ async def test_backfill_noop_when_complete():
         {"role": "tool", "tool_call_id": "call_x", "name": "exec", "content": "done"},
         {"role": "assistant", "content": "all good"},
     ]
-    result = ContextGovernor.backfill_missing_tool_results(messages)
+    result = backfill_missing_tool_results(messages)
     assert result is messages  # same object — no copy
 
 
 @pytest.mark.asyncio
 async def test_runner_drops_orphan_tool_results_before_model_request():
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -1600,7 +1611,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
     ]
     loop.sessions.save(session)
 
-    result = await loop._process_message(
+    result = await loop.processing.process(
         InboundMessage(channel="cli", sender_id="user", chat_id="test", content="new prompt")
     )
 
@@ -1646,7 +1657,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
 @pytest.mark.asyncio
 async def test_runner_backfill_only_mutates_model_context_not_returned_messages():
     """Runner should repair orphaned tool calls for the model without rewriting result.messages."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -1729,7 +1740,6 @@ async def test_runner_backfill_only_mutates_model_context_not_returned_messages(
 
 def test_drop_malformed_tool_calls_trims_response():
     """LLM response tool_calls with a missing/empty name are dropped in place."""
-    from cirno_core.agent.runner import AgentRunner
 
     candidate_state = ProviderConversationState(
         kind="openai_responses",
@@ -1744,31 +1754,31 @@ def test_drop_malformed_tool_calls_trims_response():
             ToolCallRequest(id="1", name=None, arguments={}),
             ToolCallRequest(id="2", name="", arguments={}),
             ToolCallRequest(id="3", name={"unexpected": "object"}, arguments={}),
-            ToolCallRequest(id="4", name="read_file", arguments={}),
+            ToolCallRequest(id="4", name=" \n\t", arguments={}),
+            ToolCallRequest(id="5", name="read_file", arguments={}),
         ],
         finish_reason="tool_calls",
         provider_state=candidate_state,
     )
-    dropped, all_dropped, orig = AgentRunner._drop_malformed_tool_calls(response)
+    dropped, all_dropped, orig = drop_malformed_tool_calls(response)
     assert [tc.name for tc in response.tool_calls] == ["read_file"]
     assert response.provider_state is None
     assert response.finish_reason == "tool_calls"
     assert response.should_execute_tools is True
-    assert dropped == 3
+    assert dropped == 4
     assert all_dropped is False
     assert orig == "tool_calls"
 
 
 def test_drop_malformed_tool_calls_all_bad_disables_execution():
     """If every tool call is malformed, execution is disabled (no empty exec)."""
-    from cirno_core.agent.runner import AgentRunner
 
     response = LLMResponse(
         content="some text",
         tool_calls=[ToolCallRequest(id="1", name=None, arguments={})],
         finish_reason="tool_calls",
     )
-    dropped, all_dropped, orig = AgentRunner._drop_malformed_tool_calls(response)
+    dropped, all_dropped, orig = drop_malformed_tool_calls(response)
     assert response.tool_calls == []
     assert response.finish_reason == "stop"
     assert response.should_execute_tools is False
@@ -1779,16 +1789,16 @@ def test_drop_malformed_tool_calls_all_bad_disables_execution():
 
 def test_drop_malformed_returns_tuple_no_calls():
     """No tool calls returns (0, False, current_finish_reason)."""
-    from cirno_core.agent.runner import AgentRunner
 
     response = LLMResponse(content="hi", finish_reason="stop")
-    dropped, all_dropped, orig = AgentRunner._drop_malformed_tool_calls(response)
+    dropped, all_dropped, orig = drop_malformed_tool_calls(response)
     assert dropped == 0
     assert all_dropped is False
     assert orig == "stop"
 
 
-def test_strip_malformed_tool_calls_keeps_valid_calls_in_history():
+@pytest.mark.parametrize("invalid_name", [None, "", " ", "\t\n"])
+def test_strip_malformed_tool_calls_keeps_valid_calls_in_history(invalid_name):
     """A mixed assistant turn keeps only its valid tool_calls."""
     messages = [
         {"role": "user", "content": "hi"},
@@ -1796,13 +1806,13 @@ def test_strip_malformed_tool_calls_keeps_valid_calls_in_history():
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "bad", "type": "function", "function": {"name": None, "arguments": "{}"}},
+                {"id": "bad", "type": "function", "function": {"name": invalid_name, "arguments": "{}"}},
                 {"id": "ok", "type": "function", "function": {"name": "exec", "arguments": "{}"}},
             ],
         },
         {"role": "tool", "tool_call_id": "ok", "name": "exec", "content": "done"},
     ]
-    result = ContextGovernor.strip_malformed_tool_calls(messages)
+    result = strip_malformed_tool_calls(messages)
     assert result is not messages  # copied, original untouched
     assert len(messages[1]["tool_calls"]) == 2  # original preserved
     kept = result[1]["tool_calls"]
@@ -1824,9 +1834,9 @@ def test_strip_malformed_tool_calls_drops_empty_assistant_turn():
         },
         {"role": "tool", "tool_call_id": "bad", "name": "", "content": "r"},
     ]
-    stripped = ContextGovernor.strip_malformed_tool_calls(messages)
+    stripped = strip_malformed_tool_calls(messages)
     assert [m["role"] for m in stripped] == ["user", "tool"]
-    healed = ContextGovernor.drop_orphan_tool_results(stripped)
+    healed = drop_orphan_tool_results(stripped)
     assert [m["role"] for m in healed] == ["user"]
 
 
@@ -1843,7 +1853,7 @@ def test_strip_malformed_tool_calls_noop_when_clean():
         },
         {"role": "tool", "tool_call_id": "ok", "name": "exec", "content": "done"},
     ]
-    assert ContextGovernor.strip_malformed_tool_calls(messages) is messages
+    assert strip_malformed_tool_calls(messages) is messages
 
 
 def test_strip_placeholder_assistant_messages_removes_omitted():
@@ -1857,7 +1867,7 @@ def test_strip_placeholder_assistant_messages_removes_omitted():
         {"role": "assistant", "content": "[Previous assistant message omitted.]"},
         {"role": "user", "content": "hello"},
     ]
-    result = ContextGovernor.strip_placeholder_assistant_messages(messages)
+    result = strip_placeholder_assistant_messages(messages)
     assert [m["role"] for m in result] == [
         "user", "assistant", "user", "user", "user",
     ]
@@ -1870,7 +1880,7 @@ def test_strip_placeholder_noop_when_clean():
         {"role": "user", "content": "hi"},
         {"role": "assistant", "content": "hello back"},
     ]
-    assert ContextGovernor.strip_placeholder_assistant_messages(messages) is messages
+    assert strip_placeholder_assistant_messages(messages) is messages
 
 
 def test_strip_placeholder_keeps_assistant_with_tool_calls():
@@ -1886,5 +1896,5 @@ def test_strip_placeholder_keeps_assistant_with_tool_calls():
         },
         {"role": "tool", "tool_call_id": "1", "name": "exec", "content": "done"},
     ]
-    result = ContextGovernor.strip_placeholder_assistant_messages(messages)
+    result = strip_placeholder_assistant_messages(messages)
     assert result is messages

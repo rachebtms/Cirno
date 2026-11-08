@@ -5,11 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cirno_core.agent.autocompact import AutoCompact
-from cirno_core.memory.consolidation import Consolidator, MemoryStore
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.memory.store import MemoryStore
 from cirno_core.config.loader import load_config, save_config
 from cirno_core.config.schema import Config
-from cirno_core.session.manager import Session, SessionManager
-from cirno_core.utils.helpers import estimate_message_tokens
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
+from cirno_core.utils.token_estimation import estimate_message_tokens
 from cirno_server.webui.settings.api import update_runtime_config_settings
 
 

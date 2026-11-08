@@ -12,7 +12,7 @@ describe("Copilot device sign-in", () => {
   it.each(["approve", "close", "unmount", "close-before-start"])("handles %s without losing the preset draft", async (ending) => {
     const payload = settingsPayload();
     payload.providers = [{
-      name: "github_copilot", label: "GitHub Copilot", configured: true,
+      id: "github_copilot", name: "GitHub Copilot", configured: true,
       auth_type: "oauth", model_catalog: "hybrid", oauth_login_supported: true,
     }];
     const flow = {
@@ -46,14 +46,14 @@ describe("Copilot device sign-in", () => {
     }));
     renderSettingsView({ initialSection: "models" });
     fireEvent.click(await screen.findByRole("button", { name: "New preset" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Preset name" }), { target: { value: "Draft" } });
-    await openPopover(screen.getByRole("combobox", { name: "Select model" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /^Preset name/ }), { target: { value: "Draft" } });
+    await openPopover(screen.getByRole("button", { name: "Show suggestions Model" }));
     fireEvent.click(await screen.findByRole("button", { name: "Sign in again" }));
     if (ending === "close-before-start") {
       cleanup();
       await act(async () => { resolveStart(flow); });
     } else {
-      const dialog = await screen.findByRole("dialog", { name: "GitHub Copilot" });
+      const dialog = await screen.findByRole("dialog", { name: "Sign in · GitHub Copilot" });
       expect(within(dialog).getByRole("textbox", { name: "Device code" })).toHaveValue("ABCD-EFGH");
       expect(within(dialog).queryByRole("button", { name: "Finish sign-in" })).not.toBeInTheDocument();
       expect(within(dialog).queryByRole("textbox", { name: "Authorization code" })).not.toBeInTheDocument();
@@ -68,9 +68,9 @@ describe("Copilot device sign-in", () => {
           expect(open).toHaveBeenCalledWith(flow.authorization_url, "_blank", "noopener,noreferrer");
           approved = true;
           await waitFor(() => expect(recovered).toBe(true), { timeout: 3000 });
-          expect(screen.queryByRole("dialog", { name: "GitHub Copilot" })).not.toBeInTheDocument();
-          expect(screen.getByRole("textbox", { name: "Preset name" })).toHaveValue("Draft");
-          await openPopover(screen.getByRole("combobox", { name: "Select model" }));
+          expect(screen.queryByRole("dialog", { name: "Sign in · GitHub Copilot" })).not.toBeInTheDocument();
+          expect(screen.getByRole("textbox", { name: /^Preset name/ })).toHaveValue("Draft");
+          await openPopover(screen.getByRole("button", { name: "Show suggestions Model" }));
           expect(await screen.findByRole("option", { name: /new-model/ })).toBeVisible();
           expect(requestMutationMock.mock.calls.some(([, args]) => args.cancel)).toBe(false);
         } finally {

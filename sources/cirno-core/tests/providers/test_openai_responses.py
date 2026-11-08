@@ -10,7 +10,7 @@ import pytest
 from loguru import logger
 from openai.types.responses import ResponseFunctionToolCall
 
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.openai_responses.converters import (
     convert_messages,
     convert_tools,

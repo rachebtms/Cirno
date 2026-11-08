@@ -1,10 +1,11 @@
 import { fetchProviderModels } from "@/lib/api";
-import type { ProviderModelsPayload } from "@/lib/types";
+import type { ProviderModelsPayload } from "@/lib/contracts/models";
 
 interface CatalogSnapshot {
   payload: ProviderModelsPayload | null;
   pending: boolean;
   failed: boolean;
+  error: string | null;
 }
 
 export function isCatalogAvailable(payload: ProviderModelsPayload | null): boolean {
@@ -17,7 +18,7 @@ function catalogFailed(payload: ProviderModelsPayload): boolean {
 }
 
 function createCatalog(token: string, provider: string) {
-  let snapshot: CatalogSnapshot = { payload: null, pending: false, failed: false };
+  let snapshot: CatalogSnapshot = { payload: null, pending: false, failed: false, error: null };
   let request: Promise<void> | null = null;
   const listeners = new Set<() => void>();
   const publish = () => listeners.forEach((listener) => listener());
@@ -31,12 +32,14 @@ function createCatalog(token: string, provider: string) {
         const retainCatalog = payload.status === "error"
           && payload.error_kind !== "auth_required" && isCatalogAvailable(snapshot.payload);
         snapshot = {
-          payload: retainCatalog ? snapshot.payload : payload,
+          payload: retainCatalog ? { ...snapshot.payload!, source: "stale" } : payload,
           pending: true,
           failed: catalogFailed(payload),
+          error: payload.message ?? null,
         };
-      }, () => {
-        snapshot = { ...snapshot, failed: true };
+      }, (error: unknown) => {
+        snapshot = { ...snapshot, payload: isCatalogAvailable(snapshot.payload) ? { ...snapshot.payload!, source: "stale" } : snapshot.payload,
+          failed: true, error: error instanceof Error ? error.message : String(error) };
       })
       .finally(() => {
         request = null;

@@ -62,29 +62,13 @@ for (const width of [390, 1440]) {
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await connection.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("button", { name: "Import", exact: true }).click();
-    await page.getByRole("button", { name: "Import mcp.json", exact: true }).click();
-    const importer = page.getByRole("dialog", { name: "Import mcp.json", exact: true });
-    expect(await importer.getByRole("textbox").getAttribute("placeholder")).toContain('\n  "mcpServers":');
-    await importer.getByRole("textbox").fill('{"mcpServers":{"docs":{"command":"npx"}}}');
-    await importer.getByRole("button", { name: "Format JSON", exact: true }).click();
-    await expect(importer.getByRole("textbox")).toContainText('    "docs": {');
-    await page.screenshot({ animations: "disabled", path: `/tmp/cirno-mcp-import-${width}.png` });
-  });
-}
-
-for (const width of [390, 1440]) {
-  test(`custom MCP editor is localized in dark mode at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 850 });
-    await page.goto("/browser/fixture.html?case=apps&custom-edit&lang=zh-CN");
-    await page.evaluate(() => document.documentElement.classList.add("dark"));
-    await page.getByRole("button", { name: "Docs MCP", exact: true }).click();
-    await page.getByRole("tab", { name: "连接", exact: true }).click();
-    await page.getByRole("button", { name: "编辑 MCP 配置", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "编辑 MCP 配置", exact: true });
-    await expect(dialog.getByRole("textbox")).toHaveValue(/\n {2}"command": "npx"/);
-    await expect(dialog.getByRole("button", { name: "格式化 JSON" })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "保存", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("textbox")).toBeFocused();
-    await page.screenshot({ animations: "disabled", path: `/tmp/cirno-mcp-dark-zh-${width}.png` });
+    const importForm = page.getByRole("form", { name: "Import mcp.json", exact: true });
+    const imported = importForm.getByRole("textbox", { name: "Import mcp.json", exact: true });
+    await expect(imported).toBeVisible();
+    const pretty = JSON.stringify({ mcpServers: { docs: { command: "npx", args: ["-y", "docs-mcp"] } } }, null, 2);
+    await expect(imported).toHaveAttribute("placeholder", pretty);
+    await imported.fill('{"mcpServers":{"docs":{"command":"npx","args":["-y","docs-mcp"]}}}');
+    await importForm.getByRole("button", { name: "Format JSON", exact: true }).click();
+    await expect(imported).toHaveValue(pretty);
   });
 }

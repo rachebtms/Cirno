@@ -33,10 +33,10 @@ async def test_sink_isolates_observer_failure_but_propagates_cancellation():
 
 async def test_scoped_output_preserves_routing_and_stream_segment_ownership():
     bus = MessageBus()
-    delivery = TurnDeliveryFactory(bus).create(InboundMessage(
+    delivery = (await TurnDeliveryFactory(bus).create(InboundMessage(
         channel="websocket", sender_id="u", chat_id="chat", content="",
         metadata={"_wants_stream": True, "origin_message_id": "original"},
-    ), "websocket:chat", enable_stream=True)
+    ), "websocket:chat", enable_stream=True))
     events = [
         ProgressEvent(content="thinking"),
         FileEditEvent(file_edit_events=[{"phase": "start", "path": "a.py"}]),
@@ -62,10 +62,13 @@ async def test_scoped_output_preserves_routing_and_stream_segment_ownership():
 
 async def test_output_consumer_capability_survives_callback_adaptation():
     bus = MessageBus()
-    quiet = TurnDeliveryFactory(bus, lambda *_: TurnRoute("websocket", "chat")).create(
+    async def quiet_route(*_):
+        return TurnRoute("websocket", "chat")
+
+    quiet = (await TurnDeliveryFactory(bus, quiet_route).create(
         InboundMessage(channel="system", sender_id="job", chat_id="websocket:chat", content=""),
         "websocket:chat",
-    )
+    ))
     assert quiet.events.accepts(ContextCompactionEvent)
     assert not quiet.events.accepts(FileEditEvent)
 
@@ -89,9 +92,9 @@ async def test_scope_snapshots_route_and_queues_events_in_order():
     bus = MessageBus()
     metadata = {"slack": {"thread_ts": "original"}}
     factory = TurnDeliveryFactory(bus)
-    delivery = factory.create(InboundMessage(
+    delivery = (await factory.create(InboundMessage(
         channel="slack", sender_id="u", chat_id="chat", content="", metadata=metadata,
-    ), "unified:default")
+    ), "unified:default"))
     metadata["slack"]["thread_ts"] = "moved"
     for phase in ("started", "succeeded"):
         await delivery.events.emit(ContextCompactionEvent("c1", phase))
@@ -110,9 +113,9 @@ async def test_new_internal_event_needs_explicit_audience(monkeypatch):
 
     bus = MessageBus()
     factory = TurnDeliveryFactory(bus)
-    delivery = factory.create(InboundMessage(
+    delivery = (await factory.create(InboundMessage(
         channel="websocket", sender_id="u", chat_id="chat", content="",
-    ), "websocket:chat")
+    ), "websocket:chat"))
     event = RetryStatus()
     await delivery.events.emit(event)
     assert bus.outbound.empty()
@@ -127,11 +130,13 @@ async def test_new_internal_event_needs_explicit_audience(monkeypatch):
 
 async def test_background_scope_keeps_retry_quiet_and_delivers_compaction():
     bus = MessageBus()
-    factory = TurnDeliveryFactory(bus,
-                                  lambda *_: TurnRoute("websocket", "chat"))
-    delivery = factory.create(InboundMessage(
+    async def quiet_route(*_):
+        return TurnRoute("websocket", "chat")
+
+    factory = TurnDeliveryFactory(bus, quiet_route)
+    delivery = (await factory.create(InboundMessage(
         channel="system", sender_id="job", chat_id="websocket:chat", content="",
-    ), "websocket:chat")
+    ), "websocket:chat"))
     await delivery.events.emit(RetryWaitEvent("waiting"))
     assert bus.outbound.empty()
     event = ContextCompactionEvent("c1", "cancelled")
@@ -142,9 +147,9 @@ async def test_background_scope_keeps_retry_quiet_and_delivers_compaction():
 @pytest.mark.parametrize("channel", ["websocket", "cli", "slack", "custom"])
 async def test_automatic_and_manual_compaction_are_delivered_to_channels(channel):
     bus = MessageBus()
-    delivery = TurnDeliveryFactory(bus).create(InboundMessage(
+    delivery = (await TurnDeliveryFactory(bus).create(InboundMessage(
         channel=channel, sender_id="u", chat_id="chat", content="",
-    ), f"{channel}:chat")
+    ), f"{channel}:chat"))
 
     await delivery.events.emit(ContextCompactionEvent("auto", "succeeded"))
     assert bus.outbound.get_nowait().event == ContextCompactionEvent("auto", "succeeded")

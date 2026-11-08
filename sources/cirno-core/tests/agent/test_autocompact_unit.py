@@ -9,7 +9,8 @@ import pytest
 
 from cirno_core.agent.autocompact import AutoCompact
 from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent, EventSink
-from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
 
 
 def _mock_sessions():

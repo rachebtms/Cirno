@@ -13,13 +13,15 @@ import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { currentLocale } from "@/i18n";
 import { fmtDateTime } from "@/lib/format-time";
-import type { SessionAutomationJob } from "@/lib/types";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
 
 interface DeleteConfirmProps {
   open: boolean;
   title: string;
   count?: number;
   automations?: SessionAutomationJob[];
+  busy?: boolean;
+  error?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -29,6 +31,8 @@ export function DeleteConfirm({
   title,
   count = 1,
   automations = [],
+  busy = false,
+  error,
   onCancel,
   onConfirm,
 }: DeleteConfirmProps) {
@@ -39,7 +43,7 @@ export function DeleteConfirm({
   const visibleAutomations = automations.slice(0, 4);
   const hiddenCount = Math.max(0, automations.length - visibleAutomations.length);
   return (
-    <AlertDialog open={open} onOpenChange={(o) => (!o ? onCancel() : undefined)}>
+    <AlertDialog open={open} onOpenChange={(o) => (!o && !busy ? onCancel() : undefined)}>
       <AlertDialogContent
         className="w-[min(calc(100vw-2rem),24rem)] gap-0 p-5 text-center"
         onEscapeKeyDown={(event) => event.stopPropagation()}
@@ -72,7 +76,7 @@ export function DeleteConfirm({
                 : t("deleteConfirm.description")}
           </AlertDialogDescription>
           {hasAutomations ? (
-            <div className="mt-4 max-h-40 w-full overflow-y-auto rounded-2xl bg-muted/55 px-3 py-2 text-left">
+            <div className="mt-4 max-h-40 w-full overflow-y-auto rounded-2xl bg-surface-secondary/55 px-3 py-2 text-left">
               {visibleAutomations.map((job) => (
                 <div key={job.id} className="min-w-0 py-1.5">
                   <div className="truncate text-[13px] font-medium leading-5 text-foreground">
@@ -96,15 +100,21 @@ export function DeleteConfirm({
             </div>
           ) : null}
         </AlertDialogHeader>
+        {error && <p role="alert" className="mt-4 break-words text-left text-sm text-destructive">{error}</p>}
         <AlertDialogFooter className="mt-6 !grid grid-cols-1 gap-2 sm:grid-cols-2">
           <AlertDialogCancel
+            disabled={busy}
             onClick={onCancel}
             className="mt-0 w-full min-w-0"
           >
             {t("deleteConfirm.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            disabled={busy}
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
             className="w-full min-w-0 !whitespace-normal bg-destructive text-center text-destructive-foreground hover:bg-destructive/90"
           >
             {hasAutomations

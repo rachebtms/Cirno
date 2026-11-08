@@ -1,0 +1,12 @@
+.settings-workspace { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: row; background: var(--background); }
+.settings-content-scroll { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+.settings-content { display: flex; flex-direction: column; gap: 1.75rem; width: 100%; max-width: 56rem; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+.settings-content-heading > h1 { font-size: 1.625rem; line-height: 1.25; font-weight: 600; letter-spacing: -.025em; }
+.settings-loading { display: grid; gap: 1rem; padding-block: 1rem; }
+.settings-loading .skeleton { min-height: 4rem; border-radius: var(--radius-lg); }
+@container cirno-tab (max-width: 1023px) {
+  .settings-workspace { flex-direction: column; }
+  .settings-content { padding: 1.25rem 1.25rem 3rem; }
+  .settings-heading-with-navigation { display: none; }
+}
+@container cirno-tab (max-width: 480px) { .settings-content { padding-inline: 1rem; } }

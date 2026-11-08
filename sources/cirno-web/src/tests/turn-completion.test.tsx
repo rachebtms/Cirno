@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { useCirnoStream } from "@/hooks/useCirnoStream";
 import { CirnoClient } from "@/lib/cirno-client";
-import type { InboundEvent, UIMessage } from "@/lib/types";
+import type { InboundEvent } from "@/lib/contracts/events";
+import type { UIMessage } from "@/lib/contracts/messages";
 import { ClientProvider } from "@/providers/ClientProvider";
 
 class TestSocket {

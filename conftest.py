@@ -45,9 +45,8 @@ def _isolate_runtime_stores(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[None]:
     """Isolate writable stores without making a directory for pure tests."""
-    import cirno_core.llm_usage.service as llm_usage
-    import cirno_core.pairing.store as pairing_store
     import cirno_core.session.location as session_location
+    import cirno_usage.service as llm_usage
 
     # A sibling of tmp_path stays outside any test's agent workspace. mkdir is
     # deferred until a store is used and remains safe for concurrent callers.
@@ -59,18 +58,12 @@ def _isolate_runtime_stores(
     monkeypatch.setattr("cirno_core.config.home._instance_path", None)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", None)
 
-    def data_dir() -> Path:
-        data_root.mkdir(parents=True, exist_ok=True)
-        return data_root
-
     def runtime_subdir(name: str) -> Path:
         path = data_root / name
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     monkeypatch.setattr(session_location, "get_runtime_subdir", runtime_subdir)
-    monkeypatch.setattr(pairing_store, "_store_path", lambda: data_dir() / "pairing.json")
-    monkeypatch.setattr(llm_usage, "get_data_dir", data_dir)
     stores: dict[Path, llm_usage.LLMUsageStore] = {}
     monkeypatch.setattr(llm_usage, "_STORES", stores)
     try:
@@ -236,10 +229,16 @@ class DisplayHistoryFixture:
         return self._project("webui_transcript_revision", key, **kwargs)
 
     def prompts(self, key, **kwargs):
-        return self._project("build_prompt_index", key, **kwargs)
+        from cirno_core.session.transcript import PromptPageRequest
+        result = []
+        while True:
+            page = self.prompt_page(key, request=PromptPageRequest(offset=len(result), limit=256), **kwargs)
+            result.extend(page["prompts"])
+            if len(result) >= page["total"]:
+                return result
 
-    def prompt_response(self, key, previous_revision, **kwargs):
-        return self._project("prompt_index_response", key, previous_revision, **kwargs)
+    def prompt_page(self, key, **kwargs):
+        return self._project("prompt_directory_page", key, **kwargs)
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SkillsMarketplace } from "@/components/settings/SkillsMarketplace";
-import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
+import { SkillsMarketplace } from "@/features/skills/SkillsMarketplace";
+import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import {
   fetchSkills,
@@ -31,8 +31,6 @@ function marketplace(token: string) {
     <ClientProvider client={client} token={token}>
       <SkillsMarketplace
         installedSkills={[]}
-        installing=""
-        onInstallingChange={() => {}}
       />
     </ClientProvider>
   );
@@ -50,7 +48,7 @@ describe("useSkills", () => {
     const getToken = () => "tok";
     function Catalog() {
       const state = useSkills(getToken);
-      return <SkillsCatalogSettings {...state} />;
+      return <SkillsLibrary {...state} />;
     }
     render(<ClientProvider client={client} token="tok"><Catalog /></ClientProvider>);
 
@@ -67,7 +65,7 @@ describe("useSkills", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await act(async () => { resolveRetry({ skills: [] }); });
     expect(screen.getByText("No skills are available.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "All 0" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "All 0" })).toBeInTheDocument();
 
     act(() => { requestSkillsRefresh(); });
     expect(screen.getByText("No skills are available.")).toBeInTheDocument();
@@ -89,7 +87,7 @@ describe("useSkills", () => {
     const installed = {
       name: "simple-pr-review",
       description: "Review pull requests.",
-      source: "workspace",
+      source: "home",
       enabled: true,
       available: true,
     };
@@ -131,7 +129,7 @@ describe("useSkills", () => {
     const installed = {
       name: "simple-pr-review",
       description: "Review pull requests.",
-      source: "workspace",
+      source: "home",
       available: true,
     };
     vi.mocked(fetchSkills).mockReset().mockImplementationOnce(
@@ -163,7 +161,7 @@ describe("useSkills", () => {
     const installed = {
       name: "simple-pr-review",
       description: "Review pull requests.",
-      source: "workspace",
+      source: "home",
       available: true,
     };
     vi.mocked(fetchSkills).mockReset()
@@ -219,7 +217,7 @@ describe("useSkills", () => {
     const installed = {
       name: "react-testing",
       description: "Test React apps.",
-      source: "workspace",
+      source: "home",
       available: true,
     };
     const getToken = () => "tok";

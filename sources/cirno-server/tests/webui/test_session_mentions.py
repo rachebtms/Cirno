@@ -5,17 +5,16 @@ import json
 import threading
 
 import pytest
-
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_handles import (
     SessionHandleResolver,
     session_handle_for_name,
 )
+from cirno_core.session.transcript import normalize_session_mentions_metadata
 from cirno_server.webui.session_access import (
     WebuiSessionAccess,
     session_mentions_runtime_context,
 )
-from cirno_core.session.transcript import normalize_session_mentions_metadata
 
 
 def _save_session(manager: SessionManager, key: str, title: str) -> None:

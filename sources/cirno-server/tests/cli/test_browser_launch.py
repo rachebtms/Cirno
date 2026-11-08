@@ -5,7 +5,6 @@ import subprocess
 from unittest.mock import MagicMock
 
 import pytest
-
 from cirno_server.cli import webui_support
 
 

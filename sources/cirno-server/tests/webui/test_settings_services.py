@@ -5,9 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-from cirno_server.channels.websocket.runtime import WebSocketConfig
-from cirno_server.webui.services import build_gateway_services
+from cirno_server.channels.websocket.config import WebSocketConfig
+from cirno_server.webui.services import build_server_services
 from cirno_server.webui.settings.services import (
     WebUIOAuthFlowRegistry,
 )
@@ -31,7 +30,7 @@ class _Flow:
 
 
 def _gateway(config_path: Path, workspace: Path):
-    return build_gateway_services(
+    return build_server_services(
         config=WebSocketConfig(),
         bus=MagicMock(),
         session_manager=None,
@@ -40,17 +39,9 @@ def _gateway(config_path: Path, workspace: Path):
         default_restrict_to_workspace=False,
         config_path=config_path,
         runtime_model_name=None,
-        runtime_surface="browser",
-        runtime_capabilities_overrides=None,
+
+
     )
-
-
-
-
-
-
-
-
 
 
 def test_oauth_registry_preserves_expiry_capacity_completion_and_cancel() -> None:
@@ -163,3 +154,40 @@ def test_oauth_registry_keeps_flow_that_starts_while_cancellation_is_pending():
         removal.join(timeout=2)
         flow.wait_closed()
         registry.close()
+
+
+def test_gateway_uses_saved_upload_limits_and_reserves_capacity_for_a_whole_batch(tmp_path):
+    from cirno_core.config.loader import save_config
+    from cirno_core.config.schema import Config
+    from cirno_server.webui.settings.api import update_runtime_config_settings
+
+    path = tmp_path / "instance/config.json"
+    path.parent.mkdir()
+    save_config(Config(), path)
+    values = {"server.uploads.max_file_mb": 150, "server.uploads.max_video_mb": 200,
+              "server.uploads.max_total_mb": 600}
+    payload = update_runtime_config_settings(values, config_path=path)
+    assert payload["requires_restart"]
+    assert all(payload["runtime_config"][key] == value for key, value in values.items())
+    gateway = _gateway(path, tmp_path / "workspace")
+    limits = gateway.ingress.bootstrap_limits(max_frame_bytes=1048576)["attachments"]
+    assert limits["max_file_bytes"] == 150 * 1024 * 1024
+    assert limits["max_video_bytes"] == 200 * 1024 * 1024
+    assert limits["max_total_bytes"] == 600 * 1024 * 1024
+    assert gateway.uploads.store.limits is gateway.ingress.attachments
+    assert gateway.uploads.store.max_pending_bytes >= 800 * 1024 * 1024
+
+
+@pytest.mark.parametrize("value", [0, -1, True, "200", 1.5])
+def test_invalid_upload_settings_preserve_configuration(tmp_path, value):
+    from cirno_core.config.loader import save_config
+    from cirno_core.config.schema import Config
+    from cirno_server.webui.settings.api import update_runtime_config_settings
+    from cirno_server.webui.settings.contracts import WebUISettingsError
+
+    path = tmp_path / "config.json"
+    save_config(Config(), path)
+    before = path.read_bytes()
+    with pytest.raises(WebUISettingsError):
+        update_runtime_config_settings({"server.uploads.max_file_mb": value}, config_path=path)
+    assert path.read_bytes() == before

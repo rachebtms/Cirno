@@ -1,17 +1,18 @@
 import { useState } from "react";
 
 import { FilePreviewPanelView } from "@/components/FilePreviewPanelView";
-import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
-import { SkillsMarketplace } from "@/components/settings/SkillsMarketplace";
-import { ModelIdPicker } from "@/components/settings/shared/ModelControls";
-import { AppsCatalogSettings, DEFAULT_CUSTOM_MCP_FORM } from "@/components/settings/system/AppsSettings";
-import { ChannelsSettings } from "@/components/settings/system/ChannelsSettings";
-import { McpManagementDialog } from "@/components/settings/system/McpManagementDialog";
+import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
+import { SkillsMarketplace } from "@/features/skills/SkillsMarketplace";
+import { ModelCatalogField } from "@/features/settings/models/ui/ModelCatalogField";
+import { AppsCatalogSettings, DEFAULT_CUSTOM_MCP_FORM } from "@/features/settings/apps/AppsCatalogSettings";
+import { ChannelsSettings } from "@/features/channels/ChannelsSettings";
+import { McpManagementDialog } from "@/features/settings/mcp/McpManagementDialog";
 import { WorkspaceProjectPicker } from "@/components/thread/WorkspaceControls";
 import { settings } from "@/dev/gallery/settings";
 import { useReadingTypography } from "@/hooks/useReadingTypography";
 import { fetchWorkspaceDirectories } from "@/lib/api";
-import type { McpPresetInfo, CirnoFeatureInfo } from "@/lib/types";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { CirnoFeatureInfo } from "@/lib/contracts/channels";
 
 const noop = () => {};
 const names = ["Search documentation", "Read repository", "List projects", "Inspect changes", "Review results", "Write notes"];
@@ -57,13 +58,10 @@ export function SkeletonFixture({ surface, loading }: { surface: string; loading
       token="fixture" cirnoFeatures={loading ? null : { features: names.map((name, index) => ({ ...feature, name: `channel-${index}`, display_name: name })), enabled_count: 6, requires_restart: false }}
       loading={loading} actionKey={null} showBrandLogos={false} error={null} requiresRestartPending={false}
       onAction={noop} onFeaturesUpdate={noop} onDismissStatus={noop}
-    /> : surface === "skills" ? <SkillsCatalogSettings loading={loading} skills={loading ? [] : names.map((name) => ({
+    /> : surface === "skills" ? <SkillsLibrary loading={loading} skills={loading ? [] : names.map((name) => ({
       name, description: "Search, inspect and maintain the project.", source: "builtin", available: true, enabled: true,
-    }))} /> : surface === "marketplace" ? <SkillsMarketplace installedSkills={[]} installing="" onInstallingChange={noop} />
-      : surface === "models" || surface === "models-compact" ? <ModelIdPicker token="fixture"
-        settings={{ ...settings, providers: settings.providers.map((provider) => provider.name === "openai" ? { ...provider, model_catalog: "official" } : provider) }}
-        provider={surface === "models-compact" ? "openai" : "anthropic"}
-        value={model} showProviderLogos={false} onChange={setModel} />
+    }))} /> : surface === "marketplace" ? <SkillsMarketplace installedSkills={[]} />
+      : surface === "models" || surface === "models-compact" ? <ModelCatalogField token="fixture" provider={settings.providers.find(row => row.id === (surface === "models-compact" ? "openai" : "anthropic"))} value={model} onChange={setModel} />
       : surface === "tools" ? <McpManagementDialog
         preset={{ ...preset, tool_names: loading ? [] : names.map((_, index) => `read_project_${index}`), tool_count: loading ? 0 : 6 }}
         values={{}} actionKey={loading ? "test:docs" : null} statusLabel="Connected" statusTone="success" tab="tools"

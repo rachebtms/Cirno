@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { SettingsView } from "@/components/settings/SettingsView";
-import { RUNTIME_CONFIG_FIELDS } from "@/components/settings/system/runtime-config-fields";
+import { SettingsView } from "@/features/settings/SettingsView";
+import { RUNTIME_CONFIG_FIELDS } from "@/features/settings/system/runtime-config-fields";
 import { settings } from "@/dev/gallery/settings";
 import { CirnoClient } from "@/lib/cirno-client";
-import type { RuntimeConfigValue, SettingsPayload } from "@/lib/types";
+import type { RuntimeConfigValue, SettingsPayload } from "@/lib/contracts/settings";
 import { ClientProvider } from "@/providers/ClientProvider";
 
 const path = "agents.defaults.idle_compact_after_minutes";
@@ -21,7 +21,7 @@ const initial: SettingsPayload = {
 initial.runtime_config![path] = Number(localStorage.getItem(storageKey) ?? 720);
 const section = new URLSearchParams(location.search).get("section");
 if (section === "models") {
-  initial.model_presets = [{ name: "primary", is_default: false, model: "gpt-5.4", provider: "openai", resolved_provider: "openai", active: true, max_tokens: 8192, temperature: 0.1, reasoning_effort: "low", reasoning_history: "auto", context_window_tokens: 200_000 }];
+  initial.model_presets = [{ id: "primary", name: "primary", is_default: false, model: "gpt-5.4", provider: "openai", resolved_provider: "openai", active: true, max_tokens: 8192, temperature: 0.1, reasoning_effort: "low", reasoning_history: "auto", context_window_tokens: 200_000 }];
   initial.model_call_order = ["primary"];
 }
 if (section === "memory-search") Object.assign(initial.runtime_config!, {
@@ -56,11 +56,11 @@ export function installIdleCompactionApi() {
   const fetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-    if (url.origin !== location.origin || !url.pathname.startsWith("/api/")) return fetch(input, init);
+    if (url.origin !== location.origin || !url.pathname.startsWith("/v0/")) return fetch(input, init);
     const bodies: Record<string, unknown> = {
-      "/api/settings": persisted,
-      "/api/settings/cirno-features": { features: [], enabled_count: 0, requires_restart: false },
-      "/api/settings/api-service": { installed: false, running: false, managed: false, host: "127.0.0.1",
+      "/v0/settings": persisted,
+      "/v0/settings/cirno-features": { features: [], enabled_count: 0, requires_restart: false },
+      "/v0/settings/api-service": { installed: false, running: false, managed: false, host: "127.0.0.1",
         port: 8900, timeout: 120, endpoint: "http://127.0.0.1:8900/v1", command: "cirno serve" },
     };
     return Response.json(bodies[url.pathname] ?? {});

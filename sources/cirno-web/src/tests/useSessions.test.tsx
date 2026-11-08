@@ -29,6 +29,7 @@ function fakeClient() {
     onError: () => () => {},
     onChat: () => () => {},
     getRunStartedAt: () => null,
+    isRunCompleted: () => false,
     onSessionUpdate: (handler: (chatId: string, scope?: string) => void) => {
       sessionUpdateHandlers.add(handler);
       return () => sessionUpdateHandlers.delete(handler);
@@ -506,12 +507,12 @@ describe("useSessions", () => {
           content: "what's this?",
           createdAt: 1,
           images: [
-            { url: "/api/media/sig-1/payload-1", name: "snap.png" },
-            { url: "/api/media/sig-2/payload-2", name: "diag.jpg" },
+            { url: "/v0/media/sig-1/payload-1", name: "snap.png" },
+            { url: "/v0/media/sig-2/payload-2", name: "diag.jpg" },
           ],
           media: [
-            { kind: "image", url: "/api/media/sig-1/payload-1", name: "snap.png" },
-            { kind: "image", url: "/api/media/sig-2/payload-2", name: "diag.jpg" },
+            { kind: "image", url: "/v0/media/sig-1/payload-1", name: "snap.png" },
+            { kind: "image", url: "/v0/media/sig-2/payload-2", name: "diag.jpg" },
           ],
         },
         { id: "a1", role: "assistant", content: "it's a cat", createdAt: 2 },
@@ -527,12 +528,12 @@ describe("useSessions", () => {
     const [first, second, third] = result.current.messages;
     expect(first.role).toBe("user");
     expect(first.images).toEqual([
-      { url: "/api/media/sig-1/payload-1", name: "snap.png" },
-      { url: "/api/media/sig-2/payload-2", name: "diag.jpg" },
+      { url: "/v0/media/sig-1/payload-1", name: "snap.png" },
+      { url: "/v0/media/sig-2/payload-2", name: "diag.jpg" },
     ]);
     expect(first.media).toEqual([
-      { kind: "image", url: "/api/media/sig-1/payload-1", name: "snap.png" },
-      { kind: "image", url: "/api/media/sig-2/payload-2", name: "diag.jpg" },
+      { kind: "image", url: "/v0/media/sig-1/payload-1", name: "snap.png" },
+      { kind: "image", url: "/v0/media/sig-2/payload-2", name: "diag.jpg" },
     ]);
     expect(second.role).toBe("assistant");
     expect(second.images).toBeUndefined();
@@ -549,7 +550,7 @@ describe("useSessions", () => {
           role: "assistant",
           content: "clip ready",
           createdAt: 1,
-          media: [{ kind: "video", url: "/api/media/sig-v/payload-v", name: "clip.mp4" }],
+          media: [{ kind: "video", url: "/v0/media/sig-v/payload-v", name: "clip.mp4" }],
         },
       ],
     }));
@@ -563,7 +564,7 @@ describe("useSessions", () => {
     expect(result.current.messages[0]!.role).toBe("assistant");
     expect(result.current.messages[0]!.images).toBeUndefined();
     expect(result.current.messages[0]!.media).toEqual([
-      { kind: "video", url: "/api/media/sig-v/payload-v", name: "clip.mp4" },
+      { kind: "video", url: "/v0/media/sig-v/payload-v", name: "clip.mp4" },
     ]);
   });
 
@@ -1079,32 +1080,25 @@ describe("useSessions", () => {
     expect(webuiThreadCache.get("websocket:host-switch")).toBe(currentBody);
   });
 
-  it("aborts a superseded latest-history request without surfacing an error", async () => {
+  it("coalesces a manual latest-history refresh behind its active read without surfacing an error", async () => {
     let firstSignal: AbortSignal | undefined;
+    let finishFirst!: (body: ReturnType<typeof canonicalThreadPayload>) => void;
     vi.mocked(api.fetchWebuiThread)
-      .mockImplementationOnce((_token, _key, optionsOrBase) => new Promise((_resolve, reject) => {
+      .mockImplementationOnce((_token, _key, optionsOrBase) => new Promise((resolve) => {
         if (typeof optionsOrBase !== "string") firstSignal = optionsOrBase?.signal;
-        firstSignal?.addEventListener("abort", () => {
-          reject(new DOMException("Aborted", "AbortError"));
-        });
+        finishFirst = resolve;
       }))
       .mockResolvedValueOnce(canonicalThreadPayload({
         schemaVersion: 3,
-        messages: [
-          { id: "a2", role: "assistant", content: "latest", createdAt: 2 },
-        ],
+        messages: [{ id: "a2", role: "assistant", content: "latest", createdAt: 2 }],
       }));
-
-    const { result } = renderHook(
-      () => useSessionHistory("websocket:superseded"),
-      { wrapper: wrap(fakeClient()) },
-    );
-
+    const { result } = renderHook(() => useSessionHistory("websocket:superseded"), { wrapper: wrap(fakeClient()) });
     await waitFor(() => expect(firstSignal).toBeDefined());
-    act(() => result.current.refresh());
-
+    act(() => { result.current.refresh(); result.current.refresh(); });
+    expect(api.fetchWebuiThread).toHaveBeenCalledTimes(1);
+    expect(firstSignal?.aborted).toBe(false);
+    await act(async () => { finishFirst(canonicalThreadPayload({ schemaVersion: 3, messages: [] })); });
     await waitFor(() => expect(api.fetchWebuiThread).toHaveBeenCalledTimes(2));
-    expect(firstSignal?.aborted).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBeNull();
     expect(result.current.messages.map((message) => message.id)).toEqual(["a2"]);

@@ -1,3 +1,4 @@
+import { updatePreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 for (const width of [1280, 390]) {
@@ -20,39 +21,40 @@ for (const width of [1280, 390]) {
       }
     });
 
-    test(`composer actions crossfade without shifting or delaying Stop (${width}px, ${variant})`, async ({ page }) => {
+    test(`composer actions crossfade between Send and Stop without shifting or delaying Stop (${width}px, ${variant})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(`/browser/fixture.html?case=composer-action&composerVariant=${variant}`);
       const input = page.getByRole("textbox");
       const action = page.locator(".composer-primary-action");
-      await expect(action).toHaveAccessibleName("Voice input");
+      await expect(action).toHaveAccessibleName("Send message");
+      await expect(action).toBeDisabled();
       const bounds = await action.boundingBox();
-      const pillBounds = await page.locator(".composer-model-pill").boundingBox();
+      const pillBounds = await page.getByRole("button", { name: "Preview", exact: true }).boundingBox();
       expect(bounds!.height).toBe(pillBounds!.height);
       expect(bounds!.y + bounds!.height / 2).toBe(pillBounds!.y + pillBounds!.height / 2);
       const model = page.getByText("Preview", { exact: true });
       const modelBounds = await model.boundingBox();
       await input.fill("Please work");
       await expect(action).toHaveAccessibleName("Send message");
+      expect(await action.boundingBox()).toEqual(bounds);
+      expect(await model.boundingBox()).toEqual(modelBounds);
+
+      // Replace the draft immediately before submission; Stop must be ready on acceptance.
+      await input.fill("");
+      await input.fill("A newer draft");
+      await action.click();
+      await expect(action).toHaveAccessibleName("Stop response");
       const samples = await action.evaluate((button) => new Promise<number[]>((resolve) => {
         const values: number[] = [];
         const start = performance.now();
         const sample = () => {
-          values.push(Number(getComputedStyle(button.querySelector('[data-action-icon="send"]')!).opacity));
+          values.push(Number(getComputedStyle(button.querySelector('[data-action-icon="stop"]')!).opacity));
           if (performance.now() - start < 200) requestAnimationFrame(sample);
           else resolve(values);
         };
         requestAnimationFrame(sample);
       }));
       expect(samples.some((opacity) => opacity > 0 && opacity < 1)).toBe(true);
-      expect(await action.boundingBox()).toEqual(bounds);
-      expect(await model.boundingBox()).toEqual(modelBounds);
-
-      // Reverse mid-transition, then send before the new icon has settled.
-      await input.fill("");
-      await input.fill("A newer draft");
-      await action.click();
-      await expect(action).toHaveAccessibleName("Stop response");
       const stop = action.locator('[data-action-icon="stop"]');
       const ring = stop.locator(".loading-ring-arc");
       await expect.poll(() => ring.evaluate((node) => node.getAnimations().length)).toBe(1);
@@ -64,7 +66,8 @@ for (const width of [1280, 390]) {
       await expect.poll(() => stop.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
       expect(await action.boundingBox()).toEqual(bounds);
       await page.getByRole("button", { name: "Finish response" }).click();
-      await expect(action).toHaveAccessibleName("Voice input");
+      await expect(action).toHaveAccessibleName("Send message");
+      await expect(action).toBeDisabled();
       await expect.poll(() => stop.evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
       expect(await ring.evaluate((node) => node.getAnimations().length)).toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -80,7 +83,7 @@ test("composer activity follows both themes and live reduced-motion preferences"
   const ring = action.locator('[data-action-icon="stop"] svg:has(.loading-ring-arc)');
   const colors: string[] = [];
   for (const dark of [false, true]) {
-    await page.evaluate((enabled) => document.documentElement.classList.toggle("dark", enabled), dark);
+    await updatePreviewPreferences(page, { themeMode: dark ? "dark" : "light" });
     colors.push(await ring.evaluate((node) => getComputedStyle(node).color));
   }
   expect(colors[0]).not.toBe(colors[1]);
@@ -107,7 +110,7 @@ test("ready send remains distinct from the composer in both themes", async ({ pa
   for (const variant of ["hero", "thread"]) {
     for (const theme of ["light", "dark"]) {
       await page.goto(`/browser/fixture.html?case=composer-action&composerVariant=${variant}`);
-      await page.locator("html").evaluate((element, dark) => element.classList.toggle("dark", dark), theme === "dark");
+      await updatePreviewPreferences(page, { themeMode: theme as "light" | "dark" });
       const action = page.locator(".composer-primary-action");
       for (const [state, value] of [["send", "A ready message"]]) {
         await page.getByRole("textbox").fill(value);

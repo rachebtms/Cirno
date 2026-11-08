@@ -4,7 +4,7 @@ import { SubagentTasksProvider } from "@/components/thread/SubagentTasks";
 import { useClient } from "@/providers/ClientProvider";
 import { useSessionHistory } from "@/hooks/useSessions";
 import { usePromptHistory } from "@/hooks/usePromptHistory";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const localMessages: UIMessage[] = Array.from({ length: 280 }, (_, index) => ({
   id: `local-${index}`, role: index % 2 ? "assistant" : "user",

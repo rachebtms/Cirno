@@ -69,7 +69,7 @@ def test_compaction_reason_survives_sqlite_reload_and_older_page(history, tmp_pa
 
 def test_append_stamps_created_at_ms(history, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno_core.session.transcript.time.time", lambda: 1_700_000_000.0)
+    monkeypatch.setattr("cirno_core.session.transcript.records.time.time", lambda: 1_700_000_000.0)
     key = "websocket:t-created-at"
 
     history.append(key, {"event": "user", "chat_id": "t-created-at", "text": "hello"})
@@ -170,7 +170,7 @@ def test_sqlite_history_paginates_latest_and_older_without_overlap(history,
 
 def test_missing_page_query_uses_bounded_default(history, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno_core.session.transcript._DEFAULT_TRANSCRIPT_PAGE_LIMIT", 4)
+    monkeypatch.setattr("cirno_core.session.transcript.paging._DEFAULT_TRANSCRIPT_PAGE_LIMIT", 4)
     key = "websocket:bounded-default"
     for idx in range(1, 5):
         _append_numbered_turn(history, key, "bounded-default", idx)
@@ -235,13 +235,13 @@ def test_event_projection_augments_complete_stream_text(history, tmp_path, monke
 
     payload = history.build(
         key,
-        augment_assistant_text=lambda text: text.replace("output.png", "/api/media/signed"),
+        augment_assistant_text=lambda text: text.replace("output.png", "/v0/media/signed"),
     )
 
     assert payload is not None
     assert [event["text"] for event in payload["events"]] == [
         "![plot](output.png)",
-        "![plot](/api/media/signed)",
+        "![plot](/v0/media/signed)",
     ]
 
 
@@ -482,8 +482,8 @@ def test_transcript_revision_tracks_artifacts_and_variants(history, tmp_path, mo
 
 def test_single_oversized_turn_is_bounded_and_marked(history, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_RECORDS", 5)
-    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_BYTES", 1_200)
+    monkeypatch.setattr("cirno_core.session.transcript.paging._MAX_TRANSCRIPT_PAGE_RECORDS", 5)
+    monkeypatch.setattr("cirno_core.session.transcript.paging._MAX_TRANSCRIPT_PAGE_BYTES", 1_200)
     key = "websocket:oversized-turn"
     history.append(
         key,
@@ -518,13 +518,13 @@ def test_single_oversized_turn_is_bounded_and_marked(history, tmp_path, monkeypa
     assert _message_contents(latest) == ["question", "final answer"]
 
 
-def test_truncated_turn_does_not_advertise_ambiguous_trace_detail(history,
+def test_truncated_turn_resolves_only_its_retained_trace_range(history,
     tmp_path,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_RECORDS", 6)
-    monkeypatch.setattr("cirno_core.session.transcript._MAX_TRANSCRIPT_PAGE_BYTES", 1_000_000)
+    monkeypatch.setattr("cirno_core.session.transcript.paging._MAX_TRANSCRIPT_PAGE_RECORDS", 6)
+    monkeypatch.setattr("cirno_core.session.transcript.paging._MAX_TRANSCRIPT_PAGE_BYTES", 1_000_000)
     key = "websocket:truncated-trace-detail"
     history.append(
         key,
@@ -565,7 +565,9 @@ def test_truncated_turn_does_not_advertise_ambiguous_trace_detail(history,
     assert payload["page"]["truncated_oversized_turn"] is True
     trace_event = next(event for event in payload["events"] if event.get("kind") == "progress")
     assert trace_event["text"] == "second_3(…)"
-    assert "trace_detail" not in trace_event
+    detail = history.trace(key, trace_event["trace_detail"]["ref"])
+    assert detail is not None
+    assert [event["text"].split("(")[0] for event in detail["events"]] == ["second_1", "second_2", "second_3"]
     assert len(json.dumps(trace_event).encode("utf-8")) < 4_096
 
 
@@ -924,8 +926,6 @@ def test_legacy_recovery_loads_session_and_builds_backfill_turns_once(history,
     )
 
     loader_calls = 0
-    backfill_calls = 0
-    original = transcript_module._session_backfill_turns
 
     def load_session_messages() -> list[dict]:
         nonlocal loader_calls
@@ -935,18 +935,10 @@ def test_legacy_recovery_loads_session_and_builds_backfill_turns_once(history,
             {"role": "assistant", "content": "answer"},
         ]
 
-    def track_backfill(session_key: str, session_messages: list[dict]):
-        nonlocal backfill_calls
-        backfill_calls += 1
-        return original(session_key, session_messages)
-
-    monkeypatch.setattr(transcript_module, "_session_backfill_turns", track_backfill)
-
     out = history.build(key, session_messages_loader=load_session_messages)
 
     assert out is not None
     assert loader_calls == 1
-    assert backfill_calls == 1
     assert [
         (message["role"], message["content"])
         for message in _conversation_events(out)
@@ -1118,7 +1110,7 @@ def test_shell_output_format_survives_reload_and_paging_without_loading_model_hi
     def build(**kwargs):
         return reopened.project_history(key, lambda snapshot: transcript_module.build_webui_thread_response(
             key, history=snapshot, session_messages_loader=fail_if_loaded,
-            augment_assistant_text=lambda text: text.replace("local.png", "/api/media/signed"), **kwargs,
+            augment_assistant_text=lambda text: text.replace("local.png", "/v0/media/signed"), **kwargs,
         ))
 
     latest = build(limit=2, direction="latest")

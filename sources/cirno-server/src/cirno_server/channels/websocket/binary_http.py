@@ -1,0 +1,145 @@
+"""Body-capable HTTP bridge for the WebSocket channel listener.
+
+GET upgrades and ordinary API reads use the WebSocket handshake parser. Signed
+media, backups and body-bearing methods use aiohttp on the same socket, retaining
+streaming/backpressure and the authenticated peer.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
+
+from aiohttp import web
+from aiohttp.web_protocol import RequestHandler
+from cirno_server.channels.websocket.attachment_policy import UPLOAD_REQUEST_TIMEOUT_SECONDS
+from websockets.asyncio.server import ServerConnection
+
+_HTTP_HEADER_TIMEOUT_S = 75.0
+_HTTP_CONNECTION_TIMEOUT_S = UPLOAD_REQUEST_TIMEOUT_SECONDS
+_STREAMING_GET_PREFIXES = (b"GET /v0/backups/", b"GET /v0/media/")
+_PREFIX_BYTES = max(map(len, _STREAMING_GET_PREFIXES))
+
+
+class BinaryHTTPBridge:
+    """Own HTTP connections alongside a websockets ``serve`` instance.
+
+    Pass ``connection_factory`` as ``create_connection`` to serve/unix_serve.
+    After closing the listener, await ``shutdown`` before ``server.wait_closed``
+    and disposing the upload store. Request decompression is deliberately disabled: declared body
+    lengths must measure the exact bytes the upload store writes.
+    """
+
+    def __init__(self, handler: Callable[[web.BaseRequest], Awaitable[web.StreamResponse]]) -> None:
+        async def request_started(request: web.BaseRequest) -> web.StreamResponse:
+            if request.transport is not None:
+                # This bridge remains the transport protocol while delegating
+                # HTTP parsing to RequestHandler on the same transport.
+                connection = cast(_BridgeConnection, request.transport.get_protocol())
+                connection.request_started(
+                    long_transfer=request.path.startswith(("/v0/backups/", "/v0/media/"))
+                )
+            return await handler(request)
+
+        self.http_server = web.Server(request_started, auto_decompress=False, keepalive_timeout=5)
+        self.pending_connections: set[_BridgeConnection] = set()
+
+        bridge = self
+
+        class Connection(_BridgeConnection):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, bridge=bridge, **kwargs)
+
+        self.connection_factory: type[ServerConnection] = Connection
+
+    async def shutdown(self) -> None:
+        for connection in tuple(self.pending_connections):
+            connection.transport.close()
+        await self.http_server.shutdown(timeout=1)
+
+
+class _BridgeConnection(ServerConnection):
+    def __init__(self, *args: Any, bridge: BinaryHTTPBridge, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._bridge = bridge
+        self._prefix = bytearray()
+        self._http_protocol: RequestHandler | None = None
+        self._selected = False
+        self._prefix_timeout: asyncio.TimerHandle | None = None
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        # Delay websockets' handshake task until we know which parser owns this
+        # connection. In particular, never feed a POST to Request.parse().
+        self.transport = cast(asyncio.Transport, transport)
+        self._bridge.pending_connections.add(self)
+        self._prefix_timeout = asyncio.get_running_loop().call_later(10, self.transport.close)
+
+    def data_received(self, data: bytes) -> None:
+        if not self._selected:
+            needed = _PREFIX_BYTES - len(self._prefix)
+            self._prefix.extend(data[:needed])
+            if len(self._prefix) < 4:
+                return
+            if any(
+                prefix.startswith(self._prefix) and len(self._prefix) < len(prefix)
+                for prefix in _STREAMING_GET_PREFIXES
+            ):
+                return
+            data = bytes(self._prefix) + data[needed:]
+            self._prefix.clear()
+            self._selected = True
+            self._bridge.pending_connections.discard(self)
+            if self._prefix_timeout is not None:
+                self._prefix_timeout.cancel()
+            if data.startswith(b"GET ") and not data.startswith(_STREAMING_GET_PREFIXES):
+                super().connection_made(self.transport)
+            else:
+                # Incomplete headers retain their own short deadline. A parsed
+                # request receives the longer bounded upload budget below.
+                self._prefix_timeout = asyncio.get_running_loop().call_later(
+                    _HTTP_HEADER_TIMEOUT_S,
+                    self.transport.close,
+                )
+                self._http_protocol = self._bridge.http_server()
+                self._http_protocol.connection_made(self.transport)
+        if self._http_protocol is not None:
+            self._http_protocol.data_received(data)
+        else:
+            super().data_received(data)
+
+    def request_started(self, *, long_transfer: bool = False) -> None:
+        if self._prefix_timeout is not None:
+            self._prefix_timeout.cancel()
+        self._prefix_timeout = asyncio.get_running_loop().call_later(
+            86400 if long_transfer else _HTTP_CONNECTION_TIMEOUT_S,
+            self.transport.close,
+        )
+
+    def eof_received(self) -> None:
+        if self._http_protocol is not None:
+            return self._http_protocol.eof_received()
+        if self._selected:
+            return super().eof_received()
+        return None
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        self._bridge.pending_connections.discard(self)
+        if self._prefix_timeout is not None:
+            self._prefix_timeout.cancel()
+        if self._http_protocol is not None:
+            self._http_protocol.connection_lost(exc)
+        elif self._selected:
+            super().connection_lost(exc)
+
+    def pause_writing(self) -> None:
+        if self._http_protocol is not None:
+            self._http_protocol.pause_writing()
+        elif self._selected:
+            super().pause_writing()
+
+    def resume_writing(self) -> None:
+        if self._http_protocol is not None:
+            self._http_protocol.resume_writing()
+        elif self._selected:
+            super().resume_writing()

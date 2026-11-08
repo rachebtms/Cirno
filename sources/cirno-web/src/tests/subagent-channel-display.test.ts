@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { scrubSubagentAnnounceBody, scrubSubagentUiMessages } from "@/lib/subagent-channel-display";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 describe("subagent-channel-display", () => {
   it("strips Task and Summarize tail", () => {

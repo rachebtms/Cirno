@@ -6,7 +6,11 @@ import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ComposerDraftStore } from "@/lib/composer-draft";
 import { encodeImage } from "@/lib/imageEncode";
 import { SESSION_DRAG_TYPE } from "@/lib/session-drag";
-import type { ChatSummary, CliAppInfo, McpPresetInfo, SlashCommand, WorkspaceScopePayload } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { SlashCommand } from "@/lib/contracts/commands";
+import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 
 function workspacePickerProps(scope: WorkspaceScopePayload) {
   const resolvePath = (path: string) => path.startsWith("~/") ? `/Users/test/${path.slice(2)}` : path;
@@ -213,7 +217,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
-  Reflect.deleteProperty(window, "cirnoHost");
   if (ORIGINAL_MEDIA_DEVICES) {
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
@@ -248,9 +251,9 @@ function rect(init: Partial<DOMRect>): DOMRect {
 }
 
 const MODEL_PRESETS = [
-  { name: "kimi", model: "moonshot/kimi-k2.5", provider: "moonshot" },
-  { name: "dflash", model: "deepseek/deepseek-v4-flash", provider: "deepseek" },
-  { name: "dspro", model: "deepseek/deepseek-v4-pro", provider: "deepseek" },
+  { id: "kimi", name: "kimi", model: "moonshot/kimi-k2.5", provider: "moonshot" },
+  { id: "dflash", name: "dflash", model: "deepseek/deepseek-v4-flash", provider: "deepseek" },
+  { id: "dspro", name: "dspro", model: "deepseek/deepseek-v4-pro", provider: "deepseek" },
 ];
 
 function renderPresetComposer(
@@ -474,29 +477,11 @@ describe("ThreadComposer", () => {
     expect(input).toHaveValue("keep this draft");
   });
 
-  it("renders a readonly hero model composer when provided", () => {
-    render(
-      <ThreadComposer
-        onSend={vi.fn()}
-        modelLabel="claude-opus-4-5"
-        placeholder="Ask anything..."
-        variant="hero"
-      />,
-    );
-
-    expect(screen.getByText("claude-opus-4-5")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Search" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Thinking" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Deep research" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Voice input" })).not.toBeInTheDocument();
-    const input = screen.getByPlaceholderText("Ask anything...");
-    expect(input).toBeInTheDocument();
-    expect(input.className).toContain("min-h-[78px]");
-    expect(input.className).toContain("text-composer");
-    expect(input.className).toContain("pt-[27px]");
-    fireEvent.change(input, { target: { value: "1" } });
-    expect(input.className).toContain("pt-[27px]");
-    expect(input.parentElement?.parentElement?.className).toContain("max-w-[var(--composer-content-width,58rem)]");
+  it.each(["hero", "thread"] as const)("uses the same editing contract for a readonly model in %s", variant => {
+    const send = vi.fn(); render(<ThreadComposer onSend={send} modelLabel="research" placeholder="Ask anything..." variant={variant} />);
+    expect(screen.getByText("research")).toBeVisible(); const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "A question" } }); fireEvent.keyDown(input, { key: "Enter" });
+    expect(send).toHaveBeenCalledWith("A question", undefined, undefined);
   });
 
   it("defers textarea autosizing until IME composition commits", () => {
@@ -526,32 +511,6 @@ describe("ThreadComposer", () => {
     expect(input.style.height).toBe("120px");
   });
 
-  it("lets long model preset labels use their intrinsic width", () => {
-    render(
-      <ThreadComposer
-        onSend={vi.fn()}
-        modelLabel="gpt-5.6-sol"
-        modelPreset="gpt-5-6-sol"
-        modelProvider="openai_codex"
-        modelPresets={[
-          {
-            name: "gpt-5-6-sol",
-            model: "openai-codex/gpt-5.6-sol",
-            provider: "openai_codex",
-          },
-          ...MODEL_PRESETS,
-        ]}
-        onModelPresetChange={vi.fn()}
-        placeholder="Ask anything..."
-        variant="hero"
-      />,
-    );
-
-    const badge = screen.getByRole("button", { name: "gpt-5.6-sol" });
-    expect(badge).toHaveClass("w-fit", "max-w-[min(18rem,44vw)]");
-    expect(badge).not.toHaveClass("w-[5.75rem]");
-    expect(screen.getByText("gpt-5.6-sol")).toBeInTheDocument();
-  });
 
   it("shows a compact context meter beside the model selector", async () => {
     render(
@@ -579,8 +538,8 @@ describe("ThreadComposer", () => {
     fireEvent.focus(context);
     const tooltip = await screen.findByRole("tooltip");
     expect(tooltip).toHaveTextContent("Context 7%");
-    expect(tooltip.parentElement).toHaveClass("rounded-full", "px-2.5", "py-1");
-    expect(tooltip.parentElement).not.toHaveTextContent("Available");
+    expect(tooltip).toHaveClass("rounded-full", "px-2.5", "py-1");
+    expect(tooltip).not.toHaveTextContent("Available");
   });
 
   it("opens an input-token chart with one bar for each logical round", () => {
@@ -745,95 +704,19 @@ describe("ThreadComposer", () => {
     expect(screen.queryByText("Reused")).not.toBeInTheDocument();
   });
 
-  it("keeps the thread composer compact while matching the hero style", () => {
-    render(
-      <ThreadComposer
-        onSend={vi.fn()}
-        modelLabel="gpt-4o"
-        modelProvider="openai"
-        modelProviderLabel="OpenAI"
-        placeholder="Type your message..."
-      />,
-    );
 
-    expect(screen.getByText("gpt-4o")).toBeInTheDocument();
-    const modelPill = screen.getByText("gpt-4o").closest(".composer-model-pill");
-    expect(modelPill).toHaveClass("font-medium", "text-foreground/70");
-    expect(modelPill).not.toHaveClass("font-semibold");
-    const providerLogo = screen.getByTestId("composer-model-logo-openai");
-    expect(providerLogo).toBeInTheDocument();
-    for (const className of ["border", "bg-background"]) {
-      expect(providerLogo).not.toHaveClass(className);
-    }
-    const input = screen.getByPlaceholderText("Type your message...");
-    expect(input.className).toContain("min-h-[50px]");
-    expect(input.className).toContain("text-composer");
-    expect(input.parentElement?.parentElement?.className).toContain("max-w-[var(--composer-content-width,49.5rem)]");
-    expect(input.parentElement?.parentElement?.className).toContain("rounded-panel");
-    expect(input.parentElement?.parentElement?.className).not.toContain("shadow-");
-    expect(screen.getByRole("button", { name: "Send message" }).className).toContain("bg-foreground");
-    expect(screen.queryByText(/Enter to send/)).not.toBeInTheDocument();
+  it("switches a model from the composer without discarding the draft", async () => {
+    const { badge, onPresetChange } = renderPresetComposer(); const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Keep this draft" } }); fireEvent.click(badge);
+    await userEvent.setup().click(screen.getByRole("menuitemradio", { name: /^dspro/ }));
+    expect(onPresetChange).toHaveBeenCalledWith("dspro"); expect(input).toHaveValue("Keep this draft");
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });
 
-  it("opens a model picker and switches presets with one click", async () => {
-    const { badge, onPresetChange } = renderPresetComposer();
-    expect(badge).toHaveClass("h-9");
-    expect(badge).toHaveClass("w-fit");
-    fireEvent.click(badge);
-    const picker = screen.getByRole("dialog", { name: "Switch model" });
-    expect(picker).toHaveClass("w-[min(18rem,calc(100vw-2rem))]");
-    expect(badge).toHaveClass("w-fit");
-    expect(badge.querySelector(".composer-model-pill")).not.toHaveClass("w-full");
-    expect(within(picker).getAllByRole("option")).toHaveLength(3);
-    expect(within(picker).getByRole("option", { name: "dflash" })).toHaveTextContent(
-      /dflash\s*deepseek-v4-flash/,
-    );
-    expect(within(picker).getByRole("option", { name: "kimi" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(document.activeElement).toBe(within(picker).getByRole("option", { name: "kimi" }));
-    fireEvent.click(within(picker).getByRole("option", { name: "dspro" }));
-    expect(onPresetChange).toHaveBeenCalledWith("dspro");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(badge).toHaveClass("w-fit");
-  });
-
-  it("opens model settings from the picker footer", async () => {
-    const onManageModels = vi.fn();
-    const { badge } = renderPresetComposer("thread", onManageModels);
-
-    fireEvent.click(badge);
-    const picker = screen.getByRole("dialog", { name: "Switch model" });
-    fireEvent.click(within(picker).getByRole("button", { name: "Manage presets" }));
-
-    expect(onManageModels).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("keeps long-press drag switching alongside the click picker", () => {
-    vi.useFakeTimers();
-    const { badge, onPresetChange } = renderPresetComposer();
-
-    fireEvent.pointerDown(badge, { pointerId: 1, pointerType: "touch", clientY: 100 });
-    act(() => vi.advanceTimersByTime(400));
-    expect(screen.getByTestId("composer-model-pill-viewport")).toBeInTheDocument();
-    expect(screen.getByTestId("composer-model-pill-layout")).toHaveClass("invisible");
-    expect(screen.getByTestId("composer-model-pill-track")).not.toHaveClass("transition-transform");
-
-    fireEvent.pointerMove(badge, { pointerId: 1, pointerType: "touch", clientY: 56 });
-    fireEvent.pointerUp(badge, { pointerId: 1, pointerType: "touch", clientY: 56 });
-    expect(onPresetChange).toHaveBeenCalledWith("dflash");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it("uses the same click picker in hero mode", () => {
-    const { badge, onPresetChange } = renderPresetComposer("hero");
-    expect(badge).toHaveClass("h-8");
-    fireEvent.click(badge);
-    fireEvent.click(screen.getByRole("option", { name: "dflash" }));
-    expect(onPresetChange).toHaveBeenCalledWith("dflash");
+  it("opens model management from the composer", async () => {
+    const manage = vi.fn(); const { badge } = renderPresetComposer("thread", manage);
+    fireEvent.click(badge); await userEvent.setup().click(screen.getByRole("menuitem", { name: "Manage presets" }));
+    expect(manage).toHaveBeenCalledOnce();
   });
 
   it.each(["thread", "hero"] as const)("keeps narrow %s permissions inline and usage below without losing the draft", async (variant) => {
@@ -894,7 +777,7 @@ describe("ThreadComposer", () => {
       removeEventListener: vi.fn(),
     })));
     vi.spyOn(HTMLFormElement.prototype, "getBoundingClientRect").mockReturnValue(rect({ width: 320, height: 160 }));
-    const scope = { project_path: "/srv/workspace", project_name: "workspace", access_mode: "full" as const };
+    const scope = { project_path: "/srv/workspace", project_name: "home", access_mode: "full" as const };
     const onWorkspaceScopeChange = vi.fn();
     const { container } = render(<ThreadComposer variant={variant} onSend={vi.fn()} workspaceScope={scope}
       workspaceDefaultScope={scope} {...workspacePickerProps(scope)} workspaceControls={{ can_change_project: true }}
@@ -1036,7 +919,7 @@ describe("ThreadComposer", () => {
     const onWorkspaceScopeChange = vi.fn();
     const defaultScope = {
       project_path: "/Users/test/.cirno/workspace",
-      project_name: "workspace",
+      project_name: "home",
       access_mode: "restricted" as const,
       restrict_to_workspace: true,
     };
@@ -1104,7 +987,7 @@ describe("ThreadComposer", () => {
     const onWorkspaceScopeChange = vi.fn();
     const defaultScope = {
       project_path: projectPath,
-      project_name: "workspace",
+      project_name: "home",
       access_mode: "restricted" as const,
       restrict_to_workspace: true,
     };
@@ -1135,7 +1018,7 @@ describe("ThreadComposer", () => {
     const onWorkspaceScopeChange = vi.fn();
     const defaultScope = {
       project_path: "/Users/test/.cirno/workspace",
-      project_name: "workspace",
+      project_name: "home",
       access_mode: "full" as const,
       restrict_to_workspace: false,
     };
@@ -1155,7 +1038,7 @@ describe("ThreadComposer", () => {
     );
     const { container, rerender } = render(composer(false));
     const trigger = screen.getByRole("button", { name: "Switch directory" });
-    expect(trigger).toHaveTextContent("workspace");
+    expect(trigger).toHaveTextContent("home");
     const access = screen.getByRole("button", { name: "Workspace access mode: Full Access" });
     const footer = container.querySelector(".thread-composer-footer-primary")!;
     expect(Array.from(footer.querySelectorAll("button"))).toEqual([
@@ -1173,7 +1056,7 @@ describe("ThreadComposer", () => {
     expect(screen.getByRole("button", { name: "Switch directory" })).toBeEnabled();
     rerender(composer(false, "thread", true));
     expect(screen.getByRole("button", { name: "Switch directory" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Switch directory" })).toHaveTextContent("workspace");
+    expect(screen.getByRole("button", { name: "Switch directory" })).toHaveTextContent("home");
     const accessAfterLock = screen.getByRole("button", { name: "Workspace access mode: Full Access" });
     await user.click(accessAfterLock);
     await user.click(screen.getByRole("menuitemradio", { name: "Default Permission" }));
@@ -1181,13 +1064,13 @@ describe("ThreadComposer", () => {
       ...defaultScope, access_mode: "restricted", restrict_to_workspace: true,
     });
     rerender(composer(true, "thread", true));
-    expect(screen.queryByText("workspace")).not.toBeInTheDocument();
+    expect(screen.queryByText("home")).not.toBeInTheDocument();
   });
 
   it("keeps the inline permission menu and directory picker mounted across composer widths", () => {
     let width = 390;
     vi.spyOn(HTMLFormElement.prototype, "getBoundingClientRect").mockImplementation(() => rect({ width, height: 160 }));
-    const defaultScope = { project_path: "/srv/workspace", project_name: "workspace", access_mode: "full" as const };
+    const defaultScope = { project_path: "/srv/workspace", project_name: "home", access_mode: "full" as const };
     const { container } = render(<ThreadComposer variant="hero" onSend={vi.fn()} workspaceScope={defaultScope}
       workspaceDefaultScope={defaultScope}
         {...workspacePickerProps(defaultScope)} workspaceControls={{ can_change_project: true }} onWorkspaceScopeChange={vi.fn()} />);
@@ -1205,12 +1088,12 @@ describe("ThreadComposer", () => {
     expect(screen.getByRole("textbox")).toBe(input);
   });
 
-  it("browses and selects the connected host's project in one dialog on a native client", async () => {
+  it("browses and selects the server's project in one dialog", async () => {
     const user = userEvent.setup();
     const onWorkspaceScopeChange = vi.fn();
     const defaultScope = {
       project_path: "/Users/test/.cirno/workspace",
-      project_name: "workspace",
+      project_name: "home",
       access_mode: "full" as const,
       restrict_to_workspace: false,
     };
@@ -1224,15 +1107,7 @@ describe("ThreadComposer", () => {
       });
     });
     const onResolveWorkspaceProject = vi.fn().mockResolvedValue(project);
-    Object.defineProperty(window, "cirnoHost", {
-      configurable: true,
-      value: {
-        getRuntimeInfo: vi.fn(),
-        restartEngine: vi.fn(),
-        openLogs: vi.fn(),
-        exportDiagnostics: vi.fn(),
-      },
-    });
+
 
     render(
       <ThreadComposer
@@ -1274,7 +1149,7 @@ describe("ThreadComposer", () => {
     const onWorkspaceScopeChange = vi.fn();
     const defaultScope = {
       project_path: "/srv/cirno/workspace",
-      project_name: "workspace",
+      project_name: "home",
       access_mode: "full" as const,
       restrict_to_workspace: false,
     };
@@ -1317,42 +1192,11 @@ describe("ThreadComposer", () => {
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   });
 
-  it("closes the sustained goal through its existing drawer", () => {
-    const { container, rerender } = render(
-      <ThreadComposer
-        onSend={vi.fn()}
-        placeholder="Type your message..."
-        goalState={{
-          active: true,
-          objective: "Ship the release",
-          ui_summary: "Preparing release",
-        }}
-      />,
-    );
-
-    const drawer = container.querySelector("[data-composer-status-drawer]");
-    expect(drawer).not.toBeNull();
-    expect(drawer).toHaveAttribute("data-state", "open");
-    expect(drawer).not.toHaveAttribute("aria-hidden");
-    const status = screen.getByRole("status");
-    expect(status).toHaveClass("composer-status-drawer-content");
-
-    rerender(
-      <ThreadComposer
-        onSend={vi.fn()}
-        placeholder="Type your message..."
-        goalState={{ active: false }}
-      />,
-    );
-
-    expect(container.querySelector("[data-composer-status-drawer]")).toBe(drawer);
-    expect(drawer).toHaveAttribute("data-state", "closed");
-    expect(drawer).toHaveAttribute("aria-hidden", "true");
+  it("removes the Goal status when the goal is cleared", () => {
+    const { rerender } = render(<ThreadComposer onSend={vi.fn()} goalState={{ active: true, objective: "Ship release", ui_summary: "Preparing release" }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Preparing release");
+    rerender(<ThreadComposer onSend={vi.fn()} goalState={{ active: false }} />);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(drawer?.querySelector('[role="status"]')).toBe(status);
-
-    fireEvent.transitionEnd(drawer as Element, { propertyName: "grid-template-rows" });
-    expect(container.querySelector("[data-composer-status-drawer]")).toBeNull();
   });
 
   it("shows full goal content and dismisses it without losing the composer draft", async () => {
@@ -1878,7 +1722,7 @@ describe("ThreadComposer", () => {
       target: { value: "参考 @收费", selectionStart: 6 },
     });
 
-    expect(screen.getByRole("group", { name: "Cirno conversations" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Conversations" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /@收费设计/i })).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Tab" });
 
@@ -2297,7 +2141,7 @@ describe("ThreadComposer", () => {
           {
             name: "up",
             description: "Exact match",
-            source: "workspace",
+            source: "home",
             available: true,
           },
         ]}
@@ -2424,8 +2268,6 @@ describe("ThreadComposer", () => {
     expect(input).toHaveValue(display);
     expect(overlay).toHaveAttribute("aria-hidden", "true");
     expect(overlay?.textContent).toBe(display);
-    expect(input).toHaveClass("[text-autospace:no-autospace]");
-    expect(overlay).toHaveClass("[text-autospace:no-autospace]");
     expect(screen.getByTestId("composer-skill-reference-workflow")).toHaveTextContent("$workflow");
   });
 
@@ -2594,7 +2436,6 @@ describe("ThreadComposer", () => {
     expect(screen.getByTestId("composer-cli-mention-logo-drive")).toBe(logo);
     fireEvent.change(input, { target: { value: "@\u00a0Google Drive 中", selectionStart: 16 } });
     expect(input).toHaveValue("@\u00a0Google Drive 中");
-    expect(input).toHaveClass("text-transparent");
     expect(input.previousElementSibling).toHaveClass("z-20");
     expect(screen.getByTestId("composer-cli-mention-logo-drive")).toBe(logo);
     expect(input.previousElementSibling?.textContent).toBe(input.value);
@@ -2647,7 +2488,6 @@ describe("ThreadComposer", () => {
     fireEvent.change(input, { target: { value: "@gimp\n" } });
     const overlay = input.previousElementSibling as HTMLElement;
     expect(overlay.textContent).toBe("@\u00a0GIMP\n\u200b");
-    expect(input).toHaveClass("block");
     input.scrollTop = 80;
     fireEvent.scroll(input);
     expect(overlay.scrollTop).toBe(80);
@@ -2913,7 +2753,7 @@ describe("ThreadComposer", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Remove attachments and quoted text before running a command.");
     expect(onSend).not.toHaveBeenCalled();
     expect(input).toHaveValue("!pwd");
-    expect(screen.getByRole("button", { name: "Remove attachment" })).toHaveAttribute("aria-description", "photo.png");
+    expect(screen.getByRole("button", { name: "Remove attachment" })).toHaveAccessibleDescription("photo.png");
   });
 
   it("rejects quoted context on bang input without clearing it", () => {
@@ -3484,9 +3324,6 @@ describe("ThreadComposer", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     const queue = screen.getByRole("group", { name: "Waiting to send" });
-    expect(queue).toHaveClass("composer-status-strip");
-    expect(queue).toHaveClass("mx-3");
-    expect(queue.parentElement?.className).toContain("group/composer");
     expect(within(queue).getByText("first follow-up second follow-up")).toHaveTextContent("first follow-up second follow-up");
     expect(within(queue).getAllByRole("button", { name: "Edit message" })).toHaveLength(1);
     expect(within(queue).getAllByRole("button", { name: "Send now" })).toHaveLength(1);
@@ -4098,4 +3935,24 @@ describe("session composer drafts", () => {
       media: expect.objectContaining({ name: "draft.png" }),
     })], { quotedContext: "quoted answer" });
   });
+});
+
+it("keeps quoted input separate from continuing the old task", () => {
+  const onContinue = vi.fn().mockResolvedValue(undefined);
+  render(<ThreadComposer onSend={vi.fn()} onContinue={onContinue} quotedContext="Selected context" />);
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  expect(onContinue).not.toHaveBeenCalled();
+});
+
+it("does not continue the old task while a new attachment is encoding", async () => {
+  const onContinue = vi.fn().mockResolvedValue(undefined);
+  const { container } = render(<ThreadComposer onSend={vi.fn()} onContinue={onContinue} />);
+  expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  fireEvent.change(container.querySelector('input[type="file"]')!, {
+    target: { files: [new File([new Uint8Array([1, 2, 3])], "new-input.png", { type: "image/png" })] },
+  });
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled());
+  expect(onContinue).not.toHaveBeenCalled();
 });

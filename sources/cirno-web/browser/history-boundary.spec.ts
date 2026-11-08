@@ -13,10 +13,11 @@ async function installHistory(page: Page, initialStart = 40, initialCount = 12) 
   const pending: Array<(value: "success" | "error") => void> = [];
   let fastResponse = false;
   let releaseFastResponse: (() => void) | null = null;
-  await page.route("**/api/sessions/**", async (route) => {
+  await page.route("**/v0/sessions/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/prompts")) return route.fulfill({ json: {
-      prompts: Array.from({ length: 52 }, (_, i) => ({ id: `u${i}`, preview: `Question ${i}`, answerPreview: "Historical answer", turnId: `turn${i}`, cursor: String(i), createdAt: i + 1 })),
+      offset: 0, total: 52, count: 52, revision: "r1",
+      prompts: Array.from({ length: 52 }, (_, i) => ({ id: `u${i}`, index: i, preview: `Question ${i}`, answerPreview: "Historical answer", turnId: `turn${i}`, cursor: String(i), createdAt: i + 1 })),
     } });
     if (!url.pathname.endsWith("/webui-thread")) return route.fulfill({ json: {} });
     if (url.pathname.includes("boundary-b")) return route.fulfill({ json: historyPage(0, 2, false) });
@@ -43,9 +44,9 @@ type HistoryFixture = Awaited<ReturnType<typeof installHistory>>;
 
 async function installShortHistory(page: Page) {
   let reads = 0;
-  await page.route("**/api/sessions/**", async (route) => {
+  await page.route("**/v0/sessions/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    if (pathname.endsWith("/prompts")) return route.fulfill({ json: { prompts: [] } });
+    if (pathname.endsWith("/prompts")) return route.fulfill({ json: { prompts: [], offset: 0, count: 0, total: 0, revision: "r1" } });
     if (!pathname.endsWith("/webui-thread")) return route.fulfill({ json: {} });
     reads++;
     const history = historyPage(0, 1, false);
@@ -132,7 +133,7 @@ async function completePrepend(history: HistoryFixture, body: Locator, firstText
   await expectAnchorCoordinate(body, anchorText, expectedTop);
 }
 
-async function themeColor(locator: Locator, token: "--muted-foreground" | "--destructive") {
+async function themeColor(locator: Locator, token: "--cirno-muted-foreground" | "--cirno-destructive") {
   return locator.evaluate((node, variable) => {
     const probe = document.createElement("span");
     probe.style.color = `hsl(var(${variable}))`;
@@ -307,7 +308,7 @@ test("wheel loading hands off to a retained 48px slot; prepend and delayed layou
 
 test("archived task results stay with the retained boundary when earlier messages load", async ({ page }) => {
   const history = await installHistory(page);
-  await page.route("**/api/sessions/**/subagents", (route) => route.fulfill({ json: { tasks: [{
+  await page.route("**/v0/sessions/**/subagents", (route) => route.fulfill({ json: { tasks: [{
     task_id: "legacy", revision: 1, label: "Earlier check", task_description: "Check earlier work",
     state: "done", phase: "completed", elapsed_seconds: 2, iteration: 1,
     tool_events: [], usage: null, receipts: {}, result: "Verified", partial: false,
@@ -567,7 +568,7 @@ test("reduced-motion failure keeps its functional 48px slot and retry until natu
   expect(held.anchorTop - originalTop).toBeCloseTo(48, 0);
   const block = header.locator(".thread-history-blocks > span").first();
   const normalColor = await header.locator(".thread-history-blocks").evaluate((node) => getComputedStyle(node).color);
-  const mutedColor = await themeColor(header, "--muted-foreground");
+  const mutedColor = await themeColor(header, "--cirno-muted-foreground");
   expect(normalColor).toBe(mutedColor);
   console.log(`history-colors dark loading=${normalColor}`);
   await expect(block).toHaveCSS("animation-name", "none");
@@ -585,7 +586,7 @@ test("reduced-motion failure keeps its functional 48px slot and retry until natu
   await expectNoVisibleHistoryText(header);
   await expect(page.getByRole("tooltip")).toHaveCount(0);
   await failedBlocks.hover();
-  await expect(page.getByRole("tooltip")).toHaveText("HTTP 503");
+  await expect(page.getByRole("tooltip")).toHaveText("History unavailable");
   await page.screenshot({ path: test.info().outputPath("history-failure-dark.png") });
   await page.mouse.move(16, 20, { steps: 5 });
   await expect(page.getByRole("tooltip")).toHaveCount(0);
@@ -822,9 +823,10 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       const touchPage = await context.newPage();
       const touchReads = await installShortHistory(touchPage);
       await touchPage.goto("/browser/fixture.html?case=history-boundary");
+      await touchPage.bringToFront();
       const touchBody = touchPage.getByTestId("thread-message-region");
       const touchHint = touchPage.getByText("No earlier messages", { exact: true });
-      await expect(touchBody.getByText("Short answer.", { exact: true })).toBeVisible();
+      await expect(touchBody.locator(".markdown-content p")).toHaveText("Short answer.");
       await stableLayout(touchBody);
       await expect(touchHint).toHaveCount(0);
       const cdp = await context.newCDPSession(touchPage);
@@ -1271,7 +1273,7 @@ test("history Blocks use muted loading and destructive error colors in light and
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme });
     const page = await context.newPage();
     const history = await installHistory(page);
-    await page.goto(`http://127.0.0.1:${process.env.NANOBOT_BROWSER_TEST_PORT ?? 4178}/browser/fixture.html?case=history-boundary`);
+    await page.goto(`http://127.0.0.1:${process.env.CIRNO_BROWSER_TEST_PORT ?? 4178}/browser/fixture.html?case=history-boundary`);
     if (colorScheme === "dark") await page.locator("html").evaluate((node) => node.classList.add("dark"));
     const body = page.getByTestId("thread-message-region");
     await expect(body).toBeVisible();
@@ -1280,13 +1282,13 @@ test("history Blocks use muted loading and destructive error colors in light and
     await requestOlderWithWheel(body, history, 1);
     const loadingBlocks = page.locator('.thread-history-status[data-state="loading"] .thread-history-blocks');
     const loadingColor = await loadingBlocks.evaluate((node) => getComputedStyle(node).color);
-    const mutedColor = await themeColor(loadingBlocks, "--muted-foreground");
+    const mutedColor = await themeColor(loadingBlocks, "--cirno-muted-foreground");
     expect(loadingColor).toBe(mutedColor);
     history.complete("error");
     const retry = page.getByRole("button", { name: "Loading failed. Retry", exact: true });
     const errorBlocks = retry.locator(".thread-history-blocks");
     const errorColor = await errorBlocks.evaluate((node) => getComputedStyle(node).color);
-    const destructiveColor = await themeColor(errorBlocks, "--destructive");
+    const destructiveColor = await themeColor(errorBlocks, "--cirno-destructive");
     expect(errorColor).toBe(destructiveColor);
     expect(errorColor).not.toBe(loadingColor);
     console.log(`history-colors ${colorScheme} loading=${loadingColor} error=${errorColor}`);

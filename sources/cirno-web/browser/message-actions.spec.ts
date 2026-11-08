@@ -7,11 +7,10 @@ for (const width of [390, 1440]) {
       for (const dark of [false, true]) {
         test(`${locale} ${dark ? "dark" : "light"}`, async ({ page }, info) => {
           const zh = locale === "zh-CN";
-          await page.addInitScript(({ locale, dark }) => {
-            localStorage.setItem("cirno.locale", locale);
+          await page.addInitScript(({ dark }) => {
             document.addEventListener("DOMContentLoaded", () => document.documentElement.classList.toggle("dark", dark));
-          }, { locale, dark });
-          await page.goto("/browser/fixture.html?case=message-actions");
+          }, { dark });
+          await page.goto(`/browser/fixture.html?case=message-actions&lang=${locale}`);
           const groups = page.getByRole("group", { name: zh ? "消息操作" : "Message actions", exact: true });
           await expect(groups).toHaveCount(2);
           const user = groups.nth(0), assistant = groups.nth(1);

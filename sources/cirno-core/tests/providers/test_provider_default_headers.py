@@ -1,4 +1,5 @@
-from cirno_core.config.schema import Config, ProviderConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.providers import ProviderConfig
 from cirno_core.providers.factory import _provider_extra_headers, provider_signature
 from cirno_core.providers.registry import find_by_name
 

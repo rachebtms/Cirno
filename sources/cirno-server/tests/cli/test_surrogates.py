@@ -1,4 +1,4 @@
-from cirno_core.utils.helpers import sanitize_surrogates as _sanitize_surrogates
+from cirno_core.utils.text import sanitize_surrogates as _sanitize_surrogates
 
 
 class TestSanitizeSurrogates:

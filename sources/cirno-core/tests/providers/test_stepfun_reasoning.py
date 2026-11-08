@@ -5,12 +5,14 @@ the model is in thinking mode and 'content' is empty. This test module
 verifies the fallback logic for all code paths.
 """
 
+from cirno_core.providers.chat_completions.complete import parse_response
+from sources.development.testing.providers import parse_chat_chunks
 from unittest.mock import patch
 
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import ProviderSpec
+from cirno_core.providers.catalog.contracts import ProviderSpec
 
 _STEPFUN_SPEC = ProviderSpec(
     name="stepfun",
@@ -42,7 +44,7 @@ def test_parse_dict_stepfun_reasoning_fallback() -> None:
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "Let me think... The answer is 42."
     # reasoning_content should also be populated from reasoning
@@ -65,7 +67,7 @@ def test_parse_dict_stepfun_reasoning_priority() -> None:
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "informal thinking"
     # reasoning_content uses the dedicated field, not reasoning
@@ -101,7 +103,7 @@ def test_parse_sdk_stepfun_reasoning_fallback() -> None:
 
     response = _make_sdk_response(content=None, reasoning="After analysis: result is 4.")
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "After analysis: result is 4."
     assert result.reasoning_content == "After analysis: result is 4."
@@ -118,7 +120,7 @@ def test_parse_sdk_stepfun_reasoning_priority() -> None:
         reasoning_content="formal reasoning",
     )
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "thinking process"
     assert result.reasoning_content == "formal reasoning"
@@ -150,7 +152,7 @@ def test_parse_chunks_dict_stepfun_reasoning_fallback() -> None:
         },
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.content == "final answer"
     assert result.reasoning_content == "Thinking step 1... step 2."
@@ -174,7 +176,7 @@ def test_parse_dict_normal_model_with_reasoning_content_unaffected() -> None:
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "The answer is 42."
     assert result.reasoning_content == "Let me think step by step..."
@@ -192,7 +194,7 @@ def test_parse_dict_standard_model_no_reasoning_unaffected() -> None:
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "Hello!"
     assert result.reasoning_content is None
@@ -219,7 +221,7 @@ def test_parse_chunks_dict_reasoning_precedence() -> None:
         },
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.reasoning_content == "formal: "
 
@@ -254,7 +256,7 @@ def test_parse_chunks_sdk_stepfun_reasoning_fallback() -> None:
         _make_sdk_chunk(reasoning=None, content="answer", finish="stop"),
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.content == "answer"
     assert result.reasoning_content == "Thinking... "
@@ -267,7 +269,7 @@ def test_parse_chunks_sdk_reasoning_precedence() -> None:
         _make_sdk_chunk(reasoning_content=None, reasoning=None, content="result", finish="stop"),
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.reasoning_content == "formal: "
 
@@ -290,7 +292,7 @@ def test_parse_dict_non_stepfun_no_reasoning_as_content() -> None:
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     # content stays None — reasoning is NOT promoted
     assert result.content is None
@@ -305,7 +307,7 @@ def test_parse_sdk_non_stepfun_no_reasoning_as_content() -> None:
 
     response = _make_sdk_response(content=None, reasoning="internal monologue")
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content is None
     assert result.reasoning_content == "internal monologue"

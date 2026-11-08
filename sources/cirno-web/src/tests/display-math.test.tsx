@@ -19,7 +19,7 @@ beforeEach(() => {
     return this.classList.contains("math-fit") ? availableWidth : 0;
   });
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
-    if (this.classList.contains("tag")) return tagWidth;
+    if (this.classList.contains("katex-tag")) return tagWidth;
     return this.classList.contains("math-fit-content") ? formulaWidth : 0;
   });
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
@@ -76,7 +76,7 @@ it("keeps observation and unchanged tag spacing stable across streaming rerender
   availableWidth = 400;
   const setProperty = vi.spyOn(CSSStyleDeclaration.prototype, "setProperty");
   const equation = (label: string) => <span className="katex-html">
-    <span>{label}</span><span className="tag">(1)</span>
+    <span>{label}</span><span className="katex-tag">(1)</span>
   </span>;
   const { container, rerender } = render(<DisplayMath>{equation("initial")}</DisplayMath>);
   await act(async () => { await document.fonts.ready; });

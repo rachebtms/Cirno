@@ -1,58 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CirnoClient } from "@/lib/cirno-client";
-import type { SidebarStatePayload } from "@/lib/types";
+import type { SidebarStatePayload } from "@/lib/contracts/conversation-preferences";
 
-/**
- * Minimal fake WebSocket implementing the subset CirnoClient touches.
- * Every instance is retrievable via ``FakeSocket.instances`` so tests can
- * drive open/close/message lifecycles deterministically.
- */
-class FakeSocket {
-  static instances: FakeSocket[] = [];
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSING = 2;
-  static readonly CLOSED = 3;
-
-  url: string;
-  readyState = FakeSocket.CONNECTING;
-  sent: string[] = [];
-  onopen: (() => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: (() => void) | null = null;
-  onclose: ((ev?: { code?: number }) => void) | null = null;
-
-  constructor(url: string) {
-    this.url = url;
-    FakeSocket.instances.push(this);
-  }
-
-  send(data: string) {
-    this.sent.push(data);
-  }
-
-  close() {
-    this.readyState = FakeSocket.CLOSED;
-    this.onclose?.();
-  }
-
-  /** Simulate a server-initiated drop with a specific wire-level close code
-   * (e.g. ``1009`` for Message Too Big). */
-  fakeCloseWithCode(code: number) {
-    this.readyState = FakeSocket.CLOSED;
-    this.onclose?.({ code });
-  }
-
-  fakeOpen() {
-    this.readyState = FakeSocket.OPEN;
-    this.onopen?.();
-  }
-
-  fakeMessage(payload: unknown) {
-    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent);
-  }
-}
+import { FakeSocket } from "./fixtures/client-socket";
 
 function lastSocket(): FakeSocket {
   const s = FakeSocket.instances.at(-1);
@@ -66,7 +17,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  Reflect.deleteProperty(window, "cirnoHost");
   vi.useRealTimers();
 });
 
@@ -91,22 +41,6 @@ describe("CirnoClient", () => {
     lastSocket().fakeMessage({ event: "ready", chat_id: "third" });
     expect(client.defaultChatId).toBe("third");
     expect(ready).toHaveBeenCalledTimes(2);
-    client.close();
-  });
-
-  it("delivers payload-free pairing changes, isolates listeners and unsubscribes", () => {
-    const client = new CirnoClient({ url: "ws://test", socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket });
-    const pairing = vi.fn();
-    client.onPairingChange(() => { throw new Error("view failed"); });
-    const unsubscribe = client.onPairingChange(pairing);
-    client.connect();
-    lastSocket().fakeOpen();
-    lastSocket().fakeMessage({ event: "pairing_changed" });
-    expect(pairing).toHaveBeenCalledTimes(1);
-    expect(pairing).toHaveBeenCalledWith();
-    unsubscribe();
-    lastSocket().fakeMessage({ event: "pairing_changed" });
-    expect(pairing).toHaveBeenCalledTimes(1);
     client.close();
   });
 
@@ -135,7 +69,7 @@ describe("CirnoClient", () => {
     const socket = lastSocket();
     socket.fakeOpen();
     const created = client.newTemporaryChat();
-    socket.fakeMessage({ event: "attached", chat_id: "temporary", temporary: true });
+    socket.fakeCreated("temporary");
     await created;
     const notice = vi.fn();
     client.onTaskNotice(notice);
@@ -158,7 +92,7 @@ describe("CirnoClient", () => {
     const socket = lastSocket();
     socket.fakeOpen();
     const created = client.newTemporaryChat();
-    socket.fakeMessage({ event: "attached", chat_id: "temporary", temporary: true });
+    socket.fakeCreated("temporary");
     await created;
     for (let index = 0; index < 2_010; index++) {
       for (const chatId of ["regular", "temporary"]) {
@@ -395,9 +329,9 @@ describe("CirnoClient", () => {
     lastSocket().fakeOpen();
     const creation = client.newTemporaryChat();
     expect(JSON.parse(lastSocket().sent.at(-1) as string)).toEqual({
-      type: "new_temporary_chat",
+      type: "new_temporary_chat", request_id: expect.any(String),
     });
-    lastSocket().fakeMessage({ event: "attached", chat_id: chatId, temporary: true });
+    lastSocket().fakeCreated(chatId);
     await expect(creation).resolves.toBe(chatId);
     lastSocket().sent = [];
     client.onChat(chatId, vi.fn());
@@ -437,11 +371,7 @@ describe("CirnoClient", () => {
     await Promise.resolve();
     expect(resolved).toBe(false);
 
-    lastSocket().fakeMessage({
-      event: "attached",
-      chat_id: "server-temporary-chat",
-      temporary: true,
-    });
+    lastSocket().fakeCreated("server-temporary-chat");
     await expect(creation).resolves.toBe("server-temporary-chat");
   });
 
@@ -457,18 +387,10 @@ describe("CirnoClient", () => {
     client.connect();
     lastSocket().fakeOpen();
     const firstCreation = client.newTemporaryChat();
-    lastSocket().fakeMessage({
-      event: "attached",
-      chat_id: "temp-drop-a",
-      temporary: true,
-    });
+    lastSocket().fakeCreated("temp-drop-a");
     await firstCreation;
     const secondCreation = client.newTemporaryChat();
-    lastSocket().fakeMessage({
-      event: "attached",
-      chat_id: "temp-drop-b",
-      temporary: true,
-    });
+    lastSocket().fakeCreated("temp-drop-b");
     await secondCreation;
     lastSocket().sent = [];
     client.onTranscript("temp-drop-a", firstHandler);
@@ -561,38 +483,6 @@ describe("CirnoClient", () => {
 
     expect(hostFactory).toHaveBeenCalledWith("cirno-host://engine/");
     expect(lastSocket().url).toBe("host:cirno-host://engine/");
-  });
-
-  it("uses the host socket bridge for native host URLs", async () => {
-    const socketEvents: {
-      handler?: (event: { id: string; type: "open" | "close" | "error"; message?: string }) => void;
-    } = {};
-    const openSocket = vi.fn(async () => "host-socket-1");
-    Object.defineProperty(window, "cirnoHost", {
-      configurable: true,
-      value: {
-        openSocket,
-        sendSocket: vi.fn(async () => undefined),
-        closeSocket: vi.fn(async () => undefined),
-        onSocketEvent: vi.fn((handler) => {
-          socketEvents.handler = handler;
-          return vi.fn();
-        }),
-      },
-    });
-    const client = new CirnoClient({
-      url: "cirno-host://engine/",
-      reconnect: false,
-    });
-    const status = vi.fn();
-    client.onStatus(status);
-
-    client.connect();
-    await Promise.resolve();
-    socketEvents.handler?.({ id: "host-socket-1", type: "open" });
-
-    expect(openSocket).toHaveBeenCalledWith("cirno-host://engine/");
-    expect(status).toHaveBeenLastCalledWith("open");
   });
 
   it("buffers transcript events independently of live observers", () => {
@@ -1452,7 +1342,6 @@ describe("CirnoClient", () => {
       project_name_overrides: {},
       tags_by_key: {},
       collapsed_groups: {},
-      workbench: { version: 1, tabs: {} },
       view: {
         density: "comfortable",
         show_archived: false,
@@ -1504,19 +1393,6 @@ describe("CirnoClient", () => {
       project_name_overrides: {},
       tags_by_key: {},
       collapsed_groups: {},
-      workbench: {
-        version: 1,
-        tabs: {
-          "tab:websocket:a": {
-            explicit: true,
-            title: "Research",
-            paneKeys: ["websocket:a", "websocket:b"],
-            layoutPaneKeys: ["websocket:a", "websocket:b"],
-            splitRatios: [0.5, 0.5],
-            layout: "columns",
-          },
-        },
-      },
       view: {
         density: "comfortable",
         show_archived: false,
@@ -1554,6 +1430,7 @@ describe("CirnoClient", () => {
       event: "error",
       detail: "workspace_scope_rejected",
       reason: "project_path must be an existing directory",
+      request_id: lastSocket().creationRequestId(),
     });
 
     await expect(pendingChat).rejects.toThrow("workspace_scope_rejected");
@@ -2016,8 +1893,8 @@ describe("CirnoClient", () => {
     client.connect();
     lastSocket().fakeOpen();
     const promise = client.newChat(1_000);
-    expect(lastSocket().sent).toContain(JSON.stringify({ type: "new_chat" }));
-    lastSocket().fakeMessage({ event: "attached", chat_id: "fresh-id" });
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({ type: "new_chat", request_id: expect.any(String) });
+    lastSocket().fakeCreated("fresh-id");
     await expect(promise).resolves.toBe("fresh-id");
   });
 
@@ -2027,12 +1904,12 @@ describe("CirnoClient", () => {
     client.connect();
     lastSocket().fakeOpen();
     const regular = client.newChat(1_000, undefined, null, true);
-    expect(lastSocket().sent).toContain(JSON.stringify({type: "new_chat", ptc_mode: true}));
-    lastSocket().fakeMessage({event: "attached", chat_id: "ptc-regular"});
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({type: "new_chat", ptc_mode: true, request_id: expect.any(String)});
+    lastSocket().fakeCreated("ptc-regular");
     await expect(regular).resolves.toBe("ptc-regular");
     const temporary = client.newTemporaryChat(1_000, true);
-    expect(lastSocket().sent).toContain(JSON.stringify({type: "new_temporary_chat", ptc_mode: true}));
-    lastSocket().fakeMessage({event: "attached", chat_id: "ptc-temporary", temporary: true});
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({type: "new_temporary_chat", ptc_mode: true, request_id: expect.any(String)});
+    lastSocket().fakeCreated("ptc-temporary");
     await expect(temporary).resolves.toBe("ptc-temporary");
     client.close();
   });
@@ -2053,10 +1930,8 @@ describe("CirnoClient", () => {
     lastSocket().fakeOpen();
 
     const promise = client.newChat(1_000, workspaceScope);
-    expect(lastSocket().sent).toContain(
-      JSON.stringify({ type: "new_chat", workspace_scope: workspaceScope }),
-    );
-    lastSocket().fakeMessage({ event: "attached", chat_id: "fresh-id" });
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({ type: "new_chat", workspace_scope: workspaceScope, request_id: expect.any(String) });
+    lastSocket().fakeCreated("fresh-id");
     await expect(promise).resolves.toBe("fresh-id");
 
     client.sendMessage("fresh-id", "hello", undefined, { workspaceScope });
@@ -2483,6 +2358,7 @@ describe("CirnoClient", () => {
       event: "error",
       detail: "workspace_scope_rejected",
       reason: "project_path must be an existing directory",
+      request_id: lastSocket().creationRequestId(),
     });
     await expect(pending).rejects.toThrow("workspace_scope_rejected");
   });
@@ -2560,7 +2436,7 @@ describe("binary attachment transport", () => {
       client.connect();
       const socket = lastSocket(); socket.fakeOpen();
       socket.fakeMessage({ event: "ready", chat_id: "chat", client_id: "test",
-        upload: { path: "/api/attachments", token: "cap" } });
+        upload: { path: "/v0/attachments", token: "cap" } });
       const delivery = client.sendAttachments("chat", "look", [
         { data_url: "data:text/plain;base64,eA==", name: "note.txt" },
       ], { turnId: "slow-upload" });
@@ -2582,7 +2458,7 @@ describe("binary attachment transport", () => {
       client.connect();
       const socket = lastSocket(); socket.fakeOpen();
       socket.fakeMessage({ event: "ready", chat_id: "chat", client_id: "test",
-        upload: { path: "/api/attachments", token: "cap" } });
+        upload: { path: "/v0/attachments", token: "cap" } });
       const draft = [{ data_url: "data:text/plain;base64,eA==", name: "note.txt" }];
       await expect(client.sendAttachments("chat", "x".repeat(400), draft)).rejects.toThrow("frame limit");
       expect(socket.sent.filter((value) => JSON.parse(value).type === "message")).toHaveLength(0);
@@ -2600,7 +2476,7 @@ describe("binary attachment transport", () => {
       const socket = lastSocket();
       socket.fakeOpen();
       socket.fakeMessage({ event: "ready", chat_id: "chat", client_id: "test",
-        upload: { path: "/api/attachments", token: "upload-capability" } });
+        upload: { path: "/v0/attachments", token: "upload-capability" } });
       const raw = "x".repeat(1_089_490);
       let accepted = false;
       const delivery = client.sendAttachments("chat", "look", [
@@ -2632,7 +2508,7 @@ describe("binary attachment transport", () => {
       client.connect();
       const socket = lastSocket(); socket.fakeOpen();
       socket.fakeMessage({ event: "ready", chat_id: "chat", client_id: "test",
-        upload: { path: "/api/attachments", token: "cap" } });
+        upload: { path: "/v0/attachments", token: "cap" } });
       const draft = [{ data_url: "data:text/plain;base64,eA==", name: "note.txt" }];
       await expect(client.sendAttachments("chat", "look", draft)).rejects.toThrow("401");
       expect(client.getRunState("chat").active).toBe(false);
@@ -2654,7 +2530,7 @@ it("probes a healthy foreground socket without discarding temporary conversation
   client.connect();
   const socket = lastSocket(); socket.fakeOpen();
   const created = client.newTemporaryChat();
-  socket.fakeMessage({ event: "attached", chat_id: "temporary", temporary: true });
+  socket.fakeCreated("temporary");
   await created;
   const delivered = vi.fn();
   client.onTranscript("temporary", delivered);
@@ -2685,5 +2561,31 @@ it("reconnects a silently dead OPEN socket after foreground probing times out", 
   expect(lastSocket().url).toBe("ws://renewed");
   lastSocket().fakeOpen();
   expect(client.status).toBe("open");
+  client.close();
+});
+
+it("waits for text acceptance and rejects a lost connection instead of leaving Sending forever", async () => {
+  const client = new CirnoClient({ url: "ws://test", reconnect: false, socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+  client.connect(); const socket = lastSocket(); socket.fakeOpen();
+  let accepted = false;
+  const sent = client.sendTextMessage("text-chat", "hello", { turnId: "reliable-text" }).then(() => { accepted = true; });
+  await Promise.resolve();
+  expect(accepted).toBe(false);
+  socket.fakeMessage({ event: "message_accepted", chat_id: "text-chat", turn_id: "reliable-text", starts_turn: true });
+  await sent; expect(accepted).toBe(true);
+  const lost = client.sendTextMessage("text-chat", "second", { turnId: "lost-text" });
+  const rejection = expect(lost).rejects.toThrow("Connection closed before message acceptance");
+  socket.close(); await rejection; client.close();
+});
+
+it("removes an expired offline text send before reconnect so a retained draft is safe to retry", async () => {
+  const client = new CirnoClient({ url: "ws://test", reconnect: false, socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+  client.connect(); const socket = lastSocket();
+  const pending = client.sendTextMessage("text-chat", "keep this draft", { turnId: "offline-text" });
+  const rejected = expect(pending).rejects.toThrow("acceptance not confirmed");
+  await vi.advanceTimersByTimeAsync(30_000); await rejected;
+  socket.fakeOpen();
+  expect(socket.sent.map(frame => JSON.parse(frame)).filter(frame => frame.type === "message")).toEqual([]);
+  expect(client.getRunState("text-chat").active).toBe(false);
   client.close();
 });

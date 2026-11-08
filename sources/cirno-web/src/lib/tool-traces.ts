@@ -1,4 +1,4 @@
-import type { ToolProgressEvent } from "@/lib/types";
+import type { ToolProgressEvent } from "@/lib/contracts/activity";
 
 export function formatToolCallTrace(call: unknown): string | null {
   if (!call || typeof call !== "object") return null;

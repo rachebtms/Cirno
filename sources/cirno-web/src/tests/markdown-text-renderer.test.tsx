@@ -222,14 +222,14 @@ describe("MarkdownTextRenderer", () => {
     const onOpenFilePreview = vi.fn();
     render(
       <MarkdownTextRenderer onOpenFilePreview={onOpenFilePreview}>
-        {"Download [index.html](/api/media/sig/html)"}
+        {"Download [index.html](/v0/media/sig/html)"}
       </MarkdownTextRenderer>,
     );
 
     expect(screen.queryByTestId("inline-file-path")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "index.html" })).toHaveAttribute(
       "href",
-      "/api/media/sig/html",
+      "/v0/media/sig/html",
     );
   });
 
@@ -287,25 +287,25 @@ describe("MarkdownTextRenderer", () => {
 
 
   it("renders markdown images as inline previews", () => {
-    render(<MarkdownTextRenderer>![Diagram](/api/media/sig/payload)</MarkdownTextRenderer>);
+    render(<MarkdownTextRenderer>![Diagram](/v0/media/sig/payload)</MarkdownTextRenderer>);
 
     const image = screen.getByRole("img", { name: "Diagram" });
-    expect(image).toHaveAttribute("src", "/api/media/sig/payload");
+    expect(image).toHaveAttribute("src", "/v0/media/sig/payload");
     expect(screen.getByRole("button", { name: "View image: Diagram" })).toBeInTheDocument();
   });
 
   it("renders markdown videos as inline players", () => {
-    render(<MarkdownTextRenderer>![cirno-intro.mp4](/api/media/sig/video)</MarkdownTextRenderer>);
+    render(<MarkdownTextRenderer>![cirno-intro.mp4](/v0/media/sig/video)</MarkdownTextRenderer>);
 
     const video = screen.getByLabelText("Video attachment: cirno-intro.mp4");
     expect(video.tagName).toBe("VIDEO");
-    expect(video).toHaveAttribute("src", "/api/media/sig/video");
+    expect(video).toHaveAttribute("src", "/v0/media/sig/video");
     expect(video).toHaveAttribute("controls");
     expect(screen.queryByRole("img", { name: "cirno-intro.mp4" })).not.toBeInTheDocument();
   });
 
   it("renders markdown links with file-looking names as file attachments", () => {
-    render(<MarkdownTextRenderer>![index.html](/api/media/sig/html)</MarkdownTextRenderer>);
+    render(<MarkdownTextRenderer>![index.html](/v0/media/sig/html)</MarkdownTextRenderer>);
 
     expect(screen.getByRole("link", { name: "Download index.html" })).toHaveAttribute("download", "index.html");
     expect(screen.getByRole("button", { name: "index.html" })).toBeVisible();
@@ -630,11 +630,11 @@ describe("MarkdownTextRenderer", () => {
   });
 
   it("renders media attachments without an extra preview/code wrapper", () => {
-    render(<MarkdownTextRenderer>![Diagram](/api/media/sig/payload)</MarkdownTextRenderer>);
+    render(<MarkdownTextRenderer>![Diagram](/v0/media/sig/payload)</MarkdownTextRenderer>);
 
     expect(screen.getByRole("img", { name: "Diagram" })).toHaveAttribute(
       "src",
-      "/api/media/sig/payload",
+      "/v0/media/sig/payload",
     );
     expect(screen.getByRole("button", { name: "View image: Diagram" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Code" })).not.toBeInTheDocument();

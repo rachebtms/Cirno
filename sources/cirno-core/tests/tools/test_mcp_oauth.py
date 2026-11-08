@@ -8,9 +8,6 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
-from mcp.client.auth import OAuthClientProvider
-from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken
-
 from cirno_core.agent.tools.mcp_oauth import (
     MCPAuthorizationRequiredError,
     MCPOAuthHandlers,
@@ -20,7 +17,9 @@ from cirno_core.agent.tools.mcp_oauth import (
     delete_mcp_oauth_credentials,
     mcp_oauth_has_credentials,
 )
-from cirno_core.config.schema import MCPServerConfig
+from cirno_core.config.tools import MCPServerConfig
+from mcp.client.auth import OAuthClientProvider
+from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken
 
 
 def _use_data_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,18 +72,18 @@ async def test_mcp_oauth_storage_isolates_name_and_server_url(
     storage = MCPOAuthStorage("notion-work", "https://mcp.example.com/mcp")
     tokens = OAuthToken(access_token="access-secret", refresh_token="refresh-secret")
     client_info = OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="client-id",
         client_secret="client-secret",
     )
 
-    await storage.prepare_redirect_uri("https://agent.example/auth/mcp/callback")
+    await storage.prepare_redirect_uri("https://agent.example/v0/mcp/oauth/callback")
     await storage.set_tokens(tokens)
     await storage.set_client_info(client_info)
 
     assert await storage.get_tokens() == tokens
     assert await storage.get_client_info() == client_info
-    assert await storage.redirect_uri() == "https://agent.example/auth/mcp/callback"
+    assert await storage.redirect_uri() == "https://agent.example/v0/mcp/oauth/callback"
     assert mcp_oauth_has_credentials("notion-work", "https://mcp.example.com/mcp")
     assert not mcp_oauth_has_credentials("notion-home", "https://mcp.example.com/mcp")
     assert not mcp_oauth_has_credentials("notion-work", "https://other.example.com/mcp")
@@ -101,14 +100,14 @@ async def test_changed_redirect_uri_discards_dynamic_registration_but_keeps_toke
 ) -> None:
     _use_data_dir(tmp_path, monkeypatch)
     storage = MCPOAuthStorage("linear", "https://mcp.linear.example/mcp")
-    await storage.prepare_redirect_uri("https://old.example/auth/mcp/callback")
+    await storage.prepare_redirect_uri("https://old.example/v0/mcp/oauth/callback")
     await storage.set_tokens(OAuthToken(access_token="access-secret"))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://old.example/auth/mcp/callback"],
+        redirect_uris=["https://old.example/v0/mcp/oauth/callback"],
         client_id="old-client",
     ))
 
-    await storage.prepare_redirect_uri("https://new.example/auth/mcp/callback")
+    await storage.prepare_redirect_uri("https://new.example/v0/mcp/oauth/callback")
 
     assert await storage.get_tokens() is not None
     assert await storage.get_client_info() is None
@@ -126,7 +125,7 @@ async def test_reset_and_delete_credentials_are_scoped_to_one_server(
     await second.set_tokens(OAuthToken(access_token="second-token"))
 
     await first.prepare_redirect_uri(
-        "https://agent.example/auth/mcp/callback",
+        "https://agent.example/v0/mcp/oauth/callback",
         reset=True,
     )
 
@@ -146,14 +145,14 @@ async def test_deleted_credentials_reject_late_writes_from_stale_oauth_flow(
     _use_data_dir(tmp_path, monkeypatch)
     server_url = "https://mcp.linear.example/mcp"
     stale = MCPOAuthStorage("linear", server_url)
-    await stale.prepare_redirect_uri("https://old.example/auth/mcp/callback")
+    await stale.prepare_redirect_uri("https://old.example/v0/mcp/oauth/callback")
 
     assert delete_mcp_oauth_credentials("linear")
     await stale.set_tokens(OAuthToken(access_token="late-after-delete"))
     assert not mcp_oauth_has_credentials("linear", server_url)
 
     replacement = MCPOAuthStorage("linear", server_url)
-    await replacement.prepare_redirect_uri("https://new.example/auth/mcp/callback")
+    await replacement.prepare_redirect_uri("https://new.example/v0/mcp/oauth/callback")
     await stale.set_tokens(OAuthToken(access_token="late-after-replacement"))
 
     assert not mcp_oauth_has_credentials("linear", server_url)
@@ -176,12 +175,12 @@ async def test_delete_before_oauth_claim_rejects_late_credential_writes(
 
     assert not delete_mcp_oauth_credentials("linear")
     with pytest.raises(MCPAuthorizationRequiredError, match="cancelled"):
-        await stale.prepare_redirect_uri("https://old.example/auth/mcp/callback")
+        await stale.prepare_redirect_uri("https://old.example/v0/mcp/oauth/callback")
     await stale.set_tokens(OAuthToken(access_token="late-after-delete"))
     assert not mcp_oauth_has_credentials("linear", server_url)
 
     replacement = MCPOAuthStorage("linear", server_url)
-    await replacement.prepare_redirect_uri("https://new.example/auth/mcp/callback")
+    await replacement.prepare_redirect_uri("https://new.example/v0/mcp/oauth/callback")
     await replacement.set_tokens(OAuthToken(access_token="fresh-token"))
     assert mcp_oauth_has_credentials("linear", server_url)
 
@@ -200,7 +199,7 @@ async def test_create_mcp_oauth_auth_uses_browser_handlers_and_persists_redirect
         return "code", "state"
 
     handlers = MCPOAuthHandlers(
-        redirect_uri="https://agent.example/auth/mcp/callback",
+        redirect_uri="https://agent.example/v0/mcp/oauth/callback",
         redirect_handler=redirect,
         callback_handler=callback,
     )
@@ -212,7 +211,7 @@ async def test_create_mcp_oauth_auth_uses_browser_handlers_and_persists_redirect
     )
 
     assert str(auth.context.client_metadata.redirect_uris[0]) == (
-        "https://agent.example/auth/mcp/callback"
+        "https://agent.example/v0/mcp/oauth/callback"
     )
     assert str(auth.context.client_metadata.client_uri) == "https://github.com/rachebtms/Cirno"
     assert str(auth.context.client_metadata.logo_uri) == (
@@ -222,7 +221,7 @@ async def test_create_mcp_oauth_auth_uses_browser_handlers_and_persists_redirect
     assert auth.context.redirect_handler is redirect
     assert auth.context.callback_handler is callback
     storage = MCPOAuthStorage("xmind", "https://app.xmind.example/api/mcp")
-    assert await storage.redirect_uri() == "https://agent.example/auth/mcp/callback"
+    assert await storage.redirect_uri() == "https://agent.example/v0/mcp/oauth/callback"
 
 
 @pytest.mark.asyncio
@@ -247,7 +246,7 @@ async def test_background_authorization_request_clears_rejected_token(
     server_url = "https://mcp.example.com/mcp"
     storage = MCPOAuthStorage("notion", server_url)
     client_info = OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     )
     await storage.set_tokens(OAuthToken(access_token="rejected-token"))
@@ -275,7 +274,7 @@ async def test_stale_authorization_preserves_new_credentials(
     auth = await create_mcp_oauth_auth("linear", server_url)
 
     replacement = MCPOAuthStorage("linear", server_url)
-    await replacement.prepare_redirect_uri("http://127.0.0.1/auth/mcp/callback")
+    await replacement.prepare_redirect_uri("http://127.0.0.1/v0/mcp/oauth/callback")
     await replacement.set_tokens(OAuthToken(access_token="new-access"))
 
     with pytest.raises(MCPAuthorizationRequiredError):
@@ -300,7 +299,7 @@ async def test_expired_token_refreshes_from_persisted_metadata_after_restart(
         expires_in=-1,
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     auth = await create_mcp_oauth_auth("linear", server_url)
@@ -356,7 +355,7 @@ async def test_issuer_bound_token_refreshes_after_401_discovers_endpoint(
         refresh_token="refresh-token",
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     await storage.clear_oauth_metadata()
@@ -420,7 +419,7 @@ async def test_untrusted_issuer_never_receives_refresh_token(
         refresh_token="legacy-refresh-secret",
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     if bound:
@@ -454,7 +453,7 @@ async def test_untrusted_issuer_never_receives_refresh_token(
         if request.url.path == "/register":
             return httpx.Response(201, json={
                 "client_id": "replacement-client",
-                "redirect_uris": ["http://127.0.0.1/auth/mcp/callback"],
+                "redirect_uris": ["http://127.0.0.1/v0/mcp/oauth/callback"],
                 "token_endpoint_auth_method": "none",
             })
         if request.url.path == "/oauth/token":
@@ -494,7 +493,7 @@ async def test_transient_refresh_failure_preserves_credentials(
     await storage.set_oauth_metadata(_oauth_metadata())
     await storage.set_tokens(original)
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     auth = await create_mcp_oauth_auth("linear", server_url)
@@ -533,7 +532,7 @@ async def test_stale_token_endpoint_is_rediscovered_once(
         expires_in=-1,
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     auth = await create_mcp_oauth_auth("linear", server_url)
@@ -626,7 +625,7 @@ async def test_unrecoverable_refresh_error_requires_authorization(
         expires_in=-1,
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     auth = await create_mcp_oauth_auth("linear", server_url)
@@ -657,7 +656,7 @@ async def test_unrecoverable_refresh_error_requires_authorization(
         if request.url.path == "/register":
             return httpx.Response(201, json={
                 "client_id": "replacement-client",
-                "redirect_uris": ["http://127.0.0.1/auth/mcp/callback"],
+                "redirect_uris": ["http://127.0.0.1/v0/mcp/oauth/callback"],
                 "token_endpoint_auth_method": "none",
             })
         return httpx.Response(404)
@@ -707,7 +706,7 @@ async def test_concurrent_expired_requests_share_one_refresh(
         expires_in=-1,
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     auth = await create_mcp_oauth_auth("linear", server_url)
@@ -749,7 +748,7 @@ async def test_separate_providers_share_storage_refresh_lock(
         expires_in=-1,
     ))
     await storage.set_client_info(OAuthClientInformationFull(
-        redirect_uris=["https://agent.example/auth/mcp/callback"],
+        redirect_uris=["https://agent.example/v0/mcp/oauth/callback"],
         client_id="registered-client",
     ))
     first_auth = await create_mcp_oauth_auth("linear", server_url)
@@ -809,7 +808,7 @@ async def test_official_mcp_sdk_completes_discovery_registration_and_token_excha
         "company-mcp",
         server_url,
         MCPOAuthHandlers(
-            redirect_uri="https://agent.example/auth/mcp/callback",
+            redirect_uri="https://agent.example/v0/mcp/oauth/callback",
             redirect_handler=redirect,
             callback_handler=callback,
         ),
@@ -851,7 +850,7 @@ async def test_official_mcp_sdk_completes_discovery_registration_and_token_excha
             )
             return httpx.Response(201, json={
                 "client_id": "cirno-client",
-                "redirect_uris": ["https://agent.example/auth/mcp/callback"],
+                "redirect_uris": ["https://agent.example/v0/mcp/oauth/callback"],
                 "token_endpoint_auth_method": "none",
             })
         if request.url.path == "/token":

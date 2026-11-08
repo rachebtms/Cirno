@@ -69,10 +69,11 @@ function isSameLocalCalendarDay(left: Date, right: Date): boolean {
 export function relativeTime(
   value: string | number | null | undefined,
   locale?: string,
+  now = Date.now(),
 ): string {
   const date = parseDate(value);
   if (!date) return "";
-  let delta = (date.getTime() - Date.now()) / 1000;
+  let delta = (date.getTime() - now) / 1000;
   const formatter = relativeTimeFormatter(activeLocale(locale));
   for (const [step, unit] of RELATIVE_THRESHOLDS) {
     if (Math.abs(delta) < step) {

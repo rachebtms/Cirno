@@ -16,7 +16,7 @@ def test_importing_providers_package_is_lazy(monkeypatch) -> None:
     monkeypatch.delitem(sys.modules, "cirno_core.providers.xai_grok_provider", raising=False)
     monkeypatch.delitem(sys.modules, "cirno_core.providers.github_copilot_provider", raising=False)
     monkeypatch.delitem(sys.modules, "cirno_core.providers.azure_openai_provider", raising=False)
-    monkeypatch.delitem(sys.modules, "cirno_core.providers.bedrock_provider", raising=False)
+    monkeypatch.delitem(sys.modules, "cirno_core.providers.bedrock.provider", raising=False)
 
     try:
         providers = importlib.import_module("cirno_core.providers")
@@ -28,7 +28,7 @@ def test_importing_providers_package_is_lazy(monkeypatch) -> None:
         assert "cirno_core.providers.xai_grok_provider" not in sys.modules
         assert "cirno_core.providers.github_copilot_provider" not in sys.modules
         assert "cirno_core.providers.azure_openai_provider" not in sys.modules
-        assert "cirno_core.providers.bedrock_provider" not in sys.modules
+        assert "cirno_core.providers.bedrock.provider" not in sys.modules
         assert providers.__all__ == [
             "LLMProvider",
             "LLMResponse",

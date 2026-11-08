@@ -1,10 +1,10 @@
 import { useLayoutEffect } from "react";
 
-import { useLocalPreferences } from "@/hooks/useLocalPreferences";
+import { usePreferences } from "@/hooks/usePreferences";
 
 /** Project browser preferences onto text tokens, without scaling the UI or rem. */
 export function useReadingTypography(): void {
-  const { readingTextSize, customReadingTextSize } = useLocalPreferences();
+  const { readingTextSize, customReadingTextSize } = usePreferences();
   useLayoutEffect(() => {
     document.documentElement.dataset.readingTextSize = readingTextSize;
     document.documentElement.style.setProperty("--custom-reading-size", `${customReadingTextSize}px`);

@@ -1,6 +1,8 @@
 """Tests for the Mistral provider registration and reasoning quirks."""
 
 from __future__ import annotations
+from cirno_core.providers.chat_completions.complete import parse_response
+from sources.development.testing.providers import parse_chat_chunks
 
 from unittest.mock import patch
 
@@ -8,7 +10,7 @@ import pytest
 from openai.types.chat import ChatCompletionChunk
 from openai.types.chat.chat_completion_chunk import Choice, ChoiceDelta
 
-from cirno_core.config.schema import ProvidersConfig
+from cirno_core.config.providers import ProvidersConfig
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.providers.registry import PROVIDERS, find_by_name
 
@@ -140,7 +142,7 @@ def test_extract_thinking_content_from_mistral_response() -> None:
         ],
         "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
     }
-    parsed = p._parse(response)
+    parsed = parse_response(response, spec=p._spec)
     assert parsed.content == "Final answer is 35."
     assert parsed.reasoning_content == "Let me think..."
 
@@ -176,7 +178,7 @@ def test_extract_thinking_content_with_tool_calls() -> None:
             }
         ],
     }
-    parsed = p._parse(response)
+    parsed = parse_response(response, spec=p._spec)
     assert parsed.content in (None, "")
     assert parsed.reasoning_content == "I should call get_weather."
     assert len(parsed.tool_calls) == 1
@@ -212,7 +214,7 @@ def test_thinking_content_only_for_mistral_spec() -> None:
             }
         ],
     }
-    parsed = p._parse(response)
+    parsed = parse_response(response, spec=p._spec)
     assert parsed.content == "hi"
     assert parsed.reasoning_content is None
 
@@ -259,7 +261,7 @@ def test_streaming_thinking_chunks_become_reasoning() -> None:
             ]
         },
     ]
-    parsed = OpenAICompatProvider._parse_chunks(chunks)
+    parsed = parse_chat_chunks(chunks)
     assert parsed.content == "final"
     assert parsed.reasoning_content == "step 1 step 2"
 
@@ -289,7 +291,7 @@ def test_streaming_thinking_chunks_via_sdk_path() -> None:
         chunk([{"type": "text", "text": "Hello "}]),
         chunk("world.", finish="stop"),
     ]
-    parsed = OpenAICompatProvider._parse_chunks(chunks)
+    parsed = parse_chat_chunks(chunks)
     assert parsed.content == "Hello world."
     assert parsed.reasoning_content == "ponder"
 
@@ -306,7 +308,7 @@ def test_mistral_strips_reasoning_content_from_history() -> None:
         },
         {"role": "user", "content": "follow up"},
     ]
-    sanitized = p._sanitize_messages(messages)
+    sanitized = p.prepare_messages(messages)
     assert all("reasoning_content" not in msg for msg in sanitized)
     assert sanitized[1]["content"] == "Hello!"
 
@@ -332,7 +334,7 @@ def test_mistral_tool_call_ids_get_normalized() -> None:
             "content": "ok",
         },
     ]
-    sanitized = p._sanitize_messages(messages)
+    sanitized = p.prepare_messages(messages)
     assistant_id = sanitized[1]["tool_calls"][0]["id"]
     tool_id = sanitized[2]["tool_call_id"]
     assert len(assistant_id) == 9
@@ -358,6 +360,6 @@ def test_mistral_preserves_text_with_tool_call_history() -> None:
         {"role": "tool", "tool_call_id": "call_1", "content": "done"},
     ]
 
-    sanitized = p._sanitize_messages(messages)
+    sanitized = p.prepare_messages(messages)
 
     assert sanitized[1]["content"] == "I will inspect it."

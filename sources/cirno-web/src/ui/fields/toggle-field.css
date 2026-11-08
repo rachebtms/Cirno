@@ -1,0 +1,6 @@
+.interface-toggle { display:flex; flex-direction:column; gap:.25rem; width:100%; align-items:stretch; }
+.interface-toggle > [data-slot=switch-content] { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:2.75rem; width:100%; }
+.interface-toggle [data-slot=label] { min-width:0; flex:1; }
+.interface-toggle [data-slot=switch-control] { flex-shrink:0; }
+.interface-toggle > [data-slot=description] { min-width:0; margin-inline-start:0; padding-inline-start:0; }
+.interface-toggle-compact { width:auto; flex-shrink:0; }

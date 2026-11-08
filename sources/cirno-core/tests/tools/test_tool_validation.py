@@ -1,4 +1,6 @@
+
 import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -7,7 +9,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-
 from cirno_core.agent.tools import (
     ArraySchema,
     IntegerSchema,
@@ -19,7 +20,10 @@ from cirno_core.agent.tools import (
 )
 from cirno_core.agent.tools.base import Tool
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.agent.tools.shell import ExecTool, ExecToolConfig
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell import tokens as shell_tokens
+from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.processes import launch as process_launch
 from cirno_core.security.network import configure_ssrf_whitelist
 
 
@@ -285,7 +289,7 @@ async def test_registry_returns_validation_error() -> None:
 
 def test_exec_extract_absolute_paths_keeps_full_windows_path() -> None:
     cmd = r"type C:\user\workspace\txt"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert paths == [r"C:\user\workspace\txt"]
 
 
@@ -293,19 +297,19 @@ def test_exec_extract_absolute_paths_captures_windows_drive_root_path() -> None:
     """Windows drive root paths like `E:\\` must be extracted for workspace guarding."""
     # Note: raw strings cannot end with a single backslash.
     cmd = "dir E:\\"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert paths == ["E:\\"]
 
 
 def test_exec_extract_absolute_paths_ignores_relative_posix_segments() -> None:
     cmd = ".venv/bin/python script.py"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert "/bin/python" not in paths
 
 
 def test_exec_extract_absolute_paths_ignores_urls() -> None:
     cmd = 'curl -s -o /dev/null -w "%{http_code}" https://www.google.com'
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert paths == ["/dev/null"]
 
 
@@ -317,9 +321,14 @@ def test_exec_extract_absolute_paths_ignores_urls() -> None:
         'python3 -c "import urllib.request; print(urllib.request.urlopen(\'http://example.com\').read()[:100])"',
     ],
 )
-def test_exec_guard_allows_public_urls(tmp_path, command: str) -> None:
+def test_exec_guard_allows_public_urls(tmp_path, monkeypatch, command: str) -> None:
+    # Test public DNS results independently of VPN / fake-IP resolvers on the
+    # development host. Network security tests cover private/mixed answers.
+    monkeypatch.setattr("cirno_core.security.network.socket.getaddrinfo", lambda *args, **kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0)),
+    ])
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command(command, str(tmp_path))
+    error = tool.preparation.policy.check(command, str(tmp_path))
     assert error is None
 
 
@@ -327,7 +336,7 @@ def test_exec_guard_allows_whitelisted_internal_urls(tmp_path) -> None:
     configure_ssrf_whitelist(["10.10.10.0/24"])
     try:
         tool = ExecTool(restrict_to_workspace=True)
-        error = tool._guard_command(
+        error = tool.preparation.policy.check(
             'curl -s -H "Authorization: Bearer ..." http://10.10.10.3:8123/api/',
             str(tmp_path),
         )
@@ -338,21 +347,21 @@ def test_exec_guard_allows_whitelisted_internal_urls(tmp_path) -> None:
 
 def test_exec_extract_absolute_paths_captures_posix_absolute_paths() -> None:
     cmd = "cat /tmp/data.txt > /tmp/out.txt"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert "/tmp/data.txt" in paths
     assert "/tmp/out.txt" in paths
 
 
 def test_exec_extract_absolute_paths_captures_home_paths() -> None:
     cmd = "cat ~/.cirno/config.json > ~/out.txt"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert "~/.cirno/config.json" in paths
     assert "~/out.txt" in paths
 
 
 def test_exec_extract_absolute_paths_captures_paths_after_equals() -> None:
     cmd = "curl --output=/etc/passwd --config=~/.cirno/config.json --user-home=~root"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert "/etc/passwd" in paths
     assert "~/.cirno/config.json" in paths
     assert "~root" in paths
@@ -360,18 +369,18 @@ def test_exec_extract_absolute_paths_captures_paths_after_equals() -> None:
 
 def test_exec_extract_absolute_paths_does_not_capture_query_tilde() -> None:
     cmd = 'python query.py --query \'{job=~"app"}\''
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert not any(p.startswith("~") for p in paths)
 
 
 def test_exec_extract_absolute_paths_captures_bare_and_named_user_home_paths() -> None:
-    paths = ExecTool._extract_absolute_paths("cd ~ && cat ~root/.bashrc")
+    paths = shell_tokens.extract_absolute_paths("cd ~ && cat ~root/.bashrc")
     assert "~" in paths
     assert "~root/.bashrc" in paths
 
 
 def test_exec_extract_absolute_paths_captures_tilde_after_shell_operators() -> None:
-    paths = ExecTool._extract_absolute_paths(
+    paths = shell_tokens.extract_absolute_paths(
         "cat <~root/.bashrc;~root/bin/tool|~daemon/bin/tool"
     )
     assert "~root/.bashrc" in paths
@@ -380,7 +389,7 @@ def test_exec_extract_absolute_paths_captures_tilde_after_shell_operators() -> N
 
 
 def test_exec_extract_absolute_paths_captures_tilde_assignment_components() -> None:
-    paths = ExecTool._extract_absolute_paths(
+    paths = shell_tokens.extract_absolute_paths(
         "HOME=~ PATH=bin:~root/bin curl --config=~"
     )
     assert "~" in paths
@@ -389,14 +398,14 @@ def test_exec_extract_absolute_paths_captures_tilde_assignment_components() -> N
 
 def test_exec_extract_absolute_paths_captures_quoted_paths() -> None:
     cmd = 'cat "/tmp/data.txt" "~/.cirno/config.json"'
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert "/tmp/data.txt" in paths
     assert "~/.cirno/config.json" in paths
 
 
 def test_exec_guard_blocks_home_path_outside_workspace(tmp_path) -> None:
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command("cat ~/.cirno/config.json", str(tmp_path))
+    error = tool.preparation.policy.check("cat ~/.cirno/config.json", str(tmp_path))
     assert error is not None
     assert error.startswith(
         "Error: Command blocked by safety guard (path outside working dir)"
@@ -416,7 +425,7 @@ async def test_exec_rejects_unknown_user_home(tmp_path, monkeypatch, command) ->
         Path(home_path).expanduser()
 
     spawn = AsyncMock(side_effect=AssertionError("Blocked commands must not start a process"))
-    monkeypatch.setattr(ExecTool, "_spawn", spawn)
+    monkeypatch.setattr(process_launch, "spawn_process", spawn)
     result = await ExecTool(
         working_dir=str(tmp_path), restrict_to_workspace=True,
     ).execute(command=command)
@@ -441,7 +450,7 @@ async def test_exec_rejects_home_path_without_home_directory(tmp_path, monkeypat
         Path("~/file.txt").expanduser()
 
     spawn = AsyncMock(side_effect=AssertionError("Blocked commands must not start a process"))
-    monkeypatch.setattr(ExecTool, "_spawn", spawn)
+    monkeypatch.setattr(process_launch, "spawn_process", spawn)
     result = await ExecTool(
         working_dir=str(tmp_path), restrict_to_workspace=True,
     ).execute(command="cat ~/file.txt")
@@ -473,7 +482,7 @@ async def test_exec_allows_resolved_home_inside_workspace(tmp_path, monkeypatch)
 )
 def test_exec_guard_blocks_home_paths_outside_workspace(tmp_path, command) -> None:
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command(command, str(tmp_path))
+    error = tool.preparation.policy.check(command, str(tmp_path))
     assert error is not None
     assert error.startswith(
         "Error: Command blocked by safety guard (path outside working dir)"
@@ -492,7 +501,7 @@ def test_exec_guard_blocks_home_paths_outside_workspace(tmp_path, command) -> No
 def test_exec_guard_blocks_home_paths_with_special_shell_contexts(
     tmp_path, command: str
 ) -> None:
-    error = ExecTool(restrict_to_workspace=True)._guard_command(command, str(tmp_path))
+    error = ExecTool(restrict_to_workspace=True).preparation.policy.check(command, str(tmp_path))
     assert error is not None
     assert error.startswith(
         "Error: Command blocked by safety guard (path outside working dir)"
@@ -501,12 +510,12 @@ def test_exec_guard_blocks_home_paths_with_special_shell_contexts(
 
 def test_exec_guard_allows_current_directory_tilde(tmp_path) -> None:
     tool = ExecTool(restrict_to_workspace=True)
-    assert tool._guard_command("cat ~+/file.txt", str(tmp_path)) is None
+    assert tool.preparation.policy.check("cat ~+/file.txt", str(tmp_path)) is None
 
 
 def test_exec_guard_blocks_quoted_home_path_outside_workspace(tmp_path) -> None:
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command('cat "~/.cirno/config.json"', str(tmp_path))
+    error = tool.preparation.policy.check('cat "~/.cirno/config.json"', str(tmp_path))
     assert error is not None
     assert error.startswith(
         "Error: Command blocked by safety guard (path outside working dir)"
@@ -520,15 +529,15 @@ def test_exec_guard_allows_media_path_outside_workspace(tmp_path, monkeypatch) -
     media_file = media_dir / "photo.jpg"
     media_file.write_text("ok", encoding="utf-8")
 
-    monkeypatch.setattr("cirno_core.agent.tools.shell.get_media_dir", lambda: media_dir)
+    monkeypatch.setattr("cirno_core.agent.tools.shell.policy.get_media_dir", lambda: media_dir)
 
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command(f'cat "{media_file}"', str(tmp_path / "workspace"))
+    error = tool.preparation.policy.check(f'cat "{media_file}"', str(tmp_path / "workspace"))
     assert error is None
 
 
 def test_exec_guard_blocks_windows_drive_root_outside_workspace(monkeypatch) -> None:
-    import cirno_core.agent.tools.shell as shell_mod
+    import cirno_core.agent.tools.shell.policy as shell_mod
 
     class FakeWindowsPath:
         def __init__(self, raw: str) -> None:
@@ -562,7 +571,7 @@ def test_exec_guard_blocks_windows_drive_root_outside_workspace(monkeypatch) -> 
     monkeypatch.setattr(shell_mod, "Path", FakeWindowsPath)
 
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command("dir E:\\", "E:\\workspace")
+    error = tool.preparation.policy.check("dir E:\\", "E:\\workspace")
     assert error is not None
     assert error.startswith(
         "Error: Command blocked by safety guard (path outside working dir)"
@@ -575,26 +584,26 @@ def test_exec_guard_allows_dev_null_redirect(tmp_path) -> None:
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "file.txt").write_text("ok", encoding="utf-8")
-    error = tool._guard_command(f'rm "{ws / "file.txt"}" 2>/dev/null', str(ws))
+    error = tool.preparation.policy.check(f'rm "{ws / "file.txt"}" 2>/dev/null', str(ws))
     assert error is None
 
 
 def test_exec_guard_allows_dev_urandom(tmp_path) -> None:
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command("cat /dev/urandom | head -c 16 > random.bin", str(tmp_path))
+    error = tool.preparation.policy.check("cat /dev/urandom | head -c 16 > random.bin", str(tmp_path))
     assert error is None
 
 
 def test_exec_guard_blocks_non_benign_dev_path(tmp_path) -> None:
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command("cat /dev/sda", str(tmp_path))
+    error = tool.preparation.policy.check("cat /dev/sda", str(tmp_path))
     assert error is not None
     assert "path outside working dir" in error
 
 
 def test_exec_extract_absolute_paths_ignores_pipe_tilde() -> None:
     cmd = "python query.py --query '{job=\"app\"} |~ \"error\"'"
-    paths = ExecTool._extract_absolute_paths(cmd)
+    paths = shell_tokens.extract_absolute_paths(cmd)
     assert not any(p.startswith("~") for p in paths)
 
 
@@ -994,7 +1003,7 @@ async def test_exec_runtime_rejects_out_of_range(
 ) -> None:
     """Invalid budgets fail before spawning instead of being clamped."""
     spawn = AsyncMock(side_effect=AssertionError("Invalid runtime must not start a process"))
-    monkeypatch.setattr(ExecTool, "_spawn", spawn)
+    monkeypatch.setattr(process_launch, "spawn_process", spawn)
     tool = ExecTool(max_runtime=301, max_runtime_limit=300)
 
     result = await tool.execute(command="echo ok", **{runtime_parameter: runtime})
@@ -1006,7 +1015,7 @@ async def test_exec_runtime_rejects_out_of_range(
 
 async def test_exec_runtime_aliases_are_mutually_exclusive(monkeypatch) -> None:
     spawn = AsyncMock(side_effect=AssertionError("Conflicting runtime arguments must not spawn"))
-    monkeypatch.setattr(ExecTool, "_spawn", spawn)
+    monkeypatch.setattr(process_launch, "spawn_process", spawn)
     tool = ExecTool()
     params = {"command": "echo ok", "max_runtime": 5, "timeout": 5}
 
@@ -1035,19 +1044,19 @@ def test_exec_config_accepts_bwrap_bind_aliases() -> None:
 
 
 def test_resolve_timeout_uses_configured_hard_budget() -> None:
-    assert ExecTool()._resolve_timeout(None) == 3600
-    assert ExecTool(timeout=5)._resolve_timeout(None) == 5
-    assert ExecTool(max_runtime=172800, max_runtime_limit=60)._resolve_timeout(None) == 172800
+    assert ExecTool().preparation.resolve_timeout(None) == 3600
+    assert ExecTool(timeout=5).preparation.resolve_timeout(None) == 5
+    assert ExecTool(max_runtime=172800, max_runtime_limit=60).preparation.resolve_timeout(None) == 172800
 
 
 def test_resolve_timeout_respects_configured_limit_without_clamping() -> None:
-    assert ExecTool()._resolve_timeout(9999) == 9999
+    assert ExecTool().preparation.resolve_timeout(9999) == 9999
     tool = ExecTool(max_runtime=60, max_runtime_limit=1200)
-    assert tool._resolve_timeout(1) == 1
-    assert tool._resolve_timeout(1200) == 1200
+    assert tool.preparation.resolve_timeout(1) == 1
+    assert tool.preparation.resolve_timeout(1200) == 1200
     for runtime in (0, -1, 1201):
         with pytest.raises(ValueError):
-            tool._resolve_timeout(runtime)
+            tool.preparation.resolve_timeout(runtime)
 
 
 @pytest.mark.parametrize("limit", [60, 1200, 86400])
@@ -1190,7 +1199,7 @@ def test_exec_guard_rejects_unresolvable_home_path(tmp_path, monkeypatch, comman
 
     monkeypatch.setattr(Path, "expanduser", expanduser)
     tool = ExecTool(restrict_to_workspace=True)
-    error = tool._guard_command(command, str(tmp_path))
+    error = tool.preparation.policy.check(command, str(tmp_path))
     assert error is not None
     assert error.startswith("Error: Command blocked by safety guard (path outside working dir)")
 
@@ -1205,4 +1214,4 @@ def test_exec_guard_allows_resolved_home_inside_workspace(tmp_path, monkeypatch)
 
     monkeypatch.setattr(Path, "expanduser", expanduser)
     tool = ExecTool(restrict_to_workspace=True)
-    assert tool._guard_command("cat ~/file.txt", str(tmp_path)) is None
+    assert tool.preparation.policy.check("cat ~/file.txt", str(tmp_path)) is None

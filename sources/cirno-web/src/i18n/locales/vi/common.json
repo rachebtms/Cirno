@@ -7,19 +7,19 @@
   "app": {
     "brand": "Cirno",
     "loading": {
-      "connecting": "Đang kết nối tới cirno…",
+      "connecting": "Đang kết nối tới Cirno…",
       "boot": "Đang tải Cirno…",
       "failed": "Không thể tải giao diện này. Hãy quay lại hoặc tải lại trang để thử lại."
     },
     "error": {
-      "title": "Không thể kết nối tới cirno",
+      "title": "Không thể kết nối tới Cirno",
       "serverHint": "Hãy chắc chắn Cirno server đang chạy (`cirno`) và trình duyệt này có thể truy cập địa chỉ WebUI của Cirno server."
     },
     "auth": {
-      "title": "Kết nối với cirno",
+      "title": "Kết nối với Cirno",
       "label": "Mật khẩu WebUI",
       "helpTitle": "Tìm mật khẩu ở đâu?",
-      "helpConfig": "Trên thiết bị đang chạy cirno, mở tệp cấu hình, thường nằm tại:",
+      "helpConfig": "Trên thiết bị đang chạy Cirno, mở tệp cấu hình, thường nằm tại:",
       "helpSecret": "Sao chép giá trị của trường này làm mật khẩu:",
       "helpFallback": "Nếu giá trị này trống, hãy dùng <code>channels.websocket.token</code>.",
       "showPassword": "Hiện mật khẩu",
@@ -38,9 +38,7 @@
       "restartHint": "Khởi động lại cirno để áp dụng thay đổi thời gian chạy.",
       "restartAction": "Khởi động lại",
       "restart": "Khởi động lại cirno",
-      "restarting": "Đang khởi động lại...",
-      "restartEngine": "Khởi động lại bộ máy",
-      "restartingEngine": "Đang khởi động lại bộ máy..."
+      "restarting": "Đang khởi động lại..."
     },
     "restart": {
       "completed": "Khởi động lại hoàn tất sau {{seconds}} giây."
@@ -51,18 +49,6 @@
     },
     "meta": {
       "description": "Giao diện web Cirno — trò chuyện với không gian làm việc Cirno của bạn."
-    },
-    "pairing": {
-      "haveCode": "Bạn đã nhận được mã?",
-      "deliveryFailed": "Không thể gửi mã ghép nối. Hãy kiểm tra quyền gửi tin nhắn của bot và nhật ký Cirno server, rồi gửi thêm một tin nhắn riêng để thử lại.",
-      "deliverySending": "Đang gửi mã ghép nối đến cuộc trò chuyện. Nếu chưa nhận được, hãy gửi thêm một tin nhắn riêng cho bot để thử lại.",
-      "title": "Ghép tài khoản",
-      "description": "Nhập mã ghép nhận được trong cuộc trò chuyện.",
-      "code": "Mã liên kết",
-      "matched": "Đã khớp với {{channel}}. Đang kết nối...",
-      "expiresInline": "Mã hết hạn {{expires}}.",
-      "queueCount": "{{count}} đang chờ",
-      "noMatch": "Không có yêu cầu đang chờ nào khớp với mã này."
     }
   },
   "ptc": {
@@ -275,8 +261,8 @@
           "help": "Tần suất kiểm tra hội thoại để nén ngữ cảnh; khác với thời gian không hoạt động. Khởi động lại để áp dụng."
         },
         "network_request_timeout_s": {
-          "label": "Compatible API request timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "Thời gian chờ kết nối / phản hồi mô hình (giây)",
+          "help": "Thời gian kết nối hoặc chờ phản hồi không truyền trực tiếp. Luồng đang hoạt động dùng giới hạn thời gian nhàn rỗi riêng."
         },
         "network_stream_idle_timeout_s": {
           "label": "Compatible API stream idle timeout (seconds)",
@@ -335,7 +321,7 @@
           "help": "Giới hạn mỗi yêu cầu; khi lỗi thì dùng BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "Giải phóng ngữ cảnh đã lưu trữ",
+          "label": "Giải phóng bộ nhớ sau khi nén",
           "help": "Sau khi nén, giữ bằng chứng và lịch sử trên đĩa, giải phóng tin nhắn thực thi cũ khỏi RAM."
         },
         "agents_defaults_dream_max_tool_iterations": {
@@ -461,6 +447,18 @@
         "agents_defaults_memory_embedding_provider": {
           "label": "Dịch vụ embedding",
           "help": "Vector tùy chọn cùng BM25. Chọn CPU cục bộ hoặc API ngoài. API nhận truy vấn và các đoạn bộ nhớ; mặc định tắt."
+        },
+        "server_uploads_max_file_mb": {
+          "label": "Giới hạn mỗi tệp (MiB)",
+          "help": "Kích thước tối đa cho mỗi ảnh hoặc tài liệu. Khởi động lại dịch vụ và tải lại trang để áp dụng."
+        },
+        "server_uploads_max_video_mb": {
+          "label": "Giới hạn mỗi video (MiB)",
+          "help": "Kích thước tối đa cho mỗi video; một video mỗi tin nhắn. Khởi động lại và tải lại trang để áp dụng."
+        },
+        "server_uploads_max_total_mb": {
+          "label": "Tổng mỗi tin nhắn (MiB)",
+          "help": "Tổng ảnh và tài liệu tải lên, không gồm video và tham chiếu tệp cục bộ. Khởi động lại và tải lại trang để áp dụng."
         }
       },
       "groups": {
@@ -565,6 +563,9 @@
         },
         "embedding": {
           "title": "Dịch vụ embedding"
+        },
+        "uploads": {
+          "title": "Tải tệp lên"
         }
       },
       "save": "Lưu thay đổi",
@@ -672,12 +673,10 @@
       "capabilities": "Tính năng",
       "cliApps": "Ứng dụng CLI",
       "mcp": "Dịch vụ MCP",
-      "apps": "Ứng dụng",
-      "nativeHost": "Ứng dụng trên máy tính",
-      "hostSafety": "An toàn ứng dụng"
+      "apps": "Ứng dụng"
     },
     "notifications": {
-      "scope": "Trình duyệt này",
+      "scope": "Thông báo và âm thanh",
       "intro": "Chọn cách nhận thông báo khi tác vụ kết thúc.",
       "pageRequired": "Không nhận được thông báo mới khi trang này bị đóng, tạm ngưng hoặc mất kết nối.",
       "revoked": "Quyền thông báo đã bị thu hồi. Thông báo hiện đã tắt. Hãy cho phép thông báo trong cài đặt trang web của trình duyệt này, rồi bật tại đây.",
@@ -740,7 +739,6 @@
       "restart": "Khởi động lại cirno",
       "configPath": "Đường dẫn cấu hình",
       "activePreset": "Cấu hình đặt trước đang dùng",
-      "gateway": "Cirno server",
       "restartState": "Trạng thái khởi động lại",
       "pendingChanges": "Thay đổi chờ áp dụng",
       "selectedPreset": "Bộ thiết lập đã chọn",
@@ -762,13 +760,11 @@
       "notificationSound": "Âm báo hoàn thành",
       "cliAppsCatalog": "Danh mục",
       "cliAppsFilter": "Bộ lọc",
-      "engine": "Bộ máy",
-      "logs": "Nhật ký",
-      "diagnostics": "Chẩn đoán",
       "contextWindow": "Cửa sổ ngữ cảnh",
       "voiceLimits": "Giới hạn",
       "reasoningDetailMode": "Chi tiết suy luận",
-      "toolDetailMode": "Chi tiết công cụ"
+      "toolDetailMode": "Chi tiết công cụ",
+      "healthListener": "Địa chỉ kiểm tra trạng thái"
     },
     "help": {
       "theme": "Chuyển giữa giao diện sáng và tối.",
@@ -796,10 +792,6 @@
       "notificationSound": "Phát âm báo khi phản hồi kết thúc, kể cả khi trang ở nền.",
       "cliAppsCatalog": "Cài công cụ CLI cho cirno; giữ nguyên ứng dụng máy tính.\n\nCài các công cụ dòng lệnh mà cirno có thể dùng trên máy này. Các ứng dụng trên máy tính không bị thay đổi.",
       "cliAppsFilter": "Tìm theo tên, danh mục hoặc chức năng.",
-      "logs": "Mở thư mục nhật ký engine của ứng dụng máy tính.",
-      "diagnostics": "Xuất báo cáo để chẩn đoán vấn đề.",
-      "localServiceAccessNative": "Lệnh Shell có toàn quyền có thể kết nối dịch vụ trên Mac này.\n\nCho phép lệnh shell có quyền truy cập đầy đủ truy cập các dịch vụ trên máy Mac này.",
-      "webuiDefaultAccessNative": "Mặc định cho trò chuyện máy tính chưa có quyền dự án.\n\nDùng cho cuộc trò chuyện trong ứng dụng khi dự án chưa có quyền riêng.",
       "contextWindow": "Số Token ngữ cảnh cho mô hình này."
     },
     "values": {
@@ -821,16 +813,15 @@
       "collapsedDiff": "Thu gọn thay đổi",
       "on": "Bật",
       "off": "Tắt",
-      "defaultPermission": "Quyền mặc định",
       "fullAccess": "Toàn quyền",
       "configured": "Đã cấu hình",
       "notConfigured": "Chưa cấu hình",
       "pending": "Đang chờ",
-      "restartingEngine": "Đang khởi động lại",
       "checking": "Đang kiểm tra",
       "running": "Đang chạy",
       "needsSetup": "Cần thiết lập",
-      "detailed": "Chi tiết"
+      "detailed": "Chi tiết",
+      "inheritToolPolicy": "Dùng chính sách công cụ"
     },
     "status": {
       "loading": "Đang tải cài đặt...",
@@ -841,12 +832,7 @@
       "restartAfterSaving": "Lưu thay đổi, rồi khởi động lại khi sẵn sàng.",
       "savedRestartApply": "Đã lưu. Khởi động lại cirno để áp dụng thay đổi.",
       "hostRestartAfterSaving": "Sau khi lưu, cirno sẽ khởi động lại bộ máy.",
-      "hostRestartPending": "Đã lưu. Bộ máy sẽ khởi động lại khi sẵn sàng.",
-      "hostApiUnavailable": "Các thao tác này chỉ có trong ứng dụng trên máy tính.",
-      "logsOpened": "Đã mở thư mục nhật ký.",
-      "logsOpenFailed": "Không thể mở thư mục nhật ký.",
-      "diagnosticsExported": "Đã xuất chẩn đoán tới {{path}}.",
-      "diagnosticsExportFailed": "Không thể xuất chẩn đoán."
+      "hostRestartPending": "Đã lưu. Bộ máy sẽ khởi động lại khi sẵn sàng."
     },
     "actions": {
       "save": "Lưu",
@@ -1022,7 +1008,7 @@
       "newPresetHelp": "Lưu mô hình và thiết lập để dùng lại.",
       "presets": "Cấu hình mô hình đặt trước",
       "presetName": "Tên cấu hình đặt trước",
-      "presetNameHelp": "Tên phải duy nhất; cũng dùng trong /model.",
+      "presetNameHelp": "Tên phải duy nhất. Đổi tên không thay đổi ID mô hình.",
       "presetNameDuplicate": "Đã có cấu hình đặt trước mang tên này.",
       "presetNamePlaceholder": "ví dụ: Viết nhanh",
       "advancedOptions": "Tùy chọn nâng cao",
@@ -1066,7 +1052,8 @@
         "auto": "Tự động",
         "preserve": "Giữ lại",
         "omit": "Không gửi"
-      }
+      },
+      "catalogErrorDetails": "Chi tiết lỗi"
     },
     "timezone": {
       "select": "Chọn múi giờ",
@@ -1404,7 +1391,7 @@
         "noOutput": "Bản ghi này không lưu nội dung phản hồi."
       },
       "create": "Tạo tác vụ",
-      "createPrompt": "Bạn muốn cirno tự động làm gì?",
+      "createPrompt": "Bạn muốn tự động hóa tác vụ nào?",
       "createInput": "Mô tả tác vụ tự động",
       "errors": {},
       "calendar": {
@@ -1542,7 +1529,8 @@
         "second": "Giây",
         "minute": "Phút",
         "hour": "Giờ",
-        "day": "Ngày"
+        "day": "Ngày",
+        "millisecond": "Mili giây"
       },
       "validation": {
         "nameRequired": "Tên là bắt buộc.",
@@ -1581,7 +1569,9 @@
       "openChatGPT": "Mở ChatGPT",
       "pasteCallbackToContinue": "Dán URL callback để tiếp tục.",
       "waitingForCallback": "Đang chờ hoàn tất đăng nhập…",
-      "finishSignIn": "Hoàn tất đăng nhập"
+      "finishSignIn": "Hoàn tất đăng nhập",
+      "cancelFailed": "Không thể hủy đăng nhập {{provider}}",
+      "cancelling": "Đang hủy đăng nhập…"
     },
     "skills": {
       "description": "Chọn kỹ năng có thể dùng trong trò chuyện.",
@@ -1610,15 +1600,15 @@
       "disableSkill": "Tắt {{name}}",
       "updateFailed": "Không thể cập nhật kỹ năng này.",
       "deleteTitle": "Xóa kỹ năng",
-      "deleteDescription": "Xóa kỹ năng này khỏi vùng làm việc hiện tại.",
+      "deleteDescription": "Xóa kỹ năng này khỏi Agent Home.",
       "deleteAction": "Xóa",
       "deleteFailed": "Không thể xóa kỹ năng này.",
       "deleteConfirmTitle": "Xóa {{name}}?",
-      "deleteConfirmDescription": "Xóa tệp kỹ năng khỏi vùng làm việc. Không thể hoàn tác.",
+      "deleteConfirmDescription": "Xóa tệp kỹ năng khỏi Agent Home. Các phiên bản đã lưu vẫn có thể đọc được.",
       "deleteConfirmAction": "Xóa kỹ năng",
       "instructionsTitle": "Hướng dẫn kỹ năng",
       "setupRequired": "Cần thiết lập",
-      "setupDescription": "Cài gói phụ thuộc trên máy Cirno server rồi kiểm tra lại.\n\nCài các gói còn thiếu trên máy chạy cirno rồi kiểm tra lại.",
+      "setupDescription": "Cài các gói phụ thuộc còn thiếu trên máy chủ Cirno, rồi kiểm tra lại.",
       "copySetupCommand": "Sao chép lệnh",
       "checkAgain": "Kiểm tra lại",
       "marketplaceSearchFailed": "Không thể tìm kiếm trong các kho kỹ năng.",
@@ -1634,7 +1624,7 @@
       "marketplaceTrendingUnavailable": "Các kỹ năng thịnh hành tạm thời không khả dụng.",
       "marketplaceEmpty": "Không tìm thấy kỹ năng cho “{{query}}”.",
       "marketplaceConfirmTitle": "Cài đặt {{name}}?",
-      "marketplaceConfirmDescription": "Kỹ năng bên thứ ba có thể chứa hướng dẫn hoặc script.\n\nKỹ năng của bên thứ ba này đến từ {{provider}} ({{source}}) và có thể chứa hướng dẫn hoặc tập lệnh thực thi.",
+      "marketplaceConfirmDescription": "Kỹ năng của bên thứ ba này đến từ {{provider}} ({{source}}) và có thể chứa hướng dẫn hoặc tập lệnh thực thi.",
       "marketplaceConfirmInstall": "Cài đặt kỹ năng",
       "marketplaceOpen": "Mở {{name}} trên {{provider}}",
       "marketplaceOpenProvider": "Mở {{provider}}",
@@ -1648,7 +1638,6 @@
       "marketplaceTrendLabel": "Xu hướng lượt cài đặt trong 8 tuần",
       "featured": "Kỹ năng",
       "empty": "Không có kỹ năng nào khả dụng.",
-      "sourceWorkspace": "Tùy chỉnh",
       "sourceBuiltin": "Tích hợp",
       "statusAvailable": "Khả dụng",
       "statusUnavailable": "Không khả dụng",
@@ -1668,46 +1657,55 @@
       "unavailableReasonLabel": "Còn thiếu gì",
       "rawInstructions": "Nội dung SKILL.md",
       "rawInstructionsEmpty": "Không có hướng dẫn.",
-      "detailDescription": "Chi tiết cho {{name}}."
+      "detailDescription": "Chi tiết cho {{name}}.",
+      "sourceHome": "Tùy chỉnh",
+      "copySetupFailed": "Không thể sao chép lệnh.",
+      "sourcePlugin": "Plugin Agent",
+      "marketplaceResultsFor": "Kết quả cho “{{query}}”",
+      "retryTrends": "Thử lại xu hướng",
+      "historyTab": "Xác thực và lịch sử"
     },
     "homeFiles": {
       "title": "Home files",
       "save": "Save",
       "reload": "Reload",
       "saved": "Saved",
-      "soul": "Personality",
+      "soul": "Tính cách Router",
       "user": "Preferences",
       "instructions": "Instructions",
       "memory": "Long-term memory",
-      "heartbeat": "Heartbeat instructions"
+      "heartbeat": "Heartbeat instructions",
+      "worker": "Tính cách cuộc trò chuyện"
     },
     "categories": {
       "interface": "Giao diện",
       "agent": "Tác nhân",
       "connections": "Kết nối",
-      "system": "Hệ thống"
+      "system": "Hệ thống",
+      "general": "Chung"
     },
     "telegram": {
-      "account": "Personal account",
-      "configureBot": "Configure bot",
-      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
-      "unbound": "Not connected",
-      "boundHelp": "Only this Telegram account can access your personal Cirno.",
-      "pinHelp": "Generate a PIN here, then send it to your bot.",
-      "unbind": "Disconnect",
-      "generatePin": "Generate PIN",
-      "pin": "Pairing PIN",
-      "copyPin": "Copy binding command",
-      "refreshPin": "Refresh PIN",
-      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
-      "sendPin": "Send {{command}} to your Telegram bot.",
-      "delivery": "Messages and notifications",
-      "enabled": "Enable Telegram",
-      "cirno": "Cirno messages",
-      "actionLinks": "Action links",
-      "webuiUrl": "Web UI address (optional)",
-      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
-      "settingsLink": "Configure Telegram notifications"
+      "account": "Tài khoản cá nhân",
+      "configureBot": "Cấu hình bot",
+      "help": "Kết nối cuộc trò chuyện riêng tư trên Telegram với Cirno. Không hỗ trợ nhóm. Trước tiên, hãy cấu hình token của bot trong phần thiết lập kênh.",
+      "unbound": "Chưa kết nối",
+      "boundHelp": "Chỉ tài khoản Telegram này có thể truy cập Router cá nhân của bạn.",
+      "pinHelp": "Tạo PIN tại đây rồi gửi cho bot của bạn.",
+      "unbind": "Ngắt kết nối",
+      "generatePin": "Tạo PIN",
+      "pin": "PIN ghép nối",
+      "copyPin": "Sao chép lệnh liên kết",
+      "refreshPin": "Làm mới PIN",
+      "expires": "Hết hạn sau {{seconds}} giây.",
+      "sendPin": "Gửi {{command}} cho bot Telegram của bạn.",
+      "delivery": "Tin nhắn và thông báo",
+      "enabled": "Bật Telegram",
+      "actionLinks": "Liên kết thao tác",
+      "webuiUrl": "Địa chỉ Web UI (không bắt buộc)",
+      "urlHelp": "Sử dụng địa chỉ có thể mở trên điện thoại. Thông báo sẽ có nút mở mục tương ứng trong hộp thư đến.",
+      "settingsLink": "Cấu hình thông báo Telegram",
+      "expired": "PIN đã hết hạn",
+      "router": "Tin nhắn Router"
     },
     "account": {
       "owner": "Chủ sở hữu phiên bản",
@@ -1718,10 +1716,13 @@
       "saved": "Đã đổi mật khẩu. Trình duyệt này vẫn đăng nhập.",
       "unavailable": "Cài đặt tài khoản khả dụng khi đăng ký và đăng nhập bằng trình duyệt.",
       "loading": "Đang tải tài khoản…",
-      "retry": "Thử lại"
+      "retry": "Thử lại",
+      "routerNameHelp": "Renaming keeps the same conversation ID, memory and task links. Historical text stays as written.",
+      "saveRouterName": "Save name",
+      "routerNameSaved": "Name updated."
     },
     "heartbeat": {
-      "help": "Kiểm tra HEARTBEAT.md định kỳ và đánh thức Cirno khi có tác vụ. Độc lập với việc kiểm tra sức khỏe dịch vụ."
+      "help": "Kiểm tra HEARTBEAT.md định kỳ và đánh thức Router khi có tác vụ. Độc lập với việc kiểm tra sức khỏe dịch vụ."
     },
     "backup": {
       "instance": "Toàn bộ phiên bản",
@@ -1751,7 +1752,21 @@
       "skip": "Để trống để bỏ qua",
       "extrasRestore": "Có thể đổi đường dẫn bổ sung. Ghi đè tệp trùng tên, giữ các tệp khác. Gói và công cụ cần hệ điều hành và CPU tương thích.",
       "restore": "Khôi phục và khởi động lại"
-    }
+    },
+    "balance": {
+      "title": "Số dư tài khoản",
+      "enabled": "Bật truy vấn số dư",
+      "endpoint": "URL API số dư",
+      "endpointHelp": "Địa chỉ này có thể khác với URL API của mô hình.",
+      "format": "Định dạng phản hồi",
+      "json": "JSON tùy chỉnh",
+      "amountPath": "Trường số dư (JSON Pointer)",
+      "currency": "Tiền tệ / đơn vị",
+      "apiKey": "Khóa API số dư (tùy chọn)",
+      "apiKeyHelp": "Để trống để dùng khóa API của nhà cung cấp.",
+      "refresh": "Làm mới số dư"
+    },
+    "navigationSearch": "Tìm kiếm cài đặt"
   },
   "chat": {
     "fallbackTitle": "Chủ đề {{id}}",
@@ -1774,7 +1789,7 @@
     "rename": "Đổi tên",
     "renamePlaceholder": "Tên chủ đề",
     "renameProjectTitle": "Đổi tên dự án",
-    "renameProjectDescription": "Chỉ đổi tên dự án trong thanh bên WebUI.",
+    "renameProjectDescription": "Đổi tên dự án. Các cuộc trò chuyện và tệp vẫn được giữ lại.",
     "renameProjectPlaceholder": "Tên dự án",
     "renameSave": "Lưu",
     "renameFailed": "Không thể lưu tên. Vui lòng thử lại.",
@@ -1794,7 +1809,8 @@
       "yesterday": "Hôm qua",
       "earlier": "Trước đó",
       "archived": "Đã lưu trữ"
-    }
+    },
+    "bulkDeleteUnavailable": "Chế độ xem này chỉ có thể xóa một cuộc trò chuyện mỗi lần."
   },
   "archiveConfirm": {
     "title": "Lưu trữ chủ đề này?",
@@ -1802,7 +1818,7 @@
     "unarchiveTitle": "Bỏ lưu trữ chủ đề này?",
     "unarchiveTitleMany": "Bỏ lưu trữ {{count}} chủ đề?",
     "description": "Lịch sử trò chuyện vẫn được giữ lại. Bạn có thể bỏ lưu trữ bất cứ lúc nào.",
-    "unarchiveDescription": "Các chủ đề này sẽ xuất hiện lại trên thanh bên."
+    "unarchiveDescription": "Các cuộc trò chuyện này sẽ xuất hiện lại trong danh sách cuộc trò chuyện."
   },
   "deleteConfirm": {
     "title": "Xóa cuộc trò chuyện này?",
@@ -2015,7 +2031,16 @@
         "estimated": "Ước tính từ ngữ cảnh và đầu ra đang tạo; hiệu chỉnh theo mức dùng thực tế sau phản hồi.",
         "unavailable": "Chưa ghi nhận mức sử dụng ngữ cảnh hiện tại. Biểu đồ hiển thị các yêu cầu trước."
       },
+      "draftStorage": {
+        "read": "Không thể khôi phục bản nháp của trình duyệt này.",
+        "save": "Không thể lưu thay đổi của bản nháp. Hãy giữ trang này mở và thử lại.",
+        "remove": "Không thể xóa bản nháp đã lưu. Hãy thử lại trước khi tải lại trang.",
+        "clearFailed": "Không thể xóa các bản nháp đã lưu trong trình duyệt này."
+      },
       "queued": {
+        "sendRejected": "Chưa gửi được tin nhắn. Tin nhắn đang chờ đã được giữ lại.",
+        "restoreFailed": "Không thể khôi phục tin nhắn đang chờ của trình duyệt này.",
+        "saveFailed": "Không thể lưu thay đổi của tin nhắn đang chờ. Hãy giữ trang này mở và thử lại.",
         "label": "Đang chờ gửi",
         "guide": "Gửi ngay",
         "delete": "Xóa tin nhắn",
@@ -2106,16 +2131,12 @@
             "title": "Hiển thị trợ giúp",
             "description": "Hiện các lệnh slash có thể dùng."
           },
-          "pairing": {
-            "title": "Ghép nối",
-            "description": "Quản lý yêu cầu ghép."
-          },
           "resume": {
             "title": "Tiếp tục tác vụ",
             "description": "Tiếp tục yêu cầu đã dừng từ ngữ cảnh đã lưu."
           },
           "clear": {
-            "title": "Xóa ngữ cảnh Cirno",
+            "title": "Xóa cuộc trò chuyện Router",
             "description": "Xóa cuộc trò chuyện Cirno cá nhân, không hoàn tác thay đổi tệp."
           },
           "temporary": {
@@ -2168,14 +2189,14 @@
         "label": "Ứng dụng",
         "cliGroup": "Ứng dụng CLI",
         "mcpGroup": "Dịch vụ MCP",
-        "sessionGroup": "Cuộc trò chuyện Cirno",
+        "sessionGroup": "Cuộc trò chuyện",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Gọi CLI bằng @{{name}}.",
         "mcpDescription": "Gọi MCP bằng @{{name}}.",
         "cliTitle": "Ứng dụng CLI: {{name}}",
         "mcpTitle": "Máy chủ MCP: {{name}}",
-        "sessionBadge": "Cuộc trò chuyện Cirno",
+        "sessionBadge": "Cuộc trò chuyện",
         "sessionDescription": "Tham chiếu @{{name}} như cuộc trò chuyện trước"
       },
       "workspace": {
@@ -2188,7 +2209,7 @@
         "defaultDescription": "Chỉ đọc, sửa tệp và chạy lệnh trong thư mục làm việc.",
         "fullDescription": "Cho phép truy cập tệp và chạy lệnh ngoài thư mục làm việc.",
         "review": "AI xét duyệt",
-        "reviewDescription": "Giữ các giới hạn mặc định. AI độc lập xét từng thao tác bị chặn mà không dùng bộ nhớ Cirno; trường hợp không rõ sẽ gửi tới hộp thư để bạn duyệt. AI có thể sai, gây lộ tệp hoặc thực thi lệnh có hại."
+        "reviewDescription": "Giữ các giới hạn mặc định. AI độc lập xét từng thao tác bị chặn mà không dùng bộ nhớ Router; trường hợp không rõ sẽ gửi tới hộp thư để bạn duyệt. AI có thể sai, gây lộ tệp hoặc thực thi lệnh có hại."
       },
       "goalStatus": {
         "blocked": "Bị chặn",
@@ -2214,7 +2235,7 @@
       "railAria": "Điều hướng tin nhắn của tôi"
     },
     "clear": {
-      "title": "Xóa cuộc trò chuyện Cirno",
+      "title": "Xóa cuộc trò chuyện Router",
       "description": "Dừng tác vụ hiện tại và xóa tin nhắn cùng ngữ cảnh của cuộc trò chuyện này. Bộ nhớ đã lưu và các cuộc trò chuyện khác được giữ lại.",
       "confirm": "Xóa cuộc trò chuyện"
     },
@@ -2226,10 +2247,10 @@
       "subagent": "Kết quả tác tử con",
       "continuation": "Tiếp tục tự động",
       "system": "Sự kiện hệ thống",
-      "supervision": "Cirno đã cập nhật cuộc trò chuyện này"
+      "supervision": "Router đã cập nhật cuộc trò chuyện này"
     },
     "supervision": {
-      "changed": "Cirno đã cập nhật cuộc trò chuyện này",
+      "changed": "Router đã cập nhật cuộc trò chuyện này",
       "actions": {
         "stop": "Đã dừng cuộc trò chuyện",
         "continue": "Đã tiếp tục cuộc trò chuyện",
@@ -2486,7 +2507,8 @@
     "automationTriggered": "Tự động kích hoạt",
     "expandStep": "Mở rộng bước",
     "collapseStep": "Thu gọn bước",
-    "edit": "Sửa tin nhắn"
+    "edit": "Sửa tin nhắn",
+    "loadMoreTools": "Hiện thêm {{count}} sự kiện công cụ"
   },
   "recovery": {
     "actionFailed": "Khôi phục thất bại. Hãy thử lại.",
@@ -2563,45 +2585,16 @@
     "copy": "Sao chép",
     "copied": "Đã sao chép"
   },
-  "workbench": {
-    "aria": "Bàn làm việc",
-    "panes": "Khung",
-    "tabAria": "Nhóm: {{title}}",
-    "panesInTab": "Các khung trong {{title}}",
-    "collapseTabGroup": "Thu gọn các khung trong {{title}}",
-    "expandTabGroup": "Mở rộng các khung trong {{title}}",
-    "dropPane": "Di chuyển {{pane}} vào {{tab}}",
-    "createGroup": "Tạo nhóm",
-    "moveTo": "Di chuyển đến",
-    "renameGroupTitle": "Đổi tên nhóm",
-    "renameGroupDescription": "Đặt tên cho nhóm này.",
-    "renameGroupPlaceholder": "Tên nhóm",
-    "dissolveTab": "Giải tán nhóm",
-    "layout": "Bố cục",
-    "addPane": "Thêm khung",
-    "paneLimit": "Tối đa {{count}} khung",
-    "deleteConversations": "Xóa mọi trò chuyện trong nhóm",
-    "movePane": "Di chuyển khung {{title}}",
-    "movePaneHint": "Kéo để di chuyển. Cũng có thể dùng các phím mũi tên",
-    "resizePaneBoundary": "Đổi kích thước ranh giới khung {{index}}",
-    "promotePane": "Đặt {{title}} làm khung chính",
-    "paneActions": "Thao tác cho khung {{title}}",
-    "detachPane": "Gỡ",
-    "composerAria": "Nhắn tin cho {{title}}",
-    "layouts": {
-      "columns": "Xếp ngang",
-      "rows": "Xếp dọc",
-      "grid": "Lưới",
-      "bsp": "BSP",
-      "main-stack": "Chính và phụ"
-    }
-  },
   "common": {
     "retry": "Thử lại",
     "dismiss": "Đóng",
     "close": "Đóng",
     "current": "Hiện tại",
-    "cancel": "Hủy"
+    "cancel": "Hủy",
+    "refresh": "Làm mới",
+    "copyFailed": "Không thể sao chép vào bộ nhớ tạm.",
+    "chooseDate": "Chọn ngày",
+    "moreActions": "Thao tác khác"
   },
   "errors": {
     "messageTooBig": {
@@ -2627,10 +2620,13 @@
       "serverTitle": "Lỗi dịch vụ nhà cung cấp mô hình",
       "unknownTitle": "Yêu cầu tới nhà cung cấp mô hình không thành công",
       "bodyWithAttempt": "Đã dừng sau {{attempts}} lần thử. Hãy thử lại sau hoặc chọn mô hình khác.",
-      "body": "Hãy thử lại sau hoặc chọn mô hình khác."
+      "body": "Hãy thử lại sau hoặc chọn mô hình khác.",
+      "configurationTitle": "Chọn mô hình trước",
+      "configurationBody": "Mở Cài đặt → Mô hình để tạo và chọn cấu hình mô hình, sau đó gửi lại tin nhắn."
     }
   },
   "workspace": {
+    "directoryRefreshError": "Không thể làm mới thư mục làm việc",
     "dialog": {
       "manual": "Dán đường dẫn",
       "absolutePathRequired": "Nhập đường dẫn thư mục tuyệt đối trên máy này."
@@ -2660,7 +2656,118 @@
       "retry": "Thử lại",
       "cancel": "Hủy",
       "switchDirectory": "Đổi thư mục"
-    }
+    },
+    "files": "Tệp",
+    "file": "Tệp",
+    "terminal": "Terminal",
+    "browser": "Trình duyệt",
+    "trace": "Dấu vết",
+    "credentials": "Thông tin xác thực",
+    "settings": "Cài đặt",
+    "conversation": "Cuộc trò chuyện",
+    "library": "Danh sách trò chuyện",
+    "inbox": "Hộp thư",
+    "automations": "Tự động hóa",
+    "launcher": "Launcher",
+    "split": "Chia đôi chế độ xem",
+    "unsplit": "Chế độ xem đơn",
+    "resizeSplit": "Điều chỉnh độ rộng chế độ xem",
+    "tabs": "Thẻ",
+    "closeTab": "Đóng {{title}}",
+    "newTab": "Thẻ mới",
+    "loading": "Đang tải…",
+    "localServer": "Máy chủ cục bộ",
+    "terminalHost": "Máy chủ terminal",
+    "connect": "Kết nối",
+    "terminalExited": "Tiến trình đã thoát ({{code}})",
+    "terminalHint": "Shell tương tác trên máy chủ đã chọn. Đóng thẻ sẽ ngắt kết nối cục bộ; tiến trình từ xa đã tách có thể tiếp tục.",
+    "addRecord": "Thêm thông tin xác thực",
+    "vaultHint": "Giá trị được mã hóa riêng với bộ nhớ. Bản sao lưu đầy đủ chứa khóa: hãy giữ riêng tư. Công cụ xác thực quản lý bản ghi mà không trả về giá trị. Bí mật từng dán vào chat vẫn còn trong lịch sử đó.",
+    "label": "Tên",
+    "recordType": "Loại",
+    "secretValue": "Giá trị nhạy cảm",
+    "reveal": "Hiển thị giá trị đã lưu",
+    "noRecords": "Chưa có thông tin xác thực",
+    "deleteRecord": "Xóa bản ghi này?",
+    "delete": "Xóa",
+    "loadOlder": "Cũ hơn",
+    "chooseConversation": "Mở thẻ này từ một cuộc trò chuyện.",
+    "loadMore": "Tải thêm thông điệp",
+    "toolDefinitions": "Định nghĩa công cụ",
+    "modelResponse": "Phản hồi mô hình",
+    "address": "Địa chỉ trang web",
+    "go": "Mở",
+    "openExternal": "Mở trong trình duyệt",
+    "browserHint": "Một số trang chặn nhúng. Nếu trang trống, hãy mở trong trình duyệt. Trang nhúng không thể truy cập tài khoản Cirno hoặc tệp cục bộ.",
+    "enterUrl": "Nhập địa chỉ trang web.",
+    "invalidUrl": "Nhập địa chỉ HTTP hoặc HTTPS.",
+    "browserSameOrigin": "Mở Cirno trực tiếp thay vì nhúng bên trong chính nó.",
+    "kind": {
+      "password": "Tài khoản / mật khẩu",
+      "text": "Văn bản dài",
+      "identity": "Mã định danh cá nhân",
+      "token": "Token / mã kích hoạt",
+      "ssh": "SSH"
+    },
+    "openItem": "Mở {{title}}",
+    "username": "Tên tài khoản",
+    "discardDescription": "Các thay đổi chưa lưu trong thẻ này sẽ bị mất.",
+    "debug": {
+      "time": "Thời gian",
+      "type": "Loại",
+      "summary": "Sự kiện",
+      "status": "Trạng thái",
+      "turn": "Lượt",
+      "size": "Kích thước",
+      "filter": "Lọc trang này",
+      "all": "Tất cả",
+      "newest": "Mới nhất",
+      "newer": "Mới hơn",
+      "refresh": "Tải lại dấu vết",
+      "inspector": "Kiểm tra sự kiện",
+      "messages": "Tin nhắn",
+      "response": "Phản hồi",
+      "tools": "Công cụ",
+      "raw": "Dữ liệu gốc",
+      "noEvents": "Trang này chưa có sự kiện.",
+      "count": "{{count}} / {{total}} sự kiện",
+      "events": "Sự kiện đã ghi",
+      "kinds": {
+        "input": "Tin nhắn người dùng",
+        "answer": "Phản hồi mô hình",
+        "reasoning": "Suy luận",
+        "tool": "Gọi công cụ",
+        "compaction": "Nén ngữ cảnh",
+        "request": "Yêu cầu API",
+        "file": "Đổi tệp",
+        "lifecycle": "Vòng đời",
+        "system": "Đầu vào hệ thống"
+      },
+      "source": "Cuộc trò chuyện nguồn",
+      "allSources": "Tất cả cuộc trò chuyện",
+      "pause": "Tạm dừng ghi",
+      "start": "Bắt đầu ghi",
+      "clear": "Xóa bản ghi",
+      "recording": "Đang ghi",
+      "paused": "Đã tạm dừng",
+      "waiting": "Ghi sự kiện mới, không nhập lịch sử trò chuyện trước đó.",
+      "capacity": "Đã đạt giới hạn lưu trữ. Xóa để tiếp tục.",
+      "storage_error": "Đã dừng ghi do lỗi bộ nhớ tạm."
+    },
+    "moveOtherGroup": "Move to other tab group",
+    "emptyGroup": "Open a page from the Launcher or drag a tab here.",
+    "sshNodeAccess": "Thêm vào SSH Nodes",
+    "sshNodeAccessHint": "Dùng trong terminal từ xa. Agent thực thi cũng cần quyền hiển thị cho Agent.",
+    "sshCredential": "Thông tin xác thực SSH",
+    "loadSSH": "Tải chi tiết kết nối",
+    "sshNodePickerHint": "Chọn thông tin xác thực SSH từ Credentials. Xóa Node vẫn giữ thông tin xác thực.",
+    "noSSHCredentials": "Trước tiên hãy tạo thông tin xác thực SSH trong Credentials.",
+    "agentVisibility": "Cho phép Agent truy cập",
+    "agentVisibilityHint": "Cho phép công cụ Agent liệt kê và quản lý thông tin xác thực này. Công cụ không trả về giá trị bí mật.",
+    "agentVisible": "Hiển thị cho Agent",
+    "agentHidden": "Riêng tư",
+    "keepSecret": "Để trống để giữ giá trị đã lưu.",
+    "sshNode": "SSH Node"
   },
   "files": {
     "title": "Files",
@@ -2686,7 +2793,8 @@
     "create": "Create",
     "discardTitle": "Discard unsaved changes?",
     "discardDescription": "Your changes have not been saved to the file.",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "openPreview": "Mở thẻ xem trước"
   },
   "memoryLibrary": {
     "search": "Tìm ký ức",
@@ -2746,12 +2854,16 @@
     "semanticMode": "Vectơ",
     "hybridMode": "Kết hợp · BM25 + vectơ",
     "searchEngine": "Đã dùng: {{mode}}",
-    "fallback_disabled": "Nhúng cục bộ đã tắt; đã dùng BM25.",
+    "fallback_disabled": "Truy xuất vectơ đã bị tắt; sử dụng BM25.",
     "fallback_busy": "Tiến trình nhúng đang bận; đã dùng BM25.",
     "fallback_lexical_only": "Bằng chứng gốc, trạng thái tác vụ và lịch sử dùng BM25. Vectơ bao gồm kiến thức và hồ sơ đang hoạt động.",
     "fallback_unavailable": "Không thể tìm kiếm vectơ; đã dùng BM25.",
     "searchDetails": "Lý do",
-    "indexPending": "Chỉ mục vectơ chưa hoàn tất. Kết quả chỉ gồm nội dung đã lập chỉ mục; tìm lại để tiếp tục lập chỉ mục."
+    "indexPending": "Chỉ mục vectơ chưa hoàn tất. Kết quả chỉ gồm nội dung đã lập chỉ mục; tìm lại để tiếp tục lập chỉ mục.",
+    "statusTitle": "Chỉ mục và hợp nhất",
+    "noTags": "Chưa có thẻ.",
+    "resultsFor": "Kết quả cho “{{query}}”",
+    "noMatches": "Không có ký ức phù hợp với tìm kiếm này."
   },
   "userQuestion": {
     "title": "Một câu hỏi dành cho bạn",
@@ -2770,7 +2882,6 @@
     "remaining_other": "Còn {{count}} câu hỏi"
   },
   "features": {
-    "globalConversation": "Cirno",
     "projects": "Dự án",
     "ordinaryConversations": "Cuộc trò chuyện",
     "createProject": "Tạo dự án",
@@ -2819,7 +2930,8 @@
     "command": "Lệnh",
     "runCommand": "Chạy",
     "close": "Đóng",
-    "commandCompleted": "Lệnh đã hoàn tất."
+    "commandCompleted": "Lệnh đã hoàn tất.",
+    "removeNode": "Xóa khỏi Nodes"
   },
   "inbox": {
     "title": "Hộp thông báo",
@@ -2833,7 +2945,7 @@
     "empty": "Chưa có thông báo",
     "loading": "Đang tải thông báo",
     "retained": "Đọc thông báo không hoàn tất thao tác tương ứng.",
-    "muteHelp": "Tắt tiếng sẽ dừng cảnh báo và âm thanh của danh mục này trên trình duyệt này. Lịch sử vẫn được giữ. Cảnh báo cũng cần bật cài đặt chung và cấp quyền.",
+    "muteHelp": "Tùy chọn thông báo trình duyệt được đồng bộ giữa các thiết bị. Tắt tiếng sẽ dừng cảnh báo và âm thanh của danh mục này; lịch sử Hộp thư vẫn được giữ. Mỗi trình duyệt cần được cấp quyền thông báo riêng.",
     "muted": "Đã tắt tiếng",
     "notify": "Thông báo",
     "unread": "Chưa đọc",
@@ -2850,7 +2962,6 @@
     },
     "kind": {
       "question": "Câu hỏi",
-      "pairing": "Phê duyệt truy cập",
       "recovery": "Khôi phục cuộc trò chuyện",
       "compaction": "Nén ngữ cảnh",
       "dream": "Hợp nhất bộ nhớ",
@@ -2912,7 +3023,57 @@
       "connection_failed": "Không thể kết nối Cirno. Kiểm tra mạng và thử lại.",
       "request_failed": "Yêu cầu thất bại. Vui lòng thử lại.",
       "incorrect_password": "Mật khẩu hiện tại không đúng.",
-      "unauthorized": "Vui lòng đăng nhập lại."
+      "unauthorized": "Vui lòng đăng nhập lại.",
+      "invalid_router_handle": "Use 3–32 lowercase letters, digits or underscores, starting with a letter.",
+      "router_handle_taken": "Another conversation already uses this name.",
+      "router_unavailable": "The Router conversation is unavailable. Try again later."
+    },
+    "routerHandle": "Router @name",
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+  },
+  "themes": {
+    "title": "Chủ đề màu",
+    "name": "Tên chủ đề",
+    "newName": "Tuyết của tôi",
+    "customize": "Tạo chủ đề",
+    "syncHint": "Mỗi chủ đề có màu sáng và tối. Cài đặt được lưu trên Cirno và đồng bộ giữa các thiết bị.",
+    "save": "Lưu chủ đề",
+    "edit": "Sửa chủ đề",
+    "remove": "Xóa chủ đề",
+    "saveFailed": "Không thể lưu tùy chọn.",
+    "contrast": "Tăng độ tương phản giữa văn bản với nền và bảng.",
+    "colors": {
+      "background": "Nền",
+      "surface": "Điều hướng",
+      "panel": "Bảng",
+      "text": "Văn bản",
+      "muted": "Văn bản phụ",
+      "accent": "Nhấn mạnh",
+      "border": "Viền"
     }
+  },
+  "conversationCatalog": {
+    "newProject": "Dự án mới",
+    "projectName": "Tên dự án",
+    "search": "Tìm cuộc trò chuyện và dự án",
+    "more": "Hiển thị thêm",
+    "unfiled": "Cuộc trò chuyện chưa phân loại",
+    "move": "Chuyển {{title}} vào dự án",
+    "newInProject": "Cuộc trò chuyện mới trong {{name}}",
+    "renameProject": "Đổi tên {{name}}",
+    "deleteProject": "Xóa {{name}}",
+    "emptyProject": "Dự án này chưa có cuộc trò chuyện.",
+    "empty": "Không có cuộc trò chuyện phù hợp.",
+    "deleteHelp": "Dự án sẽ bị xóa. Các cuộc trò chuyện, lịch sử và tệp vẫn được giữ lại.",
+    "create": "Tạo",
+    "directory": "Thư mục làm việc (không bắt buộc)",
+    "sort": "Sắp xếp cuộc trò chuyện",
+    "order": {
+      "updated_desc": "Cập nhật gần nhất",
+      "created_desc": "Tạo gần nhất",
+      "title_asc": "Tiêu đề A–Z",
+      "manual": "Thứ tự đã lưu"
+    },
+    "projectActions": "Thao tác dự án {{name}}"
   }
 }

@@ -18,7 +18,7 @@ def test_source_checkout_import_uses_pyproject_version_without_metadata() -> Non
         import types
 
         import importlib.util
-        source = {str(Path.cwd() / 'sources/cirno/__init__.py')!r}
+        source = {str(Path.cwd() / 'sources/cirno/src/cirno/__init__.py')!r}
         spec = importlib.util.spec_from_file_location("cirno", source)
         package = importlib.util.module_from_spec(spec)
         sys.modules["cirno"] = package
@@ -43,3 +43,25 @@ def test_source_checkout_import_uses_pyproject_version_without_metadata() -> Non
 
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == expected
+
+
+def test_workspace_packages_and_frontend_lockfile_share_one_version() -> None:
+    import json
+
+    root = Path(__file__).resolve().parents[3]
+    manifests = [tomllib.loads((root / name).read_text())["project"] for name in (
+        "pyproject.toml", "sources/cirno-memory/pyproject.toml", "sources/cirno-usage/pyproject.toml", "sources/cirno-vault/pyproject.toml",
+        "sources/cirno-core/pyproject.toml", "sources/cirno-server/pyproject.toml",
+    )]
+    expected = manifests[0]["version"]
+    for project in manifests:
+        assert project["version"] == expected
+        dependencies = [*project.get("dependencies", []), *(
+            dependency for group in project.get("optional-dependencies", {}).values() for dependency in group
+        )]
+        for dependency in dependencies:
+            if dependency.startswith("cirno-"):
+                assert dependency.partition("==")[2] == expected, dependency
+    frontend = json.loads((root / "sources/cirno-web/package.json").read_text())
+    lock = json.loads((root / "sources/cirno-web/package-lock.json").read_text())
+    assert frontend["version"] == lock["version"] == lock["packages"][""]["version"] == expected

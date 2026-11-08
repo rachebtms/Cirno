@@ -57,7 +57,7 @@ def test_every_channel_is_a_self_contained_package() -> None:
         assert plugin.runtime.startswith(f"cirno_server.channels.{name}.runtime:")
         assert plugin.setup is channel_setup_spec(name)
         if plugin.webui is not None:
-            assert (channel_dir.parents[1] / "cirno-web/channels" / name / plugin.webui).is_file()
+            assert (channel_dir.parents[3] / "cirno-web/channels" / name / plugin.webui).is_file()
 
 
 def test_channel_locales_cover_authoritative_setup_contracts() -> None:
@@ -68,7 +68,7 @@ def test_channel_locales_cover_authoritative_setup_contracts() -> None:
         if plugin.webui is None or plugin.setup is None:
             continue
         english = json.loads(
-            (channel_dir.parents[1] / "cirno-web/channels" / name / "webui" / "locales" / "en.json").read_text(encoding="utf-8")
+            (channel_dir.parents[3] / "cirno-web/channels" / name / "webui" / "locales" / "en.json").read_text(encoding="utf-8")
         )
         setup_messages = english["setup"]
         field_messages = setup_messages.get("fields", {})

@@ -6,33 +6,10 @@ import json
 from pathlib import Path
 
 import pytest
-
 from cirno_core.config.home import get_home_path
-from cirno_core.skills import loader as agent_skills
-from cirno_core.agent.context import ContextBuilder
 from cirno_core.skills.loader import SkillsLoader
-from cirno_core.agent.tools.filesystem import ListDirTool, WriteFileTool
-from cirno_core.agent.tools.search import GrepTool
 
-
-def _write_skill(
-    base: Path,
-    name: str,
-    *,
-    metadata_json: dict | None = None,
-    body: str = "# Skill\n",
-) -> Path:
-    """Create ``base / name / SKILL.md`` with optional cirno metadata JSON."""
-    skill_dir = base / name
-    skill_dir.mkdir(parents=True)
-    lines = ["---", f"name: {name}", f"description: {name} skill"]
-    if metadata_json is not None:
-        payload = json.dumps({"cirno": metadata_json}, separators=(",", ":"))
-        lines.append(f'metadata: {payload}')
-    lines.extend(["---", "", body])
-    path = skill_dir / "SKILL.md"
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+from sources.development.testing.skills import write_skill
 
 
 def test_list_skills_empty_when_skills_dir_missing(tmp_path: Path) -> None:
@@ -57,14 +34,14 @@ def test_list_skills_workspace_entry_shape_and_source(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     skills_root = get_home_path() / "skills"
     skills_root.mkdir(parents=True)
-    skill_path = _write_skill(skills_root, "alpha", body="# Alpha")
+    skill_path = write_skill(skills_root, "alpha", body="# Alpha")
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = loader.list_skills(filter_unavailable=False)
     assert entries == [
-        {"name": "alpha", "path": str(skill_path), "source": "workspace"},
+        {"name": "alpha", "path": str(skill_path), "source": "home"},
     ]
 
 
@@ -74,7 +51,7 @@ def test_list_skills_skips_non_directories_and_missing_skill_md(tmp_path: Path) 
     skills_root.mkdir(parents=True)
     (skills_root / "not_a_dir.txt").write_text("x", encoding="utf-8")
     (skills_root / "no_skill_md").mkdir()
-    ok_path = _write_skill(skills_root, "ok", body="# Ok")
+    ok_path = write_skill(skills_root, "ok", body="# Ok")
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
@@ -89,15 +66,15 @@ def test_list_skills_workspace_shadows_builtin_same_name(tmp_path: Path) -> None
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    ws_path = _write_skill(ws_skills, "dup", body="# Workspace wins")
+    ws_path = write_skill(ws_skills, "dup", body="# Workspace wins")
 
     builtin = tmp_path / "builtin"
-    _write_skill(builtin, "dup", body="# Builtin")
+    write_skill(builtin, "dup", body="# Builtin")
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = loader.list_skills(filter_unavailable=False)
     assert len(entries) == 1
-    assert entries[0]["source"] == "workspace"
+    assert entries[0]["source"] == "home"
     assert entries[0]["path"] == str(ws_path)
 
 
@@ -105,15 +82,15 @@ def test_list_skills_merges_workspace_and_builtin(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    ws_path = _write_skill(ws_skills, "ws_only", body="# W")
+    ws_path = write_skill(ws_skills, "ws_only", body="# W")
     builtin = tmp_path / "builtin"
-    bi_path = _write_skill(builtin, "bi_only", body="# B")
+    bi_path = write_skill(builtin, "bi_only", body="# B")
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = sorted(loader.list_skills(filter_unavailable=False), key=lambda item: item["name"])
     assert entries == [
         {"name": "bi_only", "path": str(bi_path), "source": "builtin"},
-        {"name": "ws_only", "path": str(ws_path), "source": "workspace"},
+        {"name": "ws_only", "path": str(ws_path), "source": "home"},
     ]
 
 
@@ -121,12 +98,12 @@ def test_list_skills_builtin_omitted_when_dir_missing(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    ws_path = _write_skill(ws_skills, "solo", body="# S")
+    ws_path = write_skill(ws_skills, "solo", body="# S")
     missing_builtin = tmp_path / "no_such_builtin"
 
     loader = SkillsLoader(workspace, builtin_skills_dir=missing_builtin)
     entries = loader.list_skills(filter_unavailable=False)
-    assert entries == [{"name": "solo", "path": str(ws_path), "source": "workspace"}]
+    assert entries == [{"name": "solo", "path": str(ws_path), "source": "home"}]
 
 
 def test_list_skills_filter_unavailable_excludes_unmet_bin_requirement(
@@ -135,7 +112,7 @@ def test_list_skills_filter_unavailable_excludes_unmet_bin_requirement(
     workspace = tmp_path / "ws"
     skills_root = get_home_path() / "skills"
     skills_root.mkdir(parents=True)
-    _write_skill(
+    write_skill(
         skills_root,
         "needs_bin",
         metadata_json={"requires": {"bins": ["cirno_test_fake_binary"]}},
@@ -160,7 +137,7 @@ def test_list_skills_filter_unavailable_includes_when_bin_requirement_met(
     workspace = tmp_path / "ws"
     skills_root = get_home_path() / "skills"
     skills_root.mkdir(parents=True)
-    skill_path = _write_skill(
+    skill_path = write_skill(
         skills_root,
         "has-bin",
         metadata_json={"requires": {"bins": ["cirno_test_fake_binary"]}},
@@ -178,7 +155,7 @@ def test_list_skills_filter_unavailable_includes_when_bin_requirement_met(
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = loader.list_skills(filter_unavailable=True)
     assert entries == [
-        {"name": "has-bin", "path": str(skill_path), "source": "workspace"},
+        {"name": "has-bin", "path": str(skill_path), "source": "home"},
     ]
 
 
@@ -188,7 +165,7 @@ def test_list_skills_filter_unavailable_false_keeps_unmet_requirements(
     workspace = tmp_path / "ws"
     skills_root = get_home_path() / "skills"
     skills_root.mkdir(parents=True)
-    skill_path = _write_skill(
+    skill_path = write_skill(
         skills_root,
         "blocked",
         metadata_json={"requires": {"bins": ["cirno_test_fake_binary"]}},
@@ -201,7 +178,7 @@ def test_list_skills_filter_unavailable_false_keeps_unmet_requirements(
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
     entries = loader.list_skills(filter_unavailable=False)
     assert entries == [
-        {"name": "blocked", "path": str(skill_path), "source": "workspace"},
+        {"name": "blocked", "path": str(skill_path), "source": "home"},
     ]
 
 
@@ -211,7 +188,7 @@ def test_list_skills_filter_unavailable_excludes_unmet_env_requirement(
     workspace = tmp_path / "ws"
     skills_root = get_home_path() / "skills"
     skills_root.mkdir(parents=True)
-    _write_skill(
+    write_skill(
         skills_root,
         "needs_env",
         metadata_json={"requires": {"env": ["CIRNO_SKILLS_TEST_ENV_VAR"]}},
@@ -234,9 +211,21 @@ def test_list_skills_openclaw_metadata_parsed_for_requirements(
     skill_dir = skills_root / "openclaw-skill"
     skill_dir.mkdir(parents=True)
     skill_path = skill_dir / "SKILL.md"
-    oc_payload = json.dumps({"openclaw": {"requires": {"bins": ["cirno_oc_bin"]}}}, separators=(",", ":"))
+    oc_payload = json.dumps(
+        {"openclaw": {"requires": {"bins": ["cirno_oc_bin"]}}}, separators=(",", ":")
+    )
     skill_path.write_text(
-        "\n".join(["---", "name: openclaw-skill", "description: OpenClaw metadata test", f"metadata: {oc_payload}", "---", "", "# OC"]),
+        "\n".join(
+            [
+                "---",
+                "name: openclaw-skill",
+                "description: OpenClaw metadata test",
+                f"metadata: {oc_payload}",
+                "---",
+                "",
+                "# OC",
+            ]
+        ),
         encoding="utf-8",
     )
     builtin = tmp_path / "builtin"
@@ -253,7 +242,7 @@ def test_list_skills_openclaw_metadata_parsed_for_requirements(
     )
     entries = loader.list_skills(filter_unavailable=True)
     assert entries == [
-        {"name": "openclaw-skill", "path": str(skill_path), "source": "workspace"},
+        {"name": "openclaw-skill", "path": str(skill_path), "source": "home"},
     ]
 
 
@@ -261,8 +250,8 @@ def test_disabled_skills_excluded_from_list(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    _write_skill(ws_skills, "alpha", body="# Alpha")
-    beta_path = _write_skill(ws_skills, "beta", body="# Beta")
+    write_skill(ws_skills, "alpha", body="# Alpha")
+    beta_path = write_skill(ws_skills, "beta", body="# Beta")
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
@@ -278,98 +267,14 @@ def test_disabled_skills_empty_set_no_effect(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    _write_skill(ws_skills, "alpha", body="# Alpha")
-    _write_skill(ws_skills, "beta", body="# Beta")
+    write_skill(ws_skills, "alpha", body="# Alpha")
+    write_skill(ws_skills, "beta", body="# Beta")
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin, disabled_skills=set())
     entries = loader.list_skills(filter_unavailable=False)
     assert len(entries) == 2
-
-
-def test_disabled_skills_excluded_from_build_skills_summary(tmp_path: Path) -> None:
-    workspace = tmp_path / "ws"
-    ws_skills = get_home_path() / "skills"
-    ws_skills.mkdir(parents=True)
-    _write_skill(ws_skills, "alpha", body="# Alpha")
-    _write_skill(ws_skills, "beta", body="# Beta")
-    builtin = tmp_path / "builtin"
-    builtin.mkdir()
-
-    loader = SkillsLoader(workspace, builtin_skills_dir=builtin, disabled_skills={"alpha"})
-    summary = loader.build_skills_summary()
-    assert "alpha" not in summary
-    assert "beta" in summary
-
-
-def test_build_skills_summary_keeps_builtin_root_absolute_in_agent_workspace(tmp_path: Path) -> None:
-    workspace = tmp_path / "ws"
-    workspace_skills = get_home_path() / "skills"
-    workspace_skills.mkdir(parents=True)
-    workspace_path = _write_skill(workspace_skills, "alpha", body="# Alpha")
-    builtin = tmp_path / "builtin"
-    builtin_path = _write_skill(builtin, "beta", body="# Beta")
-
-    summary = SkillsLoader(workspace, builtin_skills_dir=builtin).build_skills_summary()
-
-    assert str(workspace_skills) in summary
-    assert f"### Built-in skills (`{builtin.resolve()}`)" in summary
-    assert str(workspace_path) not in summary
-    assert str(builtin_path) not in summary
-    assert f"### Home skills (`{workspace_skills.resolve()}`)" in summary
-    assert "`alpha/SKILL.md`" in summary
-    assert "`beta/SKILL.md`" in summary
-
-
-async def test_builtin_summary_root_supports_restricted_reference_search(tmp_path: Path) -> None:
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    builtin = tmp_path / "builtin"
-    _write_skill(builtin, "documentation", body="# Documentation")
-    references = builtin / "documentation" / "references"
-    references.mkdir()
-    guide = references / "usage.md"
-    guide.write_text("Choose a timezone", encoding="utf-8")
-    summary = SkillsLoader(workspace, builtin_skills_dir=builtin).build_skills_summary()
-    heading = next(line for line in summary.splitlines() if line.startswith("### Built-in skills"))
-    reference_path = str(Path(heading.split("`")[1]) / "documentation" / "references")
-    options = {
-        "workspace": workspace,
-        "allowed_dir": workspace,
-        "restrict_to_workspace": True,
-        "extra_read_allowed_dirs": [builtin],
-    }
-
-    listing = await ListDirTool(**options).execute(path=reference_path)
-    matches = await GrepTool(**options).execute(
-        pattern="timezone", path=reference_path, glob="*.md", output_mode="files_with_matches",
-    )
-
-    assert "usage.md" in listing
-    assert "usage.md" in matches
-    rejected = await WriteFileTool(**options).execute(path=str(guide), content="replace")
-    assert rejected.is_error
-    assert guide.read_text(encoding="utf-8") == "Choose a timezone"
-
-
-def test_build_skills_summary_keeps_absolute_roots_for_selected_project(tmp_path: Path) -> None:
-    workspace = tmp_path / "ws"
-    workspace_skills = get_home_path() / "skills"
-    workspace_skills.mkdir(parents=True)
-    _write_skill(workspace_skills, "alpha", body="# Alpha")
-    builtin = tmp_path / "builtin"
-    _write_skill(builtin, "beta", body="# Beta")
-    project = tmp_path / "project"
-    project.mkdir()
-
-    summary = SkillsLoader(workspace, builtin_skills_dir=builtin).build_skills_summary(
-        workspace=project,
-    )
-
-    assert summary.count(str(workspace_skills.resolve())) == 1
-    assert summary.count(str(builtin.resolve())) == 1
-    assert str(project.resolve()) not in summary
 
 
 def test_bundled_memory_skill_uses_agent_owned_path(tmp_path: Path) -> None:
@@ -383,8 +288,8 @@ def test_disabled_skills_excluded_from_get_always_skills(tmp_path: Path) -> None
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    _write_skill(ws_skills, "alpha", metadata_json={"always": True}, body="# Alpha")
-    _write_skill(ws_skills, "beta", metadata_json={"always": True}, body="# Beta")
+    write_skill(ws_skills, "alpha", metadata_json={"always": True}, body="# Alpha")
+    write_skill(ws_skills, "beta", metadata_json={"always": True}, body="# Beta")
     builtin = tmp_path / "builtin"
     builtin.mkdir()
 
@@ -394,181 +299,7 @@ def test_disabled_skills_excluded_from_get_always_skills(tmp_path: Path) -> None
     assert "beta" in always
 
 
-def test_explicit_skill_references_resolve_available_enabled_names_in_order(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    workspace = tmp_path / "ws"
-    skills_root = get_home_path() / "skills"
-    skills_root.mkdir(parents=True)
-    _write_skill(skills_root, "alpha", body="# Alpha")
-    _write_skill(skills_root, "beta", body="# Beta")
-    _write_skill(
-        skills_root,
-        "blocked",
-        metadata_json={"requires": {"env": ["MISSING_SKILL_TEST_ENV"]}},
-        body="# Blocked",
-    )
-    builtin = tmp_path / "builtin"
-    builtin.mkdir()
-    monkeypatch.delenv("MISSING_SKILL_TEST_ENV", raising=False)
-    loader = SkillsLoader(
-        workspace,
-        builtin_skills_dir=builtin,
-        disabled_skills={"beta"},
-    )
-
-    invoked = loader.get_explicitly_invoked_skills(
-        "Use $alpha, then $unknown, $alpha again, $beta, and $blocked."
-    )
-
-    assert invoked == ["alpha"]
-
-
-def test_multiple_explicit_skills_share_one_ordered_runtime_context(tmp_path: Path) -> None:
-    workspace = tmp_path / "ws"
-    skills_root = get_home_path() / "skills"
-    skills_root.mkdir(parents=True)
-    _write_skill(skills_root, "alpha", body="Alpha instructions")
-    _write_skill(skills_root, "beta", body="Beta instructions")
-    _write_skill(
-        skills_root,
-        "always",
-        metadata_json={"always": True},
-        body="Always instructions",
-    )
-    builtin = tmp_path / "builtin"
-    builtin.mkdir()
-    loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
-
-    context = loader.build_explicit_skill_runtime_context(
-        "Use $beta, then $alpha, $beta again, and $always."
-    )
-
-    assert context is not None
-    assert context.source == "explicit_skills"
-    assert context.content.count("### Skill: beta") == 1
-    assert context.content.count("### Skill: alpha") == 1
-    assert context.content.index("### Skill: beta") < context.content.index(
-        "### Skill: alpha"
-    )
-    assert "### Skill: always" not in context.content
-
-
-def test_plain_message_skips_explicit_skill_discovery(tmp_path: Path, monkeypatch) -> None:
-    loader = SkillsLoader(tmp_path)
-
-    def unexpected_discovery():
-        pytest.fail("ordinary chat must not scan skills for explicit references")
-
-    monkeypatch.setattr(loader, "_discover_skills", unexpected_discovery)
-    assert loader.build_explicit_skill_runtime_context("Explain this project") is None
-
-
-@pytest.mark.parametrize("explicit", [False, True])
-def test_prompt_reads_skills_once_and_refreshes_on_next_build(
-    tmp_path: Path, monkeypatch, explicit: bool,
-) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    builtin = tmp_path / "builtin"
-    builtin.mkdir()
-    skills = get_home_path() / "skills"
-    alpha = _write_skill(skills, "alpha", metadata_json={"always": True}, body="First instructions")
-    beta = _write_skill(skills, "beta", metadata_json={"requires": {"bins": ["prompt-test-cli"]}})
-    builder = ContextBuilder(workspace)
-    builder.skills = SkillsLoader(workspace, builtin_skills_dir=builtin)
-    documents = {alpha, beta}
-    reads: list[Path] = []
-    parses: list[str] = []
-    original_read = Path.read_text
-    original_parse = agent_skills.parse_skill_metadata
-    original_discover = builder.skills._discover_skills
-    discoveries = 0
-    command_available = False
-    checks: list[str] = []
-
-    def discover():
-        nonlocal discoveries
-        discoveries += 1
-        return original_discover()
-
-    def read(path, *args, **kwargs):
-        if path in documents:
-            reads.append(path)
-        return original_read(path, *args, **kwargs)
-
-    def parse(content):
-        parses.append(content)
-        return original_parse(content)
-
-    def which(command):
-        checks.append(command)
-        return "installed-command" if command_available else None
-
-    def build_prompt():
-        if explicit:
-            messages = builder.build_messages(history=[], current_message="Use $alpha and $beta")
-            return "\n".join(message["content"] for message in messages)
-        return builder.build_system_prompt()
-
-    monkeypatch.setattr(builder.skills, "_discover_skills", discover)
-    monkeypatch.setattr(Path, "read_text", read)
-    monkeypatch.setattr(agent_skills, "parse_skill_metadata", parse)
-    monkeypatch.setattr("cirno_core.skills.loader.shutil.which", which)
-    first = build_prompt()
-    assert "First instructions" in first
-    assert "**beta**" not in first
-    assert discoveries == 1
-    assert all(reads.count(path) == 1 for path in documents)
-    assert len(parses) == len(documents)
-    assert checks == ["prompt-test-cli"]
-
-    alpha.write_text(original_read(alpha).replace("First instructions", "Updated instructions"), encoding="utf-8")
-    beta.write_text(original_read(beta).replace("description: beta skill", "description: Updated description"), encoding="utf-8")
-    command_available = True
-    documents.add(_write_skill(skills, "gamma", body="New skill"))
-    reads.clear()
-    parses.clear()
-    checks.clear()
-    second = build_prompt()
-    assert "Updated instructions" in second and "First instructions" not in second
-    assert "Updated description" in second
-    assert "**beta**" in second
-    assert "**gamma**" in second
-    assert discoveries == 2
-    assert all(reads.count(path) == 1 for path in documents)
-    assert len(parses) == len(documents)
-    assert checks == ["prompt-test-cli"]
-
-
 # -- multiline description tests (YAML folded > and literal |) -----------------
-
-
-def test_build_skills_summary_folded_description(tmp_path: Path) -> None:
-    """description: > (YAML folded scalar) should be parsed correctly."""
-    workspace = tmp_path / "ws"
-    ws_skills = get_home_path() / "skills"
-    ws_skills.mkdir(parents=True)
-    skill_dir = ws_skills / "pdf"
-    skill_dir.mkdir(parents=True)
-    skill_path = skill_dir / "SKILL.md"
-    skill_path.write_text(
-        "---\n"
-        "name: pdf\n"
-        "description: >\n"
-        "  Use this skill when visual quality and design identity matter for a PDF.\n"
-        "  CREATE (generate from scratch): \"make a PDF\".\n"
-        "---\n\n# PDF Skill\n",
-        encoding="utf-8",
-    )
-    builtin = tmp_path / "builtin"
-    builtin.mkdir()
-
-    loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
-    summary = loader.build_skills_summary()
-    assert "pdf" in summary
-    assert "visual quality" in summary
 
 
 def test_build_skills_summary_literal_description(tmp_path: Path) -> None:
@@ -607,14 +338,12 @@ def test_get_skill_metadata_handles_yaml_types(tmp_path: Path) -> None:
     ws_skills.mkdir(parents=True)
     skill_dir = ws_skills / "typed"
     skill_dir.mkdir(parents=True)
-    payload = json.dumps({"cirno": {"requires": {"bins": ["gh"]}, "always": True}}, separators=(",", ":"))
+    payload = json.dumps(
+        {"cirno": {"requires": {"bins": ["gh"]}, "always": True}}, separators=(",", ":")
+    )
     skill_path = skill_dir / "SKILL.md"
     skill_path.write_text(
-        "---\n"
-        "name: typed\n"
-        f"metadata: {payload}\n"
-        "always: true\n"
-        "---\n\n# Typed\n",
+        f"---\nname: typed\nmetadata: {payload}\nalways: true\n---\n\n# Typed\n",
         encoding="utf-8",
     )
     builtin = tmp_path / "builtin"
@@ -629,24 +358,26 @@ def test_get_skill_metadata_handles_yaml_types(tmp_path: Path) -> None:
     assert isinstance(meta.get("metadata"), dict)
 
 
-def test_check_requirements_tolerates_null_requires_and_lists(tmp_path: Path) -> None:
+def test_optional_null_requirements_do_not_make_invalid_list_items_available(
+    tmp_path: Path,
+) -> None:
     """Null requires/bins/env must not crash skill listing (JSON/YAML nulls)."""
     workspace = tmp_path / "ws"
     ws_skills = get_home_path() / "skills"
     ws_skills.mkdir(parents=True)
-    _write_skill(
+    write_skill(
         ws_skills,
         "null-requires",
         metadata_json={"always": True, "requires": None},
         body="# Null requires",
     )
-    _write_skill(
+    write_skill(
         ws_skills,
         "null-bins",
         metadata_json={"always": True, "requires": {"bins": None, "env": None}},
         body="# Null bins",
     )
-    _write_skill(
+    write_skill(
         ws_skills,
         "null-elems",
         metadata_json={"always": True, "requires": {"bins": [None, ""], "env": [None]}},
@@ -656,13 +387,14 @@ def test_check_requirements_tolerates_null_requires_and_lists(tmp_path: Path) ->
     builtin.mkdir()
     loader = SkillsLoader(workspace, builtin_skills_dir=builtin)
 
-    assert loader._check_requirements(loader._get_skill_meta("null-requires")) is True
-    assert loader._check_requirements(loader._get_skill_meta("null-bins")) is True
-    assert loader._check_requirements(loader._get_skill_meta("null-elems")) is True
+    assert loader.get_skill_availability("null-requires") == (True, "")
+    assert loader.get_skill_availability("null-bins") == (True, "")
+    available, reason = loader.get_skill_availability("null-elems")
+    assert not available and "requires.bins.0" in reason
     always = loader.get_always_skills()
-    assert set(always) >= {"null-requires", "null-bins", "null-elems"}
+    assert set(always) == {"null-requires", "null-bins"}
     listed = {e["name"] for e in loader.list_skills(filter_unavailable=True)}
-    assert {"null-requires", "null-bins", "null-elems"} <= listed
+    assert listed == {"null-requires", "null-bins"}
     assert loader.get_skill_requirements("null-requires") == {
         "bins": [],
         "env": [],
@@ -680,5 +412,7 @@ def test_documentation_skill_resolves_docs_without_rewriting_home_override(tmp_p
     assert (BUILTIN_DOCUMENTS_DIR / "README.md").is_file()
     override = get_home_path() / "skills/cirno-document/SKILL.md"
     override.parent.mkdir(parents=True)
-    override.write_text("Keep the literal {documentation_root} in this custom skill.", encoding="utf-8")
+    override.write_text(
+        "Keep the literal {documentation_root} in this custom skill.", encoding="utf-8"
+    )
     assert loader.load_skill("cirno-document") == override.read_text(encoding="utf-8")

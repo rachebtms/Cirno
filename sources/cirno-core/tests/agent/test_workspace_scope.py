@@ -16,8 +16,9 @@ from cirno_core.agent.tools.message import MessageTool
 from cirno_core.agent.tools.search import GrepTool
 from cirno_core.agent.tools.shell import ExecTool
 from cirno_core.agent.tools.subagent import SubagentTool
-from cirno_core.apps.cli.service import CliAppManager, CliAppsRuntimeConfig
-from cirno_core.config.schema import ToolsConfig
+from cirno_core.apps.cli.contracts import CliAppsRuntimeConfig
+from cirno_core.apps.cli.service import CliAppManager
+from cirno_core.config.tools import ToolsConfig
 from cirno_core.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScopeError,
@@ -306,6 +307,7 @@ async def test_exec_tool_uses_scope_project_as_default_cwd(
     token = bind_workspace_scope(scope)
     try:
         result = await tool.execute(
+            yield_time_ms=5000,
             command=(
                 f'{cmd_python} -c "from pathlib import Path; '
                 "Path('scoped-marker.txt').write_text('ok')\""
@@ -341,6 +343,7 @@ async def test_exec_tool_resolves_relative_working_dir_from_scope_project(
                 "print(Path.cwd())\""
             ),
             working_dir="subdir",
+            yield_time_ms=5000,
         )
     finally:
         reset_workspace_scope(token)
@@ -452,7 +455,7 @@ async def test_cli_app_scope_controls_working_dir(
         json.dumps({"_cached_at": time.time(), "data": {"meta": {}, "clis": []}}),
         encoding="utf-8",
     )
-    CliAppManager(workspace=project, data_dir=data_dir)._save_installed(
+    CliAppManager(workspace=project, data_dir=data_dir).installed.replace(
         {"demo": {"entry_point": "demo-cli"}}
     )
     monkeypatch.setattr("cirno_core.apps.cli.service.get_runtime_subdir", lambda _name: data_dir)
@@ -464,10 +467,10 @@ async def test_cli_app_scope_controls_working_dir(
     seen: dict[str, str] = {}
 
     def fake_run(argv, **kwargs):
-        seen["cwd"] = kwargs["cwd"]
+        seen["cwd"] = str(kwargs["cwd"])
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
+    monkeypatch.setattr("cirno_core.apps.cli.service.run_cli", fake_run)
     tool = CliAppsTool(
         workspace=tmp_path,
         restrict_to_workspace=True,

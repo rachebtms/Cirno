@@ -1,18 +1,16 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from agent.runner_helpers import failed_test_consolidator
-from cirno_core.agent.runner import AgentRunner, AgentRunSpec
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import (
-    GenerationSettings,
-    LLMProvider,
-    LLMResponse,
-    ProviderCallContext,
-    ToolCallRequest,
-)
+from cirno_core.agent.runner.contracts import AgentRunSpec
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.llm_runtime import LLMRuntime
+
+from sources.development.testing.runtime import failed_test_consolidator
 
 
 @pytest.mark.asyncio

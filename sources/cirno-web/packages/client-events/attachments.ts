@@ -14,7 +14,7 @@ export function isLocalAttachment(value: unknown): value is LocalAttachment {
     && typeof row.name === "string" && typeof row.mime === "string"
     && typeof row.size === "number" && Number.isSafeInteger(row.size) && row.size > 0
     && typeof row.kind === "string" && ["image", "video", "file"].includes(row.kind)
-    && typeof row.url === "string" && (row.url === "" || row.url.startsWith("/api/media/"));
+    && typeof row.url === "string" && (row.url === "" || row.url.startsWith("/v0/media/"));
 }
 export type DraftAttachment =
   | { data_url: string; name?: string; path?: never }
@@ -82,7 +82,7 @@ const UPLOAD_REQUEST_TIMEOUT_MS = 315_000;
 export function uploadCapability(value: unknown): UploadCapability | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  return row.path === "/api/attachments" && typeof row.token === "string" && row.token.length > 0
+  return row.path === "/v0/attachments" && typeof row.token === "string" && row.token.length > 0
     ? { path: row.path, token: row.token } : null;
 }
 

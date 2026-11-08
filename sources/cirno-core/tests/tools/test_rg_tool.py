@@ -9,15 +9,16 @@ import sys
 from unittest.mock import AsyncMock
 
 import pytest
-
 from cirno_core.agent.tools.context import ToolContext
-from cirno_core.agent.tools.exec_session import ExecSessionManager
+from cirno_core.processes.sessions import ExecSessionManager
 from cirno_core.agent.tools.loader import ToolLoader
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.agent.tools.rg import RgTool
 from cirno_core.agent.tools.search import FindFilesTool, GrepTool
-from cirno_core.agent.tools.shell import ExecTool, _PreparedCommand
-from cirno_core.config.schema import ToolsConfig
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell.preparation import PreparedCommand
+from cirno_core.config.tools import ToolsConfig
+from cirno_core.processes import launch as process_launch
 
 
 @pytest.mark.parametrize("installed", [True, False])
@@ -190,7 +191,7 @@ async def test_direct_process_timeout(tmp_path):
 async def test_direct_process_cancellation_reaps_child(tmp_path, monkeypatch):
     spawned = asyncio.Event()
     processes = []
-    original_spawn = ExecTool._spawn
+    original_spawn = process_launch.spawn_process
 
     async def capture(*args, **kwargs):
         process = await original_spawn(*args, **kwargs)
@@ -198,7 +199,7 @@ async def test_direct_process_cancellation_reaps_child(tmp_path, monkeypatch):
         spawned.set()
         return process
 
-    monkeypatch.setattr(ExecTool, "_spawn", staticmethod(capture))
+    monkeypatch.setattr(process_launch, "spawn_process", staticmethod(capture))
     task = asyncio.create_task(ExecTool(working_dir=str(tmp_path)).execute(
         command=[sys.executable, "-c", "import time; time.sleep(20)"],
     ))
@@ -225,10 +226,10 @@ async def test_direct_search_uses_configured_path(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("backend", ["bwrap", "seatbelt"])
 def test_direct_search_preserves_sandbox_and_arguments(tmp_path, monkeypatch, backend):
-    monkeypatch.setattr("cirno_core.agent.tools.shell._IS_WINDOWS", False)
+    monkeypatch.setattr("cirno_core.processes.platform.IS_WINDOWS", False)
     args = ["rg", "-F", "hello | $HOME; 'world'", "."]
-    prepared = RgTool(working_dir=str(tmp_path), sandbox=backend)._prepare_command(args)
-    assert isinstance(prepared, _PreparedCommand)
+    prepared = RgTool(working_dir=str(tmp_path), sandbox=backend).preparation.prepare(args)
+    assert isinstance(prepared, PreparedCommand)
     assert isinstance(prepared.command, list)
     assert prepared.command[0] == ("bwrap" if backend == "bwrap" else "/usr/bin/sandbox-exec")
     assert prepared.command[-2] == "-c"

@@ -1,0 +1,84 @@
+import { expect, test } from "@playwright/test";
+
+for (const width of [390, 1440]) test(`catalog menus retain keyboard ownership at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/browser/fixture.html?case=conversations&lang=en&theme=dark");
+  for (const title of ["Review paper", "Inspect data", "Ungrouped note"]) {
+    const action = page.getByRole("button", { name: `Conversation actions for ${title}`, exact: true });
+    await action.focus(); await page.keyboard.press("Enter");
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(action).toBeFocused();
+    await page.keyboard.press("Tab"); await expect(action).not.toBeFocused();
+  }
+  const trigger = page.getByRole("button", { name: "Conversation actions for Review paper", exact: true });
+  const newProject = page.getByRole("button", { name: "New project", exact: true });
+  const outside = await newProject.boundingBox();
+  if (!outside) throw new Error("The New project control must be visible");
+  await trigger.click();
+  await page.mouse.click(outside.x + outside.width / 2, outside.y + outside.height / 2);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await newProject.click();
+  const projectDialog = page.getByRole("dialog", { name: "New project", exact: true });
+  await expect(projectDialog).toBeVisible();
+  await projectDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(projectDialog).toHaveCount(0);
+  await expect(newProject).toBeFocused();
+
+  await trigger.click();
+  const projects = page.getByRole("menuitem", { name: "Projects", exact: true });
+  await projects.focus(); await page.keyboard.press("ArrowRight");
+  const unfiled = page.getByRole("menuitemradio", { name: "Unfiled conversations", exact: true });
+  await expect(unfiled).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(unfiled).toHaveCount(0); await expect(projects).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0); await expect(trigger).toBeFocused();
+  await page.keyboard.press("Enter");
+  await projects.focus(); await page.keyboard.press("ArrowRight");
+  await expect(unfiled).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
+  await expect(unfiled).toHaveCount(0); await expect(projects).toBeFocused();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Rename", exact: true });
+  const input = dialog.getByRole("textbox", { name: /^Conversation name/ });
+  await expect(input).toBeFocused();
+  await input.dispatchEvent("compositionstart");
+  await page.keyboard.press("Escape"); await expect(dialog).toBeVisible();
+  await input.dispatchEvent("compositionend");
+  await page.keyboard.press("Escape"); await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await page.getByRole("menuitem", { name: "Select", exact: true }).click();
+  await expect(trigger).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeVisible();
+
+  await newProject.click();
+  const name = projectDialog.getByRole("textbox", { name: /^Project name/ });
+  await name.fill("Retained project draft");
+  await page.keyboard.press("F8");
+  await expect(projectDialog).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "" })).toHaveText("Another tab");
+  await page.keyboard.press("F8");
+  await expect(projectDialog).toBeVisible();
+  await expect(name).toHaveValue("Retained project draft");
+  await projectDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(projectDialog).toHaveCount(0);
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  await input.fill("Retained conversation draft");
+  await page.keyboard.press("F8"); await expect(dialog).toHaveCount(0);
+  await page.keyboard.press("F8");
+  await expect(input).toHaveValue("Retained conversation draft");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await trigger.click();
+  await page.keyboard.press("F8");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.keyboard.press("F8");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+});

@@ -1,0 +1,7 @@
+.proxy-editor,.proxy-setup-form { display:flex; flex-direction:column; gap:.75rem; min-width:0; }
+.proxy-credentials { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.proxy-credentials[data-stacked] { grid-template-columns:minmax(0,1fr); }
+.proxy-help { color:var(--muted); font-size:.8125rem; line-height:1.6; }
+.proxy-consumer { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.proxy-consumer-copy { display:flex; flex-direction:column; gap:.25rem; }
+@container cirno-tab (max-width:480px) { .proxy-credentials { grid-template-columns:minmax(0,1fr); } }

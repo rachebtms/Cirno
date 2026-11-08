@@ -5,16 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno_core.memory.consolidation import MemoryStore
+from cirno_core.memory.store import MemoryStore
+from cirno_core.memory.dream import DreamMemory
 from cirno_core.bus.events import InboundMessage, OutboundMessage
-from cirno_core.command.builtin import (
-    build_help_text,
-    builtin_command_palette,
-    cmd_dream,
-    cmd_dream_log,
-    cmd_dream_prompt,
-    cmd_dream_restore,
-)
+from cirno_core.command.builtin.catalog import build_help_text, builtin_command_palette
+from cirno_core.command.builtin.dream import cmd_dream, cmd_dream_prompt
+from cirno_core.command.builtin.dream_history import cmd_dream_log, cmd_dream_restore
 from cirno_core.command.router import CommandContext
 from cirno_core.session.manager import SessionManager
 from cirno_core.utils.gitstore import CommitInfo
@@ -37,6 +33,19 @@ class _FakeStore:
         self.compact_history_called = False
         self._dream_batch_token = "test-batch"
         self.finished_batches = []
+        self.journal = SimpleNamespace(
+            get_last_dream_cursor=self.get_last_dream_cursor,
+            set_last_dream_cursor=self.set_last_dream_cursor,
+            compact_history=self.compact_history,
+        )
+        self.dream = SimpleNamespace(
+            run_lock=asyncio.Lock(),
+            batch_token=self._dream_batch_token,
+            finish_batch=self.finish_dream_batch,
+            build_prompt=self.build_dream_prompt,
+            build_tools=self.build_dream_tools,
+            content_diff=self.dream_content_diff,
+        )
 
     def finish_dream_batch(self, token=None, **kwargs):
         self.finished_batches.append((token, kwargs))
@@ -149,6 +158,7 @@ def _make_dream_prompt_ctx(tmp_path, raw: str = "/dream-prompt", args: str = "")
 
 
 async def _run_dream_command(ctx: CommandContext) -> OutboundMessage:
+    ctx.loop.schedule_background = asyncio.create_task
     before = asyncio.all_tasks()
     immediate = await cmd_dream(ctx)
     try:
@@ -320,19 +330,19 @@ async def test_dream_noop_batch_unlocks_following_history(tmp_path) -> None:
     store.write_soul("# Soul")
     store.write_memory("# Memory")
     for index in range(1, 22):
-        store.append_history(f"entry-{index:02d}")
+        store.journal.append_history(f"entry-{index:02d}")
     store.git.init()
 
     processed_prompts: list[str] = []
 
     async def process_direct(prompt, *args, **kwargs):
         processed_prompts.append(prompt)
-        from cirno_core.memory.repository import MemoryRepository
+        from cirno_memory.repository import MemoryRepository
         repo = MemoryRepository(store.workspace)
         with repo.connect() as db:
-            claimed = db.execute("SELECT memory_id,claimed_revision FROM dream_queue WHERE lease=?", (store._dream_batch_token,)).fetchall()
+            claimed = db.execute("SELECT memory_id,claimed_revision FROM dream_queue WHERE lease=?", (store.dream.batch_token,)).fetchall()
         for row in claimed:
-            repo.confirm(store._dream_batch_token, row['memory_id'], row['claimed_revision'], 'skipped', reason='No durable fact in these test entries', maintenance=True)
+            repo.confirm(store.dream.batch_token, row['memory_id'], row['claimed_revision'], 'skipped', reason='No durable fact in these test entries', maintenance=True)
         return OutboundMessage(
             channel="cli",
             chat_id="direct",
@@ -356,8 +366,8 @@ async def test_dream_noop_batch_unlocks_following_history(tmp_path) -> None:
     assert len(processed_prompts) == 1
     assert "entry-08" in processed_prompts[0]
     assert "entry-09" not in processed_prompts[0]
-    assert store.get_last_dream_cursor() == 8
-    next_result = store.build_dream_prompt()
+    assert store.journal.get_last_dream_cursor() == 8
+    next_result = store.dream.build_prompt()
     assert next_result is not None
     next_prompt, next_cursor = next_result
     assert next_cursor == 16
@@ -470,7 +480,7 @@ async def test_dream_prompt_init_copies_default_prompt(tmp_path) -> None:
     assert "prompts/dream.md" in out.content
     assert str(tmp_path) not in out.content
     assert "fully replaces cirno's default Dream guide" in out.content
-    assert prompt_file.read_text(encoding="utf-8") == MemoryStore.default_dream_prompt() + "\n"
+    assert prompt_file.read_text(encoding="utf-8") == DreamMemory.default_prompt() + "\n"
 
 
 @pytest.mark.asyncio
@@ -498,7 +508,7 @@ async def test_dream_prompt_init_recreates_empty_prompt(tmp_path) -> None:
     out = await cmd_dream_prompt(ctx)
 
     assert "Created Dream memory instructions" in out.content
-    assert prompt_file.read_text(encoding="utf-8") == MemoryStore.default_dream_prompt() + "\n"
+    assert prompt_file.read_text(encoding="utf-8") == DreamMemory.default_prompt() + "\n"
 
 
 def test_dream_prompt_command_in_help_and_palette() -> None:

@@ -37,7 +37,7 @@ export function DisclosureContent({
       data-state={open ? "open" : "closed"}
       aria-hidden={open ? undefined : true}
       onKeyDown={onKeyDown}
-      {...(!open ? { inert: "" } : {})}
+      {...(!open ? { inert: true } : {})}
     >
       <div className="inline-disclosure-clip">
         <div className={cn("inline-disclosure-content", className)}>{children}</div>

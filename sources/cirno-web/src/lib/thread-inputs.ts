@@ -1,4 +1,4 @@
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 /** Match the server's model-input count when branching or paging history. */
 export function isModelInput(message: UIMessage): boolean {

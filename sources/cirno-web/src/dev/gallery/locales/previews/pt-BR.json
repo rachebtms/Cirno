@@ -1,10 +1,4 @@
 {
-  "rename": {
-    "title": "RenameDialog · Renomear grupos e projetos",
-    "description": "Teste a renomeação de grupos e projetos. Os tópicos são renomeados na lista de conversas.",
-    "options": "O chamador fornece dialogTitle, description e placeholder. title define o valor inicial; onConfirm recebe o título sem espaços nas extremidades. Títulos vazios não podem ser salvos.",
-    "hint": "Ao salvar, o título acima é atualizado."
-  },
   "delete": {
     "title": "DeleteConfirm · Confirmação de exclusão",
     "description": "Compare a exclusão de uma conversa, várias conversas ou uma conversa com automações.",
@@ -60,17 +54,6 @@
     "options": "path é o texto de referência. metadata fornece o caminho completo e o relativo opcional. A galeria fornece os metadados sem carregar o arquivo.",
     "scope": "Escopo do arquivo",
     "hint": "Clique com o botão direito para abrir o menu de cópia, ou foque o arquivo e pressione Shift+F10."
-  },
-  "workbench": {
-    "title": "PaneWorkbench · Múltiplos painéis",
-    "description": "Mude o layout, ative ou adicione painéis e ajuste a posição e o tamanho.",
-    "options": "O chamador controla panes, activePaneKey, layout e splitRatios. renderPane fornece o conteúdo e os callbacks atualizam o estado local. Em telas estreitas, o painel ativo é exibido.",
-    "layout": "Layout dos painéis",
-    "limit": "Até quatro painéis",
-    "notes": "Notas de {{title}}",
-    "active": "Painel ativo",
-    "activate": "Selecione este painel para ativá-lo",
-    "hint": "Ativo: {{title}}. Arraste a alça inferior para mover um painel e as bordas para redimensioná-lo."
   },
   "hostConnection": {
     "title": "HostConnectionStatus · Status da conexão",
@@ -170,7 +153,7 @@
     "retries": "Novas tentativas: {{amount}}"
   },
   "recovery": {
-    "title": "RecoveryNotice · Recuperação de tarefas",
+    "title": "ThreadComposer · Recuperação de tarefas",
     "description": "Compare interrupção, retomada, falha e indisponibilidade; teste continuar e fechar.",
     "options": "state fornece um retrato da recuperação. onContinue e onDismiss retornam Promises. Esses callbacks apenas atualizam a prévia.",
     "state": "Estado da recuperação",
@@ -296,22 +279,13 @@
     "selected": "Host da prévia: {{name}}"
   },
   "chats": {
-    "title": "ChatList · Lista de conversas",
+    "title": "ConversationsTab · Lista de conversas",
     "description": "Selecione conversas e teste fixação, arquivamento e exclusão pelos menus.",
     "options": "O chamador fornece sessions, activeKey e chaves fixadas ou arquivadas. Os callbacks de ação atualizam a lista de exemplo.",
     "state": "Estado da lista de conversas",
     "renamed": "Novo nome: {{name}}",
     "selected": "Conversa selecionada: {{name}}",
     "none": "Nenhuma"
-  },
-  "sidebarResize": {
-    "title": "SidebarResizeHandle · Tamanho da barra lateral",
-    "description": "Redimensione, recolha e expanda a barra lateral com o mouse ou teclado.",
-    "options": "width e open são controlados. onResize atualiza o tamanho e a expansão; onDraggingChange informa o arraste.",
-    "content": "Conteúdo da barra lateral",
-    "hint": "Arraste a divisória, ou foque nela e use as setas, Home, End e Enter.",
-    "collapsed": "Recolhida",
-    "dragging": "Arrastando"
   },
   "language": {
     "title": "LanguageSwitcher · Idioma da interface",
@@ -343,7 +317,7 @@
   "channel": {
     "title": "{{channel}} · Configuração do canal",
     "description": "Explore o formulário real de configuração e seus estados.",
-    "options": "Usa registros de canal, retratos do contrato Python e ChannelSetupSurfaceView de produção. Entradas, visibilidade das credenciais, predefinições, verificações e interruptores afetam apenas esta prévia.",
+    "options": "Usa registros de canal, retratos do contrato Python e ChannelSetupView de produção. Entradas, visibilidade das credenciais, predefinições, verificações e interruptores afetam apenas esta prévia.",
     "state": "Estado da configuração do canal",
     "credentialsError": "As credenciais de exemplo foram recusadas. Atualize os valores da prévia e tente novamente.",
     "validation": "Configuração da prévia"
@@ -376,42 +350,6 @@
     "title": "WhatsAppConnectFlowView · Vinculação de dispositivo WhatsApp",
     "description": "Compare vinculação automática, sucesso, expiração e erros; teste outra conta.",
     "options": "A interface mantém as regras de início automático e layout mínimo. O chamador controla estado e novas tentativas. A entrada real gerencia início automático, tentativas forçadas e consultas periódicas."
-  },
-  "linearPanel": {
-    "title": "LinearPanelView · Configuração do Linear",
-    "description": "Explore dados do app, segredos, opções avançadas, espaços, acesso de membros e autorização web.",
-    "options": "state e workspaces fornecem retratos; callbacks conectam ações de espaço, salvamento e MCP. Três slots compõem as interfaces de membros, autorização e redefinição usadas em produção.",
-    "state": "Estado da configuração do Linear",
-    "runtimeError": "Não foi possível iniciar o webhook do Linear.",
-    "saveError": "Não foi possível salvar as configurações. Seu rascunho foi mantido.",
-    "inspectionError": "Não foi possível inspecionar os espaços de trabalho conectados.",
-    "refreshed": "Espaços de trabalho de exemplo atualizados.",
-    "removed": "Espaço de trabalho de exemplo removido: {{name}}",
-    "mcp": "Configuração do Linear MCP selecionada."
-  },
-  "linearMembers": {
-    "title": "LinearMemberAccessView · Acesso de membros",
-    "description": "Pesquise membros, mude o acesso e compare carregamento, lista vazia, salvamento e falta de confirmação.",
-    "options": "snapshot contém o estado confirmado dos membros. onLoad e onSetAllowed pertencem à entrada do canal; o gateway continua validando as permissões.",
-    "state": "Estado dos membros",
-    "loadError": "O diretório de membros está indisponível.",
-    "saveError": "O acesso não foi confirmado."
-  },
-  "linearConnect": {
-    "title": "LinearConnectFlowView · Autorização do Linear",
-    "description": "Teste a autorização no navegador com espera, início, cancelamento, sucesso e falha.",
-    "options": "Reutiliza ChannelQrConnectFlowView. O Linear fornece exibição, rótulos e foco; a entrada do runtime cria sessões e faz consultas periódicas.",
-    "state": "Etapa de autorização",
-    "error": "Não foi possível concluir a autorização.",
-    "hint": "O link de autorização e o espaço de trabalho são exemplos. Iniciar e Cancelar só mudam a etapa da prévia."
-  },
-  "linearReset": {
-    "title": "LinearResetConnectionView · Redefinir conexão",
-    "description": "Revise o que é limpo ou mantido, o estado ocupado e as tentativas após redefinição parcial.",
-    "options": "onReset executa toda a revogação e limpeza. A interface gerencia confirmação, erros, restrições de fechamento e restauração do foco.",
-    "state": "Resultado da redefinição",
-    "error": "Não foi possível parar o canal. As configurações do aplicativo foram mantidas.",
-    "completed": "Espaço de trabalho e configurações do aplicativo da prévia limpos."
   },
   "weixinPanel": {
     "title": "WeixinPanelView · Configurações do Weixin",

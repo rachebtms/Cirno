@@ -1,3 +1,4 @@
+import { seedPreviewPreferences, readPreviewPreferences } from "./preference-driver";
 import { expect, test, type Locator } from "@playwright/test";
 
 async function readMetrics(elements: Locator) {
@@ -24,10 +25,7 @@ async function metrics(element: Locator): Promise<Awaited<ReturnType<typeof read
 for (const narrow of [false, true]) {
   test(`reading hierarchy and stable controls: ${narrow ? "narrow" : "desktop"}`, async ({ page }, info) => {
     await page.setViewportSize(narrow ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
-    await page.addInitScript(() => {
-      localStorage.setItem("cirno.locale", "zh-CN");
-      localStorage.setItem("cirno-webui.theme", "light");
-    });
+    await seedPreviewPreferences(page, { language: "zh-CN", themeMode: "light" });
     await page.goto("/browser/fixture.html?case=typography");
     const group = page.getByRole("radiogroup", { name: "阅读字号", exact: true });
     await expect(group.getByRole("radio", { name: "阅读字号：标准", exact: true })).toBeChecked();
@@ -35,17 +33,17 @@ for (const narrow of [false, true]) {
     const stable = await metrics(page.locator(".settings-row").first().locator(".text-control-label"));
     const observations = [];
     for (const [size, label, bodySize] of [
-      ["small", "阅读字号：小", narrow ? 15 : 16],
-      ["standard", "阅读字号：标准", narrow ? 16 : 18],
-      ["large", "阅读字号：大", narrow ? 18 : 20],
+      ["small", "阅读字号：小", 14],
+      ["standard", "阅读字号：标准", 16],
+      ["large", "阅读字号：大", 18],
     ] as const) {
-      await group.getByRole("radio", { name: label, exact: true }).click();
+      await group.locator("label").filter({ has: page.getByRole("radio", { name: label, exact: true }) }).click();
       await expect(page.locator("html")).toHaveAttribute("data-reading-text-size", size);
       const paragraph = page.locator('section[aria-label="Reading preview"] .markdown-content p').first();
       await expect(paragraph).toHaveCSS("font-size", `${bodySize}px`);
       const body = await metrics(paragraph);
       expect(body.size).toBe(bodySize);
-      expect(body.line).toBeCloseTo(bodySize * 1.8);
+      expect(body.line).toBeCloseTo(bodySize * 1.7);
       expect(body.weight).toBe("400");
       expect((await metrics(page.locator("[data-user-text-bubble] p"))).size).toBe(bodySize);
       for (const selector of ["blockquote", "ol > li", ".task-list-item"]) {
@@ -61,9 +59,9 @@ for (const narrow of [false, true]) {
       }
       expect((await metrics(page.locator(".code-content pre"))).size).toBeCloseTo(bodySize * 0.875);
       expect((await metrics(page.locator(".markdown-inline-code"))).size).toBeCloseTo(bodySize * 0.875);
-      expect((await metrics(page.locator("textarea"))).size).toBe(Math.max(16, bodySize));
+      expect((await metrics(page.locator("textarea"))).size).toBe(narrow ? Math.max(16, bodySize) : bodySize);
       expect(await metrics(page.locator(".settings-row").first().locator(".text-control-label"))).toEqual(stable);
-      const targets = await group.getByRole("radio").evaluateAll((nodes) => nodes.map((node) => {
+      const targets = await group.locator("[data-slot=radio-content]").evaluateAll((nodes) => nodes.map((node) => {
         const { width, height } = node.getBoundingClientRect();
         return { width, height };
       }));
@@ -86,27 +84,20 @@ for (const narrow of [false, true]) {
 }
 
 test("keyboard, tooltip, persistence and unchanged preferences", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("cirno.locale", "en");
-    if (!localStorage.getItem("cirno-webui.settings-preferences")) {
-      localStorage.setItem("cirno-webui.settings-preferences", JSON.stringify({
-        schemaVersion: 1, codeWrap: false, brandLogos: false, activityMode: "expanded", notificationSound: true,
-      }));
-    }
-  });
+  await seedPreviewPreferences(page, { language: "en", codeWrap: false, brandLogos: false, activityMode: "expanded", notificationSound: true });
   await page.goto("/browser/fixture.html?case=typography");
   const standard = page.getByRole("radio", { name: "Standard reading text", exact: true });
   await standard.focus();
-  await expect(page.getByRole("tooltip")).toHaveText("Standard reading text");
+  await expect(page.getByRole("tooltip")).toHaveText("Standard reading text · 16px");
   expect(await standard.evaluate(node => node.matches(":focus-visible"))).toBe(true);
   await page.keyboard.press("ArrowRight");
   const large = page.getByRole("radio", { name: "Large reading text", exact: true });
   await expect(large).toBeFocused();
   await expect(large).toBeChecked();
-  await expect(page.locator(".markdown-content p").first()).toHaveCSS("line-height", `${20 * 1.625}px`);
+  await expect(page.locator('section[aria-label="Reading preview"] .markdown-content p').first()).toHaveCSS("line-height", `${18 * 1.625}px`);
   await page.reload();
   await expect(page.getByRole("radio", { name: "Large reading text", exact: true })).toBeChecked();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cirno-webui.settings-preferences")!))).toMatchObject({
+  expect(await readPreviewPreferences(page)).toMatchObject({
     readingTextSize: "large", codeWrap: false, brandLogos: false, activityMode: "expanded", notificationSound: true,
   });
 });
@@ -115,11 +106,11 @@ test("touch composer keeps literal mention metrics and a safe editable minimum",
   const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   try {
     const page = await context.newPage();
-    await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
+    await seedPreviewPreferences(page, { language: "en" });
     await page.goto("/browser/fixture.html?case=typography");
     const readingGroup = page.getByRole("radiogroup", { name: "Reading text size", exact: true });
     await expect(readingGroup.getByRole("radio")).toHaveCount(3);
-    const radios = await readingGroup.getByRole("radio").all();
+    const radios = await readingGroup.locator("[data-slot=radio-content]").all();
     for (const [index, radio] of radios.entries()) {
       await radio.scrollIntoViewIfNeeded();
       const target = await radio.boundingBox();
@@ -128,7 +119,7 @@ test("touch composer keeps literal mention metrics and a safe editable minimum",
       for (const edge of [-20, 20]) {
         await radios[(index + 1) % radios.length].tap();
         await page.touchscreen.tap(target!.x + target!.width / 2, target!.y + target!.height / 2 + edge);
-        await expect(radio).toBeChecked();
+        await expect(readingGroup.getByRole("radio").nth(index)).toBeChecked();
       }
     }
     const input = page.getByRole("textbox", { name: "Message input", exact: true });
@@ -141,7 +132,7 @@ test("touch composer keeps literal mention metrics and a safe editable minimum",
     ] as const;
     await input.fill("中文 English @typography 混排\n多行内容与光标保持一致，继续输入 more text.\n最后一行。");
     for (const [size, label, fontSize] of readingSizes) {
-      await readingGroup.getByRole("radio", { name: label, exact: true }).click();
+      await readingGroup.locator("label").filter({ has: page.getByRole("radio", { name: label, exact: true }) }).click();
       await expect(page.locator("html")).toHaveAttribute("data-reading-text-size", size);
       await expect(input).toHaveCSS("font-size", `${fontSize}px`);
       await input.focus();
@@ -156,7 +147,7 @@ test("touch composer keeps literal mention metrics and a safe editable minimum",
     }
     await input.fill([...Array.from({ length: 18 }, (_, i) => `第 ${i + 1} 行 中文 English @typography 光标与装饰层。`), "最后一行。"].join("\n"));
     for (const [size, label, fontSize] of readingSizes) {
-      await readingGroup.getByRole("radio", { name: label, exact: true }).click();
+      await readingGroup.locator("label").filter({ has: page.getByRole("radio", { name: label, exact: true }) }).click();
       await expect(page.locator("html")).toHaveAttribute("data-reading-text-size", size);
       await expect(input).toHaveCSS("font-size", `${fontSize}px`);
       await input.focus();
@@ -181,10 +172,7 @@ test("touch composer keeps literal mention metrics and a safe editable minimum",
 
 test("large narrow reading keeps long lists and code reachable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.addInitScript(() => {
-    localStorage.setItem("cirno.locale", "en");
-    localStorage.setItem("cirno-webui.settings-preferences", JSON.stringify({ schemaVersion: 1, readingTextSize: "large" }));
-  });
+  await seedPreviewPreferences(page, { language: "en", readingTextSize: "large" });
   await page.goto("/browser/fixture.html?case=typography&stress");
   const lastItem = page.getByText("第 30 项：中文与 English 混排的长列表内容，保持自然换行和清楚的编号。", { exact: true });
   await lastItem.click();

@@ -26,4 +26,4 @@ async def test_my_tool_max_iterations_syncs_subagent_limit(tmp_path) -> None:
 
     assert "Set max_iterations = 80" in result
     assert loop.max_iterations == 80
-    assert loop.subagents.max_iterations == 80
+    assert loop.subagents.limits.max_iterations == 80

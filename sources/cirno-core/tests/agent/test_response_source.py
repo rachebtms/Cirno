@@ -1,4 +1,5 @@
 """Actual invocation identity survives delivery and the display transcript."""
+from cirno_core.providers.retry import ProviderRetryPolicy
 
 import asyncio
 import json
@@ -8,18 +9,21 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.runner_helpers import failed_test_consolidator
+from sources.development.testing.runtime import failed_test_consolidator
 from cirno_core.agent.progress_hook import AgentProgressHook
-from cirno_core.agent.runner import AgentRunner, AgentRunSpec
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.agent.runner.contracts import AgentRunSpec
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.agent.turn_delivery import TurnDeliveryFactory
 from cirno_core.bus.events import InboundMessage, OutboundMessage
 from cirno_core.bus.outbound_events import StreamDeltaEvent, StreamEndEvent
 from cirno_core.bus.queue import MessageBus
 from cirno_server.channels.websocket.runtime import WebSocketChannel
-from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.models import ModelPresetConfig
 from cirno_core.bus.agent_events import EventSink, ResponseSource, ResponseSourceEvent
-from cirno_core.providers.base import LLMProvider, LLMResponse, ProviderCallContext
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
 from cirno_core.providers.factory import make_provider, provider_signature
 from cirno_core.providers.fallback_provider import FallbackProvider
 from cirno_core.utils.llm_runtime import LLMRuntime
@@ -49,12 +53,12 @@ class AnswerProvider(LLMProvider):
         return await self.chat(**kwargs)
 
 
-def delivery(chat="chat", *, streaming=True):
+async def delivery(chat="chat", *, streaming=True):
     bus = MessageBus()
-    turn = TurnDeliveryFactory(bus).create(InboundMessage(
+    turn = (await TurnDeliveryFactory(bus).create(InboundMessage(
         channel="websocket", sender_id="user", chat_id=chat, content="hello",
         metadata={"_wants_stream": streaming, "webui_turn_id": f"turn-{chat}"},
-    ), f"websocket:{chat}", enable_stream=streaming)
+    ), f"websocket:{chat}", enable_stream=streaming))
     return bus, turn
 
 
@@ -67,7 +71,7 @@ async def test_actual_candidate_is_delivered_and_replayed(history,
     monkeypatch,
 ):
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    bus, turn = delivery(streaming=streaming)
+    bus, turn = (await delivery(streaming=streaming))
     candidates = [AnswerProvider(
         f"provider-{i}", fail=i < failures,
         chunks=("answer",) if streaming and i >= failures else (),
@@ -213,7 +217,7 @@ async def test_attribution_does_not_change_provider_requests(with_tools, with_im
 
 @pytest.mark.parametrize("streaming", [False, True])
 async def test_synthetic_final_text_does_not_inherit_an_earlier_model(streaming):
-    bus, turn = delivery(streaming=streaming)
+    bus, turn = (await delivery(streaming=streaming))
     await turn.events.emit(ResponseSourceEvent(ResponseSource("openai", "gpt", "codex"), "Working"))
     if streaming:
         await turn.events.emit(StreamDeltaEvent("Reached the iteration limit"))
@@ -225,7 +229,7 @@ async def test_synthetic_final_text_does_not_inherit_an_earlier_model(streaming)
 
 
 async def test_unnamed_fallback_does_not_borrow_the_primary_preset():
-    bus, turn = delivery()
+    bus, turn = (await delivery())
     provider = FallbackProvider(AnswerProvider("openai", fail=True), [ModelPresetConfig(model="grok")],
                                 lambda _: AnswerProvider("xai", chunks=("answer",)))
 
@@ -241,7 +245,7 @@ async def test_unnamed_fallback_does_not_borrow_the_primary_preset():
 
 async def test_concurrent_calls_and_segments_have_independent_snapshots():
     async def run(chat, preset):
-        bus, turn = delivery(chat)
+        bus, turn = (await delivery(chat))
 
         async def delta(text):
             await turn.events.emit(StreamDeltaEvent(text))
@@ -259,7 +263,7 @@ async def test_concurrent_calls_and_segments_have_independent_snapshots():
 
 
 async def test_merged_segments_keep_all_actual_sources_and_unknown_text_is_not_mislabeled():
-    bus, turn = delivery()
+    bus, turn = (await delivery())
     a = ResponseSource("openai", "a", "writer")
     b = ResponseSource("xai", "b", "reviewer", fallback=True)
     for source in (a, b):
@@ -321,12 +325,12 @@ def test_old_history_and_malformed_identity_are_not_guessed(history, tmp_path, m
 
 async def test_runner_records_each_provider_when_streaming_times_out_and_recovers():
     class StalledProvider(AnswerProvider):
-        _CHAT_RETRY_DELAYS = ()
+        retry_policy = ProviderRetryPolicy(delays=())
 
         async def chat(self, **kwargs):
             return LLMResponse(content="stalled", finish_reason="error", error_kind="timeout")
 
-    bus, turn = delivery()
+    bus, turn = (await delivery())
     primary = StalledProvider("openai_codex", chunks=("Partial answer",))
     backup = AnswerProvider("xai", text="Recovered answer", chunks=("Recovered answer",))
     provider = FallbackProvider(primary, [ModelPresetConfig(model="grok")], lambda _: backup,
@@ -358,13 +362,13 @@ async def test_websocket_wire_and_disk_replay_preserve_sources(history, tmp_path
     gateway.temporary_chats.should_persist_transcript = lambda _: not temporary
     channel = WebSocketChannel({"allowFrom": ["*"]}, MessageBus(), gateway=gateway)
     generation, _ = await history.sessions.state.open_with_metadata("websocket:source-chat", {})
-    channel._safe_send_to = AsyncMock()
+    channel.writers.send = AsyncMock()
     channel._subs["source-chat"] = {MagicMock()}
     sources = [{"provider": "xai", "model": "grok", "preset": "snapshot name", "fallback": True}]
     metadata = {"webui_turn_id": "source-turn", "response_sources": sources, "_history_generation": generation}
     await channel.send_delta("source-chat", "Hello", metadata, stream_id="s")
     await channel.send_delta("source-chat", "", metadata, stream_id="s", stream_end=True)
-    frames = [json.loads(call.args[1]) for call in channel._safe_send_to.call_args_list]
+    frames = [json.loads(call.args[1]) for call in channel.writers.send.call_args_list]
     assert [frame["event"] for frame in frames] == ["delta", "stream_end"]
     assert all(frame["response_sources"] == sources for frame in frames)
     if temporary:

@@ -1,17 +1,16 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno_core.session.recovery import RECOVERY_METADATA_KEY
+from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY
 from cirno_server.webui.session_projection import WebUISessionProjection
 
 
 async def test_attach_fields_restore_session_runtime_metadata() -> None:
     usage = LLMUsage.reported(input_tokens=120, output_tokens=8, total_tokens=175)
     sessions = MagicMock()
-    sessions.state.read_metadata = AsyncMock(side_effect=lambda key: sessions.read_session_metadata(key))
+    sessions.state.read_metadata = AsyncMock(side_effect=lambda key, **kwargs: sessions.read_session_metadata(key, **kwargs))
     sessions.read_session_metadata.return_value = {
         "metadata": {
             SESSION_MODEL_PRESET_METADATA_KEY: "Deep Research",
@@ -36,12 +35,12 @@ async def test_attach_fields_restore_session_runtime_metadata() -> None:
         },
         "usage": usage.to_turn_dict(),
     }
-    sessions.read_session_metadata.assert_called_once_with("websocket:chat-1")
+    sessions.read_session_metadata.assert_called_once_with("websocket:chat-1", include_runtime=False)
 
 
 async def test_attach_fields_tolerate_missing_or_invalid_session_metadata() -> None:
     sessions = MagicMock()
-    sessions.state.read_metadata = AsyncMock(side_effect=lambda key: sessions.read_session_metadata(key))
+    sessions.state.read_metadata = AsyncMock(side_effect=lambda key, **kwargs: sessions.read_session_metadata(key, **kwargs))
     sessions.read_session_metadata.return_value = {
         "metadata": {SESSION_MODEL_PRESET_METADATA_KEY: 42}
     }
@@ -57,7 +56,7 @@ async def test_hydration_events_restore_goal_and_running_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sessions = MagicMock()
-    sessions.state.read_metadata = AsyncMock(side_effect=lambda key: sessions.read_session_metadata(key))
+    sessions.state.read_metadata = AsyncMock(side_effect=lambda key, **kwargs: sessions.read_session_metadata(key, **kwargs))
     sessions.read_session_metadata.return_value = {
         "metadata": {
             "goal_state": {
@@ -107,7 +106,7 @@ async def test_hydration_events_are_quiet_without_actionable_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sessions = MagicMock()
-    sessions.state.read_metadata = AsyncMock(side_effect=lambda key: sessions.read_session_metadata(key))
+    sessions.state.read_metadata = AsyncMock(side_effect=lambda key, **kwargs: sessions.read_session_metadata(key, **kwargs))
     sessions.read_session_metadata.return_value = {"metadata": {}}
     monkeypatch.setattr(
         "cirno_server.webui.session_projection.websocket_turn_wall_started_at",
@@ -132,7 +131,8 @@ async def test_hydration_yields_during_metadata_read_and_reads_live_turn_on_loop
     from cirno_core.session.manager import SessionManager
     sessions = SessionManager(tmp_path)
 
-    def read_metadata(_key):
+    def read_metadata(_key, *, include_runtime=True):
+        assert include_runtime is False
         assert threading.get_ident() != loop_thread
         entered.set()
         assert release.wait(timeout=3)

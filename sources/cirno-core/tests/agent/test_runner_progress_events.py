@@ -4,12 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cirno_core.agent.progress_hook import AgentProgressHook
-from cirno_core.agent.runner import AgentRunner
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.progress_events import output_events
 
-from agent.runner_helpers import make_run_spec
+from sources.development.testing.runtime import make_run_spec
 
 _DEFAULTS = AgentDefaults()
 
@@ -188,11 +189,11 @@ async def test_batched_file_reads_keep_each_call_and_complete_arguments() -> Non
         ("end", "file contents"), ("end", "file contents"),
     ]
 
-@pytest.mark.parametrize('session_key,reasoning', [('websocket:global', True), ('websocket:ordinary', False)])
+@pytest.mark.parametrize('session_key,reasoning', [('websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb', True), ('websocket:ordinary', False)])
 async def test_cirno_final_text_remains_execution_detail(session_key, reasoning):
     from cirno_core.agent.hook import AgentHookContext
-    from cirno_core.bus.outbound_events import ProgressEvent, StreamDeltaEvent
     from cirno_core.bus.agent_events import EventSink
+    from cirno_core.bus.outbound_events import ProgressEvent, StreamDeltaEvent
     events = []
     async def publish(event): events.append(event)
     hook = AgentProgressHook(EventSink(publish), streaming=True, session_key=session_key)

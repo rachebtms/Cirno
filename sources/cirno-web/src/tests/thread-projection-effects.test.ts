@@ -7,7 +7,8 @@ import {
   type ThreadProjectionEffects,
   type ThreadProjectionOptions,
 } from "@/lib/thread-event-projection";
-import type { ThreadProjectionEvent, UIFileEdit } from "@/lib/types";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { UIFileEdit } from "@/lib/contracts/activity";
 
 function createProjector(state = createThreadProjectionState()) {
   let nextId = 0;

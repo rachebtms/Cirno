@@ -1,5 +1,5 @@
 import { parseQuotedUserMessage } from "@/lib/user-message-quote";
-import type { UserQuestion } from "@/lib/types";
+import type { UserQuestion } from "@/lib/contracts/messages";
 
 export function parseUserQuestion(blob: unknown): UserQuestion | undefined {
   if (!blob || typeof blob !== "object" || !("kind" in blob) || blob.kind !== "user_question" || !("data" in blob)) return;

@@ -147,15 +147,15 @@ async def test_global_barrier_orders_both_sides_of_admission(tmp_path):
         assert release.wait(5)
         order.append("first")
 
-    first_task = asyncio.create_task(state._execute("chat:a", first))
+    first_task = asyncio.create_task(state.operations.execute("chat:a", first))
     tasks = [first_task]
     try:
         assert await asyncio.to_thread(started.wait, 2)
-        tasks.append(asyncio.create_task(state._execute(None, lambda: order.append("barrier"))))
+        tasks.append(asyncio.create_task(state.operations.execute(None, lambda: order.append("barrier"))))
         await asyncio.sleep(0)
-        tasks.append(asyncio.create_task(state._execute("chat:b", lambda: order.append("later"))))
+        tasks.append(asyncio.create_task(state.operations.execute("chat:b", lambda: order.append("later"))))
         await asyncio.sleep(0)
-        assert state._admitted == 3
+        assert state.operations._admitted == 3
         assert order == []
         release.set()
         await asyncio.gather(*tasks)
@@ -171,7 +171,7 @@ async def test_fork_waits_for_target_and_blocks_later_target_read(tmp_path, monk
     await state.import_messages("chat:source", [{"role": "user", "content": "kept"}])
     target_started, target_release = threading.Event(), threading.Event()
     fork_started, fork_release = threading.Event(), threading.Event()
-    original_load = state._load
+    original_load = state.repository.load
 
     def paused_source(key, *, history=True):
         if key == "chat:source":
@@ -183,8 +183,8 @@ async def test_fork_waits_for_target_and_blocks_later_target_read(tmp_path, monk
         target_started.set()
         assert target_release.wait(5)
 
-    monkeypatch.setattr(state, "_load", paused_source)
-    tasks = [asyncio.create_task(state._execute("chat:target", target_operation))]
+    monkeypatch.setattr(state.repository, "load", paused_source)
+    tasks = [asyncio.create_task(state.operations.execute("chat:target", target_operation))]
     try:
         assert await asyncio.to_thread(target_started.wait, 2)
         fork = asyncio.create_task(state.fork("chat:source", "chat:target", 1))
@@ -193,7 +193,7 @@ async def test_fork_waits_for_target_and_blocks_later_target_read(tmp_path, monk
         read = asyncio.create_task(state.read("chat:target"))
         tasks.append(read)
         await asyncio.sleep(0)
-        assert state._admitted == 3
+        assert state.operations._admitted == 3
         assert not fork_started.is_set()
         target_release.set()
         assert await asyncio.to_thread(fork_started.wait, 2)
@@ -218,16 +218,16 @@ async def test_failed_predecessor_does_not_poison_key_or_global_barrier(tmp_path
     def fail():
         raise ValueError("injected")
 
-    failed = asyncio.create_task(state._execute("chat:a", fail))
-    same_key = asyncio.create_task(state._execute("chat:a", lambda: order.append("same")))
-    barrier = asyncio.create_task(state._execute(None, lambda: order.append("barrier")))
+    failed = asyncio.create_task(state.operations.execute("chat:a", fail))
+    same_key = asyncio.create_task(state.operations.execute("chat:a", lambda: order.append("same")))
+    barrier = asyncio.create_task(state.operations.execute(None, lambda: order.append("barrier")))
     results = await asyncio.gather(failed, same_key, barrier, return_exceptions=True)
     assert isinstance(results[0], ValueError)
     assert results[1:] == [None, None]
     assert order == ["same", "barrier"]
-    assert state._admitted == 0
-    assert state._key_tails == {}
-    assert state._global_tail is None
+    assert state.operations._admitted == 0
+    assert state.operations._key_tails == {}
+    assert state.operations._global_tail is None
     await state.aclose()
 
 
@@ -237,13 +237,13 @@ async def test_cancel_before_coroutine_starts_submits_no_command(tmp_path):
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert state._admitted == 0
+    assert state.operations._admitted == 0
     assert await state.read("chat:unaccepted") is None
     await state.aclose()
 
 
 async def test_followup_can_initialize_first_turn_but_cannot_revive_deleted_session(tmp_path):
-    from cirno_core.session.recovery import pending_followups
+    from cirno_core.session.recovery.pending import pending_followups
     from cirno_core.session.sqlite_store import SessionConflictError
 
     state = SessionManager(tmp_path).state
@@ -328,7 +328,7 @@ async def test_cached_header_preserves_policy_and_offsets_without_history(tmp_pa
 async def test_missing_get_keeps_creation_before_a_later_delete(tmp_path, monkeypatch):
     state = SessionManager(tmp_path).state
     started, release = threading.Event(), threading.Event()
-    original = state._load
+    original = state.repository.load
     first = True
 
     def paused_read(key, *, history=True):
@@ -339,7 +339,7 @@ async def test_missing_get_keeps_creation_before_a_later_delete(tmp_path, monkey
             assert release.wait(5)
         return original(key, history=history)
 
-    monkeypatch.setattr(state, "_load", paused_read)
+    monkeypatch.setattr(state.repository, "load", paused_read)
     get = asyncio.create_task(state.get("chat:new"))
     tasks = [get]
     try:
@@ -406,7 +406,7 @@ async def test_connection_open_failure_does_not_poison_the_owner(tmp_path, monke
     try:
         with pytest.raises(sqlite3.OperationalError, match="database is locked"):
             await state.get("chat:retry")
-        assert state._admitted == 0
+        assert state.operations._admitted == 0
         draft = await state.get("chat:retry")
         draft.add_message("user", "accepted after lock was released")
         await state.prepare_input(draft)
@@ -416,8 +416,8 @@ async def test_connection_open_failure_does_not_poison_the_owner(tmp_path, monke
 
 
 async def test_history_peek_does_not_hold_the_metadata_control_lock(tmp_path, monkeypatch):
-    import cirno_core.session.state as owner
-    from cirno_core.session.manager import Session
+    import cirno_core.session.state.repository as owner
+    from cirno_core.session.model import Session
 
     state = SessionManager(tmp_path).state
     await state.import_messages("chat:child", [{"role": "user", "content": "history"}])

@@ -1,3 +1,4 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { readFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -6,7 +7,7 @@ const archiveBytes = Buffer.from("504b0506000000000000000000000000000000000000",
 async function openAttachments(page: Page, width = 1024, theme = "light", locale = "en") {
   await page.setViewportSize({ width, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: theme === "dark" ? "dark" : "light" });
-  await page.addInitScript((language) => localStorage.setItem("cirno.locale", language), locale);
+  await seedPreviewPreferences(page, { language: locale });
   await page.goto("/browser/fixture.html?case=attachments");
   await expect(page.getByRole("region", { name: "Assistant mixed attachments" }).locator("img")).toHaveCount(3);
   // The root element does not necessarily exist during addInitScript.

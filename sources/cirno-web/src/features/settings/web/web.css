@@ -1,0 +1,9 @@
+.web-settings,.web-fields { display:flex; flex-direction:column; gap:1rem; min-width:0; }
+.web-settings > h2 { font-size:.875rem; font-weight:600; }
+.web-fields > [data-slot=chip] { align-self:flex-start; }
+.web-help { font-size:.8125rem; line-height:1.6; color:var(--muted); }
+.web-numbers { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.web-actions,.web-save-status { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.web-actions { justify-content:flex-end; }
+.web-save-status { font-size:.8125rem; color:var(--muted); }
+@container cirno-tab (max-width:480px) { .web-numbers { grid-template-columns:minmax(0,1fr); } }

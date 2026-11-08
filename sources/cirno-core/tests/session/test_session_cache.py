@@ -2,7 +2,8 @@
 
 import pytest
 
-from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
 from cirno_core.session.sqlite_store import SessionConflictError
 
 
@@ -16,19 +17,19 @@ async def test_committed_view_cache_is_bounded(tmp_path):
     try:
         for i in range(140):
             await state.get(str(i))
-            assert len(state._snapshots) <= 8
+            assert len(state.repository.snapshots) <= 8
             if i == 7:
-                assert len(state._snapshots) == 8
+                assert len(state.repository.snapshots) == 8
                 assert state.peek("0") is not None
             elif i == 8:
-                assert len(state._snapshots) == 8
+                assert len(state.repository.snapshots) == 8
                 assert state.peek("0") is None
         await state.update_metadata("139", {"title": "updated"})
         assert state.peek("139").metadata["title"] == "updated"
-        assert len(state._snapshots) == 8
+        assert len(state.repository.snapshots) == 8
         assert state.peek("0") is None
         assert (await state.get("0")).metadata["title"] == "0"
-        assert len(state._snapshots) == 8
+        assert len(state.repository.snapshots) == 8
     finally:
         await state.aclose()
 

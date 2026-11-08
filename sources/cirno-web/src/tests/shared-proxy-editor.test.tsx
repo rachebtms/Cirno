@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { SharedProxyEditor } from "@/components/settings/shared/SharedProxyEditor";
+import { SharedProxyEditor } from "@/features/settings/shared/SharedProxyEditor";
 import i18n from "@/i18n";
 
 function editor(initial: string) {
@@ -28,7 +28,7 @@ describe("Shared proxy editor", () => {
     expect(value()).toBe("http://user:p%40ss@new:8080");
     fireEvent.click(screen.getByRole("button", { name: "Authentication (optional)" }));
     expect(value()).toBe("http://user:p%40ss@new:8080");
-    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Authentication (optional)" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("keeps pasted authentication out of the plain address and encodes credential edits", () => {

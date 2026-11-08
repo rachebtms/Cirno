@@ -7,8 +7,8 @@ export class AccountRequestError extends Error {
   }
 }
 
-export async function accountRequest(action: "register" | "login" | "logout" | "complete" | "change-password", values: Record<string, string> = {}): Promise<void> {
-  const response = await fetchWithTimeout(`/api/auth/${action}`, {
+export async function accountRequest<T = void>(action: "register" | "login" | "logout" | "complete" | "change-password" | "change-router-name", values: Record<string, string> = {}): Promise<T> {
+  const response = await fetchWithTimeout(`/v0/auth/${action}`, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
@@ -16,12 +16,13 @@ export async function accountRequest(action: "register" | "login" | "logout" | "
   });
   const result = await response.json() as { error?: string };
   if (!response.ok) throw new AccountRequestError(result.error ?? "request_failed");
+  return result as T;
 }
 
-export type AccountStatus = { enabled: boolean; authenticated: boolean; registration_required: boolean; username: string | null };
+export type AccountStatus = { enabled: boolean; authenticated: boolean; registration_required: boolean; username: string | null; router_handle?: string | null; router_id?: string };
 
 export async function accountStatus(): Promise<AccountStatus> {
-  const response = await fetchWithTimeout("/api/auth/status", { credentials: "same-origin" });
+  const response = await fetchWithTimeout("/v0/auth/status", { credentials: "same-origin" });
   const result = await response.json() as AccountStatus & { error?: string };
   if (!response.ok) throw new AccountRequestError(result.error ?? "request_failed");
   return result;

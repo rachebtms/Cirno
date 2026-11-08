@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { createThreadProjectionState, projectThreadEvent, projectThreadEvents } from "@/lib/thread-event-projection";
 import { normalizeActivityTimeline } from "@/lib/activity-timeline";
-import type { ThreadProjectionEvent, UIMessage } from "@/lib/types";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { UIMessage } from "@/lib/contracts/messages";
 import projectionFixture from "./fixtures/live-replay-event-projection.json";
 
 interface ProjectionFixtureCase {
@@ -141,7 +142,7 @@ describe("canonical thread event projection", () => {
     });
   });
 
-  it.each(["First ", "![plot](/api/media/signature/immutable-plot.png)\n\n"])(
+  it.each(["First ", "![plot](/v0/media/signature/immutable-plot.png)\n\n"])(
     "keeps legacy cumulative replay contributions around tools: %s", (prefix) => {
       const messages = projectThreadEvents([
         { event: "stream_end", chat_id: "chat", turn_id: "turn", stream_id: "answer", turn_seq: 2, text: prefix, resuming: true, merge_next: true },
@@ -194,8 +195,8 @@ describe("canonical thread event projection", () => {
   });
 
   it("keeps deferred activity rows separately addressable in one segment", () => {
-    const firstDetail = { ref: "2.history-aaaaaaaaaaaaaaaaaaaa", bytes: 40_000, traceCount: 1 };
-    const secondDetail = { ref: "2.history-bbbbbbbbbbbbbbbbbbbb", bytes: 41_000, traceCount: 1 };
+    const firstDetail = { ref: "2.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa", bytes: 40_000, traceCount: 1 };
+    const secondDetail = { ref: "2.1.2.00000000000000000000.history-bbbbbbbbbbbbbbbbbbbb", bytes: 41_000, traceCount: 1 };
 
     const messages = projectThreadEvents([
       {
@@ -239,7 +240,7 @@ it("uses deterministic unknown replay time and preserves distinct same-text inpu
 });
 
 it("keeps internal input provenance and deduplicates replay by source identity", () => {
-  const event = { event: "user_message" as const, projection_id: "input-event-1", starts_turn: true, chat_id: "global", text: "A scheduled task", created_at_ms: 100, provenance: { input_origin: { kind: "scheduled_task" as const, label: "Daily check", id: "schedule-input-1" } } };
+  const event = { event: "user_message" as const, projection_id: "input-event-1", starts_turn: true, chat_id: "b1ec9323-2155-5f24-bc56-1da2f59aeecb", text: "A scheduled task", created_at_ms: 100, provenance: { input_origin: { kind: "scheduled_task" as const, label: "Daily check", id: "schedule-input-1" } } };
   let state = createThreadProjectionState();
   state = projectThreadEvent(state, event, { createId: () => "source-row", now: 100 });
   state = projectThreadEvent(state, event, { createId: () => "duplicate-row", now: 200 });

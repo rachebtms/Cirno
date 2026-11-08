@@ -2,7 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,8 +12,9 @@ from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import RuntimeModelChanged
 from cirno_core.config.errors import ConfigLoadError
 from cirno_core.config.loader import save_config
-from cirno_core.config.schema import Config, ModelPresetConfig
-from cirno_core.providers.base import GenerationSettings
+from cirno_core.config.schema import Config
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.providers.factory import ProviderSnapshot, load_provider_snapshot
 from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
@@ -341,3 +342,24 @@ def test_settings_context_window_refreshes_runtime_state(
     assert payload["requires_restart"] is False
     assert loop.context_window_tokens == 262_144
     assert loop.llm_runtime().context_window_tokens == 262_144
+
+
+async def test_raw_model_selection_notifies_consumers_without_rewriting_admitted_runtime(tmp_path):
+    provider = _provider("model-a")
+    provider.aclose = AsyncMock()
+    changed = []
+    published = []
+    loop = AgentLoop(
+        bus=MessageBus(), provider=provider, workspace=tmp_path, model="model-a",
+        runtime_model_publisher=lambda model, preset: changed.append((model, preset)),
+    )
+    loop.bus.subscribe(published.append, RuntimeModelChanged)
+    before = loop.llm_runtime()
+    try:
+        selected = loop.set_runtime_model("model-b")
+        await loop.bus.drain()
+        assert selected.model == "model-b" and before.model == "model-a"
+        assert changed == [("model-b", None)]
+        assert [(event.model, event.model_preset) for event in published] == [("model-b", None)]
+    finally:
+        await loop.aclose()

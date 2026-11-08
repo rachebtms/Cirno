@@ -37,14 +37,14 @@ describe("index.html", () => {
       /html\.dark body\s*{[^}]*background:\s*([^;]+);/s,
     )?.[1]?.trim();
 
-    expect(themeColor?.content).toBe("#ffffff");
-    expect(themeColor?.dataset.themeColorLight).toBe("#ffffff");
-    expect(themeColor?.dataset.themeColorDark).toBe("#303030");
-    expect(lightBodyBackground).toBe("#ffffff");
-    expect(darkBodyBackground).toBe("#303030");
-    expect(manifest.background_color).toBe("#ffffff");
-    expect(manifest.theme_color).toBe("#ffffff");
-    expect(manifest.color_scheme_dark?.background_color).toBe("#303030");
-    expect(manifest.color_scheme_dark?.theme_color).toBe("#303030");
+    expect(themeColor?.content).toBe("#f7fbff");
+    expect(themeColor?.dataset.themeColorLight).toBe("#f7fbff");
+    expect(themeColor?.dataset.themeColorDark).toBe("#0e1b29");
+    expect(lightBodyBackground).toBe("#f7fbff");
+    expect(darkBodyBackground).toBe("#0e1b29");
+    expect(manifest.background_color).toBe("#f7fbff");
+    expect(manifest.theme_color).toBe("#f7fbff");
+    expect(manifest.color_scheme_dark?.background_color).toBe("#0e1b29");
+    expect(manifest.color_scheme_dark?.theme_color).toBe("#0e1b29");
   });
 });

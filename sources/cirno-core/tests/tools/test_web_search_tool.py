@@ -1,3 +1,6 @@
+from cirno_core.agent.tools.web.context import SearchContext
+from cirno_core.agent.tools.web.searches import deepseek, duckduckgo
+
 """Tests for multi-provider web search."""
 
 import asyncio
@@ -5,11 +8,11 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
-
 from cirno_core.agent.tools.registry import is_tool_error_result
-from cirno_core.agent.tools.web import WebSearchTool
+from cirno_core.agent.tools.web.search import WebSearchTool
+from cirno_core.agent.tools.web_config import WebSearchConfig
 from cirno_core.config.loader import resolve_config_env_vars
-from cirno_core.config.schema import Config, WebSearchConfig
+from cirno_core.config.schema import Config
 
 
 def _tool(
@@ -107,7 +110,7 @@ async def test_brave_search_retries_rate_limit_once(monkeypatch):
             "web": {"results": [{"title": "Recovered", "url": "https://example.com", "description": "ok"}]}
         })
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.asyncio.sleep", mock_sleep)
+    monkeypatch.setattr("asyncio.sleep", mock_sleep)
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
 
     tool = _tool(provider="brave", api_key="brave-key")
@@ -129,7 +132,7 @@ async def test_brave_search_returns_clear_rate_limit_after_retries(monkeypatch):
         calls["n"] += 1
         return _response(status=429, json={"error": "rate limit"})
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.asyncio.sleep", mock_sleep)
+    monkeypatch.setattr("asyncio.sleep", mock_sleep)
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
 
     tool = _tool(provider="brave", api_key="brave-key")
@@ -505,7 +508,7 @@ async def test_deepseek_missing_key_returns_error_without_searching(monkeypatch,
     async def unexpected_search(*args, **kwargs):
         pytest.fail("Missing DeepSeek credentials must not send the query to another provider")
 
-    monkeypatch.setattr(WebSearchTool, "_search_duckduckgo", unexpected_search)
+    monkeypatch.setattr(duckduckgo, "search", unexpected_search)
     monkeypatch.setattr(httpx.AsyncClient, "post", unexpected_search)
     if environment_key is None:
         monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
@@ -600,7 +603,7 @@ async def test_deepseek_provider_clamps_count_to_api_range(monkeypatch, requeste
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
     tool = _tool(provider="deepseek", api_key="deepseek-key")
-    await tool._search_deepseek("clamp", requested)
+    await deepseek.search(SearchContext(tool.config, tool.proxy, tool.user_agent), "clamp", requested)
 
     assert captured["count"] == expected
 
@@ -695,7 +698,7 @@ async def test_deepseek_search_retries_transient_errors_then_succeeds(
             "results": [{"title": "Recovered", "url": "https://example.com/ok", "snippet": "ok"}]
         })
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.asyncio.sleep", mock_sleep)
+    monkeypatch.setattr("asyncio.sleep", mock_sleep)
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
     tool = _tool(provider="deepseek", api_key="deepseek-key")
     result = await tool.execute(query="retry", count=1)
@@ -727,7 +730,7 @@ async def test_deepseek_search_gives_up_after_retry_budget(
         calls["n"] += 1
         return _response(status=status, json={"error": {"message": "still failing"}})
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.asyncio.sleep", mock_sleep)
+    monkeypatch.setattr("asyncio.sleep", mock_sleep)
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
     tool = _tool(provider="deepseek", api_key="deepseek-key")
     result = await tool.execute(query="retry", count=1)
@@ -882,7 +885,7 @@ async def test_deepseek_search_timeout_returns_actionable_error(monkeypatch):
 
 
 def test_deepseek_is_a_registered_search_provider():
-    from cirno_core.agent.tools.web import SEARCH_PROVIDER_OPTIONS
+    from cirno_core.agent.tools.web.catalog import SEARCH_PROVIDER_OPTIONS
 
     option = next(item for item in SEARCH_PROVIDER_OPTIONS if item["name"] == "deepseek")
     assert option["label"] == "DeepSeek"
@@ -1042,9 +1045,6 @@ async def test_duckduckgo_search(monkeypatch):
         def text(self, query, max_results=5):
             return [{"title": "DDG Result", "href": "https://ddg.example", "body": "From DuckDuckGo"}]
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.DDGS", MockDDGS, raising=False)
-    import cirno_core.agent.tools.web as web_mod
-    monkeypatch.setattr(web_mod, "DDGS", MockDDGS, raising=False)
 
     monkeypatch.setattr("ddgs.DDGS", MockDDGS)
 
@@ -1220,15 +1220,15 @@ async def test_unknown_provider():
 
 
 @pytest.mark.asyncio
-async def test_empty_provider_with_api_key_uses_brave(monkeypatch):
-    async def mock_get(self, url, **kw):
-        assert "brave" in url
-        return _response(json={"web": {"results": []}})
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
+async def test_empty_provider_uses_duckduckgo_even_with_an_unrelated_key(monkeypatch):
+    class MockDDGS:
+        def __init__(self, **kwargs):
+            pass
+        def text(self, query, max_results=5):
+            return [{"title": "Keyless", "href": "https://ddg.example", "body": "found"}]
+    monkeypatch.setattr("ddgs.DDGS", MockDDGS)
     tool = _tool(provider="", api_key="test-key")
-    result = await tool.execute(query="test")
-    assert "No results" in result
+    assert "Keyless" in await tool.execute(query="test")
 
 
 @pytest.mark.asyncio
@@ -1401,7 +1401,7 @@ async def test_olostep_package_missing_returns_install_hint(monkeypatch):
     result = await tool.execute(query="test query")
 
     assert result == (
-        "Error: Olostep support is not installed. Run `cirno plugins enable olostep`."
+        "Error: Olostep support is not installed. Install Olostep support in Settings → Web search."
     )
 
 
@@ -1457,8 +1457,8 @@ async def test_search_task_cancellation_closes_client_without_replay(monkeypatch
         assert delay == 1.0
         await block()
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", client)
-    monkeypatch.setattr("cirno_core.agent.tools.web.asyncio.sleep", sleep)
+    monkeypatch.setattr("httpx.AsyncClient", client)
+    monkeypatch.setattr("asyncio.sleep", sleep)
     task = asyncio.create_task(_tool(provider=provider, api_key="test-key").execute(query="cancel"))
     try:
         await asyncio.wait_for(entered.wait(), timeout=2)

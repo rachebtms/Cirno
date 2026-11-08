@@ -51,7 +51,7 @@ async def test_model_and_settings_search_share_the_retrieval_service(monkeypatch
         calls.append((query, config, filters))
         return {"memories": []}
 
-    monkeypatch.setattr("cirno_core.memory.search.search", search)
+    monkeypatch.setattr("cirno_memory.search.search", search)
     sessions = SimpleNamespace(
         state=SimpleNamespace(read_metadata=AsyncMock(return_value={"metadata": {}}))
     )
@@ -151,11 +151,11 @@ def test_conversation_tool_selection_and_ptc_keep_delivery_scoped():
     registry.register(ReadFileTool())
     regular = conversation_tools(registry, "websocket:ordinary")
     assert not regular.has("message") and regular.has("files__read")
-    assert conversation_tools(registry, "websocket:global").has("user__message")
+    assert conversation_tools(registry, "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb").has("user__message")
     assert conversation_tools(regular, "websocket:ordinary") is regular
     sdk = conversation_tools(registry, "websocket:ordinary", ptc_mode=True)
     assert [item["function"]["name"] for item in sdk.get_definitions()] == ["ptc__run"]
-    assert "tools.user.message(content=" not in sdk.sdk_prompt()
+    assert "tools.user.message(content=" not in sdk.model_instructions()
 
 
 @pytest.mark.parametrize("content", ['{"apps":', '[]', '{"apps": []}'])
@@ -163,10 +163,10 @@ def test_damaged_app_registry_is_not_treated_as_empty_or_overwritten(tmp_path, c
     from cirno_core.apps.cli import CliAppError, CliAppManager
 
     manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / "apps")
-    manager.installed_path.parent.mkdir()
-    manager.installed_path.write_text(content)
+    manager.installed.path.parent.mkdir()
+    manager.installed.path.write_text(content)
     with pytest.raises(CliAppError, match="installed CLI Apps"):
         manager.installed_names()
     with pytest.raises(CliAppError, match="installed CLI Apps"):
         manager._record_installed({"name": "example"})
-    assert manager.installed_path.read_text() == content
+    assert manager.installed.path.read_text() == content

@@ -21,7 +21,7 @@ from pypdf import PdfWriter
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.model_runtime import ModelRuntimeResolver
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import LLMResponse, ProviderCallContext
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
 from cirno_core.providers.factory import ProviderSnapshot
 from cirno_core.providers.openai_codex_provider import OpenAICodexProvider
 from cirno_core.utils.llm_runtime import LLMRuntime
@@ -563,7 +563,7 @@ async def test_codex_interrupted_stream_does_not_replay_accepted_request(codex_p
 
 async def test_codex_transport_retry_budget_switches_session_to_http(codex_peer, monkeypatch):
     provider, server, _ = codex_peer
-    monkeypatch.setattr(provider, "_CHAT_RETRY_DELAYS", (0, 0, 0))
+    monkeypatch.setattr(provider.retry_policy, "delays", (0, 0, 0))
 
     async def respond(peer, _body):
         await peer.socket.close(code=1011, message=b"keepalive ping timeout")
@@ -589,7 +589,7 @@ async def test_codex_transport_retry_budget_switches_session_to_http(codex_peer,
 
 async def test_codex_transport_fallback_does_not_repeat_partial_output(codex_peer, monkeypatch):
     provider, server, _ = codex_peer
-    monkeypatch.setattr(provider, "_CHAT_RETRY_DELAYS", (0, 0, 0))
+    monkeypatch.setattr(provider.retry_policy, "delays", (0, 0, 0))
     deltas = []
 
     async def respond(peer, _body):
@@ -617,8 +617,8 @@ async def test_codex_transport_fallback_does_not_repeat_partial_output(codex_pee
 
 async def test_codex_idle_timeout_budget_switches_session_to_http(codex_peer, monkeypatch):
     provider, server, _ = codex_peer
-    monkeypatch.setattr(provider, "_CHAT_RETRY_DELAYS", (0, 0, 0))
-    monkeypatch.setenv("CIRNO_STREAM_IDLE_TIMEOUT_S", "0.05")
+    monkeypatch.setattr(provider.retry_policy, "delays", (0, 0, 0))
+    provider.stream_idle_timeout_s = 0.05
 
     async def respond(_peer, _body):
         pass

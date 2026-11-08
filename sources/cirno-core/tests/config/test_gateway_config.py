@@ -1,6 +1,7 @@
 import pytest
 
-from cirno_core.config.schema import Config, ServerConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.server import ServerConfig
 
 
 def test_gateway_restart_mode_accepts_camel_alias():

@@ -1,0 +1,51 @@
+/* Server-synchronized Cirno palettes are the single source for HeroUI colors. */
+@layer base {
+  :root, .light, .dark {
+    --background: hsl(var(--cirno-background));
+    --foreground: hsl(var(--cirno-foreground));
+    --surface: hsl(var(--cirno-card));
+    --surface-foreground: var(--foreground);
+    --surface-secondary: hsl(var(--cirno-muted));
+    --surface-secondary-foreground: var(--foreground);
+    --surface-tertiary: hsl(var(--cirno-secondary));
+    --surface-tertiary-foreground: var(--foreground);
+    --overlay: hsl(var(--cirno-popover));
+    --overlay-foreground: var(--foreground);
+    --default: hsl(var(--cirno-secondary));
+    --default-foreground: var(--foreground);
+    --accent: hsl(var(--cirno-primary));
+    --accent-foreground: hsl(var(--cirno-primary-foreground));
+    --muted: hsl(var(--cirno-muted-foreground));
+    --border: hsl(var(--cirno-border));
+    --separator: var(--border);
+    --focus: hsl(var(--cirno-ring));
+    --field-background: hsl(var(--cirno-background));
+    --field-foreground: var(--foreground);
+    --field-placeholder: var(--muted);
+    --field-border: var(--border);
+    --field-border-width: 1px;
+    --field-radius: 0.75rem;
+    --danger: hsl(var(--cirno-destructive));
+    --danger-foreground: hsl(var(--cirno-destructive-foreground));
+    --segment: var(--surface);
+    --segment-foreground: var(--foreground);
+    --radius: 0.5rem;
+  }
+  /* Rounded surfaces retain their geometry during width and selection changes. */
+  * { corner-shape: round; }
+}
+
+/* Touch screens need a discoverable dismissal action without hovering. */
+@media (hover: none) {
+  .toast[data-frontmost="true"]:not([data-exiting="true"]) {
+    padding-inline-end: 3rem;
+  }
+  .toast[data-frontmost="true"]:not([data-exiting="true"]) [data-slot="toast-close"] {
+    opacity: 1;
+    pointer-events: auto;
+    inset-inline-end: .25rem;
+    top: .25rem;
+    width: 2rem;
+    height: 2rem;
+  }
+}

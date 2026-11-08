@@ -1,4 +1,4 @@
-import type { SlashCommand } from "@/lib/types";
+import type { SlashCommand } from "@/lib/contracts/commands";
 
 type ResolvedSlashCommandLifecycle =
   | "side_channel"

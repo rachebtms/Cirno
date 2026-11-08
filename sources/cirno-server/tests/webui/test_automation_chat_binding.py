@@ -11,21 +11,23 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import websockets
-
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import current_request_context
 from cirno_core.bus.queue import MessageBus
-from cirno_server.channels.websocket.runtime import WebSocketChannel, WebSocketConfig
 from cirno_core.config.schema import Config
 from cirno_core.cron.binding import CronBinding, binding_revision
 from cirno_core.cron.bound_runner import run_bound_cron_job
 from cirno_core.cron.service import CronService
 from cirno_core.cron.types import CronRunRecord, CronSchedule
-from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.manager import SessionManager
+from cirno_server.channels.websocket.config import WebSocketConfig
+from cirno_server.channels.websocket.runtime import WebSocketChannel
 from cirno_server.webui.automation_chats import automation_chats
 from cirno_server.webui.automation_results import cron_run_response
-from cirno_server.webui.services import build_gateway_services
+from cirno_server.webui.services import build_server_services
 from cirno_server.webui.session_automations import serialize_automation_jobs
 from cirno_server.webui.workspaces import WebUIWorkspaceController
 
@@ -236,10 +238,10 @@ async def test_real_gateway_move_run_reload_and_previous_result(tmp_path, target
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     cfg = WebSocketConfig.model_validate({"enabled": True, "host": "127.0.0.1", "port": port,
-        "path": "/ws", "allowFrom": ["*"], "websocketRequiresToken": True})
-    gateway = build_gateway_services(config=cfg, bus=bus, session_manager=sessions,
+        "path": "/v0/ws", "allowFrom": ["*"], "websocketRequiresToken": True})
+    gateway = build_server_services(config=cfg, bus=bus, session_manager=sessions,
         static_dist_path=None, workspace_path=tmp_path / "workspace", default_restrict_to_workspace=False,
-        runtime_model_name=None, runtime_surface="browser", runtime_capabilities_overrides=None,
+        runtime_model_name=None,
         cron_service=cron, channel_runtime_status=lambda: {"telegram": {"running": True}})
     channel = WebSocketChannel(cfg, bus, gateway=gateway)
     server = asyncio.create_task(channel.start())
@@ -252,14 +254,14 @@ async def test_real_gateway_move_run_reload_and_previous_result(tmp_path, target
         async with asyncio.timeout(5):
             while client is None:
                 try:
-                    client = await websockets.connect(f"ws://127.0.0.1:{port}/ws?token={token}")
+                    client = await websockets.connect(f"ws://127.0.0.1:{port}/v0/ws?token={token}")
                 except OSError:
                     await asyncio.sleep(.01)
         assert json.loads(await client.recv())["event"] == "ready"
         api_token = gateway.tokens.issue_api_token(60)
         async with httpx.AsyncClient(trust_env=False) as http:
             session_jobs = await http.get(
-                f"http://127.0.0.1:{port}/api/sessions/websocket%3Asource/automations",
+                f"http://127.0.0.1:{port}/v0/sessions/websocket%3Asource/automations",
                 headers={"Authorization": f"Bearer {api_token}"},
             )
             assert session_jobs.status_code == 200
@@ -269,7 +271,7 @@ async def test_real_gateway_move_run_reload_and_previous_result(tmp_path, target
             assert detail["protected"] is False
             assert detail["chat_binding_revision"] == binding_revision(old)
             assert detail["state"]["run_history"][0]["status"] == "ok"
-            url = f"http://127.0.0.1:{port}/api/webui/automations/chats?id={job.id}"
+            url = f"http://127.0.0.1:{port}/v0/webui/automations/chats?id={job.id}"
             assert (await http.get(url)).status_code == 401
             result = await http.get(url, headers={"Authorization": f"Bearer {api_token}"})
             assert result.status_code == 200
@@ -277,7 +279,7 @@ async def test_real_gateway_move_run_reload_and_previous_result(tmp_path, target
             target = next(chat for chat in data["chats"]
                           if chat["title"] == ("Product team" if target_channel == "telegram" else "Report inbox"))
             direct = await http.get(
-                f"http://127.0.0.1:{port}/api/webui/automations/change-chat?id={job.id}",
+                f"http://127.0.0.1:{port}/v0/webui/automations/change-chat?id={job.id}",
                 headers={"Authorization": f"Bearer {api_token}"},
             )
             assert direct.status_code == 405
@@ -322,7 +324,7 @@ async def test_real_gateway_move_run_reload_and_previous_result(tmp_path, target
                     await channel.send(msg)
             async with httpx.AsyncClient(trust_env=False) as http:
                 opened = await http.get(
-                    f"http://127.0.0.1:{port}/api/sessions/websocket%3Adestination/webui-thread",
+                    f"http://127.0.0.1:{port}/v0/sessions/websocket%3Adestination/webui-thread",
                     headers={"Authorization": f"Bearer {api_token}"},
                 )
                 assert opened.status_code == 200
@@ -366,7 +368,7 @@ async def test_real_gateway_move_run_reload_and_previous_result(tmp_path, target
 @pytest.mark.asyncio
 async def test_late_subagent_result_stays_with_moved_task(tmp_path, monkeypatch):
     # A background result can arrive after the normal 300-second terminal wait.
-    monkeypatch.setattr("cirno_core.agent.loop._SUBAGENT_TERMINAL_WAIT_SECONDS", 0.02)
+    monkeypatch.setattr("cirno_core.agent.execution.injection._SUBAGENT_TERMINAL_WAIT_SECONDS", 0.02)
     sessions, cron, job = seed(tmp_path)
     release = asyncio.Event()
     entered = asyncio.Event()

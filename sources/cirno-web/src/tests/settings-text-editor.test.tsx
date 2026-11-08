@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsTextEditor } from "@/components/settings/shared/SettingsTextEditor";
+import { SettingsTextEditor } from "@/features/settings/shared/SettingsTextEditor";
 import i18n from "@/i18n";
 
 beforeEach(async () => { await i18n.changeLanguage("en"); });
@@ -17,7 +17,7 @@ describe("settings text editor copy", () => {
       expect(dialog).not.toHaveAttribute("aria-describedby");
       expect(dialog).toHaveAccessibleDescription("");
       expect(within(dialog).getByRole("textbox", { name: "Headers" })).toHaveValue("{}");
-      expect(within(dialog).getByRole("textbox", { name: "Headers" })).toHaveFocus();
+      await waitFor(() => expect(within(dialog).getByRole("textbox", { name: "Headers" })).toHaveFocus());
       expect(warning).not.toHaveBeenCalled();
     },
   );
@@ -73,4 +73,18 @@ describe("JSON configuration editing", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "MCP JSON" })).toHaveValue(JSON.stringify({ command: "node" }, null, 2)));
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
+});
+
+it("ignores a previous configuration read after the editor is closed and reopened", async () => {
+  let finish!: (text: string) => void;
+  const load = vi.fn().mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve; }))
+    .mockResolvedValueOnce('{"current":true}');
+  render(<SettingsTextEditor title="Configuration" value="" json loadValue={load} onSave={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+  const input = screen.getByRole("textbox", { name: "Configuration" });
+  await waitFor(() => expect(input).toHaveValue(JSON.stringify({ current: true }, null, 2)));
+  await act(async () => finish('{"stale":true}'));
+  expect(input).toHaveValue(JSON.stringify({ current: true }, null, 2));
 });

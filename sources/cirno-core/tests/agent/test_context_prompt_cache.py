@@ -114,10 +114,10 @@ def test_provider_context_appended_after_user_content(tmp_path) -> None:
 
 def test_execution_rules_in_system_prompt(tmp_path) -> None:
     """Execution rules should appear in the system prompt via the default templates."""
-    from cirno_core.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.home_templates import sync_home_templates
 
     workspace = _make_workspace(tmp_path)
-    sync_workspace_templates(workspace, silent=True)
+    sync_home_templates(silent=True)
     builder = ContextBuilder(workspace)
 
     prompt = builder.build_system_prompt()
@@ -128,7 +128,7 @@ def test_execution_rules_in_system_prompt(tmp_path) -> None:
 @pytest.mark.parametrize("legacy_workspace", [False, True])
 def test_scheduling_contract_reaches_fresh_and_legacy_workspaces(tmp_path, legacy_workspace) -> None:
     """Default files can be skipped and old files must not hide the current contract."""
-    from cirno_core.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.home_templates import sync_home_templates
 
     workspace = _make_workspace(tmp_path)
     agents_path = workspace / "AGENTS.md"
@@ -138,7 +138,7 @@ def test_scheduling_contract_reaches_fresh_and_legacy_workspaces(tmp_path, legac
     )
     if legacy_workspace:
         agents_path.write_text(f"# Workspace rules\nReply in Chinese.\n{legacy_rule}\n", encoding="utf-8")
-    sync_workspace_templates(workspace, silent=True)
+    sync_home_templates(silent=True)
     original = agents_path.read_bytes()
     builder = ContextBuilder(workspace)
     messages = builder.build_messages(history=[], current_message="每天早上8点提醒我喝水")
@@ -233,10 +233,10 @@ def test_memory_skill_is_lazy_loaded_from_skills_index(tmp_path) -> None:
 
 
 def test_fresh_workspace_omits_default_prompt_scaffolding(tmp_path) -> None:
-    from cirno_core.utils.helpers import sync_workspace_templates
+    from cirno_core.utils.home_templates import sync_home_templates
 
     workspace = _make_workspace(tmp_path)
-    sync_workspace_templates(workspace, silent=True)
+    sync_home_templates(silent=True)
 
     prompt = ContextBuilder(workspace).build_system_prompt()
 
@@ -249,8 +249,8 @@ def test_fresh_workspace_omits_default_prompt_scaffolding(tmp_path) -> None:
 def test_template_memory_md_is_skipped(tmp_path) -> None:
     """Template content is omitted while memory locations remain available."""
     workspace = _make_workspace(tmp_path)
-    from cirno_core.utils.helpers import sync_workspace_templates
-    sync_workspace_templates(workspace, silent=True)
+    from cirno_core.utils.home_templates import sync_home_templates
+    sync_home_templates(silent=True)
 
     builder = ContextBuilder(workspace)
     prompt = builder.build_system_prompt()
@@ -263,8 +263,8 @@ def test_template_memory_md_is_skipped(tmp_path) -> None:
 def test_customized_memory_md_is_injected(tmp_path, monkeypatch) -> None:
     """A Dream-populated MEMORY.md should be injected normally."""
     workspace = _make_workspace(tmp_path)
-    from cirno_core.utils.helpers import sync_workspace_templates
-    sync_workspace_templates(workspace, silent=True)
+    from cirno_core.utils.home_templates import sync_home_templates
+    sync_home_templates(silent=True)
 
     (workspace / "memory" / "MEMORY.md").write_text(
         "# Long-term Memory\n\nUser prefers dark mode.\n", encoding="utf-8"
@@ -290,9 +290,9 @@ def test_customized_memory_md_is_injected(tmp_path, monkeypatch) -> None:
 
 
 def test_checkpoint_updates_preserve_system_and_replayed_prefix(tmp_path) -> None:
-    from cirno_core.memory.repository import MemoryRepository
+    from cirno_memory.repository import MemoryRepository
     from cirno_core.runtime.context import RUNTIME_CONTEXT_MESSAGE_META, RUNTIME_CONTEXT_HISTORY_META
-    from cirno_core.session.manager import Session
+    from cirno_core.session.model import Session
 
     workspace = _make_workspace(tmp_path)
     builder = ContextBuilder(workspace)
@@ -332,7 +332,7 @@ def test_skill_discovery_order_does_not_change_system_prompt(tmp_path, monkeypat
     assert builder.build_system_prompt() == first
 
 
-@pytest.mark.parametrize("session_key", ["websocket:global", "websocket:worker"])
+@pytest.mark.parametrize("session_key", ["websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", "websocket:worker"])
 def test_dream_memory_update_extends_cached_history_and_deduplicates(tmp_path, session_key):
     from cirno_core.runtime.context import RUNTIME_CONTEXT_MESSAGE_META, RUNTIME_CONTEXT_HISTORY_META
     workspace = _make_workspace(tmp_path)

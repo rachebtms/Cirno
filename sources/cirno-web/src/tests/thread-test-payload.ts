@@ -1,8 +1,6 @@
-import type {
-  ThreadProjectionEvent,
-  UIMessage,
-  WebuiThreadPersistedPayload,
-} from "@/lib/types";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { UIMessage } from "@/lib/contracts/messages";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 // UI-focused tests can describe their expected rows compactly here, but this
 // builder always feeds the application the canonical event protocol. The HTTP

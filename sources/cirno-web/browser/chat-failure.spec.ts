@@ -1,39 +1,34 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390]) {
   for (const variant of ["thread", "hero"]) {
     for (const notice of ["recovery", "stream", "fallback"]) {
-      test(`${notice} aligns with ${variant} composer at ${width}px`, async ({ page }) => {
+      test(`${notice} aligns with ${variant} composer at ${width}px`, async ({ page }, info) => {
         await page.setViewportSize({ width, height: 1000 });
         await page.emulateMedia({ reducedMotion: "reduce" });
-        await page.addInitScript(({ dark, locale }) => {
-          localStorage.setItem("cirno.locale", locale);
-          localStorage.setItem("cirno-webui.settings-preferences", JSON.stringify({ schemaVersion: 1, readingTextSize: "large" }));
-          document.addEventListener("DOMContentLoaded", () => {
-            document.documentElement.classList.toggle("dark", dark);
-          });
-        }, { dark: variant === "hero", locale: width === 390 ? "zh-CN" : "en" });
+        await seedPreviewPreferences(page, { language: width === 390 ? "zh-CN" : "en", readingTextSize: "large", themeMode: variant === "hero" ? "dark" : "light" });
+        await page.addInitScript(dark => {
+          document.addEventListener("DOMContentLoaded", () => document.documentElement.classList.toggle("dark", dark));
+        }, variant === "hero");
         await page.goto(`/browser/fixture.html?case=chat-failure&notice=${notice}&variant=${variant}`);
-        const alert = page.locator(".thread-composer-notice");
+        const alert = notice === "recovery" ? page.getByRole("alert") : page.locator(".thread-composer-notice");
         const composer = page.locator(".thread-composer-surface");
         await expect(alert).toBeVisible();
         await expect(composer).toBeVisible();
-        const noticeBox = (await alert.boundingBox())!;
-        const composerBox = (await composer.boundingBox())!;
-        expect(Math.abs(noticeBox.x - composerBox.x)).toBeLessThan(1);
-        expect(Math.abs(noticeBox.width - composerBox.width)).toBeLessThan(1);
-        for (const button of await alert.getByRole("button").all()) {
-          await expect(button).toBeInViewport({ ratio: 1 });
-          const box = (await button.boundingBox())!;
-          expect(box.x).toBeGreaterThanOrEqual(noticeBox.x);
-          expect(box.x + box.width).toBeLessThanOrEqual(noticeBox.x + noticeBox.width);
-        }
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         if (notice === "recovery") {
+          await expect(page.locator(".thread-composer-notice")).toHaveCount(0);
+          const noteBox = (await alert.boundingBox())!;
+          const inputBox = (await composer.boundingBox())!;
+          expect(Math.abs(noteBox.x - inputBox.x)).toBeLessThan(1);
+          expect(Math.abs(noteBox.width - inputBox.width)).toBeLessThan(1);
           await expect(alert).toContainText(width === 390 ? "模型提供商验证失败" : "Model provider authorization failed");
-          await alert.getByRole("button").first().click();
-          await expect(page.getByLabel("Fixture action")).toHaveText("settings");
-          await alert.getByRole("button").last().click();
+          const resume = composer.getByRole("button", { name: width === 390 ? "继续" : "Continue", exact: true });
+          await expect(resume).toBeInViewport({ ratio: 1 });
+          await expect(resume).toHaveClass(/composer-primary-action/);
+          await page.screenshot({ path: info.outputPath("composer-recovery.png") });
+          await resume.click();
           await expect(alert).toBeHidden();
           await expect(page.getByLabel("Fixture action")).toHaveText("continued");
         } else {
@@ -50,10 +45,7 @@ for (const width of [1440, 390]) {
   for (const size of ["small", "standard", "large"] as const) {
     test(`image and quote retain the responsive message actions: ${size}, ${width}px`, async ({ page }, info) => {
       await page.setViewportSize({ width, height: 1000 });
-      await page.addInitScript(({ size, locale }) => {
-        localStorage.setItem("cirno.locale", locale);
-        localStorage.setItem("cirno-webui.settings-preferences", JSON.stringify({ schemaVersion: 1, readingTextSize: size }));
-      }, { size, locale: width === 390 ? "zh-CN" : "en" });
+      await seedPreviewPreferences(page, { language: width === 390 ? "zh-CN" : "en", readingTextSize: size });
       await page.goto("/browser/fixture.html?case=chat-failure");
       const image = page.getByAltText("Failure screenshot");
       await expect(image).toBeVisible();

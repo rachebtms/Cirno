@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { coalesceActivityMessages } from "@/components/thread/activity/activity-message-model";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const trace = 'web_search({"query":"same query"})';
 
@@ -20,7 +20,7 @@ function progressMessage(id: string, phase: "start" | "end" | "error"): UIMessag
 describe("activity message coalescing", () => {
   it("keeps reused call IDs isolated by turn and picks the latest compatible legacy row", () => {
     const call = (id: string, turnId?: string): UIMessage => ({
-      ...progressMessage(id, "start"), turnId,
+      ...progressMessage(id, "start"), turnId, content: "web_search()", traces: ["web_search()"],
       toolEvents: [{ call_id: "shared", phase: "start", name: "web_search" }],
     });
     const complete = (id: string, turnId?: string): UIMessage => ({

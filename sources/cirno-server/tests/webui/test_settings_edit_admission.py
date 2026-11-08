@@ -10,18 +10,19 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from websockets.datastructures import Headers
-
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.queue import MessageBus
 from cirno_core.config.loader import load_config, save_config
-from cirno_core.config.schema import Config, ModelPresetConfig, ProviderConfig
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.config.providers import ProviderConfig
+from cirno_core.config.schema import Config
 from cirno_core.providers.factory import load_provider_snapshot
 from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno_server.webui.settings import api as settings_api
 from cirno_server.webui.http_utils import http_json_response
+from cirno_server.webui.settings import api as settings_api
 from cirno_server.webui.settings.routes import WebUISettingsRouter
 from cirno_server.webui.settings.services import WebUISettingsServices
+from websockets.datastructures import Headers
 
 
 @pytest.mark.asyncio
@@ -62,9 +63,9 @@ async def test_model_save_commits_before_refreshing_next_session_admission(
         parse_query=lambda path: parse_qs(urlsplit(path).query),
         json_response=http_json_response,
         error_response=lambda status, message: http_json_response({"error": message}, status=status),
-        runtime_surface="browser",
-        runtime_capabilities={},
-        mcp_oauth_redirect_uri=lambda _request: "https://gateway.example/auth/mcp/callback",
+
+
+        mcp_oauth_redirect_uri=lambda _request: "https://gateway.example/v0/mcp/oauth/callback",
     )
     before_save, allow_save = threading.Event(), threading.Event()
     disk_saved, allow_return = threading.Event(), threading.Event()
@@ -93,13 +94,13 @@ async def test_model_save_commits_before_refreshing_next_session_admission(
     try:
         prior = await admit("prior")
         cached_preset = await admit("prior-preset", explicit_preset=True)
-        draft = {"name": "chat", "context_window_tokens": 500_000}
+        draft = {"id": "chat", "context_window_tokens": 500_000}
         # A draft is just client-owned data, not disk or runtime state.
         assert disk_window() == 100_000
         assert prior.context_window_tokens == cached_preset.context_window_tokens == 100_000
         assert (await admit("draft-only")).context_window_tokens == 100_000
 
-        path = "/api/settings/model-configurations/update"
+        path = "/v0/settings/model-configurations/update"
         request = SimpleNamespace(path=path, headers=Headers())
         request._cirno_webui_mutation_request = True
         request._cirno_webui_mutation_payload = draft

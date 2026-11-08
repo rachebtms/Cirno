@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import { DiffSyntaxHighlight } from "@/components/thread/activity/DiffSyntaxHighlight";
 import { ThemeProvider } from "@/hooks/useTheme";
 
-const globalStyles = parse(readFileSync(resolve(process.cwd(), "src/globals.css"), "utf8"));
+const globalStyles = parse(["foundation", "syntax"].map((name) =>
+  readFileSync(resolve(process.cwd(), `src/styles/global/${name}.css`), "utf8"),
+).join("\n"));
 // happy-dom does not apply cascade layers; retain the real rules and their order.
 globalStyles.walkAtRules("layer", (layer) => {
   layer.replaceWith(...(layer.nodes ?? []));

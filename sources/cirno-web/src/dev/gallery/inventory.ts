@@ -7,4 +7,4 @@ export interface ComponentSource {
   source: string;
 }
 
-export const foundationPath = "webui/src/components/ui/";
+export const foundationPath = "sources/cirno-web/src/components/ui/";

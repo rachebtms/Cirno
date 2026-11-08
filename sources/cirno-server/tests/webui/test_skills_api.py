@@ -1,10 +1,10 @@
+import errno
 import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-
 from cirno_core.agent import plugins as agent_plugins
 from cirno_core.config.loader import load_config, save_config
 from cirno_core.config.schema import Config
@@ -75,6 +75,37 @@ def test_skill_detail_exposes_copyable_install_commands(tmp_path: Path) -> None:
             "command": "brew install acme/demo",
         }
     ]
+
+
+def test_invalid_metadata_remains_visible_without_inventing_empty_requirements(tmp_path):
+    directory = _write_skill(tmp_path, "broken", metadata='metadata: {cirno: {requires: {bins: git}}}\n')
+    detail = webui_skill_detail_payload(tmp_path, "broken")
+
+    assert detail is not None
+    assert detail["source"] == "home"
+    assert not detail["available"]
+    assert "requires.bins" in detail["unavailable_reason"]
+    assert detail["requirements"] is None
+    assert detail["install_options"] == []
+    assert detail["raw_markdown"] == (directory / "SKILL.md").read_text()
+    summary = next(skill for skill in webui_skills_payload(tmp_path)["skills"] if skill["name"] == "broken")
+    assert summary["unavailable_reason"] == detail["unavailable_reason"]
+
+
+def test_deleting_invalid_skill_preserves_its_readable_history(tmp_path):
+    from cirno_core.skills.history import skill_versions
+
+    directory = _write_skill(tmp_path, "broken", metadata='metadata: {cirno: {requires: {bins: git}}}\n')
+    original = (directory / "SKILL.md").read_text()
+    config_path = tmp_path / "config.json"
+    save_config(Config(), config_path)
+
+    delete_webui_skill(tmp_path, "broken", disabled_skills=set(), config_path=config_path)
+
+    versions = skill_versions("broken")
+    assert not directory.exists() and len(versions) == 1
+    assert not versions[0]["validation"]["valid"]
+    assert (Path(versions[0]["path"]) / "SKILL.md").read_text() == original
 
 
 @pytest.mark.parametrize("detail", [False, True], ids=["list", "detail"])
@@ -211,9 +242,12 @@ def test_delete_webui_skill_rejects_symlinked_skills_root(
         "---\nname: custom-skill\n---\n",
         encoding="utf-8",
     )
+    (tmp_path / "home").mkdir()
     try:
         (tmp_path / "home" / "skills").symlink_to(outside, target_is_directory=True)
     except OSError as exc:
+        if exc.errno not in {errno.EPERM, errno.EACCES, errno.ENOSYS, errno.ENOTSUP}:
+            raise
         pytest.skip(f"directory symlink unavailable: {exc}")
 
     with pytest.raises(SkillManagementError) as exc_info:

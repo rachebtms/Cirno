@@ -2,11 +2,11 @@
 
 import importlib.util
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tarfile
+from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZipFile
 
@@ -28,7 +28,9 @@ def fixture_package(root, name):
     folder.mkdir(parents=True)
     for file in ["pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md"]:
         shutil.copyfile(REPOSITORY / "sources" / f"cirno-{name}" / file, folder / file)
-    (folder / "__init__.py").write_text('"""Package fixture."""')
+    package = folder / "src" / f"cirno_{name}"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text('"""Package fixture."""')
     return folder
 
 
@@ -42,7 +44,7 @@ def test_editable_build_does_not_copy_generated_resources_into_source(tmp_path):
     data = {}
     hook.initialize("editable", data)
     assert set(root.iterdir()) == before
-    assert any(destination.endswith(".pth") for destination in data["force_include"].values())
+    assert data == {}
 
 
 @pytest.mark.parametrize("package", ["core", "server"])
@@ -69,5 +71,16 @@ def test_source_distribution_rebuild_preserves_owned_resources(tmp_path, package
         assert wheel.namelist().count(resource) == 1
         assert wheel.read(resource) == expected
         assert not any("/tests/" in name or "__pycache__" in name for name in wheel.namelist())
-    assert not (folder / "_build_commit.txt").exists()
-    assert not (folder / "skills/builtin/cirno-document/references").exists()
+    assert not (folder / "src/cirno_core/_build_commit.txt").exists()
+    assert not (folder / "src/cirno_core/skills/builtin/cirno-document/references").exists()
+
+
+@pytest.mark.parametrize("package", ["core", "server"])
+def test_editable_wheel_uses_the_same_canonical_source_root_as_static_analysis(tmp_path, package):
+    folder = fixture_package(tmp_path, package)
+    build(folder, "editable")
+    with ZipFile(next((folder / "dist").glob("*.whl"))) as wheel:
+        paths = [name for name in wheel.namelist() if name.endswith(".pth")]
+        assert len(paths) == 1
+        assert wheel.read(paths[0]).decode().strip() == str(folder / "src")
+        assert not any(name.startswith("_editable_impl_") and name.endswith(".py") for name in wheel.namelist())

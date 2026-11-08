@@ -1,9 +1,10 @@
 import { useState } from "react";
 
 import { FilePreviewPanelView, type FilePreviewPanelState } from "@/components/FilePreviewPanelView";
-import { SessionInfoPopoverView } from "@/components/thread/SessionInfoPopoverView";
+import { SessionAutomationsDialog } from "@/features/automations/session/SessionAutomationsDialog";
 import { SubagentThreadView } from "@/components/thread/SubagentThreadView";
-import type { AutomationUpdatePayload, SessionAutomationJob, UIMessage } from "@/lib/types";
+import type { AutomationUpdatePayload, SessionAutomationJob } from "@/lib/contracts/automations";
+import type { UIMessage } from "@/lib/contracts/messages";
 import { StatePicker, type ComponentExample } from "./example";
 import { useGalleryTranslation } from "./i18n";
 
@@ -38,7 +39,7 @@ function exampleJobs(now: number): SessionAutomationJob[] {
     { id: "gallery-reminder", name: "代码检查", enabled: false, schedule: { kind: "cron", expr: "0 9 * * 1", tz: "Asia/Shanghai" },
       payload: { message: "检查本周变更并整理待办。" }, state: { last_status: "error", last_error: "previews.session.providerError" } },
     { id: "gallery-local-trigger", name: "发布检查", enabled: true, kind: "local_trigger", schedule: { kind: "local" },
-      payload: { kind: "local_trigger", message: "检查发布结果。", command: 'cirno trigger gallery-local-trigger "检查发布结果"' }, state: {} },
+      payload: { kind: "local_trigger", message: "检查发布结果。", command: 'python3 -m cirno_core.triggers --store /instance/state/triggers gallery-local-trigger "检查发布结果"' }, state: {} },
   ];
 }
 
@@ -65,7 +66,7 @@ function SessionPreview() {
   }}>
     <StatePicker label={t("previews.session.state")} value={mode} options={["ready", "loading", "error", "empty", "action_error"]}
       onChange={(next) => { setMode(next); setJobs(exampleJobs(now)); setAction(null); }} />
-    <SessionInfoPopoverView title="组件设计" jobs={mode === "ready" || mode === "action_error" ? displayJobs(jobs) : []} loading={mode === "loading"} loadFailed={mode === "error"} now={now}
+    <SessionAutomationsDialog title="组件设计" jobs={mode === "ready" || mode === "action_error" ? displayJobs(jobs) : []} loading={mode === "loading"} loadError={mode === "error" ? "Fixture task discovery failed" : null} now={now}
       onOpenCalendar={() => setAction({ key: "previews.session.openedCalendar" })}
       onAction={(operation, job) => {
         if (mode === "action_error") return Promise.reject(new Error(t("previews.session.actionError")));
@@ -87,7 +88,7 @@ function SubagentPreview() {
     { id: "gallery-child-prompt", role: "user", content: "检查配置文件的字段和默认值。", turnId: "gallery-child-turn", createdAt: startedAt },
     { id: "gallery-child-thinking", role: "assistant", content: "", reasoning: "先定位配置定义，再核对默认值。",
       reasoningStreaming: mode === "running", isStreaming: mode === "running", turnId: "gallery-child-turn", createdAt: startedAt + 200 },
-    ...(mode === "ready" ? [{ id: "gallery-child-answer", role: "assistant" as const, content: "已核对配置：\n\n- **字段类型** 与默认值一致\n- **目录权限** 由 gateway 执行\n- UI 显示已有配置和保存结果", turnId: "gallery-child-turn", latencyMs: 4_200, createdAt: startedAt + 4_200 }] : []),
+    ...(mode === "ready" ? [{ id: "gallery-child-answer", role: "assistant" as const, content: "已核对配置：\n\n- **字段类型** 与默认值一致\n- **目录权限** 由 Cirno 执行\n- UI 显示已有配置和保存结果", turnId: "gallery-child-turn", latencyMs: 4_200, createdAt: startedAt + 4_200 }] : []),
   ];
   return <div className="space-y-4">
     <StatePicker label={t("previews.subagent.state")} value={mode} options={["ready", "running", "loading", "error"]} onChange={setMode} />
@@ -101,13 +102,13 @@ function SubagentPreview() {
 }
 
 export const contentExamples: ComponentExample[] = [
-  { title: "previews.filePreview.title", files: ["webui/src/components/FilePreviewPanelView.tsx"], Preview: FilePreview,
+  { title: "previews.filePreview.title", files: ["sources/cirno-web/src/components/FilePreviewPanelView.tsx"], Preview: FilePreview,
     description: "previews.filePreview.description", options: "previews.filePreview.options",
     code: '<FilePreviewPanelView path={path} state={previewState} imageOpen={imageOpen} onImageOpenChange={setImageOpen} onImageError={reportImageError} />' },
-  { title: "previews.session.title", files: ["webui/src/components/thread/SessionInfoPopoverView.tsx"], Preview: SessionPreview,
+  { title: "previews.session.title", files: ["sources/cirno-web/src/features/automations/session/SessionAutomationsDialog.tsx"], Preview: SessionPreview,
     description: "previews.session.description", options: "previews.session.options",
-    code: '<SessionInfoPopoverView title={title} jobs={jobs} loading={loading} loadFailed={failed} now={now} onAction={act} onEdit={edit} onOpenCalendar={openCalendar} />' },
-  { title: "previews.subagent.title", files: ["webui/src/components/thread/SubagentThreadView.tsx"], Preview: SubagentPreview,
+    code: '<SessionAutomationsDialog title={title} jobs={jobs} loading={loading} loadError={error} now={now} onAction={act} onEdit={edit} onOpenCalendar={openCalendar} />' },
+  { title: "previews.subagent.title", files: ["sources/cirno-web/src/components/thread/SubagentThreadView.tsx"], Preview: SubagentPreview,
     description: "previews.subagent.description", options: "previews.subagent.options",
     code: '<SubagentThreadView messages={messages} loading={loading} error={error} isStreaming={running} runStartedAt={startedAt} onRetry={retry} />' },
 ];

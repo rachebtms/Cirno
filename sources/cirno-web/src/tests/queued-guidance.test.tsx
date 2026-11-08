@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
-import type { SessionMention, SlashCommand, WebUIIngressLimits } from "@/lib/types";
+import type { SessionMention } from "@/lib/contracts/messages";
+import type { SlashCommand } from "@/lib/contracts/commands";
+import type { WebUIIngressLimits } from "@/lib/contracts/bootstrap";
 import { ComposerDraftStore } from "@/lib/composer-draft";
 import { formatQuotedUserMessage } from "@/lib/user-message-quote";
 
@@ -23,7 +25,7 @@ function limits(attachments: Partial<WebUIIngressLimits["attachments"]> = {}, ma
   return {
     transport: { max_frame_bytes: 1024 * 1024, envelope_reserve_bytes: 1024 },
     message: { max_text_bytes: maxTextBytes },
-    attachments: { max_count: 4, max_file_bytes: 6 * 1024 * 1024, max_total_bytes: 24 * 1024 * 1024, ...attachments },
+    attachments: { max_count: 4, max_file_bytes: 6 * 1024 * 1024, max_video_bytes: 20 * 1024 * 1024, max_total_bytes: 24 * 1024 * 1024, ...attachments },
   };
 }
 
@@ -68,7 +70,7 @@ describe("merged waiting messages", () => {
   });
 
   it.each(["video", "file"] as const)("sends a restored large local %s and a browser upload without spending local bytes", (kind) => {
-    const local = { path: `C:\\project\\large.${kind === "video" ? "mp4" : "pdf"}`, name: "large reference", kind, size: 64 * 1024 * 1024 + 1, mime: kind === "video" ? "video/mp4" : "application/pdf", url: "/api/media/sig/local" };
+    const local = { path: `C:\\project\\large.${kind === "video" ? "mp4" : "pdf"}`, name: "large reference", kind, size: 64 * 1024 * 1024 + 1, mime: kind === "video" ? "video/mp4" : "application/pdf", url: "/v0/media/sig/local" };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([
       { id: "first", text: "read references", images: [{ local, kind }, DOCUMENT] },
     ]));
@@ -136,6 +138,16 @@ describe("merged waiting messages", () => {
     expect(screen.getByRole("group", { name: "Waiting to send" })).toHaveTextContent("first.png");
     expect(screen.getByText(error, { exact: false })).toBeInTheDocument();
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("clears a waiting-message validation error when that message is deleted", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ id: "too-many", text: "Keep references", images: [PNG, DOCUMENT] }]));
+    render(<ThreadComposer onSend={vi.fn()} pendingQueueKey="chat-a" ingressLimits={limits({ max_count: 1 })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send now" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Max 1 attachments per message");
+    fireEvent.click(screen.getByRole("button", { name: "Delete message" }));
+    expect(screen.queryByRole("group", { name: "Waiting to send" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("lets users edit an oversized legacy aggregate without dropping excess attachments", () => {
@@ -291,6 +303,7 @@ describe("merged waiting messages", () => {
     enter("1"); enter("2");
     fireEvent.keyDown(screen.getByLabelText("Message input"), { key: "Enter" });
     expect(onSend).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Message not sent");
     expect(screen.getByRole("group", { name: "Waiting to send" })).toHaveTextContent("1 2");
     view.rerender(<ThreadComposer onSend={onSend} pendingQueueKey="chat-a" completedTurnIds={["turn-a"]} />);
     expect(onSend).toHaveBeenCalledTimes(1);
@@ -300,6 +313,7 @@ describe("merged waiting messages", () => {
     expect(onSend).toHaveBeenCalledTimes(2);
     expect(onSend).toHaveBeenLastCalledWith("1\n2");
     expect(screen.queryByRole("group", { name: "Waiting to send" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("does not automatically re-arm stopped content when another input is appended", () => {

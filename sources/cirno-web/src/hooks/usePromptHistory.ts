@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useClient } from "@/providers/ClientProvider";
-import { fetchPromptIndex, fetchWebuiThread } from "@/lib/api";
+import { fetchPromptPage, fetchWebuiThread } from "@/lib/api";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
 import { isModelCommandText } from "@/lib/format";
 import { isSystemCommandTurnId } from "@/lib/cirno-client";
-import type { PromptIndex, UIMessage, WebuiThreadPersistedPayload } from "@/lib/types";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
+import type { UIMessage } from "@/lib/contracts/messages";
+import { PromptDirectorySource } from "@/features/prompt-history/source";
+import { useDirectoryListing, type PromptDirectoryView } from "@/features/prompt-history/useDirectory";
 import { type PromptAnchor, userPromptAnchors } from "@/components/thread/promptNavigation";
 
 interface HistoryPage {
@@ -17,6 +20,8 @@ const HISTORY_PAGE_LIMIT = 3;
 
 export interface PromptHistoryNavigation {
   prompts: PromptAnchor[];
+  source?: PromptDirectorySource | null;
+  directory?: PromptDirectoryView;
   window: {
     messages: UIMessage[];
     userMessageOffset: number;
@@ -42,14 +47,16 @@ export interface PromptHistoryNavigation {
 export function usePromptHistory(key: string | null, version: number, messages: UIMessage[]): PromptHistoryNavigation {
   const { client, getToken, webuiCapabilities } = useClient();
   const enabled = !!key && webuiCapabilities.includes("webui.prompt-navigation.v1");
-  const [index, setIndex] = useState<{ key: string; prompts: PromptAnchor[] } | null>(null);
-  const indexSnapshot = useRef<PromptIndex>();
+  const source = useMemo(() => enabled && key ? new PromptDirectorySource(
+    (options, signal) => fetchPromptPage(getToken(), key, signal, options),
+  ) : null, [client, enabled, getToken, key]);
+  const listing = useDirectoryListing(source);
+  const index = useMemo(() => ({ key, prompts: listing.loaded }), [key, listing.loaded]);
   const [pages, setPages] = useState<HistoryPage[]>([]);
   const [target, setTarget] = useState<PromptHistoryNavigation["target"]>(null);
   const [operation, setOperation] = useState<PromptHistoryNavigation["operation"]>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [indexError, setIndexError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const request = useRef<AbortController | null>(null);
   const sequence = useRef(0);
@@ -73,29 +80,13 @@ export function usePromptHistory(key: string | null, version: number, messages: 
   useEffect(() => {
     scope.current = { key, client };
     latest();
-    setIndex(null);
-    indexSnapshot.current = undefined;
-    setIndexError(null);
     return () => request.current?.abort();
   }, [key, client, enabled, latest]);
 
   useEffect(() => {
-    if (!enabled || !key) return;
-    const controller = new AbortController();
-    void fetchPromptIndex(getToken(), key, controller.signal, indexSnapshot.current).then((snapshot) => {
-      if (controller.signal.aborted) return;
-      if (snapshot === indexSnapshot.current) { setIndexError(null); return; }
-      indexSnapshot.current = snapshot;
-      setIndex({ key, prompts: snapshot.prompts.filter((item) => !isSystemCommandTurnId(item.turnId) && !isModelCommandText(item.preview)).map((item, position) => ({ ...item, index: position,
-        label: item.preview.replace(/\s+/g, " ").slice(0, 80) || `Prompt ${position + 1}`,
-      })) });
-      setIndexError(null);
-    }).catch((cause: unknown) => {
-      if (controller.signal.aborted) return;
-      setIndexError(cause instanceof Error ? cause.message : String(cause));
-    });
-    return () => controller.abort();
-  }, [client, enabled, getToken, key, version, refresh]);
+    source?.refresh();
+    return () => source?.cancel();
+  }, [source, version, refresh]);
 
   const indexed = useMemo(() => {
     const ids = new Set<string>();
@@ -106,14 +97,18 @@ export function usePromptHistory(key: string | null, version: number, messages: 
     }
     return { ids, turns };
   }, [index]);
-  const localCache = useRef<{ index: typeof index; users: UIMessage[]; prompts: PromptAnchor[] }>();
+  const localCache = useRef<{ index: typeof index; users: UIMessage[]; prompts: PromptAnchor[] } | undefined>(undefined);
   const prompts = useMemo(() => {
     if (!enabled) return userPromptAnchors(messages);
     if (!currentScope || index?.key !== key) return [];
     // Live rows can still have optimistic render ids after admission. Match the
     // host's unambiguous original transport id and content, not text alone.
     const users = messages.filter((message) => {
-      if (message.role !== "user" || indexed.ids.has(message.id)) return false;
+      if (message.role !== "user" || indexed.ids.has(message.id)
+        || isSystemCommandTurnId(message.turnId) || isModelCommandText(message.content)) return false;
+      // Persisted projection ids belong to the sparse directory even when their
+      // metadata page is not loaded. Only live/optimistic rows need merging.
+      if (/^history-[a-f0-9]{20}$/.test(message.id)) return false;
       const admitted = message.turnId ? indexed.turns.get(message.turnId) : null;
       return !admitted || admitted.preview !== message.content.trim().slice(0, 320);
     });
@@ -125,10 +120,17 @@ export function usePromptHistory(key: string | null, version: number, messages: 
     const local = userPromptAnchors(messages).filter((prompt) => localIds.has(prompt.id));
     // Directory order is logical admission order. Unknown legacy times are zero,
     // not a reason to move an old prompt ahead of its preceding inputs.
-    const merged = [...index.prompts, ...local].map((prompt, position) => ({ ...prompt, index: position }));
+    const merged = [...index.prompts, ...local.map((prompt, position) => ({ ...prompt, index: listing.total + position }))];
     localCache.current = { index, users, prompts: merged };
     return merged;
-  }, [currentScope, enabled, index, indexed, key, messages]);
+  }, [currentScope, enabled, index, indexed, key, messages, listing.total]);
+
+  const directory = useMemo(() => {
+    if (!source || !currentScope) return undefined;
+    const live = new Map(prompts.filter((prompt) => prompt.index >= listing.total).map((prompt) => [prompt.index, prompt]));
+    return { ...listing, loaded: prompts, total: listing.total + live.size,
+      get: (position: number) => listing.get(position) ?? live.get(position) };
+  }, [source, currentScope, listing, prompts]);
 
   const updateMessages = useCallback((update: (messages: UIMessage[]) => UIMessage[]) => {
     setPages((current) => current.map((page) => ({ ...page, messages: update(page.messages) })));
@@ -186,10 +188,10 @@ export function usePromptHistory(key: string | null, version: number, messages: 
       forkBoundaryMessageCount: boundary };
   }, [currentScope, pages, first, last]);
 
-  return { prompts, window, target: currentScope ? target : null, loading: currentScope && loading,
+  return { prompts, source, directory, window, target: currentScope ? target : null, loading: currentScope && loading,
     operation: currentScope && (loading || error) ? operation : null,
-    error: currentScope ? error ?? indexError : null, cancel, latest, updateMessages,
-    retry: () => error ? retry.current() : setRefresh((value) => value + 1),
+    error: currentScope ? error ?? listing.error : null, cancel, latest, updateMessages,
+    retry: () => error ? retry.current() : listing.retry(),
     jump: (id) => {
       const prompt = prompts.find((item) => item.id === id);
       if (enabled && prompt?.cursor) void read(prompt.cursor, "after", id);

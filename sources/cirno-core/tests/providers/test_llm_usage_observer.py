@@ -1,4 +1,5 @@
 from __future__ import annotations
+from cirno_core.providers.retry import ProviderRetryPolicy
 
 import asyncio
 import json
@@ -11,16 +12,18 @@ from types import SimpleNamespace
 
 import pytest
 
-from cirno_core.llm_usage.context import current_llm_usage_source, llm_usage_source
-from cirno_core.llm_usage.models import LLMCallRecord
-from cirno_core.llm_usage.service import record_llm_call
-from cirno_core.llm_usage.store import LLMUsageStore
-from cirno_core.providers.base import LLMProvider, LLMResponse, LLMUsage
+from cirno_usage.context import current_llm_usage_source, llm_usage_source
+from cirno_usage.models import LLMCallRecord
+from cirno_usage.service import record_llm_call
+from cirno_usage.store import LLMUsageStore
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.fallback_provider import FallbackProvider
 
 
 class _SequenceProvider(LLMProvider):
-    _CHAT_RETRY_DELAYS = (0,)
+    retry_policy = ProviderRetryPolicy(delays=(0,))
 
     def __init__(self, responses: Iterator[LLMResponse]) -> None:
         super().__init__(provider_name="test-provider")
@@ -36,7 +39,7 @@ class _SequenceProvider(LLMProvider):
 
 
 class _NoRetryProvider(_SequenceProvider):
-    _CHAT_RETRY_DELAYS = ()
+    retry_policy = ProviderRetryPolicy(delays=())
 
 
 class _EstimatingProvider(_SequenceProvider):
@@ -190,7 +193,7 @@ async def test_missing_usage_keeps_loop_responsive_and_settles_before_cancellati
     events: list[LLMCallRecord] = []
     observer_loops = []
     clock = [1_000_000_000]
-    monkeypatch.setattr("cirno_core.providers.base.time.monotonic_ns", lambda: clock[0])
+    monkeypatch.setattr("cirno_core.providers.requests.time.monotonic_ns", lambda: clock[0])
 
     def estimate() -> tuple[int, str]:
         sources.append(current_llm_usage_source())
@@ -362,12 +365,12 @@ async def test_gateway_usage_observer_records_missing_usage_and_retry(
     reply = "gateway-response-canary-27be91"
     error = "gateway-error-canary-64a8cd"
     store = LLMUsageStore(tmp_path / "usage.sqlite3")
-    monkeypatch.setattr("cirno_core.llm_usage.service.get_llm_usage_store", lambda: store)
+    monkeypatch.setattr("cirno_usage.service.get_llm_usage_store", lambda path: store)
     provider = _SequenceProvider(iter([
         LLMResponse(content=error, finish_reason="error", error_kind="timeout"),
         LLMResponse(content=reply),
     ]))
-    provider.set_llm_call_observer(record_llm_call)
+    provider.set_llm_call_observer(lambda call: record_llm_call(call, path=store.path))
     call = provider.chat_stream_with_retry if stream else provider.chat_with_retry
     try:
         with llm_usage_source("api"):
@@ -410,7 +413,7 @@ async def test_stream_observer_records_physical_attempt_timing(monkeypatch) -> N
         ]
     )
     monkeypatch.setattr(
-        "cirno_core.providers.base.time.monotonic_ns",
+        "cirno_core.providers.requests.time.monotonic_ns",
         lambda: next(monotonic_values),
     )
 

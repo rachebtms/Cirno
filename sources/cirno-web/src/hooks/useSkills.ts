@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { fetchSkills } from "@/lib/api";
 import { isSkillsPayload, SKILLS_CHANGED_EVENT, SKILLS_REFRESH_EVENT } from "@/lib/skill-events";
-import type { SkillSummary } from "@/lib/types";
+import type { SkillSummary } from "@/lib/contracts/skills";
 
 type SkillsState =
   | { status: "loading"; skills: null }

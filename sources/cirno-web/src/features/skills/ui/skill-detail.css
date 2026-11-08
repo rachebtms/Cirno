@@ -1,0 +1,125 @@
+.skill-action-description {
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.skill-action-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+.skill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.skill-detail .modal__body {
+  display: grid;
+  gap: 1.25rem;
+  overflow: auto;
+}
+.skill-detail .modal__heading {
+  overflow-wrap: anywhere;
+}
+.skill-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.skill-description p {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.skill-description p[data-expanded="false"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.skill-detail-skeleton {
+  display: grid;
+  gap: 1rem;
+}
+.skill-detail-skeleton span:nth-child(2) {
+  width: 80%;
+}
+.skill-requirements {
+  display: grid;
+  gap: 0.75rem;
+}
+.skill-requirements > .button {
+  justify-self: start;
+}
+.skill-requirements-list {
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+.skill-requirements-list dt {
+  color: var(--muted);
+  margin-bottom: 0.375rem;
+}
+.skill-requirements-list dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.skill-command {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: var(--surface-secondary);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+}
+.skill-command code {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.skill-instructions {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  padding: 0.75rem 0;
+  margin: 0;
+}
+.skill-delete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.skill-delete h3 {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.skill-delete p {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.skill-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 2rem;
+}
+.skill-detail-title .modal__heading {
+  flex: 1;
+  min-width: 0;
+}

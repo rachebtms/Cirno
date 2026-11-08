@@ -1,18 +1,20 @@
 [project]
 name = "cirno-core"
-version = "0.1.6"
-description = "Cirno execution engine, memory, tools, and model providers"
+version = "0.2.0"
+description = "Cirno execution engine, tools, providers and memory coordination"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 dependencies = [
+    "cirno-memory==0.2.0",
+    "cirno-usage==0.2.0",
+    "cirno-vault==0.2.0",
     "anthropic>=0.100.0,<1.0.0",
     "pydantic>=2.12.0,<3.0.0",
     "pydantic-settings>=2.12.0,<3.0.0",
     "httpx[socks]>=0.28.0,<1.0.0",
     "aiohttp>=3.14.3,<4.0.0",
     "yarl>=1.17.0,<2.0.0",
-    "cryptography>=46.0.0",
     "ddgs>=9.16.1,<10.0.0",
     "oauth-cli-kit>=0.1.6,<1.0.0",
     "loguru>=0.7.3,<1.0.0",
@@ -26,6 +28,7 @@ dependencies = [
     "chardet>=3.0.2,<6.0.0",
     "openai>=2.8.0",
     "tiktoken>=0.12.0,<1.0.0",
+    "regex>=2024.11.6,<2027.0.0",
     "jinja2>=3.1.0,<4.0.0",
     "dulwich>=1.2.20,<2.0.0",
     "rapidfuzz>=3.14.6,<4.0.0",
@@ -43,9 +46,7 @@ dependencies = [
 
 [project.optional-dependencies]
 memory-embedding = [
-    "onnxruntime>=1.20,<2",
-    "tokenizers>=0.21,<1",
-    "numpy>=1.26,<3",
+    "cirno-memory[embedding]==0.2.0",
 ]
 azure = [
     "azure-identity>=1.19.0,<2.0.0",
@@ -59,16 +60,15 @@ olostep = [
 ]
 
 [build-system]
-requires = ["hatchling", "editables", "filelock>=3.25.2"]
+requires = ["hatchling", "filelock>=3.25.2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.hooks.custom]
 
 [tool.hatch.build.targets.wheel]
-bypass-selection = true
-exclude = ["/tests/**", "**/tests/**", "**/__pycache__/**", "**/*.py[cod]", "/pyproject.toml", "/hatch_build.py", "/LICENSE", "/THIRD_PARTY_NOTICES.md", "/dist/**", "/.pytest_cache/**", "/.ruff_cache/**"]
-dev-mode-dirs = ["."]
+packages = ["src/cirno_core"]
+exclude = ["**/tests/**", "**/__pycache__/**", "**/*.py[cod]"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/**/*.py", "/**/*.md", "/**/*.json", "/**/*.png", "/pyproject.toml", "/LICENSE", "/THIRD_PARTY_NOTICES.md"]
-exclude = ["**/tests/**", "**/__pycache__/**", "/dist/**", "**/.pytest_cache/**", "**/.ruff_cache/**"]
+include = ["src", "hatch_build.py", "pyproject.toml", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+exclude = ["**/tests/**", "**/__pycache__/**", "**/*.py[cod]"]

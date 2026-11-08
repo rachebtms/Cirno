@@ -1,4 +1,6 @@
 from __future__ import annotations
+from cirno_core.apps.cli.commands import CliCommands
+from cirno_core.apps.cli import records as cli_records
 
 import asyncio
 import json
@@ -15,7 +17,9 @@ import pytest
 from cirno_core.agent import plugins as agent_plugins
 from cirno_core.skills.loader import SkillsLoader
 from cirno_core.apps.cli import service as cli_service
-from cirno_core.apps.cli.service import CliAppError, CliAppManager, CliAppsRuntimeConfig, cli_app_skill_path
+from cirno_core.apps.cli.contracts import CliAppError, CliAppsRuntimeConfig
+from cirno_core.apps.cli.service import CliAppManager
+from cirno_core.apps.cli.paths import cli_app_skill_path
 
 
 @pytest.fixture(autouse=True)
@@ -130,9 +134,9 @@ def _seed_catalog(manager: CliAppManager) -> None:
             },
         ],
     }
-    _write_cache(manager._cache_path("harness"), harness)
-    _write_cache(manager._cache_path("public"), public)
-    _write_cache(manager._cache_path("extensions"), {"meta": {}, "clis": []})
+    _write_cache(manager.registry._cache_path("harness"), harness)
+    _write_cache(manager.registry._cache_path("public"), public)
+    _write_cache(manager.registry._cache_path("extensions"), {"meta": {}, "clis": []})
 
 
 def test_payload_merges_catalog_and_marks_unsupported_installs(tmp_path: Path) -> None:
@@ -182,9 +186,9 @@ def test_payload_merges_catalog_and_marks_unsupported_installs(tmp_path: Path) -
 
 def test_payload_uses_anygen_official_domain_for_logo(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
-    _write_cache(manager._cache_path("harness"), {"meta": {"updated": "2026-04-16"}, "clis": []})
+    _write_cache(manager.registry._cache_path("harness"), {"meta": {"updated": "2026-04-16"}, "clis": []})
     _write_cache(
-        manager._cache_path("public"),
+        manager.registry._cache_path("public"),
         {
             "meta": {"updated": "2026-04-18"},
             "clis": [
@@ -199,7 +203,7 @@ def test_payload_uses_anygen_official_domain_for_logo(tmp_path: Path) -> None:
             ],
         },
     )
-    _write_cache(manager._cache_path("extensions"), {"meta": {}, "clis": []})
+    _write_cache(manager.registry._cache_path("extensions"), {"meta": {}, "clis": []})
 
     payload = manager.payload()
 
@@ -211,7 +215,7 @@ def test_payload_uses_anygen_official_domain_for_logo(tmp_path: Path) -> None:
 def test_payload_resolves_obsidian_agent_cli_brand(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
     _write_cache(
-        manager._cache_path("harness"),
+        manager.registry._cache_path("harness"),
         {
             "meta": {"updated": "2026-07-14"},
             "clis": [
@@ -225,8 +229,8 @@ def test_payload_resolves_obsidian_agent_cli_brand(tmp_path: Path) -> None:
             ],
         },
     )
-    _write_cache(manager._cache_path("public"), {"meta": {}, "clis": []})
-    _write_cache(manager._cache_path("extensions"), {"meta": {}, "clis": []})
+    _write_cache(manager.registry._cache_path("public"), {"meta": {}, "clis": []})
+    _write_cache(manager.registry._cache_path("extensions"), {"meta": {}, "clis": []})
 
     app = manager.payload()["apps"][0]
 
@@ -240,7 +244,7 @@ def test_installed_payload_enriches_apps_from_cached_catalog(
 ) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({
+    manager.installed.replace({
         "gimp": {
             "entry_point": "installed-gimp",
             "source": "harness",
@@ -267,10 +271,10 @@ def test_installed_payload_enriches_apps_from_cached_catalog(
 
 def test_payload_includes_cirno_extension_registry(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
-    _write_cache(manager._cache_path("harness"), {"meta": {"updated": "2026-04-16"}, "clis": []})
-    _write_cache(manager._cache_path("public"), {"meta": {"updated": "2026-04-18"}, "clis": []})
+    _write_cache(manager.registry._cache_path("harness"), {"meta": {"updated": "2026-04-16"}, "clis": []})
+    _write_cache(manager.registry._cache_path("public"), {"meta": {"updated": "2026-04-18"}, "clis": []})
     _write_cache(
-        manager._cache_path("extensions"),
+        manager.registry._cache_path("extensions"),
         {
             "meta": {"updated": "2026-05-29"},
             "clis": [
@@ -311,7 +315,7 @@ def test_optional_extension_registry_failure_does_not_break_payload(
 ) -> None:
     manager = _manager(tmp_path)
     _write_cache(
-        manager._cache_path("harness"),
+        manager.registry._cache_path("harness"),
         {
             "meta": {"updated": "2026-04-16"},
             "clis": [
@@ -325,12 +329,12 @@ def test_optional_extension_registry_failure_does_not_break_payload(
             ],
         },
     )
-    _write_cache(manager._cache_path("public"), {"meta": {"updated": "2026-04-18"}, "clis": []})
+    _write_cache(manager.registry._cache_path("public"), {"meta": {"updated": "2026-04-18"}, "clis": []})
 
     def fail_get(*args, **kwargs):
         raise RuntimeError("network unavailable")
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.catalog.httpx.get", fail_get)
 
     payload = manager.payload()
 
@@ -345,28 +349,28 @@ def test_payload_cache_only_does_not_fetch_catalog(tmp_path: Path, monkeypatch: 
     def fail_get(*args, **kwargs):
         raise AssertionError("network should not be used")
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.catalog.httpx.get", fail_get)
 
     payload = manager.payload(cache_only=True)
 
     assert payload["catalog_updated_at"] == "2026-04-18"
     assert {app["name"] for app in payload["apps"]} >= {"gimp", "feishu"}
-    assert manager.catalog_cache_fresh() is True
+    assert manager.registry.catalog_cache_fresh() is True
 
 
 def test_catalog_cache_fresh_can_include_optional_sources(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
     _write_cache(
-        manager._cache_path("harness"),
+        manager.registry._cache_path("harness"),
         {"meta": {"updated": "2026-04-16"}, "clis": []},
     )
     _write_cache(
-        manager._cache_path("public"),
+        manager.registry._cache_path("public"),
         {"meta": {"updated": "2026-04-18"}, "clis": []},
     )
 
-    assert manager.catalog_cache_fresh() is True
-    assert manager.catalog_cache_fresh(include_optional=True) is False
+    assert manager.registry.catalog_cache_fresh() is True
+    assert manager.registry.catalog_cache_fresh(include_optional=True) is False
 
 
 def test_fetch_registry_async_offloads_cache_io_and_preserves_fallback(
@@ -374,14 +378,14 @@ def test_fetch_registry_async_offloads_cache_io_and_preserves_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager = _manager(tmp_path)
-    cache_path = manager._cache_path("harness")
+    cache_path = manager.registry._cache_path("harness")
     _write_cache(cache_path, {"meta": {"updated": "old"}, "clis": []})
     fetched = {"meta": {"updated": "2026-10-17"}, "clis": [{"name": "gimp"}]}
     loop_thread = threading.get_ident()
     io_threads: list[tuple[str, int]] = []
     network_threads: list[int] = []
-    real_cached_registry = manager._cached_registry
-    real_write = cli_service._write_json
+    real_cached_registry = manager.registry._cached_registry
+    real_write = cli_records._write_json
     real_client = httpx.AsyncClient
 
     def read(path: Path):
@@ -402,8 +406,8 @@ def test_fetch_registry_async_offloads_cache_io_and_preserves_fallback(
     def no_sync_network(*args, **kwargs):
         raise AssertionError("registry refresh must keep asynchronous HTTP")
 
-    monkeypatch.setattr(manager, "_cached_registry", read)
-    monkeypatch.setattr(cli_service, "_write_json", write)
+    monkeypatch.setattr(manager.registry, "_cached_registry", read)
+    monkeypatch.setattr(cli_records, "_write_json", write)
     monkeypatch.setattr(cli_service.httpx, "get", no_sync_network)
     monkeypatch.setattr(
         cli_service.httpx, "AsyncClient",
@@ -412,10 +416,10 @@ def test_fetch_registry_async_offloads_cache_io_and_preserves_fallback(
 
     async def check() -> None:
         url = "https://registry.invalid/catalog.json"
-        assert await manager._fetch_registry_async(url, cache_path, force_refresh=True) == fetched
+        assert await manager.registry._fetch_registry_async(url, cache_path, force_refresh=True) == fetched
         writes_before_failure = [item for item in io_threads if item[0] == "write"]
         assert writes_before_failure
-        assert await manager._fetch_registry_async(url, cache_path, force_refresh=True) == fetched
+        assert await manager.registry._fetch_registry_async(url, cache_path, force_refresh=True) == fetched
         assert [item for item in io_threads if item[0] == "write"] == writes_before_failure
 
     asyncio.run(check())
@@ -433,12 +437,12 @@ def test_payload_cache_only_without_cache_returns_empty(tmp_path: Path, monkeypa
     def fail_get(*args, **kwargs):
         raise AssertionError("network should not be used")
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.catalog.httpx.get", fail_get)
 
     payload = manager.payload(cache_only=True)
 
     assert payload == {"apps": [], "installed_count": 0, "catalog_updated_at": None}
-    assert manager.catalog_cache_fresh() is False
+    assert manager.registry.catalog_cache_fresh() is False
 
 
 def test_install_dispatches_safe_pip_and_installs_skill(
@@ -453,8 +457,8 @@ def test_install_dispatches_safe_pip_and_installs_skill(
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(manager, "_run_argv", fake_run)
-    monkeypatch.setattr(manager, "_pip_available", staticmethod(lambda: True))
+    monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
     monkeypatch.setattr(
         manager,
         "_fetch_skill_content",
@@ -471,7 +475,7 @@ def test_install_dispatches_safe_pip_and_installs_skill(
     assert payload["last_action"]["ok"] is True
     assert payload["last_action"]["installed"] is True
     assert "state_recorded" in payload["last_action"]["verification"]
-    installed = json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    installed = json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
     assert installed["gimp"]["entry_point"] == "cli-anything-gimp"
     skill = cli_app_skill_path("gimp")
     assert skill.is_file()
@@ -515,10 +519,10 @@ def test_run_argv_logs_command_exit_and_output(
         assert env["PYTHONUNBUFFERED"] == "1"
         return subprocess.CompletedProcess(argv, 0, stdout="installed ok", stderr="")
 
-    monkeypatch.setattr(cli_service, "logger", _Logger())
+    monkeypatch.setattr("cirno_core.apps.cli.commands.logger", _Logger())
     monkeypatch.setattr(cli_service.subprocess, "run", fake_run)
 
-    result = manager._run_argv(["python", "-m", "pip", "install", "sample"], timeout=5)
+    result = manager.commands._run_argv(["python", "-m", "pip", "install", "sample"], timeout=5)
 
     assert result.returncode == 0
     assert any(record.startswith("CLI Apps: running ") for record in records)
@@ -529,7 +533,7 @@ def test_run_argv_logs_command_exit_and_output(
 def test_run_argv_decodes_utf8_output(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
 
-    result = manager._run_argv(
+    result = manager.commands._run_argv(
         [
             sys.executable,
             "-c",
@@ -555,7 +559,7 @@ def test_install_records_available_cli_without_reinstalling(
     def fail_run(argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
         raise AssertionError(f"unexpected install command: {argv}")
 
-    monkeypatch.setattr(manager, "_run_argv", fail_run)
+    monkeypatch.setattr(manager.commands, "_run_argv", fail_run)
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: str(resolved) if command == "lark-cli" else None,
@@ -566,7 +570,7 @@ def test_install_records_available_cli_without_reinstalling(
     assert payload["last_action"]["ok"] is True
     assert payload["last_action"]["installed"] is True
     assert "entry_point_available" in payload["last_action"]["verification"]
-    installed = json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    installed = json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
     assert installed["feishu"]["entry_point_path"] == str(resolved)
     skill = cli_app_skill_path("feishu")
     assert skill.is_file()
@@ -578,10 +582,10 @@ def test_install_recovers_stale_npm_global_directory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager = _manager(tmp_path)
-    _write_cache(manager._cache_path("harness"), {"meta": {"updated": "2026-04-16"}, "clis": []})
-    _write_cache(manager._cache_path("public"), {"meta": {"updated": "2026-04-18"}, "clis": []})
+    _write_cache(manager.registry._cache_path("harness"), {"meta": {"updated": "2026-04-16"}, "clis": []})
+    _write_cache(manager.registry._cache_path("public"), {"meta": {"updated": "2026-04-18"}, "clis": []})
     _write_cache(
-        manager._cache_path("extensions"),
+        manager.registry._cache_path("extensions"),
         {
             "meta": {"updated": "2026-05-29"},
             "clis": [
@@ -621,7 +625,7 @@ def test_install_recovers_stale_npm_global_directory(
             return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
         raise AssertionError(f"unexpected command: {argv}")
 
-    monkeypatch.setattr(manager, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: npm if command == "npm" else None,
@@ -633,7 +637,7 @@ def test_install_recovers_stale_npm_global_directory(
     assert not stale_package.exists()
     assert not stale_temp.exists()
     assert payload["last_action"]["ok"] is True
-    installed = json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    installed = json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
     assert installed["hyperframes"]["strategy"] == "npm"
 
 
@@ -648,7 +652,7 @@ def test_install_records_entry_point_path_and_pip_distribution(
     resolved.write_text("#!/bin/sh\n", encoding="utf-8")
 
     monkeypatch.setattr(
-        manager,
+        manager.commands,
         "_run_argv",
         lambda argv, *, timeout: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
@@ -662,7 +666,7 @@ def test_install_records_entry_point_path_and_pip_distribution(
         lambda command: str(resolved) if command == "cli-anything-gimp" else None,
     )
     monkeypatch.setattr(
-        "cirno_core.apps.cli.service.importlib_metadata.distributions",
+        "cirno_core.apps.cli.command_support.importlib_metadata.distributions",
         lambda: [
             SimpleNamespace(
                 entry_points=[
@@ -675,7 +679,7 @@ def test_install_records_entry_point_path_and_pip_distribution(
 
     manager.install("gimp")
 
-    installed = json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    installed = json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
     assert installed["gimp"]["entry_point_path"] == str(resolved)
     assert installed["gimp"]["pip_distribution"] == "cli-anything-gimp"
     assert installed["gimp"]["display_name"] == "GIMP"
@@ -686,12 +690,12 @@ def test_install_records_entry_point_path_and_pip_distribution(
 def test_installed_state_writes_atomically_without_temp_leftovers(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
 
-    manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
-    manager._save_installed({"zoom": {"entry_point": "cli-anything-zoom"}})
+    manager.installed.replace({"gimp": {"entry_point": "cli-anything-gimp"}})
+    manager.installed.replace({"zoom": {"entry_point": "cli-anything-zoom"}})
 
-    installed = json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    installed = json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
     assert set(installed) == {"zoom"}
-    assert not list(manager.installed_path.parent.glob(".installed.json.*.tmp"))
+    assert not list(manager.installed.path.parent.glob(".installed.json.*.tmp"))
 
 
 def test_fetch_skill_content_rejects_untrusted_urls(
@@ -703,7 +707,7 @@ def test_fetch_skill_content_rejects_untrusted_urls(
     def fail_get(*args, **kwargs):
         raise AssertionError("untrusted skill URL should not be fetched")
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fail_get)
+    monkeypatch.setattr("cirno_core.apps.cli.catalog.httpx.get", fail_get)
 
     assert manager._fetch_skill_content({
         "name": "evil",
@@ -733,7 +737,7 @@ def test_fetch_skill_content_allows_cli_anything_raw_skill_url(
         seen.append(url)
         return Response()
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fake_get)
+    monkeypatch.setattr("cirno_core.apps.cli.catalog.httpx.get", fake_get)
 
     content = manager._fetch_skill_content({
         "name": "gimp",
@@ -764,7 +768,7 @@ def test_fetch_skill_content_uses_extension_raw_base_for_relative_skills(
         seen.append(url)
         return Response()
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.httpx.get", fake_get)
+    monkeypatch.setattr("cirno_core.apps.cli.catalog.httpx.get", fake_get)
 
     content = manager._fetch_skill_content({
         "name": "hyperframes",
@@ -784,13 +788,13 @@ def test_uninstall_removes_installed_state_and_generated_skill(
 ) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
-    from cirno_core.apps.cli.service import cli_app_skill_path
+    manager.installed.replace({"gimp": {"entry_point": "cli-anything-gimp"}})
+    from cirno_core.apps.cli.paths import cli_app_skill_path
     skill_dir = cli_app_skill_path("gimp").parent
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text("# GIMP\n", encoding="utf-8")
     monkeypatch.setattr(
-        manager,
+        manager.commands,
         "_run_argv",
         lambda argv, *, timeout: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
@@ -798,7 +802,7 @@ def test_uninstall_removes_installed_state_and_generated_skill(
     payload = manager.uninstall("gimp")
 
     assert payload["last_action"]["ok"] is True
-    assert "gimp" not in json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    assert "gimp" not in json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
     assert not skill_dir.exists()
 
 
@@ -808,15 +812,15 @@ def test_uninstall_uses_safe_python_m_pip_uninstall_command(
 ) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({"suno": {"entry_point": "suno"}})
+    manager.installed.replace({"suno": {"entry_point": "suno"}})
     calls: list[list[str]] = []
 
     def fake_run(argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(manager, "_run_argv", fake_run)
-    monkeypatch.setattr(manager, "_pip_available", staticmethod(lambda: True))
+    monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
 
     payload = manager.uninstall("suno")
 
@@ -830,7 +834,7 @@ def test_uninstall_uses_recorded_pip_distribution(
 ) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({
+    manager.installed.replace({
         "gimp": {
             "entry_point": "cli-anything-gimp",
             "pip_distribution": "actual-dist-name",
@@ -843,8 +847,8 @@ def test_uninstall_uses_recorded_pip_distribution(
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(manager, "_run_argv", fake_run)
-    monkeypatch.setattr(manager, "_pip_available", staticmethod(lambda: True))
+    monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
 
     payload = manager.uninstall("gimp")
 
@@ -852,7 +856,7 @@ def test_uninstall_uses_recorded_pip_distribution(
     assert payload["last_action"]["ok"] is True
     assert payload["last_action"]["removed"] is True
     assert "entry_point_absent" in payload["last_action"]["verification"]
-    assert "gimp" not in json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    assert "gimp" not in json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
 
 
 def test_uninstall_keeps_state_when_entry_point_still_available(
@@ -861,13 +865,13 @@ def test_uninstall_keeps_state_when_entry_point_still_available(
 ) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
+    manager.installed.replace({"gimp": {"entry_point": "cli-anything-gimp"}})
     monkeypatch.setattr(
-        manager,
+        manager.commands,
         "_run_argv",
         lambda argv, *, timeout: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
-    monkeypatch.setattr(manager, "_pip_available", staticmethod(lambda: True))
+    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/local/bin/cli-anything-gimp" if command == "cli-anything-gimp" else None,
@@ -880,7 +884,7 @@ def test_uninstall_keeps_state_when_entry_point_still_available(
     assert payload["last_action"]["still_available"] is True
     assert payload["last_action"]["verification_failed"] == ["entry_point_absent"]
     assert "kept it installed" in payload["last_action"]["message"]
-    assert "gimp" in json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    assert "gimp" in json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
 
 
 def test_uninstall_keeps_state_when_recorded_entry_point_still_exists(
@@ -892,14 +896,14 @@ def test_uninstall_keeps_state_when_recorded_entry_point_still_exists(
     resolved = tmp_path / "bin" / "cli-anything-gimp"
     resolved.parent.mkdir()
     resolved.write_text("#!/bin/sh\n", encoding="utf-8")
-    manager._save_installed({
+    manager.installed.replace({
         "gimp": {
             "entry_point": "cli-anything-gimp",
             "entry_point_path": str(resolved),
         }
     })
     monkeypatch.setattr(
-        manager,
+        manager.commands,
         "_run_argv",
         lambda argv, *, timeout: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
@@ -908,12 +912,12 @@ def test_uninstall_keeps_state_when_recorded_entry_point_still_exists(
 
     assert payload["last_action"]["ok"] is False
     assert str(resolved) in payload["last_action"]["message"]
-    assert "gimp" in json.loads(manager.installed_path.read_text(encoding="utf-8"))["apps"]
+    assert "gimp" in json.loads(manager.installed.path.read_text(encoding="utf-8"))["apps"]
 
 
 def test_mentioned_installed_apps_only_returns_installed_mentions(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
-    manager._save_installed(
+    manager.installed.replace(
         {
             "gimp": {"entry_point": "cli-anything-gimp", "source": "harness"},
             "zoom": {"entry_point": "cli-anything-zoom", "source": "public"},
@@ -965,9 +969,6 @@ def test_run_installed_cli_uses_argv_without_shell(
 
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         assert "shell" not in kwargs or kwargs["shell"] is False
-        assert kwargs["text"] is True
-        assert kwargs["encoding"] == "utf-8"
-        assert kwargs["errors"] == "replace"
         return subprocess.CompletedProcess(
             argv,
             0,
@@ -975,8 +976,8 @@ def test_run_installed_cli_uses_argv_without_shell(
             stderr="",
         )
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
-    manager._save_installed(
+    monkeypatch.setattr("cirno_core.apps.cli.service.run_cli", fake_run)
+    manager.installed.replace(
         {
             "gimp": {
                 "version": "1.0.0",
@@ -1010,8 +1011,8 @@ def test_run_reports_created_artifacts(
         (cwd / "diagram.png").write_bytes(b"\x89PNG\r\n\x1a\nimage")
         return subprocess.CompletedProcess(argv, 0, stdout="done", stderr="")
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
-    manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
+    monkeypatch.setattr("cirno_core.apps.cli.service.run_cli", fake_run)
+    manager.installed.replace({"gimp": {"entry_point": "cli-anything-gimp"}})
 
     result = manager.run("gimp", ["render"])
 
@@ -1023,7 +1024,7 @@ def test_run_reports_created_artifacts(
 def test_run_blocks_working_dir_outside_workspace(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({"gimp": {"entry_point": "cli-anything-gimp"}})
+    manager.installed.replace({"gimp": {"entry_point": "cli-anything-gimp"}})
 
     with pytest.raises(CliAppError, match="outside the configured workspace"):
         manager.run("gimp", working_dir="/etc", restrict_to_workspace=True)
@@ -1041,12 +1042,12 @@ def test_install_uses_uv_pip_when_pip_unavailable(
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
+    monkeypatch.setattr(CliCommands, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
-    monkeypatch.setattr(manager, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
     monkeypatch.setattr(manager, "_fetch_skill_content", lambda app: None)
 
     manager.install("gimp")
@@ -1066,13 +1067,13 @@ def test_update_uses_uv_pip_reinstall_when_pip_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager = _manager(tmp_path)
-    monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
+    monkeypatch.setattr(CliCommands, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
 
-    argv = manager._pip_install_argv(
+    argv = manager.commands._pip_install_argv(
         {"name": "gimp", "install_cmd": "pip install cli-anything-gimp"},
         update=True,
     )
@@ -1095,19 +1096,19 @@ def test_uninstall_uses_uv_pip_when_pip_unavailable(
 ) -> None:
     manager = _manager(tmp_path)
     _seed_catalog(manager)
-    manager._save_installed({"suno": {"entry_point": "suno"}})
+    manager.installed.replace({"suno": {"entry_point": "suno"}})
     calls: list[list[str]] = []
 
     def fake_run(argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
+    monkeypatch.setattr(CliCommands, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
-    monkeypatch.setattr(manager, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
 
     manager.uninstall("suno")
 

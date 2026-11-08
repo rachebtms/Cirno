@@ -1,3 +1,4 @@
+from cirno_core.providers.errors import public_error_kind
 from pathlib import Path
 
 import pytest
@@ -8,10 +9,11 @@ from cirno_core.bus.outbound_events import ContextCompactionEvent
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import TurnCompleted
 from cirno_core.bus.agent_events import RetryStatusEvent
-from cirno_core.providers.base import LLMProvider, ProviderCallContext
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import ProviderCallContext
 from cirno_core.session.keys import HEARTBEAT_SESSION_KEY
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
+from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
 from cirno_core.session.transport_metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
@@ -24,7 +26,7 @@ from cirno_core.session.transport_metadata import (
 async def test_internal_compaction_never_reaches_its_result_destination(channel, legacy_route, key):
     factory = TurnDeliveryFactory(MessageBus())
     msg = InboundMessage(channel=channel, sender_id="user", chat_id="chat", content="check")
-    delivery = factory.create(msg, key)
+    delivery = (await factory.create(msg, key))
     metadata = {"_compaction_route": {"channel": channel, "chat_id": "chat"}} if legacy_route else {}
     idle_events = factory.session_events(key, metadata, generation="generation")
     for sink in (delivery.events, idle_events):
@@ -37,7 +39,7 @@ async def test_internal_compaction_never_reaches_its_result_destination(channel,
     assert "_compaction_route" not in metadata
 
     # The same destination still receives the user's own compaction lifecycle.
-    user_delivery = factory.create(msg, f"{channel}:chat")
+    user_delivery = (await factory.create(msg, f"{channel}:chat"))
     user_delivery.remember_session_route(metadata)
     for sink in (user_delivery.events, factory.session_events(f"{channel}:chat", metadata, generation="generation")):
         await sink.emit(ContextCompactionEvent("user-compact", "succeeded"))
@@ -75,7 +77,7 @@ async def test_session_route_delivers_automatic_and_manual_compaction(
             "message_id": "received-1", "thread_id": "received-thread", **metadata,
         },
     )
-    delivery = factory.create(msg, key)
+    delivery = (await factory.create(msg, key))
     session_metadata = {}
     delivery.remember_session_route(session_metadata)
 
@@ -112,7 +114,7 @@ async def test_retry_event_uses_scoped_channel_delivery() -> None:
         content="hello",
         metadata={WEBUI_TURN_METADATA_KEY: "turn-1"},
     )
-    delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
+    delivery = (await TurnDeliveryFactory(bus).create(msg, msg.session_key))
 
     await delivery.events.emit(RetryStatusEvent(
         state="waiting",
@@ -141,7 +143,7 @@ async def test_delivery_maps_model_error_to_failed_turn_completion() -> None:
         chat_id="chat-a",
         content="hello",
     )
-    delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
+    delivery = (await TurnDeliveryFactory(bus).create(msg, msg.session_key))
     delivery.record_stop_reason("error", failure_error_kind="billing")
 
     await delivery.complete(
@@ -169,7 +171,7 @@ async def test_delivery_keeps_model_error_message_for_ordinary_channels() -> Non
         chat_id="chat-a",
         content="hello",
     )
-    delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
+    delivery = (await TurnDeliveryFactory(bus).create(msg, msg.session_key))
     delivery.record_stop_reason("error")
     response = OutboundMessage(
         channel="telegram",
@@ -185,9 +187,9 @@ async def test_delivery_keeps_model_error_message_for_ordinary_channels() -> Non
 @pytest.mark.parametrize("channel", ["telegram", "cli", "websocket"])
 async def test_background_retry_status_is_quiet(channel) -> None:
     factory = TurnDeliveryFactory(MessageBus())
-    delivery = factory.create(InboundMessage(
+    delivery = (await factory.create(InboundMessage(
         channel="system", sender_id="job", chat_id=f"{channel}:chat", content="",
-    ), f"{channel}:chat")
+    ), f"{channel}:chat"))
     assert not delivery.events.accepts(RetryStatusEvent)
     await delivery.events.emit(RetryStatusEvent("waiting", 1, 4, "connection"))
     assert factory.bus.outbound.empty()
@@ -198,10 +200,10 @@ async def test_retry_completion_is_isolated_between_turns_in_one_session() -> No
     seen: list[TurnCompleted] = []
     bus.subscribe(seen.append, TurnCompleted)
     factory = TurnDeliveryFactory(bus)
-    deliveries = [factory.create(InboundMessage(
+    deliveries = [(await factory.create(InboundMessage(
         channel="websocket", sender_id="user", chat_id="chat", content="",
         metadata={WEBUI_TURN_METADATA_KEY: turn},
-    ), "websocket:chat") for turn in ("first", "second")]
+    ), "websocket:chat")) for turn in ("first", "second")]
     await deliveries[0].events.emit(RetryStatusEvent("exhausted", 4, 4, "connection"))
     for delivery in reversed(deliveries):
         delivery.record_stop_reason("error")
@@ -213,7 +215,7 @@ async def test_retry_completion_is_isolated_between_turns_in_one_session() -> No
 async def test_next_model_request_clears_exhaustion_within_the_same_turn() -> None:
     from unittest.mock import AsyncMock, patch
 
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     class Provider(LLMProvider):
         async def chat(self, **kwargs):
@@ -226,20 +228,20 @@ async def test_next_model_request_clears_exhaustion_within_the_same_turn() -> No
     completed: list[TurnCompleted] = []
     bus.subscribe(completed.append, TurnCompleted)
     msg = InboundMessage(channel="websocket", sender_id="user", chat_id="chat", content="")
-    delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
+    delivery = (await TurnDeliveryFactory(bus).create(msg, msg.session_key))
     await delivery.events.emit(RetryStatusEvent("exhausted", 4, 4, "connection"))
     with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
         response = await Provider(provider_name="test").chat_stream_with_retry(
             [{"role": "user", "content": "continue"}],
             provider_context=ProviderCallContext(events=delivery.events),
         )
-    delivery.record_stop_reason("error", failure_error_kind=LLMProvider.public_error_kind(response))
+    delivery.record_stop_reason("error", failure_error_kind=public_error_kind(response))
     await delivery.complete(None, publish_completion=True)
     assert completed[0].failure_error_kind == "billing"
     assert completed[0].failure_attempts is None
 
 
-def test_websocket_lifecycles_get_distinct_internal_owners(tmp_path: Path) -> None:
+async def test_websocket_lifecycles_get_distinct_internal_owners(tmp_path: Path) -> None:
     factory = TurnDeliveryFactory(
         MessageBus(),
         route_policy=WebuiTurnRoutePolicy(SessionManager(tmp_path / "sessions")),
@@ -259,8 +261,8 @@ def test_websocket_lifecycles_get_distinct_internal_owners(tmp_path: Path) -> No
         metadata={WEBSOCKET_TURN_OWNER_METADATA_KEY: "attacker-reused-owner"},
     )
 
-    first = factory.create(first_msg, first_msg.session_key)
-    second = factory.create(second_msg, second_msg.session_key)
+    first = (await factory.create(first_msg, first_msg.session_key))
+    second = (await factory.create(second_msg, second_msg.session_key))
     first_owner = first.lifecycle_message.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
     second_owner = second.lifecycle_message.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
 
@@ -273,10 +275,10 @@ def test_websocket_lifecycles_get_distinct_internal_owners(tmp_path: Path) -> No
     assert second_msg.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY] == second_owner
 
 
-def test_websocket_lifecycle_reuses_registered_ingress_owner(tmp_path: Path) -> None:
-    from cirno_core.session import webui_turns as wth
+async def test_websocket_lifecycle_reuses_registered_ingress_owner(tmp_path: Path) -> None:
+    from cirno_core.session.webui_turns import activity as wth_activity
 
-    owner = wth.register_queued_websocket_turn_if_idle("chat-queued", "turn-queued")
+    owner = wth_activity.register_queued_websocket_turn_if_idle("chat-queued", "turn-queued")
     assert owner is not None
     msg = InboundMessage(
         channel="websocket",
@@ -294,16 +296,16 @@ def test_websocket_lifecycle_reuses_registered_ingress_owner(tmp_path: Path) -> 
     )
 
     try:
-        delivery = factory.create(msg, msg.session_key)
+        delivery = (await factory.create(msg, msg.session_key))
 
         assert delivery.lifecycle_message.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY] == owner
         assert msg.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY] == owner
     finally:
-        wth.clear_websocket_turn_if_current("chat-queued", owner)
+        wth_activity.clear_websocket_turn_if_current("chat-queued", owner)
 
 
 async def test_internal_user_input_uses_the_persisted_webui_route(tmp_path: Path) -> None:
-    from cirno_core.session import webui_turns as wth
+    from cirno_core.session.webui_turns import activity as wth_activity
 
     sessions = SessionManager(tmp_path / "sessions")
     target = sessions.get_or_create("websocket:target")
@@ -323,13 +325,13 @@ async def test_internal_user_input_uses_the_persisted_webui_route(tmp_path: Path
         input_role="user",
     )
 
-    delivery = factory.create(msg, msg.session_key)
+    delivery = (await factory.create(msg, msg.session_key))
 
     assert (delivery.route.channel, delivery.route.chat_id) == ("websocket", "target")
     assert delivery.route.publish_lifecycle
     assert delivery.route.metadata["_wants_stream"] is True
     owner = delivery.route.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
-    wth.clear_websocket_turn_if_current("target", owner)
+    wth_activity.clear_websocket_turn_if_current("target", owner)
 
 
 @pytest.mark.asyncio
@@ -338,7 +340,7 @@ async def test_same_chat_different_sessions_restore_previous_active_projection(
 ) -> None:
     from unittest.mock import AsyncMock, MagicMock
 
-    from cirno_core.session import webui_turns as wth
+    from cirno_core.session.webui_turns import activity as wth_activity
 
     factory = TurnDeliveryFactory(
         MessageBus(),
@@ -360,40 +362,40 @@ async def test_same_chat_different_sessions_restore_previous_active_projection(
         metadata={WEBUI_TURN_METADATA_KEY: "turn-second"},
         session_key_override="websocket:session-second",
     )
-    first = factory.create(first_msg, first_msg.session_key)
-    second = factory.create(second_msg, second_msg.session_key)
+    first = (await factory.create(first_msg, first_msg.session_key))
+    second = (await factory.create(second_msg, second_msg.session_key))
     first_owner = first.lifecycle_message.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
     second_owner = second.lifecycle_message.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
     bus = MagicMock()
     bus.publish_outbound = AsyncMock()
 
     try:
-        await wth.publish_turn_run_status(
+        await wth_activity.publish_turn_run_status(
             bus,
             first.lifecycle_message,
             "running",
             started_at=100.0,
         )
-        await wth.publish_turn_run_status(
+        await wth_activity.publish_turn_run_status(
             bus,
             second.lifecycle_message,
             "running",
             started_at=200.0,
         )
 
-        assert wth.websocket_turn_wall_started_at("shared-chat") == 200.0
-        assert wth.websocket_turn_id("shared-chat") == "turn-second"
-        assert wth.clear_websocket_turn_if_current("shared-chat", second_owner) is True
-        assert wth.websocket_turn_wall_started_at("shared-chat") == 100.0
-        assert wth.websocket_turn_id("shared-chat") == "turn-first"
-        assert wth._WEBSOCKET_TURN_OWNERS["shared-chat"] == first_owner
-        assert wth.clear_websocket_turn_if_current("shared-chat", first_owner) is True
-        assert wth.websocket_turn_wall_started_at("shared-chat") is None
+        assert wth_activity.websocket_turn_wall_started_at("shared-chat") == 200.0
+        assert wth_activity.websocket_turn_id("shared-chat") == "turn-second"
+        assert wth_activity.clear_websocket_turn_if_current("shared-chat", second_owner) is True
+        assert wth_activity.websocket_turn_wall_started_at("shared-chat") == 100.0
+        assert wth_activity.websocket_turn_id("shared-chat") == "turn-first"
+        assert wth_activity._WEBSOCKET_TURN_OWNERS["shared-chat"] == first_owner
+        assert wth_activity.clear_websocket_turn_if_current("shared-chat", first_owner) is True
+        assert wth_activity.websocket_turn_wall_started_at("shared-chat") is None
     finally:
-        wth._WEBSOCKET_ACTIVE_TURNS.pop("shared-chat", None)
-        wth._WEBSOCKET_TURN_WALL_STARTED_AT.pop("shared-chat", None)
-        wth._WEBSOCKET_TURN_IDS.pop("shared-chat", None)
-        wth._WEBSOCKET_TURN_OWNERS.pop("shared-chat", None)
+        wth_activity._WEBSOCKET_ACTIVE_TURNS.pop("shared-chat", None)
+        wth_activity._WEBSOCKET_TURN_WALL_STARTED_AT.pop("shared-chat", None)
+        wth_activity._WEBSOCKET_TURN_IDS.pop("shared-chat", None)
+        wth_activity._WEBSOCKET_TURN_OWNERS.pop("shared-chat", None)
 
 
 async def test_late_subagent_route_requires_webui_owned_session(tmp_path: Path) -> None:
@@ -415,19 +417,17 @@ async def test_late_subagent_route_requires_webui_owned_session(tmp_path: Path) 
         },
     )
 
-    hidden_route = factory.create(msg, session_key).route
+    hidden_route = (await factory.create(msg, session_key)).route
 
     assert hidden_route.channel == "websocket"
     assert hidden_route.chat_id == "chat-a"
     assert hidden_route.metadata == {}
     assert hidden_route.publish_lifecycle is False
 
-    session = sessions.get_or_create(session_key)
-    session.metadata["webui"] = True
-    sessions.save(session)
-    await sessions.state.read(session_key)
-    first_visible_route = factory.create(msg, session_key).route
-    second_visible_route = factory.create(msg, session_key).route
+    await sessions.state.get_header(session_key)
+    await sessions.state.update_metadata(session_key, {"webui": True})
+    first_visible_route = (await factory.create(msg, session_key)).route
+    second_visible_route = (await factory.create(msg, session_key)).route
 
     assert first_visible_route.publish_lifecycle is True
     assert set(first_visible_route.metadata) == {
@@ -464,7 +464,7 @@ async def test_unified_display_route_admits_alias_generation_and_rejects_stale_l
     policy = WebuiTurnRoutePolicy(sessions)
     factory = TurnDeliveryFactory(MessageBus(), route_policy=policy, route_admission=policy.admit)
     message = InboundMessage(channel="system", sender_id="cron", chat_id="websocket:chat", content="notice")
-    delivery = factory.create(message, source.key)
+    delivery = (await factory.create(message, source.key))
     await delivery.bind_session_generation(source.generation)
     assert delivery.route.metadata[HISTORY_GENERATION_METADATA_KEY] == alias.generation
     assert delivery.delivery_message.session_generation == source.generation
@@ -472,10 +472,10 @@ async def test_unified_display_route_admits_alias_generation_and_rejects_stale_l
     assert response.metadata[HISTORY_GENERATION_METADATA_KEY] == alias.generation
     await sessions.state.delete(alias.key)
     replacement = await sessions.state.get_header(alias.key)
-    stale = factory.create(InboundMessage(
+    stale = (await factory.create(InboundMessage(
         channel="websocket", sender_id="user", chat_id="chat", content="old queued input",
         metadata={HISTORY_GENERATION_METADATA_KEY: alias.generation},
-    ), source.key)
+    ), source.key))
     with pytest.raises(SessionConflictError):
         await stale.bind_session_generation(source.generation)
     assert replacement.generation != alias.generation

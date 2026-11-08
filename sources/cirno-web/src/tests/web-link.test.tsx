@@ -39,7 +39,7 @@ describe("browser-owned web links", () => {
     },
   );
 
-  it.each(["http://127.1:4173/page?q=one#two", "/api/media/report.pdf", "./notes.html", "mailto:test@example.com", "tel:+1234567", "#section"])(
+  it.each(["http://127.1:4173/page?q=one#two", "/v0/media/report.pdf", "./notes.html", "mailto:test@example.com", "tel:+1234567", "#section"])(
     "preserves supported link %s", (value) => {
       render(<WebLink href={value}>Example</WebLink>);
       expect(screen.getByRole("link", { name: "Example" })).toHaveAttribute("href", value);

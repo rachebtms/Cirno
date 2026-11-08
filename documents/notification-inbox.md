@@ -1,28 +1,28 @@
 # Notification inbox
 
-The inbox appears beside Cirno and Automations in the main sidebar. Its category pages are:
+Open Inbox from the workspace launcher on desktop or mobile. Its category pages are:
 
 | Route | Contents |
 | --- | --- |
-| `#/inbox?category=operations` | Asynchronous questions, pairing approvals and conversation recovery requiring user action |
-| `#/inbox?category=conversations` | Explicit work reports and failed runs; ordinary replies and successful completions are not recorded |
-| `#/inbox?category=system` | Dream and context-compaction outcomes, including failure reasons |
+| `#/inbox?category=operations` | Asynchronous questions, tool approvals and conversation recovery requiring user action |
+| `#/inbox?category=conversations` | Explicit work reports; ordinary replies and successful completions are not recorded |
+| `#/inbox?category=system` | Dream, context-compaction outcomes and failed runs, including failure reasons |
 
-Operation notices open the existing workflow: questions return to the originating conversation's composer, pairing decisions use the pairing interface, and recovery opens the affected conversation. Marking a notice read does not answer a question or approve access. Accepted user answers resolve their corresponding question notices; messages from another agent cannot stand in for user answers.
+Operation notices open the existing workflow: questions return to the originating conversation's composer, tool approvals open the requested operation, and recovery opens the affected conversation. Marking a notice read does not answer a question or approve access. Accepted user answers resolve their corresponding question notices; messages from another agent cannot stand in for user answers.
+
+The composer's question queue follows saved conversation history. If editing an earlier message removes a saved answer while retaining its question, that question becomes pending again in the original order. A temporary delivery acknowledgement does not permanently mark the question as answered.
 
 ## Notification preferences
 
-Settings allows each category to be muted separately. Muting controls this browser's notification popups and sounds; it does not remove inbox records or cancel pending actions. Browser notifications also require the overall switch, permission and an available page. Popups use category-level text rather than exposing message bodies, paths or approval codes. Opening the page does not replay every historical notice as a popup.
+Settings → Browser notifications allows each category to be muted separately. These preferences synchronize through the owner profile; muting disables that category's browser alerts and sounds while keeping inbox records and pending actions. Notification permission must be granted in each browser. Delivery also requires the overall switch and an available page. Popups use category-level text rather than exposing message bodies, paths or approval codes. Opening the page does not replay every historical notice as a popup.
 
 ## Storage
 
 Records live in `state/notifications/inbox.sqlite3` under the instance root, separate from Agent Home, conversation and memory stores. Pages load records in batches. The main interface refreshes the inbox summary and recent records every ten seconds without a model call. Cleanup retains the latest 10,000 records and preserves unresolved actions outside that window. Temporary-conversation notices are not persisted.
 
-Ordinary replies and successful turn completions are not written to Inbox. Reports, failures and action requests are retained.
-
 ## Coordination reports
 
-Cirno has coordination, memory, reference-reading and lifecycle tools. It delegates commands, file changes, Nodes, CLI Apps, MCP execution and worker subtasks to ordinary conversations. Only Cirno receives `user.message`; ordinary conversations stream assistant replies. PTC, compaction and context accounting use the same role selection.
+The Router has the full ordinary tool set plus coordination and Project management. It handles simple checks directly and delegates medium and large tasks to ordinary conversations. Only the Router receives `user.message`; ordinary conversations stream assistant replies. PTC, compaction and context accounting use the same role selection.
 
 `conversations.report` records a state, factual summary, artifact paths and optional `human_action` question. Routine progress and waiting update passive records. Results, blockers, failures and new questions enter the coordinator's durable inbox. Independent work can continue while a question is pending. Omitting `human_action` retains it; an empty string clears it. A `ready` report cannot retain an unanswered question.
 
@@ -32,4 +32,4 @@ Stable IDs and receipts in conversation storage deduplicate coordination inputs 
 
 ## Telegram delivery
 
-Bind your personal account in Settings → Telegram using the expiring PIN sent to your bot. Cirno replies and the three Inbox categories have separate notification switches. Browser mutes do not change Telegram delivery. Configure a phone-accessible Web UI address to attach an Open Cirno Inbox button to notifications; actions are completed in the authenticated browser. See [configuration](configuration.md#channels-and-remote-browsers).
+Bind your personal account in Settings → Telegram using the expiring PIN sent to your bot. Router replies and the three Inbox categories have separate notification switches. Disabling Telegram delivery preserves these choices. Browser mutes do not change Telegram delivery. Configure a phone-accessible Web UI address to attach an Open Cirno Inbox button to notifications; actions are completed in the authenticated browser. See [configuration](configuration.md#channels-and-remote-browsers).

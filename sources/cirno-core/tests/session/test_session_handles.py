@@ -248,17 +248,32 @@ async def test_runtime_existing_handles_do_not_wait_for_an_external_write_lock(t
 
 
 def test_personal_cirno_has_reserved_handle_across_reopen_and_name_collisions(tmp_path):
-    from cirno_core.session.keys import CIRNO_SESSION_KEY
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
     from cirno_core.session.session_handles import session_handle_for_name
     manager = SessionManager(tmp_path)
-    for key, name in [("websocket:ordinary", "cirno"), (CIRNO_SESSION_KEY, "vave")]:
+    for key, name in [("websocket:ordinary", "snow_9"), (ROUTER_SESSION_KEY, "snow_9")]:
         session = manager.get_or_create(key)
         session.metadata[SESSION_HANDLE_METADATA_KEY] = name
         manager.save(session)
     resolver = SessionHandleResolver(manager)
-    assert resolver.resolve("@cirno").session_key == CIRNO_SESSION_KEY
-    assert resolver.handle_for_session("websocket:ordinary").name != "cirno"
-    assert session_handle_for_name(CIRNO_SESSION_KEY, "vave").name == "cirno"
-    assert SessionHandleResolver(SessionManager(tmp_path)).resolve("cirno").session_key == CIRNO_SESSION_KEY
-    with pytest.raises(ValueError, match="reserved"):
-        session_handle_for_name("websocket:ordinary", "cirno")
+    assert resolver.resolve("@snow_9").session_key == ROUTER_SESSION_KEY
+    assert resolver.handle_for_session("websocket:ordinary").name != "snow_9"
+    assert session_handle_for_name(ROUTER_SESSION_KEY, "snow_9").name == "snow_9"
+    assert SessionHandleResolver(SessionManager(tmp_path)).resolve("snow_9").session_key == ROUTER_SESSION_KEY
+
+
+async def test_custom_router_identity_survives_ensure_and_provenance_round_trip(tmp_path):
+    from cirno_core.session.router_session import ensure_router_session
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+    from cirno_core.session.transcript.records import normalize_session_message_ui_metadata
+    sessions = SessionManager(tmp_path)
+    try:
+        await ensure_router_session(sessions, handle="snow_9")
+        await ensure_router_session(sessions)
+        handle = await SessionHandleResolver(sessions).ahandle_for_session(ROUTER_SESSION_KEY)
+        assert handle.name == "snow_9"
+        provenance = {"message_id": "custom-router", "session": handle.public_payload()}
+        assert normalize_session_message_ui_metadata(provenance) == provenance
+        assert (await sessions.state.read_header(ROUTER_SESSION_KEY)).metadata["title"] == "@snow_9"
+    finally:
+        await sessions.state.aclose()

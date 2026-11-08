@@ -1,0 +1,8 @@
+/* Dimensions shared by the document first paint and interactive surfaces. */
+:root {
+  --launcher-rail-width: 4rem;
+  --launcher-control-size: 2.75rem;
+  --composer-editor-min-height: 4.25rem;
+  --composer-control-size: 2.75rem;
+  --composer-toolbar-inset: .25rem .5rem .5rem;
+}

@@ -5,10 +5,9 @@ from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
-
 from cirno_core.config.schema import Config
 from cirno_server.webui.settings.contracts import WebUISettingsError
-from cirno_server.webui.settings.models import (
+from cirno_server.webui.settings.providers.oauth import (
     complete_oauth_provider,
     login_oauth_provider,
     logout_oauth_provider,
@@ -70,7 +69,7 @@ def test_cancels_copilot_login_while_device_prompt_is_loading(monkeypatch, tmp_p
 
     monkeypatch.setattr("cirno_core.providers.github_copilot_oauth.login_github_copilot", login)
     monkeypatch.setattr("cirno_core.providers.github_copilot_provider.get_storage", lambda: SimpleNamespace(
-        get_token_path=lambda: tmp_path / "copilot.json", save=saved.append,
+        get_token_path=lambda: tmp_path / "copilot.json", save=saved.append, delete=lambda: (tmp_path / "copilot.json").unlink(missing_ok=True),
     ))
     registry = WebUIOAuthFlowRegistry()
     kwargs = dict(oauth_flows=registry, config_path=None)

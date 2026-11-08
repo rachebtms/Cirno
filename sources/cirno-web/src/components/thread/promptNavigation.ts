@@ -1,4 +1,4 @@
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 export interface PromptAnchor {
   answerPreview: string;

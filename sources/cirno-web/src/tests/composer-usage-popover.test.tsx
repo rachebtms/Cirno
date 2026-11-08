@@ -187,3 +187,16 @@ it("shows a context ring while the first model call has no usage yet", () => {
   expect(screen.getByTestId("composer-context-meter")).toBeInTheDocument();
   expect(screen.getByTestId("composer-context-usage")).not.toHaveAccessibleName(/Context 0%/);
 });
+
+
+it("keeps the enabled usage entry available before measurements arrive", async () => {
+  const user = userEvent.setup();
+  const { rerender } = render(<ComposerUsagePopover context={null} rounds={[]} />);
+  const trigger = screen.getByTestId("composer-context-usage");
+  expect(trigger).not.toHaveAccessibleName(/0%/);
+  await user.click(trigger);
+  expect(screen.getByText("Usage data is unavailable.")).toBeInTheDocument();
+  rerender(<ComposerUsagePopover context={{ contextTokens: 100, contextWindowTokens: 1000 }} rounds={[]} />);
+  expect(screen.getByTestId("composer-context-usage")).toBe(trigger);
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "10");
+});

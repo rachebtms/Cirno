@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.execution.command_execution import TurnCommands
 from cirno_core.agent.tools.context import current_request_context
 from cirno_core.agent.tools.shell import ExecTool
 from cirno_core.bus.events import INBOUND_META_USER_SHELL, InboundMessage, OutboundMessage
-from cirno_core.command.builtin import cmd_user_shell
+from cirno_core.command.builtin.control import cmd_user_shell
 from cirno_core.command.router import CommandContext
-from cirno_core.session.manager import Session, SessionPolicy
+from cirno_core.session.model import Session, SessionPolicy
 
 
 def _context(loop: MagicMock, *, trusted: bool, command: str = "pwd") -> CommandContext:
@@ -38,12 +38,12 @@ def _context(loop: MagicMock, *, trusted: bool, command: str = "pwd") -> Command
 @pytest.mark.asyncio
 async def test_user_shell_rejects_untrusted_transport_metadata() -> None:
     loop = MagicMock()
-    loop.execute_user_shell_command = AsyncMock()
+    loop.command_execution.user_shell = AsyncMock()
 
     response = await cmd_user_shell(_context(loop, trusted=False))
 
     assert "trusted local client" in response.content
-    loop.execute_user_shell_command.assert_not_awaited()
+    loop.command_execution.user_shell.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -71,7 +71,7 @@ async def test_user_shell_uses_exec_tool_with_workspace_scope(
     if context_session:
         ctx.session = session
 
-    response = await AgentLoop.execute_user_shell_command(loop, ctx)
+    response = await TurnCommands(loop).user_shell(ctx)
 
     tool.execute_to_completion.assert_awaited_once_with(command="pwd", working_dir=str(tmp_path))
     assert response.content.endswith("Exit code: 0")
@@ -80,13 +80,13 @@ async def test_user_shell_uses_exec_tool_with_workspace_scope(
 
 
 @pytest.mark.asyncio
-async def test_user_shell_delegates_trusted_request_to_agent_loop() -> None:
+async def test_user_shell_delegates_trusted_request_to_command_execution() -> None:
     loop = MagicMock()
     expected = OutboundMessage(channel="websocket", chat_id="chat", content="ok")
-    loop.execute_user_shell_command = AsyncMock(return_value=expected)
+    loop.command_execution.user_shell = AsyncMock(return_value=expected)
     ctx = _context(loop, trusted=True, command="printf ok")
 
     response = await cmd_user_shell(ctx)
 
     assert response is expected
-    loop.execute_user_shell_command.assert_awaited_once_with(ctx)
+    loop.command_execution.user_shell.assert_awaited_once_with(ctx)

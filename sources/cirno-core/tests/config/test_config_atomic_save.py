@@ -40,12 +40,23 @@ def test_save_config_preserves_existing_file_when_write_fails(
     save_config(Config(), path)
     before = path.read_text(encoding="utf-8")
 
-    def boom(self: Path, target: Path) -> Path:  # noqa: ARG001
+    def boom(source: Path, target: Path) -> None:  # noqa: ARG001
         raise OSError("simulated crash before replace")
 
-    monkeypatch.setattr(Path, "replace", boom)
+    monkeypatch.setattr("cirno_core.utils.atomic_file.replace_atomic", boom)
     with pytest.raises(OSError, match="simulated crash"):
         save_config(Config(), path)
 
     assert path.read_text(encoding="utf-8") == before
     assert json.loads(before)  # still valid JSON
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX file modes")
+def test_new_config_is_private_even_with_a_public_umask(tmp_path):
+    path = tmp_path / "config.json"
+    previous = os.umask(0o022)
+    try:
+        save_config(Config(), path)
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600

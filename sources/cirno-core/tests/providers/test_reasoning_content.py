@@ -4,12 +4,14 @@ Covers non-streaming (_parse) and streaming (_parse_chunks) paths for
 providers that return a reasoning_content field (e.g. MiMo, DeepSeek-R1).
 """
 
+from cirno_core.providers.chat_completions.complete import parse_response
+from sources.development.testing.providers import parse_chat_chunks
 from unittest.mock import patch
 
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.utils.helpers import build_assistant_message
+from cirno_core.utils.model_messages import build_assistant_message
 
 # ── _parse: non-streaming ─────────────────────────────────────────────────
 
@@ -30,7 +32,7 @@ def test_parse_dict_extracts_reasoning_content() -> None:
         "usage": {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15},
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "42"
     assert result.reasoning_content == "Let me think step by step…"
@@ -48,7 +50,7 @@ def test_parse_dict_reasoning_content_none_when_absent() -> None:
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.reasoning_content is None
 
@@ -74,7 +76,7 @@ def test_parse_dict_reasoning_content_empty_string_preserved() -> None:
         "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.reasoning_content == ""
 
@@ -96,7 +98,7 @@ def test_parse_sdk_reasoning_content_empty_string_preserved() -> None:
         }],
     })
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     assert result.content == "answer"
     assert result.reasoning_content == ""
@@ -122,13 +124,13 @@ def test_tool_call_history_preserves_empty_reasoning_content_after_sanitize() ->
         }],
     }
 
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
     assistant_message = build_assistant_message(
         result.content or "",
         tool_calls=[tc.to_openai_tool_call() for tc in result.tool_calls],
         reasoning_content=result.reasoning_content,
     )
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "look something up"},
         assistant_message,
         {"role": "tool", "tool_call_id": "call_1", "content": "done"},
@@ -163,7 +165,7 @@ def test_parse_chunks_dict_accumulates_reasoning_content() -> None:
         },
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.content == "answer"
     assert result.reasoning_content == "Step 1. Step 2."
@@ -175,7 +177,7 @@ def test_parse_chunks_dict_reasoning_content_none_when_absent() -> None:
         {"choices": [{"finish_reason": "stop", "delta": {"content": "hi"}}]},
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.content == "hi"
     assert result.reasoning_content is None
@@ -208,7 +210,7 @@ def test_parse_chunks_sdk_accumulates_reasoning_content() -> None:
         _make_reasoning_chunk(None, "result", "stop"),
     ]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.content == "result"
     assert result.reasoning_content == "Think… Done."
@@ -218,6 +220,6 @@ def test_parse_chunks_sdk_reasoning_content_none_when_absent() -> None:
     """reasoning_content is None when SDK deltas carry no reasoning_content."""
     chunks = [_make_reasoning_chunk(None, "hello", "stop")]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.reasoning_content is None

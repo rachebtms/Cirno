@@ -1,6 +1,6 @@
 import { parsePatch } from "diff";
 
-import type { UIFileDiff } from "@/lib/types";
+import type { UIFileDiff } from "@/lib/contracts/activity";
 
 export interface RenderableFileDiffLine {
   kind: "context" | "add" | "delete";

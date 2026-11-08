@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { useSidebarState } from "@/hooks/useSidebarState";
 import type { CirnoClient } from "@/lib/cirno-client";
-import type { ConnectionStatus, SidebarStatePayload } from "@/lib/types";
+import type { ConnectionStatus } from "@/lib/contracts/transport";
+import type { SidebarStatePayload } from "@/lib/contracts/conversation-preferences";
 import { ClientProvider } from "@/providers/ClientProvider";
 
 type SidebarWrite = {
@@ -331,6 +332,7 @@ describe("useSidebarState", () => {
       await Promise.all([firstRejected, secondRejected]);
     });
     expect(setSidebarState).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBe("Save failed");
     expect(result.current.state.title_overrides).toEqual({
       "websocket:a": "Saved title", "websocket:b": "Other title",
     });
@@ -340,6 +342,7 @@ describe("useSidebarState", () => {
     expect(writes[1].state).toEqual(result.current.state);
     expect(writes[1].state.pinned_keys).toEqual(["websocket:a"]);
     await act(async () => { writes[1].resolve(); });
+    expect(result.current.error).toBeNull();
     expect(setSidebarState).toHaveBeenCalledTimes(2);
   });
 

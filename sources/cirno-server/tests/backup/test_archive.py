@@ -186,8 +186,9 @@ def test_external_sqlite_snapshot_excludes_wal_and_replaces_stale_sidecars(backu
 @pytest.mark.parametrize("name", ["instance", "instance/state", "instance/state/backups", "instance/state/./backups"])
 @pytest.mark.parametrize("link", [False, True])
 def test_restore_workspace_ancestors_cannot_be_replaced(backup, tmp_path, name, link):
-    from cirno_server.backup.archive import FORMAT, MANIFEST
     import json
+
+    from cirno_server.backup.archive import FORMAT, MANIFEST
 
     uploaded = tmp_path / "unsafe.gz"
     manifest = {"format": FORMAT, "schema": 1, "config_name": "config.json", "extras": []}

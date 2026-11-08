@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { InboxProvider, type InboxNotice } from "@/hooks/useInbox";
-import { InboxView } from "@/components/InboxView";
+import { InboxProvider, type InboxNotice } from "@/features/inbox/model/store";
+import { InboxPage } from "@/features/inbox/InboxPage";
 import { ClientProvider } from "@/providers/ClientProvider";
 import type { CirnoClient } from "@/lib/cirno-client";
 import { setAppLanguage } from "@/i18n";
@@ -28,7 +28,7 @@ function notice(id: number, category: InboxNotice["category"], kind: string, bod
 }
 function view(onSelect = vi.fn(), connection = { status: "open", onStatus: (handler: (status: string) => void) => { handler("open"); return () => {}; } }) {
   return render(<ClientProvider client={{ requestMutation, ...connection } as unknown as CirnoClient} token="test">
-    <InboxProvider><InboxView onBack={vi.fn()} onSelect={onSelect} onSettings={vi.fn()} /></InboxProvider>
+    <InboxProvider><InboxPage onBack={vi.fn()} onSelect={onSelect} onSettings={vi.fn()} /></InboxProvider>
   </ClientProvider>);
 }
 beforeEach(async () => {

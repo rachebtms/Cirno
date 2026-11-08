@@ -15,7 +15,7 @@ export function useProviderModelCatalog({ revision, token, provider, enabled }: 
   const snapshot = useSyncExternalStore(catalog.subscribe, catalog.getSnapshot, catalog.getSnapshot);
 
   useEffect(() => {
-    // The gateway owns freshness TTLs. Each opening revalidates there without
+    // The server owns freshness TTLs. Each opening revalidates there without
     // hiding the current list, and closing does not discard a pending result.
     if (enabled) void catalog.load();
   }, [catalog, enabled]);
@@ -26,6 +26,7 @@ export function useProviderModelCatalog({ revision, token, provider, enabled }: 
     payload: snapshot.payload,
     needsSignIn,
     failed: snapshot.failed,
+    error: snapshot.error,
     refreshing: snapshot.pending,
     loading: enabled && !available && !needsSignIn
       && (snapshot.pending || (!snapshot.payload && !snapshot.failed)),

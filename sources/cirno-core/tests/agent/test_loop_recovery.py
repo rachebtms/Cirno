@@ -1,4 +1,5 @@
 from __future__ import annotations
+from cirno_core.providers.messages import sanitize_empty_content
 
 import asyncio
 from copy import deepcopy
@@ -7,21 +8,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.session_helpers import save_completed_subagent
+from sources.development.testing.sessions import save_completed_subagent
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.turn_delivery import TurnDeliveryFactory
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.recovery import (
-    PENDING_USER_TURN_KEY,
-    RECOVERY_METADATA_KEY,
-    REQUEST_ORIGIN_METADATA_KEY,
-    RUNTIME_CHECKPOINT_KEY,
-)
-from cirno_core.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
-from cirno_core.session.display_recovery import RecoveryCoordinator
+from cirno_core.session.recovery.contracts import PENDING_USER_TURN_KEY, RECOVERY_METADATA_KEY, REQUEST_ORIGIN_METADATA_KEY, RUNTIME_CHECKPOINT_KEY
+from cirno_core.session.webui_turns.coordinator import WebuiTurnCoordinator
+from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
+from cirno_core.session.recovery.coordinator import RecoveryCoordinator
 from cirno_core.session.transcript import WebUITranscriptRecorder
 
 
@@ -50,7 +49,7 @@ async def test_committed_model_failure_continues_with_tool_results_without_resen
 
     async def respond(**kwargs):
         requests.append(deepcopy({
-            "messages": LLMProvider._sanitize_empty_content(kwargs["messages"]),
+            "messages": sanitize_empty_content(kwargs["messages"]),
             "tools": kwargs["tools"],
         }))
         return next(responses)
@@ -73,12 +72,12 @@ async def test_committed_model_failure_continues_with_tool_results_without_resen
     )
     try:
         with coordinator.connected():
-            await loop._dispatch_one(request, asyncio.Queue())
+            await loop.dispatch.execute(request, asyncio.Queue())
             state = (await sessions.state.get(request.session_key)).metadata[RECOVERY_METADATA_KEY]
             assert state["status"] == "awaiting_user"
             assert bus.inbound.empty()
             await recovery.handle_action("continue", {"chat_id": "chat", "recovery_id": state["recovery_id"]})
-            await loop._dispatch_one(bus.inbound.get_nowait(), asyncio.Queue())
+            await loop.dispatch.execute(bus.inbound.get_nowait(), asyncio.Queue())
         final = await sessions.state.get(request.session_key)
         assert final.metadata[RECOVERY_METADATA_KEY]["status"] == "recovered"
         assert execute.await_count == 1
@@ -134,8 +133,8 @@ async def test_recovery_preserves_turn_origin_until_the_next_user_turn(
             provider.chat_stream_with_retry = AsyncMock(side_effect=[
                 LLMResponse(content="Background check started"), LLMResponse(content="New request answered"),
             ])
-            await loop._dispatch_one(request, asyncio.Queue())
-            await loop._dispatch_one(InboundMessage(
+            await loop.dispatch.execute(request, asyncio.Queue())
+            await loop.dispatch.execute(InboundMessage(
                 channel="websocket", sender_id="user", chat_id="chat", content="New request B",
                 metadata={"webui": True, "webui_turn_id": "request-b", "message_id": "message-b"},
             ), asyncio.Queue())
@@ -152,7 +151,7 @@ async def test_recovery_preserves_turn_origin_until_the_next_user_turn(
             (tmp_path / "result.txt").write_text("Configuration verified", encoding="utf-8")
         existing_tasks = set(loop.subagents.statuses_for_session(request.session_key))
         provider.chat_stream_with_retry = AsyncMock(side_effect=interrupted)
-        delivery = loop.turn_delivery_factory.create(request, request.session_key)
+        delivery = (await loop.turn_delivery_factory.create(request, request.session_key))
         expected_origin = {
             "message_id": None if late_result else "user-message",
             "turn_id": delivery.route.turn_id,
@@ -165,7 +164,7 @@ async def test_recovery_preserves_turn_origin_until_the_next_user_turn(
                 metadata=delivery.delivery_message.metadata, phase="activity",
             )
 
-        task = asyncio.create_task(loop._process_message(
+        task = asyncio.create_task(loop.processing.process(
             request, delivery=delivery, on_progress=record_progress,
         ))
         try:
@@ -204,7 +203,7 @@ async def test_recovery_preserves_turn_origin_until_the_next_user_turn(
     coordinator = WebuiTurnCoordinator(bus, sessions, loop.schedule_background, recovery=recovery)
     try:
         with coordinator.connected():
-            await loop._dispatch_one(continuation, asyncio.Queue())
+            await loop.dispatch.execute(continuation, asyncio.Queue())
         statuses = loop.subagents.statuses_for_session(request.session_key)
         children = [status for task_id, status in statuses.items() if task_id not in existing_tasks]
         assert len(children) == 1
@@ -216,7 +215,7 @@ async def test_recovery_preserves_turn_origin_until_the_next_user_turn(
         assert continuation.metadata["webui_turn_id"] == f"recovery:{state['recovery_id']}"
         assert sessions.get_or_create(request.session_key).metadata[RECOVERY_METADATA_KEY]["status"] == "recovered"
         with coordinator.connected():
-            await loop._dispatch_one(InboundMessage(
+            await loop.dispatch.execute(InboundMessage(
                 channel="websocket", sender_id="user", chat_id="chat", content="Inspect logs",
                 metadata={"webui": True, "webui_turn_id": "next-request", "message_id": "next-message"},
             ), asyncio.Queue())
@@ -272,12 +271,12 @@ async def test_recovery_distinguishes_explicit_stop_from_gateway_shutdown(
     )
     try:
         with coordinator.connected():
-            await loop._dispatch_inbound(request)
+            await loop.dispatch.receive(request)
             await asyncio.wait_for(entered.wait(), 5)
             if gateway_shutdown:
                 loop.preserve_inflight_turns_on_shutdown()
             else:
-                await loop._dispatch_inbound(InboundMessage(
+                await loop.dispatch.receive(InboundMessage(
                     channel="websocket", sender_id="user", chat_id="chat", content="/stop",
                     metadata={"webui": True},
                 ))
@@ -312,7 +311,7 @@ async def test_recovery_distinguishes_explicit_stop_from_gateway_shutdown(
 
 @pytest.mark.parametrize("show_message", [False, True])
 async def test_stopped_request_resume_uses_configured_input_and_preserves_goal_progress(tmp_path, show_message):
-    from cirno_core.config.schema import ResumeConfig
+    from cirno_core.config.agents import ResumeConfig
     from cirno_core.bus.input_origin import input_origin
     sessions = SessionManager(tmp_path)
     bus = MessageBus()

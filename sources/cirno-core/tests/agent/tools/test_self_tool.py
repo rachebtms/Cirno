@@ -8,14 +8,13 @@ from types import MappingProxyType
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from cirno_core.agent.tools.context import RequestContext, request_context
 from cirno_core.agent.tools.runtime_control import AgentRuntimeControl
 from cirno_core.agent.tools.self import MyTool
-from cirno_core.agent.tools.shell import ExecToolConfig
-from cirno_core.agent.tools.web import WebSearchConfig, WebToolsConfig
-from cirno_core.config.schema import ModelPresetConfig
-from cirno_core.providers.base import LLMUsage
+from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.agent.tools.web_config import WebSearchConfig, WebToolsConfig
+from cirno_core.config.models import ModelPresetConfig
+from cirno_usage.types import LLMUsage
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -462,12 +461,12 @@ class TestProtectedRuntimeState:
         assert "protected" in result
 
     @pytest.mark.asyncio
-    async def test_modify_workspace_preserves_display_compatibility(self):
-        """The compatibility value is isolated from filesystem security boundaries."""
+    async def test_modify_workspace_is_rejected(self):
+        """Workspace inspection must report the directory actually used by tools."""
         tool = _make_tool()
         result = await tool.execute(action="set", key="workspace", value="/new/path")
-        assert "Set workspace" in result
-        assert tool._runtime_control.snapshot().workspace == "/new/path"
+        assert "read-only" in result
+        assert tool._runtime_control.snapshot().workspace == str(Path("/tmp/workspace").resolve())
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -572,7 +571,7 @@ class TestDeniedAttrs:
 
 
 # ---------------------------------------------------------------------------
-# _SubagentHook after_iteration updates status
+# SubagentProgress after_iteration updates status
 # ---------------------------------------------------------------------------
 
 class TestSubagentHookStatus:
@@ -581,7 +580,8 @@ class TestSubagentHookStatus:
     async def test_after_iteration_updates_status(self):
         """after_iteration should copy iteration, tool_events, usage to status."""
         from cirno_core.agent.hook import AgentHookContext
-        from cirno_core.agent.subagents.manager import SubagentStatus, _SubagentHook
+        from cirno_core.agent.subagents.status import SubagentStatus
+        from cirno_core.agent.subagents.progress import SubagentProgress
 
         status = SubagentStatus(
             task_id="test",
@@ -589,7 +589,7 @@ class TestSubagentHookStatus:
             task_description="test",
             started_at=time.monotonic(),
         )
-        hook = _SubagentHook(status)
+        hook = SubagentProgress(status)
 
         context = AgentHookContext(
             iteration=5,
@@ -608,7 +608,8 @@ class TestSubagentHookStatus:
     async def test_after_iteration_with_error(self):
         """after_iteration should set status.error when context has an error."""
         from cirno_core.agent.hook import AgentHookContext
-        from cirno_core.agent.subagents.manager import SubagentStatus, _SubagentHook
+        from cirno_core.agent.subagents.status import SubagentStatus
+        from cirno_core.agent.subagents.progress import SubagentProgress
 
         status = SubagentStatus(
             task_id="test",
@@ -616,7 +617,7 @@ class TestSubagentHookStatus:
             task_description="test",
             started_at=time.monotonic(),
         )
-        hook = _SubagentHook(status)
+        hook = SubagentProgress(status)
 
         context = AgentHookContext(
             iteration=1,

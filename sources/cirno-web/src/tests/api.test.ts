@@ -23,7 +23,7 @@ import {
   fetchMarketplaceSkillTrends,
   fetchCirnoFeatures,
   fetchProviderModels,
-  fetchPromptIndex,
+  fetchPromptPage,
   fetchSessionAutomations,
   fetchSettingsUsage,
   fetchSidebarState,
@@ -96,7 +96,7 @@ describe("webui API helpers", () => {
     await fetchWebuiThread("tok", "websocket:chat-1");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/webui-thread",
+      "/v0/sessions/websocket%3Achat-1/webui-thread",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
         credentials: "same-origin",
@@ -112,7 +112,7 @@ describe("webui API helpers", () => {
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/webui-thread?limit=120&before=abc%2B%2F%3D",
+      "/v0/sessions/websocket%3Achat-1/webui-thread?limit=120&before=abc%2B%2F%3D",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
         credentials: "same-origin",
@@ -120,24 +120,18 @@ describe("webui API helpers", () => {
     );
   });
 
-  it("revalidates prompt summaries and replaces only the changed suffix", async () => {
-    const prompt = { id: "u1", preview: "question", answerPreview: "", cursor: "cursor", turnId: "t1", createdAt: 1 };
-    const cached = { revision: "first", prompts: [prompt] };
+  it("requests bounded directory ranges and search terms with authentication", async () => {
+    const prompt = { id: "u1", preview: "question", answerPreview: "", cursor: "cursor", turnId: "t1", createdAt: 1, index: 42 };
+    const page = { revision: "first", prompts: [prompt], offset: 0, total: 1, count: 1000 };
     const signal = new AbortController().signal;
-    vi.mocked(fetch).mockResolvedValueOnce({ status: 304 } as Response);
-    await expect(fetchPromptIndex("tok", "websocket:chat-1", signal, cached)).resolves.toBe(cached);
-    expect(fetch).toHaveBeenLastCalledWith("/api/sessions/websocket%3Achat-1/webui-thread/prompts?since=first",
-      expect.objectContaining({ headers: { Authorization: "Bearer tok", "If-None-Match": '"first"' }, cache: "no-store" }));
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({
-      revision: "second", replaceFrom: 1, prompts: [{ ...prompt, id: "u2" }],
-    }) } as Response);
-    const appended = await fetchPromptIndex("tok", "websocket:chat-1", signal, cached);
-    expect(appended.prompts.map((item) => item.id)).toEqual(["u1", "u2"]);
-    expect(appended.prompts[0]).toBe(prompt);
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ revision: "third", replaceFrom: 1, prompts: [] }) } as Response);
-    expect((await fetchPromptIndex("tok", "websocket:chat-1", signal, appended)).prompts).toEqual([prompt]);
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ replaceFrom: 2, prompts: [] }) } as Response);
-    await expect(fetchPromptIndex("tok", "websocket:chat-1", signal, cached)).rejects.toThrow("Invalid prompt index revision");
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => page } as Response);
+    await expect(fetchPromptPage("tok", "websocket:chat-1", signal, { offset: 0, query: "q & x" })).resolves.toEqual(page);
+    expect(fetch).toHaveBeenLastCalledWith("/v0/sessions/websocket%3Achat-1/webui-thread/prompts?limit=64&offset=0&q=q+%26+x",
+      expect.objectContaining({ headers: { Authorization: "Bearer tok" }, cache: "no-store", signal: expect.any(AbortSignal) }));
+    for (const invalid of [{ ...page, count: 0 }, { ...page, offset: 2 }, { ...page, prompts: [{ ...prompt, index: -1 }] }]) {
+      vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => invalid } as Response);
+      await expect(fetchPromptPage("tok", "websocket:chat-1", signal)).rejects.toThrow(/Invalid prompt/);
+    }
   });
 
   it("revalidates a cached WebUI thread and reuses it on 304", async () => {
@@ -158,7 +152,7 @@ describe("webui API helpers", () => {
     })).resolves.toBe(cached);
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/webui-thread",
+      "/v0/sessions/websocket%3Achat-1/webui-thread",
       expect.objectContaining({
         headers: {
           Authorization: "Bearer tok",
@@ -280,7 +274,7 @@ describe("webui API helpers", () => {
           text: "exec(…)",
           kind: "progress",
           trace_detail: {
-            ref: "2.history-aaaaaaaaaaaaaaaaaaaa",
+            ref: "2.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa",
             bytes: 40_000,
             traceCount: 1,
           },
@@ -328,11 +322,11 @@ describe("webui API helpers", () => {
     await fetchWebuiThreadTraceDetail(
       "tok",
       "websocket:chat-1",
-      "9.history-aaaaaaaaaaaaaaaaaaaa",
+      "9.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa",
     );
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/webui-thread/trace-detail?ref=9.history-aaaaaaaaaaaaaaaaaaaa",
+      "/v0/sessions/websocket%3Achat-1/webui-thread/trace-detail?ref=9.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
         credentials: "same-origin",
@@ -364,7 +358,7 @@ describe("webui API helpers", () => {
     await fetchFilePreview("tok", "websocket:chat-1", "/tmp/project/hook.py:12");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/file-preview?path=%2Ftmp%2Fproject%2Fhook.py%3A12",
+      "/v0/sessions/websocket%3Achat-1/file-preview?path=%2Ftmp%2Fproject%2Fhook.py%3A12",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
         credentials: "same-origin",
@@ -378,7 +372,7 @@ describe("webui API helpers", () => {
     ).resolves.toBe(true);
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/file-preview?path=notes%2Fready.md&probe=1",
+      "/v0/sessions/websocket%3Achat-1/file-preview?path=notes%2Fready.md&probe=1",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
         credentials: "same-origin",
@@ -402,7 +396,7 @@ describe("webui API helpers", () => {
     await fetchSessionAutomations("tok", "websocket:chat-1");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Achat-1/automations",
+      "/v0/sessions/websocket%3Achat-1/automations",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -413,7 +407,7 @@ describe("webui API helpers", () => {
     await fetchAutomations("tok");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/automations",
+      "/v0/webui/automations",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -424,7 +418,7 @@ describe("webui API helpers", () => {
     const controller = new AbortController();
     await fetchAutomationRunResult("tok", "task/id", 1234, "cron", controller.signal);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/automations/result?id=task%2Fid&run_at_ms=1234&kind=cron",
+      "/v0/webui/automations/result?id=task%2Fid&run_at_ms=1234&kind=cron",
       expect.objectContaining({ headers: { Authorization: "Bearer tok" }, signal: expect.any(AbortSignal) }),
     );
   });
@@ -433,7 +427,7 @@ describe("webui API helpers", () => {
     const controller = new AbortController();
     await fetchAutomationChats("tok", "task/id", controller.signal);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/automations/chats?id=task%2Fid",
+      "/v0/webui/automations/chats?id=task%2Fid",
       expect.objectContaining({ headers: { Authorization: "Bearer tok" }, signal: expect.any(AbortSignal) }),
     );
     vi.mocked(fetch).mockClear();
@@ -550,7 +544,7 @@ describe("webui API helpers", () => {
     await fetchSkills("tok");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/skills",
+      "/v0/webui/skills",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -561,7 +555,7 @@ describe("webui API helpers", () => {
     await fetchSkillDetail("tok", "current web");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/skills/current%20web",
+      "/v0/webui/skills/current%20web",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -572,7 +566,7 @@ describe("webui API helpers", () => {
     await searchMarketplaceSkills("tok", "React & testing");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/skills/search?q=React+%26+testing&provider=all",
+      "/v0/webui/skills/search?q=React+%26+testing&provider=all",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -583,7 +577,7 @@ describe("webui API helpers", () => {
     await fetchTrendingMarketplaceSkills("tok", "skillhub");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/skills/trending?provider=skillhub",
+      "/v0/webui/skills/trending?provider=skillhub",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -597,7 +591,7 @@ describe("webui API helpers", () => {
     ]);
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/skills/trends?id=vercel-labs%2Fskills%2Ffind-skills&id=acme%2Fskills%2Freact",
+      "/v0/webui/skills/trends?id=vercel-labs%2Fskills%2Ffind-skills&id=acme%2Fskills%2Freact",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -666,7 +660,7 @@ describe("webui API helpers", () => {
     await fetchSettingsUsage("tok");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/usage",
+      "/v0/settings/usage",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -701,8 +695,8 @@ describe("webui API helpers", () => {
 
   it("serializes model configuration updates", async () => {
     await updateModelConfiguration(mutationTransport, {
-      name: "codex",
-      newName: "Codex",
+      id: "codex",
+      name: "Codex",
       provider: "openai_codex",
       model: "openai-codex/gpt-5.5",
       maxTokens: 8192,
@@ -714,8 +708,8 @@ describe("webui API helpers", () => {
     expect(requestMutation).toHaveBeenCalledWith(
       "settings.model_configuration.update",
       {
-        name: "codex",
-        new_name: "Codex",
+        id: "codex",
+        name: "Codex",
         provider: "openai_codex",
         model: "openai-codex/gpt-5.5",
         max_tokens: 8192,
@@ -733,7 +727,7 @@ describe("webui API helpers", () => {
     expect(requestMutation).toHaveBeenNthCalledWith(
       1,
       "settings.model_configuration.delete",
-      { name: "spare" },
+      { id: "spare" },
       20_000,
     );
 
@@ -852,7 +846,7 @@ describe("webui API helpers", () => {
     await fetchProviderModels("tok", "deepseek");
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/provider-models?provider=deepseek",
+      "/v0/settings/provider-models?provider=deepseek",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -967,7 +961,7 @@ describe("webui API helpers", () => {
 
     await expect(fetchCliApps("tok")).resolves.toMatchObject({ apps: [] });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/cli-apps",
+      "/v0/settings/cli-apps",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -993,7 +987,7 @@ describe("webui API helpers", () => {
 
     await expect(fetchInstalledCliApps("tok")).resolves.toMatchObject({ apps: [] });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/cli-apps?installed_only=1",
+      "/v0/settings/cli-apps?installed_only=1",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -1011,7 +1005,7 @@ describe("webui API helpers", () => {
 
     await expect(fetchCirnoFeatures("tok")).resolves.toMatchObject({ features: [] });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/cirno-features",
+      "/v0/settings/cirno-features",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -1050,7 +1044,7 @@ describe("webui API helpers", () => {
 
     await expect(fetchMcpPresets("tok")).resolves.toMatchObject({ presets: [] });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/mcp-presets",
+      "/v0/settings/mcp-presets",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -1074,12 +1068,12 @@ describe("webui API helpers", () => {
 
     await fetchMcpOAuthStatus("tok", "flow-123");
     expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/mcp-oauth/status?flow_id=flow-123",
+      "/v0/settings/mcp-oauth/status?flow_id=flow-123",
       expect.objectContaining({ headers: { Authorization: "Bearer tok" } }),
     );
 
     const callbackUrl =
-      "http://127.0.0.1:8765/auth/mcp/callback?code=secret&state=state-123";
+      "http://127.0.0.1:8765/v0/mcp/oauth/callback?code=secret&state=state-123";
     await completeMcpOAuth(mutationTransport, "flow-123", callbackUrl);
     expect(requestMutation).toHaveBeenCalledWith(
       "settings.mcp.oauth_complete",
@@ -1177,7 +1171,7 @@ describe("webui API helpers", () => {
 
     await expect(fetchSidebarState("tok")).resolves.toEqual(state);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/webui/sidebar-state",
+      "/v0/webui/sidebar-state",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -1205,7 +1199,7 @@ describe("webui API helpers", () => {
 
     await expect(fetchWorkspaces("tok")).resolves.toEqual(payload);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/workspaces",
+      "/v0/workspaces",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -1320,7 +1314,7 @@ describe("webui API helpers", () => {
       },
     ]);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/commands",
+      "/v0/commands",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),

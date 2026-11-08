@@ -1,29 +1,23 @@
 import { expect, test } from "@playwright/test";
 
-for (const locale of ["en", "zh-CN"]) {
-  for (const width of [390, 1280]) {
-    test(`request parameter text aligns in ${locale} at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await page.addInitScript((language) => localStorage.setItem("cirno.locale", language), locale);
-      await page.goto("/gallery.html#component=webui%2Fsrc%2Fcomponents%2Fsettings%2Fmodels%2FProviderParameterFields.tsx");
-      const preview = page.getByRole("region", { name: locale === "en" ? "Component preview" : "组件预览" });
-      const rows = preview.getByRole("button");
-      await expect(rows).toHaveCount(3);
-
-      for (const row of await rows.all()) {
-        const text = await row.locator(":scope > span").evaluateAll((elements) => elements.map((element) => {
-          const style = getComputedStyle(element);
-          const bounds = element.getBoundingClientRect();
-          return { fontSize: style.fontSize, lineHeight: style.lineHeight, top: bounds.top, height: bounds.height };
-        }));
-        expect(text).toHaveLength(3);
-        for (const item of text.slice(1)) {
-          expect(item.fontSize).toBe(text[0].fontSize);
-          expect(item.lineHeight).toBe(text[0].lineHeight);
-          expect(item.top).toBeCloseTo(text[0].top, 2);
-          expect(item.height).toBeCloseTo(text[0].height, 2);
-        }
-      }
-    });
-  }
+for (const locale of ["en", "zh-CN"]) for (const width of [390, 1280]) {
+  test(`request parameter JSON stays editable and validates in ${locale} at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/gallery.html?lang=${locale}#component=sources%2Fcirno-web%2Fsrc%2Ffeatures%2Fsettings%2Fproviders%2FProviderParameterFields.tsx`);
+    const preview = page.getByRole("region", { name: locale === "en" ? "Component preview" : "组件预览", exact: true });
+    const fields = preview.getByRole("textbox");
+    await expect(fields).toHaveCount(3);
+    const headers = fields.first();
+    await expect(headers).toHaveValue('{"X-Project":"gallery"}');
+    await headers.fill("[");
+    await expect(headers).toHaveAttribute("aria-invalid", "true");
+    await headers.fill('{"X-Project":7}');
+    await expect(headers).toHaveAttribute("aria-invalid", "true");
+    const draft = JSON.stringify({ "X-Project": "research" }, null, 2);
+    await headers.fill(draft);
+    await expect(headers).not.toHaveAttribute("aria-invalid", "true");
+    await expect.poll(async () => JSON.parse((await preview.getByRole("status").textContent())!).extraHeaders).toBe(draft);
+    await expect(headers).toHaveValue(draft);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
 }

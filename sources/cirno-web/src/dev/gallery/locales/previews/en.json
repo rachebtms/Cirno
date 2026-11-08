@@ -1,10 +1,4 @@
 {
-  "rename": {
-    "title": "RenameDialog · Rename groups and projects",
-    "description": "Try the rename dialog for groups and projects. Topics are renamed inline in the chat list.",
-    "options": "The caller supplies dialogTitle, description and placeholder. title sets the initial value; onConfirm receives the trimmed title. Empty titles cannot be saved.",
-    "hint": "Saving updates the title above."
-  },
   "delete": {
     "title": "DeleteConfirm · Delete confirmation",
     "description": "Compare deletion of one chat, multiple chats, or a chat with automations.",
@@ -60,17 +54,6 @@
     "options": "path is the reference text. metadata supplies the full path and optional relative path. The Gallery supplies metadata without loading a file.",
     "scope": "File scope",
     "hint": "Right-click for the copy menu, or focus the file and press Shift+F10."
-  },
-  "workbench": {
-    "title": "PaneWorkbench · Multiple panes",
-    "description": "Switch layouts, activate or add panes, and adjust their position and size.",
-    "options": "The caller controls panes, activePaneKey, layout and splitRatios. renderPane supplies content; callbacks update local preview state. Narrow screens show the active pane.",
-    "layout": "Pane layout",
-    "limit": "Up to four panes",
-    "notes": "{{title}} notes",
-    "active": "Active pane",
-    "activate": "Select this pane to activate it",
-    "hint": "Active: {{title}}. Drag the bottom handle to move a pane; drag its edges to resize."
   },
   "hostConnection": {
     "title": "HostConnectionStatus · Connection status",
@@ -170,7 +153,7 @@
     "retries": "Retries: {{amount}}"
   },
   "recovery": {
-    "title": "RecoveryNotice · Task recovery",
+    "title": "ThreadComposer · Task recovery",
     "description": "Compare interrupted, resuming, failed and unavailable states; try Continue and Dismiss.",
     "options": "state supplies a recovery snapshot. onContinue and onDismiss return Promises. These callbacks only update the preview.",
     "state": "Recovery state",
@@ -296,22 +279,13 @@
     "selected": "Preview host: {{name}}"
   },
   "chats": {
-    "title": "ChatList · Chat list",
+    "title": "ConversationsTab · Chat list",
     "description": "Select chats and try pinning, archiving and deleting from their menus.",
     "options": "The caller supplies sessions, activeKey and pinned/archived keys. Action callbacks update the example list.",
     "state": "Chat list state",
     "renamed": "Renamed: {{name}}",
     "selected": "Selected chat: {{name}}",
     "none": "None"
-  },
-  "sidebarResize": {
-    "title": "SidebarResizeHandle · Sidebar size",
-    "description": "Resize, collapse and expand the sidebar with the mouse or keyboard.",
-    "options": "width and open are controlled. onResize updates size and expansion; onDraggingChange reports dragging.",
-    "content": "Sidebar content",
-    "hint": "Drag the divider, or focus it and use arrow keys, Home, End and Enter.",
-    "collapsed": "Collapsed",
-    "dragging": "Dragging"
   },
   "language": {
     "title": "LanguageSwitcher · Interface language",
@@ -343,7 +317,7 @@
   "channel": {
     "title": "{{channel}} · Channel setup",
     "description": "Explore the real channel setup form and states.",
-    "options": "Uses channel registrations, Python setup-contract snapshots and production ChannelSetupSurfaceView. Inputs, credential visibility, presets, checks and toggles affect only this preview.",
+    "options": "Uses channel registrations, Python setup-contract snapshots and production ChannelSetupView. Inputs, credential visibility, presets, checks and toggles affect only this preview.",
     "state": "Channel setup state",
     "credentialsError": "Example credentials were rejected. Update the preview values and try again.",
     "validation": "Preview configuration"
@@ -376,42 +350,6 @@
     "title": "WhatsAppConnectFlowView · WhatsApp device linking",
     "description": "Compare automatic linking, success, expiry and errors in the minimal QR layout; try linking another account.",
     "options": "The view preserves automatic-start and minimal-layout display rules. The caller controls state and retries. The real connection entry owns automatic start, forced retries and polling."
-  },
-  "linearPanel": {
-    "title": "LinearPanelView · Linear setup",
-    "description": "Explore app details, secrets, advanced settings, workspaces, member access and browser authorization.",
-    "options": "state and workspaces supply snapshots; callbacks connect workspace, save and MCP actions. Three slots compose production member, authorization and reset views.",
-    "state": "Linear setup state",
-    "runtimeError": "The Linear webhook could not be started.",
-    "saveError": "Settings could not be saved. Your draft was kept.",
-    "inspectionError": "Connected workspaces could not be inspected.",
-    "refreshed": "Example workspaces refreshed.",
-    "removed": "Removed example workspace: {{name}}",
-    "mcp": "Selected Linear MCP setup."
-  },
-  "linearMembers": {
-    "title": "LinearMemberAccessView · Member access",
-    "description": "Search members, change access and compare loading, empty, saving and unconfirmed states.",
-    "options": "snapshot contains confirmed member state. onLoad and onSetAllowed belong to the channel entry; the gateway still validates permissions.",
-    "state": "Member state",
-    "loadError": "The member directory is unavailable.",
-    "saveError": "Access was not confirmed."
-  },
-  "linearConnect": {
-    "title": "LinearConnectFlowView · Linear authorization",
-    "description": "Try browser authorization and waiting notices with start, cancel, success and failure stages.",
-    "options": "Reuses ChannelQrConnectFlowView. Linear supplies browser authorization display, labels and focus handling; the runtime entry owns session creation and polling.",
-    "state": "Authorization stage",
-    "error": "Authorization could not be completed.",
-    "hint": "The authorization link and workspace are examples. Start and Cancel only change the preview stage."
-  },
-  "linearReset": {
-    "title": "LinearResetConnectionView · Reset connection",
-    "description": "Review what is cleared or kept, busy state and retries after a partial reset.",
-    "options": "onReset performs the full revocation and cleanup transaction. The view manages confirmation, errors, closing restrictions and focus restoration.",
-    "state": "Reset result",
-    "error": "The channel could not be stopped. App settings were kept.",
-    "completed": "Preview workspace and app settings cleared."
   },
   "weixinPanel": {
     "title": "WeixinPanelView · Weixin settings",

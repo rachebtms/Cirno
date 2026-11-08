@@ -1,4 +1,4 @@
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 /** Match websocket/session scrub: keep header + Result body only; trim model tail. */
 const SUBAGENT_UI_RESULT_MAX_CHARS = 800;

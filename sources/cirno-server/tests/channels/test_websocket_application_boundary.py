@@ -8,24 +8,23 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
-from websockets.datastructures import Headers
-from websockets.http11 import Request, Response
-
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_server.channels.websocket import runtime
-from cirno_server.webui.services import build_gateway_services
+from cirno_server.channels.websocket.config import WebSocketConfig
+from cirno_server.webui.services import build_server_services
+from websockets.datastructures import Headers
+from websockets.http11 import Request, Response
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-_SESSION_IDENTITY_PATH = _REPOSITORY_ROOT / "cirno-core" / "session" / "session_identity.py"
+_SESSION_IDENTITY_PATH = _REPOSITORY_ROOT / "cirno-core" / "src/cirno_core" / "session" / "session_identity.py"
 
 
 @pytest.fixture
-async def channel(tmp_path, monkeypatch):
-    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    config = runtime.WebSocketConfig(allow_from=["client-1"], websocket_requires_token=False)
+async def channel(tmp_path):
+    config = WebSocketConfig(allow_from=["client-1"], websocket_requires_token=False)
     bus = MessageBus()
-    gateway = build_gateway_services(
+    gateway = build_server_services(
         config=config,
         bus=bus,
         session_manager=None,
@@ -34,8 +33,8 @@ async def channel(tmp_path, monkeypatch):
         default_restrict_to_workspace=True,
         config_path=tmp_path / "config.json",
         runtime_model_name=None,
-        runtime_surface="browser",
-        runtime_capabilities_overrides=None,
+
+
     )
     channel = runtime.WebSocketChannel(config, bus, gateway=gateway)
     try:
@@ -44,9 +43,9 @@ async def channel(tmp_path, monkeypatch):
         async with asyncio.timeout(2):
             await channel.stop()
         assert channel._server_task is None
-        assert not channel._connection_outbound
-        assert not channel._outbound_retire_tasks
-        assert not channel._commands.request_tasks
+        assert not channel.writers.connections
+        assert not channel.writers.retire_tasks
+        assert not channel._commands.requests.tasks
 
 
 async def test_send_delegates_the_outbound_message_to_delivery(channel, monkeypatch):
@@ -162,14 +161,11 @@ def test_persisted_webui_session_prefix_has_one_production_owner() -> None:
     owners = {}
     for package in ("cirno-core", "cirno-server"):
       for path in (_REPOSITORY_ROOT / package).rglob("*.py"):
-          if "tests" in path.parts or path.name == "conftest.py":
+          if "tests" in path.parts or path.name == "conftest.py" or path.is_relative_to(
+              _REPOSITORY_ROOT / "cirno-server/src/cirno_server/maintenance/migrations"
+          ):
               continue
           lines = _session_namespace_literal_lines(path.read_text(encoding="utf-8"))
           if lines:
               owners[path.relative_to(_REPOSITORY_ROOT).as_posix()] = lines
     assert set(owners) == {_SESSION_IDENTITY_PATH.relative_to(_REPOSITORY_ROOT).as_posix()}, owners
-
-
-def test_runtime_exports_compatibility_protocol_helpers() -> None:
-    assert runtime._is_valid_chat_id("unified:default")  # pyright: ignore[reportPrivateUsage]
-    assert not runtime._is_valid_chat_id("../escape")  # pyright: ignore[reportPrivateUsage]

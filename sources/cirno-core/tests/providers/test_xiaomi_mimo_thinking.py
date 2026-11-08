@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from cirno_core.config.schema import ProvidersConfig
+from cirno_core.config.providers import ProvidersConfig
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.providers.registry import PROVIDERS
 

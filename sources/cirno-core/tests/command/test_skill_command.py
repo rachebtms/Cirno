@@ -9,9 +9,10 @@ from cirno_core.agent.loop import AgentLoop
 from cirno_core.skills.loader import SkillsLoader
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.command.builtin import cmd_skill, register_builtin_commands
+from cirno_core.command.builtin.capabilities import cmd_skill
+from cirno_core.command.builtin.registration import register_builtin_commands
 from cirno_core.command.router import CommandContext, CommandRouter
-from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.config.models import ModelPresetConfig
 
 
 def _provider(default_model: str = "test-model") -> MagicMock:

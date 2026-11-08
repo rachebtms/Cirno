@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { useFileEditDisplayMode } from "@/hooks/useFileEditDisplayMode";
 import {
-  DEFAULT_LOCAL_PREFS,
-  LOCAL_PREFS_STORAGE_KEY,
-  writeLocalPreferences,
-} from "@/lib/local-preferences";
+  DEFAULT_PREFERENCES,
+  clearOwnerPreferences,
+  writePreferences,
+} from "@/features/preferences/store";
 
 function DisplayModeProbe() {
   const mode = useFileEditDisplayMode();
@@ -15,7 +15,7 @@ function DisplayModeProbe() {
 
 describe("useFileEditDisplayMode", () => {
   afterEach(() => {
-    localStorage.removeItem(LOCAL_PREFS_STORAGE_KEY);
+    clearOwnerPreferences();
   });
 
   it("updates when local preferences change in the same document", async () => {
@@ -24,8 +24,8 @@ describe("useFileEditDisplayMode", () => {
     expect(screen.getByTestId("mode")).toHaveTextContent("summary");
 
     act(() => {
-      writeLocalPreferences({
-        ...DEFAULT_LOCAL_PREFS,
+      writePreferences({
+        ...DEFAULT_PREFERENCES,
         fileEditDisplayMode: "diff",
       });
     });

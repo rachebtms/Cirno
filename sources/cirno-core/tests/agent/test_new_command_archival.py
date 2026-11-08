@@ -20,7 +20,8 @@ class TestNewCommandArchival:
     def _make_loop(tmp_path: Path):
         from cirno_core.agent.loop import AgentLoop
         from cirno_core.bus.queue import MessageBus
-        from cirno_core.providers.base import GenerationSettings, LLMResponse
+        from cirno_core.providers.generation import GenerationSettings
+        from cirno_core.providers.contracts import LLMResponse
 
         bus = MessageBus()
         provider = MagicMock(aclose=AsyncMock())
@@ -68,7 +69,7 @@ class TestNewCommandArchival:
         loop.consolidator.archive_session = _failing_summarize  # type: ignore[method-assign]
 
         new_msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/new")
-        response = await loop._process_message(new_msg, runtime=expected_runtime)
+        response = await loop.processing.process(new_msg, runtime=expected_runtime)
 
         assert response is not None
         assert "new session started" in response.content.lower()
@@ -105,7 +106,7 @@ class TestNewCommandArchival:
         loop.schedule_background = scheduled.append  # type: ignore[method-assign]
 
         new_msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/new")
-        response = await loop._process_message(new_msg, runtime=expected_runtime)
+        response = await loop.processing.process(new_msg, runtime=expected_runtime)
 
         assert response is not None
         assert "new session started" in response.content.lower()
@@ -138,7 +139,7 @@ class TestNewCommandArchival:
         loop.consolidator.archive_session = _ok_summarize  # type: ignore[method-assign]
 
         new_msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/new")
-        response = await loop._process_message(new_msg, runtime=expected_runtime)
+        response = await loop.processing.process(new_msg, runtime=expected_runtime)
 
         assert response is not None
         assert "new session started" in response.content.lower()
@@ -171,7 +172,7 @@ class TestNewCommandArchival:
         loop.consolidator.archive_session = _slow_summarize  # type: ignore[method-assign]
 
         new_msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/new")
-        await loop._process_message(new_msg, runtime=expected_runtime)
+        await loop.processing.process(new_msg, runtime=expected_runtime)
 
         assert not archived.is_set()
         release_archive.set()

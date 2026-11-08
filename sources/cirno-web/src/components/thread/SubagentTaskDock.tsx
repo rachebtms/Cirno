@@ -151,7 +151,7 @@ function TaskDock({ allTasks, inputKey }: { allTasks: ObservedSubagentTask[]; in
   const title = t("thread.subagents.workTitle");
 
   if (!visible) return null;
-  return <div ref={root} data-testid="subagent-task-dock" className="subagent-task-dock relative mx-auto h-11 sm:h-7"
+  return <div ref={root} data-testid="subagent-task-dock" className="subagent-task-dock relative mx-auto h-11 @min-[640px]/cirno-tab:h-7"
     onPointerDownCapture={event => { ownedPointerDown.current = event.nativeEvent; }}>
     <div className="absolute inset-x-0 bottom-0 z-30 overflow-hidden rounded-t-2xl border border-b-0 border-border/70 bg-card shadow-[0_-4px_20px_rgba(15,23,42,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.24)]">
       <HoverHint enabled={!open && dragHeight === null} content={`${title} · ${summary}`}>
@@ -198,7 +198,7 @@ function TaskDock({ allTasks, inputKey }: { allTasks: ObservedSubagentTask[]; in
             if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; }
             changeOpen(!open, open);
           }}
-          className="group flex h-11 w-full touch-none select-none items-center justify-center text-muted-foreground outline-none transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing motion-reduce:transition-none sm:h-7 sm:cursor-grab">
+          className="group flex h-11 w-full touch-none select-none items-center justify-center text-muted-foreground outline-none transition-colors hover:bg-surface-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing motion-reduce:transition-none @min-[640px]/cirno-tab:h-7 @min-[640px]/cirno-tab:cursor-grab">
           <span aria-hidden className="h-1 w-8 rounded-full bg-current opacity-30 transition-opacity group-hover:opacity-60 motion-reduce:transition-none" />
           <span className="sr-only">{title} · {summary}
             {attention ? ` · ${t("thread.subagents.needsReview", { count: attention })}` : ""}
@@ -206,7 +206,7 @@ function TaskDock({ allTasks, inputKey }: { allTasks: ObservedSubagentTask[]; in
         </button>
       </HoverHint>
       <div ref={panel} id={panelId} role="region" aria-label={title} aria-describedby={progressId}
-        hidden={!treeMounted} aria-hidden={open ? undefined : true} {...(!open ? { inert: "" } : {})}
+        hidden={!treeMounted} aria-hidden={open ? undefined : true} {...(!open ? { inert: true } : {})}
         className="overflow-hidden transition-[height] duration-200 ease-out motion-reduce:transition-none"
         style={{ height: dragHeight === null ? open ? expandedHeight : 0 : Math.min(dragHeight, expandedHeight), transition: dragHeight === null ? undefined : "none" }}>
         <p id={progressId} className="sr-only">{progress}</p>
@@ -230,12 +230,12 @@ function TaskTree({ tasks, maxHeight }: { tasks: ObservedSubagentTask[]; maxHeig
           if (selection && !selection.isCollapsed && selection.containsNode(event.currentTarget, true)) return;
           context.open(task, event.currentTarget.querySelector<HTMLButtonElement>("[data-subagent-id]")!);
         }}
-        className="cursor-pointer rounded-lg transition-colors duration-150 hover:bg-muted/50 focus-within:bg-muted/50 motion-reduce:transition-none">
+        className="cursor-pointer rounded-lg transition-colors duration-150 hover:bg-surface-secondary/50 focus-within:bg-surface-secondary/50 motion-reduce:transition-none">
         <div className="flex min-w-0 items-center gap-0.5">
           <SubagentTaskButton task={task} surface="activity" />
           {task.state === "queued" || task.state === "running" ? <HoverHint content={t("thread.subagents.stopTask", { label: task.label })}>
             <Button type="button" variant="ghost" size="icon"
-              className="h-11 w-11 shrink-0 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive motion-reduce:transition-none sm:h-9 sm:w-9"
+              className="h-11 w-11 shrink-0 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive motion-reduce:transition-none @min-[640px]/cirno-tab:h-9 @min-[640px]/cirno-tab:w-9"
               aria-label={t("thread.subagents.stopTask", { label: task.label })} aria-busy={context.stoppingId === task.task_id}
               disabled={context.stoppingId !== null} onClick={() => void context.stop(task)}>
               {context.stoppingId === task.task_id ? <LoadingRing className="h-3.5 w-3.5" /> : <StopIcon className="h-3.5 w-3.5" fill="currentColor" aria-hidden />}

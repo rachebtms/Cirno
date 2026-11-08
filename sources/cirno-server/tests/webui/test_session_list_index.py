@@ -5,16 +5,15 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
-import pytest
-
 import cirno_server.webui.session_list_index as session_list_index
-from cirno_core.providers.base import ProviderConversationState
+import pytest
+from cirno_core.providers.contracts import ProviderConversationState
 from cirno_core.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY
 from cirno_core.session.automation_turns import AUTOMATION_HISTORY_META
 from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno_core.session.recovery import RECOVERY_METADATA_KEY
+from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY
 from cirno_core.session.types import SESSION_TYPE_KEY, SessionType
 
 
@@ -37,7 +36,7 @@ def test_webui_session_list_reads_previews_without_loading_history(tmp_path, mon
     assert rows[0]["model_preset"] == "fast"
 
 
-def test_webui_session_list_refreshes_after_model_preset_rename(tmp_path: Path) -> None:
+def test_webui_session_list_refreshes_after_model_selection(tmp_path: Path) -> None:
     manager = SessionManager(tmp_path)
     session = manager.get_or_create("websocket:renamed-preset")
     session.metadata[SESSION_MODEL_PRESET_METADATA_KEY] = "openai"
@@ -46,7 +45,7 @@ def test_webui_session_list_refreshes_after_model_preset_rename(tmp_path: Path) 
 
     assert list_webui_sessions(manager)[0]["model_preset"] == "openai"
 
-    assert manager.rename_model_preset("openai", "Codex") == 1
+    manager.update_session_metadata(session.key, {SESSION_MODEL_PRESET_METADATA_KEY: "Codex"})
 
     assert list_webui_sessions(manager)[0]["model_preset"] == "Codex"
 
@@ -296,12 +295,11 @@ async def test_sidebar_allocates_handles_then_reads_during_pending_write(tmp_pat
     import threading
     from types import SimpleNamespace
 
+    from cirno_core.bus.queue import MessageBus
+    from cirno_server.channels.websocket.config import WebSocketConfig
+    from cirno_server.webui.services import build_server_services
     from websockets.datastructures import Headers
     from websockets.http11 import Request
-
-    from cirno_core.bus.queue import MessageBus
-    from cirno_server.channels.websocket.runtime import WebSocketConfig
-    from cirno_server.webui.services import build_gateway_services
 
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
     manager = SessionManager(tmp_path / "workspace")
@@ -309,15 +307,15 @@ async def test_sidebar_allocates_handles_then_reads_during_pending_write(tmp_pat
     key = "websocket:busy"
     await state.get(key)
     await state.update_metadata(key, {"title": "committed"})
-    gateway = build_gateway_services(
+    gateway = build_server_services(
         config=WebSocketConfig(), bus=MessageBus(), session_manager=manager,
         static_dist_path=None, workspace_path=tmp_path / "workspace",
         default_restrict_to_workspace=True, runtime_model_name=lambda: "test-model",
-        runtime_surface="gateway", runtime_capabilities_overrides=None,
+
     )
     token = gateway.tokens.issue_api_token(60)
     connection = SimpleNamespace(remote_address=("127.0.0.1", 12345))
-    request = Request("/api/sessions", Headers({"Authorization": f"Bearer {token}"}))
+    request = Request("/v0/sessions", Headers({"Authorization": f"Bearer {token}"}))
     started, release = threading.Event(), threading.Event()
     original = manager._store.replace_metadata
 

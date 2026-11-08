@@ -1,4 +1,4 @@
-import type { BootstrapResponse } from "./types";
+import type { BootstrapResponse } from "@/lib/contracts/bootstrap";
 import { fetchWithTimeout } from "./http";
 
 const SECRET_STORAGE_KEY = "cirno-webui.bootstrap-secret";
@@ -64,7 +64,7 @@ export function consumeUrlBootstrapSecret(): string {
 
 /**
  * Fetch a short-lived token + the WebSocket path from the gateway's
- * ``/webui/bootstrap`` endpoint.
+ * ``/v0/bootstrap`` endpoint.
  */
 export async function fetchBootstrap(
   baseUrl: string = "",
@@ -75,7 +75,7 @@ export async function fetchBootstrap(
   if (secret) {
     headers["X-Cirno-Auth"] = secret;
   }
-  const res = await fetchWithTimeout(`${baseUrl}/webui/bootstrap`, {
+  const res = await fetchWithTimeout(`${baseUrl}/v0/bootstrap`, {
     method: "GET",
     credentials: "same-origin",
     headers,
@@ -114,6 +114,7 @@ export function deriveWsUrl(
   token: string | null | undefined,
   wsUrl?: string | null,
 ): string {
+  if (wsUrl && !/^wss?:\/\//i.test(wsUrl)) throw new Error("Unsupported WebSocket URL");
   const query = token ? `?token=${encodeURIComponent(token)}` : "";
   const path = wsPath && wsPath.startsWith("/") ? wsPath : `/${wsPath || ""}`;
   if (typeof window !== "undefined" && window.location.port === "5173") {
@@ -130,7 +131,7 @@ export function deriveWsUrl(
     const authority = port ? `${host}:${port}` : host;
     return `${scheme}://${authority}${path}${query}`;
   }
-  if (wsUrl && /^(wss?|cirno-host):\/\//i.test(wsUrl)) {
+  if (wsUrl && /^wss?:\/\//i.test(wsUrl)) {
     if (!token) return wsUrl;
     const join = wsUrl.includes("?") ? "&" : "?";
     return `${wsUrl}${join}token=${encodeURIComponent(token)}`;

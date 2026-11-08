@@ -14,7 +14,7 @@ from cirno_core.agent.approval.service import OperationApproval, operation_acces
 from cirno_core.security.approval.store import ApprovalStore
 from cirno_core.security.workspace_access import bind_workspace_scope, build_workspace_scope, current_workspace_scope, reset_workspace_scope
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.recovery import REQUEST_ORIGIN_METADATA_KEY
+from cirno_core.session.recovery.contracts import REQUEST_ORIGIN_METADATA_KEY
 
 
 @pytest.fixture
@@ -140,7 +140,7 @@ async def test_review_is_enforced_at_shared_tool_boundary(review):
     from cirno_core.agent.tools.context import request_context
     from cirno_core.agent.tools.execution import execute_tool_calls
     from cirno_core.agent.tools.registry import ToolRegistry
-    from cirno_core.providers.base import ToolCallRequest
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     service, request, response, target, sessions, bus = review
     response.return_value.content = '{"decision":"deny","reason":"Do not write that destination"}'
@@ -179,7 +179,7 @@ async def test_script_content_changes_require_fresh_review(review):
 
 
 async def test_owner_decision_is_recovered_if_delivery_is_interrupted(review, monkeypatch):
-    from cirno_core.session.recovery import pending_followups
+    from cirno_core.session.recovery.pending import pending_followups
     service, request, response, target, sessions, bus = review
     response.return_value.content = '{"decision":"human","reason":"Owner decision required"}'
     tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
@@ -259,7 +259,8 @@ async def test_nodes_execute_obeys_access_and_review(review, monkeypatch, mode):
     from cirno_core.nodes.service import Nodes
     from cirno_core.agent.tools.context import request_context
     service, request, response, target, sessions, bus = review
-    node = Nodes().save_node({'name': 'Research', 'host': 'lab.example', 'username': 'worker'})
+    credential = Nodes().credentials.save(label='Research', kind='ssh', ssh={'host': 'lab.example', 'username': 'worker'}, node_enabled=True, agent_visible=True)
+    node = Nodes().node(credential['id']).model_dump()
     execute = AsyncMock(return_value='remote result')
     monkeypatch.setattr(Nodes, 'execute', execute)
     scope = build_workspace_scope(request.workspace, mode, source_channel='websocket')
@@ -289,10 +290,36 @@ async def test_remote_script_requires_human_not_a_local_lookalike(review, monkey
     from cirno_core.agent.tools.instance_features import NodeTool
     from cirno_core.nodes.service import Nodes
     service, request, response, target, sessions, bus = review
-    node = Nodes().save_node({'name': 'Research', 'host': 'lab.example', 'username': 'worker'})
+    credential = Nodes().credentials.save(label='Research', kind='ssh', ssh={'host': 'lab.example', 'username': 'worker'}, node_enabled=True, agent_visible=True)
+    node = Nodes().node(credential['id']).model_dump()
     (request.workspace / 'task.py').write_text('print("safe locally")')
     params = {'action': 'execute', 'node_id': node['id'], 'command': 'python task.py'}
     with pytest.raises(PermissionError, match='pending'):
         async with operation_access(NodeTool(), params, request):
             pytest.fail('No remote effects before approval')
     response.assert_not_awaited()
+
+
+@pytest.mark.parametrize('kind', ['text', 'ssh'])
+async def test_credential_review_records_and_inbox_never_persist_secret_arguments(review, kind):
+    import json
+    from cirno_core.agent.tools.credential import CredentialTool
+    service, request, response, target, sessions, bus = review
+    secret = 'PRIVATE_REVIEW_VALUE_42'
+    params = {'action': 'store', 'id': 'credential-to-update', 'label': 'Research login', 'kind': kind}
+    params.update({'ssh': {'host': 'lab.example', 'username': 'worker', 'password': secret}} if kind == 'ssh' else {'value': secret})
+    await service.authorize(CredentialTool(), params, request, 'Replace an encrypted credential')
+    notice = service.inbox.list()['items'][0]
+    persisted = service.store.get(notice['data']['approval_id'])
+    assert secret not in json.dumps(response.call_args.kwargs)
+    assert secret not in persisted['operation']
+    assert secret not in json.dumps(notice)
+
+
+def test_credential_review_digest_binds_redacted_values(tmp_path):
+    from cirno_core.agent.approval.reviewer import operation_evidence
+    first = operation_evidence('credential', {'action': 'store', 'id': 'record', 'value': 'first-secret'}, tmp_path)
+    second = operation_evidence('credential', {'action': 'store', 'id': 'record', 'value': 'second-secret'}, tmp_path)
+    assert 'first-secret' not in str(first)
+    assert first['arguments'] == second['arguments']
+    assert first != second

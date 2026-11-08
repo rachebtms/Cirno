@@ -1,5 +1,5 @@
 import { CirnoClient } from "@/lib/cirno-client";
-import type { InboundEvent } from "@/lib/types";
+import type { InboundEvent } from "@/lib/contracts/events";
 
 /** Real lifecycle and dispatch with an in-memory transport. */
 export function createStreamClient() {

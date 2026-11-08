@@ -133,7 +133,7 @@ export function Gallery() {
             {filtered.map((item) => <a key={item.path} href={`#${new URLSearchParams({ component: item.path })}`}
               aria-current={current?.path === item.path ? "page" : undefined}
               className={cn("block rounded-control px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                current?.path === item.path ? "bg-sidebar-selected text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+                current?.path === item.path ? "bg-sidebar-selected text-foreground" : "text-muted-foreground hover:bg-surface-secondary hover:text-foreground")}>
               <span className="flex items-center justify-between gap-2"><span className="truncate">{item.name}</span>
                 {view === "all" ? <span className="shrink-0 text-[10px] opacity-70">{examplesByPath.has(item.path) ? t("ui.previewBadge") : t("ui.sourceOnlyBadge")}</span> : null}</span>
               <span className="block truncate text-[11px] opacity-70">{groupLabel(item.group)}</span>

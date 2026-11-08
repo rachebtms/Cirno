@@ -1,0 +1,7 @@
+.settings-feature { display:flex; flex-direction:column; gap:.75rem; }
+.settings-feature-row { display:flex; flex-direction:row; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.settings-feature-row > h3 { font-size:.875rem; font-weight:500; flex:1; }
+.settings-feature-row > .interface-toggle { width:auto; }
+.settings-feature-dialog { display:flex; flex-direction:column; height:min(42rem,calc(100dvh - 2rem)); max-height:calc(100dvh - 2rem); }
+.settings-feature-dialog > [data-slot=modal-body] { min-height:0; flex:1; overflow:auto; overscroll-behavior:contain; }
+.settings-feature-options { display:flex; flex-direction:column; gap:.75rem; }

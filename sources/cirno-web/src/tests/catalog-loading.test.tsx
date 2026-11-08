@@ -1,7 +1,9 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CliAppInfo, McpPresetInfo, CirnoFeatureInfo } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { CirnoFeatureInfo } from "@/lib/contracts/channels";
 import {
   installSettingsViewTestHooks,
   jsonResponse,
@@ -42,8 +44,8 @@ describe("catalog loading", () => {
     const mcp = deferred<Response>();
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings/cli-apps") return cli.promise;
-      if (url === "/api/settings/mcp-presets") return mcp.promise;
+      if (url === "/v0/settings/cli-apps") return cli.promise;
+      if (url === "/v0/settings/mcp-presets") return mcp.promise;
       return Promise.resolve(jsonResponse(settingsPayload()));
     }));
     renderSettingsView({ initialSettings: settingsPayload() });
@@ -61,8 +63,8 @@ describe("catalog loading", () => {
     const cli = deferred<Response>();
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings/cli-apps") return cli.promise;
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/cli-apps") return cli.promise;
+      if (url === "/v0/settings/mcp-presets") {
         return Promise.resolve(jsonResponse({ presets: [], installed_count: 0 }));
       }
       return Promise.resolve(jsonResponse(settingsPayload()));
@@ -89,8 +91,8 @@ describe("catalog loading", () => {
   it.each(["apps", "channels"] as const)("reports a failed %s read without claiming an empty catalog", async (section) => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
       throw new Error("Catalog offline");
     }));
     renderSettingsView({ initialSection: section, initialSettings: settingsPayload() });
@@ -105,7 +107,7 @@ describe("catalog loading", () => {
     const refresh = deferred<Response>();
     const fetchFeatures = vi.fn().mockReturnValueOnce(initial.promise).mockReturnValue(refresh.promise);
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => (
-      String(input) === "/api/settings/cirno-features"
+      String(input) === "/v0/settings/cirno-features"
         ? fetchFeatures() : Promise.resolve(jsonResponse(settingsPayload()))
     )));
     renderSettingsView({ initialSection: "channels", initialSettings: settingsPayload() });

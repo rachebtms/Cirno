@@ -5,12 +5,17 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
-
 from cirno_server.webui.build import (
     ensure_webui_bundle,
     inspect_webui_bundle,
     pick_webui_build_runner,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_build_configuration(monkeypatch):
+    monkeypatch.delenv("CIRNO_SKIP_WEBUI_BUILD", raising=False)
+
 
 _MTIME_BASE_NS = 1_700_000_000_000_000_000
 _MTIME_STEP_NS = 5_000_000_000
@@ -18,18 +23,18 @@ _MTIME_STEP_NS = 5_000_000_000
 
 @pytest.mark.parametrize("checkout", [True, False])
 def test_channel_serves_the_build_resolver_bundle(tmp_path, monkeypatch, checkout):
-    from cirno_server.channels.manager import _default_webui_dist
+    from cirno_server.channels.webui_binding import _default_webui_dist
 
-    core = tmp_path / "sources" / "cirno-core"
-    core.mkdir(parents=True)
+    package = tmp_path / "sources/cirno-server/src/cirno_server"
+    package.mkdir(parents=True)
     if checkout:
         frontend = tmp_path / "sources" / "cirno-web"
         frontend.mkdir()
         (frontend / "package.json").write_text("{}")
         bundle = tmp_path / "build" / "webui"
     else:
-        bundle = core / "web" / "dist"
-    monkeypatch.setattr("cirno_server.webui.build.default_project_root", lambda: core)
+        bundle = package / "web" / "dist"
+    monkeypatch.setattr("cirno_server.webui.build.default_package_root", lambda: package)
     assert _default_webui_dist() is None
     bundle.mkdir(parents=True)
     (bundle / "index.html").write_text("<html>Cirno setup</html>")
@@ -124,7 +129,7 @@ def test_inspect_webui_bundle_accepts_fresh_dist(tmp_path: Path) -> None:
 
 
 def test_ensure_webui_bundle_auto_builds_stale_dist(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("cirno_core.utils.bun.bun_environment", lambda _: nullcontext({"PATH": "bun"}))
+    monkeypatch.setattr("cirno_server.webui.build.bun_environment", lambda _: nullcontext({"PATH": "bun"}))
     source = tmp_path / "webui"
     dist = tmp_path / "cirno" / "web" / "dist"
     _touch(source / "package.json", mtime_ns=10)
@@ -189,3 +194,40 @@ def test_build_prefers_existing_npm(monkeypatch):
     from cirno_server.webui.build import pick_webui_build_runner
     monkeypatch.setattr("cirno_server.webui.build.shutil.which", lambda name: "/tools/" + name)
     assert pick_webui_build_runner() == "/tools/npm"
+
+
+def test_simultaneous_servers_share_one_bundle_build(tmp_path: Path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from cirno_server.webui.build import build_webui_bundle
+
+    source = tmp_path / "webui"
+    dist = tmp_path / "dist"
+    _touch(source / "package.json", mtime_ns=10)
+    _touch(source / "package-lock.json", mtime_ns=10)
+    _touch(source / "src" / "App.tsx", mtime_ns=30)
+    entered = Event()
+    release = Event()
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        if command[1] == "ci":
+            entered.set()
+            assert release.wait(2)
+        else:
+            _touch(dist / "index.html", mtime_ns=40)
+
+    def build():
+        return build_webui_bundle(source_dir=source, dist_dir=dist, runner="npm",
+                                  subprocess_run=run, force=False)
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        first = workers.submit(build)
+        assert entered.wait(1)
+        second = workers.submit(build)
+        release.set()
+        assert first.result(timeout=3).stale is False
+        assert second.result(timeout=3).stale is False
+    assert commands == [["npm", "ci"], ["npm", "run", "build"]]

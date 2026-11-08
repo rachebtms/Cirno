@@ -1,3 +1,4 @@
+import { ROUTER_CHAT_ID } from "@/lib/conversation-role";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { NOTIFICATION_OPEN_EVENT, notificationChatUrl, reconcileNotificationPermission, showBrowserNotification, taskNoticeKey } from "@/lib/browser-notifications";
@@ -9,7 +10,7 @@ export function BrowserNotifications({ client }: { client: Pick<CirnoClient, "on
     const key = taskNoticeKey(notice);
     if (!key) return;
     const event = notice.event;
-    if (event.chat_id === "global") return; // Cirno's visible messages arrive through the inbox.
+    if (event.chat_id === ROUTER_CHAT_ID) return; // Cirno's visible messages arrive through the inbox.
     const outcome = event.event === "turn_end"
       ? event.outcome === "failed" ? "failed" : event.outcome === "interrupted" ? "interrupted" : "completed"
       : event.status === "failed" ? "failed" : "interrupted";

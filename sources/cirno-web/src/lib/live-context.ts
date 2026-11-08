@@ -1,4 +1,4 @@
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 import type { ComposerContextUsage } from "@/components/thread/ComposerUsagePopover";
 
 /** A display estimate, never a provider usage or billing measurement. */

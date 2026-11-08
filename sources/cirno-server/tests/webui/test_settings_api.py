@@ -8,22 +8,44 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-
 from cirno_core.config.loader import load_config, save_config
-from cirno_core.config.schema import Config, InlineFallbackConfig, ModelAPIConfig, ModelPresetConfig
-from cirno_core.llm_usage import get_llm_usage_store
-from cirno_core.llm_usage.models import LLMCallRecord
-from cirno_core.providers.base import LLMUsage
+from cirno_core.config.models import InlineFallbackConfig, ModelAPIConfig, ModelPresetConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.paths import get_data_dir
+from cirno_usage import get_llm_usage_store
+from cirno_usage.models import LLMCallRecord
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.oauth_model_catalog import OAuthModelCatalogSnapshot
-from cirno_core.providers.registry import ProviderModelSpec, find_by_name
+from cirno_core.providers.catalog.contracts import ProviderModelSpec
+from cirno_core.providers.registry import find_by_name
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
-from cirno_server.webui.settings.api import WebUISettingsError, _docs_version, _model_catalog_kind, _oauth_provider_status, complete_oauth_provider, create_model_configuration, create_provider_settings, delete_model_configuration, login_oauth_provider, logout_oauth_provider, provider_models_payload, settings_payload, settings_usage_payload, update_agent_settings, update_model_call_order, update_model_configuration, update_network_safety_settings, update_provider_settings, update_web_search_settings
-from cirno_server.webui.settings.models import (
+from cirno_server.webui.settings.api import (
+    WebUISettingsError,
+    complete_oauth_provider,
+    create_model_configuration,
+    create_provider_settings,
+    delete_model_configuration,
+    login_oauth_provider,
+    logout_oauth_provider,
+    provider_models_payload,
+    settings_payload,
+    settings_usage_payload,
+    update_agent_settings,
+    update_model_call_order,
+    update_model_configuration,
+    update_network_safety_settings,
+    update_provider_settings,
+    update_web_search_settings,
+)
+from cirno_server.webui.settings.models.catalog import (
     _extract_model_rows,
     _model_catalog_row_active,
+    model_catalog_kind,
 )
+from cirno_server.webui.settings.providers.oauth import oauth_provider_status
 from cirno_server.webui.settings.services import WebUIOAuthFlowRegistry
+from cirno_server.webui.settings.system import docs_version
 
 DYNAMIC_PROVIDER_NAME = "my-company-api"
 DYNAMIC_PROVIDER_API_BASE = "https://example.test/v1"
@@ -56,10 +78,10 @@ def test_settings_payload_propagates_preset_resolution_failure(
 
 
 def test_docs_version_uses_released_versions_and_falls_back_for_dev() -> None:
-    assert _docs_version("0.2.3") == "0.2.3"
-    assert _docs_version("0.2.3.post1") == "0.2.3.post1"
-    assert _docs_version("0.2.3.dev0") == "latest"
-    assert _docs_version("0.2.3+editable") == "latest"
+    assert docs_version("0.2.3") == "0.2.3"
+    assert docs_version("0.2.3.post1") == "0.2.3.post1"
+    assert docs_version("0.2.3.dev0") == "latest"
+    assert docs_version("0.2.3+editable") == "latest"
 
 
 @pytest.mark.parametrize("model", ["kimi-k3", "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed"])
@@ -76,7 +98,7 @@ def test_kimi_k3_only_offers_supported_reasoning_effort_values(
 
     payload = settings_payload()
 
-    preset = next(row for row in payload["model_presets"] if row["name"] == "default")
+    preset = next(row for row in payload["model_presets"] if row["id"] == "default")
     assert preset["model"] == model
     assert preset["reasoning_effort_values"] == ["", "low", "high", "max"]
 
@@ -111,9 +133,9 @@ def test_settings_payload_exposes_edenai_provider(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    edenai = next(row for row in payload["providers"] if row["name"] == "edenai")
+    edenai = next(row for row in payload["providers"] if row["id"] == "edenai")
 
-    assert edenai["label"] == "Eden AI"
+    assert edenai["name"] == "Eden AI"
     assert edenai["configured"] is True
     assert edenai["default_api_base"] == "https://api.edenai.run/v3"
     assert edenai["model_catalog"] == "catalog"
@@ -131,9 +153,9 @@ def test_settings_payload_exposes_orcarouter_provider(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    orcarouter = next(row for row in payload["providers"] if row["name"] == "orcarouter")
+    orcarouter = next(row for row in payload["providers"] if row["id"] == "orcarouter")
 
-    assert orcarouter["label"] == "OrcaRouter"
+    assert orcarouter["name"] == "OrcaRouter"
     assert orcarouter["configured"] is True
     assert orcarouter["default_api_base"] == "https://api.orcarouter.ai/v1"
     assert orcarouter["model_catalog"] == "catalog"
@@ -180,16 +202,18 @@ def test_first_model_configuration_replaces_unused_schema_default(
         }
     )
 
-    assert payload["model_call_order"] == ["openai"]
+    identity = payload["created_model_preset"]
+    assert identity.startswith("model-")
+    assert payload["model_call_order"] == [identity]
     assert payload["model_call_order_editable"] is True
-    assert payload["agent"]["model_preset"] == "openai"
+    assert payload["agent"]["model_preset"] == identity
     saved = load_config(config_path)
-    assert saved.agents.defaults.model_preset == "openai"
+    assert saved.agents.defaults.model_preset == identity
     assert saved.agents.defaults.fallback_models == []
-    assert saved.model_presets["openai"].model == "openai/gpt-4.1"
+    assert saved.model_presets[identity].model == "openai/gpt-4.1"
 
 
-def test_create_model_configuration_preserves_canonical_name(
+def test_create_model_configuration_separates_id_and_display_name(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -207,10 +231,12 @@ def test_create_model_configuration_preserves_canonical_name(
         }
     )
 
-    assert payload["created_model_preset"] == "Fast Writing"
+    identity = payload["created_model_preset"]
+    assert identity.startswith("model-")
     rows = {row["name"]: row for row in payload["model_presets"]}
-    assert rows["Fast Writing"]["label"] == "Fast Writing"
-    assert "Fast Writing" in load_config(config_path).model_presets
+    assert rows["Fast Writing"]["name"] == "Fast Writing"
+    assert rows["Fast Writing"]["id"] == identity
+    assert load_config(config_path).model_presets[identity].display_name == "Fast Writing"
 
     with pytest.raises(WebUISettingsError) as duplicate:
         create_model_configuration(
@@ -239,11 +265,11 @@ def test_create_model_configuration_accepts_dynamic_custom_provider(
         }
     )
 
-    assert payload["agent"]["model_preset"] == "tenant-model"
-    assert payload["created_model_preset"] == "tenant-model"
+    assert payload["agent"]["model_preset"] == payload["created_model_preset"]
+    assert payload["created_model_preset"].startswith("model-")
     saved = load_config(config_path)
-    assert saved.model_presets["tenant-model"].provider == DYNAMIC_PROVIDER_NAME
-    assert saved.model_presets["tenant-model"].model == "gpt-4o-mini"
+    assert saved.model_presets[payload["created_model_preset"]].provider == DYNAMIC_PROVIDER_NAME
+    assert saved.model_presets[payload["created_model_preset"]].model == "gpt-4o-mini"
 
 
 def test_create_model_configuration_rejects_dynamic_custom_provider_without_api_base(
@@ -315,7 +341,7 @@ def test_update_model_configuration_edits_named_preset_without_selecting(
     save_config(config, config_path)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
     monkeypatch.setattr(
-        "cirno_server.webui.settings.api._oauth_provider_status",
+        "cirno_server.webui.settings.providers.oauth.oauth_provider_status",
         lambda spec: {
             "configured": spec.name == "openai_codex",
             "account": "acct-test",
@@ -326,7 +352,7 @@ def test_update_model_configuration_edits_named_preset_without_selecting(
 
     payload = update_model_configuration(
         {
-            "name": ["codex"],
+            "id": ["codex"],
             "label": ["Codex"],
             "provider": ["openai_codex"],
             "model": ["openai-codex/gpt-5.5"],
@@ -334,14 +360,14 @@ def test_update_model_configuration_edits_named_preset_without_selecting(
     )
 
     assert payload["agent"]["model_preset"] == "default"
-    assert payload["agent"]["model"] == "anthropic/claude-opus-4-5"
+    assert payload["agent"]["model"] == ""
     saved = load_config(config_path)
     assert saved.agents.defaults.model_preset is None
     assert saved.model_presets["codex"].provider == "openai_codex"
     assert saved.model_presets["codex"].model == "openai-codex/gpt-5.5"
 
 
-def test_update_model_configuration_renames_preset_and_config_references(
+def test_model_rename_preserves_all_reference_ids(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -366,27 +392,28 @@ def test_update_model_configuration_renames_preset_and_config_references(
     session_manager.save(session)
 
     payload = update_model_configuration(
-        {"name": ["openai"], "new_name": ["Codex"]},
-        rename_model_preset=session_manager.rename_model_preset,
+        {"id": ["openai"], "name": ["Codex"]},
     )
 
-    assert payload["agent"]["model_preset"] == "Codex"
-    assert payload["model_call_order"] == ["Codex", "backup", "Codex"]
-    assert [row["name"] for row in payload["model_presets"]] == [
+    assert payload["agent"]["model_preset"] == "openai"
+    assert payload["model_call_order"] == ["openai", "backup", "openai"]
+    assert [row["id"] for row in payload["model_presets"]] == [
         "default",
-        "Codex",
+        "openai",
         "backup",
     ]
+    assert next(row for row in payload["model_presets"] if row["id"] == "openai")["name"] == "Codex"
     saved = load_config(config_path)
-    assert list(saved.model_presets) == ["Codex", "backup"]
-    assert saved.agents.defaults.model_preset == "Codex"
-    assert saved.agents.defaults.fallback_models == ["backup", "Codex"]
-    assert saved.agents.defaults.dream.model_override == "Codex"
+    assert saved.model_presets["openai"].display_name == "Codex"
+    assert list(saved.model_presets) == ["openai", "backup"]
+    assert saved.agents.defaults.model_preset == "openai"
+    assert saved.agents.defaults.fallback_models == ["backup", "openai"]
+    assert saved.agents.defaults.dream.model_override == "openai"
     persisted = SessionManager(
         tmp_path / "workspace",
         sessions_root=tmp_path / "sessions",
     ).get_or_create("websocket:selected")
-    assert persisted.metadata[SESSION_MODEL_PRESET_METADATA_KEY] == "Codex"
+    assert persisted.metadata[SESSION_MODEL_PRESET_METADATA_KEY] == "openai"
 
 
 def test_update_model_configuration_rejects_duplicate_rename(
@@ -403,20 +430,19 @@ def test_update_model_configuration_rejects_duplicate_rename(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     with pytest.raises(WebUISettingsError) as duplicate:
-        update_model_configuration({"name": ["openai"], "new_name": ["codex"]})
+        update_model_configuration({"id": ["openai"], "name": ["codex"]})
 
     assert duplicate.value.status == 409
     assert set(load_config(config_path).model_presets) == {"openai", "Codex"}
 
 
-def test_update_model_configuration_rolls_back_sessions_when_config_save_fails(
+def test_model_rename_save_failure_preserves_persisted_configuration(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_path = tmp_path / "config.json"
     config = Config(model_presets={"openai": ModelPresetConfig(model="openai/gpt-4.1")})
     save_config(config, config_path)
-    calls: list[tuple[str, str]] = []
 
     def fail_save(_config: Config, _path) -> None:
         raise OSError("disk full")
@@ -425,12 +451,11 @@ def test_update_model_configuration_rolls_back_sessions_when_config_save_fails(
 
     with pytest.raises(OSError, match="disk full"):
         update_model_configuration(
-            {"name": ["openai"], "new_name": ["Codex"]},
+            {"id": ["openai"], "name": ["Codex"]},
             config_path=config_path,
-            rename_model_preset=lambda old, new: calls.append((old, new)) or 1,
         )
 
-    assert calls == [("openai", "Codex"), ("Codex", "openai")]
+    assert load_config(config_path).model_presets["openai"].display_name is None
     assert list(load_config(config_path).model_presets) == ["openai"]
 
 
@@ -539,7 +564,7 @@ def test_model_configuration_advanced_options_round_trip(
 
     updated = update_model_configuration(
         {
-            "name": ["reasoning"],
+            "id": [created["created_model_preset"]],
             "max_tokens": ["8192"],
             "temperature": ["0"],
             "reasoning_effort": [""],
@@ -566,7 +591,7 @@ def test_custom_preset_api_round_trip_and_reset(tmp_path, monkeypatch, protocol)
     })
     row = next(row for row in created["model_presets"] if row["name"] == "reasoning")
     assert row["api"] == api
-    providers = {row["name"]: row for row in created["providers"]}
+    providers = {row["id"]: row for row in created["providers"]}
     assert providers["tenant"]["model_api_configurable"] is True
     assert providers["github_copilot"]["model_api_configurable"] is True
     assert providers["anthropic"]["model_api_configurable"] is False
@@ -575,21 +600,21 @@ def test_custom_preset_api_round_trip_and_reset(tmp_path, monkeypatch, protocol)
     assert providers["anthropic"]["request_apis"] == ["anthropic_messages"]
     assert providers["bedrock"]["request_apis"] == ["bedrock_converse"]
     saved = load_config(config_path)
-    assert saved.model_presets["reasoning"].api.to_capabilities().preferred_api == protocol
-    assert json.loads(config_path.read_text(encoding="utf-8"))["modelPresets"]["reasoning"]["api"] == {
+    assert saved.model_presets[created["created_model_preset"]].api.to_capabilities().preferred_api == protocol
+    assert json.loads(config_path.read_text(encoding="utf-8"))["modelPresets"][created["created_model_preset"]]["api"] == {
         "supportedApis": [protocol], "preferredApi": protocol,
     }
 
-    update_model_call_order({"order": [json.dumps(["reasoning"])]})
+    update_model_call_order({"order": [json.dumps([created["created_model_preset"]])]})
     assert settings_payload()["agent"]["api"] == api
-    update_model_configuration({"name": ["reasoning"], "temperature": ["0.3"]})
+    update_model_configuration({"id": [created["created_model_preset"]], "temperature": ["0.3"]})
     assert settings_payload()["agent"]["api"] == api
-    reset = update_model_configuration({"name": ["reasoning"], "api": [""]})
+    reset = update_model_configuration({"id": [created["created_model_preset"]], "api": [""]})
     assert next(row for row in reset["model_presets"] if row["name"] == "reasoning")["api"] is None
-    assert load_config(config_path).model_presets["reasoning"].api is None
-    update_model_configuration({"name": ["reasoning"], "api": [json.dumps(api)]})
-    update_model_configuration({"name": ["reasoning"], "model": ["another-model"]})
-    assert load_config(config_path).model_presets["reasoning"].api is None
+    assert load_config(config_path).model_presets[created["created_model_preset"]].api is None
+    update_model_configuration({"id": [created["created_model_preset"]], "api": [json.dumps(api)]})
+    update_model_configuration({"id": [created["created_model_preset"]], "model": ["another-model"]})
+    assert load_config(config_path).model_presets[created["created_model_preset"]].api is None
 
 
 @pytest.mark.parametrize("provider,api,error", [
@@ -622,11 +647,11 @@ def test_fixed_responses_provider_rejects_chat_without_saving(tmp_path, monkeypa
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
     with pytest.raises(WebUISettingsError, match="OpenAI Codex.*does not support chat_completions"):
         update_model_configuration({
-            "name": ["codex"], "api": [json.dumps({"supportedApis": ["chat_completions"]})],
+            "id": ["codex"], "api": [json.dumps({"supportedApis": ["chat_completions"]})],
         })
     assert load_config(config_path).model_presets["codex"].api is None
     update_model_configuration({
-        "name": ["codex"], "api": [json.dumps({"supportedApis": ["responses"]})],
+        "id": ["codex"], "api": [json.dumps({"supportedApis": ["responses"]})],
     })
     assert load_config(config_path).model_presets["codex"].api.supported_apis == ("responses",)
 
@@ -647,11 +672,11 @@ def test_delete_model_configuration_protects_primary_and_removes_fallback_refere
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     with pytest.raises(WebUISettingsError) as referenced:
-        delete_model_configuration({"name": ["primary"]})
+        delete_model_configuration({"id": ["primary"]})
     assert referenced.value.status == 409
 
-    payload = delete_model_configuration({"name": ["spare"]})
-    assert {row["name"] for row in payload["model_presets"]} == {"default", "primary"}
+    payload = delete_model_configuration({"id": ["spare"]})
+    assert {row["id"] for row in payload["model_presets"]} == {"default", "primary"}
     assert "spare" not in load_config(config_path).model_presets
     assert load_config(config_path).agents.defaults.fallback_models == ["primary"]
 
@@ -672,7 +697,7 @@ def test_update_provider_settings_updates_dynamic_custom_provider(
         }
     )
 
-    providers = {row["name"]: row for row in payload["providers"]}
+    providers = {row["id"]: row for row in payload["providers"]}
     assert providers[DYNAMIC_PROVIDER_NAME]["api_base"] == "https://new.example/v1"
     assert providers[DYNAMIC_PROVIDER_NAME]["api_key_hint"] == "••••"
     saved = load_config(config_path)
@@ -704,8 +729,8 @@ def test_create_provider_settings_persists_custom_advanced_options(
     )
 
     provider_name = payload["created_provider"]
-    row = next(provider for provider in payload["providers"] if provider["name"] == provider_name)
-    assert row["label"] == "Company Server"
+    row = next(provider for provider in payload["providers"] if provider["id"] == provider_name)
+    assert row["name"] == "Company Server"
     assert row["is_custom"] is True
     assert row["advanced_fields"] == [
         "extra_headers",
@@ -756,7 +781,7 @@ def test_provider_settings_redacts_and_preserves_structured_secrets(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    row = next(provider for provider in payload["providers"] if provider["name"] == "openai")
+    row = next(provider for provider in payload["providers"] if provider["id"] == "openai")
     serialized_row = json.dumps(row, ensure_ascii=False)
 
     assert "header-secret" not in serialized_row
@@ -859,7 +884,7 @@ def test_update_provider_settings_updates_and_clears_oauth_proxy(
     save_config(config, config_path)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
     monkeypatch.setattr(
-        "cirno_server.webui.settings.api._oauth_provider_status",
+        "cirno_server.webui.settings.providers.oauth.oauth_provider_status",
         lambda _spec: {
             "configured": False,
             "account": None,
@@ -876,7 +901,7 @@ def test_update_provider_settings_updates_and_clears_oauth_proxy(
         }
     )
 
-    providers = {row["name"]: row for row in payload["providers"]}
+    providers = {row["id"]: row for row in payload["providers"]}
     assert providers[provider_name]["use_proxy"] is True
     assert getattr(load_config(config_path).providers, config_attr).use_proxy is True
     assert load_config(config_path).network.proxy == "http://127.0.0.1:7890"
@@ -885,7 +910,7 @@ def test_update_provider_settings_updates_and_clears_oauth_proxy(
 
     cleared = update_provider_settings({"provider": [provider_name], "use_proxy": ["false"]})
 
-    providers = {row["name"]: row for row in cleared["providers"]}
+    providers = {row["id"]: row for row in cleared["providers"]}
     assert providers[provider_name]["use_proxy"] is False
     assert getattr(load_config(config_path).providers, config_attr).use_proxy is False
     assert load_config(config_path).network.proxy == "http://127.0.0.1:7890"
@@ -954,7 +979,7 @@ def test_update_model_configuration_preserves_custom_context_windows(
 
     payload = update_model_configuration(
         {
-            "name": ["codex"],
+            "id": ["codex"],
             "context_window_tokens": ["128000"],
         }
     )
@@ -987,7 +1012,7 @@ def test_update_model_configuration_rejects_default_preset(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     with pytest.raises(WebUISettingsError, match="model configuration is required"):
-        update_model_configuration({"name": ["default"], "model": ["openai/gpt-4.1"]})
+        update_model_configuration({"id": ["default"], "model": ["openai/gpt-4.1"]})
 
 
 def test_settings_payload_includes_oauth_provider_status(
@@ -1013,10 +1038,10 @@ def test_settings_payload_includes_oauth_provider_status(
             "login_supported": True,
         }
 
-    monkeypatch.setattr("cirno_server.webui.settings.api._oauth_provider_status", fake_oauth_status)
+    monkeypatch.setattr("cirno_server.webui.settings.providers.oauth.oauth_provider_status", fake_oauth_status)
 
     payload = settings_payload()
-    providers = {row["name"]: row for row in payload["providers"]}
+    providers = {row["id"]: row for row in payload["providers"]}
 
     assert providers["openai_codex"]["auth_type"] == "oauth"
     assert providers["openai_codex"]["configured"] is True
@@ -1032,7 +1057,7 @@ def test_settings_payload_includes_dynamic_custom_provider(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    providers = {row["name"]: row for row in payload["providers"]}
+    providers = {row["id"]: row for row in payload["providers"]}
 
     assert payload["agent"]["provider"] == DYNAMIC_PROVIDER_NAME
     assert payload["agent"]["resolved_provider"] == DYNAMIC_PROVIDER_NAME
@@ -1079,7 +1104,7 @@ def test_settings_payload_marks_dynamic_custom_provider_without_api_base_unconfi
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    providers = {row["name"]: row for row in payload["providers"]}
+    providers = {row["id"]: row for row in payload["providers"]}
 
     assert providers[DYNAMIC_PROVIDER_NAME]["configured"] is False
     assert providers[DYNAMIC_PROVIDER_NAME]["api_key_hint"] == "••••"
@@ -1101,7 +1126,6 @@ def test_settings_payload_includes_network_safety_fields(
     payload = settings_payload()
 
     assert payload["advanced"]["webui_allow_local_service_access"] is False
-    assert payload["advanced"]["allow_local_preview_access"] is False
     assert payload["advanced"]["webui_default_access_mode"] == "default"
     assert payload["advanced"]["private_service_protection_enabled"] is True
     assert payload["advanced"]["ssrf_whitelist_count"] == 1
@@ -1238,7 +1262,7 @@ def test_settings_payload_includes_token_usage_summary(
     config = Config()
     save_config(config, config_path)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
-    get_llm_usage_store().record(
+    get_llm_usage_store(get_data_dir() / "llm_usage.sqlite3").record(
         LLMCallRecord(
             started_at_ms=int(time.time() * 1000),
             duration_ms=1,
@@ -1270,7 +1294,7 @@ def test_settings_usage_payload_returns_lightweight_token_usage(
     config = Config()
     save_config(config, config_path)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
-    get_llm_usage_store().record(
+    get_llm_usage_store(get_data_dir() / "llm_usage.sqlite3").record(
         LLMCallRecord(
             started_at_ms=int(time.time() * 1000),
             duration_ms=1,
@@ -1348,9 +1372,9 @@ def test_openai_codex_oauth_status_uses_available_token(
             "account_id": "acct-codex",
         },
     )()
-    monkeypatch.setattr("oauth_cli_kit.storage.FileTokenStorage.load", lambda _self: token)
+    monkeypatch.setattr("cirno_core.providers.oauth_storage.InstanceOAuthStorage.load", lambda _self: token)
 
-    status = _oauth_provider_status(find_by_name("openai_codex"))
+    status = oauth_provider_status(find_by_name("openai_codex"))
 
     assert status["configured"] is True
     assert status["account"] == "acct-codex"
@@ -1369,9 +1393,9 @@ def test_openai_codex_oauth_status_uses_refreshable_expired_token(
             "account_id": "acct-codex",
         },
     )()
-    monkeypatch.setattr("oauth_cli_kit.storage.FileTokenStorage.load", lambda _self: token)
+    monkeypatch.setattr("cirno_core.providers.oauth_storage.InstanceOAuthStorage.load", lambda _self: token)
 
-    status = _oauth_provider_status(find_by_name("openai_codex"))
+    status = oauth_provider_status(find_by_name("openai_codex"))
 
     assert status["configured"] is True
     assert status["expires_at"] == 1
@@ -1383,9 +1407,9 @@ def test_openai_codex_oauth_status_rejects_unavailable_token(
     def fake_load(_self):
         raise RuntimeError("refresh failed")
 
-    monkeypatch.setattr("oauth_cli_kit.storage.FileTokenStorage.load", fake_load)
+    monkeypatch.setattr("cirno_core.providers.oauth_storage.InstanceOAuthStorage.load", fake_load)
 
-    status = _oauth_provider_status(find_by_name("openai_codex"))
+    status = oauth_provider_status(find_by_name("openai_codex"))
 
     assert status["configured"] is False
     assert status["account"] is None
@@ -1405,7 +1429,7 @@ def test_xai_grok_status_accepts_refreshable_login(
         lambda: token,
     )
 
-    status = _oauth_provider_status(find_by_name("xai_grok"))
+    status = oauth_provider_status(find_by_name("xai_grok"))
 
     assert status == {
         "configured": True,
@@ -1779,7 +1803,7 @@ def test_extract_model_rows_skips_shut_down_openai_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models._model_catalog_row_active",
+        "cirno_server.webui.settings.models.catalog._model_catalog_row_active",
         lambda row, *, on=None: _model_catalog_row_active(row, on=date(2026, 9, 29)),
     )
     body = {
@@ -1819,7 +1843,7 @@ def test_provider_models_payload_omits_openai_models_past_shutdown_date(
 
     monkeypatch.setattr("cirno_server.webui.settings.api.httpx.get", fake_get)
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models._model_catalog_row_active",
+        "cirno_server.webui.settings.models.catalog._model_catalog_row_active",
         lambda row, *, on=None: _model_catalog_row_active(row, on=date(2026, 9, 29)),
     )
 
@@ -1834,7 +1858,7 @@ def test_provider_models_payload_returns_online_openai_codex_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models.get_oauth_model_catalog",
+        "cirno_server.webui.settings.models.catalog.get_oauth_model_catalog",
         lambda *_args, **_kwargs: OAuthModelCatalogSnapshot(
             models=(
                 ProviderModelSpec(
@@ -1874,7 +1898,7 @@ def test_provider_models_payload_exposes_catalog_failure_with_usable_models(
     monkeypatch, source, error_kind,
 ):
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models.get_oauth_model_catalog",
+        "cirno_server.webui.settings.models.catalog.get_oauth_model_catalog",
         lambda *_args, **_kwargs: OAuthModelCatalogSnapshot(
             models=(ProviderModelSpec(id="openai-codex/offline-model"),),
             source=source, fetched_at=123, error_kind=error_kind,
@@ -1900,7 +1924,7 @@ def test_copilot_explicit_login_does_not_reuse_revoked_credentials(monkeypatch, 
     )
     monkeypatch.setattr(GitHubCopilotOAuthFlow, "start", start)
     monkeypatch.setattr(GitHubCopilotOAuthFlow, "complete", lambda *_: SimpleNamespace(access="new-token"))
-    monkeypatch.setattr("cirno_server.webui.settings.models.invalidate_oauth_model_catalog", invalidate)
+    monkeypatch.setattr("cirno_server.webui.settings.providers.oauth.invalidate_oauth_model_catalog", invalidate)
     monkeypatch.setattr("cirno_server.webui.settings.api.settings_payload", lambda **_: {"ready": True})
     payload = login_oauth_provider({"provider": ["github-copilot"]}, oauth_flows=oauth_flows)
     assert payload["status"] == "authorization_required"
@@ -1930,7 +1954,7 @@ def test_oauth_completion_clears_same_account_catalog_failure(monkeypatch, oauth
     module = f"cirno_core.providers.{provider}_provider"
     monkeypatch.setattr(f"{module}._{provider.upper()}_MODEL_CATALOG", catalog)
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models.get_oauth_model_catalog",
+        "cirno_server.webui.settings.models.catalog.get_oauth_model_catalog",
         lambda *_args, **_kwargs: catalog.get(cache_key="same-account"),
     )
     monkeypatch.setattr("cirno_server.webui.settings.api.settings_payload", lambda **_: {"ready": True})
@@ -1966,7 +1990,7 @@ def test_provider_models_payload_returns_online_github_copilot_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models.get_oauth_model_catalog",
+        "cirno_server.webui.settings.models.catalog.get_oauth_model_catalog",
         lambda *_args, **_kwargs: OAuthModelCatalogSnapshot(
             models=(
                 ProviderModelSpec(
@@ -1993,7 +2017,7 @@ def test_provider_models_payload_returns_online_xai_grok_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "cirno_server.webui.settings.models.get_oauth_model_catalog",
+        "cirno_server.webui.settings.models.catalog.get_oauth_model_catalog",
         lambda *_args, **_kwargs: OAuthModelCatalogSnapshot(
             models=(
                 ProviderModelSpec(
@@ -2172,13 +2196,13 @@ def test_provider_models_payload_fetches_orcarouter_catalog(
 
 
 def test_model_catalog_kind_uses_provider_spec_metadata() -> None:
-    assert _model_catalog_kind(find_by_name("skywork")) == "official"
-    assert _model_catalog_kind(find_by_name("anthropic")) == "unsupported"
-    assert _model_catalog_kind(find_by_name("openrouter")) == "catalog"
-    assert _model_catalog_kind(find_by_name("orcarouter")) == "catalog"
-    assert _model_catalog_kind(find_by_name("openai_codex")) == "hybrid"
-    assert _model_catalog_kind(find_by_name("xai_grok")) == "hybrid"
-    assert _model_catalog_kind(find_by_name("github_copilot")) == "hybrid"
+    assert model_catalog_kind(find_by_name("skywork")) == "official"
+    assert model_catalog_kind(find_by_name("anthropic")) == "unsupported"
+    assert model_catalog_kind(find_by_name("openrouter")) == "catalog"
+    assert model_catalog_kind(find_by_name("orcarouter")) == "catalog"
+    assert model_catalog_kind(find_by_name("openai_codex")) == "hybrid"
+    assert model_catalog_kind(find_by_name("xai_grok")) == "hybrid"
+    assert model_catalog_kind(find_by_name("github_copilot")) == "hybrid"
 
 
 def test_create_model_configuration_accepts_configured_oauth_provider(
@@ -2189,7 +2213,7 @@ def test_create_model_configuration_accepts_configured_oauth_provider(
     save_config(Config(), config_path)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
     monkeypatch.setattr(
-        "cirno_server.webui.settings.api._oauth_provider_status",
+        "cirno_server.webui.settings.providers.oauth.oauth_provider_status",
         lambda spec: {
             "configured": spec.name == "openai_codex",
             "account": "acct-test",
@@ -2206,10 +2230,10 @@ def test_create_model_configuration_accepts_configured_oauth_provider(
         }
     )
 
-    assert payload["agent"]["model_preset"] == "codex"
-    assert payload["created_model_preset"] == "codex"
+    assert payload["agent"]["model_preset"] == payload["created_model_preset"]
+    assert payload["created_model_preset"].startswith("model-")
     saved = load_config(config_path)
-    assert saved.model_presets["codex"].provider == "openai_codex"
+    assert saved.model_presets[payload["created_model_preset"]].provider == "openai_codex"
 
 
 # ---------------------------------------------------------------------------
@@ -2230,7 +2254,7 @@ def test_settings_payload_azure_openai_with_api_key_is_configured(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    azure = next(row for row in payload["providers"] if row["name"] == "azure_openai")
+    azure = next(row for row in payload["providers"] if row["id"] == "azure_openai")
 
     assert azure["configured"] is True
     assert azure["api_key_required"] is False
@@ -2250,7 +2274,7 @@ def test_settings_payload_azure_openai_aad_mode_is_configured(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    azure = next(row for row in payload["providers"] if row["name"] == "azure_openai")
+    azure = next(row for row in payload["providers"] if row["id"] == "azure_openai")
 
     assert azure["configured"] is True
     assert azure["api_key_required"] is False
@@ -2270,7 +2294,7 @@ def test_settings_payload_azure_openai_missing_base_not_configured(
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
 
     payload = settings_payload()
-    azure = next(row for row in payload["providers"] if row["name"] == "azure_openai")
+    azure = next(row for row in payload["providers"] if row["id"] == "azure_openai")
 
     assert azure["configured"] is False
 
@@ -2294,11 +2318,11 @@ def test_create_model_configuration_accepts_azure_openai_aad_mode(
         }
     )
 
-    assert payload["agent"]["model_preset"] == "azure-aad"
-    assert payload["created_model_preset"] == "azure-aad"
+    assert payload["agent"]["model_preset"] == payload["created_model_preset"]
+    assert payload["created_model_preset"].startswith("model-")
     saved = load_config(config_path)
-    assert saved.model_presets["azure-aad"].provider == "azure_openai"
-    assert saved.model_presets["azure-aad"].model == "my-deployment"
+    assert saved.model_presets[payload["created_model_preset"]].provider == "azure_openai"
+    assert saved.model_presets[payload["created_model_preset"]].model == "my-deployment"
 
 
 @pytest.mark.parametrize("protocol", ["chat_completions", "responses", "anthropic_messages"])
@@ -2312,7 +2336,7 @@ def test_custom_connection_api_create_edit_and_preset_ceiling(tmp_path, monkeypa
         "api": [json.dumps(api)],
     })
     key = payload["created_provider"]
-    row = next(row for row in payload["providers"] if row["name"] == key)
+    row = next(row for row in payload["providers"] if row["id"] == key)
     assert payload["provider_api_configuration_supported"] is True
     assert row["api"] == api
     assert row["request_apis"] == [protocol]

@@ -97,6 +97,7 @@ def test_restricted_scope_blocks_parent_and_symlink_escape(tmp_path):
 def test_simultaneous_browser_saves_reject_the_losing_revision(tmp_path, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
+
     from cirno_server.webui import workspace_files
 
     scope = build_workspace_scope(tmp_path, "restricted")
@@ -104,7 +105,7 @@ def test_simultaneous_browser_saves_reject_the_losing_revision(tmp_path, monkeyp
     path.write_text("original")
     revision = read_workspace_file(str(path), scope=scope)["revision"]
     writing, release = Event(), Event()
-    write = workspace_files.write_text_atomic
+    write = workspace_files.atomic_write_text
 
     def delayed_write(target, content):
         if content == "first edit":
@@ -112,7 +113,7 @@ def test_simultaneous_browser_saves_reject_the_losing_revision(tmp_path, monkeyp
             assert release.wait(3)
         write(target, content)
 
-    monkeypatch.setattr(workspace_files, "write_text_atomic", delayed_write)
+    monkeypatch.setattr(workspace_files, "atomic_write_text", delayed_write)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(save_workspace_file, str(path), "first edit", revision, scope=scope)
         assert writing.wait(3)

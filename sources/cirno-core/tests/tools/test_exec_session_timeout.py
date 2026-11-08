@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import re
 import sys
+from types import SimpleNamespace
 
-from cirno_core.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
+from cirno_core.agent.tools.exec_session import ExecSessionTool
 from cirno_core.agent.tools.registry import is_tool_error_result
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.processes.sessions import ExecSessionManager
+from cirno_core.processes.sessions import session as exec_sessions
 
 
 def _session_id(result: str) -> str:
@@ -61,9 +64,9 @@ async def test_exec_session_hard_timeout_kills_process_tree_without_polling(tmp_
         await manager.close_all()
 
 
-async def test_exec_session_completed_before_deadline_keeps_output_for_late_poll(tmp_path):
+async def test_exec_session_completed_before_deadline_keeps_output_for_late_poll(tmp_path, monkeypatch):
     manager = ExecSessionManager()
-    tool = ExecTool(working_dir=str(tmp_path), timeout=1, session_manager=manager)
+    tool = ExecTool(working_dir=str(tmp_path), timeout=30, session_manager=manager)
     session_tool = ExecSessionTool(manager=manager)
 
     try:
@@ -75,9 +78,12 @@ async def test_exec_session_completed_before_deadline_keeps_output_for_late_poll
             yield_time_ms=0,
         )
         sid = _session_id(initial)
-        await asyncio.wait_for(manager._sessions[sid].process.wait(), timeout=3)
-        # Read only after the original deadline: completion must not turn into a timeout.
-        await asyncio.sleep(1.1)
+        session = manager._sessions[sid]
+        await asyncio.wait_for(session._completion_task, timeout=5)
+        # Advance this module's clock only after actual process completion. Cold
+        # interpreter startup must not consume the whole budget under CI load.
+        late_poll_time = session.deadline + 1
+        monkeypatch.setattr(exec_sessions, "time", SimpleNamespace(monotonic=lambda: late_poll_time))
 
         final = await session_tool.execute(session_id=sid, timeout_ms=0)
         assert not is_tool_error_result(final)

@@ -6,7 +6,6 @@ import shutil
 import subprocess
 
 import pytest
-
 from cirno_server.cli.windows_browser import _WSL_OPEN_SCRIPT, _redirect_html
 
 

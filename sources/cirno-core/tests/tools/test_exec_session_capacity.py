@@ -8,16 +8,12 @@ import time
 from pathlib import Path
 
 import pytest
-
 from cirno_core.agent.tools.context import RequestContext, request_context
-from cirno_core.agent.tools.exec_session import (
-    ExecSessionManager,
-    ExecSessionTool,
-    ListExecSessionsTool,
-)
+from cirno_core.agent.tools.exec_session import ExecSessionTool, ListExecSessionsTool
 from cirno_core.agent.tools.registry import is_tool_error_result
 from cirno_core.agent.tools.rg import RgTool
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.processes.sessions import ExecSessionManager
 
 
 async def _start_gated(tool: ExecTool, gate: Path) -> str:
@@ -68,10 +64,14 @@ async def test_finished_results_do_not_block_other_owner_tools(tmp_path, tool_na
                 result = await RgTool(working_dir=str(tmp_path), session_manager=manager).execute(
                     args=["--version"],
                 )
-                assert "ripgrep" in result
             else:
                 result = await tool.execute(command=[sys.executable, "-c", "print('other owner')"])
-                assert "other owner" in result
+            pending = re.search(r"session_id:\s*([0-9a-f]+)", result)
+            if pending:
+                completed = await session_tool.execute(session_id=pending.group(1), until_exit=True, timeout_ms=5000)
+                assert not is_tool_error_result(completed), completed
+                result += completed
+            assert ("ripgrep" if tool_name == "rg" else "other owner") in result
             assert not is_tool_error_result(result), result
             assert "Exit code: 0" in result
 

@@ -259,11 +259,11 @@ export function providerBrand(provider: string | null | undefined): ProviderBran
 }
 
 export function providerDisplayLabel(
-  providers: Array<{ name: string; label: string }>,
+  providers: Array<{ id: string; name: string }>,
   value: string | null | undefined,
 ): string {
   if (!value) return "";
-  return providers.find((provider) => provider.name === value)?.label
+  return providers.find((provider) => provider.id === value)?.name
     ?? PROVIDER_LABEL_ALIASES[value]
     ?? value;
 }

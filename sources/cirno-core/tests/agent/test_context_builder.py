@@ -1,4 +1,5 @@
 """Tests for ContextBuilder — system prompt and message assembly."""
+from cirno_core.providers.messages import sanitize_empty_content
 
 from pathlib import Path
 
@@ -136,7 +137,7 @@ class TestLoadBootstrapFiles:
         agent_home.mkdir(parents=True)
         project.mkdir(parents=True)
         (agent_home / "AGENTS.md").write_text("global project rules", encoding="utf-8")
-        (agent_home / "SOUL.md").write_text("global soul", encoding="utf-8")
+        (agent_home / "WORKER.md").write_text("global worker", encoding="utf-8")
         (agent_home / "USER.md").write_text("global user", encoding="utf-8")
         (project / "AGENTS.md").write_text("selected project rules", encoding="utf-8")
         (project / "SOUL.md").write_text("project soul collision", encoding="utf-8")
@@ -147,7 +148,7 @@ class TestLoadBootstrapFiles:
 
         assert "selected project rules" in result
         assert "global project rules" in result
-        assert "global soul" in result
+        assert "global worker" in result
         assert "global user" in result
         assert "project soul collision" not in result
         assert "project user collision" not in result
@@ -165,9 +166,9 @@ class TestLoadBootstrapFiles:
         assert "default workspace rules" in result
 
     def test_unmodified_agents_and_user_templates_are_skipped(self, tmp_path):
-        from cirno_core.utils.helpers import sync_workspace_templates
+        from cirno_core.utils.home_templates import sync_home_templates
 
-        sync_workspace_templates(tmp_path, silent=True)
+        sync_home_templates(silent=True)
 
         result = ContextBuilder(tmp_path / "home")._load_bootstrap_files()
 
@@ -176,9 +177,9 @@ class TestLoadBootstrapFiles:
         assert "## SOUL.md" in result
 
     def test_customized_user_template_is_loaded(self, tmp_path):
-        from cirno_core.utils.helpers import sync_workspace_templates
+        from cirno_core.utils.home_templates import sync_home_templates
 
-        sync_workspace_templates(tmp_path, silent=True)
+        sync_home_templates(silent=True)
         (tmp_path / "home" / "USER.md").write_text("User prefers Chinese.", encoding="utf-8")
 
         result = ContextBuilder(tmp_path / "home")._load_bootstrap_files()
@@ -279,14 +280,13 @@ class TestBuildUserContent:
         assert result[2]["text"] == "hello"
 
     def test_images_keep_paired_paths_in_provider_visible_content(self, tmp_path):
-        from cirno_core.providers.base import LLMProvider
         from cirno_core.providers.openai_responses.converters import convert_user_message
 
         paths = [tmp_path / "original.png", tmp_path / "uploaded.png"]
         for index, path in enumerate(paths):
             path.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes([index]) * 16)
         content = _builder(tmp_path / "home").build_user_content("compare these", [str(path) for path in paths])
-        clean = LLMProvider._sanitize_empty_content([{"role": "user", "content": content}])[0]
+        clean = sanitize_empty_content([{"role": "user", "content": content}])[0]
         converted = convert_user_message(clean["content"])["content"]
         image_indexes = [index for index, block in enumerate(converted) if block["type"] == "input_image"]
         assert len(image_indexes) == 2
@@ -309,12 +309,31 @@ class TestBuildUserContent:
 
 
 class TestBuildSystemPrompt:
+    def test_role_profiles_are_separate_and_memory_and_preferences_are_shared(self, tmp_path):
+        home = tmp_path / "home"
+        (home / "SOUL.md").write_text("Coordinator persona marker", encoding="utf-8")
+        (home / "WORKER.md").write_text("Execution persona marker", encoding="utf-8")
+        (home / "USER.md").write_text("Shared user preference marker", encoding="utf-8")
+        builder = _builder(home)
+        builder.memory.write_memory("Shared verified knowledge marker")
+        for key, expected, excluded in (
+            ("websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", "Coordinator persona marker", "Execution persona marker"),
+            ("websocket:worker", "Execution persona marker", "Coordinator persona marker"),
+        ):
+            messages = builder.build_messages([], "Check memory", session_key=key)
+            assert expected in messages[0]["content"]
+            assert excluded not in messages[0]["content"]
+            assert "Shared user preference marker" in messages[0]["content"]
+            assert "Shared verified knowledge marker" in str(messages)
+        internal = builder.build_system_prompt(session_key="dream:shared")
+        assert "Coordinator persona marker" in internal and "Execution persona marker" in internal
+
     def test_includes_identity_section(self, tmp_path):
         builder = _builder(tmp_path / "home")
         result = builder.build_system_prompt()
 
         assert "## Runtime\n" in result
-        assert "Agent profile: SOUL.md and USER.md" in result
+        assert "Agent profile: WORKER.md and USER.md" in result
         assert "History log: memory/history.jsonl" in result
 
     def test_default_identity_uses_relative_agent_paths(self, tmp_path):
@@ -537,7 +556,7 @@ class TestBuildMessages:
 
 
 def test_memory_budget_and_checkpoint_restore_are_independent_of_dream(tmp_path, monkeypatch):
-    from cirno_core.memory.repository import MemoryRepository
+    from cirno_memory.repository import MemoryRepository
     home = tmp_path / "home"
     (home / "memory").mkdir(exist_ok=True)
     original = "shared overview\n" + ("bounded memory " * 4000) + "SHARED_TAIL_NOT_INJECTED"

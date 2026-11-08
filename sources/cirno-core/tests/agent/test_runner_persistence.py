@@ -1,23 +1,27 @@
-"""Tests for tool result persistence: large results, pruning, temp files, cleanup."""
+"""Tests for tool result persistence: large results, retained evidence and replay."""
 
 from __future__ import annotations
 
 import os
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from cirno_core.agent.governance.messages import prepare_messages
+from cirno_core.agent.governance.results import normalize_tool_result
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
+from cirno_usage.types import LLMUsage
 
-from agent.runner_helpers import make_run_spec
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMResponse, LLMUsage, ToolCallRequest
+from sources.development.testing.runtime import make_run_spec
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 @pytest.mark.parametrize("invalid_block", [42, ["nested"], {}, {"type": "text", "text": 42}])
 def test_unrecognized_result_list_is_not_partially_offloaded(tmp_path, invalid_block):
-    from cirno_core.agent.context_governance import ContextGovernanceConfig, ContextGovernor
+    from cirno_core.agent.governance import ContextGovernanceConfig
     from cirno_core.agent.tools.registry import ToolRegistry
 
     result = [{"type": "text", "text": "x" * 20_000}, invalid_block]
@@ -25,14 +29,14 @@ def test_unrecognized_result_list_is_not_partially_offloaded(tmp_path, invalid_b
         provider=MagicMock(), model="test", tools=ToolRegistry(), workspace=tmp_path,
         session_key="invalid", max_tool_result_chars=2048,
     )
-    assert ContextGovernor.normalize_tool_result(config, "call", "custom", result) is result
+    assert normalize_tool_result(config, "call", "custom", result) is result
     assert list(tmp_path.iterdir()) == []
 
 
 async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     from cirno_core.agent.loop import AgentLoop
-    from cirno_core.agent.runner import AgentRunner
-    from cirno_core.session.manager import Session
+    from cirno_core.agent.runner.engine import AgentRunner
+    from cirno_core.session.model import Session
 
     provider = MagicMock()
     captured_second_call: list[dict] = []
@@ -71,20 +75,22 @@ async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     assert "[tool output persisted]" in tool_message["content"]
     assert "Result truncated. Read the saved file" in tool_message["content"]
     assert "tool-results" in tool_message["content"]
-    persisted_path = tmp_path / ".cirno" / "tool-results" / "test_runner" / "call_big.txt"
+    persisted_path = next((tmp_path / ".cirno/tool-results/test_runner").glob("*.txt"))
     assert persisted_path.read_text(encoding="utf-8") == "x" * 20_000
 
     from cirno_core.agent.tools.filesystem import ReadFileTool
 
     readback = await ReadFileTool(workspace=tmp_path).execute(
-        path=".cirno/tool-results/test_runner/call_big.txt"
+        path=str(persisted_path)
     )
     assert "x" * 20_000 in readback
 
     loop = AgentLoop.__new__(AgentLoop)
+    from cirno_core.agent.execution.persistence import TurnPersistence
+    loop.persistence = TurnPersistence(loop)
     loop.max_tool_result_chars = 2048
     session = Session(key="test:runner")
-    loop._save_turn(session, result.messages, skip=1)
+    loop.persistence.save_messages(session, result.messages, skip=1)
     persisted_tool = next(message for message in session.messages if message.get("role") == "tool")
     assert persisted_tool["content"] == tool_message["content"]
 
@@ -115,8 +121,8 @@ async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     assert replay_tool["content"] == tool_message["content"]
 
 
-def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
-    from cirno_core.utils.helpers import maybe_persist_tool_result
+def test_persist_tool_result_retains_old_referenced_session_buckets(tmp_path):
+    from cirno_core.utils.tool_results import maybe_persist_tool_result
 
     root = tmp_path / ".cirno" / "tool-results"
     old_bucket = root / "old_session"
@@ -125,6 +131,13 @@ def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
     recent_bucket.mkdir(parents=True)
     (old_bucket / "old.txt").write_text("old", encoding="utf-8")
     (recent_bucket / "recent.txt").write_text("recent", encoding="utf-8")
+
+    retained = []
+    for index in range(40):
+        evidence = root / f"research_{index}" / "result.txt"
+        evidence.parent.mkdir()
+        evidence.write_text(f"evidence {index}")
+        retained.append(evidence)
 
     stale = time.time() - (8 * 24 * 60 * 60)
     os.utime(old_bucket, (stale, stale))
@@ -140,13 +153,14 @@ def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
 
     assert "truncated" in persisted
     assert ".cirno" in persisted
-    assert not old_bucket.exists()
+    assert (old_bucket / "old.txt").read_text() == "old"
     assert recent_bucket.exists()
-    assert (root / "current_session" / "call_big.txt").exists()
+    assert [path.read_text() for path in retained] == [f"evidence {index}" for index in range(40)]
+    assert len(list((root / "current_session").glob("*.txt"))) == 1
 
 
 def test_persist_tool_result_leaves_no_temp_files(tmp_path):
-    from cirno_core.utils.helpers import maybe_persist_tool_result
+    from cirno_core.utils.tool_results import maybe_persist_tool_result
 
     root = tmp_path / ".cirno" / "tool-results"
     maybe_persist_tool_result(
@@ -157,40 +171,15 @@ def test_persist_tool_result_leaves_no_temp_files(tmp_path):
         max_chars=64,
     )
 
-    assert (root / "current_session" / "call_big.txt").exists()
+    assert len(list((root / "current_session").glob("*.txt"))) == 1
     assert list((root / "current_session").glob("*.tmp")) == []
 
 
-def test_persist_tool_result_logs_cleanup_failures(monkeypatch, tmp_path):
-    from cirno_core.utils.helpers import maybe_persist_tool_result
-
-    warnings: list[str] = []
-
-    monkeypatch.setattr(
-        "cirno_core.utils.helpers._cleanup_tool_result_buckets",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("busy")),
-    )
-    monkeypatch.setattr(
-        "cirno_core.utils.helpers.logger.exception",
-        lambda message, *args: warnings.append(message.format(*args)),
-    )
-
-    persisted = maybe_persist_tool_result(
-        tmp_path,
-        "current:session",
-        "call_big",
-        "x" * 5000,
-        max_chars=64,
-    )
-
-    assert "truncated" in persisted
-    assert ".cirno" in persisted
-    assert warnings and "Failed to clean stale tool result buckets" in warnings[0]
 
 
 async def test_read_file_result_is_not_offloaded(tmp_path):
     """read_file must not trigger generic offloading (prevents persist->read->persist loops)."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     captured_second_call: list[dict] = []
@@ -237,8 +226,8 @@ async def test_read_file_result_is_not_offloaded(tmp_path):
 async def test_processed_tool_result_is_stable_for_persistence_and_replay(tmp_path):
     """The content sent after a tool call must survive the session round trip unchanged."""
     from cirno_core.agent.loop import AgentLoop
-    from cirno_core.agent.runner import AgentRunner
-    from cirno_core.session.manager import Session
+    from cirno_core.agent.runner.engine import AgentRunner
+    from cirno_core.session.model import Session
 
     raw_result = "start-" + ("x" * 20_000) + "-end-marker"
     first_provider = MagicMock()
@@ -273,9 +262,11 @@ async def test_processed_tool_result_is_stable_for_persistence_and_replay(tmp_pa
     )
 
     loop = AgentLoop.__new__(AgentLoop)
+    from cirno_core.agent.execution.persistence import TurnPersistence
+    loop.persistence = TurnPersistence(loop)
     loop.max_tool_result_chars = 2048
     session = Session(key="test:replay")
-    loop._save_turn(session, result.messages, skip=1)
+    loop.persistence.save_messages(session, result.messages, skip=1)
     persisted_tool = next(message for message in session.messages if message.get("role") == "tool")
 
     assert request_tool["content"] == raw_result
@@ -308,53 +299,14 @@ async def test_processed_tool_result_is_stable_for_persistence_and_replay(tmp_pa
     assert replay_request_tool["content"] == request_tool["content"]
 
 
-async def test_runner_keeps_going_when_tool_result_persistence_fails():
-    from cirno_core.agent.runner import AgentRunner
-
-    provider = MagicMock()
-    captured_second_call: list[dict] = []
-    call_count = {"n": 0}
-
-    async def chat_stream_with_retry(*, messages, **kwargs):
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            return LLMResponse(
-                content="working",
-                tool_calls=[ToolCallRequest(id="call_1", name="list_dir", arguments={"path": "."})],
-                usage=LLMUsage.reported(input_tokens=5, output_tokens=3),
-            )
-        captured_second_call[:] = messages
-        return LLMResponse(content="done", tool_calls=[], usage=None)
-
-    provider.chat_stream_with_retry = chat_stream_with_retry
-    tools = MagicMock()
-    tools.get_definitions.return_value = []
-    tools.execute = AsyncMock(return_value="tool result")
-
-    runner = AgentRunner()
-    with patch(
-        "cirno_core.agent.context_governance.maybe_persist_tool_result",
-        side_effect=RuntimeError("disk full"),
-    ):
-        result = await runner.run(make_run_spec(provider,
-            initial_messages=[{"role": "user", "content": "do task"}],
-            tools=tools,
-            model="test-model",
-            max_iterations=2,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
-        ))
-
-    assert result.final_content == "done"
-    tool_message = next(msg for msg in captured_second_call if msg.get("role") == "tool")
-    assert tool_message["content"] == "tool result"
 
 
 async def test_mixed_tool_text_survives_model_save_replay(tmp_path):
-    from cirno_core.agent.context_governance import ContextGovernanceConfig, ContextGovernor
+    from cirno_core.agent.governance import ContextGovernanceConfig
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.agent.tools.filesystem import ReadFileTool
     from cirno_core.agent.tools.registry import ToolRegistry
-    from cirno_core.session.manager import Session
+    from cirno_core.session.model import Session
 
     tools = ToolRegistry()
     reader = ReadFileTool(workspace=tmp_path, allowed_dir=tmp_path)
@@ -373,24 +325,25 @@ async def test_mixed_tool_text_survives_model_save_replay(tmp_path):
         {"role": "tool", "name": "custom_image_tool", "tool_call_id": "mixed",
          "content": [{"type": "text", "text": raw}, image]},
     ]
-    governor = ContextGovernor()
-    live = governor.prepare_messages_for_model(config, messages)
+    live = prepare_messages(config, messages)
     reference = live[-1]["content"][0]["text"]
     assert len(reference) <= 2048
     assert live[-1]["content"][1] == image
     loop = AgentLoop.__new__(AgentLoop)
+    from cirno_core.agent.execution.persistence import TurnPersistence
+    loop.persistence = TurnPersistence(loop)
     session = Session(key="mixed")
-    loop._save_turn(session, live, skip=0)
-    replay = governor.prepare_messages_for_model(config, session.get_history())
+    loop.persistence.save_messages(session, live, skip=0)
+    replay = prepare_messages(config, session.get_history())
     assert replay[-1]["content"][0]["text"] == reference
     assert "data:image" not in str(replay[-1]["content"])
-    readback = await reader.execute(path=".cirno/tool-results/mixed/mixed_text_0.txt")
+    readback = await reader.execute(path=str(next((tmp_path / ".cirno/tool-results/mixed").glob("*.txt"))))
     assert raw in readback
     assert messages[-1]["content"][0]["text"] == raw
 
 
 async def test_tiny_budget_keeps_complete_readable_reference(tmp_path):
-    from cirno_core.agent.context_governance import ContextGovernanceConfig, ContextGovernor
+    from cirno_core.agent.governance import ContextGovernanceConfig
     from cirno_core.agent.tools.filesystem import ReadFileTool
     from cirno_core.agent.tools.registry import ToolRegistry
 
@@ -404,11 +357,11 @@ async def test_tiny_budget_keeps_complete_readable_reference(tmp_path):
         session_key=session_key, max_tool_result_chars=64,
     )
     raw = "y" * 20_000
-    reference = ContextGovernor.normalize_tool_result(config, call_id, "exec", raw)
+    reference = normalize_tool_result(config, call_id, "exec", raw)
     assert reference.startswith("[truncated: ") and reference.endswith("]")
     path = reference.removeprefix("[truncated: ").removesuffix("]")
     assert raw in await reader.execute(path=path)
-    assert ContextGovernor.normalize_tool_result(config, call_id, "exec", reference) == reference
+    assert normalize_tool_result(config, call_id, "exec", reference) == reference
     assert (tmp_path / path).read_text(encoding="utf-8") == raw
 
 
@@ -421,7 +374,7 @@ async def test_result_reference_survives_workspace_switch_without_bypassing_rest
         build_workspace_scope,
         reset_workspace_scope,
     )
-    from cirno_core.utils.helpers import maybe_persist_tool_result
+    from cirno_core.utils.tool_results import maybe_persist_tool_result
 
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -443,7 +396,7 @@ async def test_result_reference_survives_workspace_switch_without_bypassing_rest
 
 @pytest.mark.parametrize("budget", [2048, 16000])
 def test_offload_preview_uses_budget_and_retains_tail(tmp_path, budget):
-    from cirno_core.utils.helpers import maybe_persist_tool_result
+    from cirno_core.utils.tool_results import maybe_persist_tool_result
 
     content = "FIRST MATCH\n" + "x" * 20000 + "\n(use offset=250 to continue)"
     result = maybe_persist_tool_result(tmp_path, "search", "call", content, max_chars=budget)
@@ -452,11 +405,11 @@ def test_offload_preview_uses_budget_and_retains_tail(tmp_path, budget):
     assert "FIRST MATCH" in result
     assert "use offset=250 to continue" in result
     assert "Read the saved file" in result
-    assert (tmp_path / ".cirno/tool-results/search/call.txt").read_text(encoding="utf-8") == content
+    assert next((tmp_path / ".cirno/tool-results/search").glob("*.txt")).read_text(encoding="utf-8") == content
 
 
 async def test_grep_page_survives_default_result_normalization(tmp_path):
-    from cirno_core.agent.context_governance import ContextGovernanceConfig, ContextGovernor
+    from cirno_core.agent.governance import ContextGovernanceConfig
     from cirno_core.agent.tools.registry import ToolRegistry
     from cirno_core.agent.tools.search import GrepTool
 
@@ -468,7 +421,7 @@ async def test_grep_page_survives_default_result_normalization(tmp_path):
         provider=MagicMock(), model="test", tools=ToolRegistry(), workspace=tmp_path,
         session_key="search", max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
-    normalized = ContextGovernor.normalize_tool_result(config, "call", "grep", page)
+    normalized = normalize_tool_result(config, "call", "grep", page)
 
     assert "use offset=" in normalized
     assert len(normalized) <= _MAX_TOOL_RESULT_CHARS

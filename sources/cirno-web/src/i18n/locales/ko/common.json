@@ -7,19 +7,19 @@
   "app": {
     "brand": "Cirno",
     "loading": {
-      "connecting": "cirno에 연결 중…",
+      "connecting": "Cirno에 연결 중…",
       "boot": "Cirno 불러오는 중…",
       "failed": "이 화면을 불러오지 못했습니다. 뒤로 가거나 페이지를 새로고침하여 다시 시도하세요."
     },
     "error": {
-      "title": "cirno에 연결할 수 없습니다",
+      "title": "Cirno에 연결할 수 없습니다",
       "serverHint": "Cirno server(`cirno`)가 실행 중이고 이 브라우저에서 WebUI 주소에 접근할 수 있는지 확인하세요."
     },
     "auth": {
-      "title": "cirno에 연결",
+      "title": "Cirno에 연결",
       "label": "WebUI 비밀번호",
       "helpTitle": "비밀번호는 어디에서 찾나요?",
-      "helpConfig": "cirno을 실행 중인 기기에서 설정 파일을 여세요. 일반적으로 다음 위치에 있습니다:",
+      "helpConfig": "Cirno을 실행 중인 기기에서 설정 파일을 여세요. 일반적으로 다음 위치에 있습니다:",
       "helpSecret": "이 필드의 값을 비밀번호로 복사하세요:",
       "helpFallback": "값이 비어 있으면 <code>channels.websocket.token</code>을 사용하세요.",
       "showPassword": "비밀번호 표시",
@@ -38,9 +38,7 @@
       "restartHint": "런타임 변경 사항을 적용하려면 cirno을 다시 시작하세요.",
       "restartAction": "다시 시작",
       "restart": "cirno 다시 시작",
-      "restarting": "다시 시작 중...",
-      "restartEngine": "엔진 다시 시작",
-      "restartingEngine": "엔진 다시 시작 중..."
+      "restarting": "다시 시작 중..."
     },
     "restart": {
       "completed": "{{seconds}}초 만에 다시 시작되었습니다."
@@ -51,18 +49,6 @@
     },
     "meta": {
       "description": "Cirno 웹 UI — Cirno 작업공간과 대화하세요."
-    },
-    "pairing": {
-      "haveCode": "이미 코드를 받으셨나요?",
-      "deliveryFailed": "페어링 코드를 보내지 못했습니다. 봇의 메시지 전송 권한과 Cirno 서버 로그를 확인한 후, 봇에게 개인 메시지를 다시 보내세요.",
-      "deliverySending": "채팅으로 페어링 코드를 보내고 있습니다. 코드가 도착하지 않으면 봇에게 개인 메시지를 다시 보내세요.",
-      "title": "계정 연결",
-      "description": "채팅에서 받은 연결 코드를 입력하세요.",
-      "code": "연결 코드",
-      "matched": "{{channel}} 일치. 연결 중...",
-      "expiresInline": "코드 만료: {{expires}}.",
-      "queueCount": "{{count}}개 대기 중",
-      "noMatch": "이 코드와 일치하는 대기 중인 요청이 없습니다."
     }
   },
   "ptc": {
@@ -275,8 +261,8 @@
           "help": "대화가 유휴 압축 조건을 충족하는지 확인하는 간격입니다. 유휴 시간 제한과는 별개이며 재시작 후 적용됩니다."
         },
         "network_request_timeout_s": {
-          "label": "Compatible API request timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "모델 연결 / 응답 제한 시간(초)",
+          "help": "연결하거나 비스트리밍 응답을 기다리는 시간입니다. 스트리밍에는 별도의 유휴 제한 시간이 적용됩니다."
         },
         "network_stream_idle_timeout_s": {
           "label": "Compatible API stream idle timeout (seconds)",
@@ -335,7 +321,7 @@
           "help": "요청별 제한 시간이며 실패 시 BM25로 돌아갑니다."
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "압축된 실행 컨텍스트 해제",
+          "label": "압축 후 메모리 해제",
           "help": "압축 후 증거와 표시 기록은 디스크에 유지하고 이전 실행 메시지의 메모리를 해제합니다."
         },
         "agents_defaults_dream_max_tool_iterations": {
@@ -461,6 +447,18 @@
         "agents_defaults_memory_embedding_provider": {
           "label": "임베딩 서비스",
           "help": "BM25와 함께 사용하는 선택적 벡터 검색입니다. 로컬 CPU 또는 외부 API를 선택합니다. API에는 검색어와 기억 조각을 전송하며 기본값은 꺼짐입니다."
+        },
+        "server_uploads_max_file_mb": {
+          "label": "파일 크기 제한 (MiB)",
+          "help": "이미지 또는 문서 한 개의 업로드 제한입니다. 서비스를 재시작하고 페이지를 새로 고치면 적용됩니다."
+        },
+        "server_uploads_max_video_mb": {
+          "label": "동영상 크기 제한 (MiB)",
+          "help": "동영상 한 개의 제한입니다. 메시지당 동영상은 하나만 가능합니다. 재시작 및 새로 고침 후 적용됩니다."
+        },
+        "server_uploads_max_total_mb": {
+          "label": "메시지당 총 파일 크기 (MiB)",
+          "help": "동영상을 제외한 이미지와 문서의 합계입니다. 로컬 파일 참조는 제외됩니다. 재시작 및 새로 고침 후 적용됩니다."
         }
       },
       "groups": {
@@ -565,6 +563,9 @@
         },
         "embedding": {
           "title": "임베딩 서비스"
+        },
+        "uploads": {
+          "title": "파일 업로드"
         }
       },
       "save": "변경 사항 저장",
@@ -626,7 +627,7 @@
       "appearance": "외관",
       "notifications": "브라우저 알림",
       "models": "모델",
-      "providers": "제공업체",
+      "providers": "공급자",
       "voice": "음성",
       "browser": "웹 검색",
       "channels": "채널 설정",
@@ -672,12 +673,10 @@
       "capabilities": "기능",
       "cliApps": "CLI 앱",
       "mcp": "MCP 서비스",
-      "apps": "앱",
-      "nativeHost": "데스크톱 앱",
-      "hostSafety": "앱 보안"
+      "apps": "앱"
     },
     "notifications": {
-      "scope": "이 브라우저",
+      "scope": "알림 및 소리",
       "intro": "작업이 끝났을 때 알림을 받을 방법을 선택하세요.",
       "pageRequired": "페이지가 닫히거나 일시 중지되거나 연결이 끊기면 새 알림을 받을 수 없습니다.",
       "revoked": "알림 권한이 취소되어 알림이 꺼졌습니다. 이 브라우저의 사이트 설정에서 알림을 허용한 후 여기에서 다시 켜세요.",
@@ -740,7 +739,6 @@
       "restart": "cirno 다시 시작",
       "configPath": "설정 경로",
       "activePreset": "활성 프리셋",
-      "gateway": "Cirno 서버",
       "restartState": "다시 시작 상태",
       "pendingChanges": "적용 대기 변경",
       "selectedPreset": "선택한 프리셋",
@@ -762,13 +760,11 @@
       "notificationSound": "완료 알림음",
       "cliAppsCatalog": "카탈로그",
       "cliAppsFilter": "필터",
-      "engine": "엔진",
-      "logs": "로그",
-      "diagnostics": "진단",
       "contextWindow": "컨텍스트 창",
       "voiceLimits": "제한",
       "reasoningDetailMode": "생각 과정 표시",
-      "toolDetailMode": "도구 실행 표시"
+      "toolDetailMode": "도구 실행 표시",
+      "healthListener": "상태 확인 수신 주소"
     },
     "help": {
       "theme": "밝은 화면과 어두운 화면을 전환하세요.",
@@ -796,10 +792,6 @@
       "notificationSound": "응답이 끝나면 백그라운드에서도 알림음을 재생합니다.",
       "cliAppsCatalog": "cirno용 CLI 도구를 설치합니다. 데스크톱 앱은 변경되지 않습니다.\n\ncirno이 이 컴퓨터에서 사용할 수 있는 명령줄 도구를 설치합니다. 데스크톱 앱은 변경하지 않습니다.",
       "cliAppsFilter": "이름, 분류 또는 기능으로 검색하세요.",
-      "logs": "데스크톱 앱의 엔진 로그 폴더를 엽니다.",
-      "diagnostics": "문제 진단을 돕는 보고서를 내보냅니다.",
-      "localServiceAccessNative": "전체 접근 Shell 명령이 이 Mac의 서비스에 연결할 수 있습니다.\n\n전체 접근 권한 셸 명령이 이 Mac의 서비스에 접근할 수 있게 합니다.",
-      "webuiDefaultAccessNative": "프로젝트 권한이 없는 데스크톱 채팅의 기본값입니다.\n\n프로젝트별 권한이 없는 네이티브 채팅에 사용됩니다.",
       "contextWindow": "이 모델의 컨텍스트 Token 예산입니다."
     },
     "values": {
@@ -821,16 +813,15 @@
       "collapsedDiff": "변경 접기",
       "on": "켜짐",
       "off": "꺼짐",
-      "defaultPermission": "기본 권한",
       "fullAccess": "전체 접근",
       "configured": "설정됨",
       "notConfigured": "설정 안 됨",
       "pending": "대기 중",
-      "restartingEngine": "다시 시작 중",
       "checking": "확인 중",
       "running": "실행 중",
       "needsSetup": "설정 필요",
-      "detailed": "자세히"
+      "detailed": "자세히",
+      "inheritToolPolicy": "도구 정책 사용"
     },
     "status": {
       "loading": "설정을 불러오는 중...",
@@ -841,12 +832,7 @@
       "restartAfterSaving": "변경 사항을 저장한 뒤 준비되면 다시 시작하세요.",
       "savedRestartApply": "저장했습니다. 변경 사항을 적용하려면 cirno을 다시 시작하세요.",
       "hostRestartAfterSaving": "저장하면 cirno이 엔진을 다시 시작합니다.",
-      "hostRestartPending": "저장했습니다. 준비되면 엔진을 다시 시작합니다.",
-      "hostApiUnavailable": "이 작업은 데스크톱 앱에서만 사용할 수 있습니다.",
-      "logsOpened": "로그 폴더를 열었습니다.",
-      "logsOpenFailed": "로그 폴더를 열 수 없습니다.",
-      "diagnosticsExported": "진단을 {{path}}에 내보냈습니다.",
-      "diagnosticsExportFailed": "진단을 내보낼 수 없습니다."
+      "hostRestartPending": "저장했습니다. 준비되면 엔진을 다시 시작합니다."
     },
     "actions": {
       "save": "저장",
@@ -1022,7 +1008,7 @@
       "newPresetHelp": "모델과 설정을 저장해 다시 사용하세요.",
       "presets": "모델 프리셋",
       "presetName": "프리셋 이름",
-      "presetNameHelp": "이름은 고유해야 하며 /model에서도 사용됩니다.",
+      "presetNameHelp": "이름은 고유해야 합니다. 이름을 바꿔도 모델 ID는 유지됩니다.",
       "presetNameDuplicate": "같은 이름의 프리셋이 이미 있습니다.",
       "presetNamePlaceholder": "예: 빠른 작성",
       "advancedOptions": "고급 옵션",
@@ -1066,7 +1052,8 @@
         "auto": "자동",
         "preserve": "보존",
         "omit": "전송하지 않음"
-      }
+      },
+      "catalogErrorDetails": "오류 세부 정보"
     },
     "timezone": {
       "select": "시간대 선택",
@@ -1404,7 +1391,7 @@
         "noOutput": "이 기록에는 응답 본문이 저장되지 않았습니다."
       },
       "create": "작업 만들기",
-      "createPrompt": "cirno이 무엇을 자동으로 할까요?",
+      "createPrompt": "어떤 작업을 자동화할까요?",
       "createInput": "자동화 설명",
       "errors": {},
       "calendar": {
@@ -1542,7 +1529,8 @@
         "second": "초",
         "minute": "분",
         "hour": "시간",
-        "day": "일"
+        "day": "일",
+        "millisecond": "밀리초"
       },
       "validation": {
         "nameRequired": "이름은 필수입니다.",
@@ -1581,7 +1569,9 @@
       "openChatGPT": "ChatGPT 열기",
       "pasteCallbackToContinue": "계속하려면 콜백 URL을 붙여 넣으세요.",
       "waitingForCallback": "로그인 완료 대기 중…",
-      "finishSignIn": "로그인 완료"
+      "finishSignIn": "로그인 완료",
+      "cancelFailed": "{{provider}} 로그인을 취소할 수 없습니다",
+      "cancelling": "로그인 취소 중…"
     },
     "skills": {
       "description": "채팅에서 사용할 스킬을 선택하세요.",
@@ -1610,15 +1600,15 @@
       "disableSkill": "{{name}} 비활성화",
       "updateFailed": "이 스킬을 업데이트할 수 없습니다.",
       "deleteTitle": "스킬 삭제",
-      "deleteDescription": "현재 작업 공간에서 이 스킬을 삭제합니다.",
+      "deleteDescription": "Agent Home에서 이 스킬을 삭제합니다.",
       "deleteAction": "삭제",
       "deleteFailed": "이 스킬을 삭제할 수 없습니다.",
       "deleteConfirmTitle": "{{name}}을(를) 삭제하시겠습니까?",
-      "deleteConfirmDescription": "작업 공간에서 스킬 파일을 삭제합니다. 되돌릴 수 없습니다.",
+      "deleteConfirmDescription": "Agent Home에서 스킬 파일을 삭제합니다. 보관된 이전 버전은 계속 읽을 수 있습니다.",
       "deleteConfirmAction": "스킬 삭제",
       "instructionsTitle": "스킬 안내",
       "setupRequired": "설정 필요",
-      "setupDescription": "Cirno 서버 호스트에 의존성을 설치한 뒤 다시 확인하세요.\n\ncirno을 실행하는 컴퓨터에 필요한 패키지를 설치한 후 다시 확인하세요.",
+      "setupDescription": "Cirno 서버를 실행하는 기기에 필요한 의존성을 설치한 뒤 다시 확인하세요.",
       "copySetupCommand": "명령 복사",
       "checkAgain": "다시 확인",
       "marketplaceSearchFailed": "스킬 마켓을 검색할 수 없습니다.",
@@ -1634,7 +1624,7 @@
       "marketplaceTrendingUnavailable": "인기 스킬을 일시적으로 불러올 수 없습니다.",
       "marketplaceEmpty": "“{{query}}”에 해당하는 스킬이 없습니다.",
       "marketplaceConfirmTitle": "{{name}}을(를) 설치할까요?",
-      "marketplaceConfirmDescription": "외부 스킬에는 지침이나 스크립트가 포함될 수 있습니다.\n\n이 타사 스킬은 {{provider}}({{source}})에서 제공되며 지침이나 실행 가능한 스크립트를 포함할 수 있습니다.",
+      "marketplaceConfirmDescription": "이 타사 스킬은 {{provider}}({{source}})에서 제공되며 지침이나 실행 가능한 스크립트를 포함할 수 있습니다.",
       "marketplaceConfirmInstall": "스킬 설치",
       "marketplaceOpen": "{{provider}}에서 {{name}} 열기",
       "marketplaceOpenProvider": "{{provider}} 열기",
@@ -1648,7 +1638,6 @@
       "marketplaceTrendLabel": "8주 설치 추이",
       "featured": "스킬",
       "empty": "사용 가능한 스킬이 없습니다.",
-      "sourceWorkspace": "사용자 지정",
       "sourceBuiltin": "내장",
       "statusAvailable": "사용 가능",
       "statusUnavailable": "사용 불가",
@@ -1668,46 +1657,55 @@
       "unavailableReasonLabel": "부족한 항목",
       "rawInstructions": "SKILL.md 내용",
       "rawInstructionsEmpty": "지침이 없습니다.",
-      "detailDescription": "{{name}} 세부 정보."
+      "detailDescription": "{{name}} 세부 정보.",
+      "sourceHome": "사용자 지정",
+      "copySetupFailed": "명령을 복사하지 못했습니다.",
+      "sourcePlugin": "Agent 플러그인",
+      "marketplaceResultsFor": "“{{query}}” 검색 결과",
+      "retryTrends": "추세 다시 불러오기",
+      "historyTab": "검증 및 이력"
     },
     "homeFiles": {
       "title": "Home files",
       "save": "Save",
       "reload": "Reload",
       "saved": "Saved",
-      "soul": "Personality",
+      "soul": "Router 성격",
       "user": "Preferences",
       "instructions": "Instructions",
       "memory": "Long-term memory",
-      "heartbeat": "Heartbeat instructions"
+      "heartbeat": "Heartbeat instructions",
+      "worker": "일반 대화 성격"
     },
     "categories": {
       "interface": "인터페이스",
       "agent": "에이전트",
       "connections": "연결",
-      "system": "시스템"
+      "system": "시스템",
+      "general": "일반"
     },
     "telegram": {
-      "account": "Personal account",
-      "configureBot": "Configure bot",
-      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
-      "unbound": "Not connected",
-      "boundHelp": "Only this Telegram account can access your personal Cirno.",
-      "pinHelp": "Generate a PIN here, then send it to your bot.",
-      "unbind": "Disconnect",
-      "generatePin": "Generate PIN",
-      "pin": "Pairing PIN",
-      "copyPin": "Copy binding command",
-      "refreshPin": "Refresh PIN",
-      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
-      "sendPin": "Send {{command}} to your Telegram bot.",
-      "delivery": "Messages and notifications",
-      "enabled": "Enable Telegram",
-      "cirno": "Cirno messages",
-      "actionLinks": "Action links",
-      "webuiUrl": "Web UI address (optional)",
-      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
-      "settingsLink": "Configure Telegram notifications"
+      "account": "개인 계정",
+      "configureBot": "봇 설정",
+      "help": "개인 Telegram 채팅을 Cirno에 연결합니다. 그룹은 지원하지 않습니다. 먼저 채널 설정에서 봇 토큰을 설정하세요.",
+      "unbound": "연결되지 않음",
+      "boundHelp": "이 Telegram 계정만 개인 Router에 접근할 수 있습니다.",
+      "pinHelp": "여기서 PIN을 생성한 후 봇에 보내세요.",
+      "unbind": "연결 해제",
+      "generatePin": "PIN 생성",
+      "pin": "연결 PIN",
+      "copyPin": "연결 명령 복사",
+      "refreshPin": "PIN 갱신",
+      "expires": "{{seconds}}초 후 만료됩니다.",
+      "sendPin": "Telegram 봇에 {{command}}을(를) 보내세요.",
+      "delivery": "메시지 및 알림",
+      "enabled": "Telegram 활성화",
+      "actionLinks": "작업 링크",
+      "webuiUrl": "Web UI 주소 (선택 사항)",
+      "urlHelp": "휴대전화에서 열 수 있는 주소를 사용하세요. 알림에는 받은 편지함의 해당 항목을 여는 버튼이 포함됩니다.",
+      "settingsLink": "Telegram 알림 설정",
+      "expired": "PIN이 만료되었습니다",
+      "router": "Router 메시지"
     },
     "account": {
       "owner": "인스턴스 소유자",
@@ -1718,10 +1716,13 @@
       "saved": "비밀번호가 변경되었습니다. 이 브라우저의 로그인은 유지됩니다.",
       "unavailable": "계정 설정은 브라우저 등록 및 로그인 사용 시 이용할 수 있습니다.",
       "loading": "계정 불러오는 중…",
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "routerNameHelp": "Renaming keeps the same conversation ID, memory and task links. Historical text stays as written.",
+      "saveRouterName": "Save name",
+      "routerNameSaved": "Name updated."
     },
     "heartbeat": {
-      "help": "HEARTBEAT.md를 주기적으로 확인하고 작업이 있으면 Cirno를 깨웁니다. 서비스 상태 확인과는 별개입니다."
+      "help": "HEARTBEAT.md를 주기적으로 확인하고 작업이 있으면 Router를 깨웁니다. 서비스 상태 확인과는 별개입니다."
     },
     "backup": {
       "instance": "전체 인스턴스",
@@ -1751,7 +1752,21 @@
       "skip": "빈칸이면 건너뛰기",
       "extrasRestore": "추가 경로를 변경할 수 있습니다. 같은 이름의 파일은 덮어쓰고 무관한 기존 파일은 유지합니다. 패키지와 외부 도구는 호환되는 OS와 CPU가 필요합니다.",
       "restore": "복원 후 재시작"
-    }
+    },
+    "balance": {
+      "title": "계정 잔액",
+      "enabled": "잔액 조회 사용",
+      "endpoint": "잔액 API URL",
+      "endpointHelp": "모델 API와 다른 주소를 사용할 수 있습니다.",
+      "format": "응답 형식",
+      "json": "사용자 지정 JSON",
+      "amountPath": "잔액 필드(JSON Pointer)",
+      "currency": "통화 / 단위",
+      "apiKey": "잔액 API 키(선택)",
+      "apiKeyHelp": "비워 두면 공급자의 API 키를 사용합니다.",
+      "refresh": "잔액 새로 고침"
+    },
+    "navigationSearch": "설정 검색"
   },
   "chat": {
     "fallbackTitle": "주제 {{id}}",
@@ -1774,7 +1789,7 @@
     "rename": "이름 변경",
     "renamePlaceholder": "주제 이름",
     "renameProjectTitle": "프로젝트 이름 변경",
-    "renameProjectDescription": "WebUI 사이드바의 프로젝트 이름만 변경하세요.",
+    "renameProjectDescription": "프로젝트 이름을 변경합니다. 대화와 파일은 유지됩니다.",
     "renameProjectPlaceholder": "프로젝트 이름",
     "renameSave": "저장",
     "renameFailed": "이름을 저장하지 못했습니다. 다시 시도하세요.",
@@ -1794,7 +1809,8 @@
       "yesterday": "어제",
       "earlier": "이전",
       "archived": "보관됨"
-    }
+    },
+    "bulkDeleteUnavailable": "이 화면에서는 한 번에 대화 하나만 삭제할 수 있습니다."
   },
   "archiveConfirm": {
     "title": "이 주제를 보관할까요?",
@@ -1802,7 +1818,7 @@
     "unarchiveTitle": "이 주제의 보관을 해제할까요?",
     "unarchiveTitleMany": "주제 {{count}}개의 보관을 해제할까요?",
     "description": "대화 기록은 유지되며 언제든지 보관을 해제할 수 있습니다.",
-    "unarchiveDescription": "이 주제들이 사이드바에 다시 표시됩니다."
+    "unarchiveDescription": "이 대화들이 대화 목록에 다시 표시됩니다."
   },
   "deleteConfirm": {
     "title": "이 채팅을 삭제할까요?",
@@ -2015,7 +2031,16 @@
         "estimated": "현재 컨텍스트와 생성 중인 출력으로 추정하며 응답 후 실제 사용량으로 보정합니다。",
         "unavailable": "현재 문맥 사용량이 기록되지 않았습니다. 차트는 이전 요청을 표시합니다."
       },
+      "draftStorage": {
+        "read": "이 브라우저에 저장된 초안을 복원하지 못했습니다.",
+        "save": "초안의 변경 내용을 저장하지 못했습니다. 이 페이지를 열어 둔 채 다시 시도하세요.",
+        "remove": "저장된 초안을 삭제하지 못했습니다. 새로고침하기 전에 다시 시도하세요.",
+        "clearFailed": "이 브라우저에 저장된 초안을 지우지 못했습니다."
+      },
       "queued": {
+        "sendRejected": "메시지를 보내지 못했습니다. 대기 메시지는 보관되어 있습니다.",
+        "restoreFailed": "이 브라우저에 저장된 대기 메시지를 복원하지 못했습니다.",
+        "saveFailed": "대기 메시지의 변경 내용을 저장하지 못했습니다. 이 페이지를 열어 둔 채 다시 시도하세요.",
         "label": "전송 대기 중",
         "guide": "지금 보내기",
         "delete": "메시지 삭제",
@@ -2106,16 +2131,12 @@
             "title": "도움말 보기",
             "description": "사용 가능한 슬래시 명령을 표시합니다."
           },
-          "pairing": {
-            "title": "페어링",
-            "description": "연결 요청을 관리합니다."
-          },
           "resume": {
             "title": "작업 계속하기",
             "description": "저장된 문맥에서 중지된 작업을 계속합니다."
           },
           "clear": {
-            "title": "Cirno 문맥 지우기",
+            "title": "Router 대화 지우기",
             "description": "개인 Cirno 대화를 지웁니다. 파일 변경은 취소되지 않습니다."
           },
           "temporary": {
@@ -2168,14 +2189,14 @@
         "label": "앱",
         "cliGroup": "CLI 앱",
         "mcpGroup": "MCP 서비스",
-        "sessionGroup": "Cirno 대화",
+        "sessionGroup": "대화",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "@{{name}}으로 CLI를 호출합니다.",
         "mcpDescription": "@{{name}}으로 MCP를 호출합니다.",
         "cliTitle": "CLI 앱: {{name}}",
         "mcpTitle": "MCP 서버: {{name}}",
-        "sessionBadge": "Cirno 대화",
+        "sessionBadge": "대화",
         "sessionDescription": "@{{name}}을 이전 채팅으로 참조"
       },
       "workspace": {
@@ -2188,7 +2209,7 @@
         "defaultDescription": "작업 디렉터리 안에서만 파일을 읽고 쓰며 명령을 실행합니다.",
         "fullDescription": "작업 디렉터리 밖의 파일 접근과 명령 실행을 허용합니다.",
         "review": "AI 승인",
-        "reviewDescription": "기본 제한을 유지합니다. 독립 AI가 Cirno 기억 없이 제한된 작업을 검토하며 불확실하면 받은 편지함에서 승인을 요청합니다. AI 오판으로 파일 유출이나 유해한 명령 실행이 발생할 수 있습니다."
+        "reviewDescription": "기본 제한을 유지합니다. 독립 AI가 Router 기억 없이 제한된 작업을 검토하며 불확실하면 받은 편지함에서 승인을 요청합니다. AI 오판으로 파일 유출이나 유해한 명령 실행이 발생할 수 있습니다."
       },
       "goalStatus": {
         "blocked": "진행 불가",
@@ -2214,7 +2235,7 @@
       "railAria": "내 메시지 탐색"
     },
     "clear": {
-      "title": "Cirno 대화 지우기",
+      "title": "Router 대화 지우기",
       "description": "현재 실행을 중지하고 이 대화의 메시지와 컨텍스트를 지웁니다. 저장된 기억과 다른 대화는 유지됩니다.",
       "confirm": "대화 지우기"
     },
@@ -2226,10 +2247,10 @@
       "subagent": "하위 에이전트 결과",
       "continuation": "자동 계속",
       "system": "시스템 이벤트",
-      "supervision": "Cirno가 이 대화를 변경했습니다"
+      "supervision": "Router가 이 대화를 변경했습니다"
     },
     "supervision": {
-      "changed": "Cirno가 이 대화를 변경했습니다",
+      "changed": "Router가 이 대화를 변경했습니다",
       "actions": {
         "stop": "이 대화를 중지했습니다",
         "continue": "이 대화를 계속했습니다",
@@ -2486,7 +2507,8 @@
     "automationTriggered": "자동 실행됨",
     "expandStep": "단계 펼치기",
     "collapseStep": "단계 접기",
-    "edit": "메시지 편집"
+    "edit": "메시지 편집",
+    "loadMoreTools": "도구 이벤트 {{count}}개 더 보기"
   },
   "recovery": {
     "actionFailed": "복구 작업에 실패했습니다. 다시 시도하세요.",
@@ -2563,45 +2585,16 @@
     "copy": "복사",
     "copied": "복사됨"
   },
-  "workbench": {
-    "aria": "작업대",
-    "panes": "창",
-    "tabAria": "그룹: {{title}}",
-    "panesInTab": "{{title}}의 창",
-    "collapseTabGroup": "{{title}}의 창 접기",
-    "expandTabGroup": "{{title}}의 창 펼치기",
-    "dropPane": "{{pane}}을(를) {{tab}}으로 이동",
-    "createGroup": "그룹 만들기",
-    "moveTo": "이동",
-    "renameGroupTitle": "그룹 이름 변경",
-    "renameGroupDescription": "이 그룹에 이름을 지정하세요.",
-    "renameGroupPlaceholder": "그룹 이름",
-    "dissolveTab": "그룹 해제",
-    "layout": "레이아웃",
-    "addPane": "창 추가",
-    "paneLimit": "최대 {{count}}개 창",
-    "deleteConversations": "그룹 내 모든 대화 삭제",
-    "movePane": "{{title}} 창 이동",
-    "movePaneHint": "드래그하여 이동. 방향키로도 이동 가능",
-    "resizePaneBoundary": "창 경계 {{index}} 크기 조절",
-    "promotePane": "{{title}}을(를) 기본 창으로 설정",
-    "paneActions": "{{title}} 창 작업",
-    "detachPane": "제거",
-    "composerAria": "{{title}}에 메시지 보내기",
-    "layouts": {
-      "columns": "좌우 배치",
-      "rows": "상하 배치",
-      "grid": "그리드",
-      "bsp": "BSP",
-      "main-stack": "주 창과 보조 창"
-    }
-  },
   "common": {
     "retry": "다시 시도",
     "dismiss": "닫기",
     "close": "닫기",
     "current": "현재",
-    "cancel": "취소"
+    "cancel": "취소",
+    "refresh": "새로 고침",
+    "copyFailed": "클립보드에 복사하지 못했습니다.",
+    "chooseDate": "날짜 선택",
+    "moreActions": "추가 작업"
   },
   "errors": {
     "messageTooBig": {
@@ -2627,10 +2620,13 @@
       "serverTitle": "모델 제공업체 서비스 오류",
       "unknownTitle": "모델 제공업체 요청 실패",
       "bodyWithAttempt": "{{attempts}}회 시도 후 중지했습니다. 나중에 다시 시도하거나 다른 모델을 선택하세요.",
-      "body": "나중에 다시 시도하거나 다른 모델을 선택하세요."
+      "body": "나중에 다시 시도하거나 다른 모델을 선택하세요.",
+      "configurationTitle": "먼저 모델을 선택하세요",
+      "configurationBody": "설정 → 모델에서 모델 프리셋을 만들고 선택한 후 메시지를 다시 보내세요."
     }
   },
   "workspace": {
+    "directoryRefreshError": "작업 디렉터리를 새로 고칠 수 없습니다",
     "dialog": {
       "manual": "경로 붙여넣기",
       "absolutePathRequired": "이 머신의 절대 폴더 경로를 입력하세요."
@@ -2660,7 +2656,118 @@
       "retry": "다시 시도",
       "cancel": "취소",
       "switchDirectory": "디렉터리 전환"
-    }
+    },
+    "files": "파일",
+    "file": "파일",
+    "terminal": "터미널",
+    "browser": "브라우저",
+    "trace": "추적",
+    "credentials": "자격 증명",
+    "settings": "설정",
+    "conversation": "대화",
+    "library": "대화 목록",
+    "inbox": "받은 편지함",
+    "automations": "자동화",
+    "launcher": "Launcher",
+    "split": "분할 보기",
+    "unsplit": "단일 보기",
+    "resizeSplit": "분할 너비 조절",
+    "tabs": "탭",
+    "closeTab": "{{title}} 닫기",
+    "newTab": "새 탭",
+    "loading": "불러오는 중…",
+    "localServer": "로컬 서버",
+    "terminalHost": "터미널 호스트",
+    "connect": "연결",
+    "terminalExited": "프로세스 종료 ({{code}})",
+    "terminalHint": "선택한 서버의 대화형 셸입니다. 탭을 닫으면 로컬 연결이 종료됩니다. 분리된 원격 프로세스는 계속 실행될 수 있습니다.",
+    "addRecord": "자격 증명 추가",
+    "vaultHint": "값은 메모리와 분리하여 암호화됩니다. 전체 백업에 암호화 키가 포함되므로 안전하게 보관하세요. 자격 증명 도구는 값을 반환하지 않고 기록을 관리합니다. 이전에 채팅에 붙여 넣은 비밀은 기록에 남습니다.",
+    "label": "이름",
+    "recordType": "유형",
+    "secretValue": "민감한 값",
+    "reveal": "저장된 값 표시",
+    "noRecords": "저장된 자격 증명 없음",
+    "deleteRecord": "이 자격 증명을 삭제할까요?",
+    "delete": "삭제",
+    "loadOlder": "이전",
+    "chooseConversation": "대화에서 이 탭을 여세요.",
+    "loadMore": "메시지 더 불러오기",
+    "toolDefinitions": "도구 정의",
+    "modelResponse": "모델 응답",
+    "address": "웹사이트 주소",
+    "go": "이동",
+    "openExternal": "브라우저에서 열기",
+    "browserHint": "일부 사이트는 삽입을 차단합니다. 빈 화면이면 브라우저에서 여세요. 삽입된 사이트는 Cirno 계정과 로컬 파일에 접근할 수 없습니다.",
+    "enterUrl": "웹사이트 주소를 입력하세요.",
+    "invalidUrl": "HTTP 또는 HTTPS 주소를 입력하세요.",
+    "browserSameOrigin": "Cirno 안에 다시 삽입하지 말고 직접 탭으로 여세요.",
+    "kind": {
+      "password": "계정 / 비밀번호",
+      "text": "긴 텍스트",
+      "identity": "개인 식별 정보",
+      "token": "토큰 / 활성화 코드",
+      "ssh": "SSH"
+    },
+    "openItem": "{{title}} 열기",
+    "username": "계정 사용자 이름",
+    "discardDescription": "이 탭의 저장되지 않은 변경 사항이 사라집니다.",
+    "debug": {
+      "time": "시간",
+      "type": "유형",
+      "summary": "이벤트",
+      "status": "상태",
+      "turn": "턴",
+      "size": "크기",
+      "filter": "현재 페이지 필터",
+      "all": "모든 이벤트",
+      "newest": "최신",
+      "newer": "이전 페이지",
+      "refresh": "추적 새로고침",
+      "inspector": "이벤트 검사",
+      "messages": "메시지",
+      "response": "응답",
+      "tools": "도구 정의",
+      "raw": "원본",
+      "noEvents": "현재 페이지에 이벤트가 없습니다.",
+      "count": "{{count}} / {{total}}개 이벤트",
+      "events": "기록된 이벤트",
+      "kinds": {
+        "input": "사용자 메시지",
+        "answer": "모델 응답",
+        "reasoning": "추론",
+        "tool": "도구 호출",
+        "compaction": "압축",
+        "request": "API 요청",
+        "file": "파일 변경",
+        "lifecycle": "수명 주기",
+        "system": "시스템 입력"
+      },
+      "source": "출처 대화",
+      "allSources": "모든 대화",
+      "pause": "기록 일시 정지",
+      "start": "기록 시작",
+      "clear": "기록 지우기",
+      "recording": "기록 중",
+      "paused": "일시 정지",
+      "waiting": "새 이벤트를 기록합니다. 이전 대화 기록은 가져오지 않습니다.",
+      "capacity": "저장 한도에 도달했습니다. 지운 후 계속하세요.",
+      "storage_error": "임시 저장소 오류로 기록이 중지되었습니다."
+    },
+    "moveOtherGroup": "Move to other tab group",
+    "emptyGroup": "Open a page from the Launcher or drag a tab here.",
+    "sshNodeAccess": "SSH Nodes에 추가",
+    "sshNodeAccessHint": "원격 터미널에서 사용합니다. Agent 실행에는 Agent 공개도 필요합니다.",
+    "sshCredential": "SSH 자격 증명",
+    "loadSSH": "연결 정보 불러오기",
+    "sshNodePickerHint": "Credentials에서 SSH 자격 증명을 선택하세요. Node를 제거해도 자격 증명은 유지됩니다.",
+    "noSSHCredentials": "먼저 Credentials에서 SSH 자격 증명을 만드세요.",
+    "agentVisibility": "Agent에 공개",
+    "agentVisibilityHint": "Agent 도구의 목록 조회와 관리를 허용합니다. 자격 증명 도구는 비밀 값을 반환하지 않습니다.",
+    "agentVisible": "Agent에 공개됨",
+    "agentHidden": "비공개",
+    "keepSecret": "비워 두면 저장된 값을 유지합니다.",
+    "sshNode": "SSH Node"
   },
   "files": {
     "title": "Files",
@@ -2686,7 +2793,8 @@
     "create": "Create",
     "discardTitle": "Discard unsaved changes?",
     "discardDescription": "Your changes have not been saved to the file.",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "openPreview": "미리보기 탭 열기"
   },
   "memoryLibrary": {
     "search": "기억 검색",
@@ -2746,12 +2854,16 @@
     "semanticMode": "벡터",
     "hybridMode": "하이브리드 · BM25 + 벡터",
     "searchEngine": "사용 방식: {{mode}}",
-    "fallback_disabled": "로컬 임베딩이 꺼져 있어 BM25를 사용했습니다.",
+    "fallback_disabled": "벡터 검색이 비활성화되어 BM25를 사용합니다.",
     "fallback_busy": "임베딩 작업이 진행 중이어서 BM25를 사용했습니다.",
     "fallback_lexical_only": "원문, 작업 상태 및 기록은 BM25로 검색합니다. 벡터는 활성 지식과 프로필을 대상으로 합니다.",
     "fallback_unavailable": "벡터 검색을 사용할 수 없어 BM25를 사용했습니다.",
     "searchDetails": "이유",
-    "indexPending": "벡터 색인이 완료되지 않았습니다. 색인된 내용만 표시됩니다. 다시 검색하면 색인이 계속됩니다."
+    "indexPending": "벡터 색인이 완료되지 않았습니다. 색인된 내용만 표시됩니다. 다시 검색하면 색인이 계속됩니다.",
+    "statusTitle": "색인 및 기억 정리",
+    "noTags": "태그가 없습니다.",
+    "resultsFor": "“{{query}}” 검색 결과",
+    "noMatches": "검색 조건에 맞는 기억이 없습니다."
   },
   "userQuestion": {
     "title": "확인할 사항",
@@ -2770,7 +2882,6 @@
     "remaining_other": "남은 질문 {{count}}개"
   },
   "features": {
-    "globalConversation": "Cirno",
     "projects": "프로젝트",
     "ordinaryConversations": "대화",
     "createProject": "프로젝트 만들기",
@@ -2819,7 +2930,8 @@
     "command": "명령",
     "runCommand": "실행",
     "close": "닫기",
-    "commandCompleted": "명령이 완료되었습니다."
+    "commandCompleted": "명령이 완료되었습니다.",
+    "removeNode": "Nodes에서 제거"
   },
   "inbox": {
     "title": "알림함",
@@ -2833,7 +2945,7 @@
     "empty": "알림이 없습니다",
     "loading": "알림을 불러오는 중",
     "retained": "읽음으로 표시해도 작업은 완료되지 않습니다.",
-    "muteHelp": "음소거하면 이 브라우저에서 해당 분류의 알림과 소리를 끕니다. 알림 기록은 유지됩니다. 브라우저 알림에는 전체 설정과 권한도 필요합니다.",
+    "muteHelp": "브라우저 알림 설정은 기기 간에 동기화됩니다. 음소거하면 해당 분류의 알림과 소리를 끄며 받은 알림 기록은 유지됩니다. 각 브라우저에서 알림 권한을 별도로 허용해야 합니다.",
     "muted": "음소거됨",
     "notify": "알림 켜기",
     "unread": "읽지 않음",
@@ -2850,7 +2962,6 @@
     },
     "kind": {
       "question": "질문",
-      "pairing": "접근 승인",
       "recovery": "대화 복구",
       "compaction": "컨텍스트 압축",
       "dream": "기억 정리",
@@ -2912,7 +3023,57 @@
       "connection_failed": "Cirno에 연결할 수 없습니다. 네트워크를 확인하세요.",
       "request_failed": "요청에 실패했습니다. 다시 시도하세요.",
       "incorrect_password": "현재 비밀번호가 올바르지 않습니다.",
-      "unauthorized": "다시 로그인하세요."
+      "unauthorized": "다시 로그인하세요.",
+      "invalid_router_handle": "Use 3–32 lowercase letters, digits or underscores, starting with a letter.",
+      "router_handle_taken": "Another conversation already uses this name.",
+      "router_unavailable": "The Router conversation is unavailable. Try again later."
+    },
+    "routerHandle": "Router @name",
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+  },
+  "themes": {
+    "title": "색상 테마",
+    "name": "테마 이름",
+    "newName": "나의 스노우",
+    "customize": "테마 만들기",
+    "syncHint": "각 테마에는 밝은 색상과 어두운 색상이 포함됩니다. 설정은 Cirno에 저장되고 기기 간에 동기화됩니다.",
+    "save": "테마 저장",
+    "edit": "테마 편집",
+    "remove": "테마 삭제",
+    "saveFailed": "설정을 저장하지 못했습니다.",
+    "contrast": "텍스트와 배경 및 패널의 대비를 높여 주세요.",
+    "colors": {
+      "background": "배경",
+      "surface": "탐색",
+      "panel": "패널",
+      "text": "텍스트",
+      "muted": "보조 텍스트",
+      "accent": "강조",
+      "border": "테두리"
     }
+  },
+  "conversationCatalog": {
+    "newProject": "새 프로젝트",
+    "projectName": "프로젝트 이름",
+    "search": "대화 및 프로젝트 검색",
+    "more": "더 보기",
+    "unfiled": "미분류 대화",
+    "move": "{{title}} 대화를 프로젝트로 이동",
+    "newInProject": "{{name}}에서 새 대화",
+    "renameProject": "{{name}} 이름 변경",
+    "deleteProject": "{{name}} 삭제",
+    "emptyProject": "이 프로젝트에 대화가 없습니다.",
+    "empty": "일치하는 대화가 없습니다.",
+    "deleteHelp": "프로젝트를 삭제합니다. 대화, 기록 및 파일은 유지됩니다.",
+    "create": "만들기",
+    "directory": "작업 디렉터리 (선택 사항)",
+    "sort": "대화 정렬",
+    "order": {
+      "updated_desc": "최근 업데이트순",
+      "created_desc": "최근 생성순",
+      "title_asc": "제목순",
+      "manual": "저장된 순서"
+    },
+    "projectActions": "프로젝트 {{name}} 작업"
   }
 }

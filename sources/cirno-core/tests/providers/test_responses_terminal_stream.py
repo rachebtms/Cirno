@@ -8,7 +8,7 @@ import httpx
 import pytest
 from openai import APIConnectionError, AsyncOpenAI
 
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.openai_responses import (
     ResponsesStreamCapture,
     consume_sdk_stream,

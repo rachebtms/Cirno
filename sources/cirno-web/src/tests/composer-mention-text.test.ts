@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { splitCapabilityMentionSegments } from "@/components/CliAppMentionText";
 import { composerCompositionSegments, composerMentionLabel, composerMentionText, editComposerMentionText, mentionTextOffset } from "@/lib/composer-mention-text";
-import type { CliAppInfo } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
 
 const apps = [
   ["linear", "Linear"], ["drawio", "Draw.io"], ["drive", "Google Drive"],

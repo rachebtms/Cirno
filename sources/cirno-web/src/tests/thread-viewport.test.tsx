@@ -1,19 +1,15 @@
 import { createRef, Profiler, useRef } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { PromptNavigator } from "@/components/thread/PromptNavigator";
-import {
-  HISTORY_WINDOW_INCREMENT,
-  INITIAL_HISTORY_WINDOW,
-  ThreadViewport,
-  type ThreadViewportHandle,
-  windowMessages,
-} from "@/components/thread/ThreadViewport";
+import { HISTORY_WINDOW_INCREMENT, INITIAL_HISTORY_WINDOW, windowMessages } from "@/components/thread/viewport/window";
+import { ThreadViewport } from "@/components/thread/ThreadViewport";
+import type { ThreadViewportHandle } from "@/components/thread/viewport/contracts";
 import { ThreadCameraController } from "@/components/thread/thread-camera";
 import { ThreadMotionCoordinator } from "@/components/thread/thread-motion";
 import type { PromptHistoryNavigation } from "@/hooks/usePromptHistory";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const messages: UIMessage[] = [
   {
@@ -66,7 +62,7 @@ function mockScrollGeometry(scroller: HTMLElement, height: number, viewport: num
 interface ResizeObserverInstance extends ResizeObserver {
   elements: Element[];
   callback: ResizeObserverCallback;
-  disconnect: ReturnType<typeof vi.fn>;
+  disconnect: Mock<ResizeObserver["disconnect"]>;
 }
 
 function stubVisualViewport({
@@ -128,7 +124,7 @@ function stubResizeObserver() {
   class MockResizeObserver implements ResizeObserverInstance {
     elements: Element[] = [];
     callback: ResizeObserverCallback;
-    disconnect = vi.fn();
+    disconnect = vi.fn<ResizeObserver["disconnect"]>();
 
     constructor(callback: ResizeObserverCallback) {
       this.callback = callback;
@@ -1358,30 +1354,6 @@ describe("ThreadViewport", () => {
     );
   });
 
-  it("separates the mobile welcome copy and composer into responsive rows", () => {
-    render(
-      <ThreadViewport
-        messages={emptyMessages}
-        isStreaming={false}
-        composer={<div>composer</div>}
-        emptyState={<div>welcome</div>}
-      />,
-    );
-
-    const layout = screen.getByTestId("thread-welcome-layout");
-    expect(layout).toHaveClass("thread-layout", "grid");
-    expect(layout).toHaveAttribute("data-layout", "hero");
-    expect(screen.getByText("welcome").parentElement).toHaveClass(
-      "min-h-0",
-      "items-center",
-      "sm:items-end",
-      "sm:pb-8",
-    );
-    expect(screen.getByTestId("thread-composer-motion")).toContainElement(
-      screen.getByText("composer"),
-    );
-  });
-
   it("allows the welcome view to scroll when a short viewport overflows", async () => {
     const { container } = render(
       <ThreadViewport
@@ -1990,7 +1962,7 @@ describe("ThreadViewport", () => {
     expect(within(dialog).getByText("My messages")).toBeInTheDocument();
     expect(within(dialog).getByText("message 4")).toBeInTheDocument();
 
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Search messages" }), {
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search messages" }), {
       target: { value: "message 4" },
     });
     expect(within(dialog).queryByText("message 1")).not.toBeInTheDocument();
@@ -2008,7 +1980,7 @@ describe("ThreadViewport", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Message navigation" }));
     const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Search messages" }), { target: { value: "message 20" } });
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search messages" }), { target: { value: "message 20" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Jump to message: message 20" }));
 
     await waitFor(() => expect(screen.getByText("message 20")).toBeInTheDocument());

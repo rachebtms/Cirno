@@ -82,5 +82,8 @@
   "tools.ssrf_whitelist",
   "tools.web.enable",
   "tools.web.use_proxy",
-  "tools.web.user_agent"
+  "tools.web.user_agent",
+  "server.uploads.max_file_mb",
+  "server.uploads.max_video_mb",
+  "server.uploads.max_total_mb"
 ]

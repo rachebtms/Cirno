@@ -5,9 +5,11 @@ import pytest
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import RuntimeModelChanged
-from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.config.models import ModelPresetConfig
 from cirno_core.sdk.assistant import Cirno
-from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.factory import ProviderSnapshot
 from cirno_core.sdk.types import SessionSnapshot
 from cirno_core.session.model_selection import (

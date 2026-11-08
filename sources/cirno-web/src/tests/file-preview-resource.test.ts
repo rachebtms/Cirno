@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFilePreviewResource } from "@/lib/file-preview-resource";
-import type { FilePreviewPayload } from "@/lib/types";
+import type { FilePreviewPayload } from "@/lib/contracts/files";
 
 const payload: FilePreviewPayload = { path: "notes.txt", display_path: "notes.txt", project_path: "/workspace", size: 3, content: "One", language: "text", truncated: false };
 

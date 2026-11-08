@@ -1,0 +1,21 @@
+[project]
+name = "cirno-memory"
+version = "0.2.0"
+description = "Disk-first evidence, BM25 retrieval, Dream receipts and optional embeddings"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["pydantic>=2.12.0,<3", "httpx[socks]>=0.28.0,<1", "filelock>=3.25.2"]
+
+[project.optional-dependencies]
+embedding = ["onnxruntime>=1.20,<2", "tokenizers>=0.21,<1", "numpy>=1.26,<3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cirno_memory"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "pyproject.toml", "LICENSE"]

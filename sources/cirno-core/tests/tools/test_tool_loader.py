@@ -70,7 +70,8 @@ def test_tool_context_defaults():
     assert ctx.bus is None
     assert ctx.subagent_manager is None
     assert ctx.cron_service is None
-    assert ctx.exec_session_manager is None
+    assert ctx.exec_session_manager is not None
+    assert ctx.exec_session_manager is not ToolContext(config=None, workspace="/tmp").exec_session_manager
     assert ctx.provider_snapshot_loader is None
     assert ctx.providers_config is None
     assert ctx.runtime_control is None
@@ -97,13 +98,15 @@ def test_discover_finds_concrete_tools():
     assert "MyTool" in class_names
     assert "SubagentTool" in class_names
     assert "ExecSessionTool" in class_names
+    assert sum(cls.__name__ == "FindFilesTool" for cls in discovered) == 1
+    assert sum(cls.__name__ == "GrepTool" for cls in discovered) == 1
 
 
 def test_discover_excludes_abstract_and_mcp():
     loader = ToolLoader()
     discovered = loader.discover()
     class_names = {cls.__name__ for cls in discovered}
-    assert "_FsTool" not in class_names
+    assert "FileTool" not in class_names
     assert "_SearchTool" not in class_names
     assert "MCPToolWrapper" not in class_names
     assert "MCPResourceWrapper" not in class_names
@@ -122,7 +125,7 @@ def test_loader_registers_exec_with_real_tools_config(tmp_path):
     from types import SimpleNamespace
 
     from cirno_core.agent.tools.registry import ToolRegistry
-    from cirno_core.config.schema import ToolsConfig
+    from cirno_core.config.tools import ToolsConfig
 
     ctx = ToolContext(
         config=ToolsConfig(),
@@ -145,9 +148,9 @@ def test_loader_registers_exec_with_real_tools_config(tmp_path):
 def test_loader_wires_shared_exec_session_manager(tmp_path):
     from types import SimpleNamespace
 
-    from cirno_core.agent.tools.exec_session import ExecSessionManager
     from cirno_core.agent.tools.registry import ToolRegistry
-    from cirno_core.config.schema import ToolsConfig
+    from cirno_core.config.tools import ToolsConfig
+    from cirno_core.processes.sessions import ExecSessionManager
 
     manager = ExecSessionManager()
     ctx = ToolContext(
@@ -178,7 +181,7 @@ def test_loader_wires_shared_exec_session_manager(tmp_path):
 def test_loader_preserves_caller_supplied_tool(tmp_path):
     from cirno_core.agent.tools.filesystem import ReadFileTool
     from cirno_core.agent.tools.registry import ToolRegistry
-    from cirno_core.config.schema import ToolsConfig
+    from cirno_core.config.tools import ToolsConfig
 
     tool = ReadFileTool(workspace=tmp_path / "custom-root")
     registry = ToolRegistry()
@@ -192,7 +195,7 @@ def test_loader_preserves_caller_supplied_tool(tmp_path):
     assert "read_file" not in registered
 
 
-# --- Task 4: _FsTool.create() ---
+# --- Task 4: FileTool.create() ---
 
 
 def test_fs_tool_create_builds_from_context():
@@ -278,7 +281,8 @@ def test_cron_tool_create():
 
 
 def test_exec_tool_config_cls():
-    from cirno_core.agent.tools.shell import ExecTool, ExecToolConfig
+    from cirno_core.agent.tools.shell import ExecTool
+    from cirno_core.agent.tools.shell_config import ExecToolConfig
     assert ExecTool.config_cls() is ExecToolConfig
     assert ExecTool.config_key == "exec"
 
@@ -294,8 +298,9 @@ def test_exec_tool_enabled():
 
 
 def test_exec_tool_create():
-    from cirno_core.agent.tools.shell import ExecTool, ExecToolConfig
-    from cirno_core.config.schema import ToolsConfig
+    from cirno_core.agent.tools.shell import ExecTool
+    from cirno_core.agent.tools.shell_config import ExecToolConfig
+    from cirno_core.config.tools import ToolsConfig
 
     config = ToolsConfig(exec=ExecToolConfig(
         max_runtime=120,
@@ -308,14 +313,16 @@ def test_exec_tool_create():
     tool = ExecTool.create(ctx)
 
     assert isinstance(tool, ExecTool)
-    assert tool.path_prepend == "/venv/bin"
-    assert tool._resolve_timeout(None) == 120
+    assert tool.preparation.config.path_prepend == "/venv/bin"
+    assert tool.preparation.resolve_timeout(None) == 120
     for name in ("max_runtime", "timeout"):
         assert tool.parameters["properties"][name]["maximum"] == 900
 
 
 def test_web_tools_config_cls():
-    from cirno_core.agent.tools.web import WebFetchTool, WebSearchTool, WebToolsConfig
+    from cirno_core.agent.tools.web.fetch import WebFetchTool
+    from cirno_core.agent.tools.web.search import WebSearchTool
+    from cirno_core.agent.tools.web_config import WebToolsConfig
     assert WebSearchTool.config_key == "web"
     assert WebSearchTool.config_cls() is WebToolsConfig
     assert WebFetchTool.config_key == "web"
@@ -323,7 +330,7 @@ def test_web_tools_config_cls():
 
 
 def test_web_tools_enabled():
-    from cirno_core.agent.tools.web import WebSearchTool
+    from cirno_core.agent.tools.web.search import WebSearchTool
     mock_config = MagicMock()
     mock_config.web.enable = True
     ctx = ToolContext(config=mock_config, workspace="/tmp")
@@ -333,7 +340,7 @@ def test_web_tools_enabled():
 
 
 def test_web_search_tool_create():
-    from cirno_core.agent.tools.web import WebSearchTool
+    from cirno_core.agent.tools.web.search import WebSearchTool
     mock_config = MagicMock()
     mock_config.web.enable = True
     mock_config.web.search = MagicMock()
@@ -345,7 +352,7 @@ def test_web_search_tool_create():
 
 
 def test_web_fetch_tool_create():
-    from cirno_core.agent.tools.web import WebFetchTool
+    from cirno_core.agent.tools.web.fetch import WebFetchTool
     mock_config = MagicMock()
     mock_config.web.enable = True
     mock_config.web.fetch = MagicMock()
@@ -396,7 +403,11 @@ def test_my_tool_requires_runtime_control():
 
 
 def test_mcp_wrappers_not_discoverable():
-    from cirno_core.agent.tools.mcp import MCPPromptWrapper, MCPResourceWrapper, MCPToolWrapper
+    from cirno_core.agent.tools.mcp.wrappers import (
+        MCPPromptWrapper,
+        MCPResourceWrapper,
+        MCPToolWrapper,
+    )
     assert MCPToolWrapper._plugin_discoverable is False
     assert MCPResourceWrapper._plugin_discoverable is False
     assert MCPPromptWrapper._plugin_discoverable is False
@@ -409,7 +420,7 @@ def test_loader_registers_builtin_tools():
     """Verify the loader produces the same tool set as the old _register_default_tools."""
     from cirno_core.agent.tools.loader import ToolLoader
     from cirno_core.agent.tools.registry import ToolRegistry
-    from cirno_core.agent.tools.shell import ExecToolConfig
+    from cirno_core.agent.tools.shell_config import ExecToolConfig
 
     mock_config = MagicMock()
     mock_config.exec = ExecToolConfig(max_runtime=60)

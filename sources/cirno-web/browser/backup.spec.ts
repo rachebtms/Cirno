@@ -1,9 +1,10 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 for (const locale of ["en", "zh-CN"]) for (const width of [390, 1280]) {
   test(`backup and Node details in ${locale} at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.addInitScript((language) => localStorage.setItem("cirno.locale", language), locale);
+    await seedPreviewPreferences(page, { language: locale });
     await page.goto("/browser/fixture.html?case=backup");
     const chinese = locale === "zh-CN";
     await expect(page.getByRole("checkbox", { name: "/data/cirno/state/cli/config/tea" })).toBeDisabled();

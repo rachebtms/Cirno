@@ -30,7 +30,7 @@ from cirno_core.sdk.assistant import (
     StreamEvent,
     StreamEventType,
 )
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RuntimeContextBlock,
@@ -316,7 +316,7 @@ async def test_run_exposes_attributes_to_context_provider_without_persisting_the
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.agent.tools.context import RequestContext
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     provider = _fake_provider("test-model")
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -363,7 +363,7 @@ async def test_persisted_turn_callback_is_best_effort_and_reads_display_safe_ses
     from cirno import SessionTurnPersisted
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     provider = _fake_provider("test-model")
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -459,7 +459,7 @@ async def test_ephemeral_run_does_not_invoke_persisted_turn_callback(tmp_path):
     from cirno import SessionTurnPersisted
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     provider = _fake_provider("test-model")
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -536,7 +536,7 @@ async def test_run_populates_tools_used_across_iterations(tmp_path):
     """tools_used collects every tool name fired across all iterations, in order."""
     from cirno_core.agent.hook import AgentHookContext
     from cirno_core.bus.events import OutboundMessage
-    from cirno_core.providers.base import ToolCallRequest
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -653,7 +653,7 @@ async def test_run_populates_observability_fields(tmp_path):
 async def test_run_ephemeral_still_captures_runner_observability(tmp_path):
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
@@ -921,7 +921,7 @@ async def test_run_user_hooks_still_fire_alongside_capture(tmp_path):
 async def test_concurrent_run_hooks_are_isolated_per_call(tmp_path):
     from cirno_core.agent.hook import AgentHook, AgentHookContext
     from cirno_core.bus.events import OutboundMessage
-    from cirno_core.providers.base import ToolCallRequest
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1225,7 +1225,7 @@ async def test_stream_rejects_multiple_model_selectors(tmp_path):
 async def test_run_streamed_emits_tool_events(tmp_path):
     from cirno_core.agent.hook import AgentHookContext
     from cirno_core.bus.events import OutboundMessage
-    from cirno_core.providers.base import ToolCallRequest
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     config_path = _write_config(tmp_path)
     bot = Cirno.from_config(config_path, workspace=tmp_path)
@@ -1378,7 +1378,7 @@ async def test_run_streamed_stream_events_is_single_consumer(tmp_path):
 @pytest.mark.asyncio
 async def test_sdk_capture_prefers_run_level_snapshot():
     from cirno_core.agent.hook import AgentHookContext, AgentRunHookContext, SDKCaptureHook
-    from cirno_core.providers.base import ToolCallRequest
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     hook = SDKCaptureHook()
     iter_messages = [{"role": "user", "content": "work"}]

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { parseQuotedUserMessage } from "@/lib/user-message-quote";
-import type { UIMessage, UserQuestion } from "@/lib/types";
+import type { UIMessage, UserQuestion } from "@/lib/contracts/messages";
 
 type AnswerState = { answer: string; status: UIMessage["deliveryStatus"] };
 type ReplyContext = { questions: UserQuestion[]; answers: Map<string, AnswerState>; send?: (question: UserQuestion, answer: string) => boolean | Promise<boolean> };
@@ -15,18 +15,31 @@ export function QuestionReplyProvider({ messages, send, children }: {
 }) {
   const [accepted, setAccepted] = useState(new Map<string, string>());
   const questions = useMemo(() => [...new Map(messages.filter(message => message.userQuestion).map(message => [message.userQuestion!.id, message.userQuestion!])).values()], [messages]);
-  const answers = useMemo(() => {
+  const historyAnswers = useMemo(() => {
     const result = new Map<string, AnswerState>();
     for (const message of messages) {
       if (message.role !== "user") continue;
       const quote = parseQuotedUserMessage(message.content);
       if (quote.questionId) result.set(quote.questionId, { answer: quote.content, status: message.deliveryStatus });
     }
+    return result;
+  }, [messages]);
+  useEffect(() => {
+    const confirmed = (id: string) => historyAnswers.has(id)
+      && !["sending", "failed"].includes(historyAnswers.get(id)?.status ?? "");
+    if ([...accepted.keys()].some(confirmed)) {
+      // Acknowledgements bridge optimistic delivery only. Once history owns
+      // the answer, rewinding that history must make the question pending again.
+      setAccepted(previous => new Map([...previous].filter(([id]) => !confirmed(id))));
+    }
+  }, [accepted, historyAnswers]);
+  const answers = useMemo(() => {
+    const result = new Map(historyAnswers);
     for (const [id, answer] of accepted) {
       if (result.get(id)?.status !== "failed") result.set(id, { answer, status: undefined });
     }
     return result;
-  }, [messages, accepted]);
+  }, [historyAnswers, accepted]);
   const submit: ReplyContext["send"] = useMemo(() => send ? async (question, answer) => {
     const delivered = await send(question, answer);
     if (delivered) setAccepted(previous => new Map(previous).set(question.id, answer));
@@ -57,7 +70,7 @@ export function UserQuestionCard({ question, header }: { question: UserQuestion;
   };
   return <section aria-label={t("userQuestion.title")} className="min-w-0 overflow-hidden rounded-prominent border border-input bg-settings-surface shadow-sm">
     {header ?? <div className="flex items-center gap-2 px-4 pt-4 text-xs text-muted-foreground"><CircleHelp className="size-4 shrink-0" aria-hidden />{t("userQuestion.title")}</div>}
-    <div className="max-h-[min(50dvh,28rem)] overflow-y-auto overscroll-contain px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+    <div className="max-h-[min(50dvh,28rem)] overflow-y-auto overscroll-contain px-4 pb-4 pt-3 @min-[640px]/cirno-tab:px-5 @min-[640px]/cirno-tab:pb-5">
     <p className="whitespace-pre-wrap break-words text-reading font-medium">{question.question}</p>
     {question.assumption && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{t("userQuestion.assumption", { assumption: question.assumption })}</p>}
     {answered ? <div className="mt-3 flex min-w-0 items-start gap-2 text-sm"><Check className="mt-0.5 size-4 shrink-0 text-emerald-500" aria-hidden /><div className="min-w-0"><p className="text-xs text-muted-foreground">{t("userQuestion.answered")}</p><p className="whitespace-pre-wrap break-words">{response.answer}</p></div></div>
@@ -99,7 +112,7 @@ export function UserQuestionQueue({ children, isStreaming = false, onStop }: {
     hadQuestions.current = Boolean(active);
   }, [active]);
   const count = t("userQuestion.remaining", { count: pending.length });
-  const header = <div className="flex min-w-0 items-center gap-2 border-b border-border/60 px-3 py-2 sm:px-4">
+  const header = <div className="flex min-w-0 items-center gap-2 border-b border-border/60 px-3 py-2 @min-[640px]/cirno-tab:px-4">
     <CircleHelp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
     <span className="min-w-0 flex-1 text-sm font-medium" role="status">{count}</span>
     {isStreaming && onStop && <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label={t("thread.composer.stop")} onClick={onStop}><Square className="size-3.5" aria-hidden /></Button>}

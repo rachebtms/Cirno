@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from cirno_core.providers.anthropic_provider import AnthropicProvider
-from cirno_core.providers.base import LLMResponse
+from cirno_core.providers.contracts import LLMResponse
 
 _LONG_REQUEST_MESSAGE = (
     "Streaming is required for operations that may take longer than 10 minutes. "

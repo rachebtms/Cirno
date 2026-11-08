@@ -338,7 +338,7 @@ def test_model_preset_accepts_explicit_default_name() -> None:
 def test_model_presets_rejects_reserved_default_name() -> None:
     import pytest
 
-    with pytest.raises(ValueError, match="model_preset name 'default' is reserved"):
+    with pytest.raises(ValueError, match="model_preset ID 'default' is reserved"):
         Config.model_validate({
             "modelPresets": {
                 "default": {"model": "custom-model"},

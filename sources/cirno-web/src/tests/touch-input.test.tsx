@@ -2,8 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
 import postcss from "postcss";
-import tailwindcss from "tailwindcss";
-import loadConfig from "tailwindcss/loadConfig";
+import tailwindcss from "@tailwindcss/postcss";
 import { describe, expect, it } from "vitest";
 
 import { Input } from "@/components/ui/input";
@@ -25,11 +24,8 @@ describe("touch form typography", () => {
   });
 
   it("emits the baseline after compact utilities, only for opted-in touch fields", async () => {
-    const config = loadConfig(resolve(process.cwd(), "tailwind.config.js"));
     const source = readFileSync(resolve(process.cwd(), "src/globals.css"), "utf8");
-    const result = await postcss([tailwindcss({ ...config, content: [{
-      raw: 'class="touch-text-input text-xs text-sm text-ui-body text-[13px] text-[19px]"',
-    }] })]).process(source, { from: undefined });
+    const result = await postcss([tailwindcss()]).process(source, { from: resolve(process.cwd(), "src/globals.css") });
     let baseline = -1;
     let index = 0;
     const compact: number[] = [];

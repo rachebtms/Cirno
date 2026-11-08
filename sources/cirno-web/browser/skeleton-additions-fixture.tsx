@@ -1,16 +1,19 @@
 import { useLayoutEffect, useState } from "react";
 
-import { ChatList } from "@/components/ChatList";
-import { SettingsPage } from "@/components/settings/SettingsPage";
-import type { SettingsSectionKey } from "@/components/settings/contracts";
-import { SkillsCatalogSettings } from "@/components/settings/SkillsCatalogSettings";
-import { AutomationsSettings } from "@/components/settings/system/AutomationsSettings";
-import { RUNTIME_CONFIG_FIELDS } from "@/components/settings/system/runtime-config-fields";
-import { useSettingsController } from "@/components/settings/useSettingsController";
-import { SessionInfoPopoverView } from "@/components/thread/SessionInfoPopoverView";
+import { ConversationCatalogPreview } from "@/dev/fixtures/ConversationCatalogPreview";
+import { SettingsPage } from "@/features/settings/SettingsPage";
+import type { SettingsSectionKey } from "@/features/settings/contracts";
+import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
+import { AutomationsPage } from "@/features/automations";
+import { RUNTIME_CONFIG_FIELDS } from "@/features/settings/system/runtime-config-fields";
+import { useSettingsController } from "@/features/settings/useSettingsController";
+import { SessionAutomationsDialog } from "@/features/automations/session/SessionAutomationsDialog";
 import { settings } from "@/dev/gallery/settings";
 import { setAppLanguage } from "@/i18n";
-import type { ChatSummary, SessionAutomationJob, SettingsPayload, SkillDetail } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
+import type { SettingsPayload } from "@/lib/contracts/settings";
+import type { SkillDetail } from "@/lib/contracts/skills";
 
 const noop = () => {};
 const now = Date.now();
@@ -30,9 +33,9 @@ const skill: SkillDetail = {
 };
 const previewSettings: SettingsPayload = {
   ...settings,
-  version: { current: "0.1.4", commit: null },
+  version: { current: "0.2.0", commit: null },
   advanced: { ...settings.advanced, exec_max_runtime_limit: 86400 },
-  model_presets: [{ name: "primary", model: "openai-codex/gpt-6.1-sol", provider: "openai", resolved_provider: "openai", active: true, is_default: false,
+  model_presets: [{ id: "primary", name: "primary", model: "openai-codex/gpt-6.1-sol", provider: "openai", resolved_provider: "openai", active: true, is_default: false,
     max_tokens: 8192, context_window_tokens: 500_000, temperature: 0.1, reasoning_effort: "max" }],
   model_call_order: ["primary"],
   runtime_config: Object.fromEntries(RUNTIME_CONFIG_FIELDS.map((field) => [field.path,
@@ -49,17 +52,17 @@ export function installSkeletonPreviewApi() {
   const fetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-    if (url.origin !== location.origin || !url.pathname.startsWith("/api/")) return fetch(input, init);
+    if (url.origin !== location.origin || !url.pathname.startsWith("/v0/")) return fetch(input, init);
     if ((init?.method ?? "GET") !== "GET") return Response.json({ error: "Read-only preview" }, { status: 403 });
-    if (url.pathname.startsWith("/api/webui/skills/")) {
+    if (url.pathname.startsWith("/v0/webui/skills/")) {
       if (detailState === "loading") await new Promise<void>(() => {});
       return detailState === "error" ? Response.json({ error: "Preview read failed" }, { status: 503 }) : Response.json(skill);
     }
     const bodies: Record<string, unknown> = {
-      "/api/settings": previewSettings, "/api/settings/usage": { usage: null },
-      "/api/webui/automations": { jobs }, "/api/settings/cirno-features": { features: [], enabled_count: 0, requires_restart: false },
-      "/api/settings/cli-apps": { apps: [], installed_count: 0 }, "/api/settings/mcp-presets": { presets: [], installed_count: 0 },
-      "/api/settings/api-service": { installed: false, running: false, managed: false, host: "127.0.0.1", port: 8900, timeout: 120, endpoint: "http://127.0.0.1:8900/v1", command: "cirno serve" },
+      "/v0/settings": previewSettings, "/v0/settings/usage": { usage: null },
+      "/v0/webui/automations": { jobs }, "/v0/settings/cirno-features": { features: [], enabled_count: 0, requires_restart: false },
+      "/v0/settings/cli-apps": { apps: [], installed_count: 0 }, "/v0/settings/mcp-presets": { presets: [], installed_count: 0 },
+      "/v0/settings/api-service": { installed: false, running: false, managed: false, host: "127.0.0.1", port: 8900, timeout: 120, endpoint: "http://127.0.0.1:8900/v1", command: "cirno serve" },
     };
     return Response.json(bodies[url.pathname] ?? {});
   };
@@ -107,7 +110,6 @@ function SkeletonSurface() {
   const surface = params.get("surface") ?? "chats";
   const state = params.get("state") ?? "loaded";
   const section = (params.get("section") ?? "appearance") as SettingsSectionKey;
-  const density = params.has("compact") ? "compact" : "comfortable";
   const dark = params.has("dark");
   useLayoutEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
   const controller = useSettingsController({ initialSection: section, initialSettings: previewSettings, onModelNameChange: noop });
@@ -124,15 +126,16 @@ function SkeletonSurface() {
           automationsError: state === "error" ? "Preview read failed" : null,
         },
       }}
-        themePreference={dark ? "dark" : "light"} showSidebar mainNavigationExpanded={false} onChangeTheme={noop} onBackToChat={noop}
-        skills={empty ? [] : [skill]} skillsLoading={loading && empty} skillsError={state === "error"} isRestarting={false} hostChromeInset={false} /></div>
+        themePreference={dark ? "dark" : "light"} showSidebar onChangeTheme={noop} onBackToChat={noop}
+        skills={empty ? [] : [skill]} skillsLoading={loading && empty} skillsError={state === "error"} isRestarting={false} /></div>
         : <main className="settings-grid mx-auto w-full p-4" style={surface === "automations" ? { maxWidth: 960 } : undefined}>
-          {surface === "chats" ? <div style={{ height: 440, width: 280, maxWidth: "100%" }} className="bg-sidebar"><ChatList sessions={empty ? [] : sessions} activeKey={null} loading={loading} density={density}
-            onSelect={noop} onRequestDelete={noop} onTogglePin={noop} onToggleArchive={noop} onRequestRename={async () => {}} /></div>
-            : surface === "automations" ? <AutomationsSettings payload={empty ? null : { jobs }} loading={loading} filter="all" actionKey={null} error={state === "error" ? "Preview read failed" : null}
+          {surface === "chats" ? <div style={{ height: 620, width: 800, maxWidth: "100%" }} className="border border-border bg-background">
+            <ConversationCatalogPreview key={state} sessions={empty ? [] : sessions} loading={loading} />
+          </div>
+            : surface === "automations" ? <AutomationsPage payload={empty ? null : { jobs }} loading={loading} filter="all" actionKey={null} error={state === "error" ? "Preview read failed" : null}
               onFilterChange={noop} onAction={noop} onRequestEdit={noop} onRequestDelete={noop} />
-              : surface === "skill-detail" ? <SkillsCatalogSettings skills={[skill]} />
-                : surface === "session-jobs" ? <SessionInfoPopoverView title="Project review" jobs={empty ? [] : jobs} loading={loading} loadFailed={state === "error"} now={now}
+              : surface === "skill-detail" ? <SkillsLibrary skills={[skill]} />
+                : surface === "session-jobs" ? <SessionAutomationsDialog title="Project review" jobs={empty ? [] : jobs} loading={loading} loadError={state === "error" ? "Fixture task discovery failed" : null} now={now}
                   onAction={async () => jobs} onEdit={async () => jobs} />
                   : null}
         </main>}

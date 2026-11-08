@@ -1,10 +1,11 @@
+from cirno_core.providers.chat_completions.errors import error_response
+from cirno_core.providers.errors import is_billing_error
 from types import SimpleNamespace
 
 import pytest
 
 from cirno_core.providers.anthropic_provider import AnthropicProvider
-from cirno_core.providers.base import LLMProvider, LLMResponse
-from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.contracts import LLMResponse
 
 
 def _fake_response(
@@ -33,7 +34,7 @@ def test_openai_handle_error_extracts_structured_metadata() -> None:
     )
     err.body = {"error": {"type": "rate_limit_exceeded", "code": "rate_limit_exceeded"}}
 
-    response = OpenAICompatProvider._handle_error(err)
+    response = error_response(err)
 
     assert response.finish_reason == "error"
     assert response.error_status_code == 409
@@ -47,7 +48,7 @@ def test_openai_handle_error_marks_timeout_kind() -> None:
     class FakeTimeoutError(Exception):
         pass
 
-    response = OpenAICompatProvider._handle_error(FakeTimeoutError("timeout"))
+    response = error_response(FakeTimeoutError('timeout'))
 
     assert response.finish_reason == "error"
     assert response.error_kind == "timeout"
@@ -92,4 +93,4 @@ def test_anthropic_handle_error_marks_connection_kind() -> None:
 ])
 def test_is_arrearage_response(expected: bool, kwargs: dict) -> None:
     response = LLMResponse(finish_reason="error", **{"content": "boom", **kwargs})
-    assert LLMProvider.is_arrearage_response(response) is expected
+    assert is_billing_error(response) is expected

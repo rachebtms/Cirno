@@ -1,0 +1,182 @@
+@keyframes settings-restart-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-restart-pending { animation: settings-restart-breathe 3s ease-in-out infinite; }
+  .settings-restart-pending:hover, .settings-restart-pending:focus-visible { animation: none; }
+}
+
+@keyframes preset-name-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  35% {
+    transform: translateX(-2px);
+  }
+
+  70% {
+    transform: translateX(2px);
+  }
+}
+
+/* Settings grid: 4px baseline; 720px frame; 12 columns / 24px gutter on
+   desktop, 4 columns / 16px gutter on mobile. Rows share the same tracks. */
+@layer components {
+  .settings-grid {
+    --settings-columns: 4;
+    --settings-gutter: 16px;
+    --settings-margin: 16px;
+    --settings-inset: 16px;
+    --settings-module-gap: 20px;
+    container-type: inline-size;
+    max-inline-size: 720px;
+    padding-inline: var(--settings-margin);
+  }
+  .settings-grid.settings-feature-page {
+    --settings-margin: 0.75rem;
+    max-inline-size: calc(var(--content-column-width) + 2 * var(--settings-margin));
+  }
+  .settings-grid.settings-feature-page.settings-automations-grid {
+    max-inline-size: calc(60rem + 2 * var(--settings-margin));
+  }
+  .settings-stack > :not([hidden]) ~ :not([hidden]) {
+    margin-block-start: var(--settings-module-gap, 20px);
+  }
+  .settings-section-title {
+    margin-block-end: 20px;
+    padding-inline: var(--settings-inset, 16px);
+    line-height: 20px;
+  }
+  .settings-section-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding-inline: var(--settings-inset, 16px);
+  }
+  .settings-section-heading > .settings-section-title { margin: 0; padding: 0; }
+  .settings-stack > .settings-section-heading + :not([hidden]) { margin-block-start: 20px; }
+  .control-layout {
+    display: flex;
+    height: 2.25rem;
+    align-items: center;
+    gap: 0.5rem;
+    border-width: 1px;
+    padding-inline: 0.75rem;
+  }
+  .settings-row, .settings-footer, .settings-disclosure-row {
+    display: grid;
+    grid-template-columns: repeat(var(--settings-columns, 4), minmax(0, 1fr));
+    column-gap: var(--settings-gutter, 16px);
+    row-gap: 12px;
+    align-items: center;
+    padding: 12px var(--settings-inset, 16px);
+    min-block-size: 60px;
+  }
+  .settings-row > *, .settings-footer > * { grid-column: 1 / -1; min-inline-size: 0; }
+  .settings-disclosure-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .settings-control { display: flex; align-items: center; max-inline-size: 100%; }
+  .settings-control > * { max-inline-size: 100%; }
+  .settings-control input, .settings-control textarea { max-inline-size: 100%; text-align: start; }
+  .settings-control input[type="number"] { font-variant-numeric: tabular-nums; }
+  .settings-footer { min-block-size: 60px; }
+  .settings-footer-auto { min-block-size: 40px; padding-block: 8px; row-gap: 0; }
+  .settings-footer-auto > :first-child { grid-column: 1 / -1; font-size: 12px; }
+  .settings-footer-auto > :nth-child(2):empty { display: none; }
+  .settings-row:has(> .settings-control > :is([role="switch"], [data-skeleton-switch])) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 24px;
+  }
+  .settings-row:has(> .settings-control > :is([role="switch"], [data-skeleton-switch])) > :first-child { grid-column: 1; }
+  .settings-row:has(> .settings-control > :is([role="switch"], [data-skeleton-switch])) > :nth-child(2) { grid-column: 2; }
+  .settings-list-row, .settings-list-inset { padding-inline: var(--settings-inset, 16px); }
+  .settings-list-row { min-block-size: 60px; border-radius: var(--radius-control); }
+  .settings-list-row:focus-visible { outline: none; }
+  .icon-action[aria-pressed="true"], .icon-action[data-state="open"] {
+    color: hsl(var(--cirno-foreground));
+  }
+  .icon-action[aria-pressed="true"]::after, .icon-action[data-state="open"]::after {
+    content: "";
+    position: absolute;
+    bottom: 3px;
+    left: calc(50% - 4px);
+    width: 8px;
+    height: 2px;
+    border-radius: 1px;
+    background-color: currentColor;
+    pointer-events: none;
+  }
+  .icon-action svg {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .icon-action [data-product-icon="settings"] > path {
+      transform-box: view-box;
+      transform-origin: center;
+      transform: rotate(0deg);
+      transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .icon-action:not(:disabled):hover [data-product-icon="settings"] > path {
+      transform: rotate(90deg);
+    }
+  }
+  .activity-current-trace { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .activity-current > path:first-child { opacity: 0.35; }
+    .activity-current-trace {
+      display: block;
+      stroke-dasharray: 16 84;
+      animation: activity-current-flow var(--activity-animation);
+    }
+  }
+  @keyframes activity-current-flow {
+    0% { stroke-dashoffset: 16; opacity: 0; }
+    50% { opacity: 1; }
+    100% { stroke-dashoffset: 116; opacity: 0; }
+  }
+  .quiet-control, .settings-hover {
+    --control-hover-fill: hsl(var(--cirno-foreground) / 0.045);
+    --control-active-fill: hsl(var(--cirno-foreground) / 0.085);
+  }
+  .dark .quiet-control, .dark .settings-hover {
+    --control-hover-fill: rgb(255 255 255 / 0.065);
+    --control-active-fill: rgb(255 255 255 / 0.105);
+  }
+  @media (hover: hover) {
+    .quiet-control:hover, .settings-hover:hover {
+      background-color: var(--control-hover-fill);
+    }
+  }
+  .quiet-control:active, .settings-hover:active,
+  .quiet-control[data-state="open"], .quiet-control[aria-pressed="true"] {
+    background-color: var(--control-active-fill);
+  }
+  .settings-editor { padding: 16px var(--settings-inset, 16px); }
+  @container cirno-tab (min-width: 640px) {
+    .settings-grid { --settings-margin: 32px; }
+    .settings-grid.settings-feature-page { --settings-margin: 1rem; }
+  }
+  @container (min-width: 640px) {
+    .settings-grid .settings-row, .settings-grid .settings-footer {
+      --settings-columns: 12;
+      --settings-gutter: 24px;
+    }
+    .settings-grid .settings-control { justify-content: flex-end; }
+    .settings-grid .settings-row > :first-child,
+    .settings-grid .settings-footer > :first-child { grid-column: 1 / 8; }
+    .settings-grid .settings-row > :nth-child(2),
+    .settings-grid .settings-footer > :nth-child(2) { grid-column: 8 / -1; }
+    .settings-grid .settings-footer-auto > :first-child { grid-column: 1 / -1; }
+    .settings-grid .settings-row:has(:is(.segmented-control, .settings-version-actions)) > :first-child { grid-column: 1 / 7; }
+    .settings-grid .settings-row:has(:is(.segmented-control, .settings-version-actions)) > :nth-child(2) { grid-column: 7 / -1; }
+  }
+  @container cirno-tab (min-width: 768px) {
+    .settings-grid { --settings-inset: 24px; }
+  }
+}

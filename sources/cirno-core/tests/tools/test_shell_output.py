@@ -6,10 +6,10 @@ import re
 import sys
 
 import pytest
-
-from cirno_core.agent.tools.exec_session import ExecSessionManager, ExecSessionTool
+from cirno_core.agent.tools.exec_session import ExecSessionTool
 from cirno_core.agent.tools.shell import ExecTool
-from cirno_core.agent.tools.shell_output import ShellOutputFilter
+from cirno_core.processes.output import ShellOutputFilter
+from cirno_core.processes.sessions import ExecSessionManager
 
 
 @pytest.mark.parametrize("chunk_size", [1, 4096])
@@ -112,7 +112,7 @@ def test_tool_environment_keeps_managed_paths_but_not_credentials(monkeypatch):
     monkeypatch.setenv("TEA_CONFIG_DIR", "/state/cli/config/tea")
     monkeypatch.setenv("XDG_CONFIG_HOME", "/state/cli/config")
     monkeypatch.setenv("OPENAI_API_KEY", "private-test-key")
-    env = ExecTool()._build_env()
+    env = ExecTool().preparation.environment.build()
     assert env["VIRTUAL_ENV"] == "/state/tools/python"
     assert env["TEA_CONFIG_DIR"] == "/state/cli/config/tea"
     assert env["XDG_CONFIG_HOME"] == "/state/cli/config"

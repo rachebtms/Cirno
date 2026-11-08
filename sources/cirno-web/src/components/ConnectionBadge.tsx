@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
-import type { ConnectionStatus } from "@/lib/types";
+import type { ConnectionStatus } from "@/lib/contracts/transport";
 
 const COPY: Record<ConnectionStatus, { color: string }> = {
   idle: { color: "text-muted-foreground" },

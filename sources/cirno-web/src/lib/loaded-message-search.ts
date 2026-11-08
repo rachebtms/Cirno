@@ -1,6 +1,6 @@
 import { projectWebuiThreadMessages } from "./thread-display-projection";
 import type { LoadedThreadMessages } from "./thread-message-cache";
-import type { UIMessage } from "./types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 // Message objects and arrays are immutable; eviction also releases these weak entries.
 const visibleMessages = new WeakMap<UIMessage[], UIMessage[]>();

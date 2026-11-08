@@ -4,6 +4,12 @@ import i18n from "@/i18n";
 import { resolveModelRequestFailureCopy } from "@/lib/model-request-failure";
 
 describe("model request failure copy", () => {
+  it("directs incomplete setup to models without suggesting another retry", () => {
+    const copy = resolveModelRequestFailureCopy({ errorKind: "configuration", attempts: 1 }, i18n.t);
+    expect(copy.title).toBe("Choose a model first");
+    expect(copy.body).toContain("Settings → Models");
+    expect(copy.body).not.toContain("attempts");
+  });
   it("maps every sanitized provider error category to a specific cause", () => {
     const titles = ["authentication", "billing", "connection", "timeout", "rate_limit", "server", "unknown"].map(
       (errorKind) => resolveModelRequestFailureCopy({ errorKind }, i18n.t).title,

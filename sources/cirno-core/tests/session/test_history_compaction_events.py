@@ -1,0 +1,36 @@
+"""Compaction explanations shown live must survive durable replay."""
+
+import pytest
+
+from cirno_core.session.presentation_history import fact_from_record, record_from_fact
+
+
+@pytest.mark.parametrize(
+    "phase,details",
+    [
+        (
+            "succeeded",
+            {
+                "context_tokens": 4721,
+                "context_window_tokens": 131072,
+                "context_estimated": True,
+                "evidence_checkpoint": True,
+            },
+        ),
+        ("failed", {"error": "Provider disconnected before producing a checkpoint"}),
+    ],
+)
+def test_compaction_fact_preserves_progress_and_failure_details(phase, details):
+    record = {
+        "event": "context_compaction",
+        "chat_id": "research",
+        "turn_id": "long-task",
+        "compaction_id": "checkpoint-17",
+        "phase": phase,
+        "reason": "context_pressure",
+        **details,
+    }
+    replay = record_from_fact(fact_from_record(record), "websocket:research")
+    for field, value in details.items():
+        assert replay[field] == value
+    assert replay["reason"] == "context_pressure"

@@ -2,7 +2,7 @@
 import pytest
 
 from cirno_core.config.home import get_home_path
-from cirno_core.memory.repository import MemoryRepository
+from cirno_memory.repository import MemoryRepository
 from cirno_core.session.display_history import HistoryFact, HistoryKind
 from cirno_core.session.manager import SessionManager
 

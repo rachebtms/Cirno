@@ -1,4 +1,4 @@
-import type { ChatSummary } from "./types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
 
 const WEBSOCKET_SESSION_KEY_PREFIX = "websocket:";
 

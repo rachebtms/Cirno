@@ -1,6 +1,6 @@
 """Tests for tool hint formatting (cirno_core.utils.tool_hints)."""
 
-from cirno_core.providers.base import ToolCallRequest
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.tool_hints import format_tool_hints
 
 

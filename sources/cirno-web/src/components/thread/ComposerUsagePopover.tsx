@@ -81,10 +81,6 @@ export function ComposerUsagePopover({
     && context.contextTokens >= 0
     && Number.isFinite(context.contextWindowTokens)
     && (context.contextWindowTokens ?? 0) > 0;
-  if (!hasContext && normalizedRounds.length === 0 && !error && !pending) {
-    return null;
-  }
-
   const contextPercentage = hasContext
     ? Math.min(
         100,
@@ -273,7 +269,7 @@ export function ComposerUsagePopover({
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={contextPercentage}
-                  className="mt-2 h-1 overflow-hidden rounded-full bg-muted"
+                  className="mt-2 h-1 overflow-hidden rounded-full bg-surface-secondary"
                 >
                   <div
                     className={cn(
@@ -286,7 +282,8 @@ export function ComposerUsagePopover({
                   />
                 </div>
               </>
-            ) : <p className="text-xs text-muted-foreground">{error || t("thread.composer.context.unavailable")}</p>}
+            ) : <p className="text-xs text-muted-foreground">{error || t(normalizedRounds.length
+              ? "thread.composer.context.unavailable" : "settings.usage.unavailable")}</p>}
             {context?.estimated ? <p className="mt-2 text-xs text-muted-foreground">{t("thread.composer.context.estimated")}</p> : null}
 
             {normalizedRounds.length > 0 ? (
@@ -398,7 +395,7 @@ export function ComposerUsagePopover({
                                 aria-label={detailLabel}
                                 data-testid="round-usage-bar"
                                 className={cn(
-                                  "flex w-full max-w-7 flex-col overflow-hidden rounded-t-[3px] bg-muted",
+                                  "flex w-full max-w-7 flex-col overflow-hidden rounded-t-[3px] bg-surface-secondary",
                                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                   // Let touch users hit the entire column, even when a
                                   // round's proportional bar is less than a pixel high.

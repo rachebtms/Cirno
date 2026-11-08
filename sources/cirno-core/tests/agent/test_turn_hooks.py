@@ -3,7 +3,7 @@ from loguru import logger
 
 from cirno_core.agent.hook import AgentHook, AgentHookContext, AgentTurnHookContext
 from cirno_core.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
-from cirno_core.providers.base import ToolCallRequest
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.progress_events import output_events
 
 

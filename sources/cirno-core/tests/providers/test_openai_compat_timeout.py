@@ -1,7 +1,7 @@
 from unittest.mock import patch, sentinel
 
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import ProviderSpec
+from cirno_core.providers.catalog.contracts import ProviderSpec
 
 
 def _assert_openai_compat_timeout(timeout) -> None:

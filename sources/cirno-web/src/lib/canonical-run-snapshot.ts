@@ -1,6 +1,7 @@
 import type { CanonicalRunSnapshot } from "./cirno-client";
 import { projectThreadEvents } from "./thread-event-projection";
-import type { UIMessage, WebuiThreadPersistedPayload } from "./types";
+import type { UIMessage } from "@/lib/contracts/messages";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 export function completedAssistantTurnIds(messages: UIMessage[]): string[] {
   return Array.from(new Set(messages.flatMap((message) => (

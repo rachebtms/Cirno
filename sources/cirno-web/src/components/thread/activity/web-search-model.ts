@@ -2,7 +2,7 @@ import { implementationToolName } from "@/lib/tool-names";
 import type { TFunction } from "i18next";
 
 import { canonicalToolTrace, formatToolCallTrace } from "@/lib/tool-traces";
-import type { ToolProgressEvent } from "@/lib/types";
+import type { ToolProgressEvent } from "@/lib/contracts/activity";
 
 import { redactActivityText, safeActivityDetail, toolActivityDetails } from "./activity-text";
 import { displayWebHost, formatCompactWebUrl, parseSafeActivityHttpUrl } from "./web-url";

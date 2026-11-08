@@ -14,7 +14,7 @@ from cirno_core.providers.azure_openai_provider import (
     AzureOpenAIProvider,
     _AzureTokenProvider,
 )
-from cirno_core.providers.base import LLMResponse, ProviderCallContext
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
 
 # ---------------------------------------------------------------------------
 # Init & validation
@@ -190,7 +190,7 @@ def test_init_missing_key_without_azure_identity_raises(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     with patch("builtins.__import__", side_effect=fake_import):
-        with pytest.raises(RuntimeError, match=r"cirno plugins enable azure"):
+        with pytest.raises(RuntimeError, match=r"Settings → Providers"):
             AzureOpenAIProvider(api_key="", api_base="https://res.openai.azure.com")
 
 

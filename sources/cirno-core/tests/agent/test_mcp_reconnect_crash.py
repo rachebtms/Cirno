@@ -1,3 +1,7 @@
+import cirno_core.agent.tools.mcp.connector as mcp_connector
+import cirno_core.agent.tools.mcp.http as mcp_http
+import cirno_core.agent.tools.mcp.provider as mcp_provider
+
 """Reproduction test for HKUDS/cirno#4302.
 
 This test starts a real FastMCP streamable-http server in a child process,
@@ -18,11 +22,10 @@ import time
 
 import httpx
 import pytest
-
-from cirno_core.agent.tools import mcp as mcp_module
-from cirno_core.agent.tools.mcp import MCPProvider, MCPToolWrapper
+from cirno_core.agent.tools.mcp.provider import MCPProvider
+from cirno_core.agent.tools.mcp.wrappers import MCPToolWrapper
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.config.schema import MCPServerConfig
+from cirno_core.config.tools import MCPServerConfig
 from cirno_core.security import network as security_network
 
 # Leave enough headroom for reconnect handshakes on slower CI hosts; each test
@@ -136,15 +139,11 @@ def allow_loopback_mcp_urls(monkeypatch: pytest.MonkeyPatch):
     class TestPinnedDNSAsyncTransport(security_network.PinnedDNSAsyncTransport):
         _resolver_lock = asyncio.Lock()
 
-    monkeypatch.setattr(mcp_module, "PinnedDNSAsyncTransport", TestPinnedDNSAsyncTransport)
-    monkeypatch.setattr(
-        mcp_module,
-        "validate_url_target",
+    monkeypatch.setattr(mcp_http, "PinnedDNSAsyncTransport", TestPinnedDNSAsyncTransport)
+    monkeypatch.setattr(mcp_connector, "validate_url_target",
         lambda url, *, allow_loopback=False: (True, ""),
     )
-    monkeypatch.setattr(
-        mcp_module,
-        "resolve_url_target",
+    monkeypatch.setattr(mcp_http, "resolve_url_target",
         lambda url, *, allow_loopback=False: (True, "", ("127.0.0.1",)),
     )
     monkeypatch.setattr(
@@ -152,14 +151,10 @@ def allow_loopback_mcp_urls(monkeypatch: pytest.MonkeyPatch):
         "resolve_url_target",
         lambda url, *, allow_loopback=False: (True, "", ("127.0.0.1",)),
     )
-    monkeypatch.setattr(
-        mcp_module,
-        "env_proxy_applies_to_url",
+    monkeypatch.setattr(mcp_http, "env_proxy_applies_to_url",
         lambda url: False,
     )
-    monkeypatch.setattr(
-        mcp_module,
-        "httpx_env_proxy_mounts",
+    monkeypatch.setattr(mcp_http, "httpx_env_proxy_mounts",
         lambda: {},
     )
 
@@ -218,14 +213,14 @@ async def test_mcp_reconnect_during_shutdown_does_not_crash(
 
     reconnect_started = asyncio.Event()
     finish_reconnect = asyncio.Event()
-    real_connect = mcp_module.connect_mcp_servers
+    real_connect = mcp_provider.connect_mcp_servers
 
     async def gated_connect(*args, **kwargs):
         reconnect_started.set()
         await finish_reconnect.wait()
         return await real_connect(*args, **kwargs)
 
-    monkeypatch.setattr(mcp_module, "connect_mcp_servers", gated_connect)
+    monkeypatch.setattr(mcp_provider, "connect_mcp_servers", gated_connect)
     call_task = asyncio.create_task(tool.execute(name="second"))
     await asyncio.wait_for(reconnect_started.wait(), timeout=5)
     close_task = asyncio.create_task(provider.aclose())

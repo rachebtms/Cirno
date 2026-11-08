@@ -7,17 +7,20 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.web.search import WebSearchTool
+from cirno_core.agent.tools.web_config import WebSearchConfig
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from ddgs.ddgs import DDGS
 from ddgs.engines.wikipedia import Wikipedia
 from ddgs.exceptions import TimeoutException
 from ddgs.http_client import HttpClient
 
-from agent.runner_helpers import make_run_spec
-from cirno_core.agent.runner import AgentRunner
-from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.agent.tools.web import WebSearchTool
-from cirno_core.config.schema import AgentDefaults, WebSearchConfig
-from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from sources.development.testing.runtime import make_run_spec
 
 
 @pytest.mark.asyncio

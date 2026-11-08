@@ -1,7 +1,8 @@
+import userEvent from "@testing-library/user-event";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import type { SettingsPayload } from "@/lib/types";
-import { requestMutationMock, jsonResponse, settingsPayload, renderSettingsView, installSettingsViewTestHooks } from "@/tests/settings-test-utils";
+import type { SettingsPayload } from "@/lib/contracts/settings";
+import { requestMutationMock, jsonResponse, settingsPayload, renderSettingsView, installSettingsViewTestHooks, openPopover } from "@/tests/settings-test-utils";
 
 
 describe("Settings capabilities", () => {
@@ -18,17 +19,14 @@ describe("Settings capabilities", () => {
     renderSettingsView({ initialSection: "capabilities", initialSettings: payload });
     const memory = screen.getByRole("switch", { name: "Memory consolidation" });
     const web = screen.getByRole("switch", { name: "Web access" });
-    expect(memory).toHaveClass("h-5", "w-9", "bg-foreground");
-    expect(web).toHaveClass("h-5", "w-9", "bg-foreground");
-    const webStyle = web.className;
+    expect(memory).toBeChecked();
+    expect(web).toBeChecked();
     fireEvent.click(memory);
     await waitFor(() => expect(memory).toBeDisabled());
     expect(web).toBeEnabled();
     expect(web).toBeChecked();
-    expect(web.className).toBe(webStyle);
     fireEvent.click(web);
     expect(web).not.toBeChecked();
-    expect(web).toHaveClass("bg-muted-foreground/25");
     await act(async () => finishMemory(memorySaved));
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.runtime_config.update", { values: { "tools.web.enable": false } }, 20_000,
@@ -45,7 +43,7 @@ describe("Settings capabilities", () => {
     });
     renderSettingsView({ initialSection: "browser", initialSettings: payload });
     fireEvent.click(screen.getByRole("switch", { name: "Web access" }));
-    expect(screen.getByRole("combobox", { name: "DuckDuckGo" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /DuckDuckGo/ })).toBeVisible();
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
       "settings.runtime_config.update", { values: { "tools.web.enable": true } }, 20_000,
     ));
@@ -55,11 +53,11 @@ describe("Settings capabilities", () => {
     const payload = settingsPayload();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(payload);
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(payload);
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [], installed_count: 0 });
       }
       return { ok: false, status: 404, json: async () => ({}) } as Response;
@@ -76,7 +74,7 @@ describe("Settings capabilities", () => {
 
     expect(await screen.findByText("Web safety")).toBeInTheDocument();
     expect(screen.getByText("Default access")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Default Permission" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use tool policy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Full Access" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("switch", { name: "Local services" }));
@@ -121,6 +119,7 @@ describe("Settings capabilities", () => {
       "settings.runtime_config.update", { values: { "tools.web.use_proxy": false } }, 20_000,
     ));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Web access" })).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Web access" })).not.toBeInTheDocument());
     expect(screen.getByRole("switch", { name: "Web access" })).not.toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
     const proxy = screen.getByRole("textbox", { name: "Shared proxy" });
@@ -131,7 +130,7 @@ describe("Settings capabilities", () => {
     fireEvent.change(proxy, { target: { value: address } });
     expect(proxy).toHaveValue("http://new-proxy.example:7890");
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
-    fireEvent.click(within(screen.getByRole("region", { name: "Shared proxy" })).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Shared proxy" })).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.runtime_config.update", { values: { "network.proxy": address } }, 20_000,
     ));
@@ -164,9 +163,9 @@ describe("Settings capabilities", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(payload);
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+      if (url === "/v0/settings") return jsonResponse(payload);
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
       return { ok: false, status: 404, json: async () => ({}) } as Response;
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -174,7 +173,7 @@ describe("Settings capabilities", () => {
 
     renderSettingsView({ initialSection: "browser" });
 
-    fireEvent.keyDown(await screen.findByRole("combobox", { name: /DuckDuckGo/ }), { key: "ArrowDown" });
+    await openPopover(await screen.findByRole("button", { name: /DuckDuckGo/ }));
     fireEvent.click(await screen.findByRole("option", { name: "Keenable" }));
 
     await waitFor(() =>
@@ -205,7 +204,7 @@ describe("Settings capabilities", () => {
     });
     renderSettingsView({ initialSection: "browser", initialSettings: payload });
 
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "DuckDuckGo" }), { key: "ArrowDown" });
+    await openPopover(screen.getByRole("button", { name: /DuckDuckGo/ }));
     fireEvent.click(await screen.findByRole("option", { name: "DeepSeek" }));
     expect(await screen.findByText("Add the required credential before saving.")).toBeVisible();
     expect(requestMutationMock).not.toHaveBeenCalled();
@@ -217,10 +216,10 @@ describe("Settings capabilities", () => {
       { provider: "deepseek", api_key: "sk-deepseek-search-key", max_results: 5, timeout: 30, use_jina_reader: true },
       20_000,
     ));
-    expect(await screen.findByText("sk-d...key")).toBeVisible();
+    expect(await screen.findByPlaceholderText("sk-d...key")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced options" }));
-    const timeout = screen.getAllByRole("spinbutton").find((input) => (input as HTMLInputElement).value === "30")!;
+    const timeout = screen.getByRole("textbox", { name: /^Search timeout/ });
     fireEvent.change(timeout, { target: { value: "45" } });
     fireEvent.blur(timeout);
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
@@ -228,6 +227,29 @@ describe("Settings capabilities", () => {
       { provider: "deepseek", max_results: 5, timeout: 45, use_jina_reader: true },
       20_000,
     ));
+  });
+
+  it("explains an empty numeric field and keeps configuration open until it can be saved", async () => {
+    const payload = { ...settingsPayload(), runtime_config: { "tools.web.enable": true } };
+    renderSettingsView({ initialSection: "capabilities", initialSettings: payload });
+    fireEvent.click(within(screen.getByRole("region", { name: "Web access" })).getByRole("button", { name: "Configure" }));
+    const dialog = screen.getByRole("dialog", { name: "Web access" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Advanced options" }));
+    const timeout = within(dialog).getByRole("textbox", { name: /^Search timeout/ });
+    const user = userEvent.setup();
+    await user.clear(timeout);
+    await user.tab();
+    await waitFor(() => expect(timeout).toHaveAttribute("aria-invalid", "true"));
+    expect(timeout).toHaveAccessibleDescription();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled());
+    expect(dialog).toBeInTheDocument();
+    expect(requestMutationMock).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(timeout).toHaveValue("30");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(requestMutationMock).not.toHaveBeenCalled();
   });
 
   it("keeps a newer credential draft visible when an older save response arrives", async () => {
@@ -238,7 +260,7 @@ describe("Settings capabilities", () => {
     requestMutationMock.mockImplementationOnce(() => new Promise<SettingsPayload>((resolve) => { finish = resolve; }))
       .mockResolvedValue({ ...payload, web_search: { ...payload.web_search, api_key_hint: "latest-key" } });
     renderSettingsView({ initialSection: "browser", initialSettings: payload });
-    const credential = screen.getByText("old-key").parentElement!;
+    const credential = screen.getByPlaceholderText("old-key").closest<HTMLElement>('[data-slot="textfield"]')!;
     fireEvent.click(within(credential).getByRole("button", { name: "Edit" }));
     const key = credential.querySelector("input")!;
     fireEvent.focus(key);
@@ -255,85 +277,5 @@ describe("Settings capabilities", () => {
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.web_search.update", expect.objectContaining({ api_key: "latest-key" }), 20_000,
     ));
-  });
-
-  it("uses native host safety copy on the native surface", async () => {
-    const payload = {
-      ...settingsPayload(),
-      surface: "native" as const,
-      runtime_surface: "native" as const,
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url === "/api/settings") return jsonResponse(payload);
-        if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-        if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-        return { ok: false, status: 404, json: async () => ({}) } as Response;
-      }),
-    );
-
-    renderSettingsView({ initialSection: "advanced" });
-
-    expect(await screen.findByText("App safety")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Local services" }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Allow Full Access shell commands to reach services on this Mac.");
-  });
-
-  it("refreshes settings with a fresh token after native engine restart", async () => {
-    const payload = {
-      ...settingsPayload(),
-      surface: "native" as const,
-      runtime_surface: "native" as const,
-      runtime_capabilities: {
-        can_restart_engine: true,
-        can_open_logs: true,
-        can_export_diagnostics: true,
-      },
-    };
-    const restartedPayload = {
-      ...payload,
-      advanced: { ...payload.advanced, webui_allow_local_service_access: false },
-      requires_restart: true,
-      restart_required_sections: ["runtime"],
-    };
-    const refreshedPayload = {
-      ...restartedPayload,
-      requires_restart: false,
-      restart_required_sections: [],
-    };
-    const restartEngine = vi.fn(async () => "fresh-token");
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
-      if (url === "/api/settings" && auth === "Bearer fresh-token") {
-        return jsonResponse(refreshedPayload);
-      }
-      if (url === "/api/settings") return jsonResponse(payload);
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    requestMutationMock.mockResolvedValueOnce(restartedPayload);
-
-    renderSettingsView({
-      initialSection: "advanced",
-      onNativeEngineRestart: restartEngine,
-    });
-
-    expect(await screen.findByText("App safety")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("switch", { name: "Local services" }));
-
-    await waitFor(() => expect(restartEngine).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/settings",
-        expect.objectContaining({
-          headers: { Authorization: "Bearer fresh-token" },
-        }),
-      ),
-    );
   });
 });

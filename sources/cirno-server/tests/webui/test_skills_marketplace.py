@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import io
 import zipfile
@@ -6,7 +7,6 @@ from typing import Any
 
 import httpx
 import pytest
-
 from cirno_server.webui.skills_marketplace import (
     SkillsMarketplaceError,
     _valid_skillhub_download_url,
@@ -583,6 +583,7 @@ async def test_install_marketplace_skill_rejects_symlinked_skills_root(
     outside = tmp_path.parent / (tmp_path.name + "-outside")
     workspace.mkdir(parents=True)
     outside.mkdir(parents=True)
+    (tmp_path / "home").mkdir()
     try:
         (tmp_path / "home" / "skills").symlink_to(outside, target_is_directory=True)
     except OSError as exc:
@@ -605,3 +606,43 @@ async def test_install_marketplace_skill_rejects_symlinked_skills_root(
 def _select_test_home(tmp_path, monkeypatch):
     """Keep these Home-file scenarios independent of the developer instance."""
     monkeypatch.setattr("cirno_core.config.home._instance_path", tmp_path)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["search", "trending"])
+async def test_partial_marketplace_failure_is_reported_with_healthy_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str,
+) -> None:
+    async def unavailable(*_args, **_kwargs):
+        raise SkillsMarketplaceError("upstream service timed out", status=502)
+
+    async def healthy(*_args, **_kwargs):
+        return {"skills": [{"id": "healthy-skill"}], "install_supported": True}
+
+    prefix = "_search" if operation == "search" else "_trending"
+    monkeypatch.setattr(f"cirno_server.webui.skills_marketplace.{prefix}_skills_sh_skills", unavailable)
+    monkeypatch.setattr(f"cirno_server.webui.skills_marketplace.{prefix}_skillhub_skills", healthy)
+    payload = (await search_marketplace_skills("research", tmp_path) if operation == "search"
+               else await trending_marketplace_skills(tmp_path))
+    assert payload["skills"] == [{"id": "healthy-skill"}]
+    assert payload["warnings"] == [{"provider": "skills_sh", "message": "upstream service timed out"}]
+    monkeypatch.setattr(f"cirno_server.webui.skills_marketplace.{prefix}_skillhub_skills", unavailable)
+    with pytest.raises(SkillsMarketplaceError, match="skills.sh: upstream service timed out; SkillHub:"):
+        if operation == "search":
+            await search_marketplace_skills("research", tmp_path)
+        else:
+            await trending_marketplace_skills(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_individual_marketplace_cancellation_is_propagated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def cancelled(*_args, **_kwargs):
+        raise asyncio.CancelledError
+
+    async def healthy(*_args, **_kwargs):
+        return {"skills": [], "install_supported": True}
+
+    monkeypatch.setattr("cirno_server.webui.skills_marketplace._search_skills_sh_skills", cancelled)
+    monkeypatch.setattr("cirno_server.webui.skills_marketplace._search_skillhub_skills", healthy)
+    with pytest.raises(asyncio.CancelledError):
+        await search_marketplace_skills("research", tmp_path)

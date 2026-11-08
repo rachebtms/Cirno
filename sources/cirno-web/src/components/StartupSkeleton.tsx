@@ -1,21 +1,13 @@
-import type { CSSProperties } from "react";
-
 export type StartupSurface = "chat" | "settings" | "skills" | "apps" | "channels" | "automations" | "remote";
 
 /** Also inlined in index.html: keep document startup independent of app modules. */
 export function readStartupLayout() {
   let hash = window.location.hash.slice(1);
-  let sidebarExpanded = true;
-  let sidebarWidth = 272;
   try {
     if ((!hash || hash === "/" || hash === "/new")
       && Date.now() - Number(localStorage.getItem("cirno-webui.restartStartedAt") || 0) < 300_000) {
       hash = (localStorage.getItem("cirno-webui.restartRoute") || hash).replace(/^#/, "");
     }
-    const stored = localStorage.getItem("cirno-webui.sidebar");
-    sidebarExpanded = stored === null || stored === "1";
-    const width = Number(localStorage.getItem("cirno-webui.sidebar.width"));
-    if (Number.isFinite(width) && width >= 220) sidebarWidth = Math.min(480, width);
   } catch {
     // Storage can be unavailable in private browsing; use the shell's defaults.
   }
@@ -29,14 +21,12 @@ export function readStartupLayout() {
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const calendarWeeks = Math.ceil(((firstDay.getDay() + 6) % 7 + days) / 7);
-  return { surface, section, sidebarExpanded, sidebarWidth, calendarWeeks, existingChat: /^\/(chat|temporary)\/.+/.test(path) };
+  return { surface, section, calendarWeeks, existingChat: /^\/(chat|temporary)\/.+/.test(path) };
 }
 
 interface StartupSkeletonProps {
   surface?: StartupSurface;
   section?: string;
-  sidebarExpanded?: boolean;
-  sidebarWidth?: number;
   existingChat?: boolean;
   calendarWeeks?: number;
   embedded?: boolean;
@@ -49,25 +39,29 @@ function Block({ className = "" }: { className?: string }) {
 
 /** One markup/CSS contract for the HTML first paint and React's loading boundaries. */
 export function StartupSkeleton({
-  surface = "chat", section = "overview", sidebarExpanded = true, sidebarWidth = 272,
-  existingChat = false, calendarWeeks = 5, embedded = false, label = "Loading cirno…",
+  surface = "chat", section = "overview",
+  existingChat = false, calendarWeeks = 5, embedded = false, label = "Loading Cirno…",
 }: StartupSkeletonProps) {
   const Root = embedded ? "section" : "main";
   return (
     <Root className="startup-shell" aria-busy="true" data-startup-surface={surface}
-      data-startup-section={section} data-sidebar-expanded={sidebarExpanded} data-existing-chat={existingChat}
-      data-calendar-weeks={calendarWeeks} data-embedded={embedded}
-      style={{ "--startup-sidebar-width": `${sidebarExpanded ? sidebarWidth : 56}px` } as CSSProperties}>
+      data-startup-section={section} data-existing-chat={existingChat}
+      data-calendar-weeks={calendarWeeks} data-embedded={embedded}>
       <span className="startup-status" role="status" data-boot-copy>{label}</span>
       <div className="startup-navigation" aria-hidden="true">
-        <Block className="startup-nav-brand" />
-        {Array.from({ length: 7 }, (_, index) => <div key={index} className="startup-nav-row"><Block className="startup-nav-icon" /><Block className="startup-nav-label" /></div>)}
+        <div className="startup-nav-items">
+          {Array.from({ length: 9 }, (_, index) => <div key={index} className="startup-nav-row"><Block className="startup-nav-icon" /></div>)}
+        </div>
+        <div className="startup-nav-utilities">
+          {[0, 1].map(index => <div key={index} className="startup-nav-row"><Block className="startup-nav-icon" /></div>)}
+        </div>
       </div>
       <div className="startup-content" aria-hidden="true">
+        <div className="startup-workspace-tabs"><Block /></div>
         <div className="startup-chat">
           <div className="startup-chat-header">
             <div className="startup-header-leading"><div className="startup-header-menu"><Block /></div><Block className="startup-header-title" /></div>
-            <div className="startup-header-actions"><div><Block /></div><div><Block /></div></div>
+            <div className="startup-header-actions"><div><Block /></div><div><Block /></div><div><Block /></div><div><Block /></div></div>
           </div>
           <div className="startup-chat-viewport">
             <div className="startup-chat-layout">

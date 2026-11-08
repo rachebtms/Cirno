@@ -1,0 +1,27 @@
+.models-settings { display:flex; flex-direction:column; gap:1rem; }
+.models-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.5rem; }
+.model-preset-list { display:flex; flex-direction:column; gap:.75rem; }
+.model-preset-card { padding:0; }
+.model-preset-row { display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:.375rem; padding:.75rem; }
+.model-preset-open { display:flex; flex:1; min-width:0; justify-content:flex-start; height:auto; min-height:3rem; padding:.375rem; gap:.75rem; }
+.model-preset-identity { display:flex; flex-direction:column; gap:.25rem; align-items:flex-start; min-width:0; flex:1; }
+.model-preset-identity > span:first-child { font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.model-preset-meta { display:flex; flex-wrap:wrap; gap:.5rem; color:var(--muted); font-size:.75rem; max-width:100%; overflow-wrap:anywhere; white-space:normal; text-align:left; }
+.model-preset-order { display:flex; }
+.model-preset-drag { touch-action:none; cursor:grab; }
+.model-preset-unconfigured { flex-basis:100%; font-size:.8125rem; color:var(--warning); margin-left:3rem; }
+.model-order-saving { display:flex; gap:.5rem; font-size:.8125rem; color:var(--muted); }
+.model-preset-dialog { max-height:calc(100dvh - 2rem); overflow:hidden; display:flex; flex-direction:column; }
+.model-preset-form { display:flex; flex-direction:column; min-height:0; }
+.model-preset-fields { display:flex; flex-direction:column; gap:1rem; }
+.model-advanced-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.model-catalog-field { display:flex; flex-direction:column; gap:.5rem; }
+@container cirno-tab (max-width:480px) { .model-preset-row { padding:.5rem; } .model-preset-order { flex-basis:100%; justify-content:flex-end; } .model-advanced-fields { grid-template-columns:1fr; } }
+
+.model-catalog-popover { max-height:min(28rem,60dvh); overflow:auto; }
+.model-catalog-feedback { margin:.375rem; }
+.model-catalog-feedback [data-slot="alert-content"] { min-width:0; }
+.model-catalog-error { white-space:pre-wrap; overflow-wrap:anywhere; font-size:.75rem; }
+
+.model-catalog-popover { max-width:calc(100vw - 1.5rem); }
+.model-catalog-option { display:flex; flex-direction:column; gap:.125rem; min-width:0; overflow-wrap:anywhere; }

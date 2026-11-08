@@ -1,0 +1,7 @@
+.terminal-screen { display:flex; flex:1; flex-direction:column; min-height:0; min-width:0; background:var(--background); color:var(--foreground); }
+.terminal-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; padding:.625rem .75rem; border-bottom:1px solid var(--border); flex-shrink:0; }
+.terminal-toolbar .select { width:11rem; max-width:100%; }
+.terminal-directory { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.75rem; color:var(--muted); }
+.terminal-hint { padding:1.25rem; color:var(--muted); font-size:.875rem; }
+.terminal-canvas { min-height:0; flex:1; overflow:hidden; padding:.5rem; background:var(--background); color:var(--foreground); caret-color:var(--accent); }
+.terminal-screen .alert { flex-shrink:0; border-radius:0; white-space:pre-wrap; overflow-wrap:anywhere; }

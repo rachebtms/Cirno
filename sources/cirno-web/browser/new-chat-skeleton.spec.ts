@@ -4,9 +4,7 @@ const cases = [
   { name: "phone", width: 390, height: 844, touch: true, extra: "" },
   { name: "reported viewport", width: 946, height: 936, touch: false, extra: "" },
   { name: "desktop", width: 1440, height: 936, touch: false, extra: "" },
-  { name: "sidebar rail", width: 1440, height: 936, touch: false, extra: "&collapsed" },
-  { name: "custom sidebar", width: 1440, height: 936, touch: false, extra: "&sidebarWidth=384" },
-  { name: "compact desktop composer", width: 1024, height: 936, touch: false, extra: "&sidebarWidth=480" },
+  { name: "compact desktop composer", width: 1024, height: 936, touch: false, extra: "" },
   { name: "wide desktop", width: 1920, height: 1080, touch: false, extra: "" },
 ];
 
@@ -26,12 +24,8 @@ for (const c of cases) for (const locale of ["en", "zh-CN"]) {
   test.describe(`${c.name} ${locale} new chat`, () => {
     test.use({ viewport: { width: c.width, height: c.height }, hasTouch: c.touch, reducedMotion: "reduce" });
     test("aligns the document skeleton with the real welcome, composer and header", async ({ page }) => {
-      await page.addInitScript((language) => {
-        Math.random = () => 0;
-        localStorage.setItem("cirno.locale", language);
-      }, locale);
-      await page.route("**/api/commands", (route) => route.fulfill({ json: { commands: [] } }));
-      const url = `/browser/fixture.html?case=new-chat-skeleton${c.extra}${locale === "zh-CN" ? "&dark" : ""}`;
+      await page.route("**/v0/commands", (route) => route.fulfill({ json: { commands: [] } }));
+      const url = `/browser/fixture.html?case=new-chat-skeleton&lang=${locale}${c.extra}${locale === "zh-CN" ? "&dark" : ""}`;
       await page.goto(url);
       await expect(page.locator(".thread-composer-surface")).toBeVisible();
       await page.evaluate(async () => { await document.fonts.ready; });
@@ -45,6 +39,7 @@ for (const c of cases) for (const locale of ["en", "zh-CN"]) {
         input: await box(page.locator(".thread-composer-input")),
         footer: await box(page.locator(".thread-composer-footer")),
         greeting: await box(page.getByTestId("hero-greeting")),
+        cameraScroll: await page.locator(".thread-viewport-frame").evaluate((element) => element.scrollTop),
         workspaceRow: await box(page.locator(".thread-composer-meta")),
         workspaceControl: await box(page.locator(".thread-composer-workspace")),
       };
@@ -59,10 +54,13 @@ for (const c of cases) for (const locale of ["en", "zh-CN"]) {
       await expect(controls).toHaveCount(loaded.controls.length);
       for (let i = 0; i < loaded.controls.length; i++) sameBox(await box(controls.nth(i)), loaded.controls[i]);
       const greeting = await box(page.locator(".startup-welcome-line"));
-      if (c.width < 640) expect(Math.abs(greeting.y + greeting.height / 2 - loaded.greeting.y - loaded.greeting.height / 2)).toBeLessThanOrEqual(1);
-      else expect(Math.abs(greeting.y + greeting.height - loaded.greeting.y - loaded.greeting.height)).toBeLessThanOrEqual(1);
+      // Compare document positions: initial composer focus can scroll the live camera.
+      // Fitted greeting fonts round to Chromium's 1/64 CSS-pixel layout unit.
+      const loadedGreetingY = loaded.greeting.y + loaded.cameraScroll;
+      if (c.width < 640) expect(Math.abs(greeting.y + greeting.height / 2 - loadedGreetingY - loaded.greeting.height / 2)).toBeLessThanOrEqual(1 / 64);
+      else expect(Math.abs(greeting.y + greeting.height - loadedGreetingY - loaded.greeting.height)).toBeLessThanOrEqual(1 / 64);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-      await expect(page.getByRole("status")).toHaveText("Loading cirno…");
+      await expect(page.getByRole("status")).toHaveText("Loading Cirno…");
     });
   });
 }

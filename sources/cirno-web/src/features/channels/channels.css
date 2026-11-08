@@ -1,0 +1,360 @@
+.channel-settings {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.channel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.channel-toolbar > .textfield {
+  flex: 1;
+  min-width: min(100%, 14rem);
+}
+.channel-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 0.75rem;
+}
+.channel-group-heading {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 0.625rem;
+}
+.channel-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.channel-open.button {
+  min-width: 0;
+  flex: 1;
+  height: auto;
+  justify-content: flex-start;
+  padding: 0.25rem;
+  white-space: normal;
+  text-align: start;
+}
+.channel-open > span:last-child {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.channel-open strong {
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+.channel-open > span > span {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.channel-open [data-failed="true"] {
+  color: var(--danger);
+}
+.channel-error {
+  display: flex;
+  align-items: start;
+  gap: 0.5rem;
+}
+.channel-error > .alert {
+  flex: 1;
+  min-width: 0;
+}
+.channel-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.channel-dialog-heading {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: start;
+}
+.channel-dialog-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.channel-dialog-controls > .modal__close-trigger {
+  position: static;
+}
+.channel-dialog .modal__body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.channel-help {
+  display: grid;
+  gap: 0.625rem;
+  max-width: min(22rem, 80vw);
+  padding: 0.5rem;
+}
+.channel-help > a {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.channel-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+}
+.channel-placeholder span {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--surface-tertiary);
+}
+.channel-placeholder > span:first-child {
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+}
+.channel-placeholder > div {
+  display: grid;
+  gap: 0.5rem;
+  flex: 1;
+}
+.channel-placeholder > div > span {
+  height: 0.75rem;
+  width: 65%;
+}
+.channel-placeholder > div > span + span {
+  width: 40%;
+}
+.channel-placeholder > span:last-child {
+  width: 2.5rem;
+  height: 1.25rem;
+  border-radius: 999px;
+}
+.channel-setup-form,
+.channel-fields,
+.channel-field-groups,
+.channel-advanced {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.channel-setup-heading,
+.channel-setup-identity,
+.channel-save-state {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.channel-setup-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.channel-setup-identity h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.channel-save-state,
+.channel-setup-hint {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.channel-save-state:empty {
+  display: none;
+}
+.channel-text-field,
+.channel-advanced,
+.channel-choice-field {
+  min-width: 0;
+}
+.channel-text-field > .button {
+  margin-top: 0.375rem;
+}
+.channel-json-field {
+  font-family: var(--font-mono);
+  resize: vertical;
+  min-height: 7rem;
+}
+.channel-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+.channel-switch-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  min-height: 2.75rem;
+  width: 100%;
+}
+.channel-switch-content > [data-slot="label"] {
+  flex: 1;
+  min-width: 0;
+}
+.channel-secret-action,
+.channel-setup-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.channel-secret-action > span {
+  flex: 1;
+  min-width: 6rem;
+  font-size: 0.875rem;
+}
+.channel-setup-actions > .interface-toggle {
+  flex: 1;
+  min-width: 10rem;
+}
+.channel-setup-helpers,
+.channel-presets > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.channel-presets legend {
+  margin-bottom: 0.625rem;
+  font-size: 0.875rem;
+}
+.channel-validation {
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+}
+.channel-validation header,
+.channel-validation > p {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.channel-validation header > span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.channel-validation ul {
+  display: grid;
+  gap: 0.75rem;
+}
+.channel-validation li {
+  display: flex;
+  align-items: start;
+  gap: 0.625rem;
+}
+.channel-validation li > svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+.channel-validation li[data-status="fail"] > svg {
+  color: var(--danger);
+}
+.channel-validation li[data-status="pass"] > svg {
+  color: var(--success);
+}
+.channel-validation li p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+.channel-validation a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  color: var(--accent);
+}
+.channel-manual-connect {
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+.channel-manual-connect code {
+  padding: 0.75rem;
+  background: var(--surface-secondary);
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.channel-manual-connect .button {
+  justify-self: start;
+}
+.channel-setup-missing,
+.channel-plugin-loading {
+  display: grid;
+  gap: 1rem;
+}
+.channel-field-group {
+  min-width: 0;
+}
+.channel-field-group > legend:not(.sr-only) {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.channel-credential-alternatives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.channel-setup-panel {
+  display: grid;
+  min-width: 0;
+  gap: 1.25rem;
+}
+.channel-instances {
+  display: grid;
+  gap: 1rem;
+}
+.channel-instance-heading,
+.channel-instance-identity,
+.channel-instance-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.channel-instance-heading {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+.channel-instance-identity {
+  flex: 1;
+  min-width: 10rem;
+}
+.channel-instance-identity > div:last-child {
+  min-width: 0;
+}
+.channel-instance-identity h4 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.channel-instance-identity span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.channel-instance-editor {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  min-width: 0;
+}
+.channel-instance-editor > .button {
+  justify-self: start;
+}

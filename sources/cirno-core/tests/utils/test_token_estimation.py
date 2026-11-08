@@ -4,13 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from cirno_core.utils import helpers, token_encoding
-from cirno_core.utils.helpers import (
-    estimate_message_tokens,
-    estimate_prompt_tokens,
-    estimate_prompt_tokens_chain,
-    truncate_text_to_tokens,
-)
+from cirno_core.utils import token_estimation as helpers, token_encoding
+from cirno_core.utils.token_estimation import estimate_message_tokens, estimate_prompt_tokens, estimate_prompt_tokens_chain
+from cirno_core.utils.text import truncate_text_to_tokens
 
 
 class _NoCounterProvider:
@@ -49,7 +45,7 @@ def test_provider_counter_does_not_initialize_fallback(monkeypatch):
             assert model == "provider-specific-model"
             return 1234, "provider-local"
 
-    monkeypatch.setattr(helpers, "_get_token_encoding", forbidden)
+    monkeypatch.setattr(token_encoding, "get_token_encoding", forbidden)
     assert estimate_prompt_tokens_chain(
         Provider(), "provider-specific-model", [{"role": "user", "content": "hi"}],
     ) == (1234, "provider-local")
@@ -80,9 +76,10 @@ def test_estimate_prompt_tokens_chain_falls_back_when_provider_counter_fails() -
 def test_estimate_prompt_tokens_uses_conservative_fallback_when_tiktoken_fails(
     monkeypatch,
 ) -> None:
+    original_encoding = token_encoding.get_token_encoding()
     monkeypatch.setattr(
-        helpers,
-        "_get_token_encoding",
+        token_encoding,
+        "get_token_encoding",
         lambda: (_ for _ in ()).throw(RuntimeError("encoding unavailable")),
     )
 
@@ -95,9 +92,8 @@ def test_estimate_prompt_tokens_uses_conservative_fallback_when_tiktoken_fails(
         messages,
     )
 
-    encoding = token_encoding.get_token_encoding()
-    assert encoding is not None
-    actual_tokens = len(encoding.encode(content)) + 4
+    assert original_encoding is not None
+    actual_tokens = len(original_encoding.encode(content)) + 4
     assert tokens == len(content.encode("utf-8")) + 4
     assert tokens >= actual_tokens
     assert chain_tokens == tokens
@@ -106,8 +102,8 @@ def test_estimate_prompt_tokens_uses_conservative_fallback_when_tiktoken_fails(
 
 def test_estimate_message_tokens_uses_utf8_byte_fallback(monkeypatch) -> None:
     monkeypatch.setattr(
-        helpers,
-        "_get_token_encoding",
+        token_encoding,
+        "get_token_encoding",
         lambda: (_ for _ in ()).throw(RuntimeError("encoding unavailable")),
     )
     content = "🙂你" * 100
@@ -119,8 +115,8 @@ def test_estimate_message_tokens_uses_utf8_byte_fallback(monkeypatch) -> None:
 
 def test_truncate_text_to_tokens_uses_utf8_byte_budget_fallback(monkeypatch) -> None:
     monkeypatch.setattr(
-        helpers,
-        "_get_token_encoding",
+        token_encoding,
+        "get_token_encoding",
         lambda: (_ for _ in ()).throw(RuntimeError("encoding unavailable")),
     )
 
@@ -166,7 +162,8 @@ def test_concurrent_prompt_estimates_cache_both_tool_separator_counts(monkeypatc
                     barrier.wait(timeout=5)
             return list(text.encode("utf-8"))
 
-    monkeypatch.setattr(helpers, "_get_token_encoding", Encoding)
+    monkeypatch.setattr(token_encoding, "get_token_encoding", lambda: encoding)
+    encoding = Encoding()
     messages = [{"role": "user", "content": "hello"}]
     with ThreadPoolExecutor(max_workers=2) as pool:
         empty = pool.submit(estimate_prompt_tokens, [], tools)
@@ -203,3 +200,25 @@ def test_estimate_prompt_tokens_recomputes_when_tool_items_change(monkeypatch) -
     after_tools = "\n" + json.dumps(tools, ensure_ascii=False)
     assert before_tools in fake_encoding.encoded
     assert after_tools in fake_encoding.encoded
+
+
+def test_tool_token_count_changes_after_in_place_schema_edit():
+    tools = [{"type": "function", "function": {"name": "demo", "description": "short"}}]
+    first = estimate_prompt_tokens([], tools)
+    tools[0]["function"]["description"] = "long description " * 100
+    assert estimate_prompt_tokens([], tools) > first
+
+
+def test_tool_cache_does_not_reuse_counts_for_a_different_tokenizer(monkeypatch):
+    class Encoding:
+        def __init__(self, size):
+            self.size = size
+
+        def encode_ordinary(self, text):
+            return [0] * self.size
+
+    tools = [{"type": "function", "function": {"name": "demo"}}]
+    monkeypatch.setattr(token_encoding, "_encoding", Encoding(3))
+    assert estimate_prompt_tokens([], tools) == 3
+    monkeypatch.setattr(token_encoding, "_encoding", Encoding(7))
+    assert estimate_prompt_tokens([], tools) == 7

@@ -1,13 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { Trans, useTranslation } from "react-i18next";
+import { Trans } from "react-i18next";
 
 import { CapabilityMentionToken } from "@/components/CliAppMentionText";
 import type { CapabilityMentionSegment } from "@/lib/composer-mention-text";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
 import { FileActions } from "@/components/FileActions";
 import { InlineTokenHighlight, INLINE_TOKEN_HIGHLIGHT_COLOR } from "@/components/InlineTokenHighlight";
-import { RenameDialog } from "@/components/RenameDialog";
 import { SessionHandleLabel } from "@/components/SessionHandleLabel";
 import { SlashCommandText } from "@/components/SlashCommandText";
 import { StartupShell } from "@/components/StartupShell";
@@ -16,8 +14,10 @@ import * as ProductIcons from "@/components/icons/product-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PaneWorkbench, type WorkbenchPane } from "@/components/workbench/PaneWorkbench";
-import type { CliAppInfo, McpPresetInfo, SessionAutomationJob, SessionMention, WorkbenchLayout } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
+import type { SessionMention } from "@/lib/contracts/messages";
 import { cn } from "@/lib/utils";
 import { Sample, StatePicker, type ComponentExample } from "./example";
 import { useGalleryTranslation } from "./i18n";
@@ -37,24 +37,6 @@ const mcpPreset: McpPresetInfo = {
 const sessionMention: SessionMention = {
   id: "gallery-session", name: "design", session_key: "webui:gallery-design", title: "组件设计",
 };
-
-function RenamePreview() {
-  const { t } = useTranslation();
-  const { t: g } = useGalleryTranslation();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("组件设计");
-  return <div className="space-y-4">
-    <p className="text-sm">{title}</p>
-    <Button variant="outline" onClick={() => setOpen(true)}>{t("workbench.renameGroupTitle")}</Button>
-    <RenameDialog open={open} title={title}
-      dialogTitle={t("workbench.renameGroupTitle")}
-      description={t("workbench.renameGroupDescription")}
-      placeholder={t("workbench.renameGroupPlaceholder")}
-      onCancel={() => setOpen(false)}
-      onConfirm={(next) => { setTitle(next); setOpen(false); }} />
-    <p role="status" className="text-xs text-muted-foreground">{g("previews.rename.hint")}</p>
-  </div>;
-}
 
 const automations: SessionAutomationJob[] = [
   { id: "gallery-daily", name: "每日项目摘要", enabled: true, schedule: { kind: "cron", expr: "0 9 * * *", tz: "Asia/Shanghai" }, payload: { message: "Summarize project updates" }, state: { next_run_at_ms: Date.UTC(2026, 9, 14, 1) } },
@@ -143,7 +125,7 @@ function ProductIconsPreview() {
     <StatePicker label={t("previews.productIcons.size")} value={size} options={["16", "20", "24"]} onChange={setSize} />
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">{Object.entries(ProductIcons).map(([name, Icon]) =>
       <button key={name} type="button" aria-pressed={selected === name} onClick={() => setSelected(name)}
-        className={cn("flex min-w-0 flex-col items-center gap-2 rounded-control p-3 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected === name && "bg-muted text-foreground")}>
+        className={cn("flex min-w-0 flex-col items-center gap-2 rounded-control p-3 text-muted-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected === name && "bg-surface-secondary text-foreground")}>
         <Icon size={Number(size)} /><span className="max-w-full break-all text-center text-[10px] leading-4">{name.replace(/Icon$/, "")}</span>
       </button>)}</div>
     <p role="status" className="mt-4 text-xs text-muted-foreground">{t("previews.productIcons.selected", { name: selected })}</p>
@@ -168,52 +150,8 @@ function FileActionsPreview() {
   </>;
 }
 
-const initialPanes: WorkbenchPane[] = [
-  { key: "pane-1", title: "组件设计" }, { key: "pane-2", title: "实现" }, { key: "pane-3", title: "验证" },
-];
-
-function WorkbenchPreview() {
-  const { t } = useGalleryTranslation();
-  const [panes, setPanes] = useState(initialPanes);
-  const [active, setActive] = useState("pane-1");
-  const [layout, setLayout] = useState<WorkbenchLayout>("columns");
-  const [ratios, setRatios] = useState<number[]>([]);
-  return <>
-    <StatePicker label={t("previews.workbench.layout")} value={layout} options={["columns", "rows", "grid", "bsp", "main-stack"]}
-      onChange={(next) => { setLayout(next); setRatios([]); }} />
-    <div className="h-[28rem] overflow-hidden rounded-panel border">
-      <PaneWorkbench panes={panes} activePaneKey={active} layout={layout} showLayoutControl
-        addPaneDisabled={panes.length >= 4} addPaneDisabledLabel={t("previews.workbench.limit")}
-        onActivatePane={setActive} onLayoutChange={(next) => { setLayout(next); setRatios([]); }}
-        onAddPane={() => {
-          const next = { key: `pane-${panes.length + 1}`, title: "补充笔记" };
-          setPanes([...panes, next]); setActive(next.key);
-        }}
-        onPaneOrderChange={(keys) => setPanes(keys.flatMap((key) => panes.filter((pane) => pane.key === key)))}
-        splitRatios={ratios} onSplitRatiosChange={setRatios}
-        renderPane={(pane, context) => {
-          const header = <div className="pointer-events-auto flex h-10 items-center justify-between gap-2 px-3 text-xs">
-            <span>{pane.title}</span>{context.headerActions}
-          </div>;
-          return <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pb-8">
-            {context.active && context.headerPortalTarget ? createPortal(header, context.headerPortalTarget) : context.active ? header : <p className="h-10 content-center text-xs text-muted-foreground">{pane.title}</p>}
-            <label className="grid gap-2 text-xs text-muted-foreground">{t("previews.workbench.notes", { title: pane.title })}
-              <Textarea defaultValue={`在${pane.title}窗格中编辑笔记。`} /></label>
-            <p className="text-xs text-muted-foreground">{t(context.active ? "previews.workbench.active" : "previews.workbench.activate")}</p>
-          </div>;
-        }} />
-    </div>
-    <p role="status" className="mt-4 text-xs text-muted-foreground">{t("previews.workbench.hint", { title: panes.find((pane) => pane.key === active)?.title })}</p>
-  </>;
-}
-
-
-
-const components = "webui/src/components/";
+const components = "sources/cirno-web/src/components/";
 export const shellExamples: ComponentExample[] = [
-  { title: "previews.rename.title", files: ["RenameDialog"], Preview: RenamePreview,
-    description: "previews.rename.description", options: "previews.rename.options",
-    code: '<RenameDialog open={open} title={title} dialogTitle="Rename group" description="Give this group a name." placeholder="Group name" onCancel={close} onConfirm={rename} />' },
   { title: "previews.delete.title", files: ["DeleteConfirm"], Preview: DeletePreview,
     description: "previews.delete.description", options: "previews.delete.options",
     code: '<DeleteConfirm open={open} title="组件设计" count={1} automations={jobs} onCancel={close} onConfirm={remove} />' },
@@ -235,7 +173,5 @@ export const shellExamples: ComponentExample[] = [
   { title: "previews.fileActions.title", files: ["FileActions"], Preview: FileActionsPreview,
     description: "previews.fileActions.description", options: "previews.fileActions.options",
     code: '<FileActions path="src/app.tsx" metadata={{ path: "D:/workspace/src/app.tsx", relative_path: "src/app.tsx" }}><Button>app.tsx</Button></FileActions>' },
-  { title: "previews.workbench.title", files: ["workbench/PaneWorkbench"], Preview: WorkbenchPreview,
-    description: "previews.workbench.description", options: "previews.workbench.options",
-    code: '<PaneWorkbench panes={panes} activePaneKey={active} layout={layout} showLayoutControl onActivatePane={setActive} onAddPane={addPane} onLayoutChange={setLayout} onPaneOrderChange={reorder} renderPane={renderPane} />' },
+
 ].map((example) => ({ ...example, files: example.files.map((file) => `${components}${file}.tsx`) }));

@@ -3,10 +3,12 @@ from types import SimpleNamespace
 
 from cirno_core.agent.tools.context import ToolContext
 from cirno_core.agent.tools.file_state import FileStates
-from cirno_core.agent.tools.filesystem import FileToolsConfig, ReadFileTool
+from cirno_core.agent.tools.filesystem import ReadFileTool
+from cirno_core.agent.tools.filesystem_config import FileToolsConfig
 from cirno_core.agent.tools.loader import ToolLoader
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.config.schema import Config, ToolsConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.tools import ToolsConfig
 
 FILE_TOOL_NAMES = {
     "apply_patch",

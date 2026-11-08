@@ -1,5 +1,6 @@
 """Tests for auto compact (idle TTL) feature."""
 
+from cirno_core.session.recovery.contracts import RUNTIME_CHECKPOINT_KEY, PENDING_USER_TURN_KEY
 import asyncio
 import time
 from datetime import datetime, timedelta
@@ -16,9 +17,10 @@ from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.command import CommandContext
-from cirno_core.config.schema import AgentDefaults, Config
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.config.schema import Config
 from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent
-from cirno_core.providers.base import LLMResponse
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.runtime.context import public_history_message
 from cirno_core.sdk.clients import RuntimeClient
 from cirno_core.session.keys import HEARTBEAT_SESSION_KEY
@@ -224,7 +226,7 @@ async def test_idle_compaction_skips_subagent_sessions(tmp_path, monkeypatch, re
         clock.now.return_value = datetime.now() + timedelta(minutes=20)
         monkeypatch.setattr("cirno_core.agent.autocompact.datetime", clock)
         loop.consolidator.archive_session = AsyncMock(return_value="Conversation summary.")
-        await loop._check_expired_sessions_if_due()
+        await loop.lifecycle.expire_sessions()
         await _drain_background_tasks(loop)
 
         loop.consolidator.archive_session.assert_awaited_once()
@@ -373,24 +375,23 @@ class TestIdleScanThrottling:
         )
         loop.auto_compact.check_expired = AsyncMock()
         loop._next_idle_compact_check_at = 0
-        monkeypatch.setattr("cirno_core.agent.loop.time", SimpleNamespace(time=time.time, monotonic=lambda: next(ticks)))
+        monkeypatch.setattr("cirno_core.agent.execution.lifecycle.time", SimpleNamespace(time=time.time, monotonic=lambda: next(ticks)))
 
-        await loop._check_expired_sessions_if_due()
+        await loop.lifecycle.expire_sessions()
         loop.auto_compact.check_expired.assert_called_once()
-        await loop._check_expired_sessions_if_due()
+        await loop.lifecycle.expire_sessions()
         loop.auto_compact.check_expired.assert_called_once()
-        await loop._check_expired_sessions_if_due()
+        await loop.lifecycle.expire_sessions()
 
         assert loop.auto_compact.check_expired.call_count == 2
 
-    async def test_zero_idle_scan_interval_checks_every_tick(self, tmp_path, monkeypatch):
+    async def test_zero_idle_scan_interval_checks_every_tick(self, tmp_path):
         """An explicit zero should leave each idle tick eligible to scan."""
-        monkeypatch.setattr("cirno_core.agent.loop.time", SimpleNamespace(time=time.time, monotonic=lambda: 1_000.0))
         loop = _make_loop(tmp_path)
         loop.auto_compact.check_expired = AsyncMock()
 
-        await loop._check_expired_sessions_if_due()
-        await loop._check_expired_sessions_if_due()
+        await loop.lifecycle.expire_sessions()
+        await loop.lifecycle.expire_sessions()
 
         assert loop.auto_compact.check_expired.call_count == 2
 
@@ -553,7 +554,7 @@ class TestAutoCompactIdleDetection:
         loop.sessions.save(session)
 
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="new msg")
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         session_after = loop.sessions.get_or_create("cli:test")
         assert any(m["content"] == "old message" for m in session_after.messages)
@@ -576,7 +577,7 @@ class TestAutoCompactIdleDetection:
         await loop.auto_compact._archive("cli:test", runtime=loop.llm_runtime())
 
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="new msg")
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         session_after = loop.sessions.get_or_create("cli:test")
         assert len(archived_messages) == 12
@@ -596,7 +597,7 @@ class TestAutoCompactIdleDetection:
         loop.sessions.save(session)
 
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="new msg")
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         session_after = loop.sessions.get_or_create("cli:test")
         assert any(m["content"] == "recent message" for m in session_after.messages)
@@ -638,7 +639,7 @@ class TestAutoCompactIdleDetection:
         loop.consolidator.compact_idle_session = _make_fake_compact(loop)
 
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/new")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "new session started" in response.content.lower()
@@ -653,7 +654,7 @@ class TestAutoCompactIdleDetection:
         but tagged with _command so they don't leak into LLM context."""
         loop = _make_loop(tmp_path)
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/help")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         session_after = loop.sessions.get_or_create("cli:test")
@@ -663,7 +664,7 @@ class TestAutoCompactIdleDetection:
         assert session_after.messages[0].get("_command") is True
         assert session_after.messages[1]["role"] == "assistant"
         assert session_after.messages[1].get("_command") is True
-        assert AgentLoop._PENDING_USER_TURN_KEY not in session_after.metadata
+        assert PENDING_USER_TURN_KEY not in session_after.metadata
         await loop.aclose()
 
     @pytest.mark.asyncio
@@ -703,7 +704,7 @@ class TestAutoCompactSystemMessages:
             channel="system", sender_id="subagent", chat_id="cli:test",
             content="subagent result",
         )
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         session_after = loop.sessions.get_or_create("cli:test")
         assert any(m["content"] == "old user 0" for m in session_after.messages)
@@ -763,7 +764,7 @@ class TestAutoCompactEdgeCases:
         """Short expired sessions keep recent messages; checkpoint restore still works on resume."""
         loop = _make_loop(tmp_path, idle_compact_after_minutes=15)
         session = loop.sessions.get_or_create("cli:test")
-        session.metadata[AgentLoop._RUNTIME_CHECKPOINT_KEY] = {
+        session.metadata[RUNTIME_CHECKPOINT_KEY] = {
             "assistant_message": {"role": "assistant", "content": "interrupted response"},
             "completed_tool_results": [],
             "pending_tool_calls": [],
@@ -781,7 +782,7 @@ class TestAutoCompactEdgeCases:
         await loop.auto_compact._archive("cli:test", runtime=loop.llm_runtime())
 
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="continue")
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         session_after = loop.sessions.get_or_create("cli:test")
         assert [message["content"] for message in archived_messages] == ["previous message"]
@@ -833,7 +834,7 @@ class TestAutoCompactIntegration:
             channel="cli", sender_id="user", chat_id="test",
             content="Let's continue, teach me present perfect",
         )
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         # Phase 4: Verify
         session_after = loop.sessions.get_or_create("cli:test")
@@ -887,7 +888,7 @@ class TestAutoCompactIntegration:
             channel="cli", sender_id="user", chat_id="test",
             content="Paragraph one\n\nParagraph two\n\nParagraph three",
         )
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         session_after = loop.sessions.get_or_create("cli:test")
         assert any(m.get("content") == "old message" for m in session_after.messages)
@@ -1245,7 +1246,7 @@ class TestProactiveAutoCompact:
 
         # User returns, sends new messages
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content="second topic")
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
         # New messages have now been idle for a fresh TTL interval.
         monkeypatch.setattr("cirno_core.agent.autocompact.datetime", SimpleNamespace(
@@ -1433,7 +1434,7 @@ async def test_idle_compaction_rechecks_settled_activity(tmp_path, monkeypatch, 
             return now[0] if tz is None else now[0].replace(tzinfo=tz)
 
     # The scanner and settled-turn/summary writers must share the same clock.
-    for module in ("cirno_core.agent.autocompact", "cirno_core.agent.loop", "cirno_core.session.manager"):
+    for module in ("cirno_core.agent.autocompact", "cirno_core.agent.execution.persistence", "cirno_core.session.model"):
         monkeypatch.setattr(f"{module}.datetime", Clock)
     loop = _make_loop(tmp_path / "workspace")
     key = HEARTBEAT_SESSION_KEY
@@ -1463,7 +1464,7 @@ async def test_idle_compaction_rechecks_settled_activity(tmp_path, monkeypatch, 
             now[0] += timedelta(minutes=20)
             if ordering == "scan_during_turn":
                 loop._next_idle_compact_check_at = 0
-                await loop._check_expired_sessions_if_due()
+                await loop.lifecycle.expire_sessions()
             other_responses.append(await asyncio.wait_for(
                 loop.process_direct("other input", session_key="cli:other"), 5,
             ))
@@ -1477,7 +1478,7 @@ async def test_idle_compaction_rechecks_settled_activity(tmp_path, monkeypatch, 
     try:
         if ordering == "archive_queued_before_turn":
             loop._next_idle_compact_check_at = 0
-            await loop._check_expired_sessions_if_due()
+            await loop.lifecycle.expire_sessions()
             assert key in loop.auto_compact._archiving
         finishing = asyncio.create_task(finish_turn())
         # Await inline: the direct call takes the free lock before the already
@@ -1497,7 +1498,7 @@ async def test_idle_compaction_rechecks_settled_activity(tmp_path, monkeypatch, 
 
         now[0] += timedelta(minutes=20)
         loop._next_idle_compact_check_at = 0
-        await loop._check_expired_sessions_if_due()
+        await loop.lifecycle.expire_sessions()
         await asyncio.wait_for(_drain_background_tasks(loop), 5)
         assert len(archived) == 1
         assert "completed reply" in archived[0]

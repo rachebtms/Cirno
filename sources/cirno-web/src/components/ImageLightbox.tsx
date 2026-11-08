@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
-import type { UIImage } from "@/lib/types";
+import type { UIImage } from "@/lib/contracts/messages";
 import { ZoomableImage } from "@/components/ZoomableImage";
 
 interface ImageLightboxProps {

@@ -73,7 +73,7 @@ def main() -> None:
     from cirno_core.config.loader import load_config
     from cirno_server.channels.telegram.manifest import PLUGIN
     from cirno_server.features.service import extra_installed
-    import cirno_core.memory.embedding_worker as worker
+    import cirno_memory.embedding_worker as worker
 
     assert extra_installed("telegram", list(PLUGIN.dependencies)), "Telegram dependencies are incomplete"
     memory = load_config().agents.defaults.memory

@@ -1,3 +1,4 @@
+import { readPreviewPreferences } from "./preference-driver";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const fixture = (surface: string, state = "loaded", extra = "") => `/browser/fixture.html?case=skeleton-additions&surface=${surface}&state=${state}${extra}`;
@@ -36,70 +37,55 @@ async function accessibleSkeleton(page: Page) {
 
 for (const width of [390, 1440]) for (const locale of ["en", "zh-CN"]) {
   test.describe(`${width}px ${locale} new first-load skeletons`, () => {
-    test.use({ viewport: { width, height: 1000 }, reducedMotion: "reduce", hasTouch: width === 390 });
+    test.use({ viewport: { width, height: 1000 }, reducedMotion: "reduce", hasTouch: width === 390, locale });
     test.beforeEach(async ({ page }) => {
-      await page.addInitScript((language) => localStorage.setItem("cirno.locale", language), locale);
       await page.clock.setFixedTime(new Date("2026-10-19T12:00:00Z"));
     });
 
-    test("sidebar rows preserve comfortable, compact and touch density", async ({ page }) => {
-      for (const extra of ["", "&compact"]) {
-        await page.goto(fixture("chats", "loaded", extra));
-        await settle(page);
-        const loaded = await boxes(page.locator("[data-chat-row]"));
-        await page.goto(fixture("chats", "loading", extra));
-        await settle(page);
-        sameBoxes((await boxes(page.locator("[data-chat-skeleton-row]"))).slice(0, loaded.length), loaded);
-        await accessibleSkeleton(page);
-      }
+    test("the catalog keeps its heading while loading without displaying fake conversations", async ({ page }) => {
+      await page.goto(fixture("chats", "loaded"));
+      const catalog = page.getByRole("region", { name: locale === "en" ? "Conversations" : "会话列表", exact: true });
+      await expect(catalog.locator("[data-chat-row]")).toHaveCount(4);
+      const heading = await catalog.getByRole("heading", { level: 1 }).boundingBox();
+      await page.goto(fixture("chats", "loading"));
+      await expect(catalog).toHaveAttribute("aria-busy", "true");
+      await expect(catalog.locator("[data-chat-row]")).toHaveCount(0);
+      await expect(catalog.getByRole("status")).toBeVisible();
+      expect(await catalog.getByRole("heading", { level: 1 }).boundingBox()).toEqual(heading);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     });
 
-    test("settings sections preserve their loaded row layout", async ({ page }, testInfo) => {
-      for (const section of ["notifications", "capabilities", "runtime", "advanced", "overview", "models", "about"]) {
-        const extra = `&section=${section}${section === "notifications" ? "&notificationPermission=granted" : ""}`;
+    test("service settings expose loading and usable content in the current categories", async ({ page }) => {
+      for (const section of ["runtime", "models", "approval"]) {
+        const extra = `&section=${section}`;
         await page.goto(fixture("settings", "loaded", extra));
-        const target = page.locator("[data-settings-section]");
-        if (section === "notifications") {
-          await page.context().grantPermissions(["notifications"]);
-          await page.evaluate(async () => {
-            await navigator.serviceWorker.register("/sw.js", { scope: "/browser/" });
-            await navigator.serviceWorker.ready;
-            window.dispatchEvent(new Event("focus"));
-          });
-          await expect(target.getByRole("status")).toBeEmpty();
-          await expect(target.getByRole("switch")).toHaveCount(2);
-          await expect(target.getByRole("switch").first()).toBeEnabled();
-        }
-        if (section === "runtime") await expect(page.locator('[data-settings-section] button').filter({ hasText: locale === "en" ? "Start API server" : "启动 API 服务" })).toBeVisible();
-        await settle(page);
-        const selector = section === "overview" ? "section button.group" : section === "models" ? '[data-testid^="model-call-order-row"], .settings-footer' : section === "about" ? ".settings-list-row" : ".settings-row";
-        const notificationDetails = section === "notifications" ? ", .settings-list-inset > .border-t, section > p" : "";
-        const proxyForm = section === "advanced" ? ", [data-shared-proxy-editor]" : "";
-        const loaded = await boxes(target.locator(selector + notificationDetails + proxyForm));
-        const proxyAddress = section === "advanced" ? await boxes(target.locator('[data-shared-proxy-editor] input')) : null;
-        const loadedControls = section === "notifications" ? await boxes(target.getByRole("switch")) : null;
+        const target = page.locator(`[data-settings-section="${section}"]`);
+        await expect(target).toBeVisible();
+        await expect(target.locator("section").first()).toBeVisible();
+        await expect(status(page)).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), section).toBe(false);
         await page.goto(fixture("settings", "loading", extra));
-        await settle(page);
-        const skeletonSelector = section === "overview" ? "[data-overview-skeleton-row]" : section === "models" ? "[data-model-preset-skeleton], .settings-footer" : section === "about" ? ".settings-list-row" : "[data-settings-skeleton-row]";
-        const proxySkeleton = section === "advanced" ? ", [data-shared-proxy-skeleton]" : "";
-        const skeleton = await boxes(target.locator(skeletonSelector + notificationDetails + proxySkeleton));
-        sameBoxes(skeleton, loaded, section);
-        if (proxyAddress) sameBoxes(await boxes(target.locator("[data-proxy-address-skeleton]")), proxyAddress, "shared proxy address");
-        if (loadedControls) {
-          const skeletonControls = await boxes(target.locator("[data-skeleton-switch]"));
-          sameBoxes(skeletonControls, loadedControls);
-          await testInfo.attach("notifications-layout", { body: JSON.stringify({ loaded, skeleton, loadedControls, skeletonControls }, null, 2), contentType: "application/json" });
-        }
         await accessibleSkeleton(page);
+        await expect(target.locator(".animate-pulse > *").first()).toBeVisible();
+        await expect(target.getByRole("textbox")).toHaveCount(0);
+        await expect(target.getByRole("switch")).toHaveCount(0);
       }
     });
 
-    test("appearance stays usable and keeps its layout while gateway settings load or fail", async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem("cirno-webui.settings-preferences", JSON.stringify({
-        schemaVersion: 1, readingTextSize: "custom", customReadingTextSize: 24,
-      })));
-      await page.goto(fixture("settings", "loaded", "&section=appearance"));
-      const target = page.locator('[data-settings-section="appearance"]');
+    test("notification preferences remain available when service settings fail", async ({ page }) => {
+      for (const state of ["loaded", "loading", "error"]) {
+        await page.goto(fixture("settings", state, "&section=notifications&notificationPermission=granted"));
+        const target = page.locator('[data-settings-section="notifications"]');
+        await expect(target.getByRole("switch")).toHaveCount(5);
+        await expect(target.getByRole("switch").nth(1)).toBeEnabled();
+        await expect(status(page)).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+      }
+    });
+
+    test("reading preferences stay usable while service settings load or fail", async ({ page }) => {
+      await page.goto(fixture("settings", "loaded", "&section=reading&readingSize=24"));
+      const target = page.locator('[data-settings-section="reading"]');
       const ready = async () => {
         await expect(target.locator("[data-reading-preview-content] strong")).toBeVisible();
         await expect(target.locator("[data-reading-preview-content] .markdown-content p").first()).toHaveCSS("font-size", "24px");
@@ -109,7 +95,7 @@ for (const width of [390, 1440]) for (const locale of ["en", "zh-CN"]) {
       const layout = ".appearance-theme-grid, .appearance-reading-card, .appearance-size-options, .settings-row";
       const loaded = await boxes(target.locator(layout));
       for (const state of ["loading", "error", "refresh"]) {
-        await page.goto(fixture("settings", state, "&section=appearance"));
+        await page.goto(fixture("settings", state, "&section=reading&readingSize=24"));
         await ready();
         sameBoxes(await boxes(target.locator(layout)), loaded, `appearance ${state}`);
         await expect(status(page)).toHaveCount(0);
@@ -119,70 +105,60 @@ for (const width of [390, 1440]) for (const locale of ["en", "zh-CN"]) {
         await input.fill("22");
         await input.press("Enter");
         await expect(target.locator("[data-reading-preview-content] .markdown-content p").first()).toHaveCSS("font-size", "22px");
-        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cirno-webui.settings-preferences")!).customReadingTextSize)).toBe(22);
+        await expect.poll(() => readPreviewPreferences(page).then(values => values.customReadingTextSize)).toBe(22);
+        await input.fill("24");
+        await input.press("Enter");
       }
     });
 
-    test("calendar and task skeletons retain their toolbar and real date grid", async ({ page }) => {
-      for (const nextMonth of [false, true]) {
-        const open = async (state: string) => {
-          await page.goto(fixture("automations", state));
-          if (nextMonth) await page.getByRole("button", { name: locale === "en" ? "Next month" : "下个月" }).click();
-          await settle(page);
-        };
-        await open("loaded");
-        const toolbar = await boxes(page.locator(".automation-panel-toolbar"));
-        const nav = await boxes(page.locator(".automation-calendar-navigation"));
-        const grid = width === 1440 ? await boxes(page.locator(".automation-calendar-day")) : null;
-        if (grid) expect(grid).toHaveLength(nextMonth ? 42 : 35);
-        const agenda = !nextMonth && width === 390 ? await boxes(page.locator(".automation-calendar-agenda li")) : null;
-        await open("loading");
-        sameBoxes(await boxes(page.locator(".automation-panel-toolbar")), toolbar);
-        sameBoxes(await boxes(page.locator(".automation-calendar-navigation")), nav);
-        if (grid) sameBoxes(await boxes(page.locator(".automation-calendar-day")), grid);
-        if (agenda) sameBoxes(await boxes(page.locator("[data-agenda-skeleton-row]")), agenda);
-        await accessibleSkeleton(page);
-      }
-      await page.goto(fixture("automations"));
-      await page.locator(".automation-view-switch button").first().click();
-      await settle(page);
-      const rows = await boxes(page.locator('section[aria-label] button[aria-haspopup="dialog"]'));
+    test("calendar and task loading retains navigation, dates and accessible status", async ({ page }) => {
       await page.goto(fixture("automations", "loading"));
-      await page.locator(".automation-view-switch button").first().click();
       await settle(page);
-      sameBoxes(await boxes(page.locator("[data-automation-task-skeleton]")), rows);
+      await accessibleSkeleton(page);
+      await expect(page.getByRole("tab", { name: locale === "en" ? "Calendar" : "日历", exact: true })).toHaveAttribute("aria-selected", "true");
+      const days = page.locator(".automation-calendar-days>li");
+      await expect(days).toHaveCount(35);
+      await page.getByRole("button", { name: locale === "en" ? "Next month" : "下个月" }).click();
+      await expect(days).toHaveCount(42);
+      if (width === 1440) await expect(days.last()).toBeVisible();
+      await page.getByRole("tab", { name: locale === "en" ? "Tasks" : "任务", exact: true }).click();
+      await expect(page.locator("[data-automation-task-skeleton]")).toHaveCount(3);
+      await accessibleSkeleton(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     });
 
-    test("skill detail keeps the known summary and matches the toggle and instructions disclosure", async ({ page }) => {
+    test("skill detail retains its summary while instructions load", async ({ page }) => {
       const open = async (state: string) => {
         await page.goto(fixture("skill-detail", state));
         await page.getByRole("button", { name: locale === "en" ? "Open details for project-review" : "查看 project-review 详情" }).click();
-        await settle(page);
       };
       await open("loaded");
-      await expect(page.getByRole("dialog").getByRole("switch")).toBeEnabled();
-      const toggle = await boxes(page.getByRole("dialog").getByRole("switch").locator(".."));
-      const instructions = await boxes(page.getByRole("dialog").getByRole("button", { name: /SKILL.md/ }).locator(".."));
-      const title = await boxes(page.getByRole("dialog").getByRole("heading", { name: "project-review" }));
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByRole("switch")).toBeEnabled();
+      await dialog.getByRole("button", { name: locale === "en" ? "Skill instructions" : "技能说明" }).click();
+      await expect(dialog.locator("pre")).toContainText("Read the repository instructions before reviewing changes.");
       await open("loading");
-      await expect(page.getByRole("dialog").getByText("Review the repository and summarize actionable changes.")).toBeVisible();
-      sameBoxes(await boxes(page.locator("[data-skill-toggle-skeleton]")), toggle);
-      sameBoxes(await boxes(page.locator("[data-skill-instructions-skeleton]")), instructions);
-      sameBoxes(await boxes(page.getByRole("dialog").getByRole("heading", { name: "project-review" })), title);
+      await expect(dialog.getByText("Review the repository and summarize actionable changes.")).toBeVisible();
+      await expect(dialog.getByRole("heading", { name: "project-review" })).toBeVisible();
+      await expect(dialog.getByRole("switch")).toHaveCount(0);
       await accessibleSkeleton(page);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
     });
 
-    test("session automation keeps row and action alignment", async ({ page }) => {
+    test("session automation loading has no stale task actions", async ({ page }) => {
       const open = async (state: string) => {
         await page.goto(fixture("session-jobs", state));
         await page.getByRole("button", { name: locale === "en" ? "Session details" : "会话详情" }).click();
-        await settle(page);
       };
       await open("loaded");
-      const rows = await boxes(page.getByRole("dialog").locator('button[aria-haspopup="dialog"]'));
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.locator('button[aria-haspopup="dialog"]')).toHaveCount(3);
       await open("loading");
-      sameBoxes(await boxes(page.locator("[data-session-job-skeleton]")), rows);
+      await expect(dialog.locator('button[aria-haspopup="dialog"]')).toHaveCount(0);
       await accessibleSkeleton(page);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
     });
 
     test("cached settings and lists stay visible during background refresh", async ({ page }) => {

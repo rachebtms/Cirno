@@ -1,6 +1,7 @@
 """Tests for AgentLoop integration with AgentRunner: streaming, think-filter, error handling, subagent."""
 
 from __future__ import annotations
+from cirno_core.providers.messages import sanitize_empty_content
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,21 +17,18 @@ def isolated_home(tmp_path):
     set_instance_path(None)
 
 
-from agent.session_helpers import mock_session_manager
+from sources.development.testing.sessions import mock_session_manager
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.outbound_events import StreamedResponseEvent
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import AgentDefaults
+from cirno_core.config.agents import AgentDefaults
 from cirno_core.bus.agent_events import RetryStatusEvent
-from cirno_core.providers.base import (
-    GenerationSettings,
-    LLMProvider,
-    LLMResponse,
-    ToolCallRequest,
-)
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_INPUT_META,
     WEBUI_QUOTE_METADATA,
@@ -90,7 +88,7 @@ async def test_loop_uses_structured_retry_status_without_legacy_text(tmp_path):
     loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
     loop.tools.get_definitions = MagicMock(return_value=[])
 
-    result = await loop._process_message(
+    result = await loop.processing.process(
         InboundMessage(
             channel="websocket",
             sender_id="user",
@@ -120,7 +118,7 @@ async def test_ephemeral_runner_enters_and_restores_turn_scopes(tmp_path):
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=chat_stream_with_retry)
     loop.tools.get_definitions = MagicMock(return_value=[])
 
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
         ephemeral=True,
@@ -171,7 +169,7 @@ async def test_goal_command_can_implement_plan_from_prior_discussion(tmp_path):
     session.add_message("assistant", "Use the staged migration plan and run integration tests.")
     loop.sessions.save(session)
 
-    result = await loop._process_message(
+    result = await loop.processing.process(
         InboundMessage(
             channel="cli",
             sender_id="user",
@@ -228,13 +226,13 @@ async def test_runtime_context_is_persisted_as_next_turn_prompt_prefix(tmp_path)
     loop.register_runtime_context_provider(provide_context)
     loop.register_runtime_context_provider(provide_context)
 
-    await loop._process_message(InboundMessage(
+    await loop.processing.process(InboundMessage(
         channel="cli",
         sender_id="user",
         chat_id="direct",
         content="first turn $review",
     ))
-    await loop._process_message(InboundMessage(
+    await loop.processing.process(InboundMessage(
         channel="cli",
         sender_id="user",
         chat_id="direct",
@@ -243,8 +241,8 @@ async def test_runtime_context_is_persisted_as_next_turn_prompt_prefix(tmp_path)
 
     first_request = provider.chat_stream_with_retry.await_args_list[0].kwargs["messages"]
     second_request = provider.chat_stream_with_retry.await_args_list[1].kwargs["messages"]
-    first_wire = LLMProvider._sanitize_empty_content(first_request)
-    second_wire = LLMProvider._sanitize_empty_content(second_request)
+    first_wire = sanitize_empty_content(first_request)
+    second_wire = sanitize_empty_content(second_request)
     assert second_wire[: len(first_wire)] == first_wire
     assert first_wire[1] == second_wire[1]
     assert first_wire[0] == second_wire[0]
@@ -278,7 +276,7 @@ async def test_webui_quote_reaches_model_without_leaking_into_public_history(tmp
     })
     assert quote is not None
 
-    await loop._process_message(InboundMessage(
+    await loop.processing.process(InboundMessage(
         channel="websocket",
         sender_id="user",
         chat_id="chat",
@@ -326,7 +324,7 @@ async def test_runtime_context_provider_runs_once_across_tool_iterations(tmp_pat
 
     loop.register_runtime_context_provider(provide_context)
 
-    await loop._process_message(InboundMessage(
+    await loop.processing.process(InboundMessage(
         channel="cli",
         sender_id="user",
         chat_id="direct",
@@ -391,7 +389,7 @@ async def test_loop_max_iterations_message_stays_stable(tmp_path):
     loop.tools.execute = AsyncMock(return_value="ok")
     loop.max_iterations = 2
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
     )
@@ -414,7 +412,7 @@ async def test_loop_goal_turn_uses_standard_iteration_budget(tmp_path):
     loop.max_iterations = 2
 
     runtime = loop.llm_runtime()
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=runtime,
         request_context=RequestContext(
@@ -453,7 +451,7 @@ async def test_loop_stream_filter_handles_think_only_prefix_without_crashing(tmp
     async def on_stream_end(*, resuming: bool = False) -> None:
         endings.append(resuming)
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
         events=output_events(on_stream=on_stream, on_stream_end=on_stream_end),
@@ -487,7 +485,7 @@ async def test_loop_stream_filter_hides_split_think_tags(tmp_path, first_delta, 
     async def on_stream(delta: str) -> None:
         deltas.append(delta)
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
         events=output_events(on_stream=on_stream),
@@ -511,7 +509,7 @@ async def test_loop_retries_think_only_final_response(tmp_path):
 
     loop.provider.chat_stream_with_retry = chat_stream_with_retry
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
     )
@@ -540,7 +538,7 @@ async def test_llm_error_returns_regular_response_instead_of_streamed_event(tmp_
     msg = InboundMessage(
         channel="feishu", sender_id="u1", chat_id="c1", content="hi",
     )
-    result = await loop._process_message(
+    result = await loop.processing.process(
         msg,
         on_stream=AsyncMock(),
         on_stream_end=AsyncMock(),
@@ -556,11 +554,12 @@ async def test_llm_error_returns_regular_response_instead_of_streamed_event(tmp_
 @pytest.mark.asyncio
 async def test_ssrf_soft_block_can_finalize_after_streamed_tool_call(tmp_path):
     from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.tools.base import ToolResult
     from cirno_core.bus.events import InboundMessage
     from cirno_core.bus.queue import MessageBus
 
     bus = MessageBus()
-    provider = MagicMock()
+    provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
     tool_call_resp = LLMResponse(
         content="checking metadata",
@@ -589,17 +588,23 @@ async def test_ssrf_soft_block_can_finalize_after_streamed_tool_call(tmp_path):
 
     loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
     loop.tools.get_definitions = MagicMock(return_value=[])
-    loop.tools.prepare_call = MagicMock(return_value=(None, {}, None))
-    loop.tools.execute = AsyncMock(return_value=(
+    # Conversation tool selection copies the registry but shares tool instances.
+    # Mock the executor itself so this test never starts the real network command.
+    execute = AsyncMock(return_value=ToolResult.error(
         "Error: Command blocked by safety guard (internal/private URL detected)"
     ))
+    loop.tools.get("exec").execute = execute
+    try:
+        result = await loop.processing.process(
+            InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="hi"),
+            on_stream=AsyncMock(),
+            on_stream_end=AsyncMock(),
+        )
+    finally:
+        await loop.aclose()
 
-    result = await loop._process_message(
-        InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="hi"),
-        on_stream=AsyncMock(),
-        on_stream_end=AsyncMock(),
-    )
-
+    execute.assert_awaited_once()
+    assert execute.await_args.kwargs["command"] == "curl http://169.254.169.254/latest/meta-data/"
     assert result is not None
     assert result.content == "I cannot access private URLs. Please share the local file."
     assert isinstance(result.event, StreamedResponseEvent)
@@ -608,7 +613,7 @@ async def test_ssrf_soft_block_can_finalize_after_streamed_tool_call(tmp_path):
 @pytest.mark.asyncio
 async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
     from cirno_core.agent.loop import AgentLoop
-    from cirno_core.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER
+    from cirno_core.agent.runner.history import _PERSISTED_MODEL_ERROR_PLACEHOLDER
     from cirno_core.bus.events import InboundMessage
     from cirno_core.bus.queue import MessageBus
 
@@ -622,7 +627,7 @@ async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
     loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
     loop.tools.get_definitions = MagicMock(return_value=[])
 
-    first = await loop._process_message(
+    first = await loop.processing.process(
         InboundMessage(channel="cli", sender_id="user", chat_id="test", content="first question")
     )
     assert first is not None
@@ -637,7 +642,7 @@ async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
         {"role": "assistant", "content": _PERSISTED_MODEL_ERROR_PLACEHOLDER},
     ]
 
-    second = await loop._process_message(
+    second = await loop.processing.process(
         InboundMessage(channel="cli", sender_id="user", chat_id="test", content="second question")
     )
     assert second is not None
@@ -697,3 +702,32 @@ async def test_subagent_max_iterations_announces_partial_incomplete_result(tmp_p
     assert notice.metadata["subagent_partial"] is True
     assert "working" in notice.content
     await mgr.close()
+
+
+async def test_root_work_report_remains_hidden_in_persisted_model_context(tmp_path):
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+    from cirno_core.session.history_visibility import is_hidden_history_message
+    from cirno_core.session.transcript import session_display_facts
+    provider = MagicMock(aclose=AsyncMock())
+    provider.get_default_model.return_value = "test-model"
+    provider.generation = GenerationSettings()
+    provider.can_resume_conversation_state.return_value = False
+    provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="Handled report", tool_calls=[], usage=None))
+    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
+    try:
+        await loop.sessions.state.get(ROUTER_SESSION_KEY)
+        await loop.sessions.state.get("websocket:worker")
+        sender = loop.tools.get("send_session_message")
+        await sender.enqueue(source_session_key="websocket:worker", target_handle="@cirno", content="Internal structured report",
+                             expect_reply=False, report={"id": "one", "state": "ready"})
+        message = await loop.bus.consume_inbound()
+        assert is_hidden_history_message(message.metadata)
+        await loop.processing.process(message)
+        saved = await loop.sessions.state.read(ROUTER_SESSION_KEY)
+        report = next(row for row in saved.messages if str(row.get("content", "")).startswith("Internal structured report"))
+        assert is_hidden_history_message(report)
+        assert report["input_origin"]["kind"] == "conversation"
+        assert all("Internal structured report" not in fact.content.get("text", "") for fact in session_display_facts(saved))
+    finally:
+        await loop.aclose()

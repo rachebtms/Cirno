@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import pytest
-
 from cirno_core.agent.tools.apply_patch import ApplyPatchTool
 
 
@@ -454,19 +452,19 @@ def test_apply_patch_edits_rolls_back_when_later_write_fails(tmp_path, monkeypat
     second_original = b"before\r\nsecond tail"
     second.write_bytes(second_original)
     tool = ApplyPatchTool(workspace=tmp_path)
-    write_text = Path.write_text
+    from cirno_core.utils import atomic_file
+    replace = atomic_file.replace_atomic
     failed = False
 
-    def _fail_second_write(path, *args, **kwargs):
+    def _fail_second_write(source, destination):
         nonlocal failed
-        written = write_text(path, *args, **kwargs)
-        if path == second and not failed:
+        replace(source, destination)
+        if destination == second and not failed:
             failed = True
             # A persistence error can occur after the file has already changed.
             raise OSError("injected second write failure")
-        return written
 
-    monkeypatch.setattr(Path, "write_text", _fail_second_write)
+    monkeypatch.setattr(atomic_file, "replace_atomic", _fail_second_write)
 
     result = asyncio.run(
         tool.execute(

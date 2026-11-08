@@ -1,0 +1,14 @@
+.configuration-page { display: grid; gap: 2rem; }
+.configuration-section { min-width: 0; }
+.configuration-section > h2 { margin-bottom: 1rem; font-size: 1rem; font-weight: 600; }
+.configuration-section fieldset { display: grid; min-width: 0; gap: 1.5rem; border: 0; padding: 0; }
+.configuration-field { display: grid; min-width: 0; gap: .45rem; }
+.configuration-field > .input, .configuration-field > .select, .configuration-field > .select__trigger, .configuration-field > .combo-box { max-width: 100%; width: 100%; }
+.configuration-field .description, .configuration-switch .description, .configuration-help { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.configuration-field .label, .configuration-switch .label { font-size: .875rem; font-weight: 500; }
+.configuration-textarea { resize: vertical; min-height: 7rem; font-family: inherit; }
+.configuration-save { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; min-height: 2rem; margin-top: .75rem; }
+.configuration-save > [role=status] { margin-right: auto; color: var(--muted); font-size: .75rem; }
+.configuration-help { margin-bottom: 1rem; }
+.configuration-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+@container cirno-tab (max-width: 480px) { .configuration-columns { grid-template-columns: minmax(0,1fr); } }

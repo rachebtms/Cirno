@@ -31,6 +31,7 @@ export function useReconnectRuns(client: CirnoClient, getToken: () => string): v
         if (!body || signal.aborted) return;
         const { completedTurnIds, snapshot } = persistedCanonicalRunState(body);
         const explicitlyCompleted = turnId !== null && completedTurnIds.includes(turnId);
+        if (turnId && !explicitlyCompleted && client.isRunCompleted(chatId, turnId)) return;
         if (!explicitlyCompleted && (snapshot.hasPendingToolCalls || snapshot.activeTurnId)) {
           // Refresh active traces only for the run that this read actually belongs to.
           if (turnId && snapshot.activeTurnId === turnId && client.getRunGeneration(chatId) === generation

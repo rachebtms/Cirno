@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { MessageBubble } from "@/components/MessageBubble";
+import { MessageBubble } from "@/features/messages";
 import { DiagramScope } from "@/components/markdown-diagrams/context";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 

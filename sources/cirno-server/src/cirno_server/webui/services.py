@@ -1,0 +1,185 @@
+"""Composition helpers for the embedded WebUI gateway."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable
+
+from cirno_core.config.loader import get_config_path
+from cirno_core.config.paths import get_media_dir
+from cirno_core.session.transcript import WebUITranscriptRecorder
+from cirno_server.channels.websocket.attachment_http import AttachmentHTTP
+from cirno_server.channels.websocket.attachment_policy import AttachmentIngressLimits
+from cirno_server.channels.websocket.attachment_store import AttachmentStore
+from cirno_server.webui.access_tokens import ServerTokenStore
+from cirno_server.webui.http import ServerHTTPHandler
+from cirno_server.webui.http_endpoint import WebUIServerEndpoint
+from cirno_server.webui.ingress_policy import WebUIIngressPolicy
+from cirno_server.webui.media_gateway import WebUIMediaServer
+from cirno_server.webui.session_projection import WebUISessionProjection
+from cirno_server.webui.settings.services import WebUISettingsServices
+from cirno_server.webui.temporary_chats import WebUITemporaryChats
+from cirno_server.webui.workspaces import WebUIWorkspaceController
+from loguru import logger as default_logger
+
+if TYPE_CHECKING:
+    from cirno_core.agent.subagents.manager import SubagentManager
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.cron.service import CronService
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.triggers.local_store import LocalTriggerStore
+    from cirno_server.channels.websocket.config import WebSocketConfig
+
+
+@dataclass(frozen=True)
+class ServerServices:
+    """Explicit dependencies shared by WebSocket transport and HTTP routes."""
+
+    http: ServerHTTPHandler
+    endpoint: WebUIServerEndpoint
+    settings: WebUISettingsServices
+    tokens: ServerTokenStore
+    media: WebUIMediaServer
+    uploads: AttachmentHTTP
+    ingress: WebUIIngressPolicy
+    transcripts: WebUITranscriptRecorder
+    workspaces: WebUIWorkspaceController
+    temporary_chats: WebUITemporaryChats
+    session_projection: WebUISessionProjection
+    session_manager: SessionManager | None
+    cron_service: CronService | None
+    local_trigger_store: LocalTriggerStore | None
+    cron_pending_job_ids: Callable[[str], set[str]] | None
+    local_trigger_pending_ids: Callable[[str], set[str]] | None
+    maintenance: Callable[[], Any] | None = None
+
+
+def build_server_services(
+    *,
+    config: WebSocketConfig,
+    bus: MessageBus,
+    session_manager: SessionManager | None,
+    static_dist_path: Path | None,
+    workspace_path: Path,
+    default_restrict_to_workspace: bool,
+    config_path: Path | None = None,
+    runtime_model_name: Callable[[], str | None] | None,
+    refresh_runtime_config: Callable[[], None] | None = None,
+    context_usage: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
+    maintenance: Callable[[], Any] | None = None,
+    disabled_skills: set[str] | None = None,
+    cron_service: CronService | None = None,
+    local_trigger_store: LocalTriggerStore | None = None,
+    cron_pending_job_ids: Callable[[str], set[str]] | None = None,
+    local_trigger_pending_ids: Callable[[str], set[str]] | None = None,
+    channel_feature_action: Callable[..., Any] | None = None,
+    channel_runtime_status: Callable[[], dict[str, Any]] | None = None,
+    mcp_runtime_status: Callable[[], Mapping[str, str]] | None = None,
+    mcp_reload: Callable[[], Awaitable[dict[str, Any]]] | None = None,
+    skill_state_action: Callable[[set[str]], None] | None = None,
+    recovery_action: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
+    subagent_manager: SubagentManager | None = None,
+    discard_session: Callable[[str], Awaitable[None]] | None = None,
+    logger: Any = default_logger,
+) -> ServerServices:
+    settings = WebUISettingsServices.create(
+        config_path or get_config_path(),
+        refresh_runtime_config=refresh_runtime_config,
+    )
+    tokens = ServerTokenStore()
+    upload_config = settings.config.load().server.uploads
+    ingress = WebUIIngressPolicy(
+        attachments=AttachmentIngressLimits(
+            max_file_bytes=upload_config.max_file_mb * 1024 * 1024,
+            max_video_bytes=upload_config.max_video_mb * 1024 * 1024,
+            max_total_bytes=upload_config.max_total_mb * 1024 * 1024,
+        )
+    )
+    minimum_frame_bytes = ingress.minimum_full_policy_frame_bytes()
+    if config.max_message_bytes < minimum_frame_bytes:
+        logger.warning(
+            "WebSocket maxMessageBytes={} is below the WebUI ingress policy capacity={}; "
+            "policy-valid messages may still hit the transport frame guard",
+            config.max_message_bytes,
+            minimum_frame_bytes,
+        )
+    media = WebUIMediaServer(
+        workspace_path=workspace_path,
+        logger=logger,
+    )
+    uploads = AttachmentHTTP(
+        AttachmentStore(
+            get_media_dir("websocket"),
+            limits=ingress.attachments,
+            max_pending_bytes=max(
+                128 * 1024 * 1024,
+                ingress.attachments.max_file_bytes,
+                ingress.attachments.max_total_bytes + ingress.attachments.max_video_bytes,
+            ),
+        )
+    )
+    transcripts = WebUITranscriptRecorder(session_manager, log=logger)
+    workspaces = WebUIWorkspaceController(
+        session_manager=session_manager,
+        default_workspace=workspace_path,
+        default_restrict_to_workspace=default_restrict_to_workspace,
+    )
+    temporary_chats = WebUITemporaryChats(
+        bus=bus,
+        session_manager=session_manager,
+        workspaces=workspaces,
+        logger=logger,
+    )
+    session_projection = WebUISessionProjection(
+        session_manager, subagent_manager=subagent_manager, log=logger
+    )
+    http = ServerHTTPHandler(
+        config=config,
+        session_manager=session_manager,
+        static_dist_path=static_dist_path,
+        runtime_model_name=runtime_model_name,
+        context_usage=context_usage,
+        bus=bus,
+        tokens=tokens,
+        media=media,
+        ingress=ingress,
+        workspaces=workspaces,
+        settings=settings,
+        skills_workspace_path=workspace_path,
+        disabled_skills=disabled_skills,
+        cron_service=cron_service,
+        local_trigger_store=local_trigger_store,
+        cron_pending_job_ids=cron_pending_job_ids,
+        local_trigger_pending_ids=local_trigger_pending_ids,
+        channel_feature_action=channel_feature_action,
+        channel_runtime_status=channel_runtime_status,
+        mcp_runtime_status=mcp_runtime_status,
+        mcp_reload=mcp_reload,
+        skill_state_action=skill_state_action,
+        recovery_action=recovery_action,
+        subagent_manager=subagent_manager,
+        discard_session=discard_session,
+        log=logger,
+    )
+    endpoint = WebUIServerEndpoint(config=config, http=http, tokens=tokens)
+    return ServerServices(
+        maintenance=maintenance,
+        http=http,
+        endpoint=endpoint,
+        settings=settings,
+        tokens=tokens,
+        media=media,
+        uploads=uploads,
+        ingress=ingress,
+        transcripts=transcripts,
+        workspaces=workspaces,
+        temporary_chats=temporary_chats,
+        session_projection=session_projection,
+        session_manager=session_manager,
+        cron_service=cron_service,
+        local_trigger_store=local_trigger_store,
+        cron_pending_job_ids=cron_pending_job_ids,
+        local_trigger_pending_ids=local_trigger_pending_ids,
+    )

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { AccountSettings } from "@/components/settings/account/AccountSettings";
+import { AccountSettings } from "@/features/settings/account/AccountSettings";
 import * as account from "@/lib/account";
 import { setAppLanguage } from "@/i18n";
 
@@ -19,7 +19,7 @@ async function fill(newPassword = "NewPassword!", confirmPassword = newPassword)
 }
 
 it("changes the password and clears sensitive form values after success", async () => {
-  const request = vi.spyOn(account, "accountRequest").mockResolvedValue();
+  const request = vi.spyOn(account, "accountRequest").mockResolvedValue(undefined);
   render(<AccountSettings />);
   await fill();
   await waitFor(() => expect(request).toHaveBeenCalledWith("change-password", { current_password: "OldPassword!", new_password: "NewPassword!" }));
@@ -29,7 +29,7 @@ it("changes the password and clears sensitive form values after success", async 
 });
 
 it("validates password strength and confirmation without sending invalid changes", async () => {
-  const request = vi.spyOn(account, "accountRequest").mockResolvedValue();
+  const request = vi.spyOn(account, "accountRequest").mockResolvedValue(undefined);
   render(<AccountSettings />);
   await fill("short");
   expect(screen.getByRole("alert")).toHaveTextContent("at least 10 characters");

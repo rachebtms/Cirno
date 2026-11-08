@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { UIMediaAttachment } from "@/lib/types";
+import type { UIMediaAttachment } from "@/lib/contracts/messages";
 import { ImageThumbnail } from "@/components/ImageGallery";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { useRegisterInlineImage } from "@/components/InlineImageContext";
@@ -101,7 +101,7 @@ function AttachmentFrame({
 }) {
   const frameClassName = cn(
     "not-prose my-3 block w-fit max-w-full overflow-hidden rounded-control",
-    "border border-border/60 bg-muted/40",
+    "border border-border/60 bg-surface-secondary/40",
     attachment.kind === "image" && "bg-background/85",
     attachment.kind === "video" ? "w-[min(100%,32rem)]" : "",
     variant === "compact" && "my-1 rounded-xl shadow-none",

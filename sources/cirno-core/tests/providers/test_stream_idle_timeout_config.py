@@ -4,19 +4,18 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import cirno_core.providers.openai_codex_provider as codex_provider
 import httpx
 import pytest
-from openai.types.chat import ChatCompletionChunk
-
-import cirno_core.providers.openai_codex_provider as codex_provider
 from cirno_core.providers.anthropic_provider import AnthropicProvider
-from cirno_core.providers.base import (
+from cirno_core.providers.bedrock.provider import BedrockProvider
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.timeouts import (
     DEFAULT_STREAM_IDLE_TIMEOUT_S,
     MAX_STREAM_IDLE_TIMEOUT_S,
     resolve_stream_idle_timeout_s,
 )
-from cirno_core.providers.bedrock_provider import BedrockProvider
-from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from openai.types.chat import ChatCompletionChunk
 
 
 class _AsyncStream:
@@ -128,7 +127,7 @@ async def test_codex_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> Non
         )
 
     def fake_client(*, timeout: float, verify: bool) -> httpx.AsyncClient:
-        seen["timeout"] = timeout
+        seen["timeout"] = timeout.read
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
     monkeypatch.setattr(codex_provider.httpx, "AsyncClient", fake_client)
@@ -141,3 +140,8 @@ async def test_codex_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> Non
     )
 
     assert seen["timeout"] == DEFAULT_STREAM_IDLE_TIMEOUT_S
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+def test_nonfinite_idle_timeout_uses_default(value):
+    assert resolve_stream_idle_timeout_s(env_value=value) == DEFAULT_STREAM_IDLE_TIMEOUT_S

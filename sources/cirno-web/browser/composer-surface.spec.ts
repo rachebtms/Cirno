@@ -1,15 +1,15 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  await page.route("**/api/commands", route => route.fulfill({ json: { commands: [] } }));
+  await page.route("**/v0/commands", route => route.fulfill({ json: { commands: [] } }));
 });
 
-for (const theme of ["light", "dark"]) {
+for (const theme of ["light", "dark"] as const) {
   test.describe(theme, () => {
     test.beforeEach(async ({ page }) => {
+      await seedPreviewPreferences(page, { language: "en", themeMode: theme });
       await page.addInitScript((theme) => {
-        localStorage.setItem("cirno.locale", "en");
-        localStorage.setItem("cirno-webui.theme", theme);
         document.documentElement.classList.toggle("dark", theme === "dark");
       }, theme);
     });
@@ -33,27 +33,21 @@ for (const theme of ["light", "dark"]) {
       await expect(input).toHaveValue("Keep the work in focus.");
     });
 
-    test("composer focus preserves the active goal's blue ring", async ({ page }) => {
-      await page.emulateMedia({ reducedMotion: "reduce" });
+    test("drafting preserves the active Goal and its accessible details", async ({ page }) => {
       await page.goto("/browser/fixture.html?case=composer-action&goal");
-      const surface = page.locator(".thread-composer-surface");
-      await expect(surface).toBeVisible();
-      const ring = await surface.evaluate(element => {
-        const probe = document.createElement("span");
-        probe.style.color = getComputedStyle(element).getPropertyValue("--tw-ring-color");
-        document.body.append(probe);
-        const color = getComputedStyle(probe).color;
-        probe.remove();
-        return color;
-      });
+      const goal = page.getByRole("status", { name: "Goal: Keep the work in focus.", exact: true });
       const input = page.getByRole("textbox", { name: "Message input" });
-      await input.blur();
-      const rest = await surface.evaluate(element => getComputedStyle(element).boxShadow);
-      expect(rest).toContain(ring);
-      await input.focus();
-      const focused = await surface.evaluate(element => getComputedStyle(element).boxShadow);
-      expect(focused).toContain(ring);
-      expect(focused).toBe(rest);
+      await input.fill("A follow-up while this Goal runs");
+      await expect(goal).toBeVisible();
+      const expand = goal.getByRole("button", { name: "Show full goal", exact: true });
+      await expand.click();
+      const details = page.getByRole("dialog");
+      await expect(details).toContainText("Keep the work in focus.");
+      await page.keyboard.press("Escape");
+      await expect(details).not.toBeVisible();
+      await expect(expand).toBeFocused();
+      await expect(input).toHaveValue("A follow-up while this Goal runs");
+      await expect(goal).toBeVisible();
     });
   });
 }

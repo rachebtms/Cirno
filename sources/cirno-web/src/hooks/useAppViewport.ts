@@ -1,6 +1,5 @@
 import { useLayoutEffect } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { isNativeRuntime } from "@/lib/runtime";
 
 /** One viewport owner for navigation, workbench composers and ordinary threads. */
 export function useAppViewport() {
@@ -8,7 +7,7 @@ export function useAppViewport() {
   useLayoutEffect(() => {
     const viewport = window.visualViewport;
     const root = document.getElementById("root");
-    if (!touch || !viewport || !root || isNativeRuntime()) return;
+    if (!touch || !viewport || !root) return;
     // Body portals (for example session search) share the app's viewport owner.
     const viewportStyle = document.documentElement.style;
 

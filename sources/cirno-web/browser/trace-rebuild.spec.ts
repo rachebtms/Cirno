@@ -1,0 +1,38 @@
+import { expect, test } from "@playwright/test";
+
+for (const width of [390, 1440]) for (const theme of ["light", "dark"]) test(`recording filters, details and controls work at ${width}px in ${theme}`, async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto(`/browser/fixture.html?case=trace-rebuild&lang=en&theme=${theme}`);
+  const table = page.getByRole("grid", { name: "Recorded events", exact: true });
+  await expect(table.getByRole("row")).toHaveCount(26);
+  const request = table.locator('[data-event-kind="request"]').first();
+  expect((await request.boundingBox())!.height).toBeLessThan(36);
+  await request.click();
+  const inspector = page.getByRole("region", { name: "Event inspector", exact: true });
+  await expect(inspector.getByRole("tab", { name: "Messages", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("tabpanel")).toContainText("Shared model instructions");
+  await inspector.getByRole("tab", { name: "Tools", exact: true }).click();
+  await expect(inspector.getByRole("tabpanel")).toContainText("nodes.execute");
+  await page.getByRole("button", { name: /Type$/ }).click();
+  await page.getByRole("option", { name: "Tool call", exact: true }).click();
+  await page.getByRole("button", { name: /Source conversation$/ }).click();
+  await page.getByRole("option", { name: "@worker", exact: true }).click();
+  await expect(table.locator('[data-event-kind="tool_activity"]')).toHaveCount(3);
+  await table.locator('[data-event-kind="tool_activity"]').first().click();
+  await expect(inspector.getByRole("tab", { name: "Raw", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("tabpanel")).toContainText('"command": "nvidia-smi"');
+  await page.getByRole("searchbox", { name: "Filter this page", exact: true }).fill("nvidia");
+  await page.getByRole("button", { name: "Pause recording", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Start recording", exact: true })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath("trace.png"), animations: "disabled" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Start recording", exact: true }).click();
+  await page.getByRole("button", { name: "Clear recording", exact: true }).click();
+  await expect(inspector).not.toBeVisible();
+  await expect(page.getByText("Recording new events. Earlier conversation history is not captured.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close recording tab", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Recording closed", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});

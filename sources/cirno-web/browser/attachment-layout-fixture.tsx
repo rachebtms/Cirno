@@ -1,5 +1,5 @@
-import { MessageBubble } from "@/components/MessageBubble";
-import type { UIMediaAttachment, UIMessage } from "@/lib/types";
+import { MessageBubble } from "@/features/messages";
+import type { UIMediaAttachment, UIMessage } from "@/lib/contracts/messages";
 import sampleVideo from "@/dev/gallery/fixtures/sample.webm";
 
 function image(name: string, color: string): UIMediaAttachment {

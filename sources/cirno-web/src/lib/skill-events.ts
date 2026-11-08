@@ -1,4 +1,4 @@
-import type { SkillsPayload } from "@/lib/types";
+import type { SkillsPayload } from "@/lib/contracts/skills";
 
 export const SKILLS_CHANGED_EVENT = "cirno:skills-changed";
 export const SKILLS_REFRESH_EVENT = "cirno:skills-refresh";

@@ -13,7 +13,7 @@ from cirno_core.runtime.heartbeat import enqueue_heartbeat
 from cirno_core.storage.instance import InstanceData
 from cirno_core.nodes.service import Nodes
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.recovery import pending_followups
+from cirno_core.session.recovery.pending import pending_followups
 from cirno_server.webui.instance_api import instance_action
 
 
@@ -23,6 +23,8 @@ async def setup(tmp_path):
     set_instance_path(home)
     sessions = SessionManager(home / "workspace", sessions_root=home / "sessions")
     await sessions.state.get("websocket:work")
+    from cirno_core.session.router_session import ensure_router_session
+    await ensure_router_session(sessions)
     bus = MessageBus()
     yield home, sessions, bus
     await sessions.state.aclose()
@@ -34,11 +36,11 @@ async def test_heartbeat_queues_once_and_survives_restart(setup):
     assert await enqueue_heartbeat(sessions, bus, "Check active work")
     assert not await enqueue_heartbeat(sessions, bus, "Check active work")
     incoming = await bus.consume_inbound()
-    assert incoming.session_key == "websocket:global"
+    assert incoming.session_key == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
     assert incoming.sender_id == "heartbeat"
     assert not incoming.is_user_input
-    header = await sessions.state.read("websocket:global")
-    assert header.metadata["title"] == "Cirno"
+    header = await sessions.state.read("websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")
+    assert header.metadata["title"] == "@cirno"
     recovered = pending_followups(header)
     assert len(recovered) == 1 and not recovered[0].is_user_input
     assert recovered[0].metadata["_heartbeat"] is True
@@ -55,7 +57,7 @@ async def test_reports_to_cirno_are_addressed_to_its_queue(setup):
         )
     assert result.startswith("Queued to @")
     inbound = await bus.consume_inbound()
-    assert inbound.session_key == "websocket:global"
+    assert inbound.session_key == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
     assert inbound.metadata["_session_message"]["source_session_key"] == "websocket:work"
 
 
@@ -80,22 +82,16 @@ async def test_password_nodes_redact_and_preserve_credentials(setup, monkeypatch
     home, sessions, bus = setup
     data = InstanceData(home / "state")
     nodes = Nodes(data)
-    saved = nodes.save_node(
-        {
-            "name": "Test",
-            "host": "localhost",
-            "username": "test",
-            "auth_method": "password",
-            "password": "test-only-secret",
-        }
-    )
+    connection = {"host": "localhost", "username": "test", "auth_method": "password", "password": "test-only-secret"}
+    credential = nodes.credentials.save(label="Test", kind="ssh", ssh=connection, node_enabled=True, agent_visible=True)
+    saved = nodes.list_nodes()[0]
     assert saved["has_password"] and "password" not in saved
-    updated = nodes.save_node({**saved, "name": "Renamed", "password": ""})
+    nodes.credentials.save(id=credential["id"], label="Renamed", kind="ssh", ssh={**connection, "password": ""})
     assert nodes.node(saved["id"]).password == "test-only-secret"
     assert "test-only-secret" not in json.dumps(nodes.list_nodes())
     node = nodes.node(saved["id"])
     assert "BatchMode=no" in nodes.arguments(node)
-    nodes.save_node({**updated, "auth_method": "key"})
+    nodes.credentials.save(id=saved["id"], label="Renamed", kind="ssh", ssh={**connection, "auth_method": "key"})
     assert not nodes.node(saved["id"]).password
     assert data.path.stat().st_mode & 0o777 == 0o600
     execute = AsyncMock(return_value="direct output")
@@ -112,7 +108,7 @@ async def test_password_nodes_redact_and_preserve_credentials(setup, monkeypatch
 async def test_full_access_write_is_not_limited_to_home_exceptions(setup):
     from cirno_core.agent.tools.context import ToolContext
     from cirno_core.agent.tools.filesystem import WriteFileTool
-    from cirno_core.config.schema import ToolsConfig
+    from cirno_core.config.tools import ToolsConfig
 
     home, _, _ = setup
     workspace = home / "workspace"
@@ -129,7 +125,9 @@ async def test_heartbeat_run_consumes_journal_and_delivers_tool_reply(setup):
     from unittest.mock import MagicMock
 
     from cirno_core.agent.loop import AgentLoop
-    from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+    from cirno_core.providers.generation import GenerationSettings
+    from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     home, _, bus = setup
     provider = MagicMock(aclose=AsyncMock())
@@ -151,15 +149,15 @@ async def test_heartbeat_run_consumes_journal_and_delivers_tool_reply(setup):
     )
     loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model")
     from cirno_core.agent.turn_delivery import TurnDeliveryFactory
-    from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
+    from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
     loop.turn_delivery_factory = TurnDeliveryFactory(bus, route_policy=WebuiTurnRoutePolicy(loop.sessions))
     try:
         await enqueue_heartbeat(loop.sessions, bus, "Send one useful update")
         message = await bus.consume_inbound()
-        assert loop.turn_delivery_factory.create(message, message.session_key).route.publish_lifecycle
-        response = await loop._process_message(message)
+        assert (await loop.turn_delivery_factory.create(message, message.session_key)).route.publish_lifecycle
+        response = await loop.processing.process(message)
         assert response is None
-        assert not pending_followups(await loop.sessions.state.read("websocket:global"))
+        assert not pending_followups(await loop.sessions.state.read("websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"))
         visible = []
         while bus.outbound_size:
             outbound = await bus.consume_outbound()
@@ -168,22 +166,23 @@ async def test_heartbeat_run_consumes_journal_and_delivers_tool_reply(setup):
         assert any(
             row.content == "Heartbeat ready"
             and row.channel == "websocket"
-            and row.chat_id == "global"
+            and row.chat_id == "b1ec9323-2155-5f24-bc56-1da2f59aeecb"
             for row in visible
         )
     finally:
         await loop.aclose()
 
 
-@pytest.mark.parametrize("session_key", ["websocket:global", "websocket:work"])
+@pytest.mark.parametrize("session_key", ["websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", "websocket:work"])
 @pytest.mark.parametrize("background", [False, True])
 async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_key, background):
     from unittest.mock import MagicMock
 
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.events import InboundMessage
-    from cirno_core.providers.base import GenerationSettings, LLMResponse
-    from cirno_core.session.global_session import ensure_global_session
+    from cirno_core.providers.generation import GenerationSettings
+    from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.session.router_session import ensure_router_session
 
     home, _, bus = setup
     provider = MagicMock(aclose=AsyncMock())
@@ -193,8 +192,8 @@ async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="Nothing to report"))
     loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model")
     try:
-        await ensure_global_session(loop.sessions)
-        await loop._process_message(InboundMessage(
+        await ensure_router_session(loop.sessions)
+        await loop.processing.process(InboundMessage(
             channel="system" if background else "websocket",
             sender_id="heartbeat" if background else "user",
             chat_id=session_key.split(":", 1)[1],
@@ -206,13 +205,13 @@ async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_
         messages = provider.chat_stream_with_retry.call_args.kwargs["messages"]
         system = messages[0]["content"]
         assert messages[0]["role"] == "system"
-        if session_key == "websocket:global":
+        if session_key == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb":
             assert "MUST call `user__message(content=..., media=[...])`" in system
             assert "including greetings" in system
             assert "Direct greetings and questions still require a reply" in system
             assert "finish silently" in system
         else:
-            assert "# Cirno Conversation" not in system
+            assert "# Personal Router Conversation" not in system
         # A silent background check must finish without a forced tool retry.
         assert provider.chat_stream_with_retry.await_count == 1
         while bus.outbound_size:
@@ -225,7 +224,7 @@ async def test_project_is_bound_before_chat_attach(setup):
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
-    from cirno_server.webui.inbound_commands import WebUICommandRouter
+    from cirno_server.webui.commands.router import WebUICommandRouter
     home, sessions, _ = setup
     project = InstanceData(home / "state").save('projects', {'name':'Independent project'})
     scope = SimpleNamespace(payload=lambda: {'kind':'directory','path':str(home/'workspace')})
@@ -237,8 +236,8 @@ async def test_project_is_bound_before_chat_attach(setup):
     router._session_projection = SimpleNamespace(attach_fields=AsyncMock(return_value={}))
     router._outbound = SimpleNamespace(hydrate=AsyncMock())
     router.workspace_project_selection_available = lambda connection: True
-    async def resolve(connection, factory): return factory()
-    router.workspace_scope_or_error = resolve
+    async def resolve(connection, factory, *, request_id=None): return factory()
+    router.messages = SimpleNamespace(workspace_scope_or_error=resolve)
     await router.dispatch(object(), 'test-client', {'type':'new_chat','project_id':project['id']})
     key = 'websocket:' + transport.webui_attach.call_args.args[1]
     metadata = (await sessions.state.read_metadata(key))['metadata']
@@ -253,8 +252,8 @@ async def test_fixed_cirno_name_and_role_prompt_use_session_identity(setup):
     from cirno_core.agent.tools.coordination import CreateSessionTool
 
     _, sessions, bus = setup
-    await sessions.state.get("websocket:global")  # No is_global flag is needed.
-    context = RequestContext(channel="websocket", chat_id="global", session_key="websocket:global")
+    await sessions.state.mutate_metadata("websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", lambda metadata: metadata.clear())  # Identity determines the role.
+    context = RequestContext(channel="websocket", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")
     with request_context(context):
         result = await SetSessionTitleTool(sessions, bus).execute(title="Wrong title")
     assert not getattr(result, "is_error", False)
@@ -262,13 +261,13 @@ async def test_fixed_cirno_name_and_role_prompt_use_session_identity(setup):
     assert bus.outbound_size == 0
     provider = CreateSessionTool(sessions)
     block = await provider._provide_runtime_context(context)
-    assert "Cirno (coordination)" in block.content
+    assert "@cirno (personal Router)" in block.content
     assert "conversations__set_title" not in block.content
     ordinary = await provider._provide_runtime_context(RequestContext(
         channel="websocket", chat_id="work", session_key="websocket:work",
     ))
     assert "Use conversations__set_title early" in ordinary.content
-    from cirno_core.session.webui_turns import maybe_generate_webui_title
+    from cirno_core.session.webui_turns.titles import maybe_generate_webui_title
     provider = AsyncMock()
     await sessions.state.update_metadata(context.session_key, {"webui": True})
     assert not await maybe_generate_webui_title(
@@ -391,10 +390,10 @@ async def test_inflight_goal_completion_cannot_overwrite_user_pause(setup, monke
 
 async def test_reset_keeps_cirno_identity_but_discards_old_goal_and_reports(setup):
     _, sessions, _ = setup
-    key = "websocket:global"
+    key = "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
     before = await sessions.state.get_header(key)
+    identity = dict(before.metadata)
     await sessions.state.update_metadata(key, {
-        "title": "Cirno", "is_global": True,
         "goal_state": {"status": "active", "objective": "Old task"},
         "_sustained_goal_continuation_rounds": 7,
         "work_report": {"id": "old"}, "work_report_pending": [{"id": "old"}],
@@ -402,21 +401,21 @@ async def test_reset_keeps_cirno_identity_but_discards_old_goal_and_reports(setu
     await sessions.state.reset(key)
     after = await sessions.state.read_header(key)
     assert after.generation != before.generation
-    assert after.metadata == {"title": "Cirno", "is_global": True}
+    assert after.metadata == identity
 
 
 async def test_goal_continuation_enables_webui_execution_stream(setup):
     from cirno_core.agent.turn_delivery import TurnDeliveryFactory
     from cirno_core.bus.events import InboundMessage
-    from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
+    from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
 
     _, sessions, bus = setup
     await sessions.state.update_metadata("websocket:work", {"webui": True})
-    delivery = TurnDeliveryFactory(bus, route_policy=WebuiTurnRoutePolicy(sessions)).create(
+    delivery = (await TurnDeliveryFactory(bus, route_policy=WebuiTurnRoutePolicy(sessions)).create(
         InboundMessage(channel="websocket", chat_id="work", sender_id="system:goal", content="Continue",
                        metadata={"_internal_continuation": True, "_skip_user_persist": True}),
         "websocket:work", enable_stream=True,
-    )
+    ))
     assert delivery.streaming
     assert delivery.route.metadata["webui"] is True
     assert delivery.route.metadata["_wants_stream"] is True

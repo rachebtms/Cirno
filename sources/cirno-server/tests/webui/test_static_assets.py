@@ -4,13 +4,15 @@ import gzip
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from cirno_server.webui.ws_http import ServerHTTPHandler
+from cirno_server.webui.http import ServerHTTPHandler
+from cirno_server.webui.http.assets import AssetsRoutes
 
 
 def _handler(static_dist_path: Path) -> ServerHTTPHandler:
     handler = object.__new__(ServerHTTPHandler)
     handler.static_dist_path = static_dist_path
     handler._log = MagicMock()
+    handler.assets_routes = AssetsRoutes(handler)
     return handler
 
 
@@ -22,7 +24,7 @@ def test_static_asset_serves_precompressed_gzip_variant(tmp_path) -> None:
     compressed = gzip.compress(source, mtime=0)
     asset.with_name(f"{asset.name}.gz").write_bytes(compressed)
 
-    response = _handler(tmp_path)._serve_static(
+    response = _handler(tmp_path).assets_routes._serve_static(
         "/assets/app-abc123.js",
         accept_encoding="br, gzip; q=0.8",
     )
@@ -43,7 +45,7 @@ def test_static_asset_preserves_identity_when_gzip_is_rejected(tmp_path) -> None
     asset.write_bytes(source)
     asset.with_name(f"{asset.name}.gz").write_bytes(gzip.compress(source, mtime=0))
 
-    response = _handler(tmp_path)._serve_static(
+    response = _handler(tmp_path).assets_routes._serve_static(
         "/assets/app-abc123.css",
         accept_encoding="gzip;q=0, br",
     )
@@ -54,15 +56,15 @@ def test_static_asset_preserves_identity_when_gzip_is_rejected(tmp_path) -> None
     assert response.body == source
 
 
-def test_spa_fallback_uses_precompressed_index_without_long_term_cache(tmp_path) -> None:
+def test_root_uses_precompressed_index_without_long_term_cache(tmp_path) -> None:
     source = b"<!doctype html><div id='root'></div>" * 100
     index = tmp_path / "index.html"
     index.write_bytes(source)
     compressed = gzip.compress(source, mtime=0)
     index.with_name("index.html.gz").write_bytes(compressed)
 
-    response = _handler(tmp_path)._serve_static(
-        "/chat/example",
+    response = _handler(tmp_path).assets_routes._serve_static(
+        "/",
         accept_encoding="gzip",
     )
 

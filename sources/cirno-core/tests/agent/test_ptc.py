@@ -9,7 +9,7 @@ from cirno_core.agent.ptc.registry import PtcToolRegistry
 from cirno_core.agent.tools.base import Tool
 from cirno_core.agent.tools.execution import execute_tool_calls
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.providers.base import ToolCallRequest
+from cirno_core.providers.tool_calls import ToolCallRequest
 
 
 class ExampleTool(Tool):
@@ -51,7 +51,7 @@ async def test_only_run_code_is_directly_exposed():
     registry = PtcToolRegistry(native)
     assert [s["function"]["name"] for s in registry.get_definitions()] == ["ptc__run"]
     assert registry.prepare_call("example", {"value": 1})[2]
-    assert '"name":"example"' in registry.sdk_prompt()
+    assert '"name":"example"' in registry.model_instructions()
 
 
 @pytest.mark.parametrize("code,reason", [
@@ -118,7 +118,7 @@ async def test_session_enables_sdk_only_for_ptc_and_preserves_tool_result(tmp_pa
     from cirno_core.agent.context import TranscriptInput
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
     provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -131,7 +131,7 @@ async def test_session_enables_sdk_only_for_ptc_and_preserves_tool_result(tmp_pa
     tools.register(ExampleTool())
     await loop.sessions.state.open_with_metadata("cli:ptc", {"ptc_mode": True})
     session = await loop.sessions.state.read("cli:ptc")
-    result = await loop._run_agent_loop(TranscriptInput(history=[], current_message="test"),
+    result = await loop.model_turn.run(TranscriptInput(history=[], current_message="test"),
         runtime=loop.llm_runtime(), tools=tools, session=session)
     assert result.final_content == "Seven"
     request = provider.chat_stream_with_retry.call_args_list[0].kwargs

@@ -1,4 +1,4 @@
-import type { UIMediaAttachment, UIMediaKind } from "@/lib/types";
+import type { UIMediaAttachment, UIMediaKind } from "@/lib/contracts/messages";
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",

@@ -13,7 +13,8 @@ import {
   ToolRunIcon,
 } from "@/components/icons/product-icons";
 import { AlertCircle, FileSearch, type LucideIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
+import { ConversationCatalogContext } from "@/features/conversations/catalog/context";
 import { useTranslation } from "react-i18next";
 
 import { ActivityStep } from "@/components/thread/activity/ActivityStep";
@@ -36,7 +37,10 @@ interface GenericToolRunModel {
 export function GenericToolRun({ items }: { items: GenericToolRunItem[] }) {
   const { t } = useTranslation();
   const model = useMemo(() => buildModel(items, t), [items, t]);
-  const action = formatActivityTarget(t, model.label, model.detail);
+  const catalog = useContext(ConversationCatalogContext);
+  const target = catalog?.sessions.find(session => session.handle?.id === model.detail || session.key === model.detail);
+  const detail = target?.handle ? `@${target.handle.name}` : model.detail;
+  const action = formatActivityTarget(t, model.label, detail);
 
   return (
     <ActivityStep

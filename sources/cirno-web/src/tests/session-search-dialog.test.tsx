@@ -6,7 +6,8 @@ import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { useAppViewport } from "@/hooks/useAppViewport";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { ThreadTranscript } from "@/lib/thread-transcript";
-import type { ChatSummary, UIMessage } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 function session(index: number): ChatSummary {
   return {
@@ -105,11 +106,9 @@ describe("SessionSearchDialog", () => {
     expect(dialog.className).not.toContain("backdrop-blur");
     // The body portal must share the app's keyboard-fitted frame. Its list
     // height is bounded by that frame, not by the layout viewport's 100vh.
-    expect(dialog.parentElement).toHaveStyle({
-      top: "var(--app-viewport-top, 0px)",
-      height: "var(--app-viewport-height, 100%)",
-      bottom: "auto",
-    });
+    expect(dialog.parentElement!.style.top).toBe("var(--app-viewport-top, 0px)");
+    expect(dialog.parentElement!.style.height).toBe("var(--app-viewport-height, 100%)");
+    expect(dialog.parentElement!.style.bottom).toBe("auto");
     expect(dialog).toHaveClass("max-h-[min(40rem,100%)]");
     expect(screen.getByTestId("session-search-scroll")).toHaveClass("overflow-y-auto");
     expect(screen.queryByText("/model fast")).not.toBeInTheDocument();
@@ -164,7 +163,7 @@ describe("SessionSearchDialog", () => {
       expect(screen.getByText(/权限配置 Full Access/).textContent!.length).toBeLessThanOrEqual(162);
     }
     fireEvent.change(input, { target: { value: "uncached server content" } });
-    expect(screen.getByText("No matching topics.")).toBeInTheDocument();
+    expect(screen.getByText("No matching conversations.")).toBeInTheDocument();
     fireEvent.change(input, { target: { value: "权限" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onSelect).toHaveBeenCalledWith("websocket:chat-1");

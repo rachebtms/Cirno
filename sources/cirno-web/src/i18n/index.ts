@@ -11,7 +11,6 @@ import {
   defaultLocale,
   fallbackLocale,
   normalizeLocale,
-  persistLocale,
   resolveInitialLocale,
   supportedLocales,
   type SupportedLocale,
@@ -122,12 +121,20 @@ export async function setAppLanguage(locale: SupportedLocale): Promise<void> {
   await initializeI18n();
   await loadLocaleResources(locale);
   await i18n.changeLanguage(locale);
+  const { patchPreferences } = await import("@/features/preferences/store");
+  patchPreferences({ language: locale });
+}
+
+export async function applyServerLanguage(locale: string): Promise<void> {
+  const selected = normalizeLocale(locale);
+  if (currentLocale() === selected) return;
+  await loadLocaleResources(selected);
+  await i18n.changeLanguage(selected);
 }
 
 function syncLocaleSideEffects(language: string) {
   const locale = normalizeLocale(language);
   applyDocumentLocale(locale);
-  persistLocale(locale);
 }
 
 export default i18n;

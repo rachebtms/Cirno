@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from cirno_core.config.loader import load_config, save_config
 from cirno_core.config.schema import Config
 from cirno_server.webui.settings.api import update_runtime_config_settings

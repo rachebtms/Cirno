@@ -1,0 +1,36 @@
+import type { Dispatch, SetStateAction } from "react";
+import type { EditCompletion } from "../../shared/useEditCompletion";
+import type { RequestParameterDraft } from "../../providers/ProviderParameterFields";
+import type { SettingsPayload } from "@/lib/contracts/settings";
+import type { AgentSettingsDraft } from "../modelDraft";
+export type ModelsSettingsProps = {
+
+  editCompletion: EditCompletion;
+  token: string;
+  form: AgentSettingsDraft;
+  setForm: Dispatch<SetStateAction<AgentSettingsDraft>>;
+  editingPresetId: string;
+  presetNameError: string | null;
+  error?: string | null;
+  settings: SettingsPayload;
+  dirty: boolean;
+  creating: boolean;
+  creatingSaving: boolean;
+  callOrder: string[];
+  saving: boolean;
+  orderSaving: boolean;
+  showBrandLogos: boolean;
+  providerSaving: string | null;
+  onChangeCallOrder: (order: string[]) => void;
+  onProviderOAuthLogin: (provider: string) => void;
+  onAddProvider: (trigger: HTMLButtonElement | null, onAdded: (provider: string) => void) => void;
+  onConfigureProvider: (provider: string, trigger: HTMLButtonElement | null) => void;
+  onManageProviders: (trigger: HTMLButtonElement) => void;
+  onSave: () => void;
+  onSaveRequestSettings: (values: Partial<RequestParameterDraft>) => Promise<void>;
+  onBeginCreate: () => void;
+  onCancelCreate: () => void;
+  onClearPresetNameError: () => void;
+  onSelectConfiguration: (name: string) => void;
+  onDeleteConfiguration: (preset: SettingsPayload["model_presets"][number], onDeleted: () => void) => void;
+};

@@ -9,7 +9,8 @@ import time
 
 import pytest
 
-from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
 from cirno_core.session.sqlite_store import SessionConflictError
 
 
@@ -253,13 +254,13 @@ async def test_late_metadata_and_summary_cannot_resurrect_deleted_session(tmp_pa
 
 
 async def test_large_draft_copy_and_publication_run_on_owner_worker(tmp_path, monkeypatch):
-    import cirno_core.session.state as owner
+    from cirno_core.session.state import repository, turns
 
     state = SessionManager(tmp_path).state
     draft = await state.get("chat:copy")
     draft.add_message("user", "large transcript" * 10000)
     loop_thread = threading.get_ident()
-    original_copy = owner.deepcopy
+    original_copy = repository.deepcopy
     copied = threading.Event()
 
     def checked_copy(value):
@@ -268,7 +269,8 @@ async def test_large_draft_copy_and_publication_run_on_owner_worker(tmp_path, mo
             copied.set()
         return original_copy(value)
 
-    monkeypatch.setattr(owner, "deepcopy", checked_copy)
+    for owner in (repository, turns):
+        monkeypatch.setattr(owner, "deepcopy", checked_copy)
     await state.prepare_input(draft)
     await state.checkpoint_view(draft, {"step": 1})
     await state.finish_turn(draft)
@@ -355,7 +357,7 @@ async def test_read_and_delete_are_serialized_without_cache_ghost(tmp_path, monk
     state = manager.state
     await state.get("chat:a")
     loaded, release = threading.Event(), threading.Event()
-    original = state._load
+    original = state.repository.load
     first = True
 
     def paused_load(key, *, history=True):
@@ -367,7 +369,7 @@ async def test_read_and_delete_are_serialized_without_cache_ghost(tmp_path, monk
             release.wait(5)
         return session
 
-    monkeypatch.setattr(state, "_load", paused_load)
+    monkeypatch.setattr(state.repository, "load", paused_load)
     read = asyncio.create_task(state.read("chat:a"))
     assert await asyncio.to_thread(loaded.wait, 2)
     deletion = asyncio.create_task(state.delete("chat:a"))
@@ -431,5 +433,5 @@ def test_committed_version_tracks_history_and_session_replacement(tmp_path, monk
     def unexpected_decode(*args, **kwargs):
         pytest.fail("version read decoded history or metadata")
 
-    monkeypatch.setattr("cirno_core.session.sqlite_store._object", unexpected_decode)
+    monkeypatch.setattr("cirno_core.session.sqlite_store.decode_record", unexpected_decode)
     assert manager.read_session_version(key) == (replacement.generation, replacement.revision)

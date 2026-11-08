@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { WebuiThreadCache } from "@/lib/webui-thread-cache";
-import type { WebuiThreadPersistedPayload } from "@/lib/types";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 function payload(id: string): WebuiThreadPersistedPayload {
   return {

@@ -1,0 +1,20 @@
+.workspace-directory-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .workspace-directory-loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, hsl(var(--cirno-foreground) / 0.045), transparent);
+    transform: translateX(-100%);
+    animation: workspace-directory-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes workspace-directory-shimmer {
+  to { transform: translateX(100%); }
+}

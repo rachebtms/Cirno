@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cirno_server.channels.websocket.runtime import WebSocketConfig
+from cirno_server.channels.websocket.config import WebSocketConfig
 from cirno_core.config.loader import load_config, resolve_config_env_vars
 
 
@@ -26,6 +26,7 @@ def test_first_boot_generates_valid_container_config(tmp_path):
     assert result.returncode == 0, result.stderr
     config = resolve_config_env_vars(load_config(path))
     ws = WebSocketConfig.model_validate(config.channels.model_dump()["websocket"])
+    assert config.last_run_version == "0.2.0"
     assert config.server.health_host == ws.host == "0.0.0.0"
     assert ws.enabled and ws.websocket_requires_token
     assert ws.browser_setup
@@ -68,8 +69,23 @@ def test_failed_write_does_not_leave_an_existing_config(tmp_path):
     from cirno_server.cli.docker_bootstrap import initialize_config
 
     path = tmp_path / "config.json"
-    with patch.object(Path, "replace", side_effect=PermissionError("read-only mount")):
+    with patch("cirno_core.utils.atomic_file.replace_atomic", side_effect=PermissionError("read-only mount")):
         with pytest.raises(PermissionError, match="read-only mount"):
             initialize_config(path)
     assert not path.exists()
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_slim_configuration_uses_full_image_assets_without_rewriting_custom_settings(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    assert _initialize(path).returncode == 0
+    previous = path.read_bytes()
+    monkeypatch.setenv("CIRNO_BUNDLED_EMBEDDING_DIR", "/opt/cirno/models/bge-small-zh-v1.5")
+
+    config = load_config(path)
+
+    memory = config.agents.defaults.memory
+    assert memory.embedding_model_path.endswith("/model_quantized.onnx")
+    assert memory.embedding_tokenizer_path.endswith("/tokenizer.json")
+    assert not memory.embedding_enabled
+    assert path.read_bytes() == previous

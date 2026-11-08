@@ -1,4 +1,4 @@
-import type { WorkspaceDirectoriesPayload } from "@/lib/types";
+import type { WorkspaceDirectoriesPayload } from "@/lib/contracts/workspaces";
 import { normalizeWorkspacePath, type BrowseWorkspaceDirectories } from "@/lib/workspace";
 
 const MAX_DIRECTORIES = 64;

@@ -1,8 +1,8 @@
 # Cirno
 
-Cirno is a general-purpose AI assistant with a Python service and a React/TypeScript browser interface, based on [Nanobot](https://github.com/HKUDS/nanobot).
+Cirno is a general-purpose AI assistant with a Python service and a React/TypeScript browser interface, built for personal assistance and sustained research.
 
-Conversations have separate histories, input queues, Goals and cancellation scopes. The Cirno coordination conversation delegates execution to ordinary conversations and presents reports. Projects group conversations independently of their working directories. Memory, profiles and learned Skills live in Agent Home.
+Conversations have separate histories, input queues, Goals and cancellation scopes. The Router (default `@cirno`) handles brief checks directly, delegates medium and large tasks to ordinary conversations and presents reports. Projects group conversations independently of their working directories. Memory, profiles and learned Skills live in Agent Home.
 
 ## Run from source
 
@@ -11,11 +11,11 @@ Requires Python 3.11+ and Node.js 24 for the frontend build. From the repository
 ```sh
 npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run build
-python -m pip install -e sources/cirno-core -e sources/cirno-server -e .
+python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e .
 cirno --port 8000
 ```
 
-Open `http://localhost:8000` and configure a provider under Settings → Models. On first launch, register the instance owner and configure a model in the browser. Data defaults to `~/.cirno/`; use `cirno --home /path/to/instance` for a separate instance. See [configuration](documents/configuration.md).
+Open `http://localhost:8000` and configure a connection under Settings → Providers, then add a model under Settings → Models. On first launch, register the instance owner, choose the Router’s display @name (default `@cirno`), and configure a model in the browser. Data defaults to `~/.cirno/`; use `cirno --home /path/to/instance` for a separate instance. See [configuration](documents/configuration.md).
 
 The new-conversation header offers optional [PTC mode](documents/architecture/ptc.md), which lets the model compose tool calls inside a bounded Python program. It is off by default and saved per conversation.
 
@@ -36,7 +36,8 @@ Use `docker compose -f compose.yaml -f compose.full.yaml up -d` for the `latest-
 
 ## Repository and documentation
 
-- `sources/cirno-core/`: execution engine, model providers, memory, tools, Skills and session state.
+- `sources/cirno-core/`: execution engine, model providers, memory coordination, tools, Skills and session state.
+- `sources/cirno-memory/`, `sources/cirno-usage/`, `sources/cirno-vault/`: memory retrieval, usage accounting and encrypted credentials.
 - `sources/cirno-server/`: HTTP/WebSocket API, Telegram, service lifecycle and settings.
 - `sources/cirno/`: lightweight application distribution and public SDK facade.
 - `sources/cirno-web/`: browser client and client contracts.
@@ -47,8 +48,10 @@ Start with the [documentation index](documents/README.md). It covers [memory](do
 
 ## Releases
 
-The current version is **0.1.6**. See the [release notes](documents/releases/0.1.6.md). Existing 0.1.3, 0.1.4 and 0.1.5 instances can upgrade by replacing the image while keeping the same instance volume. See the [upgrade steps](documents/docker.md#upgrading-from-013). Layouts from versions before 0.1.3 are not automatically migrated.
+The current version is **0.2.0**. See the [release notes](documents/releases/0.2.0.md). Instances on 0.1.6 are automatically migrated at startup while retaining their instance volume. See [instance migration](documents/migrations.md) and the [Docker upgrade steps](documents/docker.md#upgrading-from-016).
 
-## Attribution and updates
+## Acknowledgements and updates
 
-This fork starts from Nanobot commit `1c28b20c7e11c06b5f589259e62be238da387b11`. Upstream copyright and third-party notices are preserved in [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Cirno is maintained independently. Update the checkout, rebuild the frontend and reinstall the Python package to upgrade; containers update by rebuilding or pulling a published image. The application retains service restart but has no in-app updater.
+Cirno draws on ideas and earlier code from [Nanobot](https://github.com/HKUDS/nanobot), [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), and [DeepSeek SuperAgent](https://github.com/deepseek-ai/dsh-superagent-prototype). Upstream copyright and third-party notices are preserved in [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Cirno is maintained independently. Update the checkout, rebuild the frontend and reinstall the Python package to upgrade; containers update by rebuilding or pulling a published image. The application retains service restart but has no in-app updater.
+
+The [tabbed workspace guide](documents/workspace.md) covers file editors, local and SSH terminals, request transparency, and encrypted personal credentials in 0.2.0.

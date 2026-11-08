@@ -6,8 +6,9 @@ import { SubagentTaskDock } from "@/components/thread/SubagentTaskDock";
 import { SubagentThreadMessages, useHasSubagentResults } from "@/components/thread/SubagentTaskResults";
 import { SubagentTasksProvider } from "@/components/thread/SubagentTasks";
 import { setAppLanguage } from "@/i18n";
-import { DEFAULT_LOCAL_PREFS, LOCAL_PREFS_STORAGE_KEY, writeLocalPreferences } from "@/lib/local-preferences";
-import type { InboundEvent, SubagentTaskSnapshot, UIMessage } from "@/lib/types";
+import { DEFAULT_PREFERENCES, clearOwnerPreferences, writePreferences } from "@/features/preferences/store";
+import type { InboundEvent } from "@/lib/contracts/events";
+import type { SubagentTaskSnapshot, UIMessage } from "@/lib/contracts/messages";
 
 const requestMutation = vi.fn();
 const chatHandlers = new Set<(event: InboundEvent) => void>();
@@ -71,7 +72,7 @@ function expectBefore(first: Node, second: Node) {
 
 describe("subagent result archives", () => {
   beforeEach(async () => {
-    localStorage.removeItem(LOCAL_PREFS_STORAGE_KEY);
+    clearOwnerPreferences();
     await setAppLanguage("en");
     requestMutation.mockReset();
     client.onChat.mockClear();
@@ -83,7 +84,7 @@ describe("subagent result archives", () => {
     cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    localStorage.removeItem(LOCAL_PREFS_STORAGE_KEY);
+    clearOwnerPreferences();
   });
 
   it("keeps queued, running and stopping work out of chat until a terminal result arrives", async () => {
@@ -254,7 +255,7 @@ describe("subagent result archives", () => {
   });
 
   it("preserves each disclosure through other task outcomes, history prepends and Activity preference changes", async () => {
-    act(() => { writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, activityMode: "expanded" }); });
+    act(() => { writePreferences({ ...DEFAULT_PREFERENCES, activityMode: "expanded" }); });
     vi.mocked(fetch).mockImplementation(async () => response([
       task(),
       task({ task_id: "second", label: "Second check", created_at: 101 }),
@@ -265,7 +266,7 @@ describe("subagent result archives", () => {
     const archive = await screen.findByRole("region", { name: "Subtasks" });
     expect(summary(archive)).toHaveAttribute("aria-expanded", "false");
     await user.click(summary(archive));
-    act(() => { writeLocalPreferences(DEFAULT_LOCAL_PREFS); });
+    act(() => { writePreferences(DEFAULT_PREFERENCES); });
     expect(summary(archive)).toHaveAttribute("aria-expanded", "true");
 
     emitTask(task({ task_id: "other", label: "Other check", revision: 2, state: "error", error: "Other work failed",
@@ -285,7 +286,7 @@ describe("subagent result archives", () => {
       .toEqual(["task-1", "second"]);
     expect(summary(screen.getByRole("region", { name: "Other tasks" }))).toHaveAttribute("aria-expanded", "true");
     await user.click(summary(retained));
-    act(() => { writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, activityMode: "expanded" }); });
+    act(() => { writePreferences({ ...DEFAULT_PREFERENCES, activityMode: "expanded" }); });
     expect(summary(retained)).toHaveAttribute("aria-expanded", "false");
     expect(within(retained).queryByRole("button", { name: "Config check Completed 4s" })).not.toBeInTheDocument();
   });

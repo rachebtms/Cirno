@@ -1,4 +1,4 @@
-import type { CliAppInfo, CliAppsPayload } from "@/lib/types";
+import type { CliAppInfo, CliAppsPayload } from "@/lib/contracts/apps";
 
 export const CLI_APPS_CHANGED_EVENT = "cirno:cli-apps-changed";
 

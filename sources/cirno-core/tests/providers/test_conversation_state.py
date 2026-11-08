@@ -6,13 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cirno_core.providers.base import (
-    LLMProvider,
-    LLMResponse,
-    ProviderCallContext,
-    ProviderConversationState,
-    ToolCallRequest,
-)
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext, ProviderConversationState
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.providers.conversation_state import (
     ProviderConversationStateController,
     allows_conversation_message_merge,

@@ -1,6 +1,6 @@
 import { ThreadHistoryStatus } from "@/components/thread/ThreadHistoryStatus";
 import { ThreadMessages } from "@/components/thread/ThreadMessages";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 export function SubagentThreadView({ messages, loading, error, isStreaming, activeTurnId, runStartedAt, onRetry }: {
   messages: UIMessage[];

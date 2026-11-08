@@ -10,17 +10,16 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from websockets.datastructures import Headers
-
 from cirno_core.bus.queue import MessageBus
 from cirno_core.config.loader import get_config_path
 from cirno_core.config.network import NetworkConfig
-from cirno_core.config.schema import MCPServerConfig
+from cirno_core.config.tools import MCPServerConfig
 from cirno_core.runtime.admission import RuntimeBusyError
 from cirno_server.webui.http_utils import http_json_response
-from cirno_server.webui.mcp.presets_api import custom_mcp_action
+from cirno_server.webui.mcp.configuration import custom_mcp_action
 from cirno_server.webui.settings.routes import WebUISettingsRouter
 from cirno_server.webui.settings.services import WebUISettingsServices
+from websockets.datastructures import Headers
 
 
 def _router(
@@ -29,13 +28,11 @@ def _router(
     config_path: Path | None = None,
     mcp_runtime_status: Callable[[], Mapping[str, str]] | None = None,
     mcp_reload: Callable[[], Awaitable[dict[str, object]]] | None = None,
-    rename_model_preset: Callable[[str, str], int] | None = None,
     refresh_runtime_config: Callable[[], None] | None = None,
 ) -> WebUISettingsRouter:
     return WebUISettingsRouter(
         settings=WebUISettingsServices.create(
             config_path or get_config_path(),
-            rename_model_preset=rename_model_preset,
             refresh_runtime_config=refresh_runtime_config,
         ),
         bus=MessageBus(),
@@ -47,11 +44,11 @@ def _router(
             {"error": message},
             status=status,
         ),
-        runtime_surface="browser",
-        runtime_capabilities={},
+
+
         mcp_runtime_status=mcp_runtime_status,
         mcp_reload=mcp_reload,
-        mcp_oauth_redirect_uri=lambda _request: "https://gateway.example/auth/mcp/callback",
+        mcp_oauth_redirect_uri=lambda _request: "https://gateway.example/v0/mcp/oauth/callback",
     )
 
 
@@ -103,10 +100,10 @@ async def test_provider_login_keeps_maintenance_busy_until_worker_exits(tmp_path
 
     monkeypatch.setattr("cirno_core.providers.github_copilot_oauth.login_github_copilot", login)
     monkeypatch.setattr("cirno_core.providers.github_copilot_provider.get_storage", lambda: SimpleNamespace(
-        get_token_path=lambda: tmp_path / "copilot.json", save=saved.append,
+        get_token_path=lambda: tmp_path / "copilot.json", save=saved.append, delete=lambda: (tmp_path / "copilot.json").unlink(missing_ok=True),
     ))
     monkeypatch.setattr("cirno_server.webui.settings.api.settings_payload", lambda **_: {})
-    path = "/api/settings/provider/oauth-login"
+    path = "/v0/settings/provider/oauth-login"
     response = await router.dispatch(None, _mutation_request(path, {"provider": "github_copilot"}), path)
     assert response.status_code == 200
     payload = json.loads(response.body)
@@ -121,8 +118,8 @@ async def test_provider_login_keeps_maintenance_busy_until_worker_exits(tmp_path
                 await shutdown
         else:
             path = (
-                "/api/settings/provider/oauth-logout" if finish == "logout"
-                else "/api/settings/provider/oauth-login/complete"
+                "/v0/settings/provider/oauth-logout" if finish == "logout"
+                else "/v0/settings/provider/oauth-login/complete"
             )
             response = await router.dispatch(None, _mutation_request(path, {
                 "provider": "github_copilot", "flow_id": payload["flow_id"], "cancel": "true",
@@ -158,7 +155,7 @@ async def test_failed_codex_login_start_still_owns_late_worker(tmp_path, monkeyp
         storage.save(SimpleNamespace(access="late-fixture-token"))
 
     monkeypatch.setattr(oauth, "login_oauth_interactive", login)
-    path = "/api/settings/provider/oauth-login"
+    path = "/v0/settings/provider/oauth-login"
     try:
         response = await router.dispatch(None, _mutation_request(path, {
             "provider": "openai_codex", "remote_browser": "true",
@@ -201,7 +198,7 @@ async def test_channel_setup_blocks_maintenance_until_confirmed_cleanup(
         "cirno_server.webui.settings.routes.load_channel_plugin",
         lambda _: SimpleNamespace(load_connector=lambda: connector),
     )
-    path = "/api/settings/channels/whatsapp/connect/start"
+    path = "/v0/settings/channels/whatsapp/connect/start"
     response = await router.dispatch(None, _mutation_request(path, {}), path)
     assert response.status_code == 200
     assert json.loads(response.body)["status"] == "pending"
@@ -234,7 +231,7 @@ async def test_legacy_connector_can_connect_but_cannot_claim_maintenance_idle(tm
         "cirno_server.webui.settings.routes.load_channel_plugin",
         lambda _: SimpleNamespace(load_connector=lambda: connector),
     )
-    path = "/api/settings/channels/custom/connect/start"
+    path = "/v0/settings/channels/custom/connect/start"
     response = await router.dispatch(None, _mutation_request(path, {}), path)
     assert response.status_code == 200
     await router.close()
@@ -266,11 +263,11 @@ async def test_mcp_list_serializes_local_runtime_failure_snapshot(tmp_path) -> N
         mcp_runtime_status=runtime_snapshot,
     )
     request = SimpleNamespace(
-        path="/api/settings/mcp-presets",
+        path="/v0/settings/mcp-presets",
         headers=Headers(),
     )
 
-    response = await router.dispatch(None, request, "/api/settings/mcp-presets")
+    response = await router.dispatch(None, request, "/v0/settings/mcp-presets")
 
     assert response is not None
     assert response.status_code == 200
@@ -292,7 +289,7 @@ async def test_usage_query_runs_off_the_event_loop(monkeypatch) -> None:
         return {"days": []}
 
     monkeypatch.setattr("cirno_server.webui.settings.routes.settings_usage_payload", usage_payload)
-    request = SimpleNamespace(path="/api/settings/usage", headers=Headers())
+    request = SimpleNamespace(path="/v0/settings/usage", headers=Headers())
 
     response = await _router().dispatch(None, request, request.path)
 
@@ -312,7 +309,7 @@ async def test_full_settings_query_runs_off_the_event_loop(monkeypatch) -> None:
         return http_json_response({"ok": True})
 
     monkeypatch.setattr(router, "_handle_settings", settings_response)
-    request = SimpleNamespace(path="/api/settings", headers=Headers())
+    request = SimpleNamespace(path="/v0/settings", headers=Headers())
 
     response = await router.dispatch(None, request, request.path)
 
@@ -346,9 +343,9 @@ async def test_automatic_model_api_read_resolves_drafts_without_saving_or_probin
 
     monkeypatch.setattr("httpx.Client", unexpected_client)
     monkeypatch.setattr("httpx.AsyncClient", unexpected_client)
-    path = f"/api/settings/model-api?provider={provider}&model={model}&reasoning_effort={effort}"
+    path = f"/v0/settings/model-api?provider={provider}&model={model}&reasoning_effort={effort}"
     request = SimpleNamespace(path=path, headers=Headers())
-    route = "/api/settings/model-api"
+    route = "/v0/settings/model-api"
     denied = await _router(authorized=False, config_path=config_path).dispatch(None, request, route)
     assert denied is not None and denied.status_code == 401
     response = await _router(config_path=config_path).dispatch(None, request, route)
@@ -409,7 +406,7 @@ async def test_settings_shutdown_joins_browser_authorization_and_releases_admiss
 
     monkeypatch.setattr("cirno_server.webui.mcp.oauth_api.connect_mcp_servers", connect)
     router = _router(config_path=tmp_path / "config.json")
-    path = "/api/settings/mcp-oauth/start"
+    path = "/v0/settings/mcp-oauth/start"
     response = await router.dispatch(None, _mutation_request(path, {"name": "linear"}), path)
     assert response.status_code == 200
     assert json.loads(response.body)["status"] == "authorization_required"
@@ -450,11 +447,11 @@ async def test_mcp_oauth_start_uses_gateway_callback_and_requires_api_auth(monke
     })
     router._mcp_oauth = SimpleNamespace(start=start)
     request = _mutation_request(
-        "/api/settings/mcp-oauth/start",
+        "/v0/settings/mcp-oauth/start",
         {"name": "xmind"},
     )
 
-    response = await router.dispatch(None, request, "/api/settings/mcp-oauth/start")
+    response = await router.dispatch(None, request, "/v0/settings/mcp-oauth/start")
 
     assert response is not None
     assert response.status_code == 200
@@ -462,14 +459,14 @@ async def test_mcp_oauth_start_uses_gateway_callback_and_requires_api_auth(monke
     start.assert_awaited_once_with(
         "xmind",
         config,
-        "https://gateway.example/auth/mcp/callback",
+        "https://gateway.example/v0/mcp/oauth/callback",
         reload_mcp=ANY,
         network=network,
         reset_credentials=False,
     )
 
     denied = _router(authorized=False)
-    denied_response = await denied.dispatch(None, request, "/api/settings/mcp-oauth/start")
+    denied_response = await denied.dispatch(None, request, "/v0/settings/mcp-oauth/start")
     assert denied_response is not None
     assert denied_response.status_code == 401
 
@@ -477,7 +474,7 @@ async def test_mcp_oauth_start_uses_gateway_callback_and_requires_api_auth(monke
     failed._mcp_oauth = SimpleNamespace(
         start=AsyncMock(side_effect=RuntimeError("upstream secret response"))
     )
-    failed_response = await failed.dispatch(None, request, "/api/settings/mcp-oauth/start")
+    failed_response = await failed.dispatch(None, request, "/v0/settings/mcp-oauth/start")
     assert failed_response is not None
     assert failed_response.status_code == 500
     assert json.loads(failed_response.body) == {"error": "MCP OAuth start failed"}
@@ -490,11 +487,11 @@ async def test_mcp_oauth_callback_is_state_authenticated_and_returns_close_page(
     submit = MagicMock(return_value="xmind")
     router._mcp_oauth = SimpleNamespace(submit_callback=submit)
     request = SimpleNamespace(
-        path="/auth/mcp/callback?code=oauth-code&state=state-123",
+        path="/v0/mcp/oauth/callback?code=oauth-code&state=state-123",
         headers=Headers(),
     )
 
-    response = await router.dispatch(None, request, "/auth/mcp/callback")
+    response = await router.dispatch(None, request, "/v0/mcp/oauth/callback")
 
     assert response is not None
     assert response.status_code == 200
@@ -510,7 +507,7 @@ async def test_mcp_oauth_callback_is_state_authenticated_and_returns_close_page(
 @pytest.mark.asyncio
 async def test_mcp_oauth_manual_completion_reads_websocket_payload() -> None:
     callback_url = (
-        "http://127.0.0.1:8765/auth/mcp/callback?code=oauth-code&state=state-123"
+        "http://127.0.0.1:8765/v0/mcp/oauth/callback?code=oauth-code&state=state-123"
     )
     router = _router()
     submit = MagicMock(
@@ -524,11 +521,11 @@ async def test_mcp_oauth_manual_completion_reads_websocket_payload() -> None:
     )
     router._mcp_oauth = SimpleNamespace(submit_callback_url=submit)
     request = _mutation_request(
-        "/api/settings/mcp-oauth/complete",
+        "/v0/settings/mcp-oauth/complete",
         {"flow_id": "flow-123", "callback_url": callback_url},
     )
 
-    response = await router.dispatch(None, request, "/api/settings/mcp-oauth/complete")
+    response = await router.dispatch(None, request, "/v0/settings/mcp-oauth/complete")
 
     assert response is not None
     assert response.status_code == 200
@@ -540,7 +537,7 @@ async def test_mcp_oauth_manual_completion_reads_websocket_payload() -> None:
     denied_response = await denied.dispatch(
         None,
         request,
-        "/api/settings/mcp-oauth/complete",
+        "/v0/settings/mcp-oauth/complete",
     )
     assert denied_response is not None
     assert denied_response.status_code == 401
@@ -581,7 +578,7 @@ async def test_oauth_completion_reads_websocket_payload(
     monkeypatch.setattr("cirno_server.webui.settings.routes.complete_oauth_provider", complete)
     router = _router()
     request = _mutation_request(
-        "/api/settings/provider/oauth-login/complete",
+        "/v0/settings/provider/oauth-login/complete",
         {
             "provider": provider,
             "flow_id": "flow-123",
@@ -592,7 +589,7 @@ async def test_oauth_completion_reads_websocket_payload(
     response = await router.dispatch(
         None,
         request,
-        "/api/settings/provider/oauth-login/complete",
+        "/v0/settings/provider/oauth-login/complete",
     )
 
     assert response is not None
@@ -606,7 +603,7 @@ async def test_oauth_completion_reads_websocket_payload(
         "query": {"provider": [provider], "flow_id": ["flow-123"]},
         "authorization_response": authorization_response,
     }
-    assert request.path == "/api/settings/provider/oauth-login/complete"
+    assert request.path == "/v0/settings/provider/oauth-login/complete"
     assert not request.headers
 
 
@@ -614,38 +611,38 @@ async def test_oauth_completion_reads_websocket_payload(
     ("route_path", "function_name", "payload", "expected_query"),
     [
         (
-            "/api/settings/update",
+            "/v0/settings/update",
             "update_agent_settings",
             {"model_preset": "Codex"},
             {"model_preset": ["Codex"]},
         ),
         (
-            "/api/settings/model-configurations/create",
+            "/v0/settings/model-configurations/create",
             "create_model_configuration",
             {"name": "Codex", "model": "openai-codex/gpt-5.6"},
             {"name": ["Codex"], "model": ["openai-codex/gpt-5.6"]},
         ),
         (
-            "/api/settings/model-configurations/delete",
+            "/v0/settings/model-configurations/delete",
             "delete_model_configuration",
             {"name": "spare"},
             {"name": ["spare"]},
         ),
 
         (
-            "/api/settings/model-call-order/update",
+            "/v0/settings/model-call-order/update",
             "update_model_call_order",
             {"order": ["backup"]},
             {"order": ['["backup"]']},
         ),
         (
-            "/api/settings/provider/create",
+            "/v0/settings/provider/create",
             "create_provider_settings",
             {"name": "team", "api_base": "https://llm.example/v1"},
             {"name": ["team"], "api_base": ["https://llm.example/v1"]},
         ),
         (
-            "/api/settings/provider/update",
+            "/v0/settings/provider/update",
             "update_provider_settings",
             {"provider": "team", "api_base": "https://llm.example/v2"},
             {"provider": ["team"], "api_base": ["https://llm.example/v2"]},
@@ -682,40 +679,27 @@ async def test_runtime_config_mutation_routes_refresh_live_runtime(
 
 
 @pytest.mark.asyncio
-async def test_model_update_route_forwards_session_rename_dependency(monkeypatch) -> None:
-    rename_model_preset = MagicMock(return_value=2)
-    refresh_runtime_config = MagicMock()
-    captured: dict[str, object] = {}
+async def test_model_update_route_targets_stable_id(monkeypatch) -> None:
+    refresh = MagicMock()
+    captured = {}
 
-    def update(query, *, config_path=None, rename_model_preset=None):
-        captured.update(query=query, rename_model_preset=rename_model_preset)
+    def update(query, *, config_path=None):
+        captured.update(query)
         return {"updated": True}
 
     monkeypatch.setattr("cirno_server.webui.settings.routes.update_model_configuration", update)
-    path = "/api/settings/model-configurations/update"
-    request = _mutation_request(path, {"name": "openai", "new_name": "Codex"})
-
-    response = await _router(
-        rename_model_preset=rename_model_preset,
-        refresh_runtime_config=refresh_runtime_config,
-    ).dispatch(
-        None,
-        request,
-        path,
+    path = "/v0/settings/model-configurations/update"
+    response = await _router(refresh_runtime_config=refresh).dispatch(
+        None, _mutation_request(path, {"id": "model-123", "name": "Renamed"}), path,
     )
-
-    assert response is not None
     assert response.status_code == 200
-    assert captured == {
-        "query": {"name": ["openai"], "new_name": ["Codex"]},
-        "rename_model_preset": rename_model_preset,
-    }
-    refresh_runtime_config.assert_called_once_with()
+    assert captured == {"id": ["model-123"], "name": ["Renamed"]}
+    refresh.assert_called_once_with()
 
 
 @pytest.mark.asyncio
 async def test_settings_get_mutation_route_is_method_not_allowed() -> None:
-    path = "/api/settings/provider/update"
+    path = "/v0/settings/provider/update"
     request = SimpleNamespace(
         path=f"{path}?provider=openrouter&api_key=must-not-run",
         headers=Headers(),

@@ -5,12 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.session_helpers import stop_loop
+from sources.development.testing.sessions import stop_loop
 from cirno_core.agent.goals.permission import goal_mutation_allowed, goal_mutation_permission
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import public_history_messages
 from cirno_core.session.goal_state import GOAL_STATE_KEY
 from cirno_core.session.history_visibility import is_hidden_history_message
@@ -54,8 +56,8 @@ async def test_goal_input_enters_running_turn_with_scoped_permission(tmp_path, c
 
     provider.chat_stream_with_retry = AsyncMock(side_effect=respond)
     loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
-    process = AsyncMock(wraps=loop._process_message)
-    loop._process_message = process
+    process = AsyncMock(wraps=loop.processing.process)
+    loop.processing.process = process
     run = asyncio.create_task(loop.run())
     try:
         await loop.bus.publish_inbound(InboundMessage(
@@ -100,7 +102,7 @@ async def test_scheduled_goal_command_cannot_generate_internal_input(tmp_path):
     )
     loop = AgentLoop(bus=MessageBus(), provider=MagicMock(aclose=AsyncMock()), workspace=tmp_path, model="test-model")
     try:
-        await loop._dispatch_command_inline(msg, msg.session_key, msg.content, loop.commands.dispatch)
+        await loop.command_execution.dispatch_inline(msg, msg.session_key, msg.content, loop.commands.dispatch)
         response = loop.bus.outbound.get_nowait()
         assert "only be started by a user" in response.content
         assert loop._pending_queues == {}
@@ -112,7 +114,7 @@ async def test_scheduled_goal_command_cannot_generate_internal_input(tmp_path):
 
 @pytest.mark.parametrize("boundary", ["text", "tool", "error", "empty"])
 async def test_goal_at_iteration_limit_stays_queued_for_a_tool_capable_turn(tmp_path, boundary):
-    from agent.session_helpers import run_session
+    from sources.development.testing.sessions import run_session
 
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
@@ -130,7 +132,7 @@ async def test_goal_at_iteration_limit_stays_queued_for_a_tool_capable_turn(tmp_
     async def respond(**kwargs):
         calls.append(str(kwargs["messages"]))
         if len(calls) == 1:
-            await loop._dispatch_command_inline(
+            await loop.command_execution.dispatch_inline(
                 goal, goal.session_key, goal.content, loop.commands.dispatch,
             )
             if boundary == "tool":
@@ -173,7 +175,7 @@ async def test_goal_at_iteration_limit_stays_queued_for_a_tool_capable_turn(tmp_
 
 async def test_generated_goal_input_survives_pending_followup_recovery(tmp_path):
     from cirno_core.command.router import CommandContext
-    from cirno_core.session.recovery import pending_followups
+    from cirno_core.session.recovery.pending import pending_followups
 
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
@@ -252,7 +254,7 @@ async def test_internal_continuation_cannot_inherit_goal_permission(tmp_path):
     ])
     try:
         with goal_mutation_permission(True):
-            await loop._process_message(message, session_key="cli:test")
+            await loop.processing.process(message, session_key="cli:test")
             assert goal_mutation_allowed() is True
         assert GOAL_STATE_KEY not in (await loop.sessions.state.get("cli:test")).metadata
         final_request = provider.chat_stream_with_retry.await_args.kwargs["messages"]

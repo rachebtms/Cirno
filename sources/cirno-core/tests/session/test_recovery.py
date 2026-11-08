@@ -8,18 +8,14 @@ import pytest
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.outbound_events import RecoveryStateEvent, SessionUpdatedEvent
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import ProviderConversationState
-from cirno_core.session.manager import Session, SessionManager
-from cirno_core.session.recovery import (
-    PENDING_FOLLOWUPS_KEY,
-    PENDING_USER_TURN_KEY,
-    RECOVERY_METADATA_KEY,
-    RUNTIME_CHECKPOINT_KEY,
-    acknowledge_pending_followups,
-    pending_followups,
-    record_pending_followup,
-)
-from cirno_core.session.display_recovery import RecoveryActionError, RecoveryCoordinator
+from cirno_core.providers.contracts import ProviderConversationState
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.recovery.restart import RecoveryRestart
+from cirno_core.session.recovery.contracts import PENDING_FOLLOWUPS_KEY, PENDING_USER_TURN_KEY, RECOVERY_METADATA_KEY, RUNTIME_CHECKPOINT_KEY
+from cirno_core.session.recovery.pending import acknowledge_pending_followups, pending_followups, record_pending_followup
+from cirno_core.session.recovery.contracts import RecoveryActionError
+from cirno_core.session.recovery.coordinator import RecoveryCoordinator
 
 
 @pytest.fixture(autouse=True)
@@ -708,7 +704,7 @@ async def test_model_failure_waits_across_restart_and_rejects_duplicate_continue
     state = sessions.get_or_create("websocket:chat").metadata[RECOVERY_METADATA_KEY]
     assert state["failure_error_kind"] == "connection"
     assert state.get("reply_preserved", False) is reply_preserved
-    from cirno_core.session.recovery import recovery_state_from_metadata
+    from cirno_core.session.recovery.state import recovery_state_from_metadata
     public_state = recovery_state_from_metadata({RECOVERY_METADATA_KEY: state})
     assert public_state is not None
     assert public_state.get("reply_preserved", False) is reply_preserved
@@ -762,7 +758,7 @@ async def test_scan_failure_is_visible_instead_of_aborting_other_sessions(
         session.add_message("user", f"finish {key}")
         session.metadata[PENDING_USER_TURN_KEY] = True
         _persist(sessions, session)
-    recover_session = RecoveryCoordinator._recover_session
+    recover_session = RecoveryRestart.recover
     attempted = []
 
     async def fail_first(self, session: Session, chat_id: str) -> None:
@@ -771,7 +767,7 @@ async def test_scan_failure_is_visible_instead_of_aborting_other_sessions(
             raise RuntimeError("boom")
         await recover_session(self, session, chat_id)
 
-    monkeypatch.setattr(RecoveryCoordinator, "_recover_session", fail_first)
+    monkeypatch.setattr(RecoveryRestart, "recover", fail_first)
     try:
         await coordinator.scan()
 
@@ -827,3 +823,147 @@ async def test_bus_remains_quiet_after_recovered_state(tmp_path: Path) -> None:
     await asyncio.sleep(0)
     assert bus.inbound.empty()
     assert bus.outbound.empty()
+
+
+@pytest.mark.parametrize("reason", ["model_request_failed", "user_stopped", "restart_requires_confirmation"])
+async def test_internal_coordination_supersedes_web_recovery_and_publishes_to_target(tmp_path, reason):
+    coordinator, bus, sessions = _coordinator(tmp_path)
+    session = sessions.get_or_create("websocket:worker")
+    session.messages.append({"role": "user", "content": "Finish research"})
+    session.metadata[RECOVERY_METADATA_KEY] = {
+        "status": "awaiting_user", "recovery_id": "failure", "reason": reason, "can_continue": True,
+    }
+    _persist(sessions, session)
+    message = InboundMessage(channel="system", sender_id="session", chat_id="websocket:worker",
+                             content="Continue from saved progress", session_key_override=session.key,
+                             require_existing_session=True)
+    assert await coordinator.admit(message)
+    saved = await sessions.state.read(session.key)
+    assert saved.metadata[RECOVERY_METADATA_KEY]["status"] == "recovered"
+    assert saved.metadata[RECOVERY_METADATA_KEY]["reason"] == "superseded"
+    events = [bus.outbound.get_nowait(), bus.outbound.get_nowait()]
+    assert all(event.channel == "websocket" and event.chat_id == "worker" for event in events)
+    assert isinstance(events[0].event, RecoveryStateEvent)
+    assert not await coordinator.admit(InboundMessage(channel="websocket", sender_id="system", chat_id="worker",
+        content="Stale recovery", metadata={"_webui_recovery_id": "failure"}))
+    await coordinator.turn_completed(session.key)
+    assert (await sessions.state.read(session.key)).metadata[RECOVERY_METADATA_KEY]["status"] == "recovered"
+    await sessions.state.aclose()
+
+
+async def test_recovery_admission_does_not_recreate_deleted_targets_or_modify_replaced_state(tmp_path):
+    coordinator, bus, sessions = _coordinator(tmp_path)
+    for metadata in ({}, {"_webui_recovery_id": "deleted"}):
+        message = InboundMessage(channel="websocket", sender_id="session", chat_id="deleted",
+            content="Continue", metadata=metadata, require_existing_session=True)
+        assert not await coordinator.admit(message)
+        assert await sessions.state.read_header("websocket:deleted") is None
+    session = await sessions.state.get("websocket:worker")
+    state = {"status": "awaiting_user", "recovery_id": "new", "reason": "user_stopped"}
+    await sessions.state.update_metadata(session.key, {RECOVERY_METADATA_KEY: state})
+    stale = InboundMessage(channel="system", sender_id="session", chat_id=session.key,
+        content="Old continuation", session_key_override=session.key, require_existing_session=True,
+        session_generation="old-generation")
+    assert not await coordinator.admit(stale)
+    assert (await sessions.state.read_header(session.key)).metadata[RECOVERY_METADATA_KEY] == state
+    assert bus.outbound.empty()
+    await sessions.state.aclose()
+
+
+async def test_superseding_active_recovery_does_not_materialize_checkpoint_twice(tmp_path):
+    from cirno_core.session.recovery.checkpoints import restore_runtime_checkpoint
+
+    coordinator, _, sessions = _coordinator(tmp_path)
+    key = "websocket:chat"
+    original = await sessions.state.import_messages(key, [{"role": "user", "content": "Run one operation"}])
+    original.metadata.update({
+        "webui": True,
+        RECOVERY_METADATA_KEY: {"status": "resuming", "recovery_id": "active", "attempts": 1},
+        RUNTIME_CHECKPOINT_KEY: {
+            "phase": "tools_completed",
+            "assistant_message": {"role": "assistant", "content": "Checking", "tool_calls": [
+                {"id": "operation-1", "type": "function", "function": {"name": "exec", "arguments": "{}"}},
+            ]},
+            "completed_tool_results": [{"role": "tool", "tool_call_id": "operation-1", "content": "Operation finished"}],
+        },
+    })
+    await sessions.state.restore_interruption(original)
+    started = asyncio.Event()
+
+    async def active_recovery():
+        try:
+            started.set()
+            await asyncio.Event().wait()
+        finally:
+            saved = await sessions.state.read(key)
+            restore_runtime_checkpoint(saved)
+            await sessions.state.finish_turn(saved)
+
+    task = asyncio.create_task(active_recovery())
+    await started.wait()
+    coordinator.register_recovery_task(key, task)
+    try:
+        assert await coordinator.admit(InboundMessage(channel="websocket", chat_id="chat", sender_id="user", content="New direction"))
+        saved = await sessions.state.read(key)
+        assert sum(row.get("tool_call_id") == "operation-1" for row in saved.messages) == 1
+        assert saved.metadata[RECOVERY_METADATA_KEY]["reason"] == "superseded"
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await sessions.state.aclose()
+
+
+@pytest.mark.parametrize("replaced", [False, True], ids=["deleted", "replaced"])
+async def test_late_turn_completion_does_not_recreate_or_interrupt_a_new_context(tmp_path, replaced):
+    from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+    from cirno_core.session.webui_turns.coordinator import WebuiTurnCoordinator
+
+    coordinator, bus, sessions = _coordinator(tmp_path)
+    key = "websocket:chat"
+    original = await sessions.state.import_messages(key, [{"role": "user", "content": "Old task"}], metadata={"webui": True})
+    delivery = (await TurnDeliveryFactory(bus).create(InboundMessage(
+        channel="websocket", chat_id="chat", sender_id="user", content="Old task", metadata={"webui": True},
+    ), key))
+    await delivery.bind_session_generation(original.generation)
+    if replaced:
+        await sessions.state.reset(key)
+        await sessions.state.import_messages(key, [{"role": "user", "content": "New task"}])
+    else:
+        await sessions.state.delete(key)
+    webui = WebuiTurnCoordinator(bus, sessions, lambda coro: coro.close(), recovery=coordinator)
+    try:
+        with webui.connected():
+            delivery.record_stop_reason("error", failure_error_kind="connection")
+            await delivery.complete(None, publish_completion=True)
+        saved = await sessions.state.read(key)
+        if replaced:
+            assert [row["content"] for row in saved.messages] == ["New task"]
+            assert RECOVERY_METADATA_KEY not in saved.metadata
+        else:
+            assert saved is None
+        assert bus.outbound.empty()
+    finally:
+        await sessions.state.aclose()
+
+
+async def test_stale_dismiss_cannot_discard_an_already_queued_continuation(tmp_path):
+    coordinator, bus, sessions = _coordinator(tmp_path)
+    key = "websocket:chat"
+    original = await sessions.state.import_messages(key, [{"role": "user", "content": "Finish the task"}], metadata={
+        "webui": True, RECOVERY_METADATA_KEY: {
+            "status": "awaiting_user", "recovery_id": "same-notice", "attempts": 0,
+        },
+    })
+    payload = {"chat_id": "chat", "recovery_id": "same-notice"}
+    try:
+        await coordinator.handle_action("continue", payload)
+        continuation = await bus.consume_inbound()
+        with pytest.raises(RecoveryActionError, match="waiting for confirmation") as rejected:
+            await coordinator.handle_action("dismiss", payload)
+        assert rejected.value.status == 409
+        assert await coordinator.admit(continuation)
+        saved = await sessions.state.read(key)
+        assert saved.generation == original.generation
+        assert saved.metadata[RECOVERY_METADATA_KEY]["status"] == "resuming"
+    finally:
+        await sessions.state.aclose()

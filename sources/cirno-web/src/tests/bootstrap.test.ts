@@ -44,13 +44,11 @@ describe("bootstrap helpers", () => {
     );
   });
 
-  it("preserves the host socket bridge URL", () => {
-    expect(deriveWsUrl("/", "tok en", "cirno-host://engine/")).toBe(
-      "cirno-host://engine/?token=tok%20en",
-    );
+  it("rejects unsupported WebSocket transports", () => {
+    expect(() => deriveWsUrl("/", "tok en", "cirno-host://engine/")).toThrow("Unsupported WebSocket URL");
   });
 
-  it("falls back to the current window host for legacy bootstrap payloads", () => {
+  it("uses the current window host when the server supplies a WebSocket path", () => {
     expect(deriveWsUrl("/", "tok")).toBe(
       "ws://localhost:3000/?token=tok",
     );

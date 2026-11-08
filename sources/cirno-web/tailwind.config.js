@@ -1,4 +1,3 @@
-import animate from "tailwindcss-animate";
 import typography from "@tailwindcss/typography";
 import plugin from "tailwindcss/plugin";
 
@@ -83,35 +82,31 @@ export default {
           DEFAULT: "var(--content-link)",
           hover: "var(--content-link-hover)",
         },
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        background: "hsl(var(--cirno-background))",
+        foreground: "hsl(var(--cirno-foreground))",
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "hsl(var(--cirno-card))",
+          foreground: "hsl(var(--cirno-card-foreground))",
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: "hsl(var(--cirno-popover))",
+          foreground: "hsl(var(--cirno-popover-foreground))",
         },
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "hsl(var(--cirno-primary))",
+          foreground: "hsl(var(--cirno-primary-foreground))",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: "hsl(var(--cirno-secondary))",
+          foreground: "hsl(var(--cirno-secondary-foreground))",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+
+          foreground: "hsl(var(--cirno-muted-foreground))",
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: "hsl(var(--cirno-destructive))",
+          foreground: "hsl(var(--cirno-destructive-foreground))",
         },
         "diff-added": {
           DEFAULT: "var(--diff-added)",
@@ -121,22 +116,22 @@ export default {
           DEFAULT: "var(--diff-deleted)",
           foreground: "var(--diff-deleted-foreground)",
         },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        border: "hsl(var(--cirno-border))",
+        input: "hsl(var(--cirno-input))",
+        ring: "hsl(var(--cirno-ring))",
         sidebar: {
-          DEFAULT: "hsl(var(--sidebar))",
-          foreground: "hsl(var(--sidebar-foreground))",
-          content: "hsl(var(--sidebar-content))",
-          "muted-foreground": "hsl(var(--sidebar-muted-foreground))",
-          selected: "hsl(var(--sidebar-selected))",
-          accent: "hsl(var(--sidebar-accent))",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
-          border: "hsl(var(--sidebar-border))",
+          DEFAULT: "hsl(var(--cirno-sidebar))",
+          foreground: "hsl(var(--cirno-sidebar-foreground))",
+          content: "hsl(var(--cirno-sidebar-content))",
+          "muted-foreground": "hsl(var(--cirno-sidebar-muted-foreground))",
+          selected: "hsl(var(--cirno-sidebar-selected))",
+          accent: "hsl(var(--cirno-sidebar-accent))",
+          "accent-foreground": "hsl(var(--cirno-sidebar-accent-foreground))",
+          border: "hsl(var(--cirno-sidebar-border))",
         },
         settings: {
-          canvas: "hsl(var(--settings-canvas))",
-          surface: "hsl(var(--settings-surface))",
+          canvas: "hsl(var(--cirno-settings-canvas))",
+          surface: "hsl(var(--cirno-settings-surface))",
         },
       },
       keyframes: {
@@ -156,7 +151,6 @@ export default {
     },
   },
   plugins: [
-    animate,
     typography,
     plugin(({ addVariant, addUtilities }) => {
       addUtilities({ ".rounded-full": { cornerShape: "round" } });

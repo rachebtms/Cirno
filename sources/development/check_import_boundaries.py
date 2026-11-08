@@ -1,4 +1,4 @@
-"""Check direct Python imports against the gateway's ownership boundaries."""
+"""Check direct Python imports against the service's ownership boundaries."""
 
 from __future__ import annotations
 
@@ -38,7 +38,6 @@ _ADAPTERS = (
     "cirno_server.cli",
     "cirno_server.application",
     "cirno_server.lifecycle",
-    "cirno_server.lifecycle",
     "cirno_server.webui",
 )
 
@@ -51,7 +50,15 @@ _TOOL_CONFIG_MODULES = (
 )
 
 IMPORT_RULES = (
+    ImportRule("independent-memory", ("cirno_memory",), ("cirno_core", "cirno_server", "cirno", "cirno_usage", "cirno_vault")),
+    ImportRule("independent-usage", ("cirno_usage",), ("cirno_core", "cirno_server", "cirno", "cirno_vault", "cirno_memory")),
+    ImportRule("independent-vault", ("cirno_vault",), ("cirno_core", "cirno_server", "cirno", "cirno_usage", "cirno_memory")),
     ImportRule("package-dependencies", ("cirno_core",), ("cirno_server", "cirno")),
+    ImportRule(
+        "process-primitives",
+        ("cirno_core.processes",),
+        (*_ADAPTERS, "cirno_core.agent", "cirno_core.session"),
+    ),
     ImportRule(
         "core-execution",
         ("cirno_core.agent.loop", "cirno_core.agent.runner", "cirno_core.agent.turn_delivery"),
@@ -82,7 +89,6 @@ IMPORT_RULES = (
             "cirno_core.command",
             "cirno_core.runtime.context",
             "cirno_core.security.workspace_access",
-            "cirno_core.pairing.events",
             "cirno_core.session.goal_state",
             "cirno_core.session.webui_turns",
             "cirno_core.session.transport_metadata",
@@ -90,7 +96,7 @@ IMPORT_RULES = (
             "cirno_core.session.transcript",
             "cirno_server.webui.cli_apps_api",
             "cirno_server.webui.forking",
-            "cirno_server.webui.mcp.presets_api",
+            "cirno_server.webui.mcp",
             "cirno_server.webui.sidebar_state",
         ),
     ),
@@ -114,7 +120,7 @@ IMPORT_RULES = (
     ImportRule(
         "shared-primitives",
         ("cirno_core.utils.file_io", "cirno_core.skills.metadata", "cirno_core.providers.generation",
-         "cirno_core.llm_usage.types", "cirno_core.session.automation_spec"),
+         "cirno_usage.types", "cirno_core.session.automation_spec"),
         (*_ADAPTERS, "cirno_core.agent", "cirno_core.apps", "cirno_core.session", "cirno_core.config"),
     ),
     ImportRule(
@@ -181,7 +187,7 @@ class ImportCollector(ast.NodeVisitor):
                         self.builtin_import_calls.add(binding)
 
     def _add(self, target: str, line: int) -> None:
-        if any(_within(target, prefix) for prefix in ("cirno_core", "cirno_server", "cirno")):
+        if any(_within(target, prefix) for prefix in ("cirno_core", "cirno_server", "cirno", "cirno_usage", "cirno_vault", "cirno_memory")):
             self.edges.append(ImportEdge(target, line, self.type_only))
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -253,7 +259,7 @@ def check_repository(root: Path) -> tuple[int, list[str]]:
         relative = path.relative_to(root)
         if "tests" in relative.parts or path.name == "conftest.py":
             continue
-        namespace = "cirno_server" if root.name == "cirno-server" else "cirno_core"
+        namespace = root.name.replace("-", "_")
         parts = (namespace, *relative.with_suffix("").parts)
         is_package = parts[-1] == "__init__"
         module = ".".join(parts[:-1] if is_package else parts)
@@ -279,7 +285,7 @@ def main() -> int:
         help="core source directory",
     )
     args = parser.parse_args()
-    roots = [args.root] if (args.root / "__init__.py").is_file() else [args.root / "cirno-core", args.root / "cirno-server"]
+    roots = [args.root] if (args.root / "__init__.py").is_file() else [args.root / "cirno-core/src/cirno_core", args.root / "cirno-server/src/cirno_server", args.root / "cirno-memory/src/cirno_memory", args.root / "cirno-usage/src/cirno_usage", args.root / "cirno-vault/src/cirno_vault"]
     checked = 0
     violations = []
     for root in roots:

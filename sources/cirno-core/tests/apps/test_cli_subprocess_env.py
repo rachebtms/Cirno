@@ -1,6 +1,6 @@
+from __future__ import annotations
 """CLI app subprocesses must not inherit API keys from the parent environ."""
 
-from __future__ import annotations
 
 import json
 import sys
@@ -13,7 +13,7 @@ from cirno_core.apps.cli.service import CliAppManager
 @pytest.mark.parametrize("platform", ["linux", "darwin"])
 @pytest.mark.parametrize("runtime_dir", ["/run/user/1000", None])
 def test_subprocess_env_excludes_api_keys(monkeypatch, tmp_path, platform, runtime_dir) -> None:
-    monkeypatch.setattr("cirno_core.apps.cli.service.sys.platform", platform)
+    monkeypatch.setattr("cirno_core.apps.cli.commands.sys.platform", platform)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-should-not-leak")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-leak")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-leak")
@@ -23,7 +23,7 @@ def test_subprocess_env_excludes_api_keys(monkeypatch, tmp_path, platform, runti
         monkeypatch.setenv("XDG_RUNTIME_DIR", runtime_dir)
 
     manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / "cli-apps")
-    env = manager._subprocess_env()
+    env = manager.commands._subprocess_env()
 
     assert "OPENAI_API_KEY" not in env
     assert "ANTHROPIC_API_KEY" not in env
@@ -36,13 +36,13 @@ def test_subprocess_env_excludes_api_keys(monkeypatch, tmp_path, platform, runti
 
 
 def test_subprocess_env_excludes_api_keys_on_windows(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("cirno_core.apps.cli.service.sys.platform", "win32")
+    monkeypatch.setattr("cirno_core.apps.cli.commands.sys.platform", "win32")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-should-not-leak")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-leak")
     monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 
     manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / "cli-apps")
-    env = manager._subprocess_env()
+    env = manager.commands._subprocess_env()
 
     assert "OPENAI_API_KEY" not in env
     assert "ANTHROPIC_API_KEY" not in env
@@ -70,8 +70,8 @@ def test_child_process_receives_runtime_dir_without_api_keys(
         monkeypatch.setenv("XDG_RUNTIME_DIR", runtime_dir)
 
     manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / "cli-apps")
-    manager._save_installed({"env-check": {"entry_point": sys.executable}})
-    monkeypatch.setattr(manager, "get_app", lambda name: {"name": name})
+    manager.installed.replace({"env-check": {"entry_point": sys.executable}})
+    monkeypatch.setattr(manager.registry, "get_app", lambda name: {"name": name})
     keys = ("XDG_RUNTIME_DIR", *secrets)
     args = [
         "-c",
@@ -82,7 +82,7 @@ def test_child_process_receives_runtime_dir_without_api_keys(
         output = manager.run("env-check", args)
         assert "exited 0" in output
     else:
-        result = manager._run_argv([sys.executable, *args], timeout=5)
+        result = manager.commands._run_argv([sys.executable, *args], timeout=5)
         assert result.returncode == 0
         output = result.stdout
 
@@ -101,12 +101,12 @@ def test_cli_apps_share_persistent_tool_locations(monkeypatch, tmp_path):
         monkeypatch.setenv(key, value)
     monkeypatch.setenv('OPENAI_API_KEY', 'never-export-this')
     manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / 'cli-apps')
-    env = manager._subprocess_env()
+    env = manager.commands._subprocess_env()
     assert all(env[key] == value for key, value in values.items())
     assert env['VIRTUAL_ENV'] == values['CIRNO_SHELL_VENV']
     assert env['PATH'].split(os.pathsep)[0] == str(Path(values['CIRNO_SHELL_VENV']) / 'bin')
     assert 'OPENAI_API_KEY' not in env
-    argv = manager._pip_install_argv({'install_cmd': 'pip install sample-package'})
-    assert manager._pip_interpreter() in argv
+    argv = manager.commands._pip_install_argv({'install_cmd': 'pip install sample-package'})
+    assert manager.commands._pip_interpreter() in argv
     assert sys.executable not in argv
-    assert manager._pip_interpreter() in manager._pip_uninstall_argv({'name': 'sample', 'pip_package': 'sample-package'})
+    assert manager.commands._pip_interpreter() in manager.commands._pip_uninstall_argv({'name': 'sample', 'pip_package': 'sample-package'})

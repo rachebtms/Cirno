@@ -1,3 +1,5 @@
+import { radioControl } from "./control-driver";
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test, type Page } from "@playwright/test";
 import { canonicalThreadPayload } from "../src/tests/thread-test-payload";
 
@@ -15,9 +17,9 @@ const history = canonicalThreadPayload({
 });
 
 async function openThread(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
-  await page.route("**/api/commands", route => route.fulfill({ json: { commands: [] } }));
-  await page.route("**/api/sessions/*/webui-thread?*", route => route.fulfill({ json: history }));
+  await seedPreviewPreferences(page, { language: "en" });
+  await page.route("**/v0/commands", route => route.fulfill({ json: { commands: [] } }));
+  await page.route("**/v0/sessions/*/webui-thread?*", route => route.fulfill({ json: history }));
   await page.goto("/browser/fixture.html?case=thread-loading");
   await expect(page.getByRole("heading", { name: "Section 25", exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
@@ -111,18 +113,18 @@ test("Chromium IME composition and commit keep the transcript stationary", async
 
 test("multiline drafts resize after reading typography changes", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
+  await seedPreviewPreferences(page, { language: "en" });
   await page.goto("/browser/fixture.html?case=typography");
   const input = page.getByRole("textbox", { name: "Message input", exact: true });
   await input.fill("First line\nSecond line\nThird line");
   const standardHeight = await input.evaluate(node => node.clientHeight);
   const sizes = [
-    ["large", "Large reading text", 20],
-    ["small", "Small reading text", 16],
-    ["standard", "Standard reading text", 18],
+    ["large", "Large reading text", 18],
+    ["small", "Small reading text", 14],
+    ["standard", "Standard reading text", 16],
   ] as const;
   for (const [size, label, fontSize] of sizes) {
-    await page.getByRole("radio", { name: label, exact: true }).click();
+    await radioControl(page, label).click();
     await expect(page.locator("html")).toHaveAttribute("data-reading-text-size", size);
     await expect(input).toHaveCSS("font-size", `${fontSize}px`);
     expect(await input.evaluate(node => node.scrollHeight <= node.clientHeight + 1)).toBe(true);

@@ -350,15 +350,21 @@ test("does not retire a completed list or detail while it is being read", async 
 for (const width of [1440, 390]) {
   test(`keeps the reading position when results are archived and the live entry retires at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/browser/fixture.html?case=subagent-dock");
+    await page.goto("/browser/fixture.html?case=subagent-dock&long-history");
     const body = page.getByTestId("thread-message-region");
     const paragraphs = body.getByText("主对话仍然可以正常输出和滚动。任务列表与消息区分别滚动，展开详情也不会取消正在执行的任务。", { exact: true });
-    await expect(paragraphs).toHaveCount(12);
+    await expect(paragraphs).toHaveCount(40);
     await settledMotion(body);
-    const anchor = paragraphs.nth(6);
-    await anchor.scrollIntoViewIfNeeded();
+    // Read away from the top boundary: its pull-to-history spring deliberately
+    // moves the surface and is exercised separately by the history tests.
+    const anchor = paragraphs.nth(20);
     await body.hover();
-    await page.mouse.wheel(0, -160);
+    // Claim the camera through real input before positioning the reading anchor.
+    // Programmatic scrolling alone must not cancel live-tail following.
+    await page.mouse.wheel(0, -1);
+    await expect.poll(() => body.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop)).toBeGreaterThan(0);
+    await anchor.evaluate(node => node.scrollIntoView({ block: "center" }));
+    await expect.poll(() => body.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
     await expect.poll(() => body.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop)).toBeGreaterThan(100);
     await expect(anchor).toBeInViewport();
     await settledMotion(body);
@@ -631,7 +637,7 @@ for (const width of [1440, 390, 320]) {
     const archive = page.locator("[data-subagent-results]").first();
     const header = archive.locator("[data-subagent-results-summary]");
     const logo = header.locator("img");
-    await expect(logo).toHaveAttribute("src", "/brand/cirno_mark.svg");
+    await expect(logo).toHaveAttribute("src", "/brand/cirno_snowflake_mark.svg");
     await expect.poll(() => logo.evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     const rows = archive.locator('[data-subagent-surface="archive"]');
     await expect(rows.first()).toBeHidden();

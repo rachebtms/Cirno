@@ -12,7 +12,7 @@ import { deriveTitle, visibleSessionPreview } from "@/lib/format";
 import { findLoadedMessagePreview } from "@/lib/loaded-message-search";
 import type { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { cn } from "@/lib/utils";
-import type { ChatSummary } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
 
 interface SessionSearchDialogProps {
   open: boolean;
@@ -237,8 +237,8 @@ export function SessionSearchDialog({
                         className={cn(
                           "grid h-full w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-control px-3 py-2 text-left transition-colors",
                           highlighted
-                            ? "bg-muted text-foreground"
-                            : "text-foreground hover:bg-muted",
+                            ? "bg-surface-secondary text-foreground"
+                            : "text-foreground hover:bg-surface-secondary",
                         )}
                       >
                         <span className="min-w-0 flex-1">

@@ -10,10 +10,14 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from cirno_core.agent.tools.exec_session import ExecSessionManager, ExecSessionTool, _ExecSession
+from cirno_core.agent.tools.exec_session import ExecSessionTool
 from cirno_core.agent.tools.registry import is_tool_error_result
-from cirno_core.agent.tools.shell import ExecTool, _reap_pid
+from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.processes import launch as process_launch
+from cirno_core.processes import lifecycle as process_lifecycle
+from cirno_core.processes.lifecycle import reap_pid
+from cirno_core.processes.sessions import ExecSessionManager
+from cirno_core.processes.sessions.session import ExecSession
 
 
 def _python_command(code: str) -> str:
@@ -54,7 +58,7 @@ class _MockProcess:
         return self.returncode
 
 
-async def _cleanup_session(session: _ExecSession) -> None:
+async def _cleanup_session(session: ExecSession) -> None:
     await asyncio.wait_for(session.kill(), timeout=5)
     tasks = (
         session._stdout_task, session._stderr_task, session._completion_task,
@@ -68,28 +72,28 @@ async def _cleanup_session(session: _ExecSession) -> None:
 
 def test_reap_pid_noops_without_waitpid():
     """On platforms (or test stubs) without waitpid, reaping is a no-op."""
-    with patch("cirno_core.agent.tools.shell.os") as mock_os:
+    with patch("cirno_core.processes.lifecycle.os") as mock_os:
         mock_os.waitpid = None
         mock_os.WNOHANG = None
-        _reap_pid(12345)
+        reap_pid(12345)
 
 
 def test_reap_pid_calls_waitpid_wnohang():
-    with patch("cirno_core.agent.tools.shell.os") as mock_os:
+    with patch("cirno_core.processes.lifecycle.os") as mock_os:
         mock_os.waitpid = MagicMock(return_value=(12345, 0))
         mock_os.WNOHANG = 1
-        _reap_pid(12345)
+        reap_pid(12345)
         mock_os.waitpid.assert_called_once_with(12345, 1)
 
 
 def test_reap_pid_swallows_already_reaped_errors():
-    with patch("cirno_core.agent.tools.shell.os") as mock_os:
+    with patch("cirno_core.processes.lifecycle.os") as mock_os:
         mock_os.WNOHANG = 1
         mock_os.waitpid = MagicMock(side_effect=ChildProcessError("no child"))
-        _reap_pid(99)
+        reap_pid(99)
 
         mock_os.waitpid = MagicMock(side_effect=ProcessLookupError("gone"))
-        _reap_pid(99)
+        reap_pid(99)
 
 
 @pytest.mark.asyncio
@@ -98,8 +102,8 @@ async def test_kill_process_skips_kill_when_already_exited():
     process = _MockProcess(pid=4242, returncode=0)
     process.kill = MagicMock(side_effect=ProcessLookupError("already dead"))
 
-    with patch("cirno_core.agent.tools.shell._reap_pid") as reap:
-        await ExecTool._kill_process(process)
+    with patch("cirno_core.processes.lifecycle.reap_pid") as reap:
+        await process_lifecycle.kill_process(process)
 
     process.kill.assert_not_called()
     process.wait.assert_not_called()
@@ -110,8 +114,8 @@ async def test_kill_process_skips_kill_when_already_exited():
 async def test_kill_process_kills_and_reaps_live_process():
     process = _MockProcess(pid=77, returncode=None)
 
-    with patch("cirno_core.agent.tools.shell._reap_pid") as reap:
-        await ExecTool._kill_process(process)
+    with patch("cirno_core.processes.lifecycle.reap_pid") as reap:
+        await process_lifecycle.kill_process(process)
 
     process.kill.assert_called_once()
     process.wait.assert_awaited()
@@ -130,8 +134,8 @@ async def test_kill_process_reaps_even_if_kill_races_exit():
 
     process.kill.side_effect = raced_exit
 
-    with patch("cirno_core.agent.tools.shell._reap_pid") as reap:
-        await ExecTool._kill_process(process)
+    with patch("cirno_core.processes.lifecycle.reap_pid") as reap:
+        await process_lifecycle.kill_process(process)
 
     process.kill.assert_called_once()
     process.wait.assert_awaited()
@@ -144,8 +148,8 @@ async def test_execute_reaps_after_normal_completion():
     process = _MockProcess(pid=1001, returncode=0, stdout=b"ok\n")
     manager = ExecSessionManager()
     with (
-        patch.object(ExecTool, "_spawn", return_value=process),
-        patch("cirno_core.agent.tools.shell._reap_pid") as reap,
+        patch.object(process_launch, "spawn_process", return_value=process),
+        patch("cirno_core.processes.lifecycle.reap_pid") as reap,
     ):
         try:
             result = await ExecTool(session_manager=manager).execute(command="echo ok")
@@ -165,9 +169,9 @@ async def test_execute_timeout_kills_and_reaps():
     process = _MockProcess(pid=1002, returncode=None)
     manager = ExecSessionManager()
     with (
-        patch.object(ExecTool, "_spawn", return_value=process) as spawn,
-        patch.object(ExecTool, "_kill_process_tree", side_effect=ExecTool._kill_process) as kill_tree,
-        patch("cirno_core.agent.tools.shell._reap_pid") as reap,
+        patch.object(process_launch, "spawn_process", return_value=process) as spawn,
+        patch.object(process_lifecycle, "kill_process_tree", side_effect=process_lifecycle.kill_process) as kill_tree,
+        patch("cirno_core.processes.lifecycle.reap_pid") as reap,
     ):
         try:
             result = await asyncio.wait_for(
@@ -195,17 +199,17 @@ async def test_execute_cancellation_kills_process_tree():
     process = _MockProcess(pid=1005, returncode=None)
     manager = ExecSessionManager()
     waiting = asyncio.Event()
-    poll = _ExecSession.poll
+    poll = ExecSession.poll
 
-    async def initial_poll(session: _ExecSession, *args, **kwargs):
+    async def initial_poll(session: ExecSession, *args, **kwargs):
         waiting.set()
         return await poll(session, *args, **kwargs)
 
     with (
-        patch.object(ExecTool, "_spawn", return_value=process) as spawn,
-        patch.object(ExecTool, "_kill_process_tree", side_effect=ExecTool._kill_process) as kill_tree,
-        patch.object(_ExecSession, "poll", new=initial_poll),
-        patch("cirno_core.agent.tools.shell._reap_pid") as reap,
+        patch.object(process_launch, "spawn_process", return_value=process) as spawn,
+        patch.object(process_lifecycle, "kill_process_tree", side_effect=process_lifecycle.kill_process) as kill_tree,
+        patch.object(ExecSession, "poll", new=initial_poll),
+        patch("cirno_core.processes.lifecycle.reap_pid") as reap,
     ):
         execution = asyncio.create_task(
             ExecTool(session_manager=manager).execute(command="sleep 99"),
@@ -236,9 +240,9 @@ async def test_exec_session_wait_cancellation_does_not_kill_process_tree():
     manager = ExecSessionManager()
     session_tool = ExecSessionTool(manager=manager)
     with (
-        patch.object(ExecTool, "_spawn", return_value=process),
-        patch.object(ExecTool, "_kill_process_tree", side_effect=ExecTool._kill_process) as kill_tree,
-        patch("cirno_core.agent.tools.shell._reap_pid") as reap,
+        patch.object(process_launch, "spawn_process", return_value=process),
+        patch.object(process_lifecycle, "kill_process_tree", side_effect=process_lifecycle.kill_process) as kill_tree,
+        patch("cirno_core.processes.lifecycle.reap_pid") as reap,
     ):
         observer = None
         try:
@@ -283,10 +287,10 @@ async def test_execute_exception_after_success_does_not_raise_on_dead_process():
     process.kill.side_effect = ProcessLookupError("already dead")
     manager = ExecSessionManager()
     with (
-        patch.object(ExecTool, "_spawn", return_value=process),
-        patch("cirno_core.agent.tools.shell._reap_pid") as reap,
+        patch.object(process_launch, "spawn_process", return_value=process),
+        patch("cirno_core.processes.lifecycle.reap_pid") as reap,
         patch(
-            "cirno_core.agent.tools.shell.format_session_poll",
+            "cirno_core.agent.tools.shell.tool.format_session_poll",
             side_effect=RuntimeError("boom after exit"),
         ) as formatter,
     ):
@@ -311,8 +315,8 @@ async def test_execute_exception_after_success_does_not_raise_on_dead_process():
 async def test_execute_stream_read_error_kills_live_process(tmp_path):
     manager = ExecSessionManager()
     tool = ExecTool(working_dir=str(tmp_path), session_manager=manager)
-    spawn_process = ExecTool._spawn
-    kill_process_tree = ExecTool._kill_process_tree
+    spawn_process = process_launch.spawn_process
+    kill_process_tree = process_lifecycle.kill_process_tree
     process = None
 
     async def spawn_with_broken_stdout(*args, **kwargs):
@@ -324,9 +328,9 @@ async def test_execute_stream_read_error_kills_live_process(tmp_path):
         return process
 
     with (
-        patch.object(ExecTool, "_spawn", side_effect=spawn_with_broken_stdout),
-        patch.object(ExecTool, "_kill_process_tree", wraps=kill_process_tree) as kill_tree,
-        patch("cirno_core.agent.tools.shell._reap_pid", wraps=_reap_pid) as reap,
+        patch.object(process_launch, "spawn_process", side_effect=spawn_with_broken_stdout),
+        patch.object(process_lifecycle, "kill_process_tree", wraps=kill_process_tree) as kill_tree,
+        patch("cirno_core.processes.lifecycle.reap_pid", wraps=reap_pid) as reap,
     ):
         try:
             result = await asyncio.wait_for(tool.execute(
@@ -355,12 +359,12 @@ async def test_kill_process_tree_targets_group_after_root_exits():
     process = _MockProcess(pid=1006, returncode=0)
 
     with (
-        patch("cirno_core.agent.tools.shell._IS_WINDOWS", False),
-        patch("cirno_core.agent.tools.shell.os.killpg", create=True) as kill_group,
-        patch("cirno_core.agent.tools.shell.signal.SIGKILL", 9, create=True),
-        patch("cirno_core.agent.tools.shell._reap_pid") as reap,
+        patch("cirno_core.processes.platform.IS_WINDOWS", False),
+        patch("cirno_core.processes.lifecycle.os.killpg", create=True) as kill_group,
+        patch("cirno_core.processes.lifecycle.signal.SIGKILL", 9, create=True),
+        patch("cirno_core.processes.lifecycle.reap_pid") as reap,
     ):
-        await ExecTool._kill_process_tree(process)
+        await process_lifecycle.kill_process_tree(process)
 
     kill_group.assert_called_once_with(1006, 9)
     process.kill.assert_not_called()
@@ -411,10 +415,10 @@ async def test_kill_process_tree_kills_descendant_after_root_exits(tmp_path):
         "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"
     )
     tool = ExecTool(working_dir=str(tmp_path), timeout=10)
-    process = await tool._spawn(
+    process = await process_launch.spawn_process(
         _python_command(parent_code),
         str(tmp_path),
-        tool._build_env(),
+        tool.preparation.environment.build(),
         process_tree=True,
     )
     try:
@@ -424,19 +428,19 @@ async def test_kill_process_tree_kills_descendant_after_root_exits(tmp_path):
             while not started.exists():
                 await asyncio.sleep(0.01)
 
-        await ExecTool._kill_process_tree(process)
+        await process_lifecycle.kill_process_tree(process)
         await asyncio.wait_for(process.communicate(), timeout=5)
         release.write_text("go")
         await asyncio.sleep(1)
         assert not marker.exists()
     finally:
-        await ExecTool._kill_process_tree(process)
+        await process_lifecycle.kill_process_tree(process)
 
 
 @pytest.mark.asyncio
 async def test_exec_session_kill_reaps():
     process = _MockProcess(pid=2001, returncode=None)
-    session = _ExecSession(
+    session = ExecSession(
         session_id="abc",
         process=process,
         command="sleep 1",
@@ -445,7 +449,7 @@ async def test_exec_session_kill_reaps():
         owner_session_key=None,
     )
     try:
-        with patch("cirno_core.agent.tools.shell._reap_pid") as reap:
+        with patch("cirno_core.processes.lifecycle.reap_pid") as reap:
             await session.kill()
         process.kill.assert_called_once()
         process.wait.assert_awaited()
@@ -466,7 +470,7 @@ async def test_exec_session_kill_reaps_if_process_exits_before_kill():
         raise ProcessLookupError("raced exit")
 
     process.kill.side_effect = raced_exit
-    session = _ExecSession(
+    session = ExecSession(
         session_id="raced",
         process=process,
         command="sleep 1",
@@ -475,7 +479,7 @@ async def test_exec_session_kill_reaps_if_process_exits_before_kill():
         owner_session_key=None,
     )
     try:
-        with patch("cirno_core.agent.tools.shell._reap_pid") as reap:
+        with patch("cirno_core.processes.lifecycle.reap_pid") as reap:
             await session.kill()
         process.kill.assert_called_once()
         process.wait.assert_awaited()
@@ -491,7 +495,7 @@ async def test_exec_session_kill_waits_for_reader_tasks():
     process = _MockProcess(pid=2003, returncode=None, stdout=b"head\n")
     # OS exit can be observed before the readers have consumed the final pipe bytes.
     process.kill.side_effect = lambda: process.exit(-9, close_streams=False)
-    session = _ExecSession(
+    session = ExecSession(
         session_id="readers",
         process=process,
         command="sleep 1",
@@ -529,7 +533,7 @@ async def test_exec_session_kill_waits_for_reader_tasks():
 @pytest.mark.asyncio
 async def test_exec_session_poll_reaps_after_exit():
     process = _MockProcess(pid=2004, returncode=0, stdout=b"hi\n")
-    session = _ExecSession(
+    session = ExecSession(
         session_id="def",
         process=process,
         command="echo hi",
@@ -538,7 +542,7 @@ async def test_exec_session_poll_reaps_after_exit():
         owner_session_key=None,
     )
     try:
-        with patch("cirno_core.agent.tools.shell._reap_pid") as reap:
+        with patch("cirno_core.processes.lifecycle.reap_pid") as reap:
             await asyncio.wait_for(session.wait_exit(), timeout=5)
             poll = await session.poll(yield_time_ms=0, max_output_chars=1000)
         assert poll.done is True

@@ -43,7 +43,7 @@ async def test_metadata_checkpoint_and_followups_do_not_read_history(tmp_path):
         with manager._store.transaction() as db:
             db.set_authorizer(deny_history)
 
-    await state._execute(draft.key, protect)
+    await state.operations.execute(draft.key, protect)
     await state.update_metadata(draft.key, {"title": "new"})
     await state.checkpoint_view(draft, {"step": 1})
     before_followup = manager.read_session_snapshot(draft.key).updated_at

@@ -4,7 +4,8 @@ import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { ThreadViewport } from "@/components/thread/ThreadViewport";
 import { Button } from "@/components/ui/button";
-import type { UIMessage, WorkspaceScopePayload, WorkspacesPayload } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
+import type { WorkspaceScopePayload, WorkspacesPayload } from "@/lib/contracts/workspaces";
 
 const messages: UIMessage[] = [
   { id: "layout-question-1", role: "user", content: "手机上的聊天布局，能不能再紧凑自然一些？", createdAt: 1_700_000_000_000 },

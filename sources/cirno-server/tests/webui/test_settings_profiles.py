@@ -1,5 +1,4 @@
 import pytest
-
 from cirno_core.config.home import get_home_path
 from cirno_core.config.schema import Config
 from cirno_core.providers.factory import make_provider
@@ -36,7 +35,7 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
     provider = make_provider(config)
     assert provider.request_timeout_s == 180
     assert provider.stream_idle_timeout_s == 150
-    assert len(provider._CHAT_RETRY_DELAYS) == 4
+    assert len(provider.retry_policy.delays) == 4
     assert config.agents.defaults.dream.build_schedule("UTC").every_ms == 6 * 3_600_000
     assert not config.agents.defaults.heartbeat.enabled
 
@@ -53,12 +52,11 @@ async def test_home_file_routes_require_authenticated_socket_requests(tmp_path):
     from types import SimpleNamespace
     from urllib.parse import parse_qs, urlsplit
 
-    from websockets.datastructures import Headers
-
     from cirno_core.bus.queue import MessageBus
     from cirno_server.webui.http_utils import http_json_response
     from cirno_server.webui.settings.routes import WebUISettingsRouter
     from cirno_server.webui.settings.services import WebUISettingsServices
+    from websockets.datastructures import Headers
 
     def router(authorized):
         return WebUISettingsRouter(
@@ -67,10 +65,10 @@ async def test_home_file_routes_require_authenticated_socket_requests(tmp_path):
             check_api_token=lambda request: authorized,
             parse_query=lambda path: parse_qs(urlsplit(path).query), json_response=http_json_response,
             error_response=lambda status, message: http_json_response({"error": message}, status=status),
-            runtime_surface="browser", runtime_capabilities={},
+
         )
 
-    path = "/api/settings/profile/read"
+    path = "/v0/settings/profile/read"
     request = SimpleNamespace(path=path, headers=Headers())
     assert (await router(True).dispatch(None, request, path)).status_code == 405
     request._cirno_webui_mutation_request = True

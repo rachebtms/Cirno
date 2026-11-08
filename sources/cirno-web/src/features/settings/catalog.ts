@@ -1,0 +1,46 @@
+import {
+  AboutIcon,
+  AdvancedIcon,
+  AppearanceIcon,
+  CapabilitiesIcon,
+  ModelsIcon,
+  OverviewIcon,
+  SystemIcon,
+} from "@/components/icons/product-icons";
+import { Activity, Archive, Bell, BookOpen, BookOpenText, Brain, Globe, HeartPulse, KeyRound, Link, MessagesSquare, Moon, Network, Play, Search, Server, ShieldCheck, Terminal, UserRound, Wrench, type LucideIcon } from "lucide-react";
+
+import type { SettingsSectionKey } from "@/features/settings/contracts";
+
+export const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fallback: string; group: string }> = [
+  { key: "overview", icon: OverviewIcon, fallback: "Overview", group: "general" },
+  { key: "account", icon: KeyRound, fallback: "Account", group: "general" },
+  { key: "regional", icon: Globe, fallback: "Time & region", group: "general" },
+  { key: "appearance", icon: AppearanceIcon, fallback: "Appearance", group: "interface" },
+  { key: "reading", icon: BookOpenText, fallback: "Text & reading", group: "interface" },
+  { key: "activity", icon: Activity, fallback: "Execution display", group: "interface" },
+  { key: "notifications", icon: Bell, fallback: "Browser notifications", group: "interface" },
+  { key: "personality", icon: UserRound, fallback: "Personality", group: "agent" },
+  { key: "providers", icon: Network, fallback: "Providers", group: "agent" },
+  { key: "models", icon: ModelsIcon, fallback: "Models", group: "agent" },
+  { key: "memory", icon: Brain, fallback: "Memory library", group: "agent" },
+  { key: "context", icon: Archive, fallback: "Context compaction", group: "agent" },
+  { key: "dream", icon: Moon, fallback: "Dream consolidation", group: "agent" },
+  { key: "memory-search", icon: Search, fallback: "Memory retrieval", group: "agent" },
+  { key: "approval", icon: ShieldCheck, fallback: "AI approvals", group: "agent" },
+  { key: "execution", icon: Play, fallback: "Goals & execution", group: "agent" },
+  { key: "coordination", icon: MessagesSquare, fallback: "Conversation coordination", group: "agent" },
+  { key: "heartbeat", icon: HeartPulse, fallback: "Heartbeat", group: "agent" },
+  { key: "apps", icon: Wrench, fallback: "Tools & CLI Apps", group: "agent" },
+  { key: "shell", icon: Terminal, fallback: "Shell execution", group: "agent" },
+  { key: "skills", icon: BookOpen, fallback: "Skills", group: "agent" },
+  { key: "browser", icon: CapabilitiesIcon, fallback: "Web search", group: "connections" },
+  { key: "nodes", icon: Server, fallback: "Nodes", group: "connections" },
+  { key: "mcp", icon: Server, fallback: "MCP", group: "connections" },
+  { key: "telegram", icon: Link, fallback: "Telegram", group: "connections" },
+  { key: "channels", icon: MessagesSquare, fallback: "Channel setup", group: "connections" },
+  { key: "network", icon: Network, fallback: "Network & retries", group: "system" },
+  { key: "advanced", icon: AdvancedIcon, fallback: "Permissions", group: "system" },
+  { key: "backup", icon: Archive, fallback: "Backup & restore", group: "system" },
+  { key: "runtime", icon: SystemIcon, fallback: "Server", group: "system" },
+  { key: "about", icon: AboutIcon, fallback: "About", group: "system" },
+];

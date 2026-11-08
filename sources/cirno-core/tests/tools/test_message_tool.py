@@ -90,7 +90,7 @@ async def test_message_tool_inherits_metadata_for_same_target() -> None:
     tool = MessageTool(send_callback=_send)
     slack_meta = {"slack": {"thread_ts": "111.222", "channel_type": "channel"}}
 
-    with request_context(RequestContext(channel="slack", chat_id="C123", session_key="websocket:global", metadata=slack_meta)):
+    with request_context(RequestContext(channel="slack", chat_id="C123", session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", metadata=slack_meta)):
         await tool.execute(content="thread reply")
 
     assert sent[0].metadata == {**slack_meta, "_record_channel_delivery": True}
@@ -106,7 +106,7 @@ async def test_message_tool_clears_metadata_when_context_has_none() -> None:
     tool = MessageTool(send_callback=_send)
     rich_context = RequestContext(
         channel="slack",
-        session_key="websocket:global",
+        session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb",
         chat_id="C123",
         metadata={"slack": {"thread_ts": "111.222", "channel_type": "channel"}},
     )
@@ -117,7 +117,7 @@ async def test_message_tool_clears_metadata_when_context_has_none() -> None:
     with request_context(
         RequestContext(
             channel="slack",
-            session_key="websocket:global",
+            session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb",
             chat_id="C123",
             metadata={},
         ),
@@ -138,7 +138,7 @@ async def test_message_tool_does_not_inherit_metadata_for_cross_target() -> None
     with request_context(
         RequestContext(
             channel="slack",
-            session_key="websocket:global",
+            session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb",
             chat_id="C123",
             metadata={"slack": {"thread_ts": "111.222", "channel_type": "channel"}},
         ),
@@ -343,10 +343,10 @@ async def test_message_tool_allows_ws_explicit_when_matches_context(tmp_path) ->
         sent.append(msg)
 
     tool = MessageTool(send_callback=_send)
-    conv = "global"
+    conv = "cirno"
     f = tmp_path / "doc.md"
     f.write_text("hello", encoding="utf-8")
-    with request_context(RequestContext(channel="websocket", chat_id=conv, session_key="websocket:global", metadata={})):
+    with request_context(RequestContext(channel="websocket", chat_id=conv, session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", metadata={})):
         result = await tool.execute(
             content="see file",
             channel="websocket",
@@ -359,7 +359,7 @@ async def test_message_tool_allows_ws_explicit_when_matches_context(tmp_path) ->
 
 @pytest.mark.asyncio
 async def test_message_tool_regular_cli_context_cannot_use_cirno_delivery(tmp_path) -> None:
-    """Only the Cirno conversation owns the message capability."""
+    """Only the Router conversation owns the message capability."""
     sent: list[OutboundMessage] = []
 
     async def _send(msg: OutboundMessage) -> None:
@@ -376,5 +376,5 @@ async def test_message_tool_regular_cli_context_cannot_use_cirno_delivery(tmp_pa
             chat_id=target,
             media=[str(f)],
         )
-    assert "available only in the Cirno conversation" in result
+    assert "available only in the Router conversation" in result
     assert sent == []

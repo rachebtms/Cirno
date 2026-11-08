@@ -14,7 +14,7 @@ from cirno_core.session.goal_state import (
     explicit_goal_requested,
     sustained_goal_turn,
 )
-from cirno_core.session.recovery import REQUEST_ORIGIN_METADATA_KEY
+from cirno_core.session.recovery.contracts import REQUEST_ORIGIN_METADATA_KEY
 from cirno_core.session.turn_continuation import (
     INTERNAL_CONTINUATION_KIND_META,
     INTERNAL_CONTINUATION_META,

@@ -21,9 +21,10 @@ from cirno_core.bus.runtime_events import (
     TurnRuntimeAdmitted,
     UserInputAccepted,
 )
-from cirno_core.providers.base import GenerationSettings, LLMUsage
+from cirno_core.providers.generation import GenerationSettings
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.fallback_provider import FallbackModelSelection
-from cirno_core.session import webui_turns as wth
+from cirno_core.session.webui_turns import activity as wth_activity, coordinator as wth_coordinator, models as wth_models
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_handles import session_handle_for_name
 from cirno_core.session.session_messages import SESSION_MESSAGE_METADATA_KEY
@@ -33,15 +34,15 @@ from cirno_core.session.transport_metadata import WEBSOCKET_TURN_OWNER_METADATA_
 
 @pytest.fixture(autouse=True)
 def _clear_turn_wall_clock() -> None:
-    wth._WEBSOCKET_ACTIVE_TURNS.clear()
-    wth._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
-    wth._WEBSOCKET_TURN_IDS.clear()
-    wth._WEBSOCKET_TURN_OWNERS.clear()
+    wth_activity._WEBSOCKET_ACTIVE_TURNS.clear()
+    wth_activity._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
+    wth_activity._WEBSOCKET_TURN_IDS.clear()
+    wth_activity._WEBSOCKET_TURN_OWNERS.clear()
     yield
-    wth._WEBSOCKET_ACTIVE_TURNS.clear()
-    wth._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
-    wth._WEBSOCKET_TURN_IDS.clear()
-    wth._WEBSOCKET_TURN_OWNERS.clear()
+    wth_activity._WEBSOCKET_ACTIVE_TURNS.clear()
+    wth_activity._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
+    wth_activity._WEBSOCKET_TURN_IDS.clear()
+    wth_activity._WEBSOCKET_TURN_OWNERS.clear()
 
 
 @pytest.mark.asyncio
@@ -56,12 +57,12 @@ async def test_publish_turn_run_status_running_records_wall_clock() -> None:
         metadata={"webui_turn_id": "turn-a"},
     )
 
-    await wth.publish_turn_run_status(bus, msg, "running")
+    await wth_activity.publish_turn_run_status(bus, msg, "running")
 
-    assert "chat-a" in wth._WEBSOCKET_TURN_WALL_STARTED_AT
-    t0 = wth.websocket_turn_wall_started_at("chat-a")
+    assert "chat-a" in wth_activity._WEBSOCKET_TURN_WALL_STARTED_AT
+    t0 = wth_activity.websocket_turn_wall_started_at("chat-a")
     assert isinstance(t0, float)
-    assert wth.websocket_turn_id("chat-a") == "turn-a"
+    assert wth_activity.websocket_turn_id("chat-a") == "turn-a"
     call = bus.publish_outbound.await_args[0][0]
     assert call.chat_id == "chat-a"
     assert isinstance(call.event, GoalStatusEvent)
@@ -74,9 +75,9 @@ async def test_publish_turn_run_status_reuses_explicit_wall_clock() -> None:
     bus.publish_outbound = AsyncMock()
     msg = InboundMessage(channel="websocket", sender_id="u", chat_id="chat-a", content="hi")
 
-    await wth.publish_turn_run_status(bus, msg, "running", started_at=1234.5)
+    await wth_activity.publish_turn_run_status(bus, msg, "running", started_at=1234.5)
 
-    assert wth.websocket_turn_wall_started_at("chat-a") == 1234.5
+    assert wth_activity.websocket_turn_wall_started_at("chat-a") == 1234.5
     call = bus.publish_outbound.await_args[0][0]
     assert isinstance(call.event, GoalStatusEvent)
     assert call.event.started_at == 1234.5
@@ -94,13 +95,13 @@ async def test_publish_turn_run_status_idle_retains_registry_until_delivery() ->
         metadata={"webui_turn_id": "turn-b"},
     )
 
-    await wth.publish_turn_run_status(bus, msg, "running")
-    assert wth.websocket_turn_wall_started_at("chat-b") is not None
-    assert wth.websocket_turn_id("chat-b") == "turn-b"
+    await wth_activity.publish_turn_run_status(bus, msg, "running")
+    assert wth_activity.websocket_turn_wall_started_at("chat-b") is not None
+    assert wth_activity.websocket_turn_id("chat-b") == "turn-b"
 
-    await wth.publish_turn_run_status(bus, msg, "idle")
-    assert wth.websocket_turn_wall_started_at("chat-b") is not None
-    assert wth.websocket_turn_id("chat-b") == "turn-b"
+    await wth_activity.publish_turn_run_status(bus, msg, "idle")
+    assert wth_activity.websocket_turn_wall_started_at("chat-b") is not None
+    assert wth_activity.websocket_turn_id("chat-b") == "turn-b"
 
 
 async def test_clear_websocket_turn_only_clears_matching_owner() -> None:
@@ -109,15 +110,15 @@ async def test_clear_websocket_turn_only_clears_matching_owner() -> None:
         channel="websocket", sender_id="u", chat_id="chat-b", content="hi",
         metadata={"webui_turn_id": "turn-new", WEBSOCKET_TURN_OWNER_METADATA_KEY: "owner-new"},
     )
-    await wth.publish_turn_run_status(bus, msg, "running", started_at=1234.5)
+    await wth_activity.publish_turn_run_status(bus, msg, "running", started_at=1234.5)
 
-    assert wth.clear_websocket_turn_if_current("chat-b", "owner-old") is False
-    assert wth.websocket_turn_wall_started_at("chat-b") == 1234.5
-    assert wth.websocket_turn_id("chat-b") == "turn-new"
+    assert wth_activity.clear_websocket_turn_if_current("chat-b", "owner-old") is False
+    assert wth_activity.websocket_turn_wall_started_at("chat-b") == 1234.5
+    assert wth_activity.websocket_turn_id("chat-b") == "turn-new"
 
-    assert wth.clear_websocket_turn_if_current("chat-b", "owner-new") is True
-    assert wth.websocket_turn_wall_started_at("chat-b") is None
-    assert wth.websocket_turn_id("chat-b") is None
+    assert wth_activity.clear_websocket_turn_if_current("chat-b", "owner-new") is True
+    assert wth_activity.websocket_turn_wall_started_at("chat-b") is None
+    assert wth_activity.websocket_turn_id("chat-b") is None
 
 
 @pytest.mark.asyncio
@@ -137,16 +138,16 @@ async def test_ownerless_turns_receive_distinct_internal_owners() -> None:
         content="second",
     )
 
-    await wth.publish_turn_run_status(bus, first, "running")
+    await wth_activity.publish_turn_run_status(bus, first, "running")
     first_owner = first.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
-    await wth.publish_turn_run_status(bus, second, "running")
+    await wth_activity.publish_turn_run_status(bus, second, "running")
     second_owner = second.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY]
 
     assert first_owner != second_owner
-    assert wth.clear_websocket_turn_if_current("chat-ownerless", first_owner) is True
-    assert wth._WEBSOCKET_TURN_OWNERS["chat-ownerless"] == second_owner
-    assert wth.websocket_turn_wall_started_at("chat-ownerless") is not None
-    assert wth.clear_websocket_turn_if_current("chat-ownerless", second_owner) is True
+    assert wth_activity.clear_websocket_turn_if_current("chat-ownerless", first_owner) is True
+    assert wth_activity._WEBSOCKET_TURN_OWNERS["chat-ownerless"] == second_owner
+    assert wth_activity.websocket_turn_wall_started_at("chat-ownerless") is not None
+    assert wth_activity.clear_websocket_turn_if_current("chat-ownerless", second_owner) is True
 
 
 @pytest.mark.asyncio
@@ -155,17 +156,17 @@ async def test_publish_turn_run_status_non_websocket_noop_registry() -> None:
     bus.publish_outbound = AsyncMock()
     msg = InboundMessage(channel="telegram", sender_id="u", chat_id="1", content="hi")
 
-    await wth.publish_turn_run_status(bus, msg, "running")
+    await wth_activity.publish_turn_run_status(bus, msg, "running")
 
-    assert wth._WEBSOCKET_TURN_WALL_STARTED_AT == {}
-    assert wth._WEBSOCKET_TURN_IDS == {}
+    assert wth_activity._WEBSOCKET_TURN_WALL_STARTED_AT == {}
+    assert wth_activity._WEBSOCKET_TURN_IDS == {}
 
 
 @pytest.mark.asyncio
 async def test_fallback_model_is_scoped_to_its_websocket_chat() -> None:
     bus = MessageBus()
     bus.publish_outbound = AsyncMock()
-    observer = wth.build_webui_fallback_model_observer(bus)
+    observer = wth_models.build_webui_fallback_model_observer(bus)
 
     runtime = LLMRuntime(
         provider=MagicMock(),
@@ -200,7 +201,7 @@ async def test_coordinator_connections_end_on_scope_exit_and_can_reconnect(tmp_p
 
     bus = MessageBus()
     bus.publish_outbound = AsyncMock()
-    coordinator = wth.WebuiTurnCoordinator(
+    coordinator = wth_coordinator.WebuiTurnCoordinator(
         bus=bus, sessions=SessionManager(tmp_path),
         schedule_background=lambda coro: coro.close(),
     )
@@ -221,7 +222,7 @@ async def test_coordinator_connections_end_on_scope_exit_and_can_reconnect(tmp_p
 async def test_admitted_runtime_publishes_chat_scoped_model_and_preset(tmp_path) -> None:
     bus = MessageBus()
     bus.publish_outbound = AsyncMock()
-    coordinator = wth.WebuiTurnCoordinator(
+    coordinator = wth_coordinator.WebuiTurnCoordinator(
         bus=bus,
         sessions=SessionManager(tmp_path),
         schedule_background=lambda coro: coro.close(),
@@ -266,16 +267,17 @@ async def test_turn_retry_cause_survives_only_actual_exhaustion(
     tmp_path, states, terminal_kind, expected_kind, attempts,
 ) -> None:
     bus = MessageBus()
-    coordinator = wth.WebuiTurnCoordinator(
+    coordinator = wth_coordinator.WebuiTurnCoordinator(
         bus=bus, sessions=SessionManager(tmp_path),
         schedule_background=lambda coro: coro.close(),
     )
+    await coordinator.sessions.state.get("websocket:chat-retry")
     with coordinator.connected():
         msg = InboundMessage(
             channel="websocket", sender_id="user", chat_id="chat-retry", content="hello",
             metadata={"webui": True, "webui_turn_id": "turn-1"},
         )
-        delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
+        delivery = (await TurnDeliveryFactory(bus).create(msg, msg.session_key))
         for state in states:
             await delivery.events.emit(RetryStatusEvent(
                 state=state, attempt=4, max_attempts=4, error_kind="connection",
@@ -314,8 +316,8 @@ async def test_session_input_is_projected_by_the_webui_coordinator(
         "target_session_key": "websocket:target",
     }
     append_input = AsyncMock(side_effect=None if write_succeeds else OSError("write failed"))
-    monkeypatch.setattr(wth, "append_session_message_input", append_input)
-    coordinator = wth.WebuiTurnCoordinator(
+    monkeypatch.setattr(wth_coordinator, "append_session_message_input", append_input)
+    coordinator = wth_coordinator.WebuiTurnCoordinator(
         bus=bus,
         sessions=sessions,
         schedule_background=lambda coro: coro.close(),
@@ -351,7 +353,7 @@ async def test_session_input_is_projected_by_the_webui_coordinator(
 async def test_fallback_model_ignores_non_websocket_requests() -> None:
     bus = MessageBus()
     bus.publish_outbound = AsyncMock()
-    observer = wth.build_webui_fallback_model_observer(bus)
+    observer = wth_models.build_webui_fallback_model_observer(bus)
 
     with request_context(RequestContext(channel="telegram", chat_id="chat-model")):
         await observer(FallbackModelSelection("fallback", "openai_codex"))
@@ -394,7 +396,7 @@ async def test_turn_end_reads_goal_without_loading_conversation_history(
 
     monkeypatch.setattr(sessions._store, "_open_connection", protected_connection)
     bus = MessageBus()
-    coordinator = wth.WebuiTurnCoordinator(
+    coordinator = wth_coordinator.WebuiTurnCoordinator(
         bus=bus, sessions=sessions, schedule_background=lambda coro: coro.close(),
     )
     msg = InboundMessage(

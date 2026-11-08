@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.bus.events import InboundMessage, OutboundMessage
 from cirno_core.cron.bound_runner import run_bound_cron_job
@@ -9,7 +8,7 @@ from cirno_core.cron.service import CronService
 from cirno_core.cron.types import CronJob, CronPayload, CronRunRecord, CronRunResult, CronSchedule
 from cirno_core.triggers.local_types import LocalTrigger, TriggerRunRecord
 from cirno_core.utils.run_records import write_run_record
-from cirno_server.webui.automation_results import cron_run_response, trigger_run_response
+from cirno_server.webui.automation_results import AutomationResultReadError, cron_run_response, trigger_run_response
 
 
 def job_with_run(run: CronRunRecord) -> CronJob:
@@ -79,7 +78,8 @@ def test_result_path_cannot_escape_the_runs_directory(tmp_path: Path) -> None:
     assert cron_run_response(runs, job_with_run(run), run) is None
     (runs / "broken.json").write_text("{", encoding="utf-8")
     run.run_id = "broken"
-    assert cron_run_response(runs, job_with_run(run), run) is None
+    with pytest.raises(AutomationResultReadError, match="broken.json.*invalid UTF-8 JSON"):
+        cron_run_response(runs, job_with_run(run), run)
 
 
 def test_local_trigger_uses_exact_delivery_time_and_session(tmp_path: Path) -> None:

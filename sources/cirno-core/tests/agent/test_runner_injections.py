@@ -1,19 +1,24 @@
+from __future__ import annotations
+
+from cirno_core.agent.governance.merging import merge_adjacent_user_messages
+from cirno_core.agent.runner.inputs import append_injected_messages, drain_injections
+
 """Tests for the mid-turn injection system: drain, checkpoints, pending queues, error paths."""
 
-from __future__ import annotations
 
 import asyncio
 import base64
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from agent.runner_helpers import make_run_spec
-from agent.session_helpers import run_session, visible_message
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.tools.context import RequestContext
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
+
+from sources.development.testing.runtime import make_run_spec
+from sources.development.testing.sessions import run_session, visible_message
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -51,10 +56,8 @@ def _make_loop(tmp_path, *, recovery_admission=None):
 @pytest.mark.asyncio
 async def test_drain_injections_returns_empty_when_no_callback():
     """No injection_callback → empty list."""
-    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
     spec = make_run_spec(provider,
@@ -62,18 +65,16 @@ async def test_drain_injections_returns_empty_when_no_callback():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=None,
     )
-    result = await runner._drain_injections(spec)
+    result = await drain_injections(spec)
     assert result == []
 
 
 @pytest.mark.asyncio
 async def test_drain_injections_extracts_content_from_inbound_messages():
     """Should extract .content from InboundMessage objects."""
-    from cirno_core.agent.runner import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
 
@@ -90,7 +91,7 @@ async def test_drain_injections_extracts_content_from_inbound_messages():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=cb,
     )
-    result = await runner._drain_injections(spec)
+    result = await drain_injections(spec)
     assert result == [
         {"role": "user", "content": "hello"},
         {"role": "user", "content": "world"},
@@ -100,11 +101,9 @@ async def test_drain_injections_extracts_content_from_inbound_messages():
 @pytest.mark.asyncio
 async def test_drain_injections_keeps_entire_callback_snapshot():
     """A callback snapshot is never split by an arbitrary message count."""
-    from cirno_core.agent.runner import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
     msgs = [
@@ -120,7 +119,7 @@ async def test_drain_injections_keeps_entire_callback_snapshot():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=cb,
     )
-    result = await runner._drain_injections(spec)
+    result = await drain_injections(spec)
     assert result == [
         {"role": "user", "content": f"msg{i}"}
         for i in range(8)
@@ -130,11 +129,9 @@ async def test_drain_injections_keeps_entire_callback_snapshot():
 @pytest.mark.asyncio
 async def test_drain_injections_skips_empty_content():
     """Messages with blank content should be filtered out."""
-    from cirno_core.agent.runner import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
 
@@ -152,17 +149,15 @@ async def test_drain_injections_skips_empty_content():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=cb,
     )
-    result = await runner._drain_injections(spec)
+    result = await drain_injections(spec)
     assert result == [{"role": "user", "content": "valid"}]
 
 
 @pytest.mark.asyncio
 async def test_drain_injections_filters_empty_dict_payloads():
     """Pre-normalized dict injections should obey the same empty-content guard."""
-    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
 
@@ -185,7 +180,7 @@ async def test_drain_injections_filters_empty_dict_payloads():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=cb,
     )
-    result = await runner._drain_injections(spec)
+    result = await drain_injections(spec)
     assert result == [
         {"role": "user", "content": "valid"},
         {"role": "user", "content": multimodal},
@@ -197,10 +192,8 @@ async def test_drain_injections_skips_objects_with_none_content():
     """Objects exposing content=None should be skipped rather than stringified."""
     from types import SimpleNamespace
 
-    from cirno_core.agent.runner import AgentRunner
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
 
@@ -216,17 +209,15 @@ async def test_drain_injections_skips_objects_with_none_content():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=cb,
     )
-    result = await runner._drain_injections(spec)
+    result = await drain_injections(spec)
     assert result == [{"role": "user", "content": "valid"}]
 
 
 @pytest.mark.asyncio
-async def test_drain_injections_handles_callback_exception():
-    """If the callback raises, return empty list (error is logged)."""
-    from cirno_core.agent.runner import AgentRunner
+async def test_drain_injections_propagates_callback_failure():
+    """A failed pending-input read must not masquerade as an empty queue."""
 
     provider = MagicMock()
-    runner = AgentRunner()
     tools = MagicMock()
     tools.get_definitions.return_value = []
 
@@ -238,14 +229,14 @@ async def test_drain_injections_handles_callback_exception():
         max_iterations=1, max_tool_result_chars=1000,
         injection_callback=cb,
     )
-    result = await runner._drain_injections(spec)
-    assert result == []
+    with pytest.raises(RuntimeError, match="boom"):
+        await drain_injections(spec)
 
 
 @pytest.mark.asyncio
 async def test_checkpoint1_injects_after_tool_execution():
     """Follow-up messages are injected after tool execution, before next LLM call."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -301,7 +292,7 @@ async def test_checkpoint1_injects_after_tool_execution():
 @pytest.mark.asyncio
 async def test_terminal_wait_does_not_block_next_iteration_after_tools():
     """Background waits begin only after a no-tool response is ready to finish."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -380,7 +371,7 @@ async def test_terminal_wait_does_not_block_next_iteration_after_tools():
 @pytest.mark.asyncio
 async def test_goal_continuation_precedes_terminal_wait():
     """An active sustained goal keeps running without joining background work."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -426,7 +417,7 @@ async def test_goal_continuation_precedes_terminal_wait():
 async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
     """After final response, if injections exist, stream_end should get resuming=True."""
     from cirno_core.agent.hook import AgentHook, AgentHookContext
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -484,7 +475,7 @@ async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
 @pytest.mark.asyncio
 async def test_injected_followup_starts_new_length_recovery_chain():
     """A follow-up gets a fresh recovery budget and no content from the prior answer."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -533,7 +524,7 @@ async def test_injected_followup_starts_new_length_recovery_chain():
 @pytest.mark.parametrize("max_iterations", [1, 3])
 async def test_truncated_answer_followup_requires_remaining_iteration(max_iterations):
     from cirno_core.agent.hook import AgentHook, AgentHookContext
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     tools = MagicMock()
@@ -589,7 +580,7 @@ async def test_truncated_answer_followup_requires_remaining_iteration(max_iterat
 @pytest.mark.asyncio
 async def test_checkpoint2_preserves_final_response_in_history_before_followup():
     """A follow-up injected after a final answer must still see that answer in history."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -680,7 +671,7 @@ async def test_loop_injected_followup_preserves_image_media(tmp_path):
 
     pending_queue = asyncio.Queue()
     runtime = loop.llm_runtime()
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hello"}], current_message=None),
         runtime=runtime,
         request_context=RequestContext(channel="cli", chat_id="c", runtime=runtime),
@@ -774,7 +765,7 @@ async def test_pending_injection_resolves_its_own_runtime_context(tmp_path):
     ))
 
     runtime = loop.llm_runtime()
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(
             history=[{"role": "user", "content": "initial message from user A"}],
             current_message=None,
@@ -826,7 +817,7 @@ async def test_pending_injection_resolves_its_own_runtime_context(tmp_path):
         for message in injected
     )
 
-    loop._save_turn(session, result.messages, skip=1)
+    loop.persistence.save_messages(session, result.messages, skip=1)
     persisted = [message for message in session.messages if message.get("role") == "user"][-2:]
     assert "telegram | group-1 | user-b | message-2" in str(persisted[0]["content"])
     assert "telegram | group-1 | user-c | message-3" in str(persisted[1]["content"])
@@ -880,7 +871,7 @@ async def test_subagent_pending_injection_is_hidden_history_and_not_merged(tmp_p
     pending_queue = asyncio.Queue()
 
     runtime = loop.llm_runtime()
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hello"}], current_message=None),
         runtime=runtime,
         request_context=RequestContext(channel="cli", chat_id="c", runtime=runtime),
@@ -902,7 +893,7 @@ async def test_subagent_pending_injection_is_hidden_history_and_not_merged(tmp_p
 @pytest.mark.asyncio
 async def test_model_request_merges_injected_user_messages_without_losing_media():
     """The model copy may merge follow-ups while the raw transcript keeps each event."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -971,11 +962,10 @@ async def test_model_request_merges_injected_user_messages_without_losing_media(
 
 def test_runner_append_keeps_recovery_followups_separate() -> None:
     """Each raw follow-up keeps its own recovery identity."""
-    from cirno_core.agent.runner import AgentRunner
-    from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY
+    from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
 
     messages = [{"role": "user", "content": "first", PENDING_FOLLOWUP_ID_KEY: "one"}]
-    AgentRunner._append_injected_messages(
+    append_injected_messages(
         messages,
         [{"role": "user", "content": "second", PENDING_FOLLOWUP_ID_KEY: "two"}],
     )
@@ -985,8 +975,6 @@ def test_runner_append_keeps_recovery_followups_separate() -> None:
 
 
 def test_model_request_merge_preserves_runtime_markers_with_media() -> None:
-    from cirno_core.agent.context_governance import ContextGovernor
-    from cirno_core.agent.runner import AgentRunner
     from cirno_core.runtime.context import (
         RUNTIME_CONTEXT_HISTORY_META,
         RUNTIME_CONTEXT_MESSAGE_META,
@@ -1009,7 +997,7 @@ def test_model_request_merge_preserves_runtime_markers_with_media() -> None:
     )
     messages: list[dict] = []
 
-    AgentRunner._append_injected_messages(messages, [
+    append_injected_messages(messages, [
         {
             "role": "user",
             "content": first_content,
@@ -1023,7 +1011,7 @@ def test_model_request_merge_preserves_runtime_markers_with_media() -> None:
     ])
 
     assert len(messages) == 2
-    merged = ContextGovernor._merge_adjacent_user_messages_for_model(messages)[0]
+    merged = merge_adjacent_user_messages(messages)[0]
     assert len(messages) == 2
     assert "private first" in str(merged["content"])
     assert "private second" in str(merged["content"])
@@ -1041,7 +1029,7 @@ def test_model_request_merge_preserves_runtime_markers_with_media() -> None:
 @pytest.mark.asyncio
 async def test_injection_cycles_are_not_stopped_by_an_arbitrary_cap():
     """Every pending snapshot runs until the normal iteration budget is reached."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -1082,7 +1070,7 @@ async def test_injection_cycles_are_not_stopped_by_an_arbitrary_cap():
 @pytest.mark.asyncio
 async def test_no_injections_flag_is_false_by_default():
     """had_injections should be False when no injection callback or no messages."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock()
 
@@ -1146,7 +1134,7 @@ async def test_mid_turn_subagent_result_does_not_resolve_a_new_turn_route(tmp_pa
     from cirno_core.bus.events import InboundMessage
 
     loop = _make_loop(tmp_path)
-    route_policy = MagicMock(side_effect=lambda _msg, _key, route: route)
+    route_policy = AsyncMock(side_effect=lambda _msg, _key, route: route)
     loop.turn_delivery_factory.route_policy = route_policy
 
     session_key = "websocket:chat-1"
@@ -1210,7 +1198,7 @@ async def test_pending_queue_batches_full_snapshot_before_first_model_call(tmp_p
         ))
 
     runtime = loop.llm_runtime()
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hello"}], current_message=None),
         runtime=runtime,
         request_context=RequestContext(channel="cli", chat_id="c", runtime=runtime),
@@ -1285,7 +1273,7 @@ async def test_pending_queue_snapshot_excludes_messages_arriving_during_conversi
     ))
 
     runtime = loop.llm_runtime()
-    run_task = asyncio.create_task(loop._run_agent_loop(
+    run_task = asyncio.create_task(loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hello"}], current_message=None),
         runtime=runtime,
         request_context=RequestContext(channel="cli", chat_id="c", runtime=runtime),
@@ -1346,7 +1334,7 @@ async def test_pending_snapshot_rolls_back_before_later_arrivals(tmp_path, cance
     loop.register_runtime_context_provider(context_provider)
     runtime = loop.llm_runtime()
     try:
-        run = loop._run_agent_loop(
+        run = loop.model_turn.run(
             TranscriptInput(history=[{"role": "user", "content": "root"}], current_message=None),
             runtime=runtime,
             request_context=RequestContext(channel="cli", chat_id="c", runtime=runtime),
@@ -1359,7 +1347,15 @@ async def test_pending_snapshot_rolls_back_before_later_arrivals(tmp_path, cance
                 *contents, "later arrival",
             ]
         else:
-            result = await run
+            with pytest.raises(RuntimeError, match="context lookup temporarily unavailable"):
+                await run
+            assert pending.qsize() == 4
+            result = await loop.model_turn.run(
+                TranscriptInput(history=[{"role": "user", "content": "root"}], current_message=None),
+                runtime=runtime,
+                request_context=RequestContext(channel="cli", chat_id="c", runtime=runtime),
+                pending_queue=pending,
+            )
             user_content = [
                 visible_message(message)["content"] for message in result.messages if message["role"] == "user"
             ]
@@ -1389,7 +1385,7 @@ async def test_persistent_conversion_error_does_not_drop_later_session_inputs(tm
         calls += 1
         if calls == 1:
             for content in ["before", "bad", "after"]:
-                (await loop._enqueue_session_message(InboundMessage(
+                (await loop.dispatch.enqueue(InboundMessage(
                     channel="cli", sender_id="u", chat_id="c", content=content,
                 )))
         return LLMResponse(content="answer", finish_reason="stop")
@@ -1410,7 +1406,8 @@ async def test_persistent_conversion_error_does_not_drop_later_session_inputs(tm
         assert [visible_message(message)["content"] for message in history if message["role"] == "user"] == [
             "root", "before", "after",
         ]
-        assert sum(event.outcome == "failed" for event in completions) == 1
+        assert completions[-1].outcome == "completed"
+        assert completions[:-1] and all(event.outcome == "failed" for event in completions[:-1])
         assert "cli:c" not in loop._pending_queues
     finally:
         await loop.aclose()
@@ -1428,14 +1425,14 @@ async def test_session_inbox_is_installed_before_worker_start(tmp_path, monkeypa
     all_processed = asyncio.Event()
     processed: list[str] = []
     followups = [f"follow-up-{index}" for index in range(40)]
-    enqueue = loop._enqueue_session_message
+    enqueue = loop.dispatch.enqueue
 
     async def capture_enqueue(msg):
         await enqueue(msg)
         if msg.content == followups[-1]:
             all_enqueued.set()
 
-    monkeypatch.setattr(loop, "_enqueue_session_message", capture_enqueue)
+    monkeypatch.setattr(loop.dispatch, "enqueue", capture_enqueue)
 
     async def _process_message(msg, **_kwargs):
         processed.append(msg.content)
@@ -1446,7 +1443,7 @@ async def test_session_inbox_is_installed_before_worker_start(tmp_path, monkeypa
             all_processed.set()
         return OutboundMessage(channel="cli", chat_id="c", content=msg.content)
 
-    loop._process_message = _process_message  # type: ignore[method-assign]
+    loop.processing.process = _process_message  # type: ignore[method-assign]
     await loop.bus.publish_inbound(
         InboundMessage(channel="cli", sender_id="u", chat_id="c", content="initial")
     )
@@ -1478,12 +1475,11 @@ async def test_busy_session_burst_reaches_next_model_call_as_one_ordered_batch(
     tmp_path, request, monkeypatch, log_content,
 ):
     """Messages accumulated during a model call share its next request snapshot."""
-    from loguru import logger
-
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.events import InboundMessage
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.session.manager import SessionPolicy
+    from cirno_core.session.model import SessionPolicy
+    from loguru import logger
 
     records = []
     sink = logger.add(lambda message: records.append(message.record))
@@ -1515,14 +1511,14 @@ async def test_busy_session_burst_reaches_next_model_call_as_one_ordered_batch(
     await loop.sessions.state.get("cli:c")
     await loop.sessions.state.set_policy("cli:c", SessionPolicy(log_content=log_content))
     followups = [f"follow-up-{index:02}" for index in range(12)]
-    enqueue = loop._enqueue_session_message
+    enqueue = loop.dispatch.enqueue
 
     async def capture_enqueue(msg):
         await enqueue(msg)
         if msg.content == followups[-1]:
             all_enqueued.set()
 
-    monkeypatch.setattr(loop, "_enqueue_session_message", capture_enqueue)
+    monkeypatch.setattr(loop.dispatch, "enqueue", capture_enqueue)
 
     run_task = asyncio.create_task(loop.run())
     try:
@@ -1589,7 +1585,7 @@ async def test_session_worker_processes_leftovers_without_republishing(tmp_path)
         processed.append(msg.content)
         return OutboundMessage(channel="cli", chat_id="c", content=msg.content)
 
-    loop._process_message = _process_message  # type: ignore[method-assign]
+    loop.processing.process = _process_message  # type: ignore[method-assign]
     for content in ("first", "leftover-1", "leftover-2"):
         pending.put_nowait(InboundMessage(
             channel="cli",
@@ -1599,7 +1595,7 @@ async def test_session_worker_processes_leftovers_without_republishing(tmp_path)
         ))
     loop._pending_queues[session_key] = pending
 
-    await loop._run_session_queue(session_key, pending)
+    await loop.dispatch.run_queue(session_key, pending)
 
     assert processed == ["first", "leftover-1", "leftover-2"]
     assert session_key not in loop._pending_queues
@@ -1609,7 +1605,7 @@ async def test_session_worker_processes_leftovers_without_republishing(tmp_path)
 @pytest.mark.asyncio
 async def test_drain_injections_after_recoverable_tool_error():
     """A tool error and injected follow-up continue in the same runner conversation."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -1668,7 +1664,7 @@ async def test_drain_injections_after_recoverable_tool_error():
 @pytest.mark.asyncio
 async def test_drain_injections_on_llm_error():
     """A follow-up after an error stays raw and reaches the next model request."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -1742,7 +1738,7 @@ async def test_drain_injections_on_llm_error():
 @pytest.mark.asyncio
 async def test_drain_injections_on_empty_final_response():
     """Pending injections should be drained when the runner exits due to empty response."""
-    from cirno_core.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner
+    from cirno_core.agent.runner.engine import _MAX_EMPTY_RETRIES, AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -1797,7 +1793,7 @@ async def test_drain_injections_on_empty_final_response():
 async def test_late_injection_recovery_completes_and_delivers_reply(failed_stop_reason):
     """Input arriving after failure bookkeeping must not poison a recovered turn."""
     from cirno_core.agent.hook import AgentHook
-    from cirno_core.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner
+    from cirno_core.agent.runner.engine import _MAX_EMPTY_RETRIES, AgentRunner
     from cirno_core.agent.tools.registry import ToolRegistry
     from cirno_core.agent.turn_delivery import TurnDeliveryFactory
     from cirno_core.bus.events import InboundMessage, OutboundMessage
@@ -1849,7 +1845,7 @@ async def test_late_injection_recovery_completes_and_delivers_reply(failed_stop_
     msg = InboundMessage(
         channel="websocket", sender_id="user", chat_id="chat", content="hello",
     )
-    delivery = TurnDeliveryFactory(bus).create(msg, msg.session_key)
+    delivery = (await TurnDeliveryFactory(bus).create(msg, msg.session_key))
     delivery.record_stop_reason(result.stop_reason, failure_error_kind=result.failure_error_kind)
     await delivery.complete(
         OutboundMessage(channel="websocket", chat_id="chat", content=result.final_content),
@@ -1876,7 +1872,7 @@ async def test_late_injection_recovery_completes_and_delivers_reply(failed_stop_
 async def test_max_iterations_without_finalization_keeps_late_injection_queued():
     """Never consume a user message when no later model request can observe it."""
     from cirno_core.agent.hook import AgentHook
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -1930,7 +1926,7 @@ async def test_max_iterations_without_finalization_keeps_late_injection_queued()
 async def test_max_iterations_finalization_keeps_late_injection_queued():
     """New input waits for a turn with tools instead of entering no-tools finalization."""
     from cirno_core.agent.hook import AgentHook
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -1999,7 +1995,7 @@ async def test_max_iterations_finalization_keeps_late_injection_queued():
 @pytest.mark.asyncio
 async def test_error_path_is_not_stopped_by_an_arbitrary_injection_cap():
     """Error recovery consumes every arrived snapshot until no follow-up remains."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.bus.events import InboundMessage
 
     provider = MagicMock()

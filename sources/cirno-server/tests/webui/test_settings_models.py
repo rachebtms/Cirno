@@ -5,18 +5,18 @@ from typing import Any
 
 import httpx
 import pytest
-
-from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.config.schema import Config
 from cirno_core.providers.registry import find_by_name
-from cirno_server.webui.settings.models import (
-    WebUISettingsError,
+from cirno_server.webui.settings.contracts import WebUISettingsError
+from cirno_server.webui.settings.models.catalog import provider_models_payload
+from cirno_server.webui.settings.models.mutations import (
     create_model_configuration,
-    model_settings_payload,
-    provider_models_payload,
     update_agent_model_settings,
     update_model_configuration,
-    update_provider_settings,
 )
+from cirno_server.webui.settings.models.payload import model_settings_payload
+from cirno_server.webui.settings.providers.mutations import update_provider_settings
 
 
 def test_preset_request_overrides_redact_roundtrip_and_clear():
@@ -28,22 +28,22 @@ def test_preset_request_overrides_redact_roundtrip_and_clear():
         "extra_body": ['{"metadata":{"api_key":"private-body","route":"one"}}'],
     }, oauth_status=_oauth_status)
     payload = model_settings_payload(config, oauth_status=_oauth_status)
-    row = next(row for row in payload["model_presets"] if row["name"] == name)
+    row = next(row for row in payload["model_presets"] if row["id"] == name)
     assert row["extra_headers"]["Authorization"] == "••••••••"
     assert row["extra_body"]["metadata"]["api_key"] == "••••••••"
     assert "private-value" not in str(payload)
     assert "private-body" not in str(payload)
     assert update_model_configuration(config, {
-        "name": [name], "extraHeaders": ['{"Authorization":"••••••••","X-Route":"two"}'],
+        "id": [name], "extraHeaders": ['{"Authorization":"••••••••","X-Route":"two"}'],
     }, oauth_status=_oauth_status)
     assert config.model_presets[name].extra_headers == {"Authorization": "private-value", "X-Route": "two"}
     assert update_model_configuration(config, {
-        "name": [name], "extra_headers": [""], "extra_body": ["{}"],
+        "id": [name], "extra_headers": [""], "extra_body": ["{}"],
     }, oauth_status=_oauth_status)
     assert config.model_presets[name].extra_headers is None
     assert config.model_presets[name].extra_body is None
     with pytest.raises(WebUISettingsError, match="JSON object"):
-        update_model_configuration(config, {"name": [name], "extra_query": ["[]"]}, oauth_status=_oauth_status)
+        update_model_configuration(config, {"id": [name], "extra_query": ["[]"]}, oauth_status=_oauth_status)
     assert config.model_presets[name].extra_query is None
 
 
@@ -56,7 +56,7 @@ def test_preset_provider_switch_clears_secrets():
         "extra_headers": ['{"Authorization":"private-value"}'],
     }, oauth_status=_oauth_status)
     update_model_configuration(config, {
-        "name": [name], "provider": ["anthropic"], "model": ["claude-sonnet-4-6"],
+        "id": [name], "provider": ["anthropic"], "model": ["claude-sonnet-4-6"],
     }, oauth_status=_oauth_status)
     assert config.model_presets[name].extra_headers is None
 
@@ -85,11 +85,11 @@ def test_auto_preset_model_change_isolates_connection_settings(target, environme
     })
     if environment_model:
         update_model_configuration(config, {
-            "name": ["primary"], "temperature": ["0.3"],
+            "id": ["primary"], "temperature": ["0.3"],
         }, oauth_status=_oauth_status)
         assert config.model_presets["primary"].model == "${CIRNO_TEST_MODEL}"
     update_model_configuration(config, {
-        "name": ["primary"], "model": [f"{target}/new"],
+        "id": ["primary"], "model": [f"{target}/new"],
     }, oauth_status=_oauth_status)
     preset = config.model_presets["primary"]
     expected = "private" if target == "tenant_a" else None
@@ -107,17 +107,17 @@ def test_auto_routing_retains_same_connection_settings_but_new_connection_accept
         }},
     })
     update_model_configuration(config, {
-        "name": ["primary"], "provider": ["auto"], "model": ["tenant_a/new"],
+        "id": ["primary"], "provider": ["auto"], "model": ["tenant_a/new"],
     }, oauth_status=_oauth_status)
     assert config.model_presets["primary"].extra_headers == {"X-Token": "private"}
     # A stale form must not restore the old connection's redacted credential.
     with pytest.raises(WebUISettingsError):
         update_model_configuration(config.model_copy(deep=True), {
-            "name": ["primary"], "provider": ["tenant_b"],
+            "id": ["primary"], "provider": ["tenant_b"],
             "extra_headers": ['{"X-Token":"••••••••"}'],
         }, oauth_status=_oauth_status)
     update_model_configuration(config, {
-        "name": ["primary"], "provider": ["tenant_b"],
+        "id": ["primary"], "provider": ["tenant_b"],
         "extra_headers": ['{"X-Token":"new-secret"}'],
     }, oauth_status=_oauth_status)
     assert config.model_presets["primary"].extra_headers == {"X-Token": "new-secret"}
@@ -194,7 +194,7 @@ def test_provider_model_refresh_reaches_oauth_catalog(monkeypatch, provider, ref
     from cirno_core.providers.oauth_model_catalog import OAuthModelCatalogSnapshot
 
     catalog = Mock(return_value=OAuthModelCatalogSnapshot(models=(), source="remote", fetched_at=123))
-    monkeypatch.setattr("cirno_server.webui.settings.models.get_oauth_model_catalog", catalog)
+    monkeypatch.setattr("cirno_server.webui.settings.models.catalog.get_oauth_model_catalog", catalog)
     query = {"provider": [provider]}
     if refresh:
         query["refresh"] = ["1"]
@@ -348,13 +348,13 @@ def test_known_reasoning_efforts_preserve_default_none_and_custom_roundtrips() -
     def saved_row() -> dict[str, Any]:
         roundtripped = Config.model_validate(config.model_dump())
         payload = model_settings_payload(roundtripped, oauth_status=_oauth_status)
-        return next(row for row in payload["model_presets"] if row["name"] == name)
+        return next(row for row in payload["model_presets"] if row["id"] == name)
 
     assert saved_row()["reasoning_effort"] is None
     assert saved_row()["reasoning_effort_values"] == ["", "none", "low", "high", "max"]
     for effort in ("none", "provider-native-mode", ""):
         assert update_model_configuration(config, {
-            "name": [name], "reasoning_effort": [effort],
+            "id": [name], "reasoning_effort": [effort],
         }, oauth_status=_oauth_status)
         assert saved_row()["reasoning_effort"] == (effort or None)
 
@@ -363,7 +363,7 @@ def test_known_reasoning_efforts_preserve_default_none_and_custom_roundtrips() -
         "reasoning_effort": ["future-effort"],
     }, oauth_status=_oauth_status)
     row = next(row for row in model_settings_payload(config, oauth_status=_oauth_status)["model_presets"]
-               if row["name"] == unknown)
+               if row["id"] == unknown)
     assert row["reasoning_effort"] == "future-effort"
     assert row["reasoning_effort_values"] == ["", "low", "medium", "high"]
 
@@ -372,8 +372,8 @@ def test_model_reasoning_replay_is_persisted_and_required_for_deepseek_tools():
     config = Config()
     config.providers.deepseek.api_key = 'fixture'
     config.model_presets['research'] = ModelPresetConfig(model='deepseek-flash', provider='deepseek')
-    assert update_model_configuration(config, {'name': ['research'], 'reasoning_history': ['preserve']}, oauth_status=_oauth_status)
+    assert update_model_configuration(config, {"id": ['research'], 'reasoning_history': ['preserve']}, oauth_status=_oauth_status)
     assert config.model_presets['research'].reasoning_history == 'preserve'
     with pytest.raises(WebUISettingsError, match='require reasoning history'):
-        update_model_configuration(config, {'name': ['research'], 'reasoning_history': ['omit']}, oauth_status=_oauth_status)
+        update_model_configuration(config, {"id": ['research'], 'reasoning_history': ['omit']}, oauth_status=_oauth_status)
     assert config.model_presets['research'].reasoning_history == 'preserve'

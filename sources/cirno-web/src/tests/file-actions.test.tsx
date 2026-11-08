@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FileActions, FileActionsProvider } from "@/components/FileActions";
 import { FileReferenceChip } from "@/components/FileReferenceChip";
 import { copyTextToClipboard } from "@/lib/clipboard";
-import type { FileReferenceMetadata } from "@/lib/types";
+import type { FileReferenceMetadata } from "@/lib/contracts/files";
 
 vi.mock("@/lib/clipboard", () => ({ copyTextToClipboard: vi.fn() }));
 const details = { path: "/workspace/notes.md", relative_path: "notes.md" };

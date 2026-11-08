@@ -20,9 +20,10 @@ from cirno_core.runtime.context import (
     webui_quote_runtime_context,
 )
 from cirno_core.sdk.types import snapshot_from_session
-from cirno_core.session.manager import Session, message_preview_text
-from cirno_core.session.webui_turns import _title_inputs
-from cirno_core.session.transcript import _session_user_event
+from cirno_core.session.model import Session
+from cirno_core.session.previews import message_preview_text
+from cirno_core.session.webui_turns.titles import _title_inputs
+from cirno_core.session.transcript.inputs import _session_user_event
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { deriveTitle, isModelCommandText, visibleSessionPreview } from "@/lib/format";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const STARTED_AT = Date.UTC(2026, 6, 25, 12, 34, 0);
 

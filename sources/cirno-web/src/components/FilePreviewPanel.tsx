@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FilePreviewPanelView, type FilePreviewPanelState } from "@/components/FilePreviewPanelView";
 import { ApiError, fetchFilePreview } from "@/lib/api";
-import type { FilePreviewPayload } from "@/lib/types";
+import type { FilePreviewPayload } from "@/lib/contracts/files";
 
 interface FilePreviewPanelProps {
   sessionKey: string;

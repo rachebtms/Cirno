@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from cirno_server.webui.dev import (
     WebUIDevError,
     WebUIDevServer,

@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentActivityCluster } from "@/components/thread/AgentActivityCluster";
 import { preloadMarkdownText } from "@/components/MarkdownText";
 import { setAppLanguage } from "@/i18n";
-import { DEFAULT_LOCAL_PREFS, LOCAL_PREFS_STORAGE_KEY, writeLocalPreferences } from "@/lib/local-preferences";
-import type { CliAppInfo, McpPresetInfo, UIMessage } from "@/lib/types";
+import { DEFAULT_PREFERENCES, clearOwnerPreferences, writePreferences } from "@/features/preferences/store";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const BLENDER_CLI_APP: CliAppInfo = {
   name: "blender",
@@ -98,7 +100,7 @@ function installReducedMotion() {
 }
 
 describe("AgentActivityCluster", () => {
-  afterEach(() => { localStorage.removeItem(LOCAL_PREFS_STORAGE_KEY); });
+  afterEach(() => { clearOwnerPreferences(); });
 
   it("keeps Cirno execution collapsed while streaming and permits manual expansion", () => {
     const { rerender } = render(<AgentActivityCluster defaultCollapsed messages={activityMessages()} isTurnStreaming hasBodyBelow={false} />);
@@ -113,19 +115,19 @@ describe("AgentActivityCluster", () => {
     render(<AgentActivityCluster messages={activityMessages()} isTurnStreaming={false} hasBodyBelow={false} />);
     const disclosure = screen.getByRole("button", { name: /Worked/ });
     expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    act(() => { writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, activityMode: "expanded" }); });
+    act(() => { writePreferences({ ...DEFAULT_PREFERENCES, activityMode: "expanded" }); });
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(disclosure);
     expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    act(() => { writeLocalPreferences(DEFAULT_LOCAL_PREFS); });
+    act(() => { writePreferences(DEFAULT_PREFERENCES); });
     expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    act(() => { writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, activityMode: "expanded" }); });
+    act(() => { writePreferences({ ...DEFAULT_PREFERENCES, activityMode: "expanded" }); });
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
   });
   it("updates existing activity when the language changes without altering raw values", async () => {
     const query = "release notes";
     const path = "src/app.tsx";
-    const cliLine = 'run_cli_app({"name":"blender","args":["--background","scene.blend"],"json":true})';
+    const cliLine = 'run_cli_app({"name":"blender","args":["--cirno-background","scene.blend"],"json":true})';
     render(
       <AgentActivityCluster
         messages={[
@@ -169,7 +171,7 @@ describe("AgentActivityCluster", () => {
 
     expect(screen.getByText(`Searched files “${query}”`)).toBeInTheDocument();
     expect(screen.getByText(`Reading file ${path}`)).toBeInTheDocument();
-    expect(screen.getByLabelText("Using Blender, --json --background scene.blend")).toBeInTheDocument();
+    expect(screen.getByLabelText("Using Blender, --json --cirno-background scene.blend")).toBeInTheDocument();
     expect(screen.getByLabelText("Opening example.com, Browserbase")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Edited" })).toBeInTheDocument();
     expect(screen.getByTestId("activity-file-reference")).toHaveTextContent(path);
@@ -178,7 +180,7 @@ describe("AgentActivityCluster", () => {
 
     expect(screen.getByText(`文件搜索完成 “${query}”`)).toBeInTheDocument();
     expect(screen.getByText(`正在读取文件 ${path}`)).toBeInTheDocument();
-    expect(screen.getByLabelText("正在使用 Blender, --json --background scene.blend")).toBeInTheDocument();
+    expect(screen.getByLabelText("正在使用 Blender, --json --cirno-background scene.blend")).toBeInTheDocument();
     expect(screen.getByLabelText("正在打开 example.com, Browserbase")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "编辑" })).toBeInTheDocument();
     expect(screen.getByTestId("activity-file-reference")).toHaveTextContent(path);
@@ -187,7 +189,7 @@ describe("AgentActivityCluster", () => {
 
     expect(screen.getByText(`“${query}” ファイル検索完了`)).toBeInTheDocument();
     expect(screen.getByText(`${path} ファイルを読み取り中`)).toBeInTheDocument();
-    expect(screen.getByLabelText("Blender を使用中, --json --background scene.blend")).toBeInTheDocument();
+    expect(screen.getByLabelText("Blender を使用中, --json --cirno-background scene.blend")).toBeInTheDocument();
     expect(screen.getByLabelText("example.com 開いています, Browserbase")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "編集" })).toBeInTheDocument();
     expect(screen.getByTestId("activity-file-reference").closest('[data-testid="activity-step"]'))
@@ -222,6 +224,29 @@ describe("AgentActivityCluster", () => {
     await waitFor(() => {
       expect(onLoadTraceDetails).toHaveBeenCalledWith(["9.tr-deadbeefdeadbeef"]);
     });
+  });
+
+  it("does not retry failed details on every live update and keeps retries scoped to the conversation", async () => {
+    const load = vi.fn().mockRejectedValue(new Error("offline"));
+    const deferred: UIMessage = {
+      id: "deferred", role: "tool", kind: "trace", content: "exec(…)", traces: ["exec(…)"],
+      traceDetail: { ref: "turn.detail", bytes: 40000, traceCount: 1 }, createdAt: 1,
+    };
+    const props = { isTurnStreaming: true, hasBodyBelow: false, expanded: true,
+      onLoadTraceDetails: load, traceDetailScope: "conversation-a" };
+    const view = render(<AgentActivityCluster {...props} messages={[deferred]} />);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(load).toHaveBeenCalledTimes(1);
+    for (let index = 0; index < 5; index++) {
+      view.rerender(<AgentActivityCluster {...props} messages={[{ ...deferred }, {
+        id: "thinking", role: "assistant", reasoning: `Working ${index}`, content: "", createdAt: 2,
+      }]} />);
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    view.rerender(<AgentActivityCluster {...props} traceDetailScope="conversation-b" messages={[deferred]} />);
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(3));
   });
 
   it.each([
@@ -586,10 +611,7 @@ describe("AgentActivityCluster", () => {
   it.each(["diff", "collapsed_diff"] as const)(
     "keeps %s edits outside reasoning folds in live and replayed activity",
     (fileEditDisplayMode) => {
-      localStorage.setItem(
-        "cirno-webui.settings-preferences",
-        JSON.stringify({ fileEditDisplayMode }),
-      );
+      writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode } });
       const messages: UIMessage[] = [
         { id: "before", role: "assistant", content: "", reasoning: "Before edit", createdAt: 1 },
         {
@@ -669,10 +691,7 @@ describe("AgentActivityCluster", () => {
   );
 
   it("renders file edit diffs and responds to preference changes", () => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "diff" } });
 
     try {
       render(
@@ -716,13 +735,13 @@ describe("AgentActivityCluster", () => {
       expect(screen.getAllByTestId("activity-diff-pair")).toHaveLength(1);
 
       act(() => {
-        writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, fileEditDisplayMode: "summary" });
+        writePreferences({ ...DEFAULT_PREFERENCES, fileEditDisplayMode: "summary" });
       });
       expect(screen.queryByTestId("file-edit-diff")).not.toBeInTheDocument();
       expect(screen.getByRole("img", { name: "Edited" })).toBeInTheDocument();
 
       act(() => {
-        writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, fileEditDisplayMode: "diff" });
+        writePreferences({ ...DEFAULT_PREFERENCES, fileEditDisplayMode: "diff" });
       });
       expect(screen.getByTestId("file-edit-diff")).toBeInTheDocument();
     } finally {
@@ -731,10 +750,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it("renders folded separators between separated file edit hunks", () => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "diff" } });
 
     try {
       render(
@@ -788,10 +804,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it("keeps long file edit diffs lazy and releases them after closing", async () => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "diff" } });
     const lines = Array.from({ length: 165 }, (_, index) => `line-${index + 1}`);
 
     try {
@@ -875,10 +888,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it("does not mount collapsed file edit diffs until opened", () => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "collapsed_diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "collapsed_diff" } });
 
     try {
       render(
@@ -931,10 +941,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it("offers the file preview entry point when a diff payload is truncated", () => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "diff" } });
     const onOpenFilePreview = vi.fn();
 
     try {
@@ -988,10 +995,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it.each([false, true])("labels created files with or without text diffs (hasDiff: %s)", (hasDiff) => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "diff" } });
     try {
       render(
         <AgentActivityCluster
@@ -1137,7 +1141,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it.each(["run_cli_app", "apps__run", "apps.run"])("renders %s as a dedicated CLI activity row", (name) => {
-    const line = `${name}({"name":"blender","args":["--background","scene.blend"],"json":true})`;
+    const line = `${name}({"name":"blender","args":["--cirno-background","scene.blend"],"json":true})`;
     render(
       <AgentActivityCluster
         messages={[{
@@ -1154,7 +1158,7 @@ describe("AgentActivityCluster", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Using Blender, --json --background scene.blend")).toBeInTheDocument();
+    expect(screen.getByLabelText("Using Blender, --json --cirno-background scene.blend")).toBeInTheDocument();
     expect(screen.getByTestId("activity-cli-logo-blender")).toBeInTheDocument();
     expect(screen.queryByText(/run_cli_app/)).not.toBeInTheDocument();
   });
@@ -1973,10 +1977,7 @@ describe("AgentActivityCluster", () => {
   });
 
   it("keeps repeated edits for the same path as separate actions", () => {
-    localStorage.setItem(
-      "cirno-webui.settings-preferences",
-      JSON.stringify({ fileEditDisplayMode: "diff" }),
-    );
+    writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode: "diff" } });
     try {
       render(
         <AgentActivityCluster
@@ -2124,7 +2125,7 @@ describe("AgentActivityCluster", () => {
             name: "web_fetch",
             arguments: { url: "https://example.com" },
             embeds: [{
-              url: "/api/media/signed/screenshot.png",
+              url: "/v0/media/signed/screenshot.png",
               name: "Homepage screenshot",
               type: "image/png",
             }],
@@ -2172,7 +2173,7 @@ describe("AgentActivityCluster", () => {
             ...message.toolEvents![0],
             phase: "end",
             files: [{
-              url: "/api/media/signed/generated.png",
+              url: "/v0/media/signed/generated.png",
               name: "generated.png",
               type: "image/png",
             }],

@@ -1,6 +1,9 @@
+
 """Tests for grep search tools."""
 
 from __future__ import annotations
+
+from cirno_core.agent.tools.web.searches import duckduckgo
 
 import asyncio
 import os
@@ -12,16 +15,15 @@ from unittest.mock import AsyncMock, MagicMock
 from zipfile import ZipFile
 
 import pytest
-
 from cirno_core.agent.loop import AgentLoop
-from cirno_core.memory.consolidation import Consolidator
 from cirno_core.agent.subagents.manager import SubagentManager
 from cirno_core.agent.tools.registry import is_tool_error_result
 from cirno_core.agent.tools.search import FindFilesTool, GrepTool
-from cirno_core.agent.tools.web import WebSearchTool
+from cirno_core.agent.tools.web.search import WebSearchTool
+from cirno_core.agent.tools.web_config import WebSearchConfig
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import WebSearchConfig
-from cirno_core.providers.base import GenerationSettings
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     default_workspace_scope,
@@ -41,7 +43,7 @@ async def test_web_search_tool_refreshes_dynamic_config_loader(monkeypatch) -> N
     async def fake_duckduckgo(self, query: str, n: int) -> str:
         return f"{self.config.provider}:{query}:{n}"
 
-    monkeypatch.setattr(WebSearchTool, "_search_duckduckgo", fake_duckduckgo)
+    monkeypatch.setattr(duckduckgo, "search", fake_duckduckgo)
 
     assert await tool.execute("cirno") == "duckduckgo:cirno:3"
 
@@ -450,9 +452,8 @@ async def test_grep_searches_xlsx_beyond_attachment_preview_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from openpyxl import Workbook
-
     from cirno_core.utils import document as document_utils
+    from openpyxl import Workbook
 
     workbook_path = tmp_path / "long.xlsx"
     workbook = Workbook()
@@ -725,7 +726,7 @@ async def test_grep_reports_skipped_binary_and_large_files(
     result = await tool.execute(pattern="needle", path=".")
 
     assert "No matches found" in result
-    assert "skipped 1 binary/unreadable files" in result
+    assert "skipped 1 binary/non-UTF-8 files" in result
     assert "skipped 1 large files" in result
 
 
@@ -815,8 +816,8 @@ async def test_subagent_registers_search_backend(tmp_path: Path, monkeypatch, us
             error=None,
         )
 
-    mgr.runner.run = fake_run
-    mgr._announce_result = AsyncMock()
+    mgr.execution.runner.run = fake_run
+    mgr.reports.announce = AsyncMock()
 
     await mgr.spawn(
         task="search task",
@@ -849,7 +850,7 @@ def test_subagent_prompt_respects_disabled_skills(tmp_path: Path) -> None:
         disabled_skills=["alpha"],
     )
 
-    prompt = mgr._build_subagent_prompt()
+    prompt = mgr.tools.prompt()
 
     assert "alpha" not in prompt
     assert "beta" in prompt
@@ -1065,7 +1066,7 @@ async def test_grep_closes_document_stream_and_preserves_locators(tmp_path, monk
             closed.append(True)
 
     monkeypatch.setattr(
-        "cirno_core.agent.tools.search.open_document_line_source",
+        "cirno_core.agent.tools.search.sources.open_document_line_source",
         lambda *_args, **_kwargs: DocumentLineSource(document_lines(), "pages=2-3"),
     )
     result = await GrepTool(workspace=tmp_path).execute(

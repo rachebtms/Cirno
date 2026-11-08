@@ -1,3 +1,5 @@
+import userEvent from "@testing-library/user-event";
+import type { CirnoClient } from "@/lib/cirno-client";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Profiler, StrictMode, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,15 +17,12 @@ import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { ThreadTranscript } from "@/lib/thread-transcript";
 import { persistedCanonicalRunState } from "@/lib/canonical-run-snapshot";
 import { ClientProvider } from "@/providers/ClientProvider";
-import type {
-  CliAppsPayload,
-  ConnectionStatus,
-  SettingsPayload,
-  SubagentTaskSnapshot,
-  ThreadProjectionEvent,
-  UIMessage,
-  WebuiThreadPersistedPayload,
-} from "@/lib/types";
+import type { CliAppsPayload } from "@/lib/contracts/apps";
+import type { ConnectionStatus } from "@/lib/contracts/transport";
+import type { SettingsPayload } from "@/lib/contracts/settings";
+import type { SubagentTaskSnapshot, UIMessage } from "@/lib/contracts/messages";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 import { canonicalThreadPayload } from "./thread-test-payload";
 import { createStreamClient } from "./stream-client";
 
@@ -122,7 +121,7 @@ function makeClient() {
       status = nextStatus;
       for (const h of statusHandlers) h(status);
     },
-    _emitChat(_chatId: string, ev: import("@/lib/types").InboundEvent) { receive(ev); },
+    _emitChat(_chatId: string, ev: import("@/lib/contracts/events").InboundEvent) { receive(ev); },
     _emitRuntimeModelUpdate(modelName: string | null, modelPreset?: string | null) {
       for (const h of runtimeModelHandlers) h(modelName, modelPreset);
     },
@@ -130,6 +129,7 @@ function makeClient() {
       for (const h of sessionUpdateHandlers) h(chatId, scope);
     },
     sendMessage,
+    sendTextMessage: vi.fn(async (chatId: string, content: string, options?: Parameters<CirnoClient["sendMessage"]>[3]) => { sendMessage(chatId, content, undefined, options); }),
     sendSystemCommand: vi.fn().mockResolvedValue(undefined),
     newChat: vi.fn(),
     forkChat: vi.fn(),
@@ -301,7 +301,7 @@ function traceDetailThread(
         ...(deferred
           ? {
               traceDetail: {
-                ref: "1.history-aaaaaaaaaaaaaaaaaaaa",
+                ref: "1.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa",
                 bytes: 40_000,
                 traceCount: 1,
               },
@@ -383,7 +383,7 @@ function modelSettings(model: string, provider: string): SettingsPayload {
       tool_status_summary_max_chars: 40,
     },
     model_presets: [{
-      name: "default",
+      id: "default", name: "default",
 
       active: true,
       is_default: true,
@@ -397,8 +397,8 @@ function modelSettings(model: string, provider: string): SettingsPayload {
     model_call_order: [],
     model_call_order_editable: false,
     providers: [
-      { name: "deepseek", label: "DeepSeek", configured: true },
-      { name: "openai_codex", label: "OpenAI Codex", configured: true },
+      { id: "deepseek", name: "DeepSeek", configured: true },
+      { id: "openai_codex", name: "OpenAI Codex", configured: true },
     ],
     web_search: {
       provider: "duckduckgo",
@@ -448,7 +448,7 @@ function settingsWithFastPreset(): SettingsPayload {
   const settings = modelSettings("deepseek-v4-pro", "deepseek");
   settings.model_presets.push({
     ...settings.model_presets[0]!,
-    name: "fast",
+    id: "fast", name: "fast",
 
     active: false,
     is_default: false,
@@ -517,7 +517,7 @@ describe("ThreadShell", () => {
     await within(dialog).findByText("Seeded history");
     const readsBeforeSearch = fetch.mock.calls.length;
     fireEvent.change(input, { target: { value: "fresh needle" } });
-    expect(within(dialog).getByText("No matching topics.")).toBeInTheDocument();
+    expect(within(dialog).getByText("No matching conversations.")).toBeInTheDocument();
     act(() => client._emitChat(chatId, { event: "message", chat_id: chatId, text: "Fresh needle from the live stream" }));
     await within(dialog).findByText("Fresh needle from the live stream");
     expect(fetch).toHaveBeenCalledTimes(readsBeforeSearch);
@@ -734,7 +734,7 @@ describe("ThreadShell", () => {
 
   it.each([false, true])("keeps text and quote drafts scoped to the session (temporary=%s)", async (temporary) => {
     const client = makeClient();
-    const draftStore: ComposerDraftStore = new Map([
+    const draftStore = new ComposerDraftStore([
       ["websocket:draft-a", { text: "draft A", attachments: [], sessionMentions: [], quotedContext: "quote A" }],
       ["websocket:draft-b", { text: "draft B", attachments: [], sessionMentions: [], quotedContext: "quote B" }],
     ]);
@@ -754,6 +754,7 @@ describe("ThreadShell", () => {
     expect(screen.queryByLabelText("Quoted context")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(client.sendMessage).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("textbox")).toHaveValue(""));
     view.rerender(shell("draft-b"));
     view.rerender(shell("draft-a"));
     expect(screen.getByRole("textbox")).toHaveValue("");
@@ -793,7 +794,7 @@ describe("ThreadShell", () => {
               content: "exec(…)",
               traces: ["exec(…)"],
               traceDetail: {
-                ref: "1.history-aaaaaaaaaaaaaaaaaaaa",
+                ref: "1.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa",
                 bytes: 40_000,
                 traceCount: 1,
               },
@@ -840,8 +841,8 @@ describe("ThreadShell", () => {
     const client = makeClient();
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/prompts")) return Promise.resolve(httpJson({ prompts: [{
-        id: "old-user", preview: "Old question", answerPreview: "old answer", createdAt: 1,
+      if (url.includes("/prompts")) return Promise.resolve(httpJson({ offset: 0, total: 1, count: 1, revision: "r1", prompts: [{
+        index: 0, id: "old-user", preview: "Old question", answerPreview: "old answer", createdAt: 1,
         cursor: "0", turnId: "old-turn",
       }] }));
       if (url.includes("/trace-detail?")) return Promise.resolve(httpJson({
@@ -854,7 +855,7 @@ describe("ThreadShell", () => {
         schemaVersion: 3, projection: "events", events: [
           { event: "user_message", chat_id: "trace-navigation", projection_id: "old-user", text: "Old question", starts_turn: true },
           { event: "message", chat_id: "trace-navigation", projection_id: "old-trace", kind: "progress", text: "exec(…)",
-            trace_detail: { ref: "1.history-aaaaaaaaaaaaaaaaaaaa", bytes: 40_000, traceCount: 1 } },
+            trace_detail: { ref: "1.1.2.00000000000000000000.history-aaaaaaaaaaaaaaaaaaaa", bytes: 40_000, traceCount: 1 } },
           { event: "message", chat_id: "trace-navigation", projection_id: "old-answer", text: "old answer" },
         ], page: { user_message_offset: 0, has_more_before: false, has_more_after: true, after_cursor: "1" },
       }));
@@ -867,7 +868,7 @@ describe("ThreadShell", () => {
       null, "tok", ["webui.prompt-navigation.v1"]));
     await screen.findByText("latest answer");
     fireEvent.click(await screen.findByRole("button", { name: "Message navigation" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Jump to message: Old question" }));
+    fireEvent.click(await within(screen.getByRole("dialog")).findByRole("button", { name: "Jump to message: Old question" }));
     await screen.findByText("old answer");
     const menu = await openMessageActions("old answer");
     fireEvent.click(within(menu).getByRole("button", { name: /Worked/ }));
@@ -1313,7 +1314,7 @@ describe("ThreadShell", () => {
     const settings = modelSettings("deepseek-v4-pro", "deepseek");
     const settingsRequest = vi.fn(() => Promise.resolve(httpJson(settings)));
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => (
-      String(input).endsWith("/api/settings")
+      String(input).endsWith("/v0/settings")
         ? settingsRequest()
         : Promise.resolve(httpJson({}))
     )));
@@ -1401,8 +1402,8 @@ describe("ThreadShell", () => {
       ),
     );
 
-    fireEvent.focus(await screen.findByLabelText("fast"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("fast gpt-5.5 OpenAI Codex");
+    await userEvent.setup().hover(await screen.findByLabelText("fast"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/fast.*gpt-5\.5.*OpenAI Codex/);
     fireEvent.blur(screen.getByLabelText("fast"));
     expect(screen.queryByLabelText("Default")).not.toBeInTheDocument();
   });
@@ -1413,7 +1414,7 @@ describe("ThreadShell", () => {
     settings.agent.model_preset = "fast";
     settings.model_presets = settings.model_presets.map((preset) => ({
       ...preset,
-      active: preset.name === "fast",
+      active: preset.id === "fast",
     }));
     render(
       wrap(
@@ -1428,8 +1429,8 @@ describe("ThreadShell", () => {
       ),
     );
 
-    fireEvent.focus(await screen.findByLabelText("fast"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("fast gpt-5.5 OpenAI Codex");
+    await userEvent.setup().hover(await screen.findByLabelText("fast"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/fast.*gpt-5\.5.*OpenAI Codex/);
     fireEvent.blur(screen.getByLabelText("fast"));
     expect(screen.queryByRole("button", { name: "Choose model" })).not.toBeInTheDocument();
   });
@@ -1439,7 +1440,7 @@ describe("ThreadShell", () => {
     const settings = settingsWithFastPreset();
     settings.model_presets.push({
       ...settings.model_presets.at(-1)!,
-      name: "extra",
+      id: "extra", name: "extra",
 
       model: "deepseek/extra",
       provider: "deepseek",
@@ -1461,7 +1462,7 @@ describe("ThreadShell", () => {
     const badge = await screen.findByRole("button", { name: "Default" });
     expect(badge).toHaveTextContent("Default");
     fireEvent.click(badge);
-    fireEvent.click(await screen.findByRole("option", { name: /^fast\b/i }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^fast\b/i }));
 
     expect(client.sendSystemCommand).toHaveBeenCalledWith(
       "preset-order",
@@ -1469,7 +1470,7 @@ describe("ThreadShell", () => {
     );
     expect(await screen.findByLabelText("fast", { selector: "button" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "fast" }));
-    fireEvent.click(await screen.findByRole("option", { name: /^extra\b/i }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^extra\b/i }));
     expect(client.sendSystemCommand).toHaveBeenLastCalledWith(
       "preset-order",
       "/model extra",
@@ -1484,13 +1485,13 @@ describe("ThreadShell", () => {
     const client = makeClient();
     const settings = modelSettings("deepseek-v4-pro", "deepseek");
     settings.providers.push({
-      name: "companyproxy",
-      label: "Company Proxy",
+      id: "companyproxy",
+      name: "Company Proxy",
       configured: true,
     });
     settings.model_presets.push({
       ...settings.model_presets[0]!,
-      name: "fast",
+      id: "fast", name: "fast",
 
       active: false,
       is_default: false,
@@ -1512,8 +1513,8 @@ describe("ThreadShell", () => {
       ),
     );
 
-    fireEvent.focus(await screen.findByLabelText("fast"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("fast gpt-4 Company Proxy");
+    await userEvent.setup().hover(await screen.findByLabelText("fast"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/fast.*gpt-4.*Company Proxy/);
     fireEvent.blur(screen.getByLabelText("fast"));
     expect(screen.queryByRole("button", { name: "Choose model" })).not.toBeInTheDocument();
   });
@@ -1563,9 +1564,9 @@ describe("ThreadShell", () => {
     expect(screen.getByText("Default")).toBeInTheDocument();
     expect(screen.queryByTestId("composer-model-logo-deepseek")).not.toBeInTheDocument();
     expect(configuredBadge).not.toHaveAttribute("data-fallback");
-    fireEvent.focus(screen.getByLabelText("Default"));
+    await userEvent.setup().hover(screen.getByLabelText("Default"));
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "Default gpt-5.5 OpenAI Codex",
+      /Default.*gpt-5\.5.*OpenAI Codex/,
     );
     fireEvent.blur(screen.getByLabelText("Default"));
 
@@ -1684,7 +1685,7 @@ describe("ThreadShell", () => {
     const client = makeClient();
     const settings = modelSettings("anthropic/claude-opus-4-5", "anthropic");
     settings.agent.has_api_key = false;
-    settings.providers = [{ name: "anthropic", label: "Anthropic", configured: false }];
+    settings.providers = [{ id: "anthropic", name: "Anthropic", configured: false }];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       if (String(input).includes("websocket%3Asetup-tooltip/webui-thread")) {
         return Promise.resolve(httpJson(transcriptFromSimpleMessages(
@@ -1720,20 +1721,20 @@ describe("ThreadShell", () => {
     const settings = modelSettings("openai-codex/gpt-5.1-codex", "openai_codex");
     settings.agent.has_api_key = false;
     settings.providers = settings.providers.map((provider) =>
-      provider.name === "openai_codex"
+      provider.id === "openai_codex"
         ? { ...provider, auth_type: "oauth", configured: false }
         : provider,
     );
     settings.providers.push(
       {
-        name: "xai_grok",
-        label: "xAI Grok",
+        id: "xai_grok",
+        name: "xAI Grok",
         auth_type: "oauth",
         configured: true,
       },
       {
-        name: "ollama",
-        label: "Ollama",
+        id: "ollama",
+        name: "Ollama",
         configured: true,
         api_base: "http://127.0.0.1:11434",
       },
@@ -1756,11 +1757,8 @@ describe("ThreadShell", () => {
 
     const badge = await screen.findByRole("button", { name: "Choose model" });
     expect(screen.queryByTestId("composer-model-setup-icon")).not.toBeInTheDocument();
-    expect(badge.querySelector('[data-needs-setup="true"]')).toHaveClass(
-      "composer-model-pill-setup",
-    );
-    expect(screen.getByTestId("composer-model-setup-label")).toHaveTextContent("Choose model");
-    expect(badge).not.toHaveClass("border-amber-500/35");
+    expect(badge).toHaveTextContent("Choose model");
+    expect(badge).toBeEnabled();
     expect(screen.queryByTestId("composer-model-logo-openai_codex")).not.toBeInTheDocument();
 
     const input = screen.getByRole("textbox", { name: "Message input" });
@@ -1775,18 +1773,18 @@ describe("ThreadShell", () => {
     expect(client.sendMessage).not.toHaveBeenCalled();
 
     onOpenModelSettings.mockClear();
-    const firstSetupPill = badge.querySelector('[data-needs-setup="true"]');
+    input.focus();
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
-
-    const secondSetupPill = badge.querySelector('[data-needs-setup="true"]');
     expect(onOpenModelSettings).not.toHaveBeenCalled();
-    expect(secondSetupPill).not.toBe(firstSetupPill);
-    expect(secondSetupPill).toHaveClass("composer-model-pill-setup-attention");
+    await waitFor(() => expect(badge).toHaveFocus());
     expect(input).toHaveValue("hello");
     expect(client.sendMessage).not.toHaveBeenCalled();
 
+    input.focus();
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
-    expect(badge.querySelector('[data-needs-setup="true"]')).not.toBe(secondSetupPill);
+    await waitFor(() => expect(badge).toHaveFocus());
+    expect(input).toHaveValue("hello");
+    expect(client.sendMessage).not.toHaveBeenCalled();
   });
 
   it("restores in-memory messages when switching away and back to a session", async () => {
@@ -2088,7 +2086,7 @@ describe("ThreadShell", () => {
     const { rerender } = render(view(null));
 
     fireEvent.click(await screen.findByRole("button", { name: "Default" }));
-    fireEvent.click(await screen.findByRole("option", { name: /^fast\b/i }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^fast\b/i }));
     expect(await within(screen.getByTestId("thread-welcome-layout")).findByText("fast")).toBeInTheDocument();
     expect(client.sendSystemCommand).not.toHaveBeenCalled();
 
@@ -2103,8 +2101,8 @@ describe("ThreadShell", () => {
     await act(async () => {
       rerender(view(session("chat-new", "fast")));
     });
-    fireEvent.focus(await screen.findByLabelText("fast"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("fast gpt-5.5 OpenAI Codex");
+    await userEvent.setup().hover(await screen.findByLabelText("fast"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/fast.*gpt-5\.5.*OpenAI Codex/);
     fireEvent.blur(screen.getByLabelText("fast"));
     expect(screen.queryByText("Default")).not.toBeInTheDocument();
     // The selected model is supplied in creation metadata, not a second command.
@@ -2438,7 +2436,7 @@ describe("ThreadShell", () => {
     );
     const input = screen.getByRole("textbox");
     expect(input).toHaveAttribute("placeholder", "Describe what you’d like to do");
-    expect(input.className).toContain("min-h-[78px]");
+    expect(input).toHaveClass("composer-editor-text");
     expect(screen.queryByText("old answer")).not.toBeInTheDocument();
   });
 
@@ -2743,7 +2741,8 @@ describe("ThreadShell", () => {
         text: "first fork answer", turn_id: "first-fork-turn", turn_seq: 2,
       });
     });
-    expect(screen.getByText("first fork answer")).toBeInTheDocument();
+    const transcript = within(screen.getByTestId("thread-message-region"));
+    expect(transcript.getByText("first fork answer")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Message input"), {
       target: { value: "second fork question" },
@@ -2754,16 +2753,16 @@ describe("ThreadShell", () => {
     );
     secondTurnId = client.sendMessage.mock.calls[0]?.[3]?.turnId ?? "";
     expect(secondTurnId).not.toBe("");
-    expect(screen.getByText("second fork question")).toBeInTheDocument();
+    expect(transcript.getByText("second fork question")).toBeInTheDocument();
 
     await act(async () => {
       client._emitSessionUpdate("chat-fork");
     });
 
     await waitFor(() => expect(historyCalls).toBe(2));
-    const firstQuestion = screen.getByText("first fork question");
-    const firstAnswer = screen.getByText("first fork answer");
-    const secondQuestion = screen.getByText("second fork question");
+    const firstQuestion = transcript.getByText("first fork question");
+    const firstAnswer = transcript.getByText("first fork answer");
+    const secondQuestion = transcript.getByText("second fork question");
     expect(firstQuestion.compareDocumentPosition(firstAnswer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(firstAnswer.compareDocumentPosition(secondQuestion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -4813,7 +4812,7 @@ describe("ThreadShell", () => {
             (event) => event.event === "message" && event.text === "answer",
           );
           if (answer?.event === "message") answer.media_urls = [{
-            url: "/api/media/stable/image",
+            url: "/v0/media/stable/image",
             name: "answer.png",
           }];
           return httpJson(thread);
@@ -4865,7 +4864,7 @@ describe("ThreadShell", () => {
             (event) => event.event === "message" && event.text === "answer",
           );
           if (answer?.event === "message") answer.media_urls = [{
-            url: "/api/media/stable/token-image",
+            url: "/v0/media/stable/token-image",
             name: "token-answer.png",
           }];
           return httpJson(thread);
@@ -5130,7 +5129,7 @@ describe("ThreadShell", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/api/commands")) {
+        if (url.endsWith("/v0/commands")) {
           return httpJson({
             commands: [
               {
@@ -5165,7 +5164,7 @@ describe("ThreadShell", () => {
     );
 
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(
-      "/api/commands",
+      "/v0/commands",
       expect.objectContaining({
         headers: { Authorization: "Bearer tok" },
       }),
@@ -5303,7 +5302,7 @@ describe("ThreadShell", () => {
     expect(screen.queryByRole("button", { name: "停止响应" })).not.toBeInTheDocument();
   });
 
-  it("moves a correlated delivery error from the banner into the failed message tooltip", async () => {
+  it("moves a correlated delivery error from the banner into the failed message details", async () => {
     const client = makeClient();
 
     render(
@@ -5340,9 +5339,9 @@ describe("ThreadShell", () => {
     expect(screen.getByRole("alert")).toHaveClass("sr-only");
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
-    fireEvent.focus(status);
+    fireEvent.click(status);
 
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    expect(await screen.findByRole("dialog", { name: "Message too large" })).toHaveTextContent(
       "The server rejected your last message because it exceeded the size limit.",
     );
   });
@@ -5598,7 +5597,7 @@ describe("ThreadShell", () => {
       resolveCatalog = resolve;
     });
     vi.mocked(fetch).mockImplementation((input) => {
-      if (String(input).includes("/api/settings/cli-apps?installed_only=1")) {
+      if (String(input).includes("/v0/settings/cli-apps?installed_only=1")) {
         return pendingCatalog;
       }
       return Promise.resolve({
@@ -5619,7 +5618,7 @@ describe("ThreadShell", () => {
     const input = await screen.findByLabelText("Message input");
     fireEvent.change(input, { target: { value: "@", selectionStart: 1 } });
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(
-      "/api/settings/cli-apps?installed_only=1",
+      "/v0/settings/cli-apps?installed_only=1",
       expect.anything(),
     ));
     const payload: CliAppsPayload = {
@@ -5675,7 +5674,7 @@ describe("ThreadShell", () => {
       catalog_updated_at: "2026-07-14",
     };
     vi.mocked(fetch).mockImplementation(async (input) => {
-      if (String(input).includes("/api/settings/cli-apps?installed_only=1")) {
+      if (String(input).includes("/v0/settings/cli-apps?installed_only=1")) {
         throw new Error("temporary catalog failure");
       }
       return {
@@ -5846,14 +5845,14 @@ describe("ThreadShell", () => {
 
   it("offers creation-only commands only on the new-conversation page", async () => {
     const client = makeClient();
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).endsWith("/api/commands")
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).endsWith("/v0/commands")
       ? httpJson({ commands: ["/ptc", "/temporary", "/model"].map(command => ({ command, title: command, description: command, icon: "code", lifecycle: "side_channel", accepts_args: true, arg_hint: "on|off" })) })
       : { ok: false, status: 404, json: async () => ({}) }));
     const view = render(wrap(client, <ThreadShell session={null} title="New" onToggleSidebar={() => {}} onPtcModeEnabledChange={() => {}} onTemporaryChatEnabledChange={() => {}} />));
     const input = screen.getByRole("textbox", { name: "Message input" });
     fireEvent.change(input, { target: { value: "/ptc" } });
     expect(await screen.findByRole("option", { name: /PTC/ })).toBeInTheDocument();
-    for (const id of ["global", "ordinary"]) {
+    for (const id of ["cirno", "ordinary"]) {
       view.rerender(wrap(client, <ThreadShell session={session(id)} title={id} onToggleSidebar={() => {}} />));
       fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), { target: { value: "/ptc" } });
       expect(screen.queryByRole("option", { name: /PTC/ })).not.toBeInTheDocument();
@@ -5953,4 +5952,81 @@ it("warns before editing or branching past text-only tool activity", async () =>
   const warning = await screen.findByRole("alertdialog");
   expect(warning).toHaveTextContent("does not undo earlier commands or file edits");
   expect(onForkChat).not.toHaveBeenCalled();
+});
+
+it.each(["running", "reasoning", "answer"])("clears an old interruption when Cirno resumes the worker via %s", async (signal) => {
+  const client = makeClient();
+  webuiThreadCache.clear();
+  const chatId = `supervised-${signal}`;
+  render(wrap(client, <ThreadShell session={session(chatId)} title="Worker" onToggleSidebar={() => {}} />));
+  await screen.findByLabelText("Message input");
+  act(() => {
+    client._emitChat(chatId, { event: "turn_end", chat_id: chatId, turn_id: "failed-turn", outcome: "failed", failure_kind: "model", failure_error_kind: "connection" });
+    client._emitChat(chatId, { event: "recovery_state", chat_id: chatId, recovery_id: "failure-1", status: "awaiting_user", reason: "model_request_failed", can_continue: true });
+  });
+  expect(screen.getByRole("button", { name: "Continue" })).toBeVisible();
+  act(() => {
+    if (signal === "running") client._emitChat(chatId, { event: "goal_status", chat_id: chatId, turn_id: "resumed", status: "running", started_at: 123 });
+    else if (signal === "reasoning") client._emitChat(chatId, { event: "reasoning_delta", chat_id: chatId, turn_id: "resumed", text: "Continue from saved progress" });
+    else client._emitChat(chatId, { event: "message", chat_id: chatId, turn_id: "resumed", text: "Recovered output" });
+  });
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  act(() => client._emitChat(chatId, { event: "turn_end", chat_id: chatId, turn_id: "resumed", outcome: "completed" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  // A genuine subsequent failure must still offer continuation.
+  act(() => {
+    client._emitChat(chatId, { event: "recovery_state", chat_id: chatId, recovery_id: "failure-2", status: "awaiting_user", reason: "model_request_failed", can_continue: true });
+  });
+  expect(screen.getByRole("button", { name: "Continue" })).toBeVisible();
+});
+
+it("places Continue in the composer action and switches back to Send when typing", async () => {
+  const client = makeClient();
+  client.requestMutation.mockResolvedValue({} as never);
+  webuiThreadCache.clear();
+  render(wrap(client, <ThreadShell session={session("composer-continue")} title="Worker" onToggleSidebar={() => {}} />));
+  await screen.findByLabelText("Message input");
+  act(() => client._emitChat("composer-continue", { event: "recovery_state", chat_id: "composer-continue", recovery_id: "failed", status: "awaiting_user", can_continue: true }));
+  const button = screen.getByRole("button", { name: "Continue" });
+  expect(button).toHaveClass("composer-primary-action");
+  expect(button.closest("form")).toContainElement(screen.getByRole("textbox", { name: "Message input" }));
+  expect(document.querySelector(".thread-composer-notice")).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), { target: { value: "Change instructions" } });
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
+  fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await waitFor(() => expect(client.requestMutation).toHaveBeenCalledWith("recovery.continue", { chat_id: "composer-continue", recovery_id: "failed" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Continue" })).toBeNull());
+});
+
+it.each([false, true])("clears only the accepted text draft after a tab switch (returned before receipt=%s)", async (returnBeforeReceipt) => {
+  const client = makeClient();
+  let accept!: () => void;
+  const receipt = new Promise<void>(resolve => { accept = resolve; });
+  client.sendTextMessage.mockImplementation((chatId, content, options) => {
+    client.sendMessage(chatId, content, undefined, options);
+    return receipt;
+  });
+  const draftStore = new ComposerDraftStore([
+    ["websocket:ack-a", { text: "A pending draft", attachments: [], sessionMentions: [], quotedContext: null }],
+    ["websocket:ack-b", { text: "B untouched draft", attachments: [], sessionMentions: [], quotedContext: "B quote" }],
+  ]);
+  const shell = (key: string) => wrap(client, <ThreadShell session={session(key)} title="Receipt" draftStore={draftStore} onToggleSidebar={() => {}} />);
+  const view = render(shell("ack-a"));
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+  await waitFor(() => expect(client.sendMessage).toHaveBeenCalled());
+  expect(draftStore.has("websocket:ack-a")).toBe(true);
+  view.rerender(shell("ack-b"));
+  expect(screen.getByRole("textbox")).toHaveValue("B untouched draft");
+  if (returnBeforeReceipt) view.rerender(shell("ack-a"));
+  await act(async () => { accept(); await receipt; });
+  if (returnBeforeReceipt) expect(screen.getByRole("textbox")).toHaveValue("");
+  else {
+    expect(screen.getByRole("textbox")).toHaveValue("B untouched draft");
+    expect(screen.getByLabelText("Quoted context")).toHaveTextContent("B quote");
+  }
+  expect(draftStore.has("websocket:ack-a")).toBe(false);
+  expect(draftStore.get("websocket:ack-b")?.text).toBe("B untouched draft");
 });

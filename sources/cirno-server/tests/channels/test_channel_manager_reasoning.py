@@ -15,21 +15,22 @@ plugins only implement the streaming primitives.
 
 from __future__ import annotations
 
+from cirno_server.channels.delivery.events import send_event
+
 import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock
 
 import pytest
-
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.outbound_events import (
     ProgressEvent,
     outbound_message_for_event,
 )
 from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import Config
 from cirno_server.channels.base import BaseChannel
 from cirno_server.channels.manager import ChannelManager
-from cirno_core.config.schema import Config
 
 
 class _MockChannel(BaseChannel):
@@ -70,12 +71,11 @@ class _MockChannel(BaseChannel):
 def manager(tmp_path) -> ChannelManager:
     config = Config.model_validate({"channels": {"websocket": {"enabled": False}}})
     mgr = ChannelManager(config, MessageBus(), config_path=tmp_path / "config.json")
-    mgr.channels["mock"] = _MockChannel({}, mgr.bus)
+    mgr.runtimes.channels["mock"] = _MockChannel({}, mgr.bus)
     return mgr
 
 
 def test_websocket_gateway_uses_configured_workspace_restriction(tmp_path, monkeypatch):
-    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
     monkeypatch.setattr(
         "cirno_server.webui.workspaces.read_webui_default_access_mode",
         lambda: "default",
@@ -96,7 +96,7 @@ def test_websocket_gateway_uses_configured_workspace_restriction(tmp_path, monke
     mgr = ChannelManager(
         config, MessageBus(), webui_static_dist=False, config_path=tmp_path / "config.json",
     )
-    channel = mgr.channels["websocket"]
+    channel = mgr.runtimes.channels["websocket"]
 
     scope = channel.gateway.workspaces.default_scope()
     assert scope.project_path == tmp_path
@@ -105,13 +105,13 @@ def test_websocket_gateway_uses_configured_workspace_restriction(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_reasoning_delta_routes_to_send_reasoning_delta(manager):
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     msg = outbound_message_for_event(
         channel="mock",
         chat_id="c1",
         event=ProgressEvent(content="step-by-step", reasoning_delta=True, stream_id="r1"),
     )
-    await manager._send_once(channel, msg)
+    await send_event(channel, msg)
     channel._delta_mock.assert_awaited_once()
     args = channel._delta_mock.await_args.args
     assert args[0] == "c1"
@@ -123,13 +123,13 @@ async def test_reasoning_delta_routes_to_send_reasoning_delta(manager):
 
 @pytest.mark.asyncio
 async def test_reasoning_end_routes_to_send_reasoning_end(manager):
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     msg = outbound_message_for_event(
         channel="mock",
         chat_id="c1",
         event=ProgressEvent(reasoning_end=True, stream_id="r1"),
     )
-    await manager._send_once(channel, msg)
+    await send_event(channel, msg)
     channel._end_mock.assert_awaited_once()
     assert channel._end_mock.await_args.kwargs["stream_id"] == "r1"
     channel._delta_mock.assert_not_awaited()
@@ -138,13 +138,13 @@ async def test_reasoning_end_routes_to_send_reasoning_end(manager):
 @pytest.mark.asyncio
 async def test_one_shot_reasoning_expands_to_delta_plus_end(manager):
     """One-shot reasoning expands to a single delta + end."""
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     msg = outbound_message_for_event(
         channel="mock",
         chat_id="c1",
         event=ProgressEvent(content="one-shot reasoning", reasoning=True),
     )
-    await manager._send_once(channel, msg)
+    await send_event(channel, msg)
     channel._delta_mock.assert_awaited_once()
     channel._end_mock.assert_awaited_once()
 
@@ -155,7 +155,7 @@ async def test_one_shot_reasoning_expands_to_delta_plus_end(manager):
 async def test_dispatch_reasoning_visibility_is_independent_of_progress(
     manager, show_reasoning, send_progress,
 ):
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     channel.show_reasoning = show_reasoning
     channel.send_progress = send_progress
     events = [
@@ -198,7 +198,7 @@ async def test_dispatch_silently_drops_reasoning_for_unknown_channel(manager):
 
     final = await _dispatch_through_final(manager)
 
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     assert channel.received == [("send", final)]
     channel._delta_mock.assert_not_awaited()
     channel._end_mock.assert_not_awaited()
@@ -232,7 +232,7 @@ async def test_base_channel_reasoning_primitives_are_noop_safe():
 
 @pytest.mark.asyncio
 async def test_file_edit_events_route_to_channel_capability(manager):
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     edits = [{"version": 1, "phase": "start", "path": "src/app.py"}]
     msg = outbound_message_for_event(
         channel="mock",
@@ -240,7 +240,7 @@ async def test_file_edit_events_route_to_channel_capability(manager):
         event=ProgressEvent(file_edit_events=edits),
     )
 
-    await manager._send_once(channel, msg)
+    await send_event(channel, msg)
 
     channel._file_edit_mock.assert_awaited_once_with(
         "c1", edits, msg.metadata
@@ -276,15 +276,15 @@ async def _dispatch_through_final(manager: ChannelManager) -> OutboundMessage:
         if (msg.channel, msg.chat_id, msg.content, msg.event) == ("mock", "c1", "Final", None):
             delivered.set()
 
-    manager.channels["mock"]._send_mock.side_effect = record_send
+    manager.runtimes.channels["mock"]._send_mock.side_effect = record_send
     await manager.bus.publish_outbound(final)
-    task = asyncio.create_task(manager._dispatch_outbound())
+    task = asyncio.create_task(manager.dispatcher.run())
     try:
         await asyncio.wait_for(delivered.wait(), timeout=2)
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):
             await asyncio.wait_for(task, timeout=2)
-    assert not manager._outbound_tasks
-    assert not manager._outbound_tails
+    assert not manager.delivery.tasks
+    assert not manager.delivery.tails
     return final

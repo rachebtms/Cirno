@@ -7,19 +7,19 @@
   "app": {
     "brand": "Cirno",
     "loading": {
-      "connecting": "正在连接 cirno…",
+      "connecting": "正在连接 Cirno…",
       "boot": "正在加载 Cirno…",
       "failed": "无法加载此页面。请返回，或刷新页面重试。"
     },
     "error": {
-      "title": "无法连接到 cirno",
+      "title": "无法连接到 Cirno",
       "serverHint": "请确认Cirno 服务端已启动（`cirno`），并且当前浏览器可以访问它的 WebUI 地址。"
     },
     "auth": {
-      "title": "连接到 cirno",
+      "title": "连接到 Cirno",
       "label": "WebUI 密码",
       "helpTitle": "在哪里找到密码？",
-      "helpConfig": "在运行 cirno 的设备上打开配置文件，通常位于：",
+      "helpConfig": "在运行 Cirno 的设备上打开配置文件，通常位于：",
       "helpSecret": "复制此字段的值作为密码：",
       "helpFallback": "若该值为空，请使用 <code>channels.websocket.token</code>。",
       "showPassword": "显示密码",
@@ -38,9 +38,7 @@
       "restartHint": "重启 cirno 以应用运行时更改。",
       "restartAction": "重启",
       "restart": "重启 cirno",
-      "restarting": "正在重启...",
-      "restartEngine": "重启引擎",
-      "restartingEngine": "正在重启引擎..."
+      "restarting": "正在重启..."
     },
     "restart": {
       "completed": "重启已完成，用时 {{seconds}} 秒。"
@@ -51,18 +49,6 @@
     },
     "meta": {
       "description": "Cirno Web UI —— 与你的 Cirno 工作区对话。"
-    },
-    "pairing": {
-      "haveCode": "已收到配对码？",
-      "deliveryFailed": "配对码发送失败。请检查此机器人的消息发送权限和Cirno 服务端日志，再给它发一条私聊消息重试。",
-      "deliverySending": "正在向聊天发送配对码。如果没有收到，请再给机器人发一条私聊消息重试。",
-      "title": "账号配对",
-      "description": "输入聊天平台收到的配对码",
-      "code": "配对码",
-      "matched": "已匹配 {{channel}}，正在连接…",
-      "expiresInline": "配对码将于 {{expires}} 过期。",
-      "queueCount": "{{count}} 个待处理",
-      "noMatch": "没有待处理请求与此配对码匹配。"
     }
   },
   "ptc": {
@@ -244,7 +230,7 @@
         },
         "tools_restrict_to_workspace": {
           "label": "目录限制",
-          "help": "设置全局工作区访问限制；WebUI 中每个对话的权限单独设置。"
+          "help": "会话遵循工具策略时，将文件访问和命令执行限制在工作目录内。会话单独设置的权限优先。"
         },
         "tools_ssrf_whitelist": {
           "label": "允许 IP",
@@ -275,8 +261,8 @@
           "help": "扫描会话是否满足空闲压缩条件的间隔，并非空闲时长。重启后生效。"
         },
         "network_request_timeout_s": {
-          "label": "模型请求超时（秒）",
-          "help": "单次模型请求的最长等待时间。"
+          "label": "模型连接／响应超时（秒）",
+          "help": "建立连接或等待非流式响应的最长时间。流式输出使用单独的空闲超时。"
         },
         "network_stream_idle_timeout_s": {
           "label": "模型流空闲超时（秒）",
@@ -347,7 +333,7 @@
           "help": "单次进程请求时间上限，失败回退 BM25。"
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "释放已压缩的运行上下文",
+          "label": "压缩后释放内存",
           "help": "压缩后，完整证据和界面历史保留在磁盘，仅释放旧执行消息的内存。"
         },
         "agents_defaults_dream_max_tool_iterations": {
@@ -461,6 +447,18 @@
         "agents_defaults_memory_embedding_provider": {
           "label": "嵌入服务",
           "help": "可选的向量检索，与 BM25 配合。可选择本地 CPU 模型或外部 API。API 模式会将查询和记忆片段发送给指定服务，默认关闭。"
+        },
+        "server_uploads_max_file_mb": {
+          "label": "单个文件大小上限（MiB）",
+          "help": "每张图片或每份文档的上传大小上限。重启服务并刷新网页后生效。"
+        },
+        "server_uploads_max_video_mb": {
+          "label": "单个视频大小上限（MiB）",
+          "help": "每个上传视频的大小上限；每条消息最多一个视频。重启服务并刷新网页后生效。"
+        },
+        "server_uploads_max_total_mb": {
+          "label": "每条消息文件总大小（MiB）",
+          "help": "每条消息上传的图片和文档总大小，不含视频；本地文件引用不计入。重启服务并刷新网页后生效。"
         }
       },
       "groups": {
@@ -565,6 +563,9 @@
         },
         "embedding": {
           "title": "嵌入服务"
+        },
+        "uploads": {
+          "title": "文件上传"
         }
       },
       "save": "保存修改",
@@ -672,9 +673,7 @@
       "regional": "地区时区",
       "webuiSafety": "WebUI 安全",
       "capabilities": "功能",
-      "apps": "应用",
-      "nativeHost": "桌面应用",
-      "hostSafety": "应用安全"
+      "apps": "应用"
     },
     "models": {
       "requestOverridesHint": "留空时使用提供商设置。更换提供商会清空这里填写的值。",
@@ -691,7 +690,7 @@
       "newPresetHelp": "保存模型和参数，方便下次选用",
       "presets": "模型预设",
       "presetName": "预设名称",
-      "presetNameHelp": "名称不可重复，也用于 /model",
+      "presetNameHelp": "名称不可重复。修改名称不会改变模型 ID。",
       "presetNameDuplicate": "已存在同名预设。",
       "presetNamePlaceholder": "例如：快速写作",
       "advancedOptions": "高级选项",
@@ -735,10 +734,11 @@
         "auto": "自动",
         "preserve": "保留",
         "omit": "不回传"
-      }
+      },
+      "catalogErrorDetails": "错误详情"
     },
     "notifications": {
-      "scope": "本浏览器",
+      "scope": "提醒与声音",
       "intro": "选择任务结束时的提醒方式。",
       "pageRequired": "页面关闭、挂起或断开连接后，无法接收新提醒。",
       "revoked": "通知权限已撤销，已关闭提醒。请先在浏览器站点设置中允许通知，再在此开启。",
@@ -801,7 +801,6 @@
       "restart": "重启 cirno",
       "configPath": "配置路径",
       "activePreset": "当前预设",
-      "gateway": "Cirno 服务端",
       "restartState": "重启状态",
       "pendingChanges": "待生效项",
       "currentModel": "当前配置",
@@ -823,13 +822,11 @@
       "webuiDefaultAccess": "默认权限",
       "cliAppsCatalog": "应用列表",
       "cliAppsFilter": "筛选",
-      "engine": "引擎",
-      "logs": "日志",
-      "diagnostics": "诊断",
       "contextWindow": "上下文窗口",
       "voiceLimits": "限制",
       "reasoningDetailMode": "思考过程详略",
-      "toolDetailMode": "工具调用详略"
+      "toolDetailMode": "工具调用详略",
+      "healthListener": "健康检查监听地址"
     },
     "help": {
       "theme": "切换浅色或深色外观",
@@ -855,12 +852,8 @@
       "cliAppsCatalog": "安装 CLI 工具，不改桌面应用\n\n安装供 cirno 使用的命令行工具，不会安装或修改对应的桌面应用。",
       "cliAppsFilter": "按名称、分类或功能搜索",
       "localServiceAccess": "完全访问的 Shell 可连接本机服务\n\n允许具有“完全访问权限”的 Shell 命令连接本机服务。",
-      "webuiDefaultAccess": "项目未设置权限时使用\n\n对话所属项目未单独设置权限时，使用此权限。",
+      "webuiDefaultAccess": "新会话的初始权限。“遵循工具策略”取决于“工作区限制”：开启时仅能访问工作目录，关闭时拥有完全访问权限。会话已保存的权限不会因此改变。",
       "securityManagedControls": "默认限制访问本机和内网\n\n网页请求默认禁止访问本机、内网和云元数据服务，明确允许的地址除外。聊天平台的安全设置单独管理。",
-      "logs": "打开桌面应用的引擎日志文件夹",
-      "diagnostics": "导出诊断报告，帮助排查问题",
-      "localServiceAccessNative": "完全访问的 Shell 可连接本机服务\n\n允许具有“完全访问权限”的 Shell 命令连接这台 Mac 上的服务。",
-      "webuiDefaultAccessNative": "桌面对话的项目未设权限时使用\n\n桌面应用中的对话所属项目未单独设置权限时，使用此权限。",
       "contextWindow": "模型可用的上下文 Token 数量"
     },
     "timezone": {
@@ -1037,16 +1030,15 @@
       "collapsedDiff": "折叠修改",
       "on": "开启",
       "off": "关闭",
-      "defaultPermission": "默认权限",
       "fullAccess": "完全访问",
       "configured": "已配置",
       "notConfigured": "未配置",
       "pending": "等待中",
-      "restartingEngine": "正在重启",
       "checking": "检查中",
       "running": "运行中",
       "needsSetup": "需要设置",
-      "detailed": "详细"
+      "detailed": "详细",
+      "inheritToolPolicy": "遵循工具策略"
     },
     "status": {
       "loading": "正在加载设置...",
@@ -1057,12 +1049,7 @@
       "restartAfterSaving": "保存修改后，重启 cirno 使其生效。",
       "savedRestartApply": "已保存，重启后生效。",
       "hostRestartAfterSaving": "保存后 cirno 会重启引擎。",
-      "hostRestartPending": "设置已保存，正在等待引擎重启。",
-      "hostApiUnavailable": "这些操作仅在桌面应用中可用。",
-      "logsOpened": "已打开日志文件夹。",
-      "logsOpenFailed": "无法打开日志文件夹。",
-      "diagnosticsExported": "诊断报告已导出到 {{path}}。",
-      "diagnosticsExportFailed": "无法导出诊断报告。"
+      "hostRestartPending": "设置已保存，正在等待引擎重启。"
     },
     "actions": {
       "save": "保存",
@@ -1404,7 +1391,7 @@
         "noOutput": "此记录未保存回复正文。"
       },
       "create": "新建任务",
-      "createPrompt": "想让 cirno 自动做什么？",
+      "createPrompt": "你想自动执行什么任务？",
       "createInput": "描述一个自动任务",
       "errors": {},
       "calendar": {
@@ -1542,7 +1529,8 @@
         "second": "秒",
         "minute": "分钟",
         "hour": "小时",
-        "day": "天"
+        "day": "天",
+        "millisecond": "毫秒"
       },
       "validation": {
         "nameRequired": "请输入任务名称。",
@@ -1581,7 +1569,9 @@
       "openChatGPT": "打开 ChatGPT",
       "pasteCallbackToContinue": "粘贴回调 URL 以继续。",
       "waitingForCallback": "等待完成登录…",
-      "finishSignIn": "完成登录"
+      "finishSignIn": "完成登录",
+      "cancelFailed": "无法取消 {{provider}} 登录",
+      "cancelling": "正在取消登录…"
     },
     "skills": {
       "description": "选择对话中可用的技能",
@@ -1610,15 +1600,15 @@
       "disableSkill": "停用 {{name}}",
       "updateFailed": "无法更新此技能。",
       "deleteTitle": "删除技能",
-      "deleteDescription": "从当前工作区移除此技能",
+      "deleteDescription": "从 Agent Home 移除此技能。",
       "deleteAction": "删除",
       "deleteFailed": "无法删除此技能。",
       "deleteConfirmTitle": "删除 {{name}}？",
-      "deleteConfirmDescription": "从工作区删除技能文件，无法撤销",
+      "deleteConfirmDescription": "从 Agent Home 删除技能文件，保留的历史版本仍可读取。",
       "deleteConfirmAction": "删除技能",
       "instructionsTitle": "技能说明",
       "setupRequired": "需要设置",
-      "setupDescription": "在Cirno 服务端设备安装依赖，再重新检查\n\n请在运行 cirno 的设备上安装缺少的依赖，然后重新检查。",
+      "setupDescription": "在运行 Cirno 服务端的设备上安装缺少的依赖，然后重新检查。",
       "copySetupCommand": "复制命令",
       "checkAgain": "重新检查",
       "marketplaceSearchFailed": "暂时无法搜索技能市场。",
@@ -1634,7 +1624,7 @@
       "marketplaceTrendingUnavailable": "暂时无法获取热门技能。",
       "marketplaceEmpty": "没有找到与“{{query}}”相关的技能。",
       "marketplaceConfirmTitle": "安装 {{name}}？",
-      "marketplaceConfirmDescription": "第三方技能可能包含指令或脚本\n\n此第三方技能来自 {{provider}}（{{source}}），其中可能包含操作指令或可执行脚本。",
+      "marketplaceConfirmDescription": "此第三方技能来自 {{provider}}（{{source}}），其中可能包含操作指令或可执行脚本。",
       "marketplaceConfirmInstall": "安装技能",
       "marketplaceOpen": "在 {{provider}} 中打开 {{name}}",
       "marketplaceOpenProvider": "打开 {{provider}}",
@@ -1648,7 +1638,6 @@
       "marketplaceTrendLabel": "近 8 周安装趋势",
       "featured": "技能",
       "empty": "暂无可用技能。",
-      "sourceWorkspace": "自定义",
       "sourceBuiltin": "内置",
       "statusAvailable": "可用",
       "statusUnavailable": "不可用",
@@ -1668,46 +1657,55 @@
       "unavailableReasonLabel": "缺少什么",
       "rawInstructions": "技能文件（SKILL.md）",
       "rawInstructionsEmpty": "暂无技能文件内容。",
-      "detailDescription": "{{name}} 的详情。"
+      "detailDescription": "{{name}} 的详情。",
+      "sourceHome": "自定义",
+      "copySetupFailed": "无法复制命令。",
+      "sourcePlugin": "Agent 插件",
+      "marketplaceResultsFor": "“{{query}}”的搜索结果",
+      "retryTrends": "重试趋势查询",
+      "historyTab": "验证与历史"
     },
     "homeFiles": {
       "title": "Home 文件",
       "save": "保存",
       "reload": "重新加载",
       "saved": "已保存",
-      "soul": "个性",
+      "soul": "Router 人格",
       "user": "用户偏好",
       "instructions": "工作指令",
       "memory": "长期记忆",
-      "heartbeat": "心跳指令"
+      "heartbeat": "心跳指令",
+      "worker": "普通会话人格"
     },
     "categories": {
       "interface": "界面",
       "agent": "Agent",
       "connections": "连接",
-      "system": "系统"
+      "system": "系统",
+      "general": "通用"
     },
     "telegram": {
       "account": "个人账号",
       "configureBot": "配置 Bot",
-      "help": "将你的 Telegram 私聊绑定到 Cirno，不支持群聊。请先在通道配置中填写 Bot Token。",
+      "help": "将 Telegram 私聊连接到 Router。不支持群聊。请先在通道设置中配置 Bot Token。",
       "unbound": "尚未绑定",
-      "boundHelp": "只有这个 Telegram 账号可以访问你的个人 Cirno。",
+      "boundHelp": "只有这个 Telegram 账号可以访问你的个人 Router。",
       "pinHelp": "在此生成 PIN，然后发给你的 Bot 验证。",
       "unbind": "解除绑定",
       "generatePin": "生成 PIN",
       "pin": "绑定 PIN",
       "copyPin": "复制绑定命令",
       "refreshPin": "刷新 PIN",
-      "expires": "{{seconds}} 秒后过期，到期自动刷新。",
+      "expires": "{{seconds}} 秒后过期。",
       "sendPin": "向 Telegram Bot 发送 {{command}}。",
       "delivery": "消息与通知",
       "enabled": "启用 Telegram",
-      "cirno": "Cirno 消息",
       "actionLinks": "操作链接",
       "webuiUrl": "Web UI 地址（可选）",
       "urlHelp": "填写手机可以打开的地址。通知会附带按钮，打开收件箱中的对应事项。",
-      "settingsLink": "配置 Telegram 通知"
+      "settingsLink": "配置 Telegram 通知",
+      "expired": "PIN 已过期",
+      "router": "Router 消息"
     },
     "account": {
       "owner": "实例所有者",
@@ -1718,10 +1716,13 @@
       "saved": "密码已修改，当前浏览器保持登录。",
       "unavailable": "账户设置适用于通过网页注册和登录的实例。",
       "loading": "正在加载账户…",
-      "retry": "重试"
+      "retry": "重试",
+      "routerNameHelp": "改名不会改变会话 ID、记忆或任务关联。历史正文保留原样。",
+      "saveRouterName": "保存名称",
+      "routerNameSaved": "名称已更新。"
     },
     "heartbeat": {
-      "help": "定期检查 HEARTBEAT.md，其中有任务时唤醒 Cirno Agent。服务健康检查是独立功能。"
+      "help": "定期检查 HEARTBEAT.md，其中有任务时唤醒 Router Agent。服务健康检查是独立功能。"
     },
     "backup": {
       "instance": "完整实例",
@@ -1751,7 +1752,21 @@
       "skip": "留空则跳过",
       "extrasRestore": "可按当前服务器调整额外路径。额外目录按合并方式恢复：覆盖同名文件，保留无关文件。软件包和外部工具需要兼容的系统及 CPU 架构。",
       "restore": "恢复并重启"
-    }
+    },
+    "balance": {
+      "title": "账户余额",
+      "enabled": "启用余额查询",
+      "endpoint": "余额 API 地址",
+      "endpointHelp": "可以与模型 API 使用不同的地址。",
+      "format": "响应格式",
+      "json": "自定义 JSON",
+      "amountPath": "余额字段（JSON Pointer）",
+      "currency": "货币 / 单位",
+      "apiKey": "余额 API 密钥（可选）",
+      "apiKeyHelp": "留空则使用提供商的 API 密钥。",
+      "refresh": "刷新余额"
+    },
+    "navigationSearch": "搜索设置"
   },
   "chat": {
     "fallbackTitle": "会话 {{id}}",
@@ -1774,7 +1789,7 @@
     "rename": "重命名",
     "renamePlaceholder": "会话名称",
     "renameProjectTitle": "项目改名",
-    "renameProjectDescription": "仅修改 WebUI 侧栏中的项目名称",
+    "renameProjectDescription": "修改项目名称，保留项目内的会话和文件。",
     "renameProjectPlaceholder": "项目名称",
     "renameSave": "保存",
     "renameFailed": "名称保存失败，请重试。",
@@ -1794,7 +1809,8 @@
       "yesterday": "昨天",
       "earlier": "更早",
       "archived": "已归档"
-    }
+    },
+    "bulkDeleteUnavailable": "此视图每次只能删除一个会话。"
   },
   "archiveConfirm": {
     "title": "归档此会话？",
@@ -1802,7 +1818,7 @@
     "unarchiveTitle": "取消归档此会话？",
     "unarchiveTitleMany": "取消归档 {{count}} 个会话？",
     "description": "聊天记录会保留，可随时取消归档。",
-    "unarchiveDescription": "这些会话将重新显示在侧栏中。"
+    "unarchiveDescription": "这些会话将重新显示在会话列表中。"
   },
   "deleteConfirm": {
     "title": "删除这个会话？",
@@ -2020,7 +2036,16 @@
         "estimated": "根据当前上下文与正在生成的思考、正文和工具数据估算，模型返回实际用量后校准。",
         "unavailable": "当前上下文用量未记录，图表显示的是此前请求用量。"
       },
+      "draftStorage": {
+        "read": "无法恢复此浏览器中保存的草稿。",
+        "save": "草稿的更改未能保存。请保留此页面并重试。",
+        "remove": "未能移除此浏览器中保存的草稿。请在刷新前重试。",
+        "clearFailed": "未能清除此浏览器中保存的草稿。"
+      },
       "queued": {
+        "sendRejected": "消息未发送，待发内容已保留。",
+        "restoreFailed": "无法恢复此浏览器中保存的待发消息。",
+        "saveFailed": "待发消息的更改未能保存。请保留此页面并重试。",
         "label": "等待发送",
         "guide": "立即发送",
         "delete": "删除消息",
@@ -2121,17 +2146,13 @@
             "title": "查看帮助",
             "description": "查看可用的斜杠命令"
           },
-          "pairing": {
-            "title": "配对",
-            "description": "管理配对请求"
-          },
           "resume": {
             "title": "继续任务",
             "description": "从已保存的上下文继续停止的任务。"
           },
           "clear": {
-            "title": "清空 Cirno 上下文",
-            "description": "清空个人 Cirno 会话；不会撤销文件修改。"
+            "title": "清空 Router 会话",
+            "description": "清空Router 会话；不会撤销文件修改。"
           },
           "temporary": {
             "title": "临时会话",
@@ -2157,14 +2178,14 @@
         "label": "应用",
         "cliGroup": "CLI 应用",
         "mcpGroup": "MCP 服务",
-        "sessionGroup": "Cirno 对话",
+        "sessionGroup": "会话",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "用 @{{name}} 调用 CLI",
         "mcpDescription": "用 @{{name}} 调用 MCP",
         "cliTitle": "CLI 应用：{{name}}",
         "mcpTitle": "MCP 服务：{{name}}",
-        "sessionBadge": "Cirno 对话",
+        "sessionBadge": "会话",
         "sessionDescription": "引用历史会话 @{{name}}"
       },
       "encoding": "处理中…",
@@ -2194,7 +2215,7 @@
         "defaultDescription": "仅在当前工作目录内读写和执行命令",
         "fullDescription": "可读写目录外文件并执行命令",
         "review": "AI 审批",
-        "reviewDescription": "保留默认限制。独立 AI 不加载 Cirno 记忆，逐项审查受限操作；疑难情况交给你在收件箱审批。AI 可能判断错误，导致文件泄露或执行有害命令。"
+        "reviewDescription": "保留默认限制。独立 AI 不加载 Router 记忆，逐项审查受限操作；疑难情况交给你在收件箱审批。AI 可能判断错误，导致文件泄露或执行有害命令。"
       }
     },
     "scrollToBottom": "滚动到底部",
@@ -2214,7 +2235,7 @@
       "railAria": "我的消息导航"
     },
     "clear": {
-      "title": "清空 Cirno 会话",
+      "title": "清空 Router 会话",
       "description": "停止当前执行并清空本会话的消息与上下文。已保存的记忆和其他会话会保留。",
       "confirm": "清空会话"
     },
@@ -2226,10 +2247,10 @@
       "subagent": "子 Agent 结果",
       "continuation": "自动续跑",
       "system": "系统事件",
-      "supervision": "Cirno 已更新此会话"
+      "supervision": "Router 已更新此会话"
     },
     "supervision": {
-      "changed": "Cirno 已更新此会话",
+      "changed": "Router 已更新此会话",
       "actions": {
         "stop": "已停止此会话",
         "continue": "已继续此会话",
@@ -2486,7 +2507,8 @@
     },
     "expandStep": "展开详情",
     "collapseStep": "收起详情",
-    "edit": "编辑消息"
+    "edit": "编辑消息",
+    "loadMoreTools": "再显示 {{count}} 条工具事件"
   },
   "recovery": {
     "actionFailed": "恢复操作失败，请重试。",
@@ -2563,45 +2585,16 @@
     "copy": "复制",
     "copied": "已复制"
   },
-  "workbench": {
-    "aria": "工作台",
-    "panes": "窗格",
-    "tabAria": "分组：{{title}}",
-    "panesInTab": "{{title}} 中的窗格",
-    "collapseTabGroup": "折叠 {{title}} 中的窗格",
-    "expandTabGroup": "展开 {{title}} 中的窗格",
-    "dropPane": "将 {{pane}} 移入 {{tab}}",
-    "createGroup": "创建分组",
-    "moveTo": "移动到",
-    "renameGroupTitle": "分组改名",
-    "renameGroupDescription": "为这个分组命名。",
-    "renameGroupPlaceholder": "分组名称",
-    "dissolveTab": "解散分组",
-    "layout": "布局",
-    "addPane": "添加窗格",
-    "paneLimit": "最多 {{count}} 个窗格",
-    "deleteConversations": "整组删除",
-    "movePane": "移动 {{title}} 窗格",
-    "movePaneHint": "拖动换位，也可以使用方向键。",
-    "resizePaneBoundary": "调整窗格边界 {{index}}",
-    "promotePane": "将 {{title}} 设为主窗格",
-    "paneActions": "{{title}} 窗格操作",
-    "detachPane": "移出",
-    "composerAria": "向 {{title}} 发送消息",
-    "layouts": {
-      "columns": "左右排列",
-      "rows": "上下排列",
-      "grid": "网格",
-      "bsp": "BSP",
-      "main-stack": "主次排列"
-    }
-  },
   "common": {
     "retry": "重试",
     "dismiss": "关闭",
     "close": "关闭",
     "current": "当前",
-    "cancel": "取消"
+    "cancel": "取消",
+    "refresh": "刷新",
+    "copyFailed": "无法复制到剪贴板。",
+    "chooseDate": "选择日期",
+    "moreActions": "更多操作"
   },
   "errors": {
     "messageTooBig": {
@@ -2627,10 +2620,13 @@
       "serverTitle": "模型提供商服务异常",
       "unknownTitle": "模型提供商请求失败",
       "bodyWithAttempt": "已尝试 {{attempts}} 次，仍未成功。可稍后继续或切换模型。",
-      "body": "可稍后继续或切换模型。"
+      "body": "可稍后继续或切换模型。",
+      "configurationTitle": "请先配置模型",
+      "configurationBody": "请前往设置 → 模型，创建并选择模型预设后重新发送消息。"
     }
   },
   "workspace": {
+    "directoryRefreshError": "无法刷新工作目录",
     "dialog": {
       "manual": "粘贴路径",
       "absolutePathRequired": "请输入这台机器上的绝对文件夹路径。"
@@ -2660,7 +2656,118 @@
       "retry": "重试",
       "cancel": "取消",
       "switchDirectory": "切换目录"
-    }
+    },
+    "files": "文件",
+    "file": "文件",
+    "terminal": "终端",
+    "browser": "浏览器",
+    "trace": "轨迹",
+    "credentials": "凭据",
+    "settings": "设置",
+    "conversation": "会话",
+    "library": "会话列表",
+    "inbox": "收件箱",
+    "automations": "自动化",
+    "launcher": "Launcher",
+    "split": "分屏显示",
+    "unsplit": "单页显示",
+    "resizeSplit": "调整分屏宽度",
+    "tabs": "工作台标签页",
+    "closeTab": "关闭 {{title}}",
+    "newTab": "新建标签页",
+    "loading": "加载中…",
+    "localServer": "本机服务器",
+    "terminalHost": "终端主机",
+    "connect": "连接",
+    "terminalExited": "进程已退出（{{code}}）",
+    "terminalHint": "这是所选服务器上的交互式终端。关闭标签页会停止本地连接；已分离的远程进程可能继续运行。",
+    "addRecord": "添加凭据",
+    "vaultHint": "敏感内容单独加密保存，不写入记忆。完整实例备份包含加密密钥，请妥善保管备份。凭据工具仅返回名称等信息，不返回敏感内容。曾经粘贴到聊天中的秘密仍会保留在对应历史里。",
+    "label": "名称",
+    "recordType": "凭据类型",
+    "secretValue": "敏感内容",
+    "reveal": "显示已保存的内容",
+    "noRecords": "尚未保存凭据",
+    "deleteRecord": "删除这条凭据？",
+    "delete": "删除",
+    "loadOlder": "更早",
+    "chooseConversation": "请从会话中打开此标签页，查看该会话的请求。",
+    "loadMore": "加载更多消息",
+    "toolDefinitions": "工具定义",
+    "modelResponse": "模型返回",
+    "address": "网站地址",
+    "go": "前往",
+    "openExternal": "在浏览器中打开",
+    "browserHint": "部分网站禁止嵌入。如果页面空白，请使用外部浏览器打开。嵌入的网站无法访问 Cirno 的账号和本地文件。",
+    "enterUrl": "输入网站地址开始浏览。",
+    "invalidUrl": "请输入 HTTP 或 HTTPS 地址。",
+    "browserSameOrigin": "请直接打开 Cirno 标签页，不要将 Cirno 嵌入自身。",
+    "kind": {
+      "password": "账号 / 密码",
+      "text": "长文本",
+      "identity": "个人证件 / 标识",
+      "token": "令牌 / 激活码",
+      "ssh": "SSH"
+    },
+    "openItem": "打开{{title}}",
+    "username": "账号用户名",
+    "discardDescription": "此标签页中尚未保存的更改将丢失。",
+    "debug": {
+      "time": "时间",
+      "type": "类型",
+      "summary": "事件",
+      "status": "状态",
+      "turn": "轮次",
+      "size": "大小",
+      "filter": "筛选本页事件",
+      "all": "全部事件",
+      "newest": "最新",
+      "newer": "较新",
+      "refresh": "刷新轨迹",
+      "inspector": "事件详情",
+      "messages": "请求消息",
+      "response": "响应",
+      "tools": "工具定义",
+      "raw": "原始数据",
+      "noEvents": "本页暂无事件。",
+      "count": "{{count}} / {{total}} 条事件",
+      "events": "录制事件",
+      "kinds": {
+        "input": "用户消息",
+        "answer": "模型回复",
+        "reasoning": "模型思考",
+        "tool": "工具调用",
+        "compaction": "上下文压缩",
+        "request": "API 请求",
+        "file": "文件变更",
+        "lifecycle": "生命周期",
+        "system": "系统输入"
+      },
+      "source": "来源会话",
+      "allSources": "全部会话",
+      "pause": "暂停录制",
+      "start": "开始录制",
+      "clear": "清空录制",
+      "recording": "录制中",
+      "paused": "已暂停",
+      "waiting": "正在录制新事件，不会导入之前的聊天记录。",
+      "capacity": "录制已达到存储上限并暂停，请清空后继续。",
+      "storage_error": "录制的临时存储发生错误，已停止录制。"
+    },
+    "moveOtherGroup": "移至另一标签组",
+    "emptyGroup": "从启动栏打开页面，或将标签拖到这里。",
+    "sshNodeAccess": "加入 SSH Nodes",
+    "sshNodeAccessHint": "用于远程终端。Agent 执行还需要开启对 Agent 可见。",
+    "sshNode": "SSH Node",
+    "sshCredential": "SSH 凭据",
+    "loadSSH": "加载连接信息",
+    "sshNodePickerHint": "从 Credentials 中选择 SSH 凭据。从 Nodes 移除时会保留凭据。",
+    "noSSHCredentials": "请先在 Credentials 中创建 SSH 凭据。",
+    "agentVisibility": "对 Agent 可见",
+    "agentVisibilityHint": "允许 Agent 工具列出和管理此凭据。凭据工具不会返回秘密值。",
+    "agentVisible": "Agent 可见",
+    "agentHidden": "仅自己可见",
+    "keepSecret": "留空则保留已保存的秘密值。"
   },
   "files": {
     "title": "文件",
@@ -2686,10 +2793,10 @@
     "create": "创建",
     "discardTitle": "放弃未保存的修改？",
     "discardDescription": "修改尚未保存到文件。",
-    "discard": "放弃修改"
+    "discard": "放弃修改",
+    "openPreview": "打开预览标签页"
   },
   "features": {
-    "globalConversation": "Cirno",
     "projects": "项目",
     "ordinaryConversations": "普通会话",
     "createProject": "创建项目",
@@ -2738,7 +2845,8 @@
     "command": "命令",
     "runCommand": "运行",
     "close": "关闭",
-    "commandCompleted": "命令已完成。"
+    "commandCompleted": "命令已完成。",
+    "removeNode": "从 Nodes 移除"
   },
   "memoryLibrary": {
     "search": "搜索记忆",
@@ -2798,12 +2906,16 @@
     "semanticMode": "向量",
     "hybridMode": "混合 · BM25 + 向量",
     "searchEngine": "实际使用：{{mode}}",
-    "fallback_disabled": "本地嵌入已关闭，已使用 BM25。",
+    "fallback_disabled": "向量检索已关闭，使用 BM25。",
     "fallback_busy": "嵌入模型正在使用中，已使用 BM25。",
     "fallback_lexical_only": "原始证据、任务状态和历史记录使用 BM25；向量索引覆盖有效知识和档案。",
     "fallback_unavailable": "向量检索不可用，已使用 BM25。",
     "searchDetails": "查看原因",
-    "indexPending": "向量索引尚未完成，当前结果仅覆盖已索引内容；再次搜索可继续建立索引。"
+    "indexPending": "向量索引尚未完成，当前结果仅覆盖已索引内容；再次搜索可继续建立索引。",
+    "statusTitle": "索引与记忆整理",
+    "noTags": "暂无标签。",
+    "resultsFor": "“{{query}}”的检索结果",
+    "noMatches": "没有符合此次检索的记忆。"
   },
   "userQuestion": {
     "title": "想确认一下",
@@ -2833,7 +2945,7 @@
     "empty": "暂无通知",
     "loading": "正在加载通知",
     "retained": "已读不会自动完成待处理操作。",
-    "muteHelp": "静音后，此浏览器不再弹出该类通知或播放提示音，通知箱仍保留记录。浏览器提醒还需开启总开关并授予权限。",
+    "muteHelp": "浏览器提醒偏好会同步到其他设备。静音会关闭该类弹窗和提示音，通知箱仍保留记录；通知权限需在每个浏览器单独授予。",
     "muted": "已静音",
     "notify": "提醒",
     "unread": "未读",
@@ -2850,7 +2962,6 @@
     },
     "kind": {
       "question": "异步提问",
-      "pairing": "访问审批",
       "recovery": "会话恢复",
       "compaction": "上下文压缩",
       "dream": "记忆整理",
@@ -2912,7 +3023,57 @@
       "connection_failed": "无法连接 Cirno，请检查网络后重试。",
       "request_failed": "请求失败，请重试。",
       "incorrect_password": "当前密码不正确。",
-      "unauthorized": "请重新登录。"
+      "unauthorized": "请重新登录。",
+      "invalid_router_handle": "@名称格式不正确。请使用 3–32 位小写字母、数字或下划线，并以字母开头。",
+      "router_handle_taken": "此名称已被其他会话使用。",
+      "router_unavailable": "Router 会话暂不可用，请稍后重试。"
+    },
+    "routerHandle": "Router 的 @名称",
+    "routerHandleHint": "3–32 位，以字母开头，可用小写字母、数字和下划线。之后可在设置中修改。"
+  },
+  "themes": {
+    "title": "配色主题",
+    "name": "主题名称",
+    "newName": "我的雪色",
+    "customize": "创建主题",
+    "syncHint": "每个主题包含浅色、深色两套配色。设置保存在 Cirno 服务器，在你的设备之间同步。",
+    "save": "保存主题",
+    "edit": "编辑主题",
+    "remove": "删除主题",
+    "saveFailed": "偏好设置保存失败。",
+    "contrast": "请提高正文与背景、面板之间的对比度。",
+    "colors": {
+      "background": "背景",
+      "surface": "导航区域",
+      "panel": "面板",
+      "text": "正文",
+      "muted": "次要文字",
+      "accent": "强调色",
+      "border": "边框"
     }
+  },
+  "conversationCatalog": {
+    "newProject": "新建项目",
+    "projectName": "项目名称",
+    "search": "搜索会话和项目",
+    "more": "显示更多",
+    "unfiled": "未归类会话",
+    "move": "将 {{title}} 移至项目",
+    "newInProject": "在 {{name}} 中新建会话",
+    "renameProject": "重命名 {{name}}",
+    "deleteProject": "删除 {{name}}",
+    "emptyProject": "该项目下暂无会话。",
+    "empty": "没有匹配的会话。",
+    "deleteHelp": "将删除项目，会话、历史和文件均会保留。",
+    "create": "创建",
+    "directory": "工作目录（可选）",
+    "sort": "会话排序",
+    "order": {
+      "updated_desc": "最近更新",
+      "created_desc": "最近创建",
+      "title_asc": "按标题排序",
+      "manual": "已保存的顺序"
+    },
+    "projectActions": "项目 {{name}} 的操作"
   }
 }

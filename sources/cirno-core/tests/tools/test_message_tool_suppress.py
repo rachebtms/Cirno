@@ -11,7 +11,8 @@ from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.message import MessageTool
 from cirno_core.bus.events import InboundMessage, OutboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.progress_events import output_events
 
 
@@ -35,7 +36,7 @@ class TestMessageToolSuppressLogic:
         loop = _make_loop(tmp_path)
         tool_call = ToolCallRequest(
             id="call1", name="message",
-            arguments={"content": "Hello", "channel": "websocket", "chat_id": "global"},
+            arguments={"content": "Hello", "channel": "websocket", "chat_id": "b1ec9323-2155-5f24-bc56-1da2f59aeecb"},
         )
         calls = iter([
             LLMResponse(content="", tool_calls=[tool_call]),
@@ -49,8 +50,8 @@ class TestMessageToolSuppressLogic:
         if isinstance(mt, MessageTool):
             mt.set_send_callback(AsyncMock(side_effect=lambda m: sent.append(m)))
 
-        msg = InboundMessage(channel="websocket", sender_id="user1", chat_id="global", content="Send")
-        result = await loop._process_message(msg, ephemeral=ephemeral)
+        msg = InboundMessage(channel="websocket", sender_id="user1", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", content="Send")
+        result = await loop.processing.process(msg, ephemeral=ephemeral)
 
         assert len(sent) == 1
         assert result is None  # suppressed
@@ -65,7 +66,7 @@ class TestMessageToolSuppressLogic:
         ])
         sender = AsyncMock()
         loop.tools.get("message").set_send_callback(sender)
-        result = await loop._process_message(InboundMessage(channel="telegram", sender_id="user", chat_id="ordinary", content="hi"))
+        result = await loop.processing.process(InboundMessage(channel="telegram", sender_id="user", chat_id="ordinary", content="hi"))
         sender.assert_not_awaited()
         assert result.content == "A normal reply."
         assert all(schema["function"]["name"] != "message" for schema in loop.provider.chat_stream_with_retry.call_args_list[0].kwargs["tools"])
@@ -77,7 +78,7 @@ class TestMessageToolSuppressLogic:
         loop.tools.get_definitions = MagicMock(return_value=[])
 
         msg = InboundMessage(channel="feishu", sender_id="user1", chat_id="chat123", content="Hi")
-        result = await loop._process_message(msg)
+        result = await loop.processing.process(msg)
 
         assert result is not None
         assert "Hello" in result.content
@@ -103,7 +104,7 @@ class TestMessageToolSuppressLogic:
             msg = InboundMessage(
                 channel="feishu", sender_id="user1", chat_id="chat123", content="Check",
             )
-            result = await loop._process_message(msg)
+            result = await loop.processing.process(msg)
         finally:
             mt.reset_suppress_delivery(token)
 
@@ -117,7 +118,7 @@ class TestMessageToolSuppressLogic:
         loop = _make_loop(tmp_path)
         tool_call = ToolCallRequest(
             id="call1", name="message",
-            arguments={"content": "Tool reply", "channel": "websocket", "chat_id": "global"},
+            arguments={"content": "Tool reply", "channel": "websocket", "chat_id": "b1ec9323-2155-5f24-bc56-1da2f59aeecb"},
         )
         calls = iter([
             LLMResponse(content="First answer", tool_calls=[]),
@@ -134,7 +135,7 @@ class TestMessageToolSuppressLogic:
                 pending_queue.put_nowait(InboundMessage(
                     channel="websocket",
                     sender_id="user1",
-                    chat_id="global",
+                    chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb",
                     content="follow-up",
                 ))
             return response
@@ -147,8 +148,8 @@ class TestMessageToolSuppressLogic:
         if isinstance(mt, MessageTool):
             mt.set_send_callback(AsyncMock(side_effect=lambda m: sent.append(m)))
 
-        msg = InboundMessage(channel="websocket", sender_id="user1", chat_id="global", content="Start")
-        result = await loop._process_message(msg, pending_queue=pending_queue)
+        msg = InboundMessage(channel="websocket", sender_id="user1", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", content="Start")
+        result = await loop.processing.process(msg, pending_queue=pending_queue)
 
         assert len(sent) == 1
         assert sent[0].content == "Tool reply"
@@ -175,7 +176,7 @@ class TestMessageToolSuppressLogic:
         async def on_progress(content: str, *, tool_hint: bool = False) -> None:
             progress.append((content, tool_hint))
 
-        result = await loop._run_agent_loop(
+        result = await loop.model_turn.run(
             TranscriptInput(history=[], current_message=None),
             runtime=loop.llm_runtime(),
             events=output_events(on_progress=on_progress),
@@ -191,7 +192,7 @@ class TestMessageToolSchema:
 
     def test_schema_describes_cirno_and_regular_conversation_delivery(self) -> None:
         tool = MessageTool()
-        assert "Cirno coordination conversation" in tool.description
+        assert "Router conversation" in tool.description
         assert "MUST use this tool" in tool.description
         assert "normal final replies are delivered automatically" in tool.description
         assert "not available in regular conversations" in tool.description
@@ -215,13 +216,13 @@ async def test_message_reply_does_not_echo_in_stream_or_model_history(tmp_path):
     deltas = []
     async def stream(text):
         deltas.append(text)
-    result = await loop._process_message(
-        InboundMessage(channel="websocket", sender_id="user", chat_id="global", content="hi"),
+    result = await loop.processing.process(
+        InboundMessage(channel="websocket", sender_id="user", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", content="hi"),
         on_stream=stream,
     )
     assert result is None
     assert deltas == []
-    session = await loop.sessions.state.read("websocket:global")
+    session = await loop.sessions.state.read("websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")
     assert not any(m.get("content") == "Hello once" and not m.get("_channel_delivery") for m in session.messages)
 
 
@@ -232,7 +233,7 @@ async def test_question_delivery_does_not_hide_following_answer(tmp_path):
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=[
         LLMResponse(content="", tool_calls=[call]), LLMResponse(content="I continued independently."),
     ])
-    result = await loop._process_message(InboundMessage(channel="websocket", sender_id="user", chat_id="question-test", content="start"))
+    result = await loop.processing.process(InboundMessage(channel="websocket", sender_id="user", chat_id="question-test", content="start"))
     assert result is not None
     assert result.content == "I continued independently."
 
@@ -247,11 +248,11 @@ async def test_regular_conversation_cannot_use_message_even_through_ptc(tmp_path
         calls.append(kwargs)
         return LLMResponse(content="A normal reply.")
     loop.provider.chat_stream_with_retry = respond
-    result = await loop._process_message(InboundMessage(channel=channel, sender_id="user", chat_id="regular", content="hello"))
+    result = await loop.processing.process(InboundMessage(channel=channel, sender_id="user", chat_id="regular", content="hello"))
     assert result.content == "A normal reply."
     request = calls[0]
     assert "Regular Conversation" in request["messages"][0]["content"]
-    assert "# Cirno Conversation" not in request["messages"][0]["content"]
+    assert "# Personal Router Conversation" not in request["messages"][0]["content"]
     assert all(s["function"]["name"] != "message" for s in request["tools"])
     if ptc:
         assert '"name":"message"' not in request["messages"][0]["content"]
@@ -264,5 +265,5 @@ async def test_regular_message_guard_cannot_be_bypassed_with_hidden_ui_argument(
     tool = MessageTool(send_callback=callback)
     with request_context(RequestContext(channel="websocket", chat_id="regular", session_key="websocket:regular")):
         result = await tool.execute("not allowed", _agent_ui={"kind": "user_question"})
-    assert "available only in the Cirno conversation" in result
+    assert "available only in the Router conversation" in result
     callback.assert_not_awaited()

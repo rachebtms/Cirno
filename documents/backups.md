@@ -1,7 +1,5 @@
 # Backup and restore
 
-Available in Cirno 0.1.5, in both image variants.
-
 Open **Settings → Backup & restore**. Export produces a downloadable `.tar.gz` archive. Both upload and download use the existing Web UI port and stream files through disk; no additional port or large in-memory archive is required. Finish or stop active operations first. Export refuses a busy runtime rather than cancelling tasks.
 
 ## What is included

@@ -1,3 +1,4 @@
+from cirno_core.providers.errors import public_error_kind, retry_after_headers, retry_after_text
 import asyncio
 import copy
 import random
@@ -5,14 +6,10 @@ import random
 import pytest
 
 from cirno_core.bus.agent_events import RetryStatusEvent
-from cirno_core.providers.base import (
-    RETRY_AFTER_BUFFER,
-    GenerationSettings,
-    LLMProvider,
-    LLMResponse,
-    ProviderCallContext,
-    ProviderConversationState,
-)
+from cirno_core.providers.retry import RETRY_AFTER_BUFFER
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext, ProviderConversationState
 
 
 def assert_local_backoff(delays: list[float], ceilings: tuple[float, ...]) -> None:
@@ -61,7 +58,7 @@ class ScriptedProvider(LLMProvider):
 def test_public_authentication_diagnosis_requires_credential_evidence(
     response: LLMResponse, expected: str,
 ) -> None:
-    assert LLMProvider.public_error_kind(response) == expected
+    assert public_error_kind(response) == expected
 
 
 @pytest.mark.asyncio
@@ -188,7 +185,7 @@ async def test_chat_with_retry_returns_final_error_after_retries(monkeypatch, fr
     delays: list[float] = []
     statuses: list[RetryStatusEvent] = []
     monkeypatch.setattr(random, "uniform", lambda low, high: low + (high - low) * fraction)
-    monkeypatch.setattr("cirno_core.providers.base.time.time", lambda: 1000.0)
+    monkeypatch.setattr("cirno_core.providers.requests.time.time", lambda: 1000.0)
 
     async def _fake_sleep(delay: float) -> None:
         delays.append(delay)
@@ -462,7 +459,7 @@ async def test_account_failure_does_not_retry_without_images(error: LLMResponse)
     assert provider.calls == 1
     assert messages == original
     assert context.conversation_state is state
-    assert LLMProvider.public_error_kind(response) in {"authentication", "billing"}
+    assert public_error_kind(response) in {"authentication", "billing"}
 
 
 # ---------------------------------------------------------------------------
@@ -683,9 +680,9 @@ async def test_chat_with_retry_uses_retry_after_and_emits_wait_progress(monkeypa
 
 
 def test_extract_retry_after_supports_common_provider_formats() -> None:
-    assert LLMProvider._extract_retry_after('{"error":{"retry_after":20}}') == 20.0
-    assert LLMProvider._extract_retry_after("Rate limit reached, please try again in 20s") == 20.0
-    assert LLMProvider._extract_retry_after("retry-after: 20") == 20.0
+    assert retry_after_text('{"error":{"retry_after":20}}') == 20.0
+    assert retry_after_text("Rate limit reached, please try again in 20s") == 20.0
+    assert retry_after_text("retry-after: 20") == 20.0
 
 
 @pytest.mark.parametrize(
@@ -702,27 +699,27 @@ def test_extract_retry_after_supports_common_provider_formats() -> None:
     ],
 )
 def test_extract_retry_after_sums_compound_durations(message: str, expected: float) -> None:
-    assert LLMProvider._extract_retry_after(message) == pytest.approx(expected)
+    assert retry_after_text(message) == pytest.approx(expected)
 
 
 def test_extract_retry_after_prefers_retry_after_over_try_again_in() -> None:
     message = "retry after 5s; otherwise try again in 1m30s"
 
-    assert LLMProvider._extract_retry_after(message) == 5.0
+    assert retry_after_text(message) == 5.0
 
 
 def test_extract_retry_after_from_headers_supports_numeric_and_http_date() -> None:
-    assert LLMProvider._extract_retry_after_from_headers({"Retry-After": "20"}) == 20.0
-    assert LLMProvider._extract_retry_after_from_headers({"retry-after": "20"}) == 20.0
-    assert LLMProvider._extract_retry_after_from_headers(
+    assert retry_after_headers({"Retry-After": "20"}) == 20.0
+    assert retry_after_headers({"retry-after": "20"}) == 20.0
+    assert retry_after_headers(
         {"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"},
     ) == 0.1
 
 
 def test_extract_retry_after_from_headers_supports_retry_after_ms() -> None:
-    assert LLMProvider._extract_retry_after_from_headers({"retry-after-ms": "250"}) == 0.25
-    assert LLMProvider._extract_retry_after_from_headers({"Retry-After-Ms": "1000"}) == 1.0
-    assert LLMProvider._extract_retry_after_from_headers(
+    assert retry_after_headers({"retry-after-ms": "250"}) == 0.25
+    assert retry_after_headers({"Retry-After-Ms": "1000"}) == 1.0
+    assert retry_after_headers(
         {"retry-after-ms": "500", "retry-after": "10"},
     ) == 0.5
 
@@ -1048,7 +1045,7 @@ async def test_concurrent_requests_keep_retry_status_and_attempts_local(monkeypa
             return LLMResponse(content=key)
 
     provider = ConcurrentProvider([])
-    monkeypatch.setattr(provider, "_CHAT_RETRY_DELAYS", (0.1,))
+    monkeypatch.setattr(provider.retry_policy, "delays", (0.1,))
 
     async def request(key):
         async def status(event):
@@ -1086,3 +1083,22 @@ async def test_cancellation_interrupts_retry_wait_without_another_call() -> None
         await asyncio.gather(task, return_exceptions=True)
     assert provider.calls == 1
     assert statuses == [("waiting", 1)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("header,value", [("retry-after-ms", "inf"), ("retry-after", "9" * 400)])
+async def test_nonfinite_upstream_retry_delay_cannot_strand_a_run(monkeypatch, header, value):
+    provider = ScriptedProvider([
+        LLMResponse(content="429 rate limit", finish_reason="error", retry_after=retry_after_headers({header: value})),
+        LLMResponse(content="Recovered"),
+    ])
+    delays = []
+
+    async def sleep(delay):
+        assert 0 < delay < 60
+        delays.append(delay)
+
+    monkeypatch.setattr("cirno_core.providers.base.asyncio.sleep", sleep)
+    response = await provider.chat_with_retry(messages=[{"role": "user", "content": "Continue research"}])
+    assert response.content == "Recovered"
+    assert len(delays) == 1

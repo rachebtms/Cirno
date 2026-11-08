@@ -38,7 +38,7 @@ it("lets users type into prompt search immediately after opening it", async () =
   await user.tab();
   expect(screen.getByRole("button", { name: "Message navigation" })).toHaveFocus();
   await user.keyboard("{Enter}");
-  const search = await screen.findByRole("textbox", { name: "Search messages" });
+  const search = await screen.findByRole("searchbox", { name: "Search messages" });
   await waitFor(() => expect(search).toHaveFocus());
   await user.keyboard("beta");
   expect(search).toHaveValue("beta");

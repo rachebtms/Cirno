@@ -1,7 +1,7 @@
 import {
   PromptNavigationIcon,
 } from "@/components/icons/product-icons";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -17,12 +17,15 @@ import {
   userPromptAnchors,
 } from "@/components/thread/promptNavigation";
 import { fmtDateTime } from "@/lib/format-time";
-import type { UIMessage } from "@/lib/types";
+import { useDirectoryListing } from "@/features/prompt-history/useDirectory";
+import type { PromptDirectorySource } from "@/features/prompt-history/source";
+import type { UIMessage } from "@/lib/contracts/messages";
 import { cn } from "@/lib/utils";
 
 interface PromptNavigatorProps {
   messages: UIMessage[];
   prompts?: PromptAnchor[];
+  source?: PromptDirectorySource | null;
   onJumpToPrompt: (promptId: string) => void;
 }
 
@@ -31,6 +34,7 @@ const ROW_HEIGHT = 88;
 export function PromptNavigator({
   messages,
   prompts: suppliedPrompts,
+  source,
   onJumpToPrompt,
 }: PromptNavigatorProps) {
   const { i18n, t } = useTranslation();
@@ -39,6 +43,8 @@ export function PromptNavigator({
   const [query, setQuery] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const [listTop, setListTop] = useState(0);
+  const listing = useDirectoryListing(source, query.trim());
+  const [pending, setPending] = useState<{ source: PromptDirectorySource; query: string; row: number } | null>(null);
 
   const filteredPrompts = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -47,10 +53,20 @@ export function PromptNavigator({
       `${prompt.label}\n${prompt.preview}`.toLocaleLowerCase().includes(needle),
     );
   }, [prompts, query]);
+  const local = useMemo(() => source ? filteredPrompts.filter((prompt) => prompt.index >= source.getSnapshot().count) : [], [source, filteredPrompts, listing]);
+  const count = source ? listing.total + local.length : filteredPrompts.length;
   const firstRow = Math.max(0, Math.floor(listTop / ROW_HEIGHT) - 2);
-  const lastRow = firstRow + Math.ceil(window.innerHeight / ROW_HEIGHT) + 5;
+  const lastRow = Math.min(count, firstRow + Math.ceil(window.innerHeight / ROW_HEIGHT) + 5);
+  const get = (position: number) => source ? listing.get(position) ?? local[position - listing.total] : filteredPrompts[position];
+  useEffect(() => { if (open) listing.ensure(firstRow, lastRow); }, [listing, open, firstRow, lastRow]);
+  useEffect(() => {
+    if (!pending || !open || pending.source !== source || pending.query !== query.trim()) return;
+    const prompt = listing.get(pending.row);
+    if (prompt) { setPending(null); setOpen(false); onJumpToPrompt(prompt.id); }
+  }, [pending, open, source, query, listing, onJumpToPrompt]);
 
-  if (prompts.length === 0) return null;
+  if (!source && prompts.length === 0) return null;
+  if (source && !count && !prompts.length && !listing.loading && !listing.error) return null;
 
   const jump = (promptId: string) => {
     setOpen(false);
@@ -64,7 +80,7 @@ export function PromptNavigator({
         variant="ghost"
         size="icon"
         className={cn(
-          "host-no-drag h-8 w-8 rounded-control text-muted-foreground/80",
+          "h-8 w-8 rounded-control text-muted-foreground/80",
           "hover:text-foreground",
         )}
         aria-label={t("thread.promptNavigator.open")}
@@ -77,7 +93,7 @@ export function PromptNavigator({
         <SheetContent
           side="right"
           aria-describedby={undefined}
-          className="w-[min(92vw,24rem)] gap-0 p-0 sm:max-w-[24rem]"
+          className="w-[min(92vw,24rem)] gap-0 p-0 @min-[640px]/cirno-tab:max-w-[24rem]"
         >
           <div className="border-b px-5 pb-4 pt-5">
             <SheetTitle className="text-base font-medium">
@@ -108,32 +124,39 @@ export function PromptNavigator({
               const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-prompt-row]");
               if (!button || !listRef.current) return;
               const index = Number(button.dataset.promptRow);
-              let next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: filteredPrompts.length - 1 }[event.key];
+              let next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: count - 1 }[event.key];
               if (event.key === "Tab") {
                 if (!event.shiftKey && index === lastRow - 1) next = index + 1;
                 if (event.shiftKey && index === firstRow && firstRow > 0) next = index - 1;
               }
-              if (next === undefined || next < 0 || next >= filteredPrompts.length) return;
+              if (next === undefined || next < 0 || next >= count) return;
               event.preventDefault();
               listRef.current.scrollTop = next * ROW_HEIGHT;
               setListTop(listRef.current.scrollTop);
               requestAnimationFrame(() => listRef.current?.querySelector<HTMLButtonElement>(`[data-prompt-row="${next}"]`)?.focus());
             }}>
-            {filteredPrompts.length > 0 ? (
-              <div style={{ paddingTop: firstRow * ROW_HEIGHT, paddingBottom: Math.max(0, filteredPrompts.length - lastRow) * ROW_HEIGHT }}>
-                {filteredPrompts.slice(firstRow, lastRow).map((prompt, offset) => (
-                  <PromptNavigatorRow
-                    key={prompt.id}
-                    row={firstRow + offset}
-                    locale={i18n.resolvedLanguage || i18n.language}
-                    prompt={prompt}
-                    onJump={jump}
-                  />
-                ))}
+            {source && listing.error ? <div role="alert" className="px-3 py-3 text-sm text-destructive">
+              {listing.error}<Button variant="ghost" size="sm" onClick={listing.retry}>{t("common.retry")}</Button>
+            </div> : null}
+            {count > 0 ? (
+              <div style={{ paddingTop: firstRow * ROW_HEIGHT, paddingBottom: Math.max(0, count - lastRow) * ROW_HEIGHT }}>
+                {Array.from({ length: Math.max(0, lastRow - firstRow) }, (_, offset) => {
+                  const row = firstRow + offset;
+                  const prompt = get(row);
+                  return prompt ? <PromptNavigatorRow key={row} row={row}
+                    locale={i18n.resolvedLanguage || i18n.language} prompt={prompt} onJump={jump} />
+                    : <button key={row} type="button" data-prompt-row={row}
+                      aria-label={t("thread.promptNavigator.jumpTo", { label: String(row + 1) })}
+                      className="h-[88px] w-full rounded-control px-3 py-3 text-left text-sm text-muted-foreground hover:bg-default focus-visible:ring-2 focus-visible:ring-ring/30"
+                      onClick={() => {
+                        if (source) setPending({ source, query: query.trim(), row });
+                        listing.ensure(row, row + 1);
+                      }}>{t("chat.loading")}</button>;
+                })}
               </div>
             ) : (
               <div className="px-3 py-10 text-center text-sm text-muted-foreground">
-                {t("thread.promptNavigator.noResults")}
+                {source && (!listing.ready || listing.loading) ? t("chat.loading") : t("thread.promptNavigator.noResults")}
               </div>
             )}
           </div>
@@ -164,7 +187,7 @@ function PromptNavigatorRow({
       data-prompt-row={row}
       className={cn(
         "h-[88px] w-full overflow-hidden rounded-control px-3 py-3 text-left transition",
-        "hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+        "hover:bg-default focus-visible:bg-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
       )}
       aria-label={t("thread.promptNavigator.jumpTo", { label: prompt.label })}
       onClick={() => onJump(prompt.id)}

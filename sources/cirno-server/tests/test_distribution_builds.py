@@ -1,12 +1,12 @@
 """Release distributions must retain resources when rebuilt outside a checkout."""
 
-from pathlib import Path
 import os
 import shutil
 import subprocess
 import sys
 import tarfile
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -19,12 +19,15 @@ def test_sdist_rebuild_preserves_package_resources(tmp_path: Path, package: str)
     source.mkdir(parents=True)
     for name in ("pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copyfile(original / name, source / name)
-    (source / "__init__.py").write_text('__version__ = "0.1.4"\n')
+    namespace = package.replace("-", "_")
+    module_root = source / "src" / namespace
+    module_root.mkdir(parents=True)
+    (module_root / "__init__.py").write_text('__version__ = "0.2.0"\n')
     if package == "cirno-core":
-        (source / "_build_commit.txt").write_text("a" * 40 + "\n")
+        (module_root / "_build_commit.txt").write_text("a" * 40 + "\n")
         required = {"cirno_core/_build_commit.txt": ("a" * 40 + "\n").encode()}
     else:
-        bundle = source / "web" / "dist"
+        bundle = module_root / "web" / "dist"
         (bundle / "assets").mkdir(parents=True)
         (bundle / "index.html").write_text('<html><script src="/assets/app.js"></script></html>')
         (bundle / "assets" / "app.js").write_text('console.log("Cirno");')

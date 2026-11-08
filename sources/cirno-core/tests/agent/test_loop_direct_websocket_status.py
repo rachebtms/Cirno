@@ -8,9 +8,11 @@ from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.outbound_events import GoalStatusEvent
 from cirno_core.bus.queue import MessageBus
 from cirno_server.channels.websocket.runtime import WebSocketChannel
-from cirno_core.providers.base import GenerationSettings, LLMResponse
-from cirno_core.session import webui_turns as wth
-from cirno_core.session.webui_turns import WebuiTurnCoordinator, WebuiTurnRoutePolicy
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.session.webui_turns import activity as wth_activity
+from cirno_core.session.webui_turns.coordinator import WebuiTurnCoordinator
+from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
 from cirno_core.session.transport_metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY
 
 
@@ -80,13 +82,13 @@ async def test_process_direct_websocket_clears_run_status(tmp_path) -> None:
             for event in status_messages
         }
         assert len(owners) == 1
-        assert wth.websocket_turn_wall_started_at("chat-1") is None
-        assert "chat-1" not in wth._WEBSOCKET_ACTIVE_TURNS
+        assert wth_activity.websocket_turn_wall_started_at("chat-1") is None
+        assert "chat-1" not in wth_activity._WEBSOCKET_ACTIVE_TURNS
     finally:
-        wth._WEBSOCKET_ACTIVE_TURNS.clear()
-        wth._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
-        wth._WEBSOCKET_TURN_IDS.clear()
-        wth._WEBSOCKET_TURN_OWNERS.clear()
+        wth_activity._WEBSOCKET_ACTIVE_TURNS.clear()
+        wth_activity._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
+        wth_activity._WEBSOCKET_TURN_IDS.clear()
+        wth_activity._WEBSOCKET_TURN_OWNERS.clear()
 
 
 @pytest.mark.asyncio
@@ -101,7 +103,7 @@ async def test_process_direct_reuses_existing_session_lock(tmp_path) -> None:
         entered.set()
         return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=msg.content)
 
-    loop._process_message = _process_message
+    loop.processing.process = _process_message
     task = asyncio.create_task(loop.process_direct("direct", session_key=session_key))
     try:
         await asyncio.sleep(0)

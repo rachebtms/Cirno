@@ -1,12 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserNotificationSettings } from "@/components/settings/notifications/BrowserNotificationSettings";
-import { NotificationSettings } from "@/components/settings/notifications/NotificationSettings";
+import { BrowserNotificationSettings } from "@/features/settings/notifications/BrowserNotificationSettings";
+import { NotificationSettings } from "@/features/settings/notifications/NotificationSettings";
 import { BrowserNotifications, useBrowserNotificationLifecycle } from "@/components/BrowserNotifications";
-import { useLocalPreferences } from "@/hooks/useLocalPreferences";
+import { usePreferences } from "@/hooks/usePreferences";
 import { enableBrowserNotifications, NOTIFICATION_OPEN_EVENT, notificationChatUrl, notificationProblem, showBrowserNotification, taskNoticeKey } from "@/lib/browser-notifications";
-import { DEFAULT_LOCAL_PREFS, readLocalPreferences, writeLocalPreferences } from "@/lib/local-preferences";
+import { DEFAULT_PREFERENCES, readPreferences, writePreferences } from "@/features/preferences/store";
 import type { TaskNotice } from "@/lib/cirno-client";
 import i18n from "@/i18n";
 
@@ -16,15 +16,15 @@ const worker = { postMessage };
 const getRegistration = vi.fn();
 
 function Harness({ enabled = false }: { enabled?: boolean }) {
-  const [preferences, setPreferences] = useState({ ...DEFAULT_LOCAL_PREFS, browserNotifications: enabled });
-  return <BrowserNotificationSettings localPrefs={preferences} onChangeLocalPrefs={setPreferences} />;
+  const [preferences, setPreferences] = useState({ ...DEFAULT_PREFERENCES, browserNotifications: enabled });
+  return <BrowserNotificationSettings displayPreferences={preferences} onChangePreferences={setPreferences} />;
 }
 
 function LifecycleHarness({ settings = true }: { settings?: boolean }) {
   useBrowserNotificationLifecycle();
-  const preferences = useLocalPreferences();
-  return settings ? <BrowserNotificationSettings localPrefs={preferences}
-    onChangeLocalPrefs={(update) => writeLocalPreferences(typeof update === "function" ? update(readLocalPreferences()) : update)} /> : null;
+  const preferences = usePreferences();
+  return settings ? <BrowserNotificationSettings displayPreferences={preferences}
+    onChangePreferences={(update) => writePreferences(typeof update === "function" ? update(readPreferences()) : update)} /> : null;
 }
 
 beforeEach(() => {
@@ -42,7 +42,7 @@ beforeEach(() => {
     return Promise.resolve("granted");
   });
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
-  writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, browserNotifications: true });
+  writePreferences({ ...DEFAULT_PREFERENCES, browserNotifications: true });
 });
 afterEach(() => {
   cleanup();
@@ -129,7 +129,7 @@ describe("notification permission and delivery boundary", () => {
     let finish!: (registration: unknown) => void;
     getRegistration.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const pending = showBrowserNotification("Task completed", options);
-    writeLocalPreferences(DEFAULT_LOCAL_PREFS);
+    writePreferences(DEFAULT_PREFERENCES);
     finish({ active: worker });
     expect(await pending).toBe("skipped");
     expect(await showBrowserNotification("Task completed", options)).toBe("skipped");
@@ -148,16 +148,16 @@ describe("notification settings", () => {
   it("keeps completion sound independent when browser notifications are unavailable", () => {
     vi.stubGlobal("Notification", undefined);
     function Page() {
-      const [preferences, setPreferences] = useState(DEFAULT_LOCAL_PREFS);
-      return <NotificationSettings localPrefs={preferences} onChangeLocalPrefs={setPreferences} />;
+      const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+      return <NotificationSettings displayPreferences={preferences} onChangePreferences={setPreferences} />;
     }
     render(<Page />);
     expect(screen.getByRole("switch", { name: "Browser notifications" })).toBeDisabled();
     const sound = screen.getByRole("switch", { name: "Completion sound" });
-    expect(sound).toHaveAttribute("aria-checked", "false");
+    expect(sound).not.toBeChecked();
     fireEvent.click(sound);
-    expect(sound).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("switch", { name: "Browser notifications" })).toHaveAttribute("aria-checked", "false");
+    expect(sound).toBeChecked();
+    expect(screen.getByRole("switch", { name: "Browser notifications" })).not.toBeChecked();
   });
 
   it("explains unavailable notification support beside a disabled switch", () => {
@@ -176,34 +176,34 @@ describe("notification settings", () => {
     const toggle = screen.getByRole("switch", { name: "Browser notifications" });
     fireEvent.click(toggle);
     await screen.findByText("Permission was not granted. Turn on notifications and choose Allow.");
-    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).not.toBeChecked();
     fireEvent.click(toggle);
-    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+    await waitFor(() => expect(toggle).toBeChecked());
     await waitFor(() => expect(screen.getByRole("button", { name: "Test notification" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Test notification" }));
     await screen.findByText(/Sent to the browser/);
     fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).not.toBeChecked();
     expect(screen.queryByRole("button", { name: "Test notification" })).not.toBeInTheDocument();
   });
 
   it("reconciles revocation outside settings and requires opt-in after regranting permission", async () => {
     vi.stubGlobal("Notification", { permission: "granted" });
-    writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, browserNotifications: true, notificationSound: true });
+    writePreferences({ ...DEFAULT_PREFERENCES, browserNotifications: true, notificationSound: true });
     const { rerender } = render(<LifecycleHarness settings={false} />);
     vi.stubGlobal("Notification", { permission: "denied" });
     fireEvent.focus(window);
-    expect(readLocalPreferences()).toMatchObject({ browserNotifications: false, notificationSound: true });
+    expect(readPreferences()).toMatchObject({ browserNotifications: false, notificationSound: true });
     rerender(<LifecycleHarness />);
     expect(screen.getByRole("status")).toHaveTextContent("Notification permission was revoked");
     expect(screen.queryByRole("button", { name: "Test notification" })).not.toBeInTheDocument();
-    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch")).not.toBeChecked();
     vi.stubGlobal("Notification", { permission: "granted", requestPermission });
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     expect(screen.getByRole("switch")).toBeEnabled();
-    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch")).not.toBeChecked();
     fireEvent.click(screen.getByRole("switch"));
-    await waitFor(() => expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true"));
+    await waitFor(() => expect(screen.getByRole("switch")).toBeChecked());
   });
 
   it("allows opt-out and an explicit readiness retry when the worker is unavailable", async () => {
@@ -212,20 +212,20 @@ describe("notification settings", () => {
     render(<Harness enabled />);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("notification service is not ready"));
     fireEvent.click(screen.getByRole("switch"));
-    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch")).not.toBeChecked();
     getRegistration.mockResolvedValue({ active: worker });
     const retry = screen.getByRole("button", { name: "Check again" });
     await waitFor(() => expect(retry).toBeEnabled());
     fireEvent.click(retry);
     await waitFor(() => expect(screen.queryByRole("button", { name: "Check again" })).not.toBeInTheDocument());
-    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch")).not.toBeChecked();
   });
 
   it("does not save late permission results after leaving settings", async () => {
     let resolve!: (permission: string) => void;
     requestPermission.mockImplementation(() => new Promise((done) => { resolve = done; }));
     const save = vi.fn();
-    const { unmount } = render(<BrowserNotificationSettings localPrefs={DEFAULT_LOCAL_PREFS} onChangeLocalPrefs={save} />);
+    const { unmount } = render(<BrowserNotificationSettings displayPreferences={DEFAULT_PREFERENCES} onChangePreferences={save} />);
     fireEvent.click(screen.getByRole("switch"));
     unmount();
     await act(async () => { resolve("granted"); });
@@ -302,7 +302,7 @@ it("keys recovery alerts by recovery identity, not by chat mounting", () => {
 
 it("mutes categories without disabling other browser notifications", async () => {
   vi.stubGlobal("Notification", { permission: "granted", requestPermission });
-  writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, browserNotifications: true, mutedNotificationCategories: ["system"] });
+  writePreferences({ ...DEFAULT_PREFERENCES, browserNotifications: true, mutedNotificationCategories: ["system"] });
   expect(await showBrowserNotification("System event", { key: "system:test", url: `${window.location.origin}/#/inbox?category=system`, category: "system" })).toBe("skipped");
   expect(await showBrowserNotification("Action needed", { key: "operations:test", url: `${window.location.origin}/#/inbox?category=operations`, category: "operations" })).toBe("submitted");
 });

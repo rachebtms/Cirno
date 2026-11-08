@@ -1,10 +1,7 @@
 import type { ComponentType } from "react";
 
 import type { ChannelPresentation } from "@/channel-plugins/catalog";
-import type {
-  CirnoFeatureInfo,
-  CirnoFeaturesPayload,
-} from "@/lib/types";
+import type { CirnoFeatureInfo, CirnoFeaturesPayload } from "@/lib/contracts/channels";
 
 export type ChannelFeatureActionOptions = {
   confirmed?: boolean;

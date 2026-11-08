@@ -1,4 +1,5 @@
-import type { UIMessage } from "@/lib/types";
+import { coalesceActivityEntries } from "@/components/thread/activity/activity-message-model";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 /** A turn is projected into ordered answer messages and collapsible activity
  * runs. Folding changes presentation only; it never changes semantic order. */
@@ -59,6 +60,7 @@ export function hasPendingAgentActivity(messages: UIMessage[]): boolean {
  */
 export function normalizeActivityTimeline(
   messages: UIMessage[],
+  options: { preserveReplyBoundaries?: boolean } = {},
 ): TurnUnit[] {
   const units: TurnUnit[] = [];
   let turnMessages: UIMessage[] = [];
@@ -75,6 +77,7 @@ export function normalizeActivityTimeline(
     const projected = projectOrderedTurn(
       orderMessagesByTurnSeq(turnMessages),
       activeTurnStartedAtMs,
+      options.preserveReplyBoundaries ?? false,
     );
     if (projected.length) {
       units.push(...projected);
@@ -114,13 +117,15 @@ export function normalizeActivityTimeline(
 
 export function projectActivityTimeline(
   messages: UIMessage[],
+  options: { preserveReplyBoundaries?: boolean } = {},
 ): TurnUnit[] {
-  return normalizeActivityTimeline(messages);
+  return normalizeActivityTimeline(messages, options);
 }
 
 function projectOrderedTurn(
   messages: UIMessage[],
   startedAtMs?: number,
+  preserveReplyBoundaries = false,
 ): TurnUnit[] {
   const units: TurnUnit[] = [];
   let activity: UIMessage[] = [];
@@ -145,7 +150,7 @@ function projectOrderedTurn(
     if (!answers.length) return;
     units.push({
       type: "message",
-      message: mergeAssistantAnswers(answers),
+      message: preserveReplyBoundaries ? answers[0] : mergeAssistantAnswers(answers),
       sourceMessageCount: answerSourceMessageCount,
     });
     answers = [];
@@ -164,36 +169,44 @@ function projectOrderedTurn(
     activitySourceMessageCount += sourceMessageCount + claimLeadingNoops();
   };
 
-  const absorbDisplayNoop = () => {
+  const absorbDisplayNoop = (count: number) => {
     if (activity.length) {
-      activitySourceMessageCount += 1;
+      activitySourceMessageCount += count;
     } else if (answers.length) {
-      answerSourceMessageCount += 1;
+      answerSourceMessageCount += count;
+    } else if (units.length) {
+      const last = units.length - 1;
+      units[last] = { ...units[last], sourceMessageCount: units[last].sourceMessageCount + count };
     } else {
-      leadingNoopSourceMessageCount += 1;
+      leadingNoopSourceMessageCount += count;
     }
   };
 
-  for (const message of messages) {
+  for (const { message, sourceMessageCount, hidden } of coalesceActivityEntries(messages)) {
+    if (hidden) {
+      absorbDisplayNoop(sourceMessageCount);
+      continue;
+    }
     if (message.userQuestion || message.kind === "compaction" || message.renderAs === "text") {
       flushActivity();
       flushAnswers();
       units.push({
         type: "message",
         message,
-        sourceMessageCount: 1 + claimLeadingNoops(),
+        sourceMessageCount: sourceMessageCount + claimLeadingNoops(),
       });
       continue;
     }
     if (isCompletedDisplayNoop(message)) {
-      absorbDisplayNoop();
+      absorbDisplayNoop(sourceMessageCount);
       continue;
     }
     if (isRawActivity(message)) {
-      appendActivity(message, 1);
+      appendActivity(message, sourceMessageCount);
       continue;
     }
     if (isAssistantAnswer(message)) {
+      if (preserveReplyBoundaries) flushAnswers();
       if (message.reasoning?.trim() || message.reasoningStreaming) {
         // This raw message contributes one answer source plus a synthetic
         // reasoning row, so count it only on the answer unit.
@@ -202,10 +215,10 @@ function projectOrderedTurn(
       flushActivity();
       answerSourceMessageCount += claimLeadingNoops();
       answers.push(stripInlineReasoning(message));
-      answerSourceMessageCount += 1;
+      answerSourceMessageCount += sourceMessageCount;
       continue;
     }
-    appendActivity(message, 1);
+    appendActivity(message, sourceMessageCount);
   }
 
   flushActivity();

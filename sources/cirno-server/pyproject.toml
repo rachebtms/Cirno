@@ -1,12 +1,12 @@
 [project]
 name = "cirno-server"
-version = "0.1.6"
+version = "0.2.0"
 description = "Cirno server, Web UI API, and personal messaging channels"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 dependencies = [
-    "cirno-core==0.1.6",
+    "cirno-core==0.2.0",
     "typer>=0.20.0,<1.0.0",
     "websockets>=15.0,<17.0",
     "setproctitle>=1.3.7,<2.0.0; sys_platform != 'win32'",
@@ -14,16 +14,15 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling", "editables", "filelock>=3.25.2"]
+requires = ["hatchling", "filelock>=3.25.2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.hooks.custom]
 
 [tool.hatch.build.targets.wheel]
-bypass-selection = true
-exclude = ["/tests/**", "**/tests/**", "**/__pycache__/**", "**/*.py[cod]", "/pyproject.toml", "/hatch_build.py", "/LICENSE", "/THIRD_PARTY_NOTICES.md", "/dist/**", "/.pytest_cache/**", "/.ruff_cache/**"]
-dev-mode-dirs = ["."]
+packages = ["src/cirno_server"]
+exclude = ["**/tests/**", "**/__pycache__/**", "**/*.py[cod]", "**/web/dist/**"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/**/*.py", "/**/*.md", "/**/*.json", "/**/*.png", "/pyproject.toml", "/LICENSE", "/THIRD_PARTY_NOTICES.md"]
-exclude = ["**/tests/**", "**/__pycache__/**", "/dist/**", "**/.pytest_cache/**", "**/.ruff_cache/**"]
+include = ["src", "hatch_build.py", "pyproject.toml", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+exclude = ["**/tests/**", "**/__pycache__/**", "**/*.py[cod]", "**/web/dist/**"]

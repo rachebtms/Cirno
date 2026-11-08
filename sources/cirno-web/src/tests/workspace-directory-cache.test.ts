@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceDirectoryCache } from "@/lib/workspace-directory-cache";
-import type { WorkspaceDirectoriesPayload } from "@/lib/types";
+import type { WorkspaceDirectoriesPayload } from "@/lib/contracts/workspaces";
 
 const directory: WorkspaceDirectoriesPayload = {
   path: "/srv/workspace", parent: "/srv", entries: [], truncated: false,

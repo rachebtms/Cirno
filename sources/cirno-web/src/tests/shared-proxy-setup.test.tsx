@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { McpPresetInfo } from "@/lib/types";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
 import { installSettingsViewTestHooks, jsonResponse, renderSettingsView, requestMutationMock, settingsPayload } from "@/tests/settings-test-utils";
 
 const preset: McpPresetInfo = {
@@ -17,9 +17,9 @@ function installProxySettings() {
   const settings = { ...settingsPayload(), runtime_config: { "network.proxy": null } };
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url === "/api/settings") return jsonResponse(settings);
-    if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-    if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [preset], installed_count: 1 });
+    if (url === "/v0/settings") return jsonResponse(settings);
+    if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+    if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [preset], installed_count: 1 });
     return jsonResponse({});
   }));
   return { settings, saved: { ...settings, runtime_config: { "network.proxy": "http://127.0.0.1:7890" }, requires_restart: true } };

@@ -1,10 +1,11 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 for (const locale of ["en", "zh-CN"]) {
   for (const width of [390, 1280]) {
     test(`idle compaction settings in ${locale} at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await page.addInitScript((language) => localStorage.setItem("cirno.locale", language), locale);
+      await seedPreviewPreferences(page, { language: locale });
       await page.goto("/browser/fixture.html?case=idle-compaction");
       const chinese = locale === "zh-CN";
       const input = page.getByRole("textbox", { name: chinese ? "空闲时限" : "Idle timeout" });
@@ -22,12 +23,12 @@ for (const locale of ["en", "zh-CN"]) {
       await page.getByText(chinese ? "分钟" : "minutes", { exact: true }).click();
       await expect(persisted).toHaveText("721");
       await expect(toggle).toBeEnabled();
-      await toggle.click();
+      await page.getByText(chinese ? "空闲自动压缩" : "Auto-compact idle sessions", { exact: true }).click();
       await expect(persisted).toHaveText("0");
       await expect(input).toHaveCount(0);
       await page.reload();
       await expect(toggle).not.toBeChecked();
-      await toggle.click();
+      await page.getByText(chinese ? "空闲自动压缩" : "Auto-compact idle sessions", { exact: true }).click();
       await expect(input).toHaveValue("15");
       await expect(toggle).toBeEnabled();
 

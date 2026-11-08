@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useClient } from "@/providers/ClientProvider";
-import { normalizeWorkbenchState } from "@/components/workbench/workbench-model";
 import { fetchSidebarState } from "@/lib/api";
-import type { ChatSummary, SidebarStatePayload } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { SidebarStatePayload } from "@/lib/contracts/conversation-preferences";
 
 const DEFAULT_SIDEBAR_STATE: SidebarStatePayload = {
-  schema_version: 1,
+  schema_version: 2,
   pinned_keys: [],
   archived_keys: [],
   session_order: [],
@@ -14,7 +14,6 @@ const DEFAULT_SIDEBAR_STATE: SidebarStatePayload = {
   project_name_overrides: {},
   tags_by_key: {},
   collapsed_groups: {},
-  workbench: { version: 1, tabs: {} },
   view: {
     density: "comfortable",
     show_archived: false,
@@ -85,7 +84,7 @@ function normalizeSidebarState(raw: unknown): SidebarStatePayload {
     ? view.sort
     : "updated_desc";
   return {
-    schema_version: 1,
+    schema_version: 2,
     pinned_keys: uniqueStrings(value.pinned_keys),
     archived_keys: uniqueStrings(value.archived_keys),
     session_order: uniqueStrings(value.session_order),
@@ -93,7 +92,6 @@ function normalizeSidebarState(raw: unknown): SidebarStatePayload {
     project_name_overrides: stringMap(value.project_name_overrides),
     tags_by_key: tagsMap(value.tags_by_key),
     collapsed_groups: boolMap(value.collapsed_groups),
-    workbench: normalizeWorkbenchState(value.workbench),
     view: {
       density,
       show_archived: Boolean(view.show_archived),
@@ -154,6 +152,8 @@ export function useSidebarState(
 ): {
   state: SidebarStatePayload;
   loading: boolean;
+  error: string | null;
+  retry: () => void;
   update: (
     updater: (state: SidebarStatePayload) => SidebarStatePayload,
   ) => Promise<void>;
@@ -161,6 +161,7 @@ export function useSidebarState(
 } {
   const { client, token } = useClient();
   const tokenRef = useRef(token);
+  const [error, setError] = useState<string | null>(null);
   const stateRef = useRef(DEFAULT_SIDEBAR_STATE);
   const loadedRef = useRef(false);
   const connectionOpenRef = useRef(client.status === "open");
@@ -186,8 +187,10 @@ export function useSidebarState(
         loadedRef.current = true;
         setState(loaded);
         setLoading(false);
-      } catch {
+        setError(null);
+      } catch (error) {
         if (cancelled || loadedRef.current) return;
+        setError(error instanceof Error ? error.message : String(error));
         // A failed read is not an empty store. Keep writes blocked until a
         // retry can load the saved state, including after gateway restarts.
         retryTimer = setTimeout(() => void load(), 3_000);
@@ -222,6 +225,7 @@ export function useSidebarState(
     persistenceInFlightRef.current = true;
     void client.setSidebarState(next)
       .then((saved) => {
+        setError(null);
         persistenceInFlightRef.current = false;
         if (rename) {
           const title = normalizeSidebarState(saved).title_overrides[rename.key];
@@ -247,6 +251,7 @@ export function useSidebarState(
           rename.reject(error);
           flushPersistenceRef.current();
         } else {
+          setError(error instanceof Error ? error.message : String(error));
           if (pendingPersistenceRef.current === null) pendingPersistenceRef.current = next;
           rejectPendingRenames(error);
         }
@@ -275,11 +280,12 @@ export function useSidebarState(
     loadedRef.current = true;
     setState(loaded);
     setLoading(false);
+    setError(null);
   }), [client]);
 
   const update = useCallback(
     async (updater: (current: SidebarStatePayload) => SidebarStatePayload) => {
-      if (!loadedRef.current) return;
+      if (!loadedRef.current) { setError("Conversation preferences have not loaded yet"); return; }
       const next = normalizeSidebarState(updater(stateRef.current));
       if (sameState(next, stateRef.current)) return;
       stateRef.current = next;
@@ -310,5 +316,5 @@ export function useSidebarState(
     void update(() => pruned);
   }, [loading, pruned, sessionsLoaded, state, update]);
 
-  return { state, loading, update, rename };
+  return { state, loading, error, retry: flushPersistence, update, rename };
 }

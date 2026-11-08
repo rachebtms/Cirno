@@ -4,12 +4,9 @@ import pytest
 
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import (
-    GenerationSettings,
-    LLMResponse,
-    ProviderConversationState,
-    ToolCallRequest,
-)
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT
 
 
@@ -142,7 +139,7 @@ async def test_ephemeral_runner_pressure_summarizes_without_persisting(tmp_path)
         for message in reloaded.messages
     )
     assert "_last_summary" not in reloaded.metadata
-    assert loop.context.memory.read_unprocessed_history(since_cursor=0) == []
+    assert loop.context.memory.journal.read_unprocessed_history(since_cursor=0) == []
 
 
 @pytest.mark.asyncio
@@ -197,7 +194,7 @@ async def test_ephemeral_tool_loop_pressure_summarizes_before_next_model_call(
     model_request = loop.provider.chat_stream_with_retry.await_args_list[3].kwargs["messages"]
     assert "Tool-loop checkpoint." in model_request[0]["content"]
     assert sum(message.get("role") == "tool" for message in model_request) == 1
-    assert loop.context.memory.read_unprocessed_history(since_cursor=0) == []
+    assert loop.context.memory.journal.read_unprocessed_history(since_cursor=0) == []
 
 
 @pytest.mark.asyncio

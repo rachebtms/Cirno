@@ -28,18 +28,18 @@ async def test_shared_listener_streams_full_backup_and_requires_capability(tmp_p
     async with serve(unused, "127.0.0.1", 0, create_connection=bridge.connection_factory) as server:
         base = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"
         async with httpx.AsyncClient(base_url=base) as client:
-            denied = await client.post("/api/backups/export", json={"paths": []})
+            denied = await client.post("/v0/backups/export", json={"paths": []})
             assert denied.status_code == 401
             with service.bus.admission.activity():
                 busy = await client.post(
-                    "/api/backups/export",
+                    "/v0/backups/export",
                     headers={"Authorization": "Bearer owner"},
                     json={"paths": []},
                 )
                 assert busy.status_code == 409
                 assert not service.bus.admission.paused
             response = await client.post(
-                "/api/backups/export", headers={"Authorization": "Bearer owner"}, json={"paths": []}
+                "/v0/backups/export", headers={"Authorization": "Bearer owner"}, json={"paths": []}
             )
             assert response.status_code == 200, response.text
             url = response.json()["url"]
@@ -52,7 +52,7 @@ async def test_shared_listener_streams_full_backup_and_requires_capability(tmp_p
             part = await client.get(url, headers={"Range": "bytes=0-9"})
             assert part.status_code == 206 and part.content == download.content[:10]
             upload = await client.post(
-                "/api/backups/upload",
+                "/v0/backups/upload",
                 content=download.content,
                 headers={"Authorization": "Bearer owner"},
             )
@@ -81,7 +81,7 @@ async def test_cancelling_a_preview_preserves_another_pending_restore(tmp_path):
         async def iter_chunked(self, size):
             yield json.dumps({"id": previews[1]["id"]}).encode()
 
-    request = SimpleNamespace(method="POST", path="/api/backups/cancel", headers={"Authorization": "Bearer owner"}, content=Body())
+    request = SimpleNamespace(method="POST", path="/v0/backups/cancel", headers={"Authorization": "Bearer owner"}, content=Body())
     assert (await service.handle(request)).status == 200
     plan = json.loads((service.archive.store / "restore-plan.json").read_text())
     assert plan["id"] == previews[0]["id"]

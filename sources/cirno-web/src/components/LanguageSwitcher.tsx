@@ -1,35 +1,15 @@
-import { useState } from "react";
+import { ListBox, Select } from "@heroui/react";
 import { useTranslation } from "react-i18next";
-
 import { currentLocale, setAppLanguage } from "@/i18n";
 import { supportedLocales, type SupportedLocale } from "@/i18n/config";
-import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { t } = useTranslation();
-  const [pointerFocus, setPointerFocus] = useState(false);
-  return (
-    <Select value={currentLocale()} onValueChange={(value) => { void setAppLanguage(value as SupportedLocale); }}>
-      <SelectTrigger
-        className={cn("min-w-40 rounded-full", pointerFocus && "focus-visible:ring-0", className)}
-        aria-label={t("sidebar.language.ariaLabel")}
-        onPointerDown={() => setPointerFocus(true)}
-        onKeyDown={() => setPointerFocus(false)}
-        onBlur={() => setPointerFocus(false)}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent
-        onPointerUpCapture={() => setPointerFocus(true)}
-        onPointerDownOutside={() => setPointerFocus(true)}
-        onKeyDownCapture={() => setPointerFocus(false)}
-        onEscapeKeyDown={() => setPointerFocus(false)}
-      >
-        {supportedLocales.map((option) => (
-          <SelectItem key={option.code} value={option.code}>{option.nativeLabel}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  return <Select value={currentLocale()} aria-label={t("sidebar.language.ariaLabel")}
+    onChange={value => { if (value !== null) void setAppLanguage(String(value) as SupportedLocale); }}>
+    <Select.Trigger aria-label={t("sidebar.language.ariaLabel")} className={className}><Select.Value>{supportedLocales.find(option => option.code === currentLocale())?.nativeLabel}</Select.Value><Select.Indicator /></Select.Trigger>
+    <Select.Popover><ListBox items={supportedLocales}>{option => <ListBox.Item id={option.code} textValue={option.nativeLabel}>
+      {option.nativeLabel}<ListBox.ItemIndicator />
+    </ListBox.Item>}</ListBox></Select.Popover>
+  </Select>;
 }

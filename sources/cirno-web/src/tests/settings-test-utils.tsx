@@ -1,9 +1,9 @@
 import { cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, vi } from "vitest";
-import { SettingsView } from "@/components/settings/SettingsView";
+import { SettingsView } from "@/features/settings/SettingsView";
 import { ClientProvider } from "@/providers/ClientProvider";
-import type { SettingsPayload } from "@/lib/types";
+import type { SettingsPayload } from "@/lib/contracts/settings";
 import type { CirnoClient } from "@/lib/cirno-client";
 
 export { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -34,7 +34,7 @@ export function settingsPayload(): SettingsPayload {
       tool_status_summary_max_chars: 40,
     },
     model_presets: [{
-      name: "primary",
+      id: "primary", name: "primary",
 
       active: true,
       is_default: false,
@@ -111,11 +111,10 @@ type SettingsViewTestOptions = Partial<Pick<
   | "skills"
   | "skillsLoading"
   | "showSidebar"
-  | "mainNavigationExpanded"
   | "onBackToChat"
   | "onSettingsChange"
   | "onStartAutomationChat"
-  | "onNativeEngineRestart"
+
   | "onRestart"
 >> & { client?: CirnoClient };
 
@@ -141,13 +140,12 @@ export function renderSettingsView(options: SettingsViewTestOptions = {}) {
         skills={options.skills}
         skillsLoading={options.skillsLoading}
         showSidebar={options.showSidebar}
-        mainNavigationExpanded={options.mainNavigationExpanded}
         onChangeTheme={options.onChangeTheme ?? (() => {})}
         onBackToChat={options.onBackToChat ?? (() => {})}
         onModelNameChange={() => {}}
         onSettingsChange={options.onSettingsChange}
         onStartAutomationChat={options.onStartAutomationChat}
-        onNativeEngineRestart={options.onNativeEngineRestart}
+
         onRestart={options.onRestart}
       />
     </ClientProvider>,

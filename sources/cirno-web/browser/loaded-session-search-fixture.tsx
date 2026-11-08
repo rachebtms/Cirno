@@ -3,7 +3,7 @@ import { SessionSearchDialog } from "@/components/SessionSearchDialog";
 import { useAppViewport } from "@/hooks/useAppViewport";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { ThreadTranscript } from "@/lib/thread-transcript";
-import type { ChatSummary } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
 
 const sessions: ChatSummary[] = Array.from({ length: 2 }, (_, index) => ({
   key: `websocket:topic-${index}`, chatId: `topic-${index}`, channel: "websocket",

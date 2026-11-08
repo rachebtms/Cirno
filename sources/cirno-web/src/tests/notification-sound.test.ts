@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  DEFAULT_LOCAL_PREFS,
-  writeLocalPreferences,
-} from "@/lib/local-preferences";
+  DEFAULT_PREFERENCES,
+} from "@/features/preferences/store";
 import { TURN_COMPLETE_SOUND_PATH } from "@/lib/notification-sound";
 
 class MockAudio {
@@ -26,10 +25,14 @@ function setVisibility(state: DocumentVisibilityState): void {
 }
 
 describe("playTurnCompleteSound", () => {
-  beforeEach(() => {
+  let writePreferences: typeof import("@/features/preferences/store").writePreferences;
+  beforeEach(async () => {
     MockAudio.instances = [];
     vi.stubGlobal("Audio", MockAudio);
     vi.resetModules();
+    const store = await import("@/features/preferences/store");
+    store.clearOwnerPreferences();
+    writePreferences = store.writePreferences;
     setVisibility("visible");
   });
 
@@ -53,7 +56,7 @@ describe("playTurnCompleteSound", () => {
   });
 
   it("plays the bundled chime when enabled and the page is visible", async () => {
-    writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, notificationSound: true });
+    writePreferences({ ...DEFAULT_PREFERENCES, notificationSound: true });
     await play();
     expect(MockAudio.instances).toHaveLength(1);
     expect(MockAudio.instances[0].src).toBe(TURN_COMPLETE_SOUND_PATH);
@@ -61,7 +64,7 @@ describe("playTurnCompleteSound", () => {
   });
 
   it("plays when enabled and the page is in the background", async () => {
-    writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, notificationSound: true });
+    writePreferences({ ...DEFAULT_PREFERENCES, notificationSound: true });
     setVisibility("hidden");
     await play();
     expect(MockAudio.instances).toHaveLength(1);
@@ -69,7 +72,7 @@ describe("playTurnCompleteSound", () => {
   });
 
   it("reuses one audio element across turns and restarts it", async () => {
-    writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, notificationSound: true });
+    writePreferences({ ...DEFAULT_PREFERENCES, notificationSound: true });
     await play();
     await play();
     expect(MockAudio.instances).toHaveLength(1);
@@ -83,7 +86,7 @@ describe("playTurnCompleteSound", () => {
       play = vi.fn().mockRejectedValue(new Error("autoplay blocked"));
     }
     vi.stubGlobal("Audio", RejectingAudio);
-    writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, notificationSound: true });
+    writePreferences({ ...DEFAULT_PREFERENCES, notificationSound: true });
     await expect(play()).resolves.toBeUndefined();
   });
 });

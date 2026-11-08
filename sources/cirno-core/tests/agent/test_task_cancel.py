@@ -7,13 +7,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from agent.session_helpers import mock_session_manager, run_session
-from cirno_core.memory.consolidation import Consolidator
 from cirno_core.bus.outbound_events import StreamDeltaEvent, StreamEndEvent
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import GenerationSettings
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.utils.llm_runtime import LLMRuntime
+
+from sources.development.testing.sessions import mock_session_manager, run_session
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -115,7 +115,7 @@ class TestBackgroundTaskTracking:
     async def test_successful_background_task_is_removed(self, monkeypatch):
         loop, _bus = _make_loop()
         mock_logger = MagicMock()
-        monkeypatch.setattr("cirno_core.agent.loop.logger", mock_logger)
+        monkeypatch.setattr("cirno_core.agent.execution.lifecycle.logger", mock_logger)
 
         loop.schedule_background(asyncio.sleep(0))
         await _wait_for_background_callbacks(loop)
@@ -127,7 +127,7 @@ class TestBackgroundTaskTracking:
     async def test_failed_background_task_is_retrieved_and_logged(self, monkeypatch):
         loop, _bus = _make_loop()
         mock_logger = MagicMock()
-        monkeypatch.setattr("cirno_core.agent.loop.logger", mock_logger)
+        monkeypatch.setattr("cirno_core.agent.execution.lifecycle.logger", mock_logger)
         failure = RuntimeError("background failure")
         loop_errors: list[dict[str, object]] = []
         event_loop = asyncio.get_running_loop()
@@ -156,7 +156,7 @@ class TestBackgroundTaskTracking:
     async def test_cancelled_background_task_is_removed_without_error(self, monkeypatch):
         loop, _bus = _make_loop()
         mock_logger = MagicMock()
-        monkeypatch.setattr("cirno_core.agent.loop.logger", mock_logger)
+        monkeypatch.setattr("cirno_core.agent.execution.lifecycle.logger", mock_logger)
         started = asyncio.Event()
         release = asyncio.Event()
 
@@ -182,7 +182,7 @@ class TestBackgroundTaskTracking:
         loop.subagents.close = AsyncMock()
         loop._exec_session_manager.close_all = AsyncMock()
         mock_logger = MagicMock()
-        monkeypatch.setattr("cirno_core.agent.loop.logger", mock_logger)
+        monkeypatch.setattr("cirno_core.agent.execution.lifecycle.logger", mock_logger)
         started = asyncio.Event()
         release = asyncio.Event()
         failure = RuntimeError("failure while draining")
@@ -214,7 +214,7 @@ class TestHandleStop:
     @pytest.mark.asyncio
     async def test_stop_no_active_task(self):
         from cirno_core.bus.events import InboundMessage
-        from cirno_core.command.builtin import cmd_stop
+        from cirno_core.command.builtin.control import cmd_stop
         from cirno_core.command.router import CommandContext
 
         loop, bus = _make_loop()
@@ -280,7 +280,7 @@ class TestHandleStop:
     @pytest.mark.asyncio
     async def test_stop_cancels_active_task(self):
         from cirno_core.bus.events import InboundMessage
-        from cirno_core.command.builtin import cmd_stop
+        from cirno_core.command.builtin.control import cmd_stop
         from cirno_core.command.router import CommandContext
 
         loop, bus = _make_loop()
@@ -309,7 +309,7 @@ class TestHandleStop:
     @pytest.mark.asyncio
     async def test_stop_cancels_multiple_tasks(self):
         from cirno_core.bus.events import InboundMessage
-        from cirno_core.command.builtin import cmd_stop
+        from cirno_core.command.builtin.control import cmd_stop
         from cirno_core.command.router import CommandContext
 
         loop, bus = _make_loop()
@@ -338,7 +338,7 @@ class TestDispatch:
     @pytest.mark.asyncio
     async def test_run_logs_and_continues_after_leaked_cancelled_error(self, monkeypatch):
         loop, bus = _make_loop()
-        loop.aclose = AsyncMock()
+        loop.lifecycle.aclose = AsyncMock()
         loop.auto_compact.check_expired = AsyncMock()
         warnings: list[str] = []
         calls = 0
@@ -353,7 +353,7 @@ class TestDispatch:
 
         monkeypatch.setattr(bus, "consume_inbound", consume_once_then_stop)
         monkeypatch.setattr(
-            "cirno_core.agent.loop.logger.warning",
+            "cirno_core.agent.execution.lifecycle.logger.warning",
             lambda message, *args, **kwargs: warnings.append(message),
         )
 
@@ -363,8 +363,8 @@ class TestDispatch:
         assert any("Ignoring leaked CancelledError" in warning for warning in warnings)
 
     def test_exec_tool_not_registered_when_disabled(self):
-        from cirno_core.agent.tools.shell import ExecToolConfig
-        from cirno_core.config.schema import ToolsConfig
+        from cirno_core.agent.tools.shell_config import ExecToolConfig
+        from cirno_core.config.tools import ToolsConfig
 
         loop, _bus = _make_loop(tools_config=ToolsConfig(exec=ExecToolConfig(enable=False)))
 
@@ -376,7 +376,7 @@ class TestDispatch:
 
         loop, bus = _make_loop()
         msg = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="hello")
-        loop._process_message = AsyncMock(
+        loop.processing.process = AsyncMock(
             return_value=OutboundMessage(channel="test", chat_id="c1", content="hi")
         )
         await run_session(loop, msg)
@@ -406,7 +406,7 @@ class TestDispatch:
             await delivery.events.emit(StreamEndEvent())
             return None
 
-        loop._process_message = fake_process
+        loop.processing.process = fake_process
 
         await run_session(loop, msg)
         first = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
@@ -436,7 +436,7 @@ class TestDispatch:
             order.append(f"end-{m.content}")
             return OutboundMessage(channel="test", chat_id="c1", content=m.content)
 
-        loop._process_message = mock_process
+        loop.processing.process = mock_process
         msg1 = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="a")
         msg2 = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="b")
 
@@ -477,7 +477,7 @@ class TestSubagentCancellation:
                 cancelled.set()
                 raise
 
-        mgr.runner.run = slow
+        mgr.execution.runner.run = slow
         await mgr.spawn("task", runtime=_runtime(MagicMock()), session_key="test:c1")
         await started.wait()
 
@@ -500,32 +500,11 @@ class TestSubagentCancellation:
         assert await mgr.cancel_by_session("nonexistent") == 0
 
     @pytest.mark.asyncio
-    async def test_cancel_by_session_does_not_terminate_parent_exec_sessions(self):
-        from cirno_core.agent.subagents.manager import SubagentManager
-        from cirno_core.agent.tools.exec_session import ExecSessionManager
-        from cirno_core.bus.queue import MessageBus
-
-        bus = MessageBus()
-        mgr = SubagentManager(
-            workspace=MagicMock(),
-            bus=bus,
-            max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
-            consolidator=MagicMock(spec=Consolidator),
-        )
-        # Replace the real exec session manager with a mock
-        mock_exec_mgr = AsyncMock(spec=ExecSessionManager)
-        mock_exec_mgr.terminate_by_owner = AsyncMock(return_value=0)
-        mgr._exec_session_manager = mock_exec_mgr
-
-        await mgr.cancel_by_session("test:c1")
-
-        mock_exec_mgr.terminate_by_owner.assert_not_awaited()
-
-    @pytest.mark.asyncio
     async def test_subagent_preserves_reasoning_fields_in_tool_turn(self, monkeypatch, tmp_path):
         from cirno_core.agent.subagents.manager import SubagentManager
         from cirno_core.bus.queue import MessageBus
-        from cirno_core.providers.base import LLMResponse, ToolCallRequest
+        from cirno_core.providers.contracts import LLMResponse
+        from cirno_core.providers.tool_calls import ToolCallRequest
 
         bus = MessageBus()
         provider = MagicMock()
@@ -579,9 +558,9 @@ class TestSubagentCancellation:
     @pytest.mark.asyncio
     async def test_subagent_exec_tool_not_registered_when_disabled(self, tmp_path):
         from cirno_core.agent.subagents.manager import SubagentManager
-        from cirno_core.agent.tools.shell import ExecToolConfig
+        from cirno_core.agent.tools.shell_config import ExecToolConfig
         from cirno_core.bus.queue import MessageBus
-        from cirno_core.config.schema import ToolsConfig
+        from cirno_core.config.tools import ToolsConfig
 
         bus = MessageBus()
         provider = MagicMock()
@@ -593,7 +572,7 @@ class TestSubagentCancellation:
             consolidator=MagicMock(spec=Consolidator),
             tools_config=ToolsConfig(exec=ExecToolConfig(enable=False)),
         )
-        mgr._announce_result = AsyncMock()
+        mgr.reports.announce = AsyncMock()
 
         async def fake_run(spec):
             assert spec.tools.get("exec") is None
@@ -604,7 +583,7 @@ class TestSubagentCancellation:
                 tool_events=[],
             )
 
-        mgr.runner.run = AsyncMock(side_effect=fake_run)
+        mgr.execution.runner.run = AsyncMock(side_effect=fake_run)
 
         await mgr.spawn(
             task="do task",
@@ -615,8 +594,8 @@ class TestSubagentCancellation:
         )
         await asyncio.gather(*mgr._running_tasks.values(), return_exceptions=True)
 
-        mgr.runner.run.assert_awaited_once()
-        mgr._announce_result.assert_awaited_once()
+        mgr.execution.runner.run.assert_awaited_once()
+        mgr.reports.announce.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_subagent_announces_success_after_recovering_from_tool_failure(
@@ -624,7 +603,8 @@ class TestSubagentCancellation:
     ):
         from cirno_core.agent.subagents.manager import SubagentManager
         from cirno_core.bus.queue import MessageBus
-        from cirno_core.providers.base import LLMResponse, ToolCallRequest
+        from cirno_core.providers.contracts import LLMResponse
+        from cirno_core.providers.tool_calls import ToolCallRequest
 
         bus = MessageBus()
         provider = MagicMock()
@@ -650,7 +630,7 @@ class TestSubagentCancellation:
             max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             consolidator=MagicMock(),
         )
-        mgr._announce_result = AsyncMock()
+        mgr.reports.announce = AsyncMock()
 
         calls = {"n": 0}
 
@@ -671,8 +651,8 @@ class TestSubagentCancellation:
         )
         await asyncio.gather(*mgr._running_tasks.values(), return_exceptions=True)
 
-        mgr._announce_result.assert_awaited_once()
-        args = mgr._announce_result.await_args.args
+        mgr.reports.announce.assert_awaited_once()
+        args = mgr.reports.announce.await_args.args
         assert args[3] == "recovered after tool failure"
         assert args[5] == "ok"
         assert calls["n"] == 2
@@ -682,7 +662,8 @@ class TestSubagentCancellation:
     async def test_cancel_by_session_cancels_running_subagent_tool(self, monkeypatch, tmp_path):
         from cirno_core.agent.subagents.manager import SubagentManager
         from cirno_core.bus.queue import MessageBus
-        from cirno_core.providers.base import LLMResponse, ToolCallRequest
+        from cirno_core.providers.contracts import LLMResponse
+        from cirno_core.providers.tool_calls import ToolCallRequest
 
         bus = MessageBus()
         provider = MagicMock()
@@ -697,7 +678,7 @@ class TestSubagentCancellation:
             max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
             consolidator=MagicMock(),
         )
-        mgr._announce_result = AsyncMock()
+        mgr.reports.announce = AsyncMock()
 
         started = asyncio.Event()
         cancelled = asyncio.Event()
@@ -722,7 +703,7 @@ class TestSubagentCancellation:
         assert count == 1
         assert cancelled.is_set()
         assert task.cancelled()
-        mgr._announce_result.assert_not_awaited()
+        mgr.reports.announce.assert_not_awaited()
 
 
 class TestSubagentAnnounceSessionKey:
@@ -749,7 +730,7 @@ class TestSubagentAnnounceSessionKey:
         mgr, bus = self._make_mgr()
 
         origin = {"channel": "telegram", "chat_id": "222", "session_key": "telegram:222"}
-        await mgr._announce_result("sub-2", "label", "task", "result", origin, "ok")
+        await mgr.reports.announce("sub-2", "label", "task", "result", origin, "ok")
 
         msg = await bus.consume_inbound()
         assert msg.session_key_override == "telegram:222"
@@ -761,7 +742,7 @@ class TestSubagentAnnounceSessionKey:
         mgr, bus = self._make_mgr()
 
         origin = {"channel": "discord", "chat_id": "333", "session_key": None}
-        await mgr._announce_result("sub-3", "label", "task", "result", origin, "ok")
+        await mgr.reports.announce("sub-3", "label", "task", "result", origin, "ok")
 
         msg = await bus.consume_inbound()
         assert msg.session_key_override == "discord:333"

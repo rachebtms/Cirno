@@ -1,5 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
-import type { InboundEvent, ThreadProjectionEvent } from "../src/lib/types";
+import type { InboundEvent, ThreadProjectionEvent } from "@/lib/contracts/events";
 
 const chatId = "answer-order";
 const turnId = "answer-order-turn";
@@ -9,10 +9,9 @@ const base = { chat_id: chatId, turn_id: turnId };
 async function openThread(page: Page, events: ThreadProjectionEvent[] = [], locale = "en") {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.addInitScript((language) => { localStorage.setItem("cirno.locale", language); }, locale);
-  await page.route("**/api/**", (route) => route.fulfill({ status: 404, json: {} }));
-  await page.route("**/api/commands", (route) => route.fulfill({ json: { commands: [] } }));
-  await page.route("**/api/sessions/*/webui-thread?*", (route) => {
+  await page.route("**/v0/**", (route) => route.fulfill({ status: 404, json: {} }));
+  await page.route("**/v0/commands", (route) => route.fulfill({ json: { commands: [] } }));
+  await page.route("**/v0/sessions/*/webui-thread?*", (route) => {
     const requestedPath = decodeURIComponent(new URL(route.request().url()).pathname);
     const history = requestedPath.includes(`/sessions/websocket:${chatId}/`) ? events : [];
     return route.fulfill({ json: {
@@ -32,7 +31,7 @@ async function openThread(page: Page, events: ThreadProjectionEvent[] = [], loca
       }
     });
   });
-  await page.goto("/browser/fixture.html?case=answer-order");
+  await page.goto(`/browser/fixture.html?case=answer-order&lang=${locale}`);
   await expect.poll(() => attached.has(chatId)).toBe(true);
   await expect(page.getByRole("status", { name: "Loading conversation…" })).toHaveCount(0);
   return { emit: (...frames: InboundEvent[]) => frames.forEach((frame) => socket.send(JSON.stringify(frame))), errors };
@@ -177,19 +176,19 @@ test.describe("answer order", () => {
 
   test("keeps a rewritten image intact before a hosted tool", async ({ page }, info) => {
     const { emit, errors } = await openThread(page);
-    await page.route("**/api/media/**", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from(
+    await page.route("**/v0/media/**", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5hUAAAAASUVORK5CYII=", "base64",
     ) }));
     emit(
       { event: "delta", ...base, stream_id: "image", turn_seq: 1, text: "![plot](plot.png)" },
-      { event: "stream_end", ...base, stream_id: "image", turn_seq: 2, text: "![plot](/api/media/signature/plot.png)", resuming: true },
+      { event: "stream_end", ...base, stream_id: "image", turn_seq: 2, text: "![plot](/v0/media/signature/plot.png)", resuming: true },
       { event: "message", ...base, turn_seq: 3, kind: "tool_hint", text: "web_search(query)" },
       { event: "delta", ...base, stream_id: "after-tool", turn_seq: 4, text: "After tool." },
       { event: "stream_end", ...base, stream_id: "after-tool", turn_seq: 5 },
     );
     const image = page.getByRole("img", { name: "plot", exact: true });
     await expect(image).toHaveCount(1);
-    await expect(image).toHaveAttribute("src", /\/api\/media\/signature\/plot.png/);
+    await expect(image).toHaveAttribute("src", /\/v0\/media\/signature\/plot.png/);
     await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1);
     await expect(page.getByText("After tool.", { exact: true })).toHaveCount(1);
     const units = page.locator("[data-thread-display-unit]");

@@ -7,7 +7,7 @@ WORKDIR /app/sources/cirno-web
 COPY sources/cirno-web/package.json sources/cirno-web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline
 COPY sources/cirno-web/ ./
-COPY sources/cirno-core/agent/tools/names.json /app/sources/cirno-core/agent/tools/names.json
+COPY sources/cirno-core/src/cirno_core/agent/tools/names.json /app/sources/cirno-core/src/cirno_core/agent/tools/names.json
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS slim-base
@@ -58,8 +58,7 @@ ENV CIRNO_FULL_IMAGE=1 \
     NPM_CONFIG_CACHE=/home/cirno/.cirno/state/cli/cache/npm \
     NPM_CONFIG_USERCONFIG=/home/cirno/.cirno/state/cli/config/npmrc \
     BASH_ENV=/etc/profile.d/cirno-tools.sh \
-    CIRNO_AGENTS__DEFAULTS__MEMORY__EMBEDDING_MODEL_PATH=/opt/cirno/models/bge-small-zh-v1.5/model_quantized.onnx \
-    CIRNO_AGENTS__DEFAULTS__MEMORY__EMBEDDING_TOKENIZER_PATH=/opt/cirno/models/bge-small-zh-v1.5/tokenizer.json \
+    CIRNO_BUNDLED_EMBEDDING_DIR=/opt/cirno/models/bge-small-zh-v1.5 \
     XDG_CONFIG_HOME=/home/cirno/.cirno/state/cli/config \
     XDG_DATA_HOME=/home/cirno/.cirno/state/cli/data \
     XDG_CACHE_HOME=/home/cirno/.cirno/state/cli/cache \
@@ -89,11 +88,14 @@ ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$CIRNO_SHELL_VENV/bin:/app/.venv/bin:$PATH"
 RUN uv venv --seed "$VIRTUAL_ENV"
 
-# Build the three local distributions together; none is fetched from PyPI.
+# Build the local distributions together; none is fetched from PyPI.
 ARG CIRNO_EXTRAS=
 COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY documents/ documents/
 COPY sources/cirno/ sources/cirno/
+COPY sources/cirno-memory/ sources/cirno-memory/
+COPY sources/cirno-usage/ sources/cirno-usage/
+COPY sources/cirno-vault/ sources/cirno-vault/
 COPY sources/cirno-core/ sources/cirno-core/
 COPY sources/cirno-server/ sources/cirno-server/
 COPY sources/deployment/install_channel_dependencies.py scripts/
@@ -101,7 +103,7 @@ COPY --from=webui-builder /app/build/webui/ build/webui/
 RUN extras="${CIRNO_EXTRAS:-${CIRNO_EXTRAS_DEFAULT:-}}" && \
     if [ -n "$extras" ]; then project=".[$extras]"; else project="."; fi && \
     CIRNO_SKIP_WEBUI_BUILD=1 uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache \
-    ./sources/cirno-core ./sources/cirno-server "$project"
+    ./sources/cirno-memory ./sources/cirno-usage ./sources/cirno-vault ./sources/cirno-core ./sources/cirno-server "$project"
 
 # Preinstall selected channel dependencies from their manifests. A comma-separated
 # list selects dependencies for the included channels.

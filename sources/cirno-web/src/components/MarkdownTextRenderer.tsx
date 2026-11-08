@@ -491,7 +491,7 @@ function InlineLinkPreviewRow({ link }: { link: InlineLinkPreview }) {
           <Globe2 className="h-3 w-3" />
         )}
       </span>
-      <span className="min-w-0 [overflow-wrap:anywhere] leading-normal sm:truncate">
+      <span className="min-w-0 [overflow-wrap:anywhere] leading-normal @min-[640px]/cirno-tab:truncate">
         {label}
       </span>
     </WebLink>
@@ -581,7 +581,7 @@ export default function MarkdownTextRenderer({
         return (
           <code
             className={cn(
-              "markdown-inline-code rounded bg-muted px-1 py-0.5 font-mono",
+              "markdown-inline-code rounded bg-surface-secondary px-1 py-0.5 font-mono",
               cls,
             )}
             {...props}
@@ -602,7 +602,7 @@ export default function MarkdownTextRenderer({
         return (
           <pre
             className={cn(
-              "my-3 overflow-x-auto rounded-lg border border-border/60 bg-muted/35",
+              "my-3 overflow-x-auto rounded-lg border border-border/60 bg-surface-secondary/35",
               "p-3 font-mono text-code text-foreground/90",
               "whitespace-pre [overflow-wrap:normal]",
             )}
@@ -698,14 +698,14 @@ export default function MarkdownTextRenderer({
             aria-label={t("message.dataTable", { defaultValue: "Data table" })}
             className={cn(
               "not-prose mb-5 mt-3 w-full max-w-full overflow-x-auto rounded-lg",
-              "border border-border/65 bg-muted/20",
+              "border border-border/65 bg-surface-secondary/20",
               "overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             )}
           >
             <table
               className={cn(
                 "w-full table-fixed border-collapse text-reading-small",
-                "[&_thead]:bg-muted/45 [&_thead]:text-muted-foreground",
+                "[&_thead]:bg-surface-secondary/45 [&_thead]:text-muted-foreground",
                 "[&_th]:border-b [&_th]:border-border/65 [&_th]:px-3 [&_th]:py-2",
                 "[&_th]:text-left [&_th]:font-medium [&_th]:whitespace-normal",
                 "[&_th]:[overflow-wrap:anywhere]",
@@ -782,7 +782,7 @@ export default function MarkdownTextRenderer({
       },
       details({ children: markdownChildren }) {
         return (
-          <details className="my-3 rounded-xl border border-border/65 bg-muted/25 px-4 py-3 open:pb-4">
+          <details className="my-3 rounded-xl border border-border/65 bg-surface-secondary/25 px-4 py-3 open:pb-4">
             {markdownChildren}
           </details>
         );

@@ -1,4 +1,7 @@
 from __future__ import annotations
+from cirno_core.apps.cli.catalog import RegistryCatalog
+from cirno_core.apps.cli import paths as cli_paths
+from cirno_core.apps.cli import records as cli_records
 
 import asyncio
 import json
@@ -7,9 +10,9 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
 
 import pytest
-
 from cirno_core.apps.cli import service as cli_service
 from cirno_core.config import home, loader
 from cirno_server.webui import cli_apps_api
@@ -28,6 +31,7 @@ class _FakeManager:
         self.apps = apps or []
         self.payload_calls: list[bool] = []
         self.fresh_checks: list[bool] = []
+        self.registry = SimpleNamespace(catalog_cache_fresh=self.catalog_cache_fresh)
 
     def payload(self, *, cache_only: bool = False) -> dict[str, Any]:
         self.payload_calls.append(cache_only)
@@ -205,14 +209,14 @@ def _local_cli_apps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
              "package_manager": "bundled", "category": "image"},
             {"name": "other", "entry_point": "fixture-other-cli", "package_manager": "bundled"},
         ] if source == "harness" else []
-        manager._cache_path(source).write_text(json.dumps({
+        manager.registry._cache_path(source).write_text(json.dumps({
             "_cached_at": 0 if source == "extensions" else time.time(),
             "data": {"meta": {"updated": "2026-10-17"}, "clis": rows},
         }), encoding="utf-8")
-    manager._save_installed({
+    manager.installed.replace({
         "gimp": {"entry_point": "fixture-slow-cli", "source": "harness", "strategy": "bundled"},
     })
-    skill = cli_service.cli_app_skill_path("gimp")
+    skill = cli_paths.cli_app_skill_path("gimp")
     skill.parent.mkdir(parents=True)
     skill.write_text("# GIMP\n", encoding="utf-8")
 
@@ -263,8 +267,8 @@ def test_cli_apps_payload_keeps_loop_responsive(
     observed: dict[str, list[int]] = {name: [] for name in ("config", "manager", "cache", "freshness")}
     real_load = cli_apps_api.load_config
     real_init = cli_service.CliAppManager.__init__
-    real_read = cli_service._read_json
-    real_freshness = cli_service.CliAppManager.catalog_cache_fresh
+    real_read = cli_records._read_json
+    real_freshness = RegistryCatalog.catalog_cache_fresh
 
     def load(config_path: Path | None = None) -> Any:
         observed["config"].append(threading.get_ident())
@@ -278,15 +282,15 @@ def test_cli_apps_payload_keeps_loop_responsive(
         observed["cache"].append(threading.get_ident())
         return real_read(path)
 
-    def freshness(manager: cli_service.CliAppManager, *, include_optional: bool = False) -> bool:
+    def freshness(manager: RegistryCatalog, *, include_optional: bool = False) -> bool:
         observed["freshness"].append(threading.get_ident())
         return real_freshness(manager, include_optional=include_optional)
 
     refresh_threads: list[int] = []
     monkeypatch.setattr(cli_apps_api, "load_config", load)
     monkeypatch.setattr(cli_service.CliAppManager, "__init__", initialize)
-    monkeypatch.setattr(cli_service, "_read_json", read)
-    monkeypatch.setattr(cli_service.CliAppManager, "catalog_cache_fresh", freshness)
+    monkeypatch.setattr(cli_records, "_read_json", read)
+    monkeypatch.setattr(RegistryCatalog, "catalog_cache_fresh", freshness)
     monkeypatch.setattr(
         cli_apps_api, "_start_catalog_refresh",
         lambda manager: refresh_threads.append(threading.get_ident()) or True,

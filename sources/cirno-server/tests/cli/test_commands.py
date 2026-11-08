@@ -1,41 +1,22 @@
 import asyncio
-import json
-import re
-import shutil
 import signal
-import urllib.error
-from contextlib import contextmanager, suppress
-from pathlib import Path
-from types import SimpleNamespace
+from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from cirno_core.agent.subagents.manager import SubagentManager
-from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.bus.events import InboundMessage, OutboundMessage
-from cirno_core.bus.queue import MessageBus
 from cirno_core.config.schema import Config
 from cirno_core.cron.webui_metadata import cron_proactive_delivery_metadata
-from cirno_core.memory.consolidation import MemoryStore
-from cirno_core.providers.factory import ProviderSnapshot, make_provider, provider_signature
+from cirno_core.memory.dream_run import commit_dream_changes
+from cirno_core.memory.store import MemoryStore
+from cirno_core.providers.factory import make_provider, provider_signature
 from cirno_core.providers.openai_codex_provider import _strip_model_prefix
 from cirno_core.providers.registry import find_by_name
 from cirno_core.session.transport_metadata import (
     WEBUI_MESSAGE_SOURCE_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
 )
-from cirno_server import application as cli_gateway_runtime
 from cirno_server.cli import webui_support as cli_webui_support
-from cirno_server.webui.dev import WebUIDevError
-from typer.testing import CliRunner
-
-runner = CliRunner()
-
-
-
-
-def _without_rendered_line_breaks(output: str) -> str:
-    return "".join(output.splitlines())
+from cirno_server.lifecycle import shutdown as server_shutdown
 
 
 def test_proactive_websocket_delivery_gets_fresh_turn_id() -> None:
@@ -57,74 +38,6 @@ def test_proactive_websocket_delivery_gets_fresh_turn_id() -> None:
     assert out[WEBUI_TURN_METADATA_KEY].startswith("cron:drink-water:")
     assert out[WEBUI_TURN_METADATA_KEY] != metadata[WEBUI_TURN_METADATA_KEY]
     assert out[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {"kind": "cron", "label": "drink water"}
-
-
-def _fake_provider():
-    """Return a minimal fake provider that satisfies AgentLoop.__init__."""
-    p = MagicMock(aclose=AsyncMock())
-    p.generation.max_tokens = 4096
-    return p
-
-
-class _StopServerError(RuntimeError):
-    pass
-
-
-class _ServerAgentContractStub:
-    """Minimal stable AgentLoop surface required by gateway assembly tests."""
-
-    tools = ToolRegistry()
-
-    async def estimate_session_context_usage(self, *_args, **_kwargs):
-        return None
-    subagents = MagicMock(spec=SubagentManager)
-
-    @contextmanager
-    def maintenance(self):
-        yield
-
-    async def discard_session(self, _session_key: str) -> None:
-        pass
-
-    @staticmethod
-    def mcp_runtime_status() -> dict[str, str]:
-        return {}
-
-    @staticmethod
-    def pending_cron_job_ids_for_session(_session_key: str) -> set[str]:
-        return set()
-
-    @staticmethod
-    def pending_local_trigger_ids_for_session(_session_key: str) -> set[str]:
-        return set()
-
-    async def submit_local_trigger_turn(
-        self,
-        _msg: InboundMessage,
-    ) -> OutboundMessage | None:
-        return None
-
-    def preserve_inflight_turns_on_shutdown(self) -> None:
-        return None
-
-
-class _EmptyServerSessionManager:
-    """Minimal session-manager contract for gateway assembly tests."""
-
-    def list_sessions(self) -> list[dict[str, object]]:
-        return []
-
-    def list_session_metadata(self) -> list[dict[str, object]]:
-        return []
-
-    @property
-    def state(self):
-        return SimpleNamespace(
-            list_sessions=AsyncMock(return_value=[]),
-            migrate_history=AsyncMock(),
-            record_delivery=AsyncMock(),
-            aclose=AsyncMock(),
-        )
 
 
 def test_gateway_signal_handler_first_signal_stops_and_second_forces() -> None:
@@ -149,7 +62,7 @@ def test_gateway_signal_handler_first_signal_stops_and_second_forces() -> None:
         output: list[str] = []
 
         tasks: list[asyncio.Task[object]] = []
-        restore = cli_gateway_runtime._install_gateway_shutdown_handlers(
+        restore = server_shutdown.install_shutdown_handlers(
             loop, shutdown_event, tasks, output.append,
         )
         tasks.append(task)
@@ -195,7 +108,7 @@ async def test_gateway_signal_fallback_requests_shutdown_then_forces_and_restore
     await asyncio.sleep(0)
     tasks: list[asyncio.Task[object]] = []
     output: list[str] = []
-    restore = cli_gateway_runtime._install_gateway_shutdown_handlers(
+    restore = server_shutdown.install_shutdown_handlers(
         loop, shutdown_event, tasks, output.append,
     )
     tasks.append(task)
@@ -217,19 +130,6 @@ async def test_gateway_signal_fallback_requests_shutdown_then_forces_and_restore
     assert handlers == dict.fromkeys((signal.SIGINT, signal.SIGTERM, sigbreak), previous)
 
 
-def test_disabled_dream_cursor_only_advances_when_behind(tmp_path) -> None:
-    store = MemoryStore(tmp_path)
-    store.append_history("first")
-    store.append_history("second")
-
-    cli_gateway_runtime._advance_dream_cursor_if_behind(store)
-    assert store.get_last_dream_cursor() == 2
-
-    store.set_last_dream_cursor(10)
-    cli_gateway_runtime._advance_dream_cursor_if_behind(store)
-    assert store.get_last_dream_cursor() == 10
-
-
 def test_commit_dream_changes_skips_noop_run(tmp_path) -> None:
     store = MemoryStore(tmp_path)
     store.write_soul("# Soul")
@@ -238,7 +138,7 @@ def test_commit_dream_changes_skips_noop_run(tmp_path) -> None:
     store.git.auto_commit("initial")
     store.git.auto_commit = MagicMock(wraps=store.git.auto_commit)
 
-    assert cli_gateway_runtime._commit_dream_changes(store) is None
+    assert commit_dream_changes(store, "dream: periodic memory consolidation") is None
     store.git.auto_commit.assert_not_called()
 
 
@@ -251,70 +151,13 @@ def test_commit_dream_changes_commits_real_edits(tmp_path) -> None:
     store.write_memory("# Memory\n- Research notes")
     store.git.auto_commit = MagicMock(wraps=store.git.auto_commit)
 
-    sha = cli_gateway_runtime._commit_dream_changes(store)
+    sha = commit_dream_changes(store, "dream: periodic memory consolidation")
 
     assert sha is not None
     store.git.auto_commit.assert_called_once()
     message = store.git.auto_commit.call_args.args[0]
     assert message.startswith("dream: periodic memory consolidation\n\n")
     assert "Research notes" in message
-
-
-@pytest.fixture
-def mock_paths():
-    """Mock config/workspace paths for test isolation."""
-    from importlib import import_module
-
-    import_module("cirno_server.channels.validation")
-    with patch("cirno_core.config.loader.get_config_path") as mock_cp, \
-         patch("cirno_core.config.loader.save_config") as mock_sc, \
-         patch("cirno_core.config.loader.load_config") as mock_lc, \
-         patch("cirno_server.cli.commands.get_workspace_path") as mock_ws:
-        base_dir = Path("./test_onboard_data")
-        if base_dir.exists():
-            shutil.rmtree(base_dir)
-        base_dir.mkdir()
-
-        config_file = base_dir / "config.json"
-        workspace_dir = base_dir / "workspace"
-
-        mock_cp.return_value = config_file
-        mock_ws.return_value = workspace_dir
-        mock_lc.side_effect = lambda _config_path=None: Config()
-
-        def _save_config(config: Config, config_path: Path | None = None):
-            target = config_path or config_file
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(json.dumps(config.model_dump(by_alias=True)), encoding="utf-8")
-
-        mock_sc.side_effect = _save_config
-
-        yield config_file, workspace_dir, mock_ws
-
-        if base_dir.exists():
-            shutil.rmtree(base_dir)
-
-
-
-
-
-
-
-
-
-
-def _strip_ansi(text):
-    """Remove ANSI escape codes from text."""
-    ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
-    return ansi_escape.sub('', text)
-
-
-
-
-
-
-
-
 
 
 def test_config_matches_github_copilot_codex_with_hyphen_prefix():
@@ -331,8 +174,6 @@ def test_config_matches_openai_codex_with_hyphen_prefix():
     assert config.get_provider_name() == "openai_codex"
 
 
-
-
 def test_config_dump_excludes_oauth_provider_blocks():
     config = Config()
 
@@ -341,62 +182,6 @@ def test_config_dump_excludes_oauth_provider_blocks():
     assert "openaiCodex" not in providers
     assert "xaiGrok" not in providers
     assert "githubCopilot" not in providers
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def test_provider_logout_paths_resolve_to_expected_files():
-    from cirno_core.providers.github_copilot_provider import get_storage
-    from cirno_core.providers.xai_oauth import get_xai_oauth_storage_path
-    from oauth_cli_kit.providers import OPENAI_CODEX_PROVIDER
-    from oauth_cli_kit.storage import FileTokenStorage
-
-    codex_storage = FileTokenStorage(token_filename=OPENAI_CODEX_PROVIDER.token_filename)
-    codex_path = codex_storage.get_token_path()
-    assert codex_path.name == "codex.json"
-    assert codex_path.parent.name == "auth"
-
-    xai_path = get_xai_oauth_storage_path()
-    assert xai_path.name == "xai.json"
-    assert xai_path.parent.name == "auth"
-
-    gh_storage = get_storage()
-    gh_path = gh_storage.get_token_path()
-    assert gh_path.name == "github-copilot.json"
-    assert gh_path.parent.name == "auth"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -957,28 +742,6 @@ def test_make_provider_rejects_auto_dynamic_custom_prefix_without_api_base():
         make_provider(config)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @pytest.mark.parametrize(
     "content, expected",
     [
@@ -994,285 +757,16 @@ def test_make_provider_rejects_auto_dynamic_custom_prefix_without_api_base():
     ],
 )
 def test_heartbeat_has_active_tasks(content, expected):
-    from cirno_server.application import _heartbeat_has_active_tasks
+    from cirno_core.runtime.heartbeat import has_active_tasks
 
-    assert _heartbeat_has_active_tasks(content) is expected
+    assert has_active_tasks(content) is expected
 
 
 def test_heartbeat_skips_bundled_template():
-    from cirno_core.utils.helpers import load_bundled_template
-    from cirno_server.application import _heartbeat_has_active_tasks
+    from cirno_core.runtime.heartbeat import has_active_tasks
+    from cirno_core.utils.home_templates import load_bundled_template
 
-    assert _heartbeat_has_active_tasks(load_bundled_template("HEARTBEAT.md")) is False
-
-
-def _write_instance_config(tmp_path: Path) -> Path:
-    config_file = tmp_path / "instance" / "config.json"
-    config_file.parent.mkdir(parents=True)
-    config_file.write_text("{}")
-    return config_file
-
-
-def _stop_gateway_provider(_config) -> object:
-    raise _StopServerError("stop")
-
-
-def _test_provider_snapshot(provider: object, config: Config) -> ProviderSnapshot:
-    return ProviderSnapshot(
-        provider=provider,
-        model=config.agents.defaults.model,
-        context_window_tokens=config.agents.defaults.context_window_tokens,
-        signature=("test",),
-    )
-
-
-def _patch_webui_provider_ready(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "cirno_core.providers.factory.validate_provider_setup",
-        lambda _config: None,
-    )
-
-
-def _patch_gateway_ports_free(monkeypatch) -> None:
-    monkeypatch.setattr("cirno_server.cli.webui._gateway_health_ready", lambda *_a, **_kw: False)
-    monkeypatch.setattr("cirno_server.cli.webui._tcp_endpoint_reachable", lambda *_a, **_kw: False)
-    monkeypatch.setattr("cirno_server.cli.webui._webui_endpoint_reachable", lambda *_a, **_kw: False)
-    monkeypatch.setattr(
-        "cirno_server.application._tcp_endpoint_reachable",
-        lambda *_a, **_kw: False,
-    )
-    monkeypatch.setattr(
-        "cirno_server.application._webui_endpoint_reachable",
-        lambda *_a, **_kw: False,
-    )
-
-
-def _record_gateway_lease_release(monkeypatch, captured: dict[str, object]) -> None:
-    from cirno_server.lifecycle import ServerClientLease
-
-    original_release = ServerClientLease.release
-
-    def record_release(
-        lease: ServerClientLease,
-        *,
-        timeout_s: int = 20,
-        wait_for_stop: bool = True,
-    ) -> bool:
-        captured["lease_release_wait_for_stop"] = wait_for_stop
-        captured["dev_running_at_release"] = captured.get("dev_running")
-        return original_release(
-            lease,
-            timeout_s=timeout_s,
-            wait_for_stop=wait_for_stop,
-        )
-
-    monkeypatch.setattr(ServerClientLease, "release", record_release)
-
-
-def _patch_webui_managed_gateway(
-    monkeypatch,
-    seen: dict[str, object] | None = None,
-) -> dict[str, object]:
-    """Run WebUI CLI tests against a managed gateway without spawning a process."""
-    from cirno_server.lifecycle import RuntimeResult, ServerStatus
-
-    captured = seen if seen is not None else {}
-    _record_gateway_lease_release(monkeypatch, captured)
-
-    class _FakeRuntime:
-        def __init__(self, **kwargs) -> None:
-            captured["runtime_kwargs"] = kwargs
-            self.paths = kwargs["paths"]
-            self.running = False
-
-        def start_background(self, options):
-            captured["start_options"] = options
-            self.running = True
-            status = ServerStatus(
-                running=True,
-                pid=123,
-                state_path=Path("gateway.json"),
-                log_path=Path("gateway.log"),
-                port=options.port,
-                reason="running",
-            )
-            return RuntimeResult(True, "server_started_background", status)
-
-        def start_on_demand(self, options):
-            from cirno_server.lifecycle import ServerClientLease
-
-            ServerClientLease(self, kind="test-webui").mark_ephemeral()
-            return self.start_background(options)
-
-        def status(self):
-            return SimpleNamespace(running=self.running)
-
-        def stop(self, *, timeout_s: int):
-            captured["stop_timeout"] = timeout_s
-            self.running = False
-            return RuntimeResult(True, "server_stopped", self.status())
-
-        _stop = stop
-
-    monkeypatch.setattr("cirno_server.lifecycle.ServerRuntime", _FakeRuntime)
-    monkeypatch.setattr(
-        "cirno_server.cli.webui._prepare_webui_bundle_for_gateway",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "cirno_server.cli.webui._attach_to_background_gateway",
-        lambda runtime, **_kwargs: captured.__setitem__("attached_runtime", runtime),
-    )
-    monkeypatch.setattr("cirno_server.cli.webui._wait_for_webui", lambda *_args, **_kwargs: True)
-    return captured
-
-
-def _patch_cli_command_runtime(
-    monkeypatch,
-    config: Config,
-    *,
-    set_config_path=None,
-    sync_templates=None,
-    make_provider=None,
-    message_bus=None,
-    session_manager=None,
-    cron_service=None,
-    get_cron_dir=None,
-) -> None:
-    from importlib import import_module
-
-    # Load adapter contracts before replacing runtime factories for this invocation.
-    import_module("cirno_core.session.webui_turns")
-    import_module("cirno_server.channels.validation")
-    import_module("cirno_server.channels.websocket.runtime")
-    provider_factory = make_provider or (lambda _config: _fake_provider())
-
-    monkeypatch.setattr(
-        "cirno_core.config.loader.set_config_path",
-        set_config_path or (lambda _path: None),
-    )
-    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: config)
-    monkeypatch.setattr("cirno_core.config.loader.resolve_config_env_vars", lambda c: c)
-    monkeypatch.setattr(
-        "cirno_server.cli.commands.sync_workspace_templates",
-        sync_templates or (lambda _path: None),
-    )
-    monkeypatch.setattr(
-        "cirno_server.cli.webui.sync_workspace_templates",
-        lambda path, **_kwargs: sync_templates(path) if sync_templates else None,
-    )
-    monkeypatch.setattr(
-        "cirno_server.application.sync_workspace_templates",
-        sync_templates or (lambda _path: None),
-    )
-    monkeypatch.setattr(
-        "cirno_core.providers.factory.make_provider",
-        provider_factory,
-    )
-    monkeypatch.setattr(
-        "cirno_core.providers.factory.build_provider_snapshot",
-        lambda _config: _test_provider_snapshot(provider_factory(_config), _config),
-    )
-    monkeypatch.setattr(
-        "cirno_core.providers.factory.load_provider_snapshot",
-        lambda _config_path=None: _test_provider_snapshot(provider_factory(config), config),
-    )
-    monkeypatch.setattr(
-        "cirno_server.cli.webui_support._provider_setup_error",
-        lambda _config: None,
-    )
-    _patch_gateway_ports_free(monkeypatch)
-
-    if message_bus is not None:
-        monkeypatch.setattr("cirno_core.bus.queue.MessageBus", message_bus)
-    if session_manager is not None:
-        monkeypatch.setattr("cirno_core.session.manager.SessionManager", session_manager)
-    if cron_service is not None:
-        monkeypatch.setattr("cirno_core.cron.service.CronService", cron_service)
-    if get_cron_dir is not None:
-        monkeypatch.setattr("cirno_core.config.paths.get_cron_dir", get_cron_dir)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-async def test_webui_dev_monitor_fails_when_sidecar_exits() -> None:
-    dev_server = MagicMock()
-    dev_server.ensure_running.side_effect = WebUIDevError(
-        "WebUI development server exited unexpectedly (code 23)"
-    )
-
-    with pytest.raises(WebUIDevError, match=r"exited unexpectedly \(code 23\)"):
-        await cli_gateway_runtime._watch_webui_dev_server(
-            dev_server,
-            asyncio.Event(),
-            poll_interval_s=0,
-        )
-
-
-async def test_webui_dev_monitor_ignores_an_expected_gateway_shutdown() -> None:
-    dev_server = MagicMock()
-    shutdown_event = asyncio.Event()
-    shutdown_event.set()
-
-    await cli_gateway_runtime._watch_webui_dev_server(
-        dev_server,
-        shutdown_event,
-        poll_interval_s=0,
-    )
-
-    dev_server.ensure_running.assert_not_called()
-
-
-def test_browser_readiness_accepts_http_auth_response(monkeypatch) -> None:
-    def auth_required(*_args, **_kwargs):
-        raise urllib.error.HTTPError(
-            "http://127.0.0.1:8765/webui/bootstrap",
-            401,
-            "authentication required",
-            hdrs=None,
-            fp=None,
-        )
-
-    monkeypatch.setattr("urllib.request.urlopen", auth_required)
-
-    assert cli_gateway_runtime._http_endpoint_responding(
-        "http://127.0.0.1:8765/webui/bootstrap"
-    ) is True
-
-
-def test_browser_readiness_rejects_connection_error(monkeypatch) -> None:
-    def unavailable(*_args, **_kwargs):
-        raise urllib.error.URLError("connection refused")
-
-    monkeypatch.setattr("urllib.request.urlopen", unavailable)
-
-    assert cli_gateway_runtime._http_endpoint_responding(
-        "http://127.0.0.1:8765/webui/bootstrap"
-    ) is False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    assert has_active_tasks(load_bundled_template("HEARTBEAT.md")) is False
 
 
 def test_launch_browser_uses_macos_url_services(monkeypatch) -> None:
@@ -1300,75 +794,3 @@ def test_launch_browser_uses_unix_launcher_on_linux(monkeypatch) -> None:
 
     assert cli_webui_support._launch_browser("http://127.0.0.1:8765/") is True
     assert opened == ["http://127.0.0.1:8765/"]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _patch_serve_runtime(monkeypatch, config: Config, seen: dict[str, object]) -> None:
-    pytest.importorskip("aiohttp")
-
-    class _FakeApiApp:
-        def __init__(self) -> None:
-            self.on_startup: list[object] = []
-            self.on_cleanup: list[object] = []
-
-    class _FakeAgentLoop:
-        @classmethod
-        def from_config(cls, config, bus=None, **extra):
-            return cls(workspace=config.workspace_path, **extra)
-        def __init__(self, **kwargs) -> None:
-            seen["workspace"] = kwargs["workspace"]
-
-        async def aclose(self) -> None:
-            return None
-
-    def _fake_create_app(
-        agent_loop,
-        model_name: str,
-        request_timeout: float,
-        api_key: str = "",
-        prepare_agent=None,
-    ):
-        seen["agent_loop"] = agent_loop
-        seen["model_name"] = model_name
-        seen["request_timeout"] = request_timeout
-        seen["api_key"] = api_key
-        seen["prepare_agent"] = prepare_agent
-        return _FakeApiApp()
-
-    def _fake_run_app(api_app, host: str, port: int, print):
-        seen["api_app"] = api_app
-        seen["host"] = host
-        seen["port"] = port
-
-    _patch_cli_command_runtime(
-        monkeypatch,
-        config,
-        message_bus=MessageBus,
-        session_manager=lambda _workspace: _EmptyServerSessionManager(),
-    )
-    monkeypatch.setattr("cirno_server.cli.commands.AgentLoop", _FakeAgentLoop)
-    monkeypatch.setattr("cirno.api.server.create_app", _fake_create_app)
-    monkeypatch.setattr("aiohttp.web.run_app", _fake_run_app)

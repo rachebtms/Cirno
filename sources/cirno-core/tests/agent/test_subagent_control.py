@@ -11,11 +11,8 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from loguru import logger
-
 from cirno_core.agent.loop import AgentLoop
-from cirno_core.memory.consolidation import Consolidator
-from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.runner.contracts import AgentRunResult
 from cirno_core.agent.subagents.manager import SubagentManager
 from cirno_core.agent.tools.base import Tool
 from cirno_core.agent.tools.context import RequestContext, current_request_context, request_context
@@ -26,11 +23,17 @@ from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import TurnRunStatusChanged
 from cirno_core.config import Config
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.processes.sessions import ExecSessionManager
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.sdk.assistant import Cirno
-from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
 from cirno_core.session.manager import SESSION_CACHE_MAX_SIZE, SessionManager
-from cirno_core.session.webui_turns import WebuiTurnRoutePolicy
+from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
 from cirno_core.utils.llm_runtime import LLMRuntime
+from loguru import logger
 
 
 def setup(tmp_path, **kwargs):
@@ -172,7 +175,7 @@ async def test_child_origin_uses_the_channel_turn_identity(loop_factory):
     message = InboundMessage("websocket", "user", "origin-check", "Delegate this inspection",
                              metadata={"webui_turn_id": "visible-parent-turn"})
     try:
-        await loop._process_message(message)
+        await loop.processing.process(message)
         status = next(iter(loop.subagents.statuses_for_session(message.session_key).values()))
         assert status.origin_turn_id == "visible-parent-turn"
     finally:
@@ -184,7 +187,7 @@ async def test_child_origin_uses_the_channel_turn_identity(loop_factory):
 async def test_default_loop_keeps_slack_thread_for_late_subagent_result(
     tmp_path, monkeypatch, cache_invalidation,
 ):
-    monkeypatch.setattr("cirno_core.agent.loop._SUBAGENT_TERMINAL_WAIT_SECONDS", 0.01)
+    monkeypatch.setattr("cirno_core.agent.execution.injection._SUBAGENT_TERMINAL_WAIT_SECONDS", 0.01)
     # This checks real default-runtime routing and persistence, not disk latency.
     # Keep bounded waits without treating a loaded Windows runner as a routing failure.
     timeout = 30
@@ -275,7 +278,7 @@ async def test_default_loop_keeps_slack_thread_for_late_subagent_result(
 @pytest.mark.asyncio
 async def test_owner_canonical_fallback_and_absent_context(tmp_path):
     manager, _, ctx = setup(tmp_path)
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="private"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="private"))
     task_id = await spawn(manager, ctx)
     receipt = await manager.send(task_id, "owner", "follow-up")
     snapshot = manager.statuses_for_session("owner")[task_id]
@@ -327,7 +330,7 @@ async def test_bounded_fifo_snapshot_and_terminal_receipts(tmp_path):
         await finish.wait()
         return AgentRunResult(messages=[], final_content="done")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     task_id = await spawn(manager, ctx)
     await entered.wait()
     for invalid in ["", "  ", "x" * 8193, "界" * 2731]:
@@ -368,7 +371,7 @@ async def test_lifetime_receipt_limit_rejects_without_silent_eviction(tmp_path):
         entered.set()
         await asyncio.Event().wait()
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     task_id = await spawn(manager, ctx)
     await entered.wait()
     for text in ["one", "two"]:
@@ -392,7 +395,7 @@ async def test_queued_cancel_is_idempotent_and_never_admitted(tmp_path, begun):
         entered.set()
         await asyncio.Event().wait()
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     await spawn(manager, ctx, "occupy")
     await entered.wait()
     queued = await spawn(manager, ctx, "queued")
@@ -535,7 +538,7 @@ async def test_host_without_background_consumer_returns_the_child_result(tmp_pat
     manager, _, ctx = setup(tmp_path)
     ctx = RequestContext("cli", "oneshot", session_key="cli:oneshot", runtime=ctx.runtime,
                          can_receive_background_results=False)
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="verified"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="verified"))
     with request_context(ctx):
         result = await SubagentTool(manager).execute("create", task="verify")
     assert result == "verified"
@@ -599,9 +602,10 @@ async def test_real_task_process_cleanup_preserves_sibling_parent_and_work_produ
             raise RuntimeError("task failed")
         return AgentRunResult(messages=[], final_content="finished")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     # The parent's exec manager must not be closed by task cancellation.
-    parent_exec = ExecTool(working_dir=str(tmp_path), session_manager=manager._exec_session_manager)
+    parent_sessions = ExecSessionManager()
+    parent_exec = ExecTool(working_dir=str(tmp_path), session_manager=parent_sessions)
     try:
         with request_context(ctx):
             output = await parent_exec.execute(**kwargs)
@@ -625,7 +629,7 @@ async def test_real_task_process_cleanup_preserves_sibling_parent_and_work_produ
             )
         for session_id, owner, exec_manager in [
             (exec_ids["two"], f"subagent:{two}", manager._tasks[two].exec_manager),
-            (parent_id, "owner", manager._exec_session_manager),
+            (parent_id, "owner", parent_sessions),
         ]:
             poll = await exec_manager.write(
                 session_id=session_id, chars="SURVIVED\n", close_stdin=False, terminate=False,
@@ -636,13 +640,16 @@ async def test_real_task_process_cleanup_preserves_sibling_parent_and_work_produ
         assert script.exists()
         assert await manager.cancel_by_session("owner") == 1
         assert manager.bus.inbound_size == 1  # No cancelled sibling notice on parent stop.
-        parent_poll = await manager._exec_session_manager.write(
+        parent_poll = await parent_sessions.write(
             session_id=parent_id, chars="STILL ALIVE\n", close_stdin=False, terminate=False,
             yield_time_ms=1000, max_output_chars=1000, owner_session_key="owner",
         )
         assert not parent_poll.done and "STILL ALIVE" in parent_poll.output
     finally:
-        await manager.close()
+        try:
+            await manager.close()
+        finally:
+            await parent_sessions.close_all()
     assert script.exists()
     assert (tmp_path / "one-output.txt").read_text() == "one"
     assert (tmp_path / "two-output.txt").read_text() == "two"
@@ -660,7 +667,7 @@ async def test_terminal_retention_and_active_capacity_are_bounded(tmp_path):
         await release.wait()
         return AgentRunResult(messages=[], final_content="done")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     first = await spawn(manager, ctx)
     await entered.wait()
     with request_context(ctx):
@@ -680,7 +687,7 @@ async def test_terminal_retention_and_active_capacity_are_bounded(tmp_path):
 @pytest.mark.parametrize("shutdown", [False, True])
 async def test_completion_wins_cancel_race_and_rejects_late_messages(tmp_path, shutdown):
     manager, _, ctx = setup(tmp_path)
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="finished"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="finished"))
     cleaning, release = asyncio.Event(), asyncio.Event()
     task_id = await spawn(manager, ctx)
     exec_manager = manager._tasks[task_id].exec_manager
@@ -726,7 +733,7 @@ async def test_cancel_wins_over_late_execution_result(tmp_path, late_failure):
                 raise RuntimeError("late failure")
             return AgentRunResult(messages=[], final_content="not success")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     task_id = await spawn(manager, ctx)
     await entered.wait()
     message_id = json.loads(await control(manager, ctx, task_id, "send", "pending"))["message_id"]
@@ -752,7 +759,7 @@ async def test_inline_caller_cancel_closes_child_without_notice(tmp_path):
         entered.set()
         await asyncio.Event().wait()
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     with request_context(ctx):
         inline = asyncio.create_task(SubagentTool(manager).execute(action="create", task="wait", wait=True))
     await entered.wait()
@@ -769,8 +776,8 @@ async def test_inline_caller_cancel_closes_child_without_notice(tmp_path):
 async def test_cleanup_failure_survives_status_eviction_and_shutdown_retries(tmp_path):
     manager, _, ctx = setup(tmp_path)
     manager.MAX_TERMINAL = 1
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(
-        messages=[], final_content="x" * (manager.max_tool_result_chars + 1),
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(
+        messages=[], final_content="x" * (manager.limits.max_tool_result_chars + 1),
     ))
     task_id = await spawn(manager, ctx)
     exec_manager = manager._tasks[task_id].exec_manager
@@ -786,7 +793,7 @@ async def test_cleanup_failure_survives_status_eviction_and_shutdown_retries(tmp
     exec_manager.close_all.assert_awaited_once()
     assert manager.bus.inbound_size == 1
     assert task_id in manager._tasks
-    assert len(manager._tasks[task_id].outcome.result) == manager.max_tool_result_chars
+    assert len(manager._tasks[task_id].outcome.result) == manager.limits.max_tool_result_chars
     newer = await spawn(manager, ctx)
     await settled(manager)
     assert json.loads(await control(manager, ctx, newer))["state"] == "done"
@@ -821,7 +828,7 @@ async def test_tool_suppressed_cancellation_cannot_start_next_tool(tmp_path):
 
     registry = ToolRegistry()
     registry.register(PauseTool())
-    manager._build_tools = lambda **kwargs: registry
+    manager.tools.build = lambda **kwargs: registry
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
         content=None,
         tool_calls=[ToolCallRequest(id=str(i), name="pause", arguments={}) for i in range(2)],
@@ -846,7 +853,7 @@ async def test_long_running_task_receipts_survive_newer_task_retention(tmp_path)
             await release.wait()
         return AgentRunResult(messages=[], final_content="done")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     old = await spawn(manager, ctx, "old")
     await entered.wait()
     message_id = json.loads(await control(manager, ctx, old, "send", "pending"))["message_id"]
@@ -935,7 +942,7 @@ async def test_targeted_inline_cancel_does_not_cancel_waiting_parent(tmp_path):
         entered.set()
         await asyncio.Event().wait()
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     with request_context(ctx):
         parent = asyncio.create_task(SubagentTool(manager).execute(action="create", task="wait", wait=True))
     await entered.wait()
@@ -951,7 +958,7 @@ async def test_targeted_inline_cancel_does_not_cancel_waiting_parent(tmp_path):
 async def test_cleanup_wait_is_bounded_and_repeated_cancel_does_not_interrupt_it(tmp_path):
     manager, _, ctx = setup(tmp_path)
     manager.CANCEL_WAIT_SECONDS = 0.02
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="done"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="done"))
     cleaning, release = asyncio.Event(), asyncio.Event()
     task_id = await spawn(manager, ctx)
     record = manager._tasks[task_id]

@@ -5,17 +5,20 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from cirno_core.memory.consolidation import Consolidator
-from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.runner.contracts import AgentRunResult
 from cirno_core.agent.subagents.manager import SubagentManager
-from cirno_core.agent.tools.filesystem import FileToolsConfig
+from cirno_core.agent.tools.filesystem_config import FileToolsConfig
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import ToolsConfig
-from cirno_core.llm_usage.context import llm_usage_source
-from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.config.tools import ToolsConfig
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.processes.sessions import ExecSessionManager
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.security.workspace_access import build_workspace_scope
 from cirno_core.utils.llm_runtime import LLMRuntime
+from cirno_usage.context import llm_usage_source
 
 
 def _runtime(provider: LLMProvider) -> LLMRuntime:
@@ -34,7 +37,7 @@ async def test_subagent_uses_tool_loader():
         max_tool_result_chars=16_000,
         consolidator=MagicMock(spec=Consolidator),
     )
-    tools = sm._build_tools()
+    tools = sm.tools.build(exec_manager=ExecSessionManager())
     assert tools.has("read_file")
     assert tools.has("write_file")
     assert not tools.has("message")
@@ -58,8 +61,8 @@ async def test_subagent_build_tools_isolates_file_read_state(tmp_path):
         consolidator=MagicMock(spec=Consolidator),
     )
 
-    first_read = sm._build_tools().get("read_file")
-    second_read = sm._build_tools().get("read_file")
+    first_read = sm.tools.build(exec_manager=ExecSessionManager()).get("read_file")
+    second_read = sm.tools.build(exec_manager=ExecSessionManager()).get("read_file")
 
     assert first_read is not second_read
     assert (await first_read.execute(path="note.txt")).startswith("1| hello")
@@ -79,7 +82,7 @@ def test_subagent_respects_file_tool_toggle(tmp_path):
         tools_config=ToolsConfig(file=FileToolsConfig(enable=False)),
     )
 
-    tools = sm._build_tools()
+    tools = sm.tools.build(exec_manager=ExecSessionManager())
 
     file_tools = {
         "apply_patch",
@@ -111,7 +114,7 @@ def test_subagent_prompt_keeps_agent_paths_for_selected_project(tmp_path):
         consolidator=MagicMock(spec=Consolidator),
     )
 
-    prompt = manager._build_subagent_prompt(workspace=project)
+    prompt = manager.tools.prompt(workspace=project)
 
     assert "one root and relative SKILL.md paths" in prompt
     assert "Join them when using `files__read`" in prompt
@@ -135,7 +138,7 @@ def test_subagent_prompt_uses_relative_paths_in_agent_workspace(tmp_path):
         consolidator=MagicMock(spec=Consolidator),
     )
 
-    prompt = manager._build_subagent_prompt()
+    prompt = manager.tools.prompt()
 
     assert "History log: memory/history.jsonl" in prompt
     assert f"### Home skills (`{tmp_path.resolve() / 'home' / 'skills'}`)" in prompt
@@ -155,10 +158,10 @@ async def test_subagent_keeps_project_runtime_scope_with_agent_owned_tools(tmp_p
         max_tool_result_chars=16_000,
         consolidator=MagicMock(spec=Consolidator),
     )
-    manager.runner.run = AsyncMock(
+    manager.execution.runner.run = AsyncMock(
         return_value=AgentRunResult(final_content="ok", messages=[], stop_reason="completed")
     )
-    manager._announce_result = AsyncMock()
+    manager.reports.announce = AsyncMock()
 
     await manager.spawn(
         task="task",
@@ -170,7 +173,7 @@ async def test_subagent_keeps_project_runtime_scope_with_agent_owned_tools(tmp_p
     )
     await asyncio.gather(*manager._running_tasks.values(), return_exceptions=True)
 
-    spec = manager.runner.run.call_args.args[0]
+    spec = manager.execution.runner.run.call_args.args[0]
     assert spec.workspace == project
     assert spec.tools.get("read_file")._workspace == agent_workspace.resolve()
 
@@ -280,10 +283,10 @@ async def test_spawned_subagent_inherits_llm_usage_source(tmp_path):
         max_tool_result_chars=16_000,
         consolidator=MagicMock(spec=Consolidator),
     )
-    sm.runner.run = AsyncMock(
+    sm.execution.runner.run = AsyncMock(
         return_value=AgentRunResult(final_content="ok", messages=[], stop_reason="completed")
     )
-    sm._announce_result = AsyncMock()
+    sm.reports.announce = AsyncMock()
 
     with llm_usage_source("cron"):
         await sm.spawn(
@@ -294,5 +297,5 @@ async def test_spawned_subagent_inherits_llm_usage_source(tmp_path):
     tasks = list(sm._running_tasks.values())
     await asyncio.gather(*tasks)
 
-    spec = sm.runner.run.call_args.args[0]
+    spec = sm.execution.runner.run.call_args.args[0]
     assert spec.llm_usage_source == "cron"

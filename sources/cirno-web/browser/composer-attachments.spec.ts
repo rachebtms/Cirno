@@ -1,3 +1,4 @@
+import { seedPreviewPreferences, updatePreviewPreferences } from "./preference-driver";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function imageFile(page: Page, name: string, background: string) {
@@ -19,27 +20,21 @@ async function imageFile(page: Page, name: string, background: string) {
 
 async function expectAttachmentDetails(page: Page, chip: Locator, name: string, touch = false) {
   const info = chip.getByRole("button", { name, exact: true });
-  const size = await info.getAttribute("aria-description");
-  expect(size).toMatch(/^\d+(?:\.\d+)? (?:B|KiB|MiB)$/);
+  await expect(info).toHaveAccessibleDescription(/^\d+(?:\.\d+)? (?:B|KiB|MiB)$/);
   if (touch) await info.tap();
-  else {
-    await info.hover();
-    await expect(page.getByRole("tooltip")).toContainText(name);
-    await expect(page.getByRole("tooltip")).toContainText(size!);
-    await info.click();
-  }
+  else await info.click();
   const details = page.getByRole("dialog", { name, exact: true });
   await expect(details.getByText(name, { exact: true })).toBeVisible();
-  await expect(details.getByText(size!, { exact: true })).toBeVisible();
+  await expect(details).toContainText(/\d+(?:\.\d+)? (?:B|KiB|MiB)/);
   await page.keyboard.press("Escape");
-  await expect(details).toHaveCount(0);
+  await expect(details).not.toBeVisible();
   await expect(info).toBeFocused();
   await page.mouse.move(0, 0);
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
-  await page.route("**/api/**", route => route.fulfill({ json: {} }));
+  await seedPreviewPreferences(page, { language: "en" });
+  await page.route("**/v0/**", route => route.fulfill({ json: {} }));
 });
 
 for (const { width, dark, variant } of [
@@ -50,9 +45,9 @@ for (const { width, dark, variant } of [
 ]) {
   test.describe(`${width}px ${dark ? "dark" : "light"} ${variant} attachments`, () => {
     test.use({ viewport: { width, height: 800 }, hasTouch: width < 640 });
-    test("shows image-only thumbnails and keeps mixed attachments removable", async ({ page }, testInfo) => {
+    test("previews mixed files and preserves the draft during touch and keyboard removal", async ({ page }, testInfo) => {
       await page.goto(`/browser/fixture.html?case=composer-action&composerVariant=${variant}`);
-      await page.locator("html").evaluate((node, enabled) => node.classList.toggle("dark", enabled), dark);
+      await updatePreviewPreferences(page, { themeMode: dark ? "dark" : "light" });
       const files = [
         await imageFile(page, "white.png", "#fff"),
         await imageFile(page, "dark.png", "#111"),
@@ -69,25 +64,23 @@ for (const { width, dark, variant } of [
         expect(await image.evaluate(node => ({ width: (node as HTMLImageElement).naturalWidth, height: (node as HTMLImageElement).naturalHeight }))).toEqual({ width: 480, height: 320 });
         const chip = chips.filter({ has: image });
         const box = (await chip.boundingBox())!;
-        expect(box.width).toBe(96);
-        expect(box.height).toBe(96);
-        expect(await chip.innerText()).toBe("");
+        await expect(chip).toContainText(name);
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
         const remove = chip.getByRole("button", { name: "Remove attachment" });
         await expect(remove).toBeVisible();
         await expect(remove).toHaveAccessibleDescription(name);
         const target = (await remove.boundingBox())!;
         expect(target.width).toBeGreaterThanOrEqual(44);
         expect(target.height).toBeGreaterThanOrEqual(44);
-        expect(target.x + target.width).toBeCloseTo(box.x + box.width - 1);
-        expect(target.y).toBeCloseTo(box.y + 1);
+        expect(target.x).toBeGreaterThanOrEqual(box.x);
+        expect(target.x + target.width).toBeLessThanOrEqual(box.x + box.width);
+        expect(target.y).toBeGreaterThanOrEqual(box.y);
         await expectAttachmentDetails(page, chip, name, width < 640);
       }
       const document = chips.filter({ has: page.getByRole("button", { name: "report.pdf", exact: true }) });
-      await expect(document).toHaveText("PDF");
+      await expect(document.getByRole("button", { name: "report.pdf", exact: true })).toHaveText("PDF");
       await expect(document.getByRole("button", { name: "report.pdf", exact: true })).toHaveAccessibleDescription(`${files[3].buffer.byteLength} B`);
-      const documentBox = (await document.boundingBox())!;
-      expect(documentBox.width).toBe(96);
-      expect(documentBox.height).toBe(96);
       await expectAttachmentDetails(page, document, "report.pdf", width < 640);
       expect(await page.evaluate(() => window.document.documentElement.scrollWidth)).toBe(width);
       await page.getByRole("textbox").fill("Compare these images with the report.");
@@ -135,5 +128,5 @@ test("shows a readable error card and allows removal of a corrupt image", async 
   await expect(input).toHaveValue(draft);
   await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
   await input.fill("");
-  await expect(page.getByRole("button", { name: "Voice input", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeDisabled();
 });

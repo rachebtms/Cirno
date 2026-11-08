@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 import cirno_core.session.sqlite_store as sqlite_store
-from cirno_core.providers.base import ProviderConversationState
-from cirno_core.session.manager import Session
+from cirno_core.providers.contracts import ProviderConversationState
+from cirno_core.session.model import Session
 from cirno_core.session.sqlite_store import SqliteSessionStore
 
 

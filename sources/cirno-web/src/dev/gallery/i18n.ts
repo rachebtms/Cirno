@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 
-import i18n, { initializeI18n } from "@/i18n";
+import i18n, { initializeI18n, applyServerLanguage } from "@/i18n";
+import { readOwnerPreferences } from "@/features/preferences/store";
 import { supportedLocales } from "@/i18n/config";
 
 const bundles = import.meta.glob<{ default: Record<string, unknown> }>(
@@ -11,6 +12,7 @@ const bundles = import.meta.glob<{ default: Record<string, unknown> }>(
 // Gallery copy is a development-only namespace; the application keeps its own bundles.
 export async function initializeGalleryI18n(): Promise<void> {
   await initializeI18n();
+  await applyServerLanguage(readOwnerPreferences().language);
   for (const { code } of supportedLocales) {
     for (const [path, bundle] of Object.entries(bundles)) {
       const match = path.match(/^\.\/locales\/([^/]+)\/([^/]+)\.json$/);

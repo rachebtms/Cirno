@@ -5,25 +5,20 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno_core.memory.consolidation import (
-    _ARCHIVE_TOOL_RESULT,
-    _HISTORY_ENTRY_HARD_CAP,
-    Consolidator,
-    MemoryStore,
-)
+from cirno_core.memory.archiver import _ARCHIVE_TOOL_RESULT
+from cirno_core.memory.journal import HISTORY_ENTRY_MAX_CHARS
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.memory.store import MemoryStore
 from cirno_core.bus.agent_events import AgentEvent, ContextCompactionEvent, EventSink
-from cirno_core.providers.base import (
-    GenerationSettings,
-    LLMResponse,
-    ProviderConversationState,
-    ToolCallRequest,
-)
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import (
     RUNTIME_CONTEXT_HISTORY_META,
     RuntimeContextBlock,
     append_runtime_context,
 )
-from cirno_core.session.manager import Session
+from cirno_core.session.model import Session
 from cirno_core.utils.llm_runtime import LLMRuntime
 from cirno_core.utils.prompt_templates import render_template
 
@@ -187,7 +182,7 @@ class TestTurnTranscriptSummary:
         assert result is not None
         assert "[RAW]" in result
         assert "accepted history" in result
-        assert store.read_unprocessed_history(since_cursor=0) == []
+        assert store.journal.read_unprocessed_history(since_cursor=0) == []
 
     async def test_native_compaction_appends_only_archive_prompt(
         self,
@@ -336,7 +331,7 @@ class TestConsolidatorSummarize:
         ]
         result = await _archive(consolidator, messages, runtime)
         assert result == "User fixed a bug in the auth module."
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
 
     async def test_summarize_appends_session_key_to_history(
@@ -359,7 +354,7 @@ class TestConsolidatorSummarize:
             session_key="telegram:chat-1",
         )
 
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert entries[0]["session_key"] == "telegram:chat-1"
 
     async def test_summarize_raw_dumps_on_llm_failure(
@@ -372,7 +367,7 @@ class TestConsolidatorSummarize:
         assert result is not None
         assert "[RAW]" in result
         assert "hello" in result
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
         assert "[RAW]" in entries[0]["content"]
 
@@ -393,7 +388,7 @@ class TestConsolidatorSummarize:
             session_key="slack:chat-2",
         )
 
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert entries[0]["session_key"] == "slack:chat-2"
 
     async def test_raw_fallback_represents_previous_checkpoint_and_new_chunk(
@@ -472,7 +467,7 @@ class TestConsolidatorArchiveErrorHandling:
         result = await _archive(consolidator, messages, runtime)
         assert result is not None
         assert "[RAW]" in result
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
         assert "[RAW]" in entries[0]["content"]
         assert invalid_output not in entries[0]["content"]
@@ -491,7 +486,7 @@ class TestConsolidatorArchiveErrorHandling:
         ]
         result = await _archive(consolidator, messages, runtime)
         assert result == "User fixed a bug in the auth module."
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
         assert "[RAW]" not in entries[0]["content"]
 
@@ -502,7 +497,7 @@ class TestConsolidatorArchiveErrorHandling:
             content="Summary.",
             finish_reason="stop",
         )
-        consolidator.store.append_history = MagicMock(side_effect=OSError("disk full"))
+        consolidator.store.journal.append_history = MagicMock(side_effect=OSError("disk full"))
         consolidator.store.raw_archive = MagicMock()
 
         with pytest.raises(OSError, match="disk full"):
@@ -520,7 +515,7 @@ class TestConsolidatorArchiveErrorHandling:
         runtime = replace(runtime, context_window_tokens=128_000)
         consolidator.store.raw_archive = MagicMock()
         monkeypatch.setattr(
-            "cirno_core.memory.consolidation.render_template",
+            "cirno_core.memory.archiver.render_template",
             MagicMock(side_effect=RuntimeError("template failed")),
         )
         session = Session(key="test:template")
@@ -609,7 +604,7 @@ class TestCompactIdleSession:
         session.add_message("user", "x " * 20_000 + "TAIL_MARKER")
         expected = store._format_messages(session.messages)
         sessions.save(session)
-        append = store._append_history_record
+        append = store.journal.append_record
         writes = 0
 
         def fail_second(content, *, session_key=None):
@@ -620,7 +615,7 @@ class TestCompactIdleSession:
             return append(content, session_key=session_key)
 
         with monkeypatch.context() as patcher:
-            patcher.setattr(store, "_append_history_record", fail_second)
+            patcher.setattr(store.journal, "append_record", fail_second)
             with pytest.raises(OSError, match="disk full"):
                 await real_consolidator.compact_idle_session(session.key, runtime=runtime)
 
@@ -628,12 +623,12 @@ class TestCompactIdleSession:
         unchanged = sessions.get_or_create(session.key)
         assert unchanged.last_archived == 0
         assert unchanged.messages == session.messages
-        partial_cursor = store.get_latest_cursor()
+        partial_cursor = store.journal.get_latest_cursor()
         assert partial_cursor == 1
 
         await real_consolidator.compact_idle_session(session.key, runtime=runtime)
 
-        entries = MemoryStore(store.workspace).read_unprocessed_history(partial_cursor)
+        entries = MemoryStore(store.workspace).journal.read_unprocessed_history(partial_cursor)
         assert "".join(entry["content"].split("\n", 1)[1] for entry in entries) == expected
         sessions.invalidate(session.key)
         assert sessions.get_or_create(session.key).last_archived == 1
@@ -747,7 +742,7 @@ class TestCompactIdleSession:
         assert first == "Short summary."
         assert second == ""
         mock_provider.chat_stream_with_retry.assert_awaited_once()
-        assert len(store.read_unprocessed_history(since_cursor=0)) == 1
+        assert len(store.journal.read_unprocessed_history(since_cursor=0)) == 1
         reloaded = sessions.get_or_create("cli:short")
         assert reloaded.last_archived == 2
         assert reloaded.get_history() == []
@@ -776,7 +771,7 @@ class TestCompactIdleSession:
         assert reloaded.last_archived == 2
         assert "_last_summary" not in reloaded.metadata
         assert reloaded.provider_state == _provider_state()
-        assert store.read_unprocessed_history(since_cursor=0) == []
+        assert store.journal.read_unprocessed_history(since_cursor=0) == []
 
     @pytest.mark.asyncio
     async def test_next_turn_rebuilds_context_after_idle_compaction(
@@ -945,7 +940,7 @@ class TestCompactIdleSession:
         assert "Earlier durable checkpoint." in fallback
         assert "[Newly archived raw context]" in fallback
         assert "newest working state" in fallback
-        entries = store.read_unprocessed_history(0)
+        entries = store.journal.read_unprocessed_history(0)
         assert entries[0]["content"] == "Earlier durable checkpoint."
         assert entries[1]["content"].startswith("[RAW] 2 messages")
         sessions.invalidate("cli:cumulative-fallback")
@@ -1074,7 +1069,7 @@ class TestCompactIdleSession:
             "cli:rawdrop", runtime=runtime
         )
 
-        raw = "\n".join(e["content"] for e in store.read_unprocessed_history(since_cursor=0))
+        raw = "\n".join(e["content"] for e in store.journal.read_unprocessed_history(since_cursor=0))
         assert "[RAW]" in raw
         assert "user msg 0" in raw
         assert "RETAINED_SUFFIX_marker" in raw
@@ -1104,7 +1099,7 @@ class TestCompactIdleSession:
             "cli:test", runtime=runtime
         )
 
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert entries[0]["session_key"] == "cli:test"
 
     @pytest.mark.asyncio
@@ -1156,7 +1151,7 @@ class TestCompactIdleSession:
 
         reloaded = sessions.get_or_create("cli:nothing")
         assert reloaded.metadata["_last_summary"]["text"] == result
-        assert real_consolidator.store.read_unprocessed_history(0)
+        assert real_consolidator.store.journal.read_unprocessed_history(0)
         assert reloaded.last_archived == 20
         assert reloaded.get_history() == []
         mock_provider.chat_stream_with_retry.assert_awaited_once()
@@ -1182,7 +1177,7 @@ class TestCompactIdleSession:
         assert "[RAW]" in result
 
         # raw_archive should have been called (history.jsonl gets an entry)
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert entries[0]["content"].startswith("[RAW] 20 messages")
 
         reloaded = sessions.get_or_create("cli:fail")
@@ -1309,7 +1304,7 @@ class TestCompactIdleSession:
             "memory overview" not in str(message.get("content", "")).lower()
             for message in reloaded.messages
         )
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert [entry["content"] for entry in entries] == [
             "## Task\nlookup\n## State\nOverview from the temporary turn.\n## Next\ncomplete"
         ]
@@ -1372,7 +1367,7 @@ class TestCompactIdleSession:
             "does not execute tools" in message["content"]
             for message in recovery_messages[-2:]
         )
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert [entry["content"] for entry in entries] == ["Recovered archive summary."]
         assert sessions.get_or_create("cli:unexpected-tool").last_archived == 2
 
@@ -1404,7 +1399,7 @@ class TestCompactIdleSession:
         assert result is not None
         assert "[RAW]" in result
         assert mock_provider.chat_stream_with_retry.await_count == 2
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
         assert "important answer" in entries[0]["content"]
         assert sessions.get_or_create("cli:repeated-tool").last_archived == 2
@@ -1434,7 +1429,7 @@ class TestCompactIdleSession:
 
         assert result is not None
         assert "[RAW]" in result
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
         assert entries[0]["content"].startswith("[RAW] ")
         assert "important answer" in entries[0]["content"]
@@ -1462,7 +1457,7 @@ class TestCompactIdleSession:
         assert result is not None
         assert "[RAW]" in result
         mock_provider.chat_stream_with_retry.assert_not_awaited()
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) > 1
         assert all(entry["content"].startswith("[RAW] ") for entry in entries)
         assert "x" * 100_000 in "".join(entry["content"].split("\n", 1)[1] for entry in entries)
@@ -1548,7 +1543,7 @@ class TestRawArchiveChunks:
 
     @pytest.mark.parametrize("boundary", ["A ", "\n\n", "<think>PRIVATE</think>"])
     def test_raw_chunks_preserve_sanitized_boundaries(self, store, boundary):
-        from cirno_core.utils.helpers import strip_think
+        from cirno_core.utils.reasoning import strip_think
 
         message = {"role": "assistant", "content": ""}
         prefix_len = len(store._format_messages([{**message, "content": "x"}])) - 1
@@ -1558,7 +1553,7 @@ class TestRawArchiveChunks:
         store.raw_archive([message])
 
         # Reload the real journal, rather than observing append call arguments.
-        entries = MemoryStore(store.workspace).read_unprocessed_history(since_cursor=0)
+        entries = MemoryStore(store.workspace).journal.read_unprocessed_history(since_cursor=0)
         joined = "".join(entry["content"].split("\n", 1)[1] for entry in entries)
         assert joined == expected
         assert "PRIVATE" not in joined
@@ -1569,7 +1564,7 @@ class TestRawArchiveChunks:
         big = "x" * 50_000
         messages = [{"role": "user", "content": big}]
         store.raw_archive(messages)
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) > 1
         assert len(entries[0]["content"]) < 50_000
         assert "[RAW]" in entries[0]["content"]
@@ -1578,7 +1573,7 @@ class TestRawArchiveChunks:
         """Small messages should not be truncated."""
         messages = [{"role": "user", "content": "hello"}]
         store.raw_archive(messages)
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries) == 1
         assert "hello" in entries[0]["content"]
 
@@ -1592,7 +1587,7 @@ class TestRawArchiveChunks:
 
         checkpoint = store.raw_archive(messages, session_key="cli:test")
 
-        persisted = store.read_unprocessed_history(since_cursor=0)[0]["content"]
+        persisted = store.journal.read_unprocessed_history(since_cursor=0)[0]["content"]
         assert checkpoint == persisted
         assert "PRIVATE_REASONING" not in checkpoint
         assert "visible result" in checkpoint
@@ -1609,21 +1604,21 @@ class TestRawArchiveChunks:
             RUNTIME_CONTEXT_HISTORY_META: marker,
         }])
 
-        entry = store.read_unprocessed_history(since_cursor=0)[0]["content"]
+        entry = store.journal.read_unprocessed_history(since_cursor=0)[0]["content"]
         assert "ship the feature" in entry
         assert "host-only goal guidance" not in entry
 
     def test_raw_archive_preserves_session_key(self, store):
         messages = [{"role": "user", "content": "hello"}]
         store.raw_archive(messages, session_key="websocket:chat-1")
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert entries[0]["session_key"] == "websocket:chat-1"
 
     def test_raw_archive_custom_max_chars(self, store):
         """max_chars parameter should override default limit."""
         messages = [{"role": "user", "content": "a" * 200}]
         store.raw_archive(messages, max_chars=100)
-        entries = store.read_unprocessed_history(since_cursor=0)
+        entries = store.journal.read_unprocessed_history(since_cursor=0)
         assert len(entries[0]["content"]) < 200
 
     @pytest.mark.parametrize("limit", [100, 100_000])
@@ -1633,9 +1628,9 @@ class TestRawArchiveChunks:
 
         checkpoint = store.raw_archive(messages, max_chars=limit, session_key="cli:chunks")
 
-        entries = MemoryStore(store.workspace).read_unprocessed_history(since_cursor=0)
+        entries = MemoryStore(store.workspace).journal.read_unprocessed_history(since_cursor=0)
         assert "".join(entry["content"].split("\n", 1)[1] for entry in entries) == expected
-        assert all(len(entry["content"]) <= _HISTORY_ENTRY_HARD_CAP for entry in entries)
+        assert all(len(entry["content"]) <= HISTORY_ENTRY_MAX_CHARS for entry in entries)
         assert all(entry["session_key"] == "cli:chunks" for entry in entries)
         assert checkpoint == store._build_raw_checkpoint(messages, max_chars=limit)
 
@@ -1656,7 +1651,7 @@ class TestArchivePersistence:
             runtime,
         )
 
-        persisted = store.read_unprocessed_history(since_cursor=0)[0]["content"]
+        persisted = store.journal.read_unprocessed_history(since_cursor=0)[0]["content"]
         assert summary is not None
         assert summary == persisted == "safe summary"
 
@@ -1667,7 +1662,7 @@ class TestArchivePersistence:
         history.jsonl — that would re-open the #3412 bloat vector from the
         *success* path instead of the fallback path."""
         mock_provider.chat_stream_with_retry.return_value = MagicMock(
-            content="S" * (_HISTORY_ENTRY_HARD_CAP * 2),
+            content="S" * (HISTORY_ENTRY_MAX_CHARS * 2),
             finish_reason="stop",
         )
         summary = await _archive(
@@ -1676,7 +1671,7 @@ class TestArchivePersistence:
             runtime,
         )
 
-        entry = store.read_unprocessed_history(since_cursor=0)[0]
-        assert len(entry["content"]) <= _HISTORY_ENTRY_HARD_CAP + 50
+        entry = store.journal.read_unprocessed_history(since_cursor=0)[0]
+        assert len(entry["content"]) <= HISTORY_ENTRY_MAX_CHARS + 50
         assert summary is not None
         assert summary == entry["content"]

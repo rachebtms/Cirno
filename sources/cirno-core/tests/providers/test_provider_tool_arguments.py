@@ -1,10 +1,6 @@
 """Shared tool-argument parsing policy tests."""
 
-from cirno_core.providers.base import (
-    parse_tool_arguments,
-    tool_arguments_json_for_replay,
-    tool_arguments_object_for_replay,
-)
+from cirno_core.providers.tool_calls import parse_tool_arguments, tool_arguments_json_for_replay, tool_arguments_object_for_replay
 
 
 def test_parse_tool_arguments_preserves_malformed_executable_arguments() -> None:

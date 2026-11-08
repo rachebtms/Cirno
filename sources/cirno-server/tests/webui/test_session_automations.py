@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from cirno_core.cron.types import CronJob, CronPayload
 from cirno_core.session.manager import SessionManager
 from cirno_core.triggers.local_types import LocalTrigger
@@ -43,7 +42,7 @@ def test_linked_chat_title_reads_current_session_metadata(
     )
 
     for expected in (title, "Updated title"):
-        rows = serialize_automation_jobs([cron, trigger], include_details=True, session_manager=manager)
+        rows = serialize_automation_jobs([cron, trigger], include_details=True, session_manager=manager, trigger_root=tmp_path / "triggers")
         for row in rows:
             assert row["origin"] == {
                 "session_key": key,

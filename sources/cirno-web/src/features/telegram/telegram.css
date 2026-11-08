@@ -1,0 +1,102 @@
+.telegram-settings,
+.telegram-section {
+  display: grid;
+  min-width: 0;
+  gap: 0.875rem;
+}
+.telegram-settings {
+  gap: 1.75rem;
+}
+.telegram-section h2 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.telegram-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.telegram-hint {
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.telegram-account-content,
+.telegram-delivery-options,
+.telegram-url-form {
+  display: grid;
+  gap: 1rem;
+}
+.telegram-account-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.telegram-account-summary > div {
+  flex: 1;
+  min-width: 10rem;
+}
+.telegram-account-summary h3 {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  margin-bottom: 0.375rem;
+}
+.telegram-account-summary > .button {
+  flex-shrink: 0;
+}
+.telegram-pairing-pin {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.telegram-pin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.telegram-pin-row > code {
+  font-size: 1.5rem;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+}
+.telegram-pin-row > code[data-expired="true"] {
+  color: var(--muted);
+}
+.telegram-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+.telegram-pairing-pin > .button,
+.telegram-url-form > .button,
+.telegram-account-content > .button {
+  justify-self: start;
+}
+.telegram-skeleton {
+  display: grid;
+  gap: 0.625rem;
+}
+.telegram-skeleton span {
+  display: block;
+  width: 45%;
+  height: 0.875rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+}
+.telegram-skeleton span + span {
+  width: 70%;
+}
+.telegram-url-form > .textfield {
+  width: 100%;
+}
+.telegram-field-error {
+  min-height: 1.5rem;
+}

@@ -1,7 +1,7 @@
 import { MemoryLruCache } from "./memory-lru-cache";
 import { parseWebuiThreadPayload } from "./api";
 import { readReloadCache, removeReloadCache, writeReloadCache } from "./reload-cache";
-import type { WebuiThreadPersistedPayload } from "./types";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 /** Bounded canonical replay cache; the most recent snapshot also survives tab reloads. */
 export class WebuiThreadCache extends MemoryLruCache<WebuiThreadPersistedPayload> {

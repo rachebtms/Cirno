@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ProvidersSettings, type ProviderSettingsEntry } from "@/components/settings/models/ProviderSettings";
-import { parseProviderObject, providerFormFromRow, type CustomProviderDraft, type ProviderForm } from "@/components/settings/models/providerForm";
+import { ProvidersSettings, type ProviderSettingsEntry } from "@/features/settings/providers/ProvidersSettings";
+import { parseProviderObject, providerFormFromRow, type CustomProviderDraft, type ProviderForm } from "@/features/settings/providers/providerForm";
 import { Button } from "@/components/ui/button";
-import type { SettingsPayload } from "@/lib/types";
+import type { SettingsPayload } from "@/lib/contracts/settings";
 import type { ComponentExample } from "./example";
 import { settings } from "./settings";
 import { useGalleryTranslation } from "./i18n";
@@ -12,16 +12,16 @@ import { useGalleryTranslation } from "./i18n";
 type ProviderRow = SettingsPayload["providers"][number];
 
 const previewProviders: ProviderRow[] = [
-  { name: "custom", label: "Custom", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.example.com/v1" },
-  { name: "anthropic", label: "Anthropic", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.anthropic.com", request_apis: ["anthropic_messages"] },
-  { name: "openai_codex", label: "OpenAI Codex", configured: true, auth_type: "oauth", api_key_required: false, oauth_login_supported: true, advanced_fields: ["use_proxy", "extra_body"] },
-  { name: "xai_grok", label: "xAI Grok", configured: true, auth_type: "oauth", api_key_required: false, oauth_login_supported: true, advanced_fields: ["use_proxy", "extra_body"] },
-  { name: "deepseek", label: "DeepSeek", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.deepseek.com" },
-  { name: "zhipu", label: "Zhipu AI", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://open.bigmodel.cn/api/paas/v4" },
-  { name: "minimax", label: "MiniMax", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.minimax.io/v1" },
-  { name: "groq", label: "Groq", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.groq.com/openai/v1" },
-  { name: "openai", label: "OpenAI", configured: false, auth_type: "api_key", default_api_base: "https://api.openai.com/v1", request_apis: ["responses", "chat_completions"], provider_api_configurable: true, model_api_configurable: true },
-  { name: "ollama", label: "Ollama", configured: false, auth_type: "api_key", api_key_required: false, default_api_base: "http://localhost:11434/v1", model_catalog: "local" },
+  { id: "custom", name: "Custom", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.example.com/v1" },
+  { id: "anthropic", name: "Anthropic", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.anthropic.com", request_apis: ["anthropic_messages"] },
+  { id: "openai_codex", name: "OpenAI Codex", configured: true, auth_type: "oauth", api_key_required: false, oauth_login_supported: true, advanced_fields: ["use_proxy", "extra_body"] },
+  { id: "xai_grok", name: "xAI Grok", configured: true, auth_type: "oauth", api_key_required: false, oauth_login_supported: true, advanced_fields: ["use_proxy", "extra_body"] },
+  { id: "deepseek", name: "DeepSeek", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.deepseek.com" },
+  { id: "zhipu", name: "Zhipu AI", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://open.bigmodel.cn/api/paas/v4" },
+  { id: "minimax", name: "MiniMax", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.minimax.io/v1" },
+  { id: "groq", name: "Groq", configured: true, auth_type: "api_key", api_key_hint: "••••••••", api_base: "https://api.groq.com/openai/v1" },
+  { id: "openai", name: "OpenAI", configured: false, auth_type: "api_key", default_api_base: "https://api.openai.com/v1", request_apis: ["responses", "chat_completions"], provider_api_configurable: true, model_api_configurable: true },
+  { id: "ollama", name: "Ollama", configured: false, auth_type: "api_key", api_key_required: false, default_api_base: "http://localhost:11434/v1", model_catalog: "local" },
 ];
 
 function stringParameters(value: string): Record<string, string> | null {
@@ -61,15 +61,14 @@ function ProvidersPreview() {
     ...settings, providers: previewProviders, provider_api_configuration_supported: true,
   }));
   const [drafts, setDrafts] = useState<Record<string, ProviderForm>>(() =>
-    Object.fromEntries(previewProviders.map((provider) => [provider.name, providerFormFromRow(provider)])));
+    Object.fromEntries(previewProviders.map((provider) => [provider.id, providerFormFromRow(provider)])));
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   const [editingKeys, setEditingKeys] = useState<Record<string, boolean>>({});
   const [entry, setEntry] = useState<ProviderSettingsEntry | null>(null);
   const [showBrandLogos, setShowBrandLogos] = useState(true);
   const [notice, setNotice] = useState<{ key: string; name?: string } | null>(null);
-  const trigger = useRef<HTMLButtonElement | null>(null);
   const nextCustomId = useRef(1);
-  const providerRows: Record<string, ProviderRow> = Object.fromEntries(payload.providers.map((provider) => [provider.name, provider]));
+  const providerRows: Record<string, ProviderRow> = Object.fromEntries(payload.providers.map((provider) => [provider.id, provider]));
 
   const resetDraft = (name: string) => {
     setDrafts((current) => ({ ...current, [name]: providerFormFromRow(providerRows[name]) }));
@@ -83,13 +82,13 @@ function ProvidersPreview() {
       setNotice({ key: "invalidParameters" });
       return false;
     }
-    setPayload((current) => ({ ...current, providers: current.providers.map((provider) => provider.name === name
+    setPayload((current) => ({ ...current, providers: current.providers.map((provider) => provider.id === name
       ? { ...provider, ...values, api_key_hint: values.api_key_hint ?? provider.api_key_hint,
-        label: provider.is_custom ? form.displayName.trim() : provider.label, configured: true }
+        name: provider.is_custom ? form.displayName.trim() : provider.name, configured: true }
       : provider) }));
     setDrafts((current) => ({ ...current, [name]: { ...form, apiKey: "" } }));
     setEditingKeys((current) => ({ ...current, [name]: false }));
-    setNotice({ key: "saved", name: providerRows[name].label });
+    setNotice({ key: "saved", name: providerRows[name].name });
     return true;
   };
   const createCustomProvider = async (form: CustomProviderDraft) => {
@@ -99,29 +98,27 @@ function ProvidersPreview() {
       return null;
     }
     const name = `custom_preview_${nextCustomId.current++}`;
-    const row: ProviderRow = { ...values, name, label: form.name.trim(), is_custom: true,
+    const row: ProviderRow = { ...values, id: name, name: form.name.trim(), is_custom: true,
       configured: true, auth_type: "api_key", api_key_required: false, provider_api_configurable: true,
       advanced_fields: ["extra_headers", "extra_body", "extra_query", "use_proxy", "thinking_style"] };
     const next: SettingsPayload = { ...payload, providers: [...payload.providers, row], created_provider: name };
     setPayload(next);
     setDrafts((current) => ({ ...current, [name]: providerFormFromRow(row) }));
-    setNotice({ key: "added", name: row.label });
+    setNotice({ key: "added", name: row.name });
     return next;
   };
   const changeOAuth = (name: string, configured: boolean) => {
-    setPayload((current) => ({ ...current, providers: current.providers.map((provider) => provider.name === name
+    setPayload((current) => ({ ...current, providers: current.providers.map((provider) => provider.id === name
       ? { ...provider, configured } : provider) }));
     setNotice({ key: configured ? "signedIn" : "signedOut" });
   };
 
   return <div className="space-y-4">
     <div className="flex flex-wrap gap-3">
-      <Button variant="outline" onClick={(event) => {
-        trigger.current = event.currentTarget;
+      <Button variant="outline" onClick={() => {
         setEntry({ kind: "manage" });
       }}>{t("settings.providers.manageProviders")}</Button>
-      <Button variant="outline" onClick={(event) => {
-        trigger.current = event.currentTarget;
+      <Button variant="outline" onClick={() => {
         setEntry({ kind: "add" });
       }}>{t("settings.providers.addProvider")}</Button>
       <Button variant="ghost" aria-pressed={showBrandLogos} onClick={() => setShowBrandLogos((current) => !current)}>
@@ -132,7 +129,7 @@ function ProvidersPreview() {
       {notice ? g(`controls.providers.${notice.key}`, { name: notice.name }) : g("controls.providers.configured", { count: payload.providers.filter((provider) => provider.configured).length })}
     </p>
     {entry ? <ProvidersSettings entry={entry} settings={payload} showBrandLogos={showBrandLogos}
-      onClose={() => setEntry(null)} onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}
+      onClose={() => setEntry(null)}
       onProviderAdded={() => setNotice({ key: "providerAdded" })}
       cirnoFeatures={null} featureAction={null} capabilityError={null} providerForms={drafts}
       visibleProviderKeys={visibleKeys} editingProviderKeys={editingKeys} providerSaving={null} remoteBrowserAccess={false}
@@ -146,7 +143,7 @@ function ProvidersPreview() {
 }
 
 export const providerExamples: ComponentExample[] = [
-  { title: "controls.providers.title", files: ["webui/src/components/settings/models/ProviderSettings.tsx"], Preview: ProvidersPreview,
+  { title: "controls.providers.title", files: ["sources/cirno-web/src/features/settings/providers/ProvidersSettings.tsx"], Preview: ProvidersPreview,
     description: "controls.providers.description",
     options: "controls.providers.options",
     code: '<ProvidersSettings entry={{ kind: "manage" }} settings={settings} providerForms={drafts} showBrandLogos={true} onSaveProvider={save} onCreateCustomProvider={create} {...callbacks} />' },

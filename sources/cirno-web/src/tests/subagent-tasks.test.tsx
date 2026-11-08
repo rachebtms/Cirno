@@ -9,9 +9,11 @@ import { SubagentThreadMessages } from "@/components/thread/SubagentTaskResults"
 import { buildDisplayUnits, unitKeysForDisplay } from "@/components/thread/ThreadMessages";
 import { ThreadVisibilityContext } from "@/hooks/useThreadVisibility";
 import { setAppLanguage } from "@/i18n";
-import { DEFAULT_LOCAL_PREFS, LOCAL_PREFS_STORAGE_KEY, writeLocalPreferences } from "@/lib/local-preferences";
+import { DEFAULT_PREFERENCES, clearOwnerPreferences, writePreferences } from "@/features/preferences/store";
 import { latestSubagentInputKey } from "@/lib/subagent-tasks";
-import type { ConnectionStatus, InboundEvent, SubagentTaskSnapshot, UIMessage } from "@/lib/types";
+import type { ConnectionStatus } from "@/lib/contracts/transport";
+import type { InboundEvent } from "@/lib/contracts/events";
+import type { SubagentTaskSnapshot, UIMessage } from "@/lib/contracts/messages";
 
 const requestMutation = vi.fn();
 const chatHandlers = new Map<string, Set<(event: InboundEvent) => void>>();
@@ -94,7 +96,7 @@ function taskIds(container: HTMLElement) {
 
 describe("session-owned task UI", () => {
   beforeEach(async () => {
-    localStorage.removeItem(LOCAL_PREFS_STORAGE_KEY);
+    clearOwnerPreferences();
     await setAppLanguage("en");
     requestMutation.mockReset();
     client.onChat.mockClear();
@@ -103,7 +105,7 @@ describe("session-owned task UI", () => {
     statusHandlers.clear();
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => response([task()])));
   });
-  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.removeItem(LOCAL_PREFS_STORAGE_KEY); });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); clearOwnerPreferences(); });
 
   it("keeps active work in one composer entry without mixing in a large terminal archive", async () => {
     const older = Array.from({ length: 40 }, (_, index) => task({
@@ -117,7 +119,7 @@ describe("session-owned task UI", () => {
     const user = userEvent.setup();
     render(layout());
     const trigger = await screen.findByTestId("subagent-task-dock-trigger");
-    expect(fetch).toHaveBeenCalledWith("/api/sessions/websocket%3Aa/subagents", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/v0/sessions/websocket%3Aa/subagents", expect.any(Object));
     expect(screen.getAllByTestId("subagent-task-dock-trigger")).toEqual([trigger]);
     expect(screen.getByTestId("composer")).toContainElement(trigger);
     expect(trigger).toHaveTextContent("Running: 1");
@@ -534,7 +536,7 @@ describe("session-owned task UI", () => {
     expect(summary).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("subagent-task-dock")).not.toBeInTheDocument();
 
-    act(() => { writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, activityMode: "expanded" }); });
+    act(() => { writePreferences({ ...DEFAULT_PREFERENCES, activityMode: "expanded" }); });
     expect(summary).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("subagent-task-tree")).not.toBeInTheDocument();
     await openArchive(user);
@@ -545,10 +547,10 @@ describe("session-owned task UI", () => {
     await user.click(within(detail).getByRole("button", { name: /Collapse activity details/ }));
     expect(within(detail).queryByTestId("agent-activity-content")).not.toBeInTheDocument();
 
-    act(() => { writeLocalPreferences(DEFAULT_LOCAL_PREFS); });
+    act(() => { writePreferences(DEFAULT_PREFERENCES); });
     expect(summary).toHaveAttribute("aria-expanded", "true");
     expect(within(detail).queryByTestId("agent-activity-content")).not.toBeInTheDocument();
-    act(() => { writeLocalPreferences({ ...DEFAULT_LOCAL_PREFS, activityMode: "expanded" }); });
+    act(() => { writePreferences({ ...DEFAULT_PREFERENCES, activityMode: "expanded" }); });
     expect(within(detail).getByTestId("agent-activity-content")).toBeVisible();
     view.unmount();
 
@@ -575,7 +577,7 @@ describe("session-owned task UI", () => {
     expect(await within(detail).findByText("Inspect configuration in the child session")).toBeVisible();
     expect(within(detail).getByText("Checking the configuration")).toBeVisible();
     expect(fetcher).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Aa/subagents/task-1/webui-thread", expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      "/v0/sessions/websocket%3Aa/subagents/task-1/webui-thread", expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     completed = true;
     emitTask(task({ revision: 2, state: "done", completed_at: 102, result: "Bounded task summary" }));

@@ -1,17 +1,19 @@
+import type { PromptDirectoryView } from "@/features/prompt-history/useDirectory";
 import { questionReplyPreview } from "@/lib/user-question";
 import { memo, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MarkdownText } from "@/components/MarkdownText";
 import { floatingSurfaceElevationClassName } from "@/components/ui/floating-surface";
 import { cn } from "@/lib/utils";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 import { type PromptAnchor, userPromptAnchors } from "./promptNavigation";
 
 interface PromptRailProps {
   messages: UIMessage[];
   prompts?: PromptAnchor[];
+  directory?: PromptDirectoryView;
   onJumpToPrompt: (promptId: string) => void;
-  scrollRef: RefObject<HTMLDivElement>;
+  scrollRef: RefObject<HTMLDivElement | null>;
   navigationFrame?: HTMLElement | null;
 }
 
@@ -20,10 +22,12 @@ const EDGE = 20;
 const WIDTHS = [28, 22, 16, 11];
 
 /** Complete logical list; only the visible markers and one preview are mounted. */
-export const PromptRail = memo(function PromptRail({ messages, prompts, onJumpToPrompt, scrollRef, navigationFrame }: PromptRailProps) {
+export const PromptRail = memo(function PromptRail({ messages, prompts, directory, onJumpToPrompt, scrollRef, navigationFrame }: PromptRailProps) {
   const { t } = useTranslation();
   const anchors = useMemo(() => prompts ?? userPromptAnchors(messages), [prompts, messages]);
-  const anchorPositions = useMemo(() => new Map(anchors.map((anchor, index) => [anchor.id, index])), [anchors]);
+  const count = directory?.total ?? anchors.length;
+  const anchorPositions = useMemo(() => new Map(anchors.map((anchor, index) => [anchor.id, directory ? anchor.index : index])), [anchors, directory]);
+  const [pendingJump, setPendingJump] = useState<{ scope: object | undefined; index: number } | null>(null);
   // Assistant token updates do not change which user elements need observation.
   const userIds = messages.filter((message) => message.role === "user").map((message) => message.id).join("\n");
   const railRef = useRef<HTMLDivElement>(null);
@@ -34,10 +38,10 @@ export const PromptRail = memo(function PromptRail({ messages, prompts, onJumpTo
   const [scrollTop, setScrollTop] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [focused, setFocused] = useState<number | null>(null);
-  const contentHeight = Math.max(height, (anchors.length - 1) * GAP + EDGE * 2);
-  const padding = (contentHeight - (anchors.length - 1) * GAP) / 2;
+  const contentHeight = Math.max(height, (count - 1) * GAP + EDGE * 2);
+  const padding = (contentHeight - (count - 1) * GAP) / 2;
   const first = Math.max(0, Math.floor((scrollTop - padding) / GAP) - 4);
-  const end = Math.min(anchors.length, Math.ceil((scrollTop + height - padding) / GAP) + 5);
+  const end = Math.min(count, Math.ceil((scrollTop + height - padding) / GAP) + 5);
 
   useLayoutEffect(() => {
     const rail = railRef.current;
@@ -65,7 +69,7 @@ export const PromptRail = memo(function PromptRail({ messages, prompts, onJumpTo
       observer.observe(pane);
     }
     return () => observer.disconnect();
-  }, [anchors.length >= 2, navigationFrame]);
+  }, [count >= 2, navigationFrame]);
 
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -125,12 +129,20 @@ export const PromptRail = memo(function PromptRail({ messages, prompts, onJumpTo
     }
   }, [activeId, anchorPositions, height, padding]);
 
-  if (anchors.length < 2) return null;
-  const preview = focused === null ? undefined : anchors[focused];
+  useEffect(() => { directory?.ensure(first, end); }, [directory, first, end]);
+  useEffect(() => {
+    if (!pendingJump) return;
+    if (pendingJump.scope !== directory?.scope) { setPendingJump(null); return; }
+    const prompt = directory?.get(pendingJump.index);
+    if (prompt) { setPendingJump(null); onJumpToPrompt(prompt.id); }
+  }, [directory, pendingJump, onJumpToPrompt]);
+
+  if (count < 2) return null;
+  const preview = focused === null ? undefined : directory ? directory.get(focused) : anchors[focused];
   const moveFocus = (index: number) => {
     const rail = railRef.current;
     if (!rail) return;
-    const next = Math.max(0, Math.min(anchors.length - 1, index));
+    const next = Math.max(0, Math.min(count - 1, index));
     rail.scrollTop = Math.max(0, padding + next * GAP - height / 2);
     setScrollTop(rail.scrollTop);
     setFocused(next);
@@ -148,20 +160,24 @@ export const PromptRail = memo(function PromptRail({ messages, prompts, onJumpTo
     <div ref={railRef} data-testid="prompt-rail-scroll" className="thread-prompt-rail-scroll h-full overflow-y-auto overscroll-contain"
       onScroll={(event) => { setScrollTop(event.currentTarget.scrollTop); setFocused(null); }}>
       <div className="relative w-9" style={{ height: contentHeight }}>
-        {anchors.slice(first, end).map((anchor, offset) => {
+        {Array.from({ length: Math.max(0, end - first) }, (_, offset) => {
           const index = first + offset;
+          const anchor = directory ? directory.get(index) : anchors[index];
           const distance = focused === null ? null : Math.abs(index - focused);
-          const active = anchor.id === activeId;
-          return <button key={anchor.id} type="button" data-prompt-index={index}
-            aria-label={t("thread.promptNavigator.jumpTo", { label: questionReplyPreview(anchor.preview || anchor.label).replace(/\s+/g, " ").slice(0, 80) })}
+          const active = anchor?.id === activeId;
+          return <button key={index} type="button" data-prompt-index={index}
+            aria-label={t("thread.promptNavigator.jumpTo", { label: (anchor ? questionReplyPreview(anchor.preview || anchor.label) : String(index + 1)).replace(/\s+/g, " ").slice(0, 80) })}
             aria-current={active ? "location" : undefined}
-            onClick={() => onJumpToPrompt(anchor.id)}
+            onClick={() => {
+              if (anchor) onJumpToPrompt(anchor.id);
+              else { setPendingJump({ scope: directory?.scope, index }); directory?.ensure(index, index + 1); }
+            }}
             onFocus={() => { inside.current = true; setFocused(index); }}
             onBlur={() => { inside.current = false; setFocused(null); }}
             onPointerEnter={() => setFocused(index)}
             onPointerLeave={() => setFocused(null)}
             onKeyDown={(event) => {
-              const next = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: anchors.length - 1 }[event.key];
+              const next = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: count - 1 }[event.key];
               if (next !== undefined) { event.preventDefault(); moveFocus(next); }
             }}
             className="absolute left-0 h-4 w-9 -translate-y-1/2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"

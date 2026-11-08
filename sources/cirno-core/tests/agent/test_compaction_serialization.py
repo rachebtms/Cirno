@@ -7,7 +7,8 @@ from unittest.mock import patch
 import pytest
 
 from cirno_core.sdk.assistant import Cirno
-from cirno_core.providers.base import LLMProvider, LLMResponse
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
 
 
 class ControlledProvider(LLMProvider):

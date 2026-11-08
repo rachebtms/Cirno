@@ -1,7 +1,8 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { readFileSync } from "node:fs";
-import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { expect, test, type WebSocketRoute, type Locator } from "@playwright/test";
 import { supportedLocales } from "../src/i18n/config";
-import type { ThreadProjectionEvent } from "../src/lib/types";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
 
 const reasons = ["idle", "context_pressure", "manual", "provider_native"] as const;
 const phases = ["started", "succeeded", "failed", "cancelled"] as const;
@@ -14,8 +15,10 @@ const samples = reasons.map((reason, index) => {
     compaction_id: reason, phase: "started", reason,
     projection_id: `${reason}-start`, turn_id: `${reason}-turn`, turn_seq: 1 };
   const phase = phases[index === 3 ? 1 : index + 1]!;
-  return { reason, start, finish: { ...start, phase, projection_id: `${reason}-finish`, turn_seq: 2 } };
+  return { reason, start, finish: { ...start, phase, ...(phase === "failed" ? { error: "ReadTimeout: no response for 120 seconds" } : {}), projection_id: `${reason}-finish`, turn_seq: 2 } };
 });
+
+const noticeTitles = (notices: Locator) => notices.locator(":scope > div > p, :scope > div > details > summary");
 
 for (const { code } of supportedLocales) {
   const lifecycle = code === "en";
@@ -25,14 +28,14 @@ for (const { code } of supportedLocales) {
       readFileSync(new URL(`../src/i18n/locales/${code}/common.json`, import.meta.url), "utf8"),
     );
     const copy = messages.thread.compaction;
-    await page.addInitScript((locale) => localStorage.setItem("cirno.locale", locale), code);
+    await seedPreviewPreferences(page, { language: code });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const history: ThreadProjectionEvent[] = [legacy,
       ...(lifecycle ? [] : samples.flatMap(({ start, finish }) => [start, finish]))];
-    await page.route("**/api/**", (route) => route.fulfill({ status: 404, json: {} }));
-    await page.route("**/api/commands", (route) => route.fulfill({ json: { commands: [] } }));
-    await page.route("**/api/sessions/*/webui-thread?*", (route) => route.fulfill({ json: {
+    await page.route("**/v0/**", (route) => route.fulfill({ status: 404, json: {} }));
+    await page.route("**/v0/commands", (route) => route.fulfill({ json: { commands: [] } }));
+    await page.route("**/v0/sessions/*/webui-thread?*", (route) => route.fulfill({ json: {
       schemaVersion: 3, projection: "events", has_more: false,
       events: decodeURIComponent(route.request().url()).includes("websocket:answer-order/") ? history : [],
     } }));
@@ -53,37 +56,41 @@ for (const { code } of supportedLocales) {
     const notices = page.locator("[data-context-compaction]");
     if (lifecycle) {
       await expect(notices).toHaveCount(1);
-      await expect(notices.first()).toHaveText(copy.succeeded);
+      await expect(noticeTitles(notices.first())).toHaveText(copy.succeeded);
       await expect(notices.first()).not.toHaveAttribute("role", "status");
       for (const [index, { reason, start, finish }] of samples.entries()) {
         socket.send(JSON.stringify(start));
         const notice = notices.nth(index + 1);
         await expect(notices).toHaveCount(index + 2);
-        await expect(notice).toHaveText(copy.reasons[reason].started);
+        await expect(noticeTitles(notice)).toHaveText(copy.reasons[reason].started);
         await expect(notice).toHaveAttribute("aria-busy", "true");
         const handle = await notice.elementHandle();
         socket.send(JSON.stringify(finish));
-        await expect(notice).toHaveText(copy.reasons[reason][finish.phase]);
+        await expect(noticeTitles(notice)).toHaveText(copy.reasons[reason][finish.phase]);
         await expect(notice).toHaveAttribute("aria-busy", "false");
         expect(await notice.evaluate((node, original) => node === original, handle)).toBe(true);
         await expect(notices).toHaveCount(index + 2);
         history.push(start, finish);
       }
-      const text = await notices.allTextContents();
+      const text = await noticeTitles(notices).allTextContents();
       await page.getByRole("button", { name: "Switch topic" }).click();
       await expect(notices).toHaveCount(0);
       await page.getByRole("button", { name: "Switch topic" }).click();
-      await expect(notices).toHaveText(text);
+      await expect(noticeTitles(notices)).toHaveText(text);
       await page.reload();
-      await expect(notices).toHaveText(text);
+      await expect(noticeTitles(notices)).toHaveText(text);
     }
     const text = [copy.succeeded, ...samples.map(({ reason, finish }) => copy.reasons[reason][finish.phase])];
-    await expect(notices).toHaveText(text);
+    await expect(noticeTitles(notices)).toHaveText(text);
     await expect(page.locator('[data-context-compaction][role="status"]')).toHaveCount(0);
+    const failed = page.locator('[data-context-compaction="failed"]');
+    await failed.locator("summary").click();
+    await expect(failed.getByText("ReadTimeout: no response for 120 seconds", { exact: true })).toBeVisible();
+    await failed.locator("summary").click();
     for (const theme of ["light", "dark"]) {
       await page.evaluate((value) => document.documentElement.classList.toggle("dark", value === "dark"), theme);
       expect(await page.locator("html").evaluate((node) => node.classList.contains("dark"))).toBe(theme === "dark");
-      await expect(notices).toHaveText(text);
+      await expect(noticeTitles(notices)).toHaveText(text);
       for (const width of [390, 1280]) {
         await page.setViewportSize({ width, height: 900 });
         expect(await notices.evaluateAll((nodes) => nodes.every((node) => {

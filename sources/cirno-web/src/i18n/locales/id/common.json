@@ -7,19 +7,19 @@
   "app": {
     "brand": "Cirno",
     "loading": {
-      "connecting": "Menghubungkan ke cirno…",
+      "connecting": "Menghubungkan ke Cirno…",
       "boot": "Memuat Cirno…",
       "failed": "Tampilan ini tidak dapat dimuat. Kembali atau muat ulang halaman untuk mencoba lagi."
     },
     "error": {
-      "title": "Tidak dapat menjangkau cirno",
+      "title": "Tidak dapat menjangkau Cirno",
       "serverHint": "Pastikan Cirno server sedang berjalan (`cirno`) dan browser ini dapat menjangkau alamat WebUI-nya."
     },
     "auth": {
-      "title": "Hubungkan ke cirno",
+      "title": "Hubungkan ke Cirno",
       "label": "Kata sandi WebUI",
       "helpTitle": "Di mana saya bisa menemukan kata sandi?",
-      "helpConfig": "Pada perangkat yang menjalankan cirno, buka file konfigurasi, biasanya di:",
+      "helpConfig": "Pada perangkat yang menjalankan Cirno, buka file konfigurasi, biasanya di:",
       "helpSecret": "Salin nilai kolom ini sebagai kata sandi:",
       "helpFallback": "Jika nilainya kosong, gunakan <code>channels.websocket.token</code>.",
       "showPassword": "Tampilkan kata sandi",
@@ -38,9 +38,7 @@
       "restartHint": "Mulai ulang cirno untuk menerapkan perubahan runtime.",
       "restartAction": "Mulai ulang",
       "restart": "Mulai ulang cirno",
-      "restarting": "Memulai ulang...",
-      "restartEngine": "Mulai ulang mesin",
-      "restartingEngine": "Memulai ulang mesin..."
+      "restarting": "Memulai ulang..."
     },
     "restart": {
       "completed": "Mulai ulang selesai dalam {{seconds}} dtk."
@@ -51,18 +49,6 @@
     },
     "meta": {
       "description": "UI web Cirno — ngobrol dengan ruang kerja Cirno Anda."
-    },
-    "pairing": {
-      "haveCode": "Sudah menerima kode?",
-      "deliveryFailed": "Kode tidak dapat dikirim. Periksa izin pengiriman pesan bot dan log Cirno server, lalu kirim pesan pribadi lagi untuk mencoba ulang.",
-      "deliverySending": "Mengirim kode ke obrolan Anda. Jika belum diterima, kirim pesan pribadi lagi ke bot untuk mencoba ulang.",
-      "title": "Pasangkan akun",
-      "description": "Masukkan kode pemasangan yang diterima di chat.",
-      "code": "Kode pairing",
-      "matched": "Cocok dengan {{channel}}. Menghubungkan...",
-      "expiresInline": "Kode kedaluwarsa {{expires}}.",
-      "queueCount": "{{count}} menunggu",
-      "noMatch": "Tidak ada permintaan tertunda yang cocok dengan kode ini."
     }
   },
   "ptc": {
@@ -275,8 +261,8 @@
           "help": "Seberapa sering percakapan diperiksa untuk pemadatan; terpisah dari batas waktu tidak aktif. Mulai ulang untuk menerapkan."
         },
         "network_request_timeout_s": {
-          "label": "Compatible API request timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "Batas waktu koneksi / respons model (detik)",
+          "help": "Waktu untuk terhubung atau menunggu respons non-streaming. Streaming aktif menggunakan batas waktu tanpa data yang terpisah."
         },
         "network_stream_idle_timeout_s": {
           "label": "Compatible API stream idle timeout (seconds)",
@@ -335,7 +321,7 @@
           "help": "Batas tiap permintaan; jika gagal gunakan BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "Lepaskan konteks yang diarsipkan",
+          "label": "Bebaskan memori setelah pemadatan",
           "help": "Setelah pemadatan, bukti dan riwayat tetap di disk; pesan eksekusi lama dilepaskan dari RAM."
         },
         "agents_defaults_dream_max_tool_iterations": {
@@ -461,6 +447,18 @@
         "agents_defaults_memory_embedding_provider": {
           "label": "Layanan embedding",
           "help": "Vektor opsional bersama BM25. Pilih CPU lokal atau API eksternal. API menerima kueri dan potongan memori; nonaktif secara bawaan."
+        },
+        "server_uploads_max_file_mb": {
+          "label": "Batas per berkas (MiB)",
+          "help": "Ukuran maksimum per gambar atau dokumen. Mulai ulang layanan dan muat ulang halaman untuk menerapkan."
+        },
+        "server_uploads_max_video_mb": {
+          "label": "Batas per video (MiB)",
+          "help": "Ukuran maksimum per video; satu video per pesan. Mulai ulang dan muat ulang halaman untuk menerapkan."
+        },
+        "server_uploads_max_total_mb": {
+          "label": "Total per pesan (MiB)",
+          "help": "Jumlah gambar dan dokumen yang diunggah, tanpa video atau referensi berkas lokal. Mulai ulang dan muat ulang halaman untuk menerapkan."
         }
       },
       "groups": {
@@ -565,6 +563,9 @@
         },
         "embedding": {
           "title": "Layanan embedding"
+        },
+        "uploads": {
+          "title": "Unggah berkas"
         }
       },
       "save": "Simpan perubahan",
@@ -672,12 +673,10 @@
       "capabilities": "Fitur",
       "cliApps": "Aplikasi CLI",
       "mcp": "Layanan MCP",
-      "apps": "Aplikasi",
-      "nativeHost": "Aplikasi desktop",
-      "hostSafety": "Keamanan aplikasi"
+      "apps": "Aplikasi"
     },
     "notifications": {
-      "scope": "Browser ini",
+      "scope": "Peringatan dan suara",
       "intro": "Pilih cara menerima notifikasi saat tugas selesai.",
       "pageRequired": "Notifikasi baru tidak diterima jika halaman ditutup, ditangguhkan, atau terputus.",
       "revoked": "Izin notifikasi telah dicabut. Notifikasi kini dinonaktifkan. Izinkan notifikasi di pengaturan situs pada browser ini, lalu aktifkan di sini.",
@@ -740,7 +739,6 @@
       "restart": "Mulai ulang cirno",
       "configPath": "Lokasi konfigurasi",
       "activePreset": "Prasetel aktif",
-      "gateway": "Cirno server",
       "restartState": "Status mulai ulang",
       "pendingChanges": "Perubahan tertunda",
       "selectedPreset": "Preset dipilih",
@@ -762,13 +760,11 @@
       "notificationSound": "Suara selesai",
       "cliAppsCatalog": "Katalog",
       "cliAppsFilter": "Saring",
-      "engine": "Mesin",
-      "logs": "Log",
-      "diagnostics": "Diagnostik",
       "contextWindow": "Jendela konteks",
       "voiceLimits": "Batas",
       "reasoningDetailMode": "Detail penalaran",
-      "toolDetailMode": "Detail aktivitas alat"
+      "toolDetailMode": "Detail aktivitas alat",
+      "healthListener": "Alamat pemeriksaan kesehatan"
     },
     "help": {
       "theme": "Beralih antara tampilan terang dan gelap.",
@@ -796,10 +792,6 @@
       "notificationSound": "Putar nada saat balasan selesai, termasuk di latar belakang.",
       "cliAppsCatalog": "Pasang alat CLI untuk cirno; aplikasi desktop tetap tidak berubah.\n\nMemasang alat baris perintah yang dapat digunakan cirno di komputer ini. Aplikasi desktop tidak diubah.",
       "cliAppsFilter": "Cari berdasarkan nama, kategori, atau kemampuan.",
-      "logs": "Buka folder log mesin aplikasi desktop.",
-      "diagnostics": "Ekspor laporan untuk mendiagnosis masalah.",
-      "localServiceAccessNative": "Perintah Shell dengan akses penuh dapat menjangkau layanan di Mac ini.\n\nIzinkan perintah shell dengan akses penuh mengakses layanan di Mac ini.",
-      "webuiDefaultAccessNative": "Default untuk chat desktop tanpa izin proyek.\n\nDigunakan untuk percakapan di aplikasi desktop tanpa izin khusus proyek.",
       "contextWindow": "Anggaran token konteks untuk model ini."
     },
     "values": {
@@ -821,16 +813,15 @@
       "collapsedDiff": "Diff ringkas",
       "on": "Aktif",
       "off": "Nonaktif",
-      "defaultPermission": "Izin bawaan",
       "fullAccess": "Akses penuh",
       "configured": "Terkonfigurasi",
       "notConfigured": "Belum dikonfigurasi",
       "pending": "Tertunda",
-      "restartingEngine": "Memulai ulang",
       "checking": "Memeriksa",
       "running": "Berjalan",
       "needsSetup": "Perlu penyiapan",
-      "detailed": "Terperinci"
+      "detailed": "Terperinci",
+      "inheritToolPolicy": "Gunakan kebijakan alat"
     },
     "status": {
       "loading": "Memuat pengaturan...",
@@ -841,12 +832,7 @@
       "restartAfterSaving": "Simpan perubahan, lalu mulai ulang saat siap.",
       "savedRestartApply": "Tersimpan. Mulai ulang cirno untuk menerapkan perubahan.",
       "hostRestartAfterSaving": "Saat disimpan, cirno akan memulai ulang mesinnya.",
-      "hostRestartPending": "Tersimpan. Mesin akan dimulai ulang saat siap.",
-      "hostApiUnavailable": "Tindakan ini hanya tersedia di aplikasi desktop.",
-      "logsOpened": "Folder log dibuka.",
-      "logsOpenFailed": "Tidak dapat membuka folder log.",
-      "diagnosticsExported": "Diagnostik diekspor ke {{path}}.",
-      "diagnosticsExportFailed": "Tidak dapat mengekspor diagnostik."
+      "hostRestartPending": "Tersimpan. Mesin akan dimulai ulang saat siap."
     },
     "actions": {
       "save": "Simpan",
@@ -1022,7 +1008,7 @@
       "newPresetHelp": "Simpan model dan pengaturan untuk digunakan kembali.",
       "presets": "Prasetel model",
       "presetName": "Nama prasetel",
-      "presetNameHelp": "Nama harus unik; juga digunakan oleh /model.",
+      "presetNameHelp": "Nama harus unik. Mengganti nama tidak mengubah ID model.",
       "presetNameDuplicate": "Prasetel dengan nama ini sudah ada.",
       "presetNamePlaceholder": "mis. Menulis cepat",
       "advancedOptions": "Opsi lanjutan",
@@ -1066,7 +1052,8 @@
         "auto": "Otomatis",
         "preserve": "Pertahankan",
         "omit": "Jangan kirim"
-      }
+      },
+      "catalogErrorDetails": "Detail kesalahan"
     },
     "timezone": {
       "select": "Pilih zona waktu",
@@ -1404,7 +1391,7 @@
         "noOutput": "Catatan ini tidak menyimpan teks respons."
       },
       "create": "Tugas baru",
-      "createPrompt": "Apa yang ingin diotomatiskan cirno?",
+      "createPrompt": "Tugas apa yang ingin Anda otomatisasi?",
       "createInput": "Jelaskan otomatisasi",
       "errors": {},
       "calendar": {
@@ -1542,7 +1529,8 @@
         "second": "Detik",
         "minute": "Menit",
         "hour": "Jam",
-        "day": "Hari"
+        "day": "Hari",
+        "millisecond": "Milidetik"
       },
       "validation": {
         "nameRequired": "Nama wajib diisi.",
@@ -1581,7 +1569,9 @@
       "openChatGPT": "Buka ChatGPT",
       "pasteCallbackToContinue": "Tempel URL callback untuk melanjutkan.",
       "waitingForCallback": "Menunggu proses masuk selesai…",
-      "finishSignIn": "Selesaikan masuk"
+      "finishSignIn": "Selesaikan masuk",
+      "cancelFailed": "Tidak dapat membatalkan masuk {{provider}}",
+      "cancelling": "Membatalkan proses masuk…"
     },
     "skills": {
       "description": "Pilih skill yang tersedia di chat.",
@@ -1610,15 +1600,15 @@
       "disableSkill": "Nonaktifkan {{name}}",
       "updateFailed": "Keterampilan ini tidak dapat diperbarui.",
       "deleteTitle": "Hapus keterampilan",
-      "deleteDescription": "Hapus skill ini dari ruang kerja saat ini.",
+      "deleteDescription": "Hapus skill ini dari Agent Home.",
       "deleteAction": "Hapus",
       "deleteFailed": "Keterampilan ini tidak dapat dihapus.",
       "deleteConfirmTitle": "Hapus {{name}}?",
-      "deleteConfirmDescription": "Hapus berkas skill dari ruang kerja. Tidak dapat dibatalkan.",
+      "deleteConfirmDescription": "Hapus berkas skill dari Agent Home. Versi yang disimpan tetap dapat dibaca.",
       "deleteConfirmAction": "Hapus keterampilan",
       "instructionsTitle": "Petunjuk keterampilan",
       "setupRequired": "Perlu penyiapan",
-      "setupDescription": "Pasang dependensi di host Cirno server, lalu periksa lagi.\n\nInstal dependensi yang belum tersedia di mesin yang menjalankan cirno, lalu periksa lagi.",
+      "setupDescription": "Pasang dependensi yang belum tersedia di server Cirno, lalu periksa lagi.",
       "copySetupCommand": "Salin perintah",
       "checkAgain": "Periksa lagi",
       "marketplaceSearchFailed": "Tidak dapat mencari marketplace keterampilan.",
@@ -1634,7 +1624,7 @@
       "marketplaceTrendingUnavailable": "Keterampilan populer sementara tidak tersedia.",
       "marketplaceEmpty": "Tidak ada keterampilan yang ditemukan untuk “{{query}}”.",
       "marketplaceConfirmTitle": "Pasang {{name}}?",
-      "marketplaceConfirmDescription": "Skill pihak ketiga dapat berisi instruksi atau skrip.\n\nKeterampilan pihak ketiga ini berasal dari {{provider}} ({{source}}) dan mungkin berisi instruksi atau skrip yang dapat dijalankan.",
+      "marketplaceConfirmDescription": "Keterampilan pihak ketiga ini berasal dari {{provider}} ({{source}}) dan mungkin berisi instruksi atau skrip yang dapat dijalankan.",
       "marketplaceConfirmInstall": "Pasang keterampilan",
       "marketplaceOpen": "Buka {{name}} di {{provider}}",
       "marketplaceOpenProvider": "Buka {{provider}}",
@@ -1648,7 +1638,6 @@
       "marketplaceTrendLabel": "Tren pemasangan 8 minggu",
       "featured": "Skill",
       "empty": "Tidak ada keterampilan yang tersedia.",
-      "sourceWorkspace": "Kustom",
       "sourceBuiltin": "Bawaan",
       "statusAvailable": "Tersedia",
       "statusUnavailable": "Tidak tersedia",
@@ -1668,46 +1657,55 @@
       "unavailableReasonLabel": "Yang belum tersedia",
       "rawInstructions": "Isi SKILL.md",
       "rawInstructionsEmpty": "Tidak ada instruksi.",
-      "detailDescription": "Detail untuk {{name}}."
+      "detailDescription": "Detail untuk {{name}}.",
+      "sourceHome": "Kustom",
+      "copySetupFailed": "Tidak dapat menyalin perintah.",
+      "sourcePlugin": "Plugin Agent",
+      "marketplaceResultsFor": "Hasil untuk “{{query}}”",
+      "retryTrends": "Coba lagi tren",
+      "historyTab": "Validasi dan riwayat"
     },
     "homeFiles": {
       "title": "Home files",
       "save": "Save",
       "reload": "Reload",
       "saved": "Saved",
-      "soul": "Personality",
+      "soul": "Kepribadian Router",
       "user": "Preferences",
       "instructions": "Instructions",
       "memory": "Long-term memory",
-      "heartbeat": "Heartbeat instructions"
+      "heartbeat": "Heartbeat instructions",
+      "worker": "Kepribadian percakapan"
     },
     "categories": {
       "interface": "Antarmuka",
       "agent": "Agen",
       "connections": "Koneksi",
-      "system": "Sistem"
+      "system": "Sistem",
+      "general": "Umum"
     },
     "telegram": {
-      "account": "Personal account",
-      "configureBot": "Configure bot",
-      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
-      "unbound": "Not connected",
-      "boundHelp": "Only this Telegram account can access your personal Cirno.",
-      "pinHelp": "Generate a PIN here, then send it to your bot.",
-      "unbind": "Disconnect",
-      "generatePin": "Generate PIN",
-      "pin": "Pairing PIN",
-      "copyPin": "Copy binding command",
-      "refreshPin": "Refresh PIN",
-      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
-      "sendPin": "Send {{command}} to your Telegram bot.",
-      "delivery": "Messages and notifications",
-      "enabled": "Enable Telegram",
-      "cirno": "Cirno messages",
-      "actionLinks": "Action links",
-      "webuiUrl": "Web UI address (optional)",
-      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
-      "settingsLink": "Configure Telegram notifications"
+      "account": "Akun pribadi",
+      "configureBot": "Konfigurasi bot",
+      "help": "Hubungkan percakapan Telegram pribadi Anda ke Cirno. Grup tidak didukung. Konfigurasikan token bot terlebih dahulu di pengaturan kanal.",
+      "unbound": "Belum terhubung",
+      "boundHelp": "Hanya akun Telegram ini yang dapat mengakses Router pribadi Anda.",
+      "pinHelp": "Buat PIN di sini, lalu kirimkan ke bot Anda.",
+      "unbind": "Putuskan koneksi",
+      "generatePin": "Buat PIN",
+      "pin": "PIN pemasangan",
+      "copyPin": "Salin perintah penautan",
+      "refreshPin": "Perbarui PIN",
+      "expires": "Kedaluwarsa dalam {{seconds}} detik.",
+      "sendPin": "Kirim {{command}} ke bot Telegram Anda.",
+      "delivery": "Pesan dan notifikasi",
+      "enabled": "Aktifkan Telegram",
+      "actionLinks": "Tautan tindakan",
+      "webuiUrl": "Alamat Web UI (opsional)",
+      "urlHelp": "Gunakan alamat yang dapat dibuka di ponsel. Notifikasi akan menyertakan tombol untuk membuka item kotak masuk yang sesuai.",
+      "settingsLink": "Konfigurasi notifikasi Telegram",
+      "expired": "PIN kedaluwarsa",
+      "router": "Pesan Router"
     },
     "account": {
       "owner": "Pemilik instans",
@@ -1718,10 +1716,13 @@
       "saved": "Kata sandi diubah. Peramban ini tetap masuk.",
       "unavailable": "Pengaturan akun tersedia saat menggunakan pendaftaran dan login melalui peramban.",
       "loading": "Memuat akun…",
-      "retry": "Coba lagi"
+      "retry": "Coba lagi",
+      "routerNameHelp": "Renaming keeps the same conversation ID, memory and task links. Historical text stays as written.",
+      "saveRouterName": "Save name",
+      "routerNameSaved": "Name updated."
     },
     "heartbeat": {
-      "help": "Memeriksa HEARTBEAT.md secara berkala dan membangunkan Cirno jika ada tugas. Terpisah dari pemeriksaan kesehatan layanan."
+      "help": "Memeriksa HEARTBEAT.md secara berkala dan membangunkan Router jika ada tugas. Terpisah dari pemeriksaan kesehatan layanan."
     },
     "backup": {
       "instance": "Seluruh instans",
@@ -1751,7 +1752,21 @@
       "skip": "Kosongkan untuk melewati",
       "extrasRestore": "Jalur tambahan dapat diubah. File yang sama ditimpa, file lain tetap ada. Paket dan alat memerlukan OS serta CPU yang kompatibel.",
       "restore": "Pulihkan dan mulai ulang"
-    }
+    },
+    "balance": {
+      "title": "Saldo akun",
+      "enabled": "Aktifkan kueri saldo",
+      "endpoint": "URL API saldo",
+      "endpointHelp": "Alamat ini dapat berbeda dari URL API model.",
+      "format": "Format respons",
+      "json": "JSON kustom",
+      "amountPath": "Kolom saldo (JSON Pointer)",
+      "currency": "Mata uang / satuan",
+      "apiKey": "Kunci API saldo (opsional)",
+      "apiKeyHelp": "Kosongkan untuk memakai kunci API penyedia.",
+      "refresh": "Perbarui saldo"
+    },
+    "navigationSearch": "Cari pengaturan"
   },
   "chat": {
     "fallbackTitle": "Topik {{id}}",
@@ -1774,7 +1789,7 @@
     "rename": "Ganti nama",
     "renamePlaceholder": "Nama topik",
     "renameProjectTitle": "Ubah nama proyek",
-    "renameProjectDescription": "Ubah hanya nama proyek di sidebar WebUI.",
+    "renameProjectDescription": "Ubah nama proyek. Percakapan dan berkasnya tetap disimpan.",
     "renameProjectPlaceholder": "Nama proyek",
     "renameSave": "Simpan",
     "renameFailed": "Nama tidak dapat disimpan. Coba lagi.",
@@ -1794,7 +1809,8 @@
       "yesterday": "Kemarin",
       "earlier": "Sebelumnya",
       "archived": "Diarsipkan"
-    }
+    },
+    "bulkDeleteUnavailable": "Tampilan ini hanya dapat menghapus satu percakapan sekaligus."
   },
   "archiveConfirm": {
     "title": "Arsipkan topik ini?",
@@ -1802,7 +1818,7 @@
     "unarchiveTitle": "Batalkan arsip topik ini?",
     "unarchiveTitleMany": "Batalkan arsip {{count}} topik?",
     "description": "Percakapan tetap tersimpan. Anda dapat membatalkan arsipnya kapan saja.",
-    "unarchiveDescription": "Topik ini akan kembali muncul di bilah samping."
+    "unarchiveDescription": "Percakapan ini akan muncul kembali di daftar percakapan."
   },
   "deleteConfirm": {
     "title": "Hapus obrolan ini?",
@@ -2015,7 +2031,16 @@
         "estimated": "Perkiraan konteks dan keluaran yang sedang dibuat; dikalibrasi dengan penggunaan aktual setelah respons.",
         "unavailable": "Penggunaan konteks saat ini belum tercatat. Grafik menampilkan permintaan sebelumnya."
       },
+      "draftStorage": {
+        "read": "Draf di browser ini tidak dapat dipulihkan.",
+        "save": "Perubahan draf tidak dapat disimpan. Biarkan halaman ini terbuka dan coba lagi.",
+        "remove": "Draf tersimpan tidak dapat dihapus. Coba lagi sebelum memuat ulang.",
+        "clearFailed": "Draf tersimpan di browser ini tidak dapat dibersihkan."
+      },
       "queued": {
+        "sendRejected": "Pesan tidak terkirim. Pesan tertunda tetap disimpan.",
+        "restoreFailed": "Pesan tertunda di browser ini tidak dapat dipulihkan.",
+        "saveFailed": "Perubahan pesan tertunda tidak dapat disimpan. Biarkan halaman ini terbuka dan coba lagi.",
         "label": "Menunggu dikirim",
         "guide": "Kirim sekarang",
         "delete": "Hapus pesan",
@@ -2106,16 +2131,12 @@
             "title": "Tampilkan bantuan",
             "description": "Tampilkan perintah slash yang tersedia."
           },
-          "pairing": {
-            "title": "Pemasangan",
-            "description": "Kelola permintaan pemasangan."
-          },
           "resume": {
             "title": "Lanjutkan tugas",
             "description": "Lanjutkan permintaan yang dihentikan dengan konteks tersimpan."
           },
           "clear": {
-            "title": "Hapus konteks Cirno",
+            "title": "Hapus percakapan Router",
             "description": "Hapus percakapan pribadi Cirno tanpa membatalkan perubahan berkas."
           },
           "temporary": {
@@ -2168,14 +2189,14 @@
         "label": "Aplikasi",
         "cliGroup": "Aplikasi CLI",
         "mcpGroup": "Layanan MCP",
-        "sessionGroup": "Percakapan Cirno",
+        "sessionGroup": "Percakapan",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Panggil CLI dengan @{{name}}.",
         "mcpDescription": "Panggil MCP dengan @{{name}}.",
         "cliTitle": "Aplikasi CLI: {{name}}",
         "mcpTitle": "Server MCP: {{name}}",
-        "sessionBadge": "Percakapan Cirno",
+        "sessionBadge": "Percakapan",
         "sessionDescription": "Referensikan @{{name}} sebagai chat sebelumnya"
       },
       "workspace": {
@@ -2188,7 +2209,7 @@
         "defaultDescription": "Baca, edit berkas, dan jalankan perintah hanya di direktori kerja.",
         "fullDescription": "Izinkan akses berkas dan perintah di luar direktori kerja.",
         "review": "Tinjauan AI",
-        "reviewDescription": "Pembatasan bawaan tetap berlaku. AI independen meninjau setiap operasi yang diblokir tanpa memori Cirno; kasus meragukan diteruskan ke kotak masuk. Kesalahan AI dapat membocorkan berkas atau menjalankan perintah berbahaya."
+        "reviewDescription": "Pembatasan bawaan tetap berlaku. AI independen meninjau setiap operasi yang diblokir tanpa memori Router; kasus meragukan diteruskan ke kotak masuk. Kesalahan AI dapat membocorkan berkas atau menjalankan perintah berbahaya."
       },
       "goalStatus": {
         "blocked": "Terhambat",
@@ -2214,7 +2235,7 @@
       "railAria": "Navigasi pesan saya"
     },
     "clear": {
-      "title": "Kosongkan percakapan Cirno",
+      "title": "Hapus percakapan Router",
       "description": "Hentikan proses saat ini dan hapus pesan serta konteks percakapan ini. Memori tersimpan dan percakapan lain tetap disimpan.",
       "confirm": "Kosongkan percakapan"
     },
@@ -2226,10 +2247,10 @@
       "subagent": "Hasil subagen",
       "continuation": "Kelanjutan otomatis",
       "system": "Peristiwa sistem",
-      "supervision": "Cirno memperbarui percakapan ini"
+      "supervision": "Router memperbarui percakapan ini"
     },
     "supervision": {
-      "changed": "Cirno memperbarui percakapan ini",
+      "changed": "Router memperbarui percakapan ini",
       "actions": {
         "stop": "Percakapan dihentikan",
         "continue": "Percakapan dilanjutkan",
@@ -2486,7 +2507,8 @@
     "automationTriggered": "Dipicu otomatis",
     "expandStep": "Buka detail langkah",
     "collapseStep": "Tutup detail langkah",
-    "edit": "Edit pesan"
+    "edit": "Edit pesan",
+    "loadMoreTools": "Tampilkan {{count}} peristiwa alat lainnya"
   },
   "recovery": {
     "actionFailed": "Pemulihan gagal. Coba lagi.",
@@ -2563,45 +2585,16 @@
     "copy": "Salin",
     "copied": "Tersalin"
   },
-  "workbench": {
-    "aria": "Ruang kerja",
-    "panes": "Panel",
-    "tabAria": "Grup: {{title}}",
-    "panesInTab": "Panel di {{title}}",
-    "collapseTabGroup": "Ciutkan panel di {{title}}",
-    "expandTabGroup": "Luaskan panel di {{title}}",
-    "dropPane": "Pindahkan {{pane}} ke {{tab}}",
-    "createGroup": "Buat grup",
-    "moveTo": "Pindahkan ke",
-    "renameGroupTitle": "Ubah nama grup",
-    "renameGroupDescription": "Beri nama untuk grup ini.",
-    "renameGroupPlaceholder": "Nama grup",
-    "dissolveTab": "Bubarkan grup",
-    "layout": "Tata letak",
-    "addPane": "Tambah panel",
-    "paneLimit": "Maksimal {{count}} panel",
-    "deleteConversations": "Hapus semua chat",
-    "movePane": "Pindahkan panel {{title}}",
-    "movePaneHint": "Seret untuk memindahkan. Tombol panah juga dapat digunakan",
-    "resizePaneBoundary": "Ubah ukuran batas panel {{index}}",
-    "promotePane": "Jadikan {{title}} panel utama",
-    "paneActions": "Tindakan panel {{title}}",
-    "detachPane": "Keluarkan",
-    "composerAria": "Pesan untuk {{title}}",
-    "layouts": {
-      "columns": "Kolom",
-      "rows": "Baris",
-      "grid": "Kisi",
-      "bsp": "BSP",
-      "main-stack": "Utama dan tumpukan"
-    }
-  },
   "common": {
     "retry": "Coba lagi",
     "dismiss": "Tutup",
     "close": "Tutup",
     "current": "Saat ini",
-    "cancel": "Batal"
+    "cancel": "Batal",
+    "refresh": "Muat ulang",
+    "copyFailed": "Tidak dapat menyalin ke papan klip.",
+    "chooseDate": "Pilih tanggal",
+    "moreActions": "Tindakan lainnya"
   },
   "errors": {
     "messageTooBig": {
@@ -2627,10 +2620,13 @@
       "serverTitle": "Kesalahan layanan penyedia model",
       "unknownTitle": "Permintaan ke penyedia model gagal",
       "bodyWithAttempt": "Dihentikan setelah {{attempts}} percobaan. Coba lagi nanti atau pilih model lain.",
-      "body": "Coba lagi nanti atau pilih model lain."
+      "body": "Coba lagi nanti atau pilih model lain.",
+      "configurationTitle": "Pilih model terlebih dahulu",
+      "configurationBody": "Buka Pengaturan → Model untuk membuat dan memilih preset model, lalu kirim kembali pesan Anda."
     }
   },
   "workspace": {
+    "directoryRefreshError": "Tidak dapat memuat ulang direktori kerja",
     "dialog": {
       "manual": "Tempel path",
       "absolutePathRequired": "Masukkan path folder absolut di mesin ini."
@@ -2660,7 +2656,118 @@
       "retry": "Coba lagi",
       "cancel": "Batal",
       "switchDirectory": "Ganti direktori"
-    }
+    },
+    "files": "Berkas",
+    "file": "Berkas",
+    "terminal": "Terminal",
+    "browser": "Peramban",
+    "trace": "Jejak",
+    "credentials": "Kredensial",
+    "settings": "Pengaturan",
+    "conversation": "Percakapan",
+    "library": "Daftar percakapan",
+    "inbox": "Kotak masuk",
+    "automations": "Otomatisasi",
+    "launcher": "Launcher",
+    "split": "Tampilan terbagi",
+    "unsplit": "Tampilan tunggal",
+    "resizeSplit": "Ubah ukuran tampilan terbagi",
+    "tabs": "Tab",
+    "closeTab": "Tutup {{title}}",
+    "newTab": "Tab baru",
+    "loading": "Memuat…",
+    "localServer": "Server lokal",
+    "terminalHost": "Host terminal",
+    "connect": "Hubungkan",
+    "terminalExited": "Proses selesai ({{code}})",
+    "terminalHint": "Shell interaktif pada server pilihan. Menutup tab memutus koneksi lokal; proses jarak jauh yang dilepas dapat tetap berjalan.",
+    "addRecord": "Tambah kredensial",
+    "vaultHint": "Nilai dienkripsi terpisah dari memori. Cadangan lengkap menyertakan kunci: simpan secara pribadi. Alat kredensial mengelola catatan tanpa mengembalikan nilainya. Rahasia yang pernah ditempel di chat tetap ada dalam riwayat.",
+    "label": "Nama",
+    "recordType": "Jenis",
+    "secretValue": "Nilai sensitif",
+    "reveal": "Tampilkan nilai tersimpan",
+    "noRecords": "Belum ada kredensial",
+    "deleteRecord": "Hapus kredensial ini?",
+    "delete": "Hapus",
+    "loadOlder": "Lebih lama",
+    "chooseConversation": "Buka tab ini dari percakapan.",
+    "loadMore": "Muat pesan lainnya",
+    "toolDefinitions": "Definisi alat",
+    "modelResponse": "Respons model",
+    "address": "Alamat situs",
+    "go": "Buka",
+    "openExternal": "Buka di peramban",
+    "browserHint": "Sebagian situs melarang penyematan. Jika halaman kosong, buka di peramban. Situs tidak dapat mengakses akun Cirno atau berkas lokal.",
+    "enterUrl": "Masukkan alamat situs.",
+    "invalidUrl": "Masukkan alamat HTTP atau HTTPS.",
+    "browserSameOrigin": "Buka Cirno langsung, jangan sematkan di dalam dirinya sendiri.",
+    "kind": {
+      "password": "Akun / sandi",
+      "text": "Teks panjang",
+      "identity": "Identitas pribadi",
+      "token": "Token / kode",
+      "ssh": "SSH"
+    },
+    "openItem": "Buka {{title}}",
+    "username": "Nama pengguna",
+    "discardDescription": "Perubahan yang belum disimpan di tab ini akan hilang.",
+    "debug": {
+      "time": "Waktu",
+      "type": "Jenis",
+      "summary": "Peristiwa",
+      "status": "Status",
+      "turn": "Giliran",
+      "size": "Ukuran",
+      "filter": "Filter halaman ini",
+      "all": "Semua",
+      "newest": "Terbaru",
+      "newer": "Lebih baru",
+      "refresh": "Muat ulang jejak",
+      "inspector": "Pemeriksa",
+      "messages": "Pesan",
+      "response": "Respons",
+      "tools": "Alat",
+      "raw": "Data mentah",
+      "noEvents": "Tidak ada peristiwa di halaman ini.",
+      "count": "{{count}} / {{total}} peristiwa",
+      "events": "Peristiwa yang direkam",
+      "kinds": {
+        "input": "Pesan pengguna",
+        "answer": "Balasan model",
+        "reasoning": "Penalaran",
+        "tool": "Panggilan alat",
+        "compaction": "Pemadatan",
+        "request": "Permintaan API",
+        "file": "Perubahan berkas",
+        "lifecycle": "Siklus hidup",
+        "system": "Masukan sistem"
+      },
+      "source": "Percakapan sumber",
+      "allSources": "Semua percakapan",
+      "pause": "Jeda perekaman",
+      "start": "Mulai perekaman",
+      "clear": "Hapus rekaman",
+      "recording": "Merekam",
+      "paused": "Dijeda",
+      "waiting": "Merekam peristiwa baru tanpa mengimpor riwayat lama.",
+      "capacity": "Batas penyimpanan tercapai. Hapus untuk melanjutkan.",
+      "storage_error": "Perekaman berhenti karena kesalahan penyimpanan sementara."
+    },
+    "moveOtherGroup": "Move to other tab group",
+    "emptyGroup": "Open a page from the Launcher or drag a tab here.",
+    "sshNodeAccess": "Tambahkan ke SSH Nodes",
+    "sshNodeAccessHint": "Gunakan di terminal jarak jauh. Eksekusi Agent juga memerlukan visibilitas Agent.",
+    "sshCredential": "Kredensial SSH",
+    "loadSSH": "Muat detail koneksi",
+    "sshNodePickerHint": "Pilih kredensial SSH dari Kredensial. Menghapus Node tidak menghapus kredensialnya.",
+    "noSSHCredentials": "Buat kredensial SSH di Kredensial terlebih dahulu.",
+    "agentVisibility": "Tersedia untuk Agent",
+    "agentVisibilityHint": "Izinkan alat Agent menampilkan dan mengelola kredensial ini. Alat kredensial tidak mengembalikan nilai rahasia.",
+    "agentVisible": "Terlihat oleh Agent",
+    "agentHidden": "Pribadi",
+    "keepSecret": "Kosongkan untuk mempertahankan nilai tersimpan.",
+    "sshNode": "SSH Node"
   },
   "files": {
     "title": "Files",
@@ -2686,7 +2793,8 @@
     "create": "Create",
     "discardTitle": "Discard unsaved changes?",
     "discardDescription": "Your changes have not been saved to the file.",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "openPreview": "Buka tab pratinjau"
   },
   "memoryLibrary": {
     "search": "Cari ingatan",
@@ -2746,12 +2854,16 @@
     "semanticMode": "Vektor",
     "hybridMode": "Hibrida · BM25 + vektor",
     "searchEngine": "Digunakan: {{mode}}",
-    "fallback_disabled": "Embedding lokal dinonaktifkan; menggunakan BM25.",
+    "fallback_disabled": "Pencarian vektor dinonaktifkan; menggunakan BM25.",
     "fallback_busy": "Proses embedding sedang sibuk; menggunakan BM25.",
     "fallback_lexical_only": "Bukti asli, status tugas, dan riwayat menggunakan BM25. Vektor mencakup pengetahuan dan profil aktif.",
     "fallback_unavailable": "Pencarian vektor tidak tersedia; menggunakan BM25.",
     "searchDetails": "Alasan",
-    "indexPending": "Indeks vektor belum lengkap. Hasil hanya mencakup konten terindeks; cari lagi untuk melanjutkan pengindeksan."
+    "indexPending": "Indeks vektor belum lengkap. Hasil hanya mencakup konten terindeks; cari lagi untuk melanjutkan pengindeksan.",
+    "statusTitle": "Indeks dan konsolidasi",
+    "noTags": "Belum ada tag.",
+    "resultsFor": "Hasil untuk “{{query}}”",
+    "noMatches": "Tidak ada memori yang sesuai dengan pencarian ini."
   },
   "userQuestion": {
     "title": "Pertanyaan untuk Anda",
@@ -2770,7 +2882,6 @@
     "remaining_other": "{{count}} pertanyaan tersisa"
   },
   "features": {
-    "globalConversation": "Cirno",
     "projects": "Proyek",
     "ordinaryConversations": "Percakapan",
     "createProject": "Buat proyek",
@@ -2819,7 +2930,8 @@
     "command": "Perintah",
     "runCommand": "Jalankan",
     "close": "Tutup",
-    "commandCompleted": "Perintah selesai."
+    "commandCompleted": "Perintah selesai.",
+    "removeNode": "Hapus dari Nodes"
   },
   "inbox": {
     "title": "Kotak masuk",
@@ -2833,7 +2945,7 @@
     "empty": "Belum ada notifikasi",
     "loading": "Memuat notifikasi",
     "retained": "Membaca notifikasi tidak menyelesaikan tindakannya.",
-    "muteHelp": "Membisukan menonaktifkan peringatan dan suara kategori ini pada peramban ini. Riwayat tetap disimpan. Peringatan juga memerlukan pengaturan utama dan izin.",
+    "muteHelp": "Preferensi notifikasi browser disinkronkan antarperangkat. Membisukan menghentikan peringatan dan suara kategori ini; riwayat Kotak masuk tetap disimpan. Setiap browser memerlukan izin notifikasi sendiri.",
     "muted": "Dibisukan",
     "notify": "Beri tahu",
     "unread": "Belum dibaca",
@@ -2850,7 +2962,6 @@
     },
     "kind": {
       "question": "Pertanyaan",
-      "pairing": "Persetujuan akses",
       "recovery": "Pemulihan percakapan",
       "compaction": "Pemadatan konteks",
       "dream": "Konsolidasi memori",
@@ -2912,7 +3023,57 @@
       "connection_failed": "Tidak dapat terhubung ke Cirno. Periksa jaringan Anda.",
       "request_failed": "Permintaan gagal. Silakan coba lagi.",
       "incorrect_password": "Kata sandi saat ini salah.",
-      "unauthorized": "Silakan masuk lagi."
+      "unauthorized": "Silakan masuk lagi.",
+      "invalid_router_handle": "Use 3–32 lowercase letters, digits or underscores, starting with a letter.",
+      "router_handle_taken": "Another conversation already uses this name.",
+      "router_unavailable": "The Router conversation is unavailable. Try again later."
+    },
+    "routerHandle": "Router @name",
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+  },
+  "themes": {
+    "title": "Tema warna",
+    "name": "Nama tema",
+    "newName": "Salju saya",
+    "customize": "Buat tema",
+    "syncHint": "Setiap tema mencakup warna terang dan gelap. Pengaturan disimpan di Cirno dan disinkronkan antarperangkat.",
+    "save": "Simpan tema",
+    "edit": "Edit tema",
+    "remove": "Hapus tema",
+    "saveFailed": "Preferensi tidak dapat disimpan.",
+    "contrast": "Tingkatkan kontras teks dengan latar dan panel.",
+    "colors": {
+      "background": "Latar",
+      "surface": "Navigasi",
+      "panel": "Panel",
+      "text": "Teks",
+      "muted": "Teks sekunder",
+      "accent": "Aksen",
+      "border": "Batas"
     }
+  },
+  "conversationCatalog": {
+    "newProject": "Proyek baru",
+    "projectName": "Nama proyek",
+    "search": "Cari percakapan dan proyek",
+    "more": "Tampilkan lagi",
+    "unfiled": "Percakapan tanpa proyek",
+    "move": "Pindahkan {{title}} ke proyek",
+    "newInProject": "Percakapan baru di {{name}}",
+    "renameProject": "Ubah nama {{name}}",
+    "deleteProject": "Hapus {{name}}",
+    "emptyProject": "Proyek ini belum memiliki percakapan.",
+    "empty": "Tidak ada percakapan yang cocok.",
+    "deleteHelp": "Proyek akan dihapus. Percakapan, riwayat, dan berkas tetap disimpan.",
+    "create": "Buat",
+    "directory": "Direktori kerja (opsional)",
+    "sort": "Urutkan percakapan",
+    "order": {
+      "updated_desc": "Terakhir diperbarui",
+      "created_desc": "Terakhir dibuat",
+      "title_asc": "Judul A–Z",
+      "manual": "Urutan tersimpan"
+    },
+    "projectActions": "Tindakan proyek {{name}}"
   }
 }

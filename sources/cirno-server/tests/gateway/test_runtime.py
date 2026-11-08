@@ -1,26 +1,13 @@
-import asyncio
 import json
 import os
 import signal
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-from cirno_server.lifecycle import (
-    ServerClientLease,
-    ServerInstance,
-    ServerRuntime,
-    ServerRuntimePaths,
-    ServerStartOptions,
-    ServerStatus,
-    RuntimeResult,
-)
-from cirno_server.lifecycle.runtime import monitor_gateway_clients
 from cirno_core.runtime.processes import ManagedProcessRuntime, process_is_running
 from cirno_core.utils.rotating_output import (
     BACKGROUND_LOG_BACKUP_COUNT_ENV,
@@ -29,6 +16,9 @@ from cirno_core.utils.rotating_output import (
     DEFAULT_BACKUP_COUNT,
     DEFAULT_MAX_BYTES,
 )
+from cirno_server.lifecycle.contracts import RuntimeResult, ServerStartOptions, ServerStatus
+from cirno_server.lifecycle.instance import ServerInstance, ServerRuntimePaths
+from cirno_server.lifecycle.runtime import ServerRuntime
 
 
 class FakeProcess:
@@ -49,15 +39,26 @@ def _paths(tmp_path: Path) -> ServerRuntimePaths:
     return ServerRuntimePaths.for_instance(data_dir=tmp_path)
 
 
+@pytest.mark.parametrize("damaged", [b"{", b"[]", b"\xff", b"x" * (64 * 1024 + 1)])
+def test_invalid_process_record_cannot_be_overwritten_by_a_new_start(tmp_path, damaged):
+    runtime = ServerRuntime(paths=_paths(tmp_path))
+    runtime.paths.run_dir.mkdir()
+    runtime.paths.state_path.write_bytes(damaged)
+    with pytest.raises(ValueError, match="[Pp]rocess state"):
+        with runtime.foreground_instance(ServerStartOptions(port=18790)):
+            pytest.fail("An invalid owner record must be resolved before starting another service")
+    assert runtime.paths.state_path.read_bytes() == damaged
+
+
 def test_runtime_state_publish_keeps_existing_snapshot_readable(tmp_path):
     """Status polling must not prevent a gateway from publishing readiness."""
-    from cirno_core.utils.atomic_file import _open_snapshot
+    from cirno_core.utils.atomic_file import open_atomic_snapshot
 
     runtime = ServerRuntime(paths=_paths(tmp_path / "网关 home"))
     previous = {"pid": os.getpid(), "identity": "fixture", "command": ["cirno", "gateway"]}
     current = {**previous, "health_host": "127.0.0.1"}
     runtime._write_state(previous)
-    with _open_snapshot(runtime.paths.state_path) as snapshot:
+    with open_atomic_snapshot(runtime.paths.state_path) as snapshot:
         runtime._write_state(current)
         assert json.loads(snapshot.read()) == previous
         assert runtime._read_state() == current
@@ -91,12 +92,9 @@ import sys
 import time
 from pathlib import Path
 
-from cirno_server.lifecycle import (
-    ServerAlreadyRunningError,
-    ServerRuntime,
-    ServerRuntimePaths,
-    ServerStartOptions,
-)
+from cirno_server.lifecycle.contracts import ServerAlreadyRunningError, ServerStartOptions
+from cirno_server.lifecycle.runtime import ServerRuntime
+from cirno_server.lifecycle.instance import ServerRuntimePaths
 
 root = Path(sys.argv[1])
 duration = float(sys.argv[2])
@@ -191,23 +189,11 @@ class _ManagedForegroundChildRuntime(ServerRuntime):
         ]
 
 
-def test_paths_use_stable_instance_suffix_for_custom_selectors(tmp_path):
-    default_paths = ServerRuntimePaths.for_instance(data_dir=tmp_path)
-    first_paths = ServerRuntimePaths.for_instance(
-        data_dir=tmp_path,
-        workspace="/tmp/workspace-a",
-        config_path="/tmp/config-a.json",
-    )
-    second_paths = ServerRuntimePaths.for_instance(
-        data_dir=tmp_path,
-        workspace="/tmp/workspace-b",
-        config_path="/tmp/config-b.json",
-    )
-
-    assert default_paths.state_path.name == "gateway.json"
-    assert first_paths.state_path.name.startswith("gateway.")
-    assert first_paths.state_path != second_paths.state_path
-    assert first_paths.log_path != second_paths.log_path
+def test_config_files_in_one_instance_share_the_same_process_owner(tmp_path):
+    first = ServerInstance.resolve(config_path=tmp_path / "one.json", workspace="/tmp/a")
+    second = ServerInstance.resolve(config_path=tmp_path / "two.json", workspace="/tmp/b")
+    assert first.paths == second.paths
+    assert first.paths.state_path == tmp_path / "state" / "run" / "gateway.json"
 
 
 def test_default_instance_preserves_released_gateway_paths() -> None:
@@ -235,7 +221,7 @@ def test_custom_instance_round_trips_the_same_child_selectors(tmp_path: Path) ->
     )
 
     assert child == parent
-    assert parent.paths.state_path.name.startswith("gateway.")
+    assert parent.paths.state_path.name == "gateway.json"
 
 
 def test_start_background_writes_state_and_child_command(tmp_path, monkeypatch):
@@ -331,23 +317,12 @@ def test_foreground_gateway_claim_is_discoverable_and_released(tmp_path, monkeyp
         assert status.pid == os.getpid()
         assert status.port == 18790
         assert status.launch_mode == "foreground"
-        assert status.lifetime == "explicit"
         assert status.command == tuple(runtime._build_child_command(options))
 
     assert runtime.status().running is False
     assert not runtime.paths.state_path.exists()
 
 
-def test_explicit_foreground_gateway_clears_stale_auto_stop_state(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Darwin")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    lease = ServerClientLease(runtime, kind="stale")
-    lease.mark_ephemeral()
-
-    with runtime.foreground_instance(ServerStartOptions(port=18790)):
-        assert runtime.status().lifetime == "explicit"
-
-    assert not lease.state_path.exists()
 
 
 def test_foreground_gateway_release_preserves_a_replacement_state(tmp_path, monkeypatch):
@@ -551,406 +526,32 @@ def test_restart_stops_then_starts_the_background_gateway(tmp_path, monkeypatch)
     assert result.ok is True
 
 
-def test_client_lease_reader_keeps_snapshot_during_replacement(tmp_path, monkeypatch):
-    """A real lease read retains its contents while a writer publishes the next state."""
-    from contextlib import contextmanager
-
-    from cirno_core.utils import atomic_file
-
-    runtime = ServerRuntime(paths=_paths(tmp_path))
-    client = ServerClientLease(runtime, kind="tui", token="client")
-    client.acquire()
-    previous = client._read_state()
-    current = {**previous, "auto_stop": True}
-    open_snapshot = atomic_file._open_snapshot
-
-    @contextmanager
-    def publish_while_reading(path):
-        with open_snapshot(path) as snapshot:
-            client._write_state(current)
-            yield snapshot
-
-    with monkeypatch.context() as patch:
-        patch.setattr(atomic_file, "_open_snapshot", publish_while_reading)
-        assert client._read_state() == previous
-    assert client._read_state() == current
-    assert list(runtime.paths.run_dir.glob("*.tmp")) == []
-
-
-def test_last_interactive_client_stops_an_on_demand_gateway(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    stopped: list[int] = []
-
-    def stop(*, timeout_s: int):
-        stopped.append(timeout_s)
-        return SimpleNamespace(ok=True, message="server_stopped")
-
-    monkeypatch.setattr(runtime, "_stop", stop)
-    tui = ServerClientLease(runtime, kind="tui", pid=os.getpid(), token="tui")
-    webui = ServerClientLease(runtime, kind="webui", pid=os.getpid(), token="webui")
-
-    tui.acquire()
-    tui.mark_ephemeral()
-    webui.acquire()
-
-    assert tui.release() is False
-    assert stopped == []
-    assert webui.release() is True
-    assert stopped == [20]
-    assert not webui.state_path.exists()
-
-
-def test_last_client_can_leave_shutdown_to_the_gateway_monitor(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    monkeypatch.setattr(
-        runtime,
-        "_stop",
-        lambda **_kwargs: pytest.fail("deferred release must not stop synchronously"),
-    )
-    client = ServerClientLease(runtime, kind="tui", pid=os.getpid(), token="tui")
-    client.acquire()
-    client.mark_ephemeral()
-
-    assert client.release(wait_for_stop=False) is False
-
-    state = json.loads(client.state_path.read_text(encoding="utf-8"))
-    assert state == {"auto_stop": True, "clients": {}}
-
-
-def test_last_client_shutdown_preserves_a_replacement_lease(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    stop_started = threading.Event()
-    finish_stop = threading.Event()
-    replacement_acquired = threading.Event()
-
-    def stop(*, timeout_s: int):
-        assert timeout_s == 20
-        stop_started.set()
-        assert finish_stop.wait(timeout=2)
-        return SimpleNamespace(
-            ok=True,
-            message="server_stopped",
-            status=runtime.status(),
-        )
-
-    monkeypatch.setattr(runtime, "_stop", stop)
-    original = ServerClientLease(runtime, kind="tui", token="original")
-    replacement = ServerClientLease(runtime, kind="webui", token="replacement")
-    original.acquire()
-    original.mark_ephemeral()
-
-    release_thread = threading.Thread(target=original.release)
-    release_thread.start()
-    assert stop_started.wait(timeout=2)
-
-    acquire_thread = threading.Thread(
-        target=lambda: (replacement.acquire(), replacement_acquired.set())
-    )
-    acquire_thread.start()
-    assert not replacement_acquired.wait(timeout=0.05)
-
-    finish_stop.set()
-    release_thread.join(timeout=2)
-    acquire_thread.join(timeout=2)
-
-    assert replacement_acquired.is_set()
-    state = json.loads(replacement.state_path.read_text(encoding="utf-8"))
-    assert set(state["clients"]) == {"replacement"}
-
-
-def test_explicit_stop_clears_leases_before_accepting_a_replacement(
-    tmp_path,
-    monkeypatch,
-):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    stop_started = threading.Event()
-    finish_stop = threading.Event()
-    replacement_acquired = threading.Event()
-
-    stale = ServerClientLease(runtime, kind="tui", token="stale")
-    replacement = ServerClientLease(runtime, kind="webui", token="replacement")
-    stale.acquire()
-    stale.mark_ephemeral()
-
-    def stop(*, timeout_s: int):
-        assert timeout_s == 20
-        stop_started.set()
-        assert finish_stop.wait(timeout=2)
-        return SimpleNamespace(
-            ok=True,
-            message="server_stopped",
-            status=runtime.status(),
-        )
-
-    monkeypatch.setattr(runtime, "_stop", stop)
-    stop_thread = threading.Thread(target=runtime.stop)
-    stop_thread.start()
-    assert stop_started.wait(timeout=2)
-
-    acquire_thread = threading.Thread(
-        target=lambda: (replacement.acquire(), replacement_acquired.set())
-    )
-    acquire_thread.start()
-    assert not replacement_acquired.wait(timeout=0.05)
-
-    finish_stop.set()
-    stop_thread.join(timeout=2)
-    acquire_thread.join(timeout=2)
-
-    assert replacement_acquired.is_set()
-    state = json.loads(replacement.state_path.read_text(encoding="utf-8"))
-    assert set(state["clients"]) == {"replacement"}
-
-
-def test_on_demand_lifetime_is_recorded_before_the_gateway_spawns(tmp_path, monkeypatch):
-    observed_auto_stop: list[bool] = []
-
-    def fake_popen(*_args, **_kwargs):
-        lease_path = runtime.paths.state_path.with_name("gateway.clients.json")
-        observed_auto_stop.append(
-            json.loads(lease_path.read_text(encoding="utf-8"))["auto_stop"]
-        )
-        return FakeProcess()
-
-    runtime = ServerRuntime(
-        paths=_paths(tmp_path),
-        platform_name="Linux",
-        popen=fake_popen,
-        sleep=lambda _seconds: None,
-    )
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    monkeypatch.setattr(runtime, "_process_identity", lambda _pid: 12345)
-    client = ServerClientLease(runtime, kind="tui", token="client")
-    client.acquire()
-
-    result = client.ensure_on_demand_gateway(ServerStartOptions(port=18790))
-
-    assert result.ok is True
-    assert observed_auto_stop == [True]
-    assert result.status.lifetime == "on_demand"
-
-
-def test_explicit_background_gateway_survives_the_last_client(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    runtime._write_state(
-        {
-            "pid": os.getpid(),
-            "identity": os.getpid(),
-            "launch_mode": "background",
-        }
-    )
-    stopped: list[int] = []
-    monkeypatch.setattr(
-        runtime,
-        "_stop",
-        lambda *, timeout_s: stopped.append(timeout_s),
-    )
-    client = ServerClientLease(runtime, kind="webui", pid=os.getpid())
-
-    client.acquire()
-    client.mark_ephemeral()
-    result = runtime.start_background(ServerStartOptions(port=18790))
-
-    assert result.ok is False
-    assert result.message == "server_already_running"
-    assert result.promoted is True
-    assert client.release() is False
-    assert stopped == []
-    assert not client.state_path.exists()
-
-
-def test_failed_last_client_shutdown_remains_retryable(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    monkeypatch.setattr(
-        runtime,
-        "_stop",
-        lambda *, timeout_s: SimpleNamespace(ok=False, message="server_stop_timeout"),
-    )
-    client = ServerClientLease(runtime, kind="tui", pid=os.getpid())
-    client.acquire()
-    client.mark_ephemeral()
-
-    assert client.release() is False
-    state = json.loads(client.state_path.read_text(encoding="utf-8"))
-    assert state == {"auto_stop": True, "clients": {}}
-
-
-@pytest.mark.parametrize("auto_stop", [False, True])
-def test_lease_queries_filter_a_reused_client_pid_without_writing(
-    tmp_path, monkeypatch, auto_stop,
-):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    identity = "same-pid:first-process"
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    monkeypatch.setattr(runtime, "_process_identity", lambda _pid: identity)
-    client = ServerClientLease(runtime, kind="tui", pid=12345, token="client")
-
-    client.acquire()
-    if auto_stop:
-        client.mark_ephemeral()
-    original = client.state_path.read_bytes()
-    # An old timestamp detects same-content rewrites without timing sleeps.
-    os.utime(client.state_path, (1, 1))
-    modified_at = client.state_path.stat().st_mtime_ns
-
-    for identity, expected_clients in (
-        ("same-pid:first-process", 1),
-        ("same-pid:replacement-process", 0),
-    ):
-        snapshot = client.snapshot()
-        status = runtime.status()
-        assert snapshot.auto_stop is auto_stop
-        assert snapshot.clients == status.clients == expected_clients
-        assert status.lifetime == ("on_demand" if auto_stop else "explicit")
-        assert client.state_path.read_bytes() == original
-        assert client.state_path.stat().st_mtime_ns == modified_at
-
-
-def test_darwin_lease_detects_pid_reuse(
-    tmp_path,
-    monkeypatch,
-):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Darwin")
-    identity = "darwin:42:1786992348:123456"
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    monkeypatch.setattr(runtime, "_process_identity", lambda _pid: identity)
-    client = ServerClientLease(runtime, kind="tui", pid=12345, token="client")
-
-    client.acquire()
-    client.mark_ephemeral()
-    state = json.loads(client.state_path.read_text(encoding="utf-8"))
-    record = state["clients"]["client"]
-
-    assert record["identity"] == identity
-
-    identity = "darwin:42:1786992348:654321"
-    assert client.snapshot().clients == 0
-
-
-def test_lease_snapshot_keeps_a_client_when_identity_probe_is_unavailable(
-    tmp_path,
-    monkeypatch,
-):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Darwin")
-    identity: str | None = "created-at"
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    monkeypatch.setattr(runtime, "_process_identity", lambda _pid: identity)
-    client = ServerClientLease(runtime, kind="tui", pid=12345, token="client")
-
-    client.acquire()
-    client.mark_ephemeral()
-    identity = None
-
-    snapshot = client.snapshot()
-
-    assert snapshot.auto_stop is True
-    assert snapshot.clients == 1
-
-
-@pytest.mark.parametrize("auto_stop", [False, True])
-def test_client_monitor_persists_only_lease_changes(tmp_path, monkeypatch, auto_stop):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    live_pids = {12345, 12346}
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda pid: pid in live_pids)
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    first = ServerClientLease(runtime, kind="tui", pid=12345, token="first")
-    second = ServerClientLease(runtime, kind="webui", pid=12346, token="second")
-    first.acquire()
-    second.acquire()
-    if auto_stop:
-        first.mark_ephemeral()
-    monitor = ServerClientLease(runtime, kind="gateway-monitor")
-
-    def poll_without_writing():
-        before = monitor.state_path.read_bytes()
-        os.utime(monitor.state_path, (1, 1))
-        modified_at = monitor.state_path.stat().st_mtime_ns
-        assert monitor.begin_orphan_shutdown() is False
-        assert monitor.state_path.read_bytes() == before
-        assert monitor.state_path.stat().st_mtime_ns == modified_at
-
-    poll_without_writing()
-    poll_without_writing()
-    live_pids.remove(first.pid)
-    assert monitor.begin_orphan_shutdown() is False
-    state = json.loads(monitor.state_path.read_text(encoding="utf-8"))
-    assert set(state["clients"]) == {"second"}
-    assert bool(state.get("auto_stop")) is auto_stop
-    poll_without_writing()
-
-    live_pids.remove(second.pid)
-    assert monitor.begin_orphan_shutdown() is auto_stop
-    if auto_stop:
-        assert json.loads(monitor.state_path.read_text(encoding="utf-8")) == {
-            "auto_stop": True,
-            "clients": {},
-            "stopping": True,
-        }
-    else:
-        assert not monitor.state_path.exists()
-        assert monitor.begin_orphan_shutdown() is False
-        assert not monitor.state_path.exists()
-
-
-async def test_client_monitor_stops_an_orphaned_on_demand_gateway(tmp_path):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    lease = ServerClientLease(runtime, kind="gateway-monitor")
-    lease.mark_ephemeral()
-    shutdown_event = asyncio.Event()
-
-    orphaned = await monitor_gateway_clients(
-        lease,
-        shutdown_event,
-        poll_interval_s=0.001,
-    )
-
-    assert orphaned is True
-    assert shutdown_event.is_set()
-    assert json.loads(lease.state_path.read_text(encoding="utf-8"))["stopping"] is True
-
-
-async def test_client_monitor_blocks_replacement_until_gateway_exit(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Linux")
-    monkeypatch.setattr(runtime, "_process_identity", lambda pid: pid)
-    monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
-    runtime._write_state({"pid": os.getpid(), "identity": os.getpid()})
-    monitor = ServerClientLease(runtime, kind="gateway-monitor")
-    monitor.mark_ephemeral()
-    shutdown_event = asyncio.Event()
-
-    assert await monitor_gateway_clients(
-        monitor,
-        shutdown_event,
-        poll_interval_s=0.001,
-    ) is True
-
-    replacement = ServerClientLease(runtime, kind="webui", token="replacement")
-    replacement_acquired = threading.Event()
-    acquire_thread = threading.Thread(
-        target=lambda: (replacement.acquire(), replacement_acquired.set())
-    )
-    acquire_thread.start()
-    assert not replacement_acquired.wait(timeout=0.05)
-
-    runtime._release_current_process()
-    acquire_thread.join(timeout=2)
-
-    assert replacement_acquired.is_set()
-    state = json.loads(replacement.state_path.read_text(encoding="utf-8"))
-    assert set(state["clients"]) == {"replacement"}
-    assert "stopping" not in state
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def test_start_background_uses_windows_process_group_flags(tmp_path, monkeypatch):
@@ -985,7 +586,7 @@ def test_managed_background_hands_off_virtualenv_launcher_pid(tmp_path: Path) ->
     marker = tmp_path / "managed-foreground.marker"
     runtime = _ManagedForegroundChildRuntime(data_dir=tmp_path, marker=marker)
 
-    result = runtime.start_on_demand(ServerStartOptions(port=18790))
+    result = runtime.start_background(ServerStartOptions(port=18790))
     launcher = runtime._owned_process
     assert isinstance(launcher, subprocess.Popen)
     try:
@@ -996,7 +597,6 @@ def test_managed_background_hands_off_virtualenv_launcher_pid(tmp_path: Path) ->
         assert claimed_pid != launcher.pid
         assert status.pid == claimed_pid
         assert status.launch_mode == "background"
-        assert status.lifetime == "on_demand"
     finally:
         if runtime.status().running:
             runtime.stop(timeout_s=3)
@@ -1085,24 +685,6 @@ def test_windows_host_identity_stays_safe_when_target_platform_is_posix(tmp_path
     assert runtime.process_identity(12345) == "created-at"
 
 
-def test_windows_lease_prunes_a_reused_pid_by_creation_time(tmp_path, monkeypatch):
-    runtime = ServerRuntime(paths=_paths(tmp_path), platform_name="Windows")
-    identity = "filetime:first-process"
-    monkeypatch.setattr("cirno_core.runtime.processes._platform_name", lambda: "Windows")
-    monkeypatch.setattr(
-        "cirno_core.runtime.processes._windows_process_identity",
-        lambda _pid: identity,
-    )
-    client = ServerClientLease(runtime, kind="tui", pid=12345, token="client")
-
-    client.acquire()
-    client.mark_ephemeral()
-    identity = "filetime:replacement-process"
-
-    snapshot = client.snapshot()
-
-    assert snapshot.auto_stop is True
-    assert snapshot.clients == 0
 
 
 def test_status_clears_stale_state(tmp_path, monkeypatch):
@@ -1172,7 +754,7 @@ def test_status_distinguishes_live_process_from_degraded_gateway_readiness(
     monkeypatch.setattr(runtime, "_is_pid_running", lambda _pid: True)
     monkeypatch.setattr(runtime, "_process_identity", lambda _pid: 42)
     monkeypatch.setattr(
-        "cirno_server.lifecycle.runtime._gateway_health_ready",
+        "cirno_server.lifecycle.runtime.health_ready",
         lambda _host, _port: False,
     )
 
@@ -1366,16 +948,6 @@ def test_terminate_windows_targets_only_the_recorded_process_tree(tmp_path, monk
     ]
 
 
-def test_orphan_shutdown_yields_to_an_explicit_lifecycle_transition(tmp_path):
-    runtime = ServerRuntime(paths=_paths(tmp_path))
-    lease = ServerClientLease(runtime, kind="gateway-monitor")
-    lease.mark_ephemeral()
-
-    with runtime._transition_lock():
-        assert lease.begin_orphan_shutdown() is False
-        assert "stopping" not in json.loads(lease.state_path.read_text(encoding="utf-8"))
-
-    assert lease.begin_orphan_shutdown() is True
 
 
 def test_windows_stop_does_not_force_a_pid_reused_during_grace(tmp_path, monkeypatch):

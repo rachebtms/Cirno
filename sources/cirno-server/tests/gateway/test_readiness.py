@@ -6,14 +6,10 @@ from dataclasses import asdict, replace
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
-
-from cirno_server.lifecycle.runtime import (
-    ServerHealthIdentity,
-    ServerRuntime,
-    ServerRuntimePaths,
-    ServerStartOptions,
-    _gateway_health_ready,
-)
+from cirno_server.lifecycle.contracts import ServerHealthIdentity, ServerStartOptions
+from cirno_server.lifecycle.runtime import ServerRuntime
+from cirno_server.lifecycle.instance import ServerRuntimePaths
+from cirno_server.lifecycle.health import health_ready
 
 
 @pytest.fixture
@@ -22,7 +18,7 @@ def health_server():
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            assert self.path == "/health"
+            assert self.path == "/v0/health"
             self.send_response(reply["status"])
             self.end_headers()
             self.wfile.write(reply["body"])
@@ -48,7 +44,7 @@ def test_restart_requires_identity_while_legacy_health_still_works(tmp_path, hea
     identity = ServerHealthIdentity("a" * 64, "b" * 32, "0.3.6")
     with runtime.foreground_instance(ServerStartOptions(port=port)):
         runtime.publish_health_host("127.0.0.1")
-        assert _gateway_health_ready("127.0.0.1", port)
+        assert health_ready("127.0.0.1", port)
         assert not runtime.verify_ready(identity)  # Older / unrelated HTTP 200.
         reply["body"] = json.dumps({
             "status": "ok", "ready": True,
@@ -73,4 +69,4 @@ def test_restart_requires_identity_while_legacy_health_still_works(tmp_path, hea
 def test_unready_or_invalid_response_cannot_confirm_restart(health_server, status, body):
     port, reply = health_server
     reply.update(status=status, body=body)
-    assert not _gateway_health_ready("127.0.0.1", port, expected=ServerHealthIdentity("a" * 64, "b" * 32, "0.3.6"))
+    assert not health_ready("127.0.0.1", port, expected=ServerHealthIdentity("a" * 64, "b" * 32, "0.3.6"))

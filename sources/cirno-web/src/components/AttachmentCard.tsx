@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { UIMediaKind } from "@/lib/types";
+import type { UIMediaKind } from "@/lib/contracts/messages";
 import { cn } from "@/lib/utils";
 
 export const attachmentCardActionClassName = "absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
@@ -27,7 +27,7 @@ export function AttachmentCard({ name, description, children, action, invalid = 
 
   return <span className={cn(
     "relative block h-24 w-24 max-w-full shrink-0 rounded-control border transition-colors motion-reduce:transition-none",
-    invalid ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-border/70 bg-muted/35",
+    invalid ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-border/70 bg-surface-secondary/35",
   )}>
     <TooltipProvider>
       <Tooltip open={hintOpen && !detailsOpen} onOpenChange={setHintOpen}>

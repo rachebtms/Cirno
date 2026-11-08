@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { SessionHandle } from "@/lib/types";
+import type { SessionHandle } from "@/lib/contracts/messages";
 
 const controlsClassName = cn(
   "pointer-events-auto flex items-center gap-0.5 rounded-compact bg-background p-px empty:hidden",
@@ -30,7 +30,7 @@ interface ThreadHeaderProps {
   onToggleSidebar: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
-  hideSidebarToggleForHostChrome?: boolean;
+  hideDesktopSidebarToggle?: boolean;
   hideSidebarToggle?: boolean;
   hideThemeButton?: boolean;
   hideTitle?: boolean;
@@ -52,7 +52,7 @@ export function ThreadHeader({
   onToggleSidebar,
   theme,
   onToggleTheme,
-  hideSidebarToggleForHostChrome = false,
+  hideDesktopSidebarToggle = false,
   hideSidebarToggle = false,
   hideThemeButton = false,
   hideTitle = false,
@@ -83,7 +83,7 @@ export function ThreadHeader({
         className={cn(
           controlsClassName,
           "relative min-w-0",
-          hideSidebarToggleForHostChrome && (minimal || hideTitle) && !handle && "lg:hidden",
+          hideDesktopSidebarToggle && (minimal || hideTitle) && !handle && "@min-[1024px]/cirno-tab:hidden",
         )}
       >
         {!hideSidebarToggle ? (
@@ -94,7 +94,7 @@ export function ThreadHeader({
             onClick={onToggleSidebar}
             className={cn(
               "h-7 w-7 rounded-control text-muted-foreground hover:text-foreground",
-              hideSidebarToggleForHostChrome && "lg:hidden",
+              hideDesktopSidebarToggle && "@min-[1024px]/cirno-tab:hidden",
             )}
           >
             <Menu className="h-3.5 w-3.5" />
@@ -126,8 +126,8 @@ export function ThreadHeader({
               aria-label={t("ptc.title")} aria-pressed={ptcModeEnabled}
               disabled={temporaryChatDisabled}
               onClick={onPtcModeEnabledChange ? () => onPtcModeEnabledChange(!ptcModeEnabled) : undefined}
-              className={cn("host-no-drag rounded-control text-muted-foreground hover:text-foreground",
-                ptcModeEnabled && "bg-accent text-foreground")}
+              className={cn("rounded-control text-muted-foreground hover:text-foreground",
+                ptcModeEnabled && "bg-default text-foreground")}
             ><Code2 aria-hidden className="h-3.5 w-3.5" /></Button>
           </TooltipTrigger><TooltipContent side="bottom" align="end" className="max-w-72">
             <div className="font-medium">{t("ptc.title")}</div>
@@ -147,7 +147,7 @@ export function ThreadHeader({
                   aria-pressed={temporaryChatEnabled}
                   onClick={() => onTemporaryChatEnabledChange(!temporaryChatEnabled)}
                   className={cn(
-                    "host-no-drag h-8 w-8 shrink-0 rounded-control text-muted-foreground hover:text-foreground",
+                    "h-8 w-8 shrink-0 rounded-control text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <TemporaryChatIcon
@@ -218,7 +218,7 @@ function ThemeButton({
       aria-label={label}
       onClick={onToggleTheme}
       className={cn(
-        "host-no-drag h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground",
+        "h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground",
         className,
       )}
     >

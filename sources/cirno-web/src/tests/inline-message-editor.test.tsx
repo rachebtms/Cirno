@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { InlineMessageEditor } from "@/components/thread/InlineMessageEditor";
-import { MessageBubble } from "@/components/MessageBubble";
+import { InlineMessageEditor } from "@/features/messages/InlineMessageEditor";
+import { MessageBubble } from "@/features/messages";
 
 function editor(overrides: Partial<React.ComponentProps<typeof InlineMessageEditor>> = {}) {
   const props = { value: "Original request", busy: false, error: "", hasToolEffects: false,

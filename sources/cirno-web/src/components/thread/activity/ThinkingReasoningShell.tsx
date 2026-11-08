@@ -94,7 +94,7 @@ export function ThinkingReasoningShell({
       {hasDetails && renderDetails ? (
         <div
           id={contentId}
-          {...(!expanded ? { inert: "" } : {})}
+          {...(!expanded ? { inert: true } : {})}
           aria-hidden={!expanded}
           className={cn(
             "grid transition-[grid-template-rows,opacity] duration-150 ease-out motion-reduce:transition-none",

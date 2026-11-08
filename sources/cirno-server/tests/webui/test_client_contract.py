@@ -1,8 +1,11 @@
 """Published package versions never substitute for wire compatibility."""
 
 import pytest
-
-from cirno_server.webui.client_contract import assess_webui_contract, compatibility_error, webui_contract
+from cirno_server.webui.client_contract import (
+    assess_webui_contract,
+    compatibility_error,
+    webui_contract,
+)
 
 
 def test_initial_host_declaration_is_an_independent_wire_fixture():

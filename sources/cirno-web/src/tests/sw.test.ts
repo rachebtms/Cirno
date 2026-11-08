@@ -327,15 +327,15 @@ describe("service worker", () => {
   it("does not intercept dynamic or unknown endpoint requests", async () => {
     const sw = loadSw();
     const paths = [
-      "/api/v1/models",
-      "/auth/session",
-      "/__cirno/ws",
+      "/v1/models",
+      "/v0/auth/session",
+      "/v0/ws",
       "/__cirno/socket.io",
-      "/api/chat/completions",
-      "/webui/bootstrap",
-      "/webui/session/list",
-      "/custom-token",
-      "/mcp-oauth/callback",
+      "/v0/chat/completions",
+      "/v0/bootstrap",
+      "/v0/sessions",
+      "/v0/custom-token",
+      "/v0/mcp/oauth/callback",
     ];
 
     for (const path of paths) {

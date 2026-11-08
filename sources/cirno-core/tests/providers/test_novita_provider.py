@@ -2,7 +2,8 @@
 
 from unittest.mock import patch
 
-from cirno_core.config.schema import Config, ProvidersConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.providers import ProvidersConfig
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.providers.registry import PROVIDERS, find_by_name
 

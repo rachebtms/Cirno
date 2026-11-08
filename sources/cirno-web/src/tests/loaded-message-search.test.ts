@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { findLoadedMessagePreview } from "@/lib/loaded-message-search";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { ThreadTranscript } from "@/lib/thread-transcript";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 function message(content: string, role: UIMessage["role"] = "assistant"): UIMessage {
   return { id: content, role, content, createdAt: 1 };

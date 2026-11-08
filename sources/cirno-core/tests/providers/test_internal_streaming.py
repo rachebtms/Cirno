@@ -1,4 +1,5 @@
 """Internal model calls consume active streams and stop when the stream goes idle."""
+from cirno_core.providers.retry import ProviderRetryPolicy
 
 import asyncio
 import json
@@ -6,17 +7,22 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 import httpx
 import pytest
-from agent.runner_helpers import failed_test_consolidator
+from sources.development.testing.runtime import failed_test_consolidator
 from openai import AsyncOpenAI
 
 from cirno_core.agent.hook import AgentHook
-from cirno_core.memory.consolidation import MemoryArchiver, MemoryStore
-from cirno_core.agent.runner import AgentRunner, AgentRunSpec
+from cirno_core.memory.archiver import MemoryArchiver
+from cirno_core.memory.store import MemoryStore
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.agent.runner.contracts import AgentRunSpec
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import ModelAPICapabilities, find_by_name
+from cirno_core.providers.model_api import ModelAPICapabilities
+from cirno_core.providers.registry import find_by_name
 from cirno_core.utils.llm_runtime import LLMRuntime
 
 
@@ -108,7 +114,7 @@ async def make_provider(monkeypatch):
                 model_api=ModelAPICapabilities(("chat_completions",), "chat_completions") if api == "chat" else ModelAPICapabilities(("responses",), "responses"),
             )
         provider._client = client
-        provider._CHAT_RETRY_DELAYS = ()
+        provider.retry_policy.delays = ()
         return provider, stream
 
     yield make
@@ -172,7 +178,7 @@ async def test_archive_preserves_raw_history_after_truncated_stream_retries(
 ):
     provider, stream = await make_provider(api, "content")
     stream.events.pop()
-    provider._CHAT_RETRY_DELAYS = (0,)
+    provider.retry_policy.delays = (0,)
     calls = []
     provider.set_llm_call_observer(calls.append)
     store = MemoryStore(tmp_path)
@@ -192,7 +198,7 @@ async def test_archive_preserves_raw_history_after_truncated_stream_retries(
     assert len(calls) == 2
     assert all(call.finish_reason == "error" and call.error_kind == "connection" for call in calls)
     assert summary is not None and "[RAW]" in summary and "PRESERVE_AUDIT_LOGS" in summary
-    entries = store.read_unprocessed_history(since_cursor=0)
+    entries = store.journal.read_unprocessed_history(since_cursor=0)
     assert len(entries) == 1
     assert entries[0]["content"] == summary
     assert stream.closed
@@ -230,11 +236,12 @@ async def test_chat_only_provider_still_has_a_timeout(monkeypatch, finalize):
     monkeypatch.setenv("CIRNO_STREAM_IDLE_TIMEOUT_S", "0.05")
 
     class ChatOnlyProvider(LLMProvider):
-        _CHAT_RETRY_DELAYS = ()
+        retry_policy = ProviderRetryPolicy(delays=())
 
         def __init__(self):
             super().__init__(provider_name="test")
             self.calls = 0
+            self.entered = asyncio.Event()
 
         def get_default_model(self):
             return "test"
@@ -246,17 +253,27 @@ async def test_chat_only_provider_still_has_a_timeout(monkeypatch, finalize):
                     content=None, finish_reason="tool_calls",
                     tool_calls=[ToolCallRequest(id="call", name="missing", arguments={})],
                 )
+            self.entered.set()
             await asyncio.Event().wait()
 
     provider = ChatOnlyProvider()
-    result = await asyncio.wait_for(AgentRunner().run(AgentRunSpec(
+    task = asyncio.create_task(AgentRunner().run(AgentRunSpec(
         initial_messages=[{"role": "user", "content": "work"}],
         tools=ToolRegistry(),
         runtime=LLMRuntime.capture(provider, "test", context_window_tokens=128_000),
         max_iterations=1, max_tool_result_chars=1_000,
         consolidate_history=failed_test_consolidator,
         max_iterations_message="Tool budget exhausted.",
-    )), timeout=1)
+    )))
+    try:
+        # The provider timeout starts at the provider call, not while prompt
+        # preparation is waiting for an executor thread on a busy machine.
+        await asyncio.wait_for(provider.entered.wait(), timeout=5)
+        result = await asyncio.wait_for(task, timeout=1)
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
     assert provider.calls == (2 if finalize else 1)
     assert result.stop_reason == ("max_iterations" if finalize else "error")
     if finalize:

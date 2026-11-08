@@ -11,7 +11,7 @@ from cirno_core.agent.tools.session_messages import (
     SessionMessageError,
 )
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import ToolsConfig
+from cirno_core.config.tools import ToolsConfig
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_handles import SessionHandle, SessionHandleResolver
 from cirno_core.session.session_messages import (
@@ -289,6 +289,7 @@ async def test_reply_timeout_observes_background_delivery_failure(
     with patch("cirno_core.agent.tools.session_messages.logger") as logger:
         scheduler.calls[0][1].fire()
         await asyncio.sleep(0)
+        await asyncio.gather(*tool._expiry_tasks, return_exceptions=True)
         await asyncio.sleep(0)
 
     assert tool._expiry_tasks == set()
@@ -369,3 +370,39 @@ async def test_reply_follows_a_recycled_handle(tmp_path: Path) -> None:
     assert result == f"Queued to @{source.name}."
     reply = await bus.consume_inbound()
     assert reply.chat_id == replacement.session_key
+
+
+@pytest.mark.parametrize("replace", [False, True])
+async def test_reply_timeout_cannot_revive_deleted_or_replaced_source(tmp_path, replace):
+    sessions = SessionManager(tmp_path)
+    _persist(sessions, "websocket:source", "websocket:target")
+    bus, scheduler = MessageBus(), _Scheduler()
+    tool = SendSessionMessageTool(sessions=sessions, bus=bus, schedule_later=scheduler)
+    target = _handle(sessions, "websocket:target")
+    await tool.enqueue(source_session_key="websocket:source", target_handle=target.name,
+                       content="Question", expect_reply=True, reply_timeout_seconds=5)
+    queued = await bus.consume_inbound()
+    assert queued.session_generation == (await sessions.state.read_header("websocket:target")).generation
+    await sessions.state.delete("websocket:source")
+    if replace:
+        await sessions.state.get("websocket:source")
+    scheduler.calls[0][1].fire()
+    await asyncio.sleep(0)
+    if tool._expiry_tasks:
+        await asyncio.gather(*tool._expiry_tasks)
+    assert bus.inbound.empty()
+    assert not tool._pending_replies
+    await sessions.state.aclose()
+
+
+async def test_old_sender_generation_cannot_send_into_current_conversations(tmp_path):
+    sessions = SessionManager(tmp_path)
+    _persist(sessions, "websocket:source", "websocket:target")
+    bus = MessageBus()
+    tool = SendSessionMessageTool(sessions=sessions, bus=bus)
+    target = _handle(sessions, "websocket:target")
+    with pytest.raises(SessionMessageError, match="was replaced"):
+        await tool.enqueue(source_session_key="websocket:source", source_generation="retired",
+                           target_handle=target.name, content="Old work", expect_reply=False)
+    assert bus.inbound.empty()
+    await sessions.state.aclose()

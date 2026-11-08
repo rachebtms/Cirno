@@ -1,10 +1,4 @@
 {
-  "rename": {
-    "title": "RenameDialog · Ubah nama grup dan proyek",
-    "description": "Coba dialog pengubahan nama grup dan proyek. Nama topik diubah langsung di daftar percakapan.",
-    "options": "Pemanggil menyediakan dialogTitle, description, dan placeholder. title menentukan nilai awal; onConfirm menerima judul tanpa spasi di kedua ujung. Judul kosong tidak dapat disimpan.",
-    "hint": "Menyimpan akan memperbarui judul di atas."
-  },
   "delete": {
     "title": "DeleteConfirm · Konfirmasi penghapusan",
     "description": "Bandingkan penghapusan satu percakapan, beberapa percakapan, atau percakapan dengan otomatisasi.",
@@ -60,17 +54,6 @@
     "options": "path adalah teks referensi. metadata menyediakan jalur lengkap dan jalur relatif opsional. Galeri menyediakan metadata tanpa memuat berkas.",
     "scope": "Cakupan berkas",
     "hint": "Klik kanan untuk membuka menu salin, atau fokuskan berkas lalu tekan Shift+F10."
-  },
-  "workbench": {
-    "title": "PaneWorkbench · Beberapa panel",
-    "description": "Ganti tata letak, aktifkan atau tambahkan panel, lalu atur posisi dan ukurannya.",
-    "options": "Pemanggil mengontrol panes, activePaneKey, layout, dan splitRatios. renderPane menyediakan konten; callback memperbarui status lokal. Layar sempit menampilkan panel aktif.",
-    "layout": "Tata letak panel",
-    "limit": "Maksimal empat panel",
-    "notes": "Catatan {{title}}",
-    "active": "Panel aktif",
-    "activate": "Pilih panel ini untuk mengaktifkannya",
-    "hint": "Aktif: {{title}}. Seret pegangan bawah untuk memindahkan panel dan tepinya untuk mengubah ukuran."
   },
   "hostConnection": {
     "title": "HostConnectionStatus · Status koneksi",
@@ -170,7 +153,7 @@
     "retries": "Percobaan ulang: {{amount}}"
   },
   "recovery": {
-    "title": "RecoveryNotice · Pemulihan tugas",
+    "title": "ThreadComposer · Pemulihan tugas",
     "description": "Bandingkan terhenti, melanjutkan, gagal, dan tidak tersedia; coba lanjutkan atau tutup.",
     "options": "state menyediakan snapshot pemulihan. onContinue dan onDismiss mengembalikan Promise. Callback ini hanya memperbarui pratinjau.",
     "state": "Status pemulihan",
@@ -296,22 +279,13 @@
     "selected": "Host pratinjau: {{name}}"
   },
   "chats": {
-    "title": "ChatList · Daftar percakapan",
+    "title": "ConversationsTab · Daftar percakapan",
     "description": "Pilih percakapan dan coba sematkan, arsipkan, atau hapus melalui menunya.",
     "options": "Pemanggil menyediakan sessions, activeKey, serta kunci yang disematkan atau diarsipkan. Callback tindakan memperbarui daftar contoh.",
     "state": "Status daftar percakapan",
     "renamed": "Nama diubah: {{name}}",
     "selected": "Percakapan terpilih: {{name}}",
     "none": "Tidak ada"
-  },
-  "sidebarResize": {
-    "title": "SidebarResizeHandle · Ukuran bilah samping",
-    "description": "Ubah ukuran, ciutkan, dan perluas bilah samping dengan tetikus atau papan ketik.",
-    "options": "width dan open dikontrol pemanggil. onResize memperbarui ukuran dan perluasan; onDraggingChange melaporkan penyeretan.",
-    "content": "Konten bilah samping",
-    "hint": "Seret pembatas, atau fokuskan lalu gunakan tombol panah, Home, End, dan Enter.",
-    "collapsed": "Diciutkan",
-    "dragging": "Sedang diseret"
   },
   "language": {
     "title": "LanguageSwitcher · Bahasa antarmuka",
@@ -343,7 +317,7 @@
   "channel": {
     "title": "{{channel}} · Pengaturan kanal",
     "description": "Jelajahi formulir pengaturan kanal asli dan statusnya.",
-    "options": "Memakai registrasi kanal, snapshot kontrak pengaturan Python, dan ChannelSetupSurfaceView produksi. Input, visibilitas kredensial, preset, pemeriksaan, dan sakelar hanya memengaruhi pratinjau ini.",
+    "options": "Memakai registrasi kanal, snapshot kontrak pengaturan Python, dan ChannelSetupView produksi. Input, visibilitas kredensial, preset, pemeriksaan, dan sakelar hanya memengaruhi pratinjau ini.",
     "state": "Status pengaturan kanal",
     "credentialsError": "Kredensial contoh ditolak. Perbarui nilai pratinjau lalu coba lagi.",
     "validation": "Konfigurasi pratinjau"
@@ -376,42 +350,6 @@
     "title": "WhatsAppConnectFlowView · Penautan perangkat WhatsApp",
     "description": "Bandingkan penautan otomatis, berhasil, kedaluwarsa, dan kesalahan; coba tautkan akun lain.",
     "options": "Tampilan mempertahankan aturan mulai otomatis dan tata letak minimal. Pemanggil mengontrol status dan percobaan ulang. Titik masuk koneksi nyata menangani mulai otomatis, percobaan paksa, dan polling."
-  },
-  "linearPanel": {
-    "title": "LinearPanelView · Pengaturan Linear",
-    "description": "Jelajahi detail aplikasi, rahasia, opsi lanjutan, ruang kerja, akses anggota, dan otorisasi web.",
-    "options": "state dan workspaces menyediakan snapshot; callback menghubungkan tindakan ruang kerja, penyimpanan, dan MCP. Tiga slot menyusun tampilan anggota, otorisasi, dan pengaturan ulang yang dipakai di produksi.",
-    "state": "Status pengaturan Linear",
-    "runtimeError": "Webhook Linear tidak dapat dimulai.",
-    "saveError": "Pengaturan tidak dapat disimpan. Draf Anda tetap disimpan.",
-    "inspectionError": "Ruang kerja yang terhubung tidak dapat diperiksa.",
-    "refreshed": "Ruang kerja contoh disegarkan.",
-    "removed": "Ruang kerja contoh dihapus: {{name}}",
-    "mcp": "Pengaturan Linear MCP dipilih."
-  },
-  "linearMembers": {
-    "title": "LinearMemberAccessView · Akses anggota",
-    "description": "Cari anggota, ubah akses, dan bandingkan pemuatan, kosong, penyimpanan, serta belum dikonfirmasi.",
-    "options": "snapshot berisi status anggota yang telah dikonfirmasi. onLoad dan onSetAllowed ditangani titik masuk kanal; gateway tetap memvalidasi izin.",
-    "state": "Status anggota",
-    "loadError": "Direktori anggota tidak tersedia.",
-    "saveError": "Akses belum dikonfirmasi."
-  },
-  "linearConnect": {
-    "title": "LinearConnectFlowView · Otorisasi Linear",
-    "description": "Coba otorisasi peramban dan pemberitahuan menunggu dengan tahap mulai, batal, berhasil, dan gagal.",
-    "options": "Memakai ulang ChannelQrConnectFlowView. Linear menyediakan tampilan, label, dan penanganan fokus; titik masuk runtime menangani pembuatan sesi dan polling.",
-    "state": "Tahap otorisasi",
-    "error": "Otorisasi tidak dapat diselesaikan.",
-    "hint": "Tautan otorisasi dan ruang kerja hanyalah contoh. Mulai dan Batal hanya mengubah tahap pratinjau."
-  },
-  "linearReset": {
-    "title": "LinearResetConnectionView · Atur ulang koneksi",
-    "description": "Tinjau data yang dihapus atau dipertahankan, status sibuk, dan percobaan ulang setelah pengaturan ulang sebagian.",
-    "options": "onReset menjalankan seluruh transaksi pencabutan dan pembersihan. Tampilan mengelola konfirmasi, kesalahan, pembatasan penutupan, dan pemulihan fokus.",
-    "state": "Hasil pengaturan ulang",
-    "error": "Kanal tidak dapat dihentikan. Pengaturan aplikasi dipertahankan.",
-    "completed": "Ruang kerja dan pengaturan aplikasi pratinjau telah dihapus."
   },
   "weixinPanel": {
     "title": "WeixinPanelView · Pengaturan Weixin",

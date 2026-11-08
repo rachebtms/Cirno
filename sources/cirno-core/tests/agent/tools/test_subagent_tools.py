@@ -8,11 +8,11 @@ import pytest
 
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.memory.consolidation import Consolidator
-from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.runner.contracts import AgentRunResult
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.agent.tools.registry import is_tool_error_result
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import GenerationSettings
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.utils.llm_runtime import LLMRuntime
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
@@ -36,14 +36,14 @@ async def test_run_inline_returns_result_without_announcement(tmp_path):
         bus=MessageBus(),
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(
         messages=[],
         stop_reason="done",
         final_content="review result",
         error=None,
         tool_events=[],
     ))
-    manager._announce_result = AsyncMock()
+    manager.reports.announce = AsyncMock()
 
     result = await manager.run_inline(
         task="review this",
@@ -52,7 +52,7 @@ async def test_run_inline_returns_result_without_announcement(tmp_path):
     )
 
     assert result == "review result"
-    manager._announce_result.assert_not_awaited()
+    manager.reports.announce.assert_not_awaited()
     assert manager._running_tasks == {}
     assert [s.state for s in manager.statuses_for_session("test:c1").values()] == ["done"]
 
@@ -70,7 +70,7 @@ async def test_run_inline_returns_structured_error(tmp_path):
         bus=MessageBus(),
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(
         messages=[],
         stop_reason="error",
         final_content=None,
@@ -94,9 +94,9 @@ async def test_run_inline_returns_structured_error(tmp_path):
 async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
     """allowed_env_keys from ExecToolConfig must be forwarded to the subagent's ExecTool."""
     from cirno_core.agent.subagents.manager import SubagentManager
-    from cirno_core.agent.tools.shell import ExecToolConfig
+    from cirno_core.agent.tools.shell_config import ExecToolConfig
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.config.schema import ToolsConfig
+    from cirno_core.config.tools import ToolsConfig
 
     bus = MessageBus()
     provider = MagicMock()
@@ -108,9 +108,9 @@ async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         tools_config=ToolsConfig(exec=ExecToolConfig(allowed_env_keys=["GOPATH", "JAVA_HOME"])),
     )
-    mgr._announce_result = AsyncMock()
+    mgr.reports.announce = AsyncMock()
 
-    mgr.runner.run = AsyncMock(return_value=AgentRunResult(
+    mgr.execution.runner.run = AsyncMock(return_value=AgentRunResult(
         messages=[],
         stop_reason="done",
         final_content="done",
@@ -127,11 +127,11 @@ async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
     )
     await asyncio.gather(*mgr._running_tasks.values(), return_exceptions=True)
 
-    mgr.runner.run.assert_awaited_once()
-    spec = mgr.runner.run.await_args.args[0]
+    mgr.execution.runner.run.assert_awaited_once()
+    spec = mgr.execution.runner.run.await_args.args[0]
     exec_tool = spec.tools.get("exec")
     assert exec_tool is not None
-    assert exec_tool.allowed_env_keys == ["GOPATH", "JAVA_HOME"]
+    assert exec_tool.preparation.config.allowed_env_keys == ["GOPATH", "JAVA_HOME"]
     assert [s.state for s in mgr.statuses_for_session("test:c1").values()] == ["done"]
 
 
@@ -151,9 +151,9 @@ async def test_subagent_uses_configured_max_iterations(tmp_path):
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         max_iterations=37,
     )
-    mgr._announce_result = AsyncMock()
+    mgr.reports.announce = AsyncMock()
 
-    mgr.runner.run = AsyncMock(return_value=AgentRunResult(
+    mgr.execution.runner.run = AsyncMock(return_value=AgentRunResult(
         messages=[],
         stop_reason="done",
         final_content="done",
@@ -170,8 +170,8 @@ async def test_subagent_uses_configured_max_iterations(tmp_path):
     )
     await asyncio.gather(*mgr._running_tasks.values(), return_exceptions=True)
 
-    mgr.runner.run.assert_awaited_once()
-    spec = mgr.runner.run.await_args.args[0]
+    mgr.execution.runner.run.assert_awaited_once()
+    spec = mgr.execution.runner.run.await_args.args[0]
     assert spec.max_iterations == 37
     assert [s.state for s in mgr.statuses_for_session("test:c1").values()] == ["done"]
 
@@ -188,7 +188,7 @@ async def test_subagent_checkpoint_updates_status_and_preserves_omitted_fields(t
         bus=MessageBus(),
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
-    mgr._announce_result = AsyncMock()
+    mgr.reports.announce = AsyncMock()
     snapshots = []
 
     async def fake_run(spec):
@@ -208,7 +208,7 @@ async def test_subagent_checkpoint_updates_status_and_preserves_omitted_fields(t
             tool_events=[],
         )
 
-    mgr.runner.run = AsyncMock(side_effect=fake_run)
+    mgr.execution.runner.run = AsyncMock(side_effect=fake_run)
 
     await mgr.spawn(task="do task", session_key="test:c1", runtime=_runtime(MagicMock()))
     await asyncio.gather(*mgr._running_tasks.values(), return_exceptions=True)
@@ -237,7 +237,7 @@ async def test_spawn_forwards_temperature_to_run_spec(tmp_path):
         bus=bus,
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
-    mgr._announce_result = AsyncMock()
+    mgr.reports.announce = AsyncMock()
 
     parent_runtime = _runtime(provider)
     seen = {}
@@ -250,7 +250,7 @@ async def test_spawn_forwards_temperature_to_run_spec(tmp_path):
             stop_reason="done", final_content="done", error=None, tool_events=[],
         )
 
-    mgr.runner.run = AsyncMock(side_effect=fake_run)
+    mgr.execution.runner.run = AsyncMock(side_effect=fake_run)
 
     await mgr.spawn(task="do task", runtime=parent_runtime, temperature=0.9)
     await asyncio.gather(*mgr._running_tasks.values(), return_exceptions=True)
@@ -277,7 +277,7 @@ async def test_background_spawn_waits_for_concurrency_capacity(tmp_path):
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
         max_concurrent_subagents=1,
     )
-    mgr._announce_result = AsyncMock()
+    mgr.reports.announce = AsyncMock()
 
     first_entered = asyncio.Event()
     second_entered = asyncio.Event()
@@ -300,7 +300,7 @@ async def test_background_spawn_waits_for_concurrency_capacity(tmp_path):
             tool_events=[],
         )
 
-    mgr.runner.run = AsyncMock(side_effect=fake_run)
+    mgr.execution.runner.run = AsyncMock(side_effect=fake_run)
 
     from cirno_core.agent.tools.context import RequestContext, request_context
 
@@ -400,7 +400,7 @@ async def test_inline_spawn_waits_for_concurrency_capacity(tmp_path):
             tool_events=[],
         )
 
-    manager.runner.run = AsyncMock(side_effect=fake_run)
+    manager.execution.runner.run = AsyncMock(side_effect=fake_run)
     tool = SubagentTool(manager)
     with request_context(RequestContext(
         channel="test",
@@ -437,7 +437,7 @@ async def test_runner_executes_inline_spawn_batch_concurrently(tmp_path):
     from cirno_core.agent.tools.registry import ToolRegistry
     from cirno_core.agent.tools.subagent import SubagentTool
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.providers.base import ToolCallRequest
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     manager = SubagentManager(
         consolidator=MagicMock(spec=Consolidator),
@@ -463,7 +463,7 @@ async def test_runner_executes_inline_spawn_batch_concurrently(tmp_path):
             tool_events=[],
         )
 
-    manager.runner.run = AsyncMock(side_effect=fake_run)
+    manager.execution.runner.run = AsyncMock(side_effect=fake_run)
     tools = ToolRegistry()
     tools.register(SubagentTool(manager))
     runtime = _runtime(MagicMock())
@@ -522,7 +522,7 @@ async def test_cancel_by_session_cancels_inline_subagent(tmp_path):
         entered.set()
         await asyncio.Event().wait()
 
-    manager.runner.run = AsyncMock(side_effect=fake_run)
+    manager.execution.runner.run = AsyncMock(side_effect=fake_run)
     inline = asyncio.create_task(manager.run_inline(
         task="wait",
         session_key="test:c1",
@@ -568,7 +568,7 @@ def test_subagent_default_max_iterations_matches_agent_defaults(tmp_path):
         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
     )
 
-    assert mgr.max_iterations == AgentDefaults().max_tool_iterations
+    assert mgr.limits.max_iterations == AgentDefaults().max_tool_iterations
 
 
 def test_agent_loop_passes_max_iterations_to_subagents(tmp_path):
@@ -588,7 +588,7 @@ def test_agent_loop_passes_max_iterations_to_subagents(tmp_path):
         max_iterations=42,
     )
 
-    assert loop.subagents.max_iterations == 42
+    assert loop.subagents.limits.max_iterations == 42
 
 
 @pytest.mark.asyncio
@@ -612,7 +612,7 @@ async def test_agent_loop_syncs_updated_max_iterations_before_run(tmp_path):
 
     async def fake_run(spec):
         assert spec.max_iterations == 55
-        assert loop.subagents.max_iterations == 55
+        assert loop.subagents.limits.max_iterations == 55
         return AgentRunResult(
             messages=[],
             stop_reason="done",
@@ -626,7 +626,7 @@ async def test_agent_loop_syncs_updated_max_iterations_before_run(tmp_path):
     loop.runner.run = AsyncMock(side_effect=fake_run)
     loop.max_iterations = 55
 
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
     )
@@ -668,7 +668,7 @@ async def test_drain_pending_no_block_when_no_subagents(tmp_path):
     loop.runner.run = AsyncMock(side_effect=fake_runner_run)
 
     runtime = loop.llm_runtime()
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "test"}], current_message=None),
         runtime=runtime,
         session=None,
@@ -689,7 +689,7 @@ async def test_terminal_drain_timeout(tmp_path):
     """The terminal drain should return empty after its shared timeout expires."""
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.session.manager import Session
+    from cirno_core.session.model import Session
 
     bus = MessageBus()
     provider = MagicMock()
@@ -720,11 +720,11 @@ async def test_terminal_drain_timeout(tmp_path):
     async def _hang_forever(spec):
         await asyncio.Event().wait()
 
-    loop.subagents.runner.run = _hang_forever
+    loop.subagents.execution.runner.run = _hang_forever
     await loop.subagents.spawn("pending", runtime=loop.llm_runtime(), session_key=session.key)
 
     runtime = loop.llm_runtime()
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "test"}], current_message=None),
         runtime=runtime,
         session=session,
@@ -757,7 +757,7 @@ async def test_terminal_drain_reuses_one_timeout_budget(tmp_path):
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.events import InboundMessage
     from cirno_core.bus.queue import MessageBus
-    from cirno_core.session.manager import Session
+    from cirno_core.session.model import Session
 
     loop = AgentLoop(
         bus=MessageBus(),
@@ -788,10 +788,10 @@ async def test_terminal_drain_reuses_one_timeout_budget(tmp_path):
     async def _hang_forever(spec):
         await asyncio.Event().wait()
 
-    loop.subagents.runner.run = _hang_forever
+    loop.subagents.execution.runner.run = _hang_forever
     await loop.subagents.spawn("pending", runtime=loop.llm_runtime(), session_key=session.key)
 
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "test"}], current_message=None),
         runtime=loop.llm_runtime(),
         session=session,
@@ -818,7 +818,7 @@ async def test_terminal_drain_reuses_one_timeout_budget(tmp_path):
     loop_asyncio = SimpleNamespace(**vars(asyncio))
     loop_asyncio.get_running_loop = lambda: fake_loop
     loop_asyncio.wait_for = _deliver
-    with patch("cirno_core.agent.loop.asyncio", loop_asyncio):
+    with patch("cirno_core.agent.execution.injection.asyncio", loop_asyncio):
         assert await terminal_injection_callback()
         assert await terminal_injection_callback()
 

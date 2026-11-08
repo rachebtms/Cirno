@@ -6,14 +6,12 @@ from typing import Any
 
 import pytest
 
-from cirno_core.providers.openai_compat_provider import (
-    OpenAICompatProvider,
-    _deep_merge,
-)
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.request_bodies import merge_objects
 from cirno_core.providers.registry import find_by_name
 
 # ---------------------------------------------------------------------------
-# _deep_merge unit tests
+# merge_objects unit tests
 # ---------------------------------------------------------------------------
 
 
@@ -21,37 +19,37 @@ class TestDeepMerge:
     """Verify recursive dict merge semantics."""
 
     def test_flat_merge(self) -> None:
-        assert _deep_merge({"a": 1}, {"b": 2}) == {"a": 1, "b": 2}
+        assert merge_objects({"a": 1}, {"b": 2}) == {"a": 1, "b": 2}
 
     def test_override_scalar(self) -> None:
-        assert _deep_merge({"a": 1}, {"a": 2}) == {"a": 2}
+        assert merge_objects({"a": 1}, {"a": 2}) == {"a": 2}
 
     def test_nested_merge(self) -> None:
         base = {"outer": {"a": 1, "b": 2}}
         override = {"outer": {"b": 3, "c": 4}}
-        assert _deep_merge(base, override) == {"outer": {"a": 1, "b": 3, "c": 4}}
+        assert merge_objects(base, override) == {"outer": {"a": 1, "b": 3, "c": 4}}
 
     def test_deeply_nested(self) -> None:
         base = {"l1": {"l2": {"a": 1}}}
         override = {"l1": {"l2": {"b": 2}}}
-        assert _deep_merge(base, override) == {"l1": {"l2": {"a": 1, "b": 2}}}
+        assert merge_objects(base, override) == {"l1": {"l2": {"a": 1, "b": 2}}}
 
     def test_override_replaces_non_dict_with_dict(self) -> None:
-        assert _deep_merge({"a": 1}, {"a": {"nested": True}}) == {"a": {"nested": True}}
+        assert merge_objects({"a": 1}, {"a": {"nested": True}}) == {"a": {"nested": True}}
 
     def test_override_replaces_dict_with_scalar(self) -> None:
-        assert _deep_merge({"a": {"nested": True}}, {"a": "flat"}) == {"a": "flat"}
+        assert merge_objects({"a": {"nested": True}}, {"a": "flat"}) == {"a": "flat"}
 
     def test_empty_base(self) -> None:
-        assert _deep_merge({}, {"a": 1}) == {"a": 1}
+        assert merge_objects({}, {"a": 1}) == {"a": 1}
 
     def test_empty_override(self) -> None:
-        assert _deep_merge({"a": 1}, {}) == {"a": 1}
+        assert merge_objects({"a": 1}, {}) == {"a": 1}
 
     def test_does_not_mutate_inputs(self) -> None:
         base = {"a": {"x": 1}}
         override = {"a": {"y": 2}}
-        _deep_merge(base, override)
+        merge_objects(base, override)
         assert base == {"a": {"x": 1}}
         assert override == {"a": {"y": 2}}
 
@@ -144,7 +142,7 @@ class TestBuildKwargsExtraBody:
 
     def test_extra_body_merges_with_thinking(self) -> None:
         """Config extra_body should merge with (and override) thinking params."""
-        from cirno_core.providers.registry import ProviderSpec
+        from cirno_core.providers.catalog.contracts import ProviderSpec
 
         spec = ProviderSpec(
             name="custom", keywords=(), env_key="",
@@ -362,19 +360,19 @@ class TestSchemaConfig:
     """Verify ProviderConfig accepts extra_body."""
 
     def test_default_is_none(self) -> None:
-        from cirno_core.config.schema import ProviderConfig
+        from cirno_core.config.providers import ProviderConfig
 
         config = ProviderConfig()
         assert config.extra_body is None
 
     def test_accepts_dict(self) -> None:
-        from cirno_core.config.schema import ProviderConfig
+        from cirno_core.config.providers import ProviderConfig
 
         config = ProviderConfig(extra_body={"guided_json": {"type": "object"}})
         assert config.extra_body == {"guided_json": {"type": "object"}}
 
     def test_nested_dict(self) -> None:
-        from cirno_core.config.schema import ProviderConfig
+        from cirno_core.config.providers import ProviderConfig
 
         config = ProviderConfig(
             extra_body={"chat_template_kwargs": {"enable_thinking": False}}

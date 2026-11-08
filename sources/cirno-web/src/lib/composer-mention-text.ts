@@ -1,4 +1,6 @@
-import type { CliAppInfo, McpPresetInfo, SessionMention } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { SessionMention } from "@/lib/contracts/messages";
 
 const MENTION_START_BOUNDARY = /[\s([{,，、;；:：!?！？。]/u;
 

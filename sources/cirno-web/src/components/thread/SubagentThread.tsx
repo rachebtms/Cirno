@@ -1,6 +1,6 @@
 import { SubagentThreadView } from "@/components/thread/SubagentThreadView";
 import { useSubagentThread } from "@/components/thread/useSubagentThread";
-import type { SubagentTaskSnapshot } from "@/lib/types";
+import type { SubagentTaskSnapshot } from "@/lib/contracts/messages";
 
 interface SubagentThreadProps {
   token: string;

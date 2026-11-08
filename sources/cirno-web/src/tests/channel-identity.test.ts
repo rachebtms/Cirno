@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  channelIsRunning,
-  channelSetup,
-  channelStatusLabel,
-  channelToggleChecked,
-} from "@/components/settings/channels/ChannelIdentity";
-import type { CirnoFeatureInfo } from "@/lib/types";
+import {channelIsRunning, channelStatusLabel, channelToggleChecked} from "@/features/channels/model/status";
+import {channelSetup} from "@/features/channels/model/presentation";
+import type { CirnoFeatureInfo } from "@/lib/contracts/channels";
 
 function feature(overrides: Partial<CirnoFeatureInfo>): CirnoFeatureInfo {
   return {

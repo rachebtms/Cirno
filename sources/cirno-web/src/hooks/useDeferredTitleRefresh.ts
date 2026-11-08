@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import type { ChatSummary } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
 
 const TITLE_REFRESH_RETRY_DELAYS_MS = [1_000, 3_000, 7_000] as const;
 

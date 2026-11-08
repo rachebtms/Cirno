@@ -10,7 +10,8 @@ from cirno_core.agent.tools.cron import CronTool
 from cirno_core.agent.tools.message import MessageTool
 from cirno_core.agent.tools.subagent import SubagentTool
 from cirno_core.cron.service import CronService
-from cirno_core.providers.base import GenerationSettings, LLMProvider
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.base import LLMProvider
 from cirno_core.utils.llm_runtime import LLMRuntime
 
 
@@ -33,14 +34,14 @@ async def test_message_tool_keeps_task_local_context() -> None:
     tool = MessageTool(send_callback=send_callback)
 
     async def task_one() -> str:
-        with request_context(RequestContext(channel="websocket", chat_id="global", session_key="websocket:global")):
+        with request_context(RequestContext(channel="websocket", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")):
             entered.set()
             await release.wait()
             return await tool.execute(content="one", channel="telegram", chat_id="chat-a")
 
     async def task_two() -> str:
         await entered.wait()
-        with request_context(RequestContext(channel="websocket", chat_id="global", session_key="websocket:global")):
+        with request_context(RequestContext(channel="websocket", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")):
             release.set()
             return await tool.execute(content="two", channel="telegram", chat_id="chat-b")
 
@@ -164,7 +165,7 @@ async def test_message_tool_basic_request_context_and_execute() -> None:
 
     tool = MessageTool(send_callback=send_callback)
     with request_context(
-        RequestContext(channel="websocket", chat_id="global", session_key="websocket:global", message_id="msg-456")
+        RequestContext(channel="websocket", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", message_id="msg-456")
     ):
         result = await tool.execute(content="hello", channel="telegram", chat_id="chat-123")
     assert result == "Message sent to telegram:chat-123"

@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from cirno_core.agent.model_runtime import ModelRuntimeResolver
-from cirno_core.config.schema import ModelPresetConfig
-from cirno_core.providers.base import GenerationSettings
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.providers.factory import ProviderSnapshot
 from cirno_core.utils.llm_runtime import LLMRuntime, runtime_from_provider_snapshot
 

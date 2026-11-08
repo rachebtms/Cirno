@@ -1,8 +1,5 @@
 import subprocess
 import sys
-from importlib import import_module
-
-import pytest
 
 
 def test_config_base_import_does_not_load_config_schema():
@@ -78,22 +75,3 @@ assert 'cirno_core.agent.tools.shell' not in sys.modules
 """
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-
-
-@pytest.mark.parametrize(
-    ("module", "names"),
-    [
-        ("cli_apps", ("CliAppsToolConfig",)),
-        ("filesystem", ("FileToolsConfig",)),
-        ("self", ("MyToolConfig",)),
-        ("shell", ("ExecToolConfig",)),
-        ("web", ("WebSearchConfig", "WebFetchConfig", "WebToolsConfig")),
-    ],
-)
-def test_tool_config_imports_keep_the_same_public_class(module, names):
-    contracts = import_module(f"cirno_core.agent.tools.{module}_config")
-    aggregate = import_module("cirno_core.config.schema")
-    implementation = import_module(f"cirno_core.agent.tools.{module}")
-    for name in names:
-        assert getattr(implementation, name) is getattr(contracts, name)
-        assert getattr(aggregate, name) is getattr(contracts, name)

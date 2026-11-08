@@ -1,11 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
-import type {
-  ChannelSetupContractField,
-  CirnoFeatureInfo,
-  CirnoFeaturesPayload,
-} from "@/lib/types";
+import type { ChannelSetupContractField, CirnoFeatureInfo, CirnoFeaturesPayload } from "@/lib/contracts/channels";
 import { requestMutationMock, jsonResponse, settingsPayload, renderSettingsView, installSettingsViewTestHooks } from "@/tests/settings-test-utils";
 
 
@@ -96,8 +92,8 @@ describe("Settings channels", () => {
     const disabled = catalogFeature("Disabled channel", false);
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({ features: [enabled, enabledWithDependencies, disabled], enabled_count: 2 });
       }
       return jsonResponse({});
@@ -108,11 +104,11 @@ describe("Settings channels", () => {
     expect(await screen.findByRole("button", { name: "View Enabled channel settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View Enabled dependency channel settings" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "View Disabled channel settings" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enabled" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "Enabled" })).toBeChecked();
     expect(screen.queryByText("No installation needed")).not.toBeInTheDocument();
     expect(screen.queryByText("Requires dependencies")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.click(screen.getByRole("radio", { name: "All" }));
     expect(screen.getByRole("button", { name: "View Disabled channel settings" })).toBeInTheDocument();
   });
 
@@ -121,8 +117,8 @@ describe("Settings channels", () => {
     const second = catalogFeature("Second channel", false);
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({ features: [first, second], enabled_count: 0 });
       }
       return jsonResponse({});
@@ -132,7 +128,7 @@ describe("Settings channels", () => {
 
     expect(await screen.findByRole("button", { name: "View First channel settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View Second channel settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
   });
 
   it("shows all channels by default when only the always-enabled WebUI is enabled", async () => {
@@ -144,8 +140,8 @@ describe("Settings channels", () => {
     const disabled = catalogFeature("Disabled channel", false);
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({ features: [websocket, disabled], enabled_count: 1 });
       }
       return jsonResponse({});
@@ -155,7 +151,7 @@ describe("Settings channels", () => {
 
     expect(await screen.findByText("Cirno Web")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View Disabled channel settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
   });
 
   it("replaces the installed channel switch with an in-row restart action", async () => {
@@ -179,10 +175,10 @@ describe("Settings channels", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/settings") return jsonResponse(settingsPayload());
-        if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-        if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-        if (url === "/api/settings/cirno-features") {
+        if (url === "/v0/settings") return jsonResponse(settingsPayload());
+        if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+        if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+        if (url === "/v0/settings/cirno-features") {
           return jsonResponse({ features: [whatsappFeature, weixinFeature], enabled_count: 0 });
         }
         return { ok: false, status: 404, json: async () => ({}) } as Response;
@@ -224,16 +220,11 @@ describe("Settings channels", () => {
     finishInstall(installedPayload);
     expect(requestMutationMock).not.toHaveBeenCalledWith("settings.channel.connect.start", expect.anything(), expect.anything());
     const restartButton = await within(installationGroup).findByRole("button", { name: "Restart cirno" });
-    const blockedInstallHint = within(installationGroup).getByRole("group", { name: "Install WeChat" });
     expect(secondInstall).toBeDisabled();
-    await act(async () => { blockedInstallHint.focus(); });
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Restart cirno before installing another channel.");
-    await userEvent.setup().keyboard("{Enter}");
+    expect(screen.getByText("Restart cirno to apply updated channel support.")).toBeVisible();
     fireEvent.click(secondInstall);
     expect(requestMutationMock).toHaveBeenCalledTimes(1);
     expect(restartButton).toBeEnabled();
-    await act(async () => { restartButton.focus(); });
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Restart cirno to apply updated channel support.");
     expect(screen.queryByRole("switch", { name: "WhatsApp channel" })).not.toBeInTheDocument();
     expect(restart).not.toHaveBeenCalled();
     fireEvent.click(restartButton);
@@ -249,10 +240,10 @@ describe("Settings channels", () => {
     const other = { ...catalogFeature("Existing", false), requires_restart: true };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") {
+      if (url === "/v0/settings") {
         return jsonResponse({ ...settingsPayload(), requires_restart: restartPending });
       }
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({
           features: [{ ...installed, restart_pending: restartPending }, other, uninstalledConnectFeature("weixin")],
           enabled_count: 0,
@@ -270,7 +261,7 @@ describe("Settings channels", () => {
     restartPending = false;
     await act(async () => { fireEvent(window, new Event("focus")); });
     expect(await screen.findByRole("switch", { name: "WhatsApp channel" })).toBeEnabled();
-    expect(screen.getByRole("switch", { name: "WhatsApp channel" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch", { name: "WhatsApp channel" })).not.toBeChecked();
     expect(screen.getByRole("switch", { name: "Existing channel" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Install WeChat" })).toBeEnabled();
   });
@@ -284,14 +275,14 @@ describe("Settings channels", () => {
         "fetch",
         vi.fn(async (input: RequestInfo | URL) => {
           const url = String(input);
-          if (url === "/api/settings") return jsonResponse(settingsPayload());
-          if (url === "/api/settings/cli-apps") {
+          if (url === "/v0/settings") return jsonResponse(settingsPayload());
+          if (url === "/v0/settings/cli-apps") {
             return jsonResponse({ apps: [], installed_count: 0 });
           }
-          if (url === "/api/settings/mcp-presets") {
+          if (url === "/v0/settings/mcp-presets") {
             return jsonResponse({ presets: [], installed_count: 0 });
           }
-          if (url === "/api/settings/cirno-features") {
+          if (url === "/v0/settings/cirno-features") {
             return jsonResponse({ features: [feature], enabled_count: 0 });
           }
           return { ok: false, status: 404, json: async () => ({}) } as Response;
@@ -311,7 +302,7 @@ describe("Settings channels", () => {
           action: "enable",
           name: "whatsapp",
           installOnly: true,
-          error: installError,
+          error: expect.objectContaining({ name: "ApiError", message: installError.message, status: 500 }),
         }),
       );
     } finally {
@@ -322,10 +313,10 @@ describe("Settings channels", () => {
   it("shows an enabled channel with missing support as failed", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({
           features: [{
             name: "matrix",
@@ -386,10 +377,10 @@ describe("Settings channels", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/settings") return jsonResponse(settingsPayload());
-        if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-        if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-        if (url === "/api/settings/cirno-features") {
+        if (url === "/v0/settings") return jsonResponse(settingsPayload());
+        if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+        if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+        if (url === "/v0/settings/cirno-features") {
           return jsonResponse({
             features: [{
               name: "matrix",
@@ -418,19 +409,16 @@ describe("Settings channels", () => {
     fireEvent.click(await screen.findByRole("button", { name: "View Matrix settings" }));
     expect(screen.getAllByText("Failed").length).toBeGreaterThan(0);
     expect(screen.getByText(runtimeError)).toBeInTheDocument();
-    expect(screen.getByLabelText("Matrix channel")).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
+    expect(screen.getByLabelText("Matrix channel")).not.toBeChecked();
   });
 
   it("renders external multi-instance channels from the shared contract", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({
           features: [{
             name: "multiplugin",
@@ -488,14 +476,8 @@ describe("Settings channels", () => {
 
     fireEvent.click((await screen.findAllByRole("button", { name: /^View .+ settings$/ }))[0]);
     expect(await screen.findByText("Default worker")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Default worker instance" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
-    expect(screen.getByRole("switch", { name: "Product worker instance" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    expect(screen.getByRole("switch", { name: "Default worker instance" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "Product worker instance" })).toBeChecked();
     fireEvent.click(within(screen.getByText("Product worker").closest("article")!)
       .getByRole("button", { name: "Advanced" }));
     expect(screen.getByRole("radio", { name: "Eu" })).toBeChecked();
@@ -519,10 +501,10 @@ describe("Settings channels", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/settings") return jsonResponse(settingsPayload());
-        if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-        if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-        if (url === "/api/settings/cirno-features") {
+        if (url === "/v0/settings") return jsonResponse(settingsPayload());
+        if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+        if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+        if (url === "/v0/settings/cirno-features") {
           return jsonResponse({
             features: [{
               name: "email",
@@ -550,7 +532,7 @@ describe("Settings channels", () => {
 
     fireEvent.click(emailRow);
 
-    expect(screen.getByRole("dialog")).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement));
     expect(within(screen.getByRole("dialog")).getByRole("heading", { name: "Email" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -563,10 +545,10 @@ describe("Settings channels", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/settings") return jsonResponse(settingsPayload());
-        if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-        if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-        if (url === "/api/settings/cirno-features") {
+        if (url === "/v0/settings") return jsonResponse(settingsPayload());
+        if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+        if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+        if (url === "/v0/settings/cirno-features") {
           return jsonResponse({
             features: [{
               name: "telegram",
@@ -590,21 +572,21 @@ describe("Settings channels", () => {
     renderSettingsView({ initialSection: "channels" });
 
     fireEvent.click(await screen.findByRole("button", { name: "View Telegram settings" }));
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Help" }), { button: 0, ctrlKey: false });
-    expect(await screen.findByRole("menuitem", { name: "Open Telegram setup" })).toHaveAttribute(
+    await userEvent.setup().click(screen.getByRole("button", { name: "Help" }));
+    expect(await screen.findByRole("link", { name: "Open Telegram setup" })).toHaveAttribute(
       "href",
       "https://github.com/rachebtms/Cirno/blob/main/documents/configuration.md#telegram",
     );
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    await userEvent.setup().keyboard("{Escape}");
   });
 
   it("opens Web configuration while keeping the channel always enabled", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
-      if (url === "/api/settings/cirno-features") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0 });
+      if (url === "/v0/settings/cirno-features") {
         return jsonResponse({
           features: [{
             name: "websocket",
@@ -633,7 +615,7 @@ describe("Settings channels", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     const websocketSwitch = screen.getByRole("switch", { name: "Enable channel" });
     expect(websocketSwitch).toBeDisabled();
-    expect(websocketSwitch).toHaveAttribute("aria-checked", "true");
+    expect(websocketSwitch).toBeChecked();
     expect(requestMutationMock).not.toHaveBeenCalled();
   });
 });

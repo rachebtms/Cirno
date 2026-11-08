@@ -6,7 +6,7 @@ async function expectFittedFormula(page: Page) {
   await expect.poll(async () => frame.evaluate((element) => {
     const box = element.getBoundingClientRect();
     const content = element.querySelector<HTMLElement>(".math-fit-content")!.getBoundingClientRect();
-    const tag = element.querySelector<HTMLElement>(".katex-html > .tag")!.getBoundingClientRect();
+    const tag = element.querySelector<HTMLElement>(".katex-html > .katex-tag")!.getBoundingClientRect();
     return box.height > 0 && content.width <= box.width + 1
       && Math.abs(content.height - box.height) <= 1
       && Math.abs((content.left + content.right) - (box.left + box.right)) <= 2
@@ -28,7 +28,7 @@ for (const width of [1280, 390]) {
       await expectFittedFormula(page);
       await expect.poll(() => page.locator(".math-fit").getAttribute("data-math-scale").then(Number)).toBeLessThan(1);
       await page.getByRole("button", { name: "Advance stream" }).click();
-      await expect(page.locator(".katex-html > .tag")).toHaveText("(1000000)");
+      await expect(page.locator(".katex-html > .katex-tag")).toHaveText("(1000000)");
       await expectFittedFormula(page);
       await page.getByRole("button", { name: "Complete", exact: true }).click();
       await expectFittedFormula(page);

@@ -8,7 +8,7 @@ export function DisplayMath({ children }: { children: ReactNode }) {
   const [layout, setLayout] = useState({ scale: 1, height: 0 });
   const update = useCallback(() => {
     if (!frame.current || !content.current) return;
-    const tag = content.current.querySelector<HTMLElement>(".katex-html > .tag");
+    const tag = content.current.querySelector<HTMLElement>(".katex-html > .katex-tag");
     const tagWidth = `${tag?.offsetWidth ?? 0}px`;
     if (content.current.style.getPropertyValue("--math-tag-width") !== tagWidth) {
       content.current.style.setProperty("--math-tag-width", tagWidth);

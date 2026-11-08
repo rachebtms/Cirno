@@ -1,4 +1,6 @@
-import type { ChatSummary, WorkspaceScopePayload } from "./types";
+import { isRecord } from "./record";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 
 const PREFIX = "cirno.reload.v1.";
 const MAX_CHARS = 512 * 1024;
@@ -63,9 +65,6 @@ export function readReloadSessions(): ChatSummary[] {
   });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function readWorkspaceScope(value: unknown): WorkspaceScopePayload | undefined {
   if (!isRecord(value) || typeof value.project_path !== "string"

@@ -1,6 +1,6 @@
 import { fetchWebuiThread } from "./api";
 import type { CirnoClient } from "./cirno-client";
-import type { WebuiThreadPersistedPayload } from "./types";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 import { webuiThreadCache } from "./webui-thread-cache";
 
 interface LatestThreadRequest {
@@ -55,12 +55,12 @@ export function fetchLatestWebuiThread(
       if (status !== "open") current.shareable = false;
     });
     const unsubscribeSessionUpdate = client.onSessionUpdate((chatId, scope) => {
-      if (key === `websocket:${chatId}` && scope !== "metadata") {
-        current.controller.abort(INVALIDATED_THREAD_READ);
-      }
+      if (key !== `websocket:${chatId}` || scope === "metadata") return;
+      if (scope === "reset") current.controller.abort(INVALIDATED_THREAD_READ);
+      else current.shareable = false;
     });
     const unsubscribeRunCompletion = client.onRunCompletion((chatId) => {
-      if (key === `websocket:${chatId}`) current.controller.abort(INVALIDATED_THREAD_READ);
+      if (key === `websocket:${chatId}`) current.shareable = false;
     });
     const finish = () => {
       if (current.settled) return;
@@ -89,8 +89,8 @@ export function fetchLatestWebuiThread(
     const abort = () => {
       release();
       if (current.controller.signal.reason === INVALIDATED_THREAD_READ) {
-        // Replace the stale page after the current notification finishes so
-        // all surviving consumers can join one read of its updated thread.
+        // A replaced context cannot install its old snapshot. Surviving
+        // consumers join one read of the replacement after this notification.
         resolve(Promise.resolve().then(() => fetchLatestWebuiThread(client, token, key, signal)));
         return;
       }

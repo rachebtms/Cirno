@@ -1,25 +1,25 @@
 """Tests for Dream session key generation and rotation."""
 
-from datetime import datetime, timedelta
+from cirno_core.memory.dream import DreamMemory
+from datetime import datetime
 from unittest.mock import patch
 
-from cirno_core.memory.consolidation import MemoryStore
 from cirno_core.session.manager import SessionManager
 
 
 class TestDreamSessionKey:
     def test_contains_timestamp(self):
-        key = MemoryStore.dream_session_key()
+        key = DreamMemory.session_key()
         assert key.startswith("dream:")
-        ts_part = key.split(":", 1)[1]
+        ts_part = key.split(":", 1)[1].rsplit("-", 1)[0]
         datetime.strptime(ts_part, "%Y%m%d-%H%M%S")
 
     def test_unique_across_calls(self):
         now = datetime(2026, 5, 28, 10, 0, 0)
-        with patch("cirno_core.memory.consolidation.datetime") as mock_dt:
-            mock_dt.now.side_effect = [now, now + timedelta(seconds=1)]
-            k1 = MemoryStore.dream_session_key()
-            k2 = MemoryStore.dream_session_key()
+        with patch("cirno_core.memory.dream.datetime") as mock_dt:
+            mock_dt.now.return_value = now
+            k1 = DreamMemory.session_key()
+            k2 = DreamMemory.session_key()
 
         assert k1 != k2
 

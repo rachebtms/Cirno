@@ -20,4 +20,4 @@ Replies carry the original question and a hidden correlation marker through the 
 
 Question payloads use `_agent_ui` in the stored assistant activity stream. Browser history projection hides their inline cards and builds the composer queue from questions and accepted user replies. Refreshes and other connected clients can recover the accepted answer state. Unsent drafts do not survive a page reload. The feature uses conversation storage rather than a separate question database or waiting worker.
 
-Both Cirno and ordinary conversations can ask questions. A question does not count as delivery of a final reply. Telegram receives a text representation and supports quoted replies; the sequential composer interface and its queue controls are Web-only.
+Router and Worker conversations can both ask questions. A question does not count as delivery of a final reply. Telegram displays question text and accepts ordinary quoted chat replies. Use the authenticated Web UI to answer a linked Inbox question and update its queue state. The sequential question composer and queue controls are Web-only.

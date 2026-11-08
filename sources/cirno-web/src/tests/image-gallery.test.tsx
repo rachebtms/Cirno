@@ -5,14 +5,15 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { preloadMarkdownText } from "@/components/MarkdownText";
 
 import { ImageGallery } from "@/components/ImageGallery";
-import { MessageBubble } from "@/components/MessageBubble";
+import { MessageBubble } from "@/features/messages";
 import { FileActionsProvider } from "@/components/FileActions";
 import { FileReferenceChip } from "@/components/FileReferenceChip";
-import type { FilePreviewPayload, UIMessage } from "@/lib/types";
+import type { FilePreviewPayload } from "@/lib/contracts/files";
+import type { UIMessage } from "@/lib/contracts/messages";
 
-const images = Array.from({ length: 8 }, (_, index) => ({ url: `/api/media/sign/image-${index}`, name: `${index}.png` }));
+const images = Array.from({ length: 8 }, (_, index) => ({ url: `/v0/media/sign/image-${index}`, name: `${index}.png` }));
 const message: UIMessage = { id: "images", role: "assistant", content: "", createdAt: 1,
-  media: [{ kind: "image", url: "/api/media/sign/chart", name: "chart.png" }] };
+  media: [{ kind: "image", url: "/v0/media/sign/chart", name: "chart.png" }] };
 
 describe("image presentation", () => {
   beforeAll(preloadMarkdownText);
@@ -35,7 +36,7 @@ describe("image presentation", () => {
   it("preserves an inline image's position, deduplicates its attachment, and opens the shared viewer", async () => {
     const user = userEvent.setup();
     const { container, rerender } = render(<MessageBubble message={{ ...message,
-      content: "Before\n\n![Trend](/api/media/sign/chart)\n\nAfter", media: [...message.media!, ...message.media!] }} />);
+      content: "Before\n\n![Trend](/v0/media/sign/chart)\n\nAfter", media: [...message.media!, ...message.media!] }} />);
     await screen.findByRole("img", { name: "Trend" });
     await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(1));
     expect(container.textContent).toMatch(/Before.*After/s);
@@ -49,15 +50,15 @@ describe("image presentation", () => {
 
   it("does not suppress files referenced in code or links, or different images sharing a name", async () => {
     const { container } = render(<MessageBubble message={{ ...message,
-      content: "```md\n![example](/api/media/sign/chart)\n```\n\n[chart.png](/api/media/sign/chart)",
-      media: [...message.media!, { kind: "image", url: "/api/media/other/chart", name: "chart.png" }] }} />);
+      content: "```md\n![example](/v0/media/sign/chart)\n```\n\n[chart.png](/v0/media/sign/chart)",
+      media: [...message.media!, { kind: "image", url: "/v0/media/other/chart", name: "chart.png" }] }} />);
     await waitFor(() => expect(container.querySelector("pre")).toBeInTheDocument());
     expect(container.querySelectorAll("img")).toHaveLength(2);
   });
 
   it("keeps the attachment if an image reference is not actually rendered by the streaming renderer", async () => {
     const { container } = render(<MessageBubble message={{ ...message,
-      content: "![Trend][chart]\n\n[chart]: /api/media/sign/chart" }} />);
+      content: "![Trend][chart]\n\n[chart]: /v0/media/sign/chart" }} />);
     await screen.findByText("![Trend][chart]");
     expect(screen.getByRole("button", { name: "View image: chart.png" })).toBeVisible();
     await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(1));

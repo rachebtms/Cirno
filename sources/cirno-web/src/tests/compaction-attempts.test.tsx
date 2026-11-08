@@ -5,7 +5,7 @@ import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
 import { decodeNotification } from "../../packages/client-events/notifications";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
 import { parseWebuiThreadPayload } from "@/lib/api";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 function attempt(id: string, phase: "failed" | "succeeded"): UIMessage {
   return { id, role: "assistant", kind: "compaction", content: "", createdAt: 100,

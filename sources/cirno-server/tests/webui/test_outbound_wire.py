@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 import pytest
-
+from cirno_core.bus.agent_events import CompactionReason
 from cirno_core.bus.outbound_events import (
     ContextCompactionEvent,
     RecoveryStateEvent,
     RetryStatusEvent,
     TurnEndEvent,
 )
-from cirno_core.bus.agent_events import CompactionReason
-from cirno_core.providers.base import LLMUsage
-from cirno_core.session.transport_metadata import WEBUI_TURN_METADATA_KEY
+from cirno_usage.types import LLMUsage
 from cirno_core.session.outbound_wire import (
     encode_context_compaction,
     encode_recovery_state,
     encode_retry_status,
     encode_turn_end,
 )
+from cirno_core.session.transport_metadata import WEBUI_TURN_METADATA_KEY
 
 
 @pytest.mark.parametrize("reason", [None, "idle", "context_pressure", "manual", "provider_native"])
@@ -179,7 +178,7 @@ def test_encode_recovery_state_reports_reply_preservation(preserved: bool) -> No
 
 
 def test_compaction_details_survive_history_projection():
-    from cirno_core.session.transcript import _client_projection_event
+    from cirno_core.session.transcript.event_projection import _client_projection_event
 
     failed = encode_context_compaction("chat", ContextCompactionEvent(
         compaction_id="failed", phase="failed", reason="idle", error="ReadTimeout: model unavailable",
@@ -195,7 +194,8 @@ def test_compaction_details_survive_history_projection():
 
 
 def test_async_question_survives_history_and_legacy_session_projection():
-    from cirno_core.session.transcript import _client_projection_event, _session_assistant_event
+    from cirno_core.session.transcript.event_projection import _client_projection_event
+    from cirno_core.session.transcript.inputs import _session_assistant_event
     blob = {'kind': 'user_question', 'data': {'id': 'a' * 32, 'question': 'Which format?', 'options': ['CSV'], 'assumption': ''}}
     for record in (
         {'event': 'message', 'chat_id': 'one', 'text': 'Which format?', 'agent_ui': blob},

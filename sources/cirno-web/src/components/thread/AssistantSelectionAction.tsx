@@ -147,7 +147,7 @@ export function AssistantSelectionAction({
       data-selection-follow-up="true"
       className={cn(
         floatingSurfaceElevationClassName,
-        "fixed z-[80] inline-flex h-9 max-w-[calc(100vw-24px)] items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "fixed z-[80] inline-flex h-9 max-w-[calc(100vw-24px)] items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors hover:bg-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       )}
       style={{
         left: action.left,

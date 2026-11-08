@@ -5,9 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
-from cirno_core.config.schema import Config, ProvidersConfig
-from cirno_core.providers.bedrock_provider import BedrockProvider
+from cirno_core.config.providers import ProvidersConfig
+from cirno_core.config.schema import Config
+from cirno_core.providers.bedrock.messages import tool_use_block
+from cirno_core.providers.bedrock.provider import BedrockProvider
+from cirno_core.providers.bedrock.requests import build_request
+from cirno_core.providers.bedrock.responses import parse_response
+from cirno_core.providers.bedrock.responses import usage as response_usage
 from cirno_core.providers.registry import find_by_name
 
 
@@ -70,9 +74,7 @@ def test_bedrock_provider_is_registered_and_matches_without_api_key() -> None:
 
 
 def test_opus_47_uses_adaptive_thinking_and_omits_temperature() -> None:
-    provider = BedrockProvider(region="us-east-1", client=FakeClient())
-
-    kwargs = provider._build_kwargs(
+    kwargs = build_request(
         messages=[{"role": "user", "content": "hi"}],
         tools=None,
         model="bedrock/global.anthropic.claude-opus-4-7",
@@ -91,9 +93,7 @@ def test_opus_47_uses_adaptive_thinking_and_omits_temperature() -> None:
 
 
 def test_generic_bedrock_model_keeps_temperature_and_skips_anthropic_thinking() -> None:
-    provider = BedrockProvider(region="us-east-1", client=FakeClient())
-
-    kwargs = provider._build_kwargs(
+    kwargs = build_request(
         messages=[{"role": "user", "content": "hi"}],
         tools=None,
         model="bedrock/amazon.nova-lite-v1:0",
@@ -110,7 +110,6 @@ def test_generic_bedrock_model_keeps_temperature_and_skips_anthropic_thinking() 
 
 
 def test_build_kwargs_converts_messages_tools_and_tool_results() -> None:
-    provider = BedrockProvider(region="us-east-1", client=FakeClient())
     tools = [{
         "type": "function",
         "function": {
@@ -135,7 +134,7 @@ def test_build_kwargs_converts_messages_tools_and_tool_results() -> None:
         {"role": "user", "content": "continue"},
     ]
 
-    kwargs = provider._build_kwargs(
+    kwargs = build_request(
         messages=messages,
         tools=tools,
         model="bedrock/anthropic.claude-opus-4-7",
@@ -162,7 +161,7 @@ def test_build_kwargs_converts_messages_tools_and_tool_results() -> None:
 
 
 def test_tool_use_block_repairs_history_tool_arguments() -> None:
-    block = BedrockProvider._tool_use_block({
+    block = tool_use_block({
         "id": "toolu_1",
         "function": {"name": "read_file", "arguments": '{path:"foo.txt"}'},
     })
@@ -172,7 +171,6 @@ def test_tool_use_block_repairs_history_tool_arguments() -> None:
 
 
 def test_build_kwargs_keeps_tool_config_for_historical_tool_blocks_without_tools() -> None:
-    provider = BedrockProvider(region="us-east-1", client=FakeClient())
     messages = [
         {"role": "user", "content": "read x"},
         {
@@ -188,7 +186,7 @@ def test_build_kwargs_keeps_tool_config_for_historical_tool_blocks_without_tools
         {"role": "user", "content": "continue"},
     ]
 
-    kwargs = provider._build_kwargs(
+    kwargs = build_request(
         messages=messages,
         tools=[],
         model="bedrock/anthropic.claude-opus-4-7",
@@ -225,7 +223,7 @@ def test_parse_response_maps_text_tools_reasoning_usage_and_stop_reason() -> Non
         },
     }
 
-    result = BedrockProvider._parse_response(response)
+    result = parse_response(response)
 
     assert result.content == "hello"
     assert result.finish_reason == "tool_calls"
@@ -246,7 +244,7 @@ async def test_chat_stream_retries_eof_without_stop_reason() -> None:
         {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": "partial summary"}}},
     ])
     provider = BedrockProvider(region="us-east-1", client=client)
-    provider._CHAT_RETRY_DELAYS = (0,)
+    provider.retry_policy.delays = (0,)
 
     result = await provider.chat_stream_with_retry([{"role": "user", "content": "summarize"}])
 
@@ -340,7 +338,7 @@ def test_bedrock_usage_preserves_cache_reporting_and_logical_input(
     expected_write: int | None,
     expected_input: int,
 ) -> None:
-    usage = BedrockProvider._usage(wire_usage)
+    usage = response_usage(wire_usage)
 
     assert usage is not None
     assert usage.cache_read_tokens == expected_read
@@ -359,3 +357,38 @@ async def test_chat_error_maps_retry_metadata() -> None:
     assert result.error_should_retry is True
     assert result.error_code == "throttlingexception"
     assert result.retry_after == 3
+
+
+def test_configured_bearer_keys_are_isolated_between_clients_and_environment(monkeypatch):
+    pytest.importorskip("boto3")
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "environment-key")
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fixture-access")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fixture-secret")
+    import os
+
+    class SignedRequest(Exception):
+        pass
+
+    tokens = []
+
+    def capture(request, **kwargs):
+        tokens.append(request.headers["Authorization"])
+        raise SignedRequest()
+
+    clients = [BedrockProvider(api_key=key, region="us-east-1")._get_client()
+               for key in ("first-key", "second-key", None)]
+    try:
+        for client in (clients[1], clients[0], clients[2], clients[0]):
+            client.meta.events.register("before-send.bedrock-runtime.Converse", capture)
+            with pytest.raises(SignedRequest):
+                client.converse(modelId="fixture", messages=[{
+                    "role": "user", "content": [{"text": "hello"}],
+                }])
+            client.meta.events.unregister("before-send.bedrock-runtime.Converse", capture)
+        assert tokens == [b"Bearer second-key", b"Bearer first-key",
+                          b"Bearer environment-key", b"Bearer first-key"]
+        assert os.environ["AWS_BEARER_TOKEN_BEDROCK"] == "environment-key"
+    finally:
+        for client in clients:
+            client.close()

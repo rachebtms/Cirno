@@ -1,0 +1,23 @@
+.mcp-management-dialog { display:flex; flex-direction:column; min-height:0; max-height:calc(100dvh - 2rem); }
+.mcp-management-heading { display:flex; flex-direction:row; align-items:center; gap:.75rem; padding-inline-end:3.5rem; }
+.mcp-management-heading > h2 { flex:1; min-width:0; overflow-wrap:anywhere; }
+.mcp-management-tabs { min-height:0; display:flex; flex-direction:column; gap:1rem; padding:0 1.5rem 1.5rem; }
+.mcp-management-tabs > [data-slot=tabs-panel] { overflow:auto; min-height:0; overscroll-behavior:contain; }
+.mcp-fields { display:flex; flex-direction:column; gap:1rem; min-width:0; }
+.mcp-fields h3 { font-size:.875rem; font-weight:600; }
+.mcp-description { color:var(--muted); font-size:.8125rem; line-height:1.6; }
+.mcp-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(7rem,1fr)); gap:.75rem; }
+.mcp-metrics > div { padding:.75rem; border-radius:.75rem; background:var(--surface-secondary); }
+.mcp-metrics dt { font-size:.75rem; color:var(--muted); }
+.mcp-metrics dd { margin-top:.375rem; font-size:.875rem; font-weight:600; }
+.mcp-tool-preview,.mcp-connection-meta,.mcp-connection-actions,.mcp-loading { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; }
+.mcp-tool-preview code { overflow-wrap:anywhere; white-space:normal; }
+.mcp-tools-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.mcp-tools-toolbar > [data-slot=search-field] { flex:1; min-width:10rem; }
+.mcp-tool-list { gap:.25rem; }
+.mcp-tool-row { width:100%; border-radius:.5rem; }
+.mcp-tool-row > [data-slot=checkbox-content] { width:100%; min-height:2.75rem; align-items:flex-start; padding:.625rem .75rem; }
+.mcp-tool-row code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.8125rem; overflow-wrap:anywhere; }
+.mcp-endpoint { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.8125rem; overflow-wrap:anywhere; }
+.mcp-connection-actions { justify-content:flex-end; }
+@container cirno-tab (max-width:480px) { .mcp-management-heading { flex-wrap:wrap; } .mcp-management-tabs { padding-inline:1rem; } }

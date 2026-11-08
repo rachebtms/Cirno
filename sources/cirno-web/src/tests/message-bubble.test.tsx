@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 
-import { MessageActions, MessageBubble } from "@/components/MessageBubble";
+import { MessageActions, MessageBubble } from "@/features/messages";
 import { preloadMarkdownText } from "@/components/MarkdownText";
 import { ThreadMessages } from "@/components/thread/ThreadMessages";
 import { setAppLanguage } from "@/i18n";
@@ -11,13 +12,11 @@ import { formatMessageEndTime } from "@/lib/format-time";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
 import { ThreadTranscript } from "@/lib/thread-transcript";
-import type {
-  CliAppInfo,
-  McpPresetInfo,
-  SlashCommand,
-  ThreadProjectionEvent,
-  UIMessage,
-} from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { SlashCommand } from "@/lib/contracts/commands";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { UIMessage } from "@/lib/contracts/messages";
 import { createStreamClient } from "./stream-client";
 
 const CLI_APPS: CliAppInfo[] = [
@@ -175,11 +174,11 @@ describe("MessageBubble", () => {
       expect((await screen.findByText("Normal reply")).tagName).toBe("STRONG");
       expect(container.querySelector("img, script, .katex, [data-testid='mermaid-block']")).toBeNull();
       expect(screen.getByRole("link", { name: "docs" })).toHaveAttribute("href", "https://example.invalid/docs");
-      fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
+      const unit = output.closest<HTMLElement>("[data-thread-display-unit]")!;
+      expect(within(unit).queryByRole("button", { name: "Copy code" })).not.toBeInTheDocument();
+      expect(within(unit).getAllByRole("button", { name: "Copy" })).toHaveLength(1);
+      fireEvent.click(within(unit).getByRole("button", { name: "Copy" }));
       await waitFor(() => expect(writeText).toHaveBeenNthCalledWith(1, raw));
-
-      fireEvent.click(within(output.closest<HTMLElement>("[data-thread-display-unit]")!).getByRole("button", { name: "Copy" }));
-      await waitFor(() => expect(writeText).toHaveBeenNthCalledWith(2, raw));
     } finally {
       writeText.mockRestore();
     }
@@ -237,10 +236,12 @@ describe("MessageBubble", () => {
     const actions = menuActions(container);
     const metadata = actions.querySelector("[data-message-timestamp]")!;
     expect(metadata.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    fireEvent.focus(trigger);
+    const user = userEvent.setup();
+    await user.tab();
+    await user.tab();
+    expect(trigger).toHaveFocus();
     expect(await screen.findByRole("tooltip")).toHaveTextContent(description);
-    fireEvent.blur(trigger);
-    fireEvent.click(trigger);
+    await user.click(trigger);
     const popover = await screen.findByRole("dialog", { name: description });
     expect(popover).toHaveTextContent(description);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
@@ -428,7 +429,8 @@ describe("MessageBubble", () => {
     expect(screen.getByText("hello")).not.toHaveClass("ring-destructive/30");
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
-    fireEvent.focus(failedStatus);
+    await userEvent.setup().tab();
+    expect(failedStatus).toHaveFocus();
 
     const tooltip = await screen.findByRole("tooltip");
     expect(tooltip).toHaveTextContent("Message too large");
@@ -670,7 +672,7 @@ describe("MessageBubble", () => {
     const time = document.querySelector("[data-assistant-completed-at]");
     expect(time).toHaveTextContent(formatMessageEndTime(completedAt));
     expect(time).toHaveAttribute("dateTime", new Date(completedAt).toISOString());
-    expect(time).toHaveClass("tabular-nums");
+    expect(time).toBeVisible();
   });
 
   it("keeps actions and timestamp on one toolbar", () => {
@@ -1051,7 +1053,7 @@ describe("MessageBubble", () => {
       isStreaming: true, createdAt: Date.now() };
     const { container, rerender } = render(<ThreadMessages messages={[message]} isStreaming />);
     const body = container.querySelector("[data-assistant-message]");
-    expect(body).toHaveClass("relative", "w-full");
+    expect(body).toBeVisible();
     rerender(<ThreadMessages messages={[{ ...message, isStreaming: false }]} />);
     expect(container.querySelector("[data-assistant-message]")).toBe(body);
 
@@ -1072,86 +1074,54 @@ describe("MessageBubble", () => {
     const createdAt = Date.UTC(2026, 6, 25, 12, 34, 56);
     const { container } = render(<MessageActions
       message={{ id: "a-file", role: "assistant", content: "", createdAt,
-        media: [{ kind: "file", name: "report.csv", url: "/api/media/report.csv" }] }}
+        media: [{ kind: "file", name: "report.csv", url: "/v0/media/report.csv" }] }}
     />);
     expect(container.querySelector("time")).toHaveTextContent(formatMessageEndTime(createdAt));
     expect(container.querySelector("time")).toHaveAttribute("dateTime", new Date(createdAt).toISOString());
   });
 
-  it("renders trace messages as collapsible tool groups", () => {
-    const message: UIMessage = {
-      id: "t1",
-      role: "tool",
-      kind: "trace",
-      content: 'search "hk weather"',
-      traces: ['weather("get")', 'search "hk weather"'],
-      createdAt: Date.now(),
-    };
-
-    render(<MessageBubble message={message} />);
+  it("renders trace messages as keyboard-accessible lazy tool groups", async () => {
+    render(<MessageBubble message={{ id: "t1", role: "tool", kind: "trace", content: "search", traces: ['weather("get")', 'search "hk weather"'], createdAt: 1 }} />);
     const toggle = screen.getByRole("button", { name: /used 2 tools/i });
-
-    const content = document.getElementById(toggle.getAttribute("aria-controls")!)!;
-    expect(content).toHaveAttribute("data-state", "closed");
-    expect(content).toHaveAttribute("inert");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
-
-    fireEvent.click(toggle);
-    expect(screen.getByText('weather("get")')).toBeInTheDocument();
-    expect(screen.getByText('search "hk weather"')).toBeInTheDocument();
-    expect(content).toHaveAttribute("data-state", "open");
-    fireEvent.click(toggle);
-    expect(content).toHaveAttribute("data-state", "closed");
-    expect(content).toHaveAttribute("aria-hidden", "true");
+    const user = userEvent.setup();
+    await user.tab();
+    await user.keyboard("[Space]");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText('weather("get")')).toBeVisible();
+    expect(screen.getByText('search "hk weather"')).toBeVisible();
+    await user.keyboard("[Space]");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText('weather("get")')).not.toBeInTheDocument();
   });
 
-  it("lazily mounts large trace groups and releases them only after an uninterrupted exit", async () => {
-    const traces = Array.from({ length: 1000 }, (_, index) => `tool call ${index}`);
-    render(<MessageBubble message={{
-      id: "large-trace", role: "tool", kind: "trace",
-      content: traces[0], traces, createdAt: Date.now(),
-    }} />);
-    const toggle = screen.getByRole("button", { name: /used 1000 tools/i });
-    const content = document.getElementById(toggle.getAttribute("aria-controls")!)!;
-    // Hidden content must not allocate a DOM node for every historical trace.
-    expect(content.querySelectorAll("li")).toHaveLength(0);
+  it("paginates large tool groups and releases their rows when closed", () => {
+    const traces = Array.from({ length: 10_000 }, (_, index) => `tool call ${index}`);
+    const { container } = render(<MessageBubble message={{ id: "large-trace", role: "tool", kind: "trace", content: traces[0], traces, createdAt: 1 }} />);
+    const toggle = screen.getByRole("button", { name: /used 10000 tools/i });
+    expect(container.querySelectorAll("li")).toHaveLength(0);
     fireEvent.click(toggle);
-    expect(content.querySelectorAll("li")).toHaveLength(1000);
-
-    let finishExit!: () => void;
-    const getAnimations = vi.fn(() => [{
-      finished: new Promise<void>((resolve) => { finishExit = resolve; }),
-    }]);
-    Object.defineProperty(content, "getAnimations", { value: getAnimations });
+    expect(screen.getAllByRole("listitem")).toHaveLength(200);
+    fireEvent.click(screen.getByRole("button", { name: "Show 200 more tool events" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(400);
+    expect(screen.getByText("tool call 399")).toBeVisible();
     fireEvent.click(toggle);
-    expect(content.querySelectorAll("li")).toHaveLength(1000);
-    expect(content).toHaveAttribute("inert");
-
-    // Reopening cancels cleanup of the previous exit, even if it finishes later.
+    expect(container.querySelectorAll("li")).toHaveLength(0);
     fireEvent.click(toggle);
-    await act(async () => { finishExit(); });
-    expect(content.querySelectorAll("li")).toHaveLength(1000);
-    expect(content).not.toHaveAttribute("inert");
-
-    fireEvent.click(toggle);
-    expect(getAnimations).toHaveBeenCalledTimes(2);
-    await act(async () => { finishExit(); });
-    expect(content.querySelectorAll("li")).toHaveLength(0);
-    fireEvent.click(toggle);
-    expect(content.querySelectorAll("li")).toHaveLength(1000);
+    expect(screen.getAllByRole("listitem")).toHaveLength(200);
   });
 
   it("retries a failed video locally without replacing a healthy player on history updates", () => {
     const message: UIMessage = { id: "retry-video", role: "user", content: "watch", createdAt: 0,
-      media: [{ kind: "video", name: "clip.webm", url: "/api/media/sig/clip" }] };
+      media: [{ kind: "video", name: "clip.webm", url: "/v0/media/sig/clip" }] };
     const { container, rerender } = render(<MessageBubble message={message} />);
     const original = container.querySelector("video")!;
     fireEvent.error(original);
     expect(container.querySelector("video")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     const retried = container.querySelector("video")!;
-    expect(retried).toHaveAttribute("src", "/api/media/sig/clip");
+    expect(retried).toHaveAttribute("src", "/v0/media/sig/clip");
     expect(retried).not.toBe(original);
     rerender(<MessageBubble message={{ ...message, media: [...message.media!] }} />);
     expect(container.querySelector("video")).toBe(retried);
@@ -1168,7 +1138,7 @@ describe("MessageBubble", () => {
       media: [
         {
           kind: "video",
-          url: "/api/media/sig/payload",
+          url: "/v0/media/sig/payload",
           name: "demo.mp4",
         },
       ],
@@ -1179,7 +1149,7 @@ describe("MessageBubble", () => {
     expect(screen.getByText("here is the clip")).toBeInTheDocument();
     const video = screen.getByLabelText(/video attachment/i);
     expect(video.tagName).toBe("VIDEO");
-    expect(video).toHaveAttribute("src", "/api/media/sig/payload");
+    expect(video).toHaveAttribute("src", "/v0/media/sig/payload");
     expect(video).toHaveAttribute("preload", "metadata");
     expect(container.querySelector("video[controls]")).toBeInTheDocument();
     expect(screen.queryByText("Preview")).not.toBeInTheDocument();
@@ -1194,7 +1164,7 @@ describe("MessageBubble", () => {
     };
     const accepted: UIMessage = {
       ...message, deliveryStatus: "accepted",
-      media: [{ kind: "video", name: "clip.webm", url: "/api/media/sig/clip" }],
+      media: [{ kind: "video", name: "clip.webm", url: "/v0/media/sig/clip" }],
     };
     const { rerender, unmount } = render(<ThreadMessages messages={[message]} />);
     expect(screen.queryByLabelText(/video attachment/i)?.tagName).not.toBe("VIDEO");
@@ -1203,10 +1173,10 @@ describe("MessageBubble", () => {
     const video = screen.getByLabelText(/video attachment/i);
     rerender(<ThreadMessages messages={[{ ...accepted, id: "history-user" }]} />);
     expect(screen.getByLabelText(/video attachment/i)).toBe(video);
-    expect(video).toHaveAttribute("src", "/api/media/sig/clip");
+    expect(video).toHaveAttribute("src", "/v0/media/sig/clip");
     unmount();
     render(<ThreadMessages messages={[accepted]} />);
-    expect(screen.getByLabelText(/video attachment/i)).toHaveAttribute("src", "/api/media/sig/clip");
+    expect(screen.getByLabelText(/video attachment/i)).toHaveAttribute("src", "/v0/media/sig/clip");
   });
 
   it("renders streaming reasoning as one compact activity line", () => {
@@ -1322,7 +1292,7 @@ describe("MessageBubble", () => {
       media: [
         {
           kind: "image",
-          url: "/api/media/sig/image",
+          url: "/v0/media/sig/image",
           name: "generated.png",
         },
       ],
@@ -1350,7 +1320,7 @@ describe("MessageBubble", () => {
       media: [
         {
           kind: "image",
-          url: "/api/media/sig/html",
+          url: "/v0/media/sig/html",
           name: "index.html",
         },
       ],
@@ -1372,7 +1342,7 @@ describe("MessageBubble", () => {
       media: [
         {
           kind: "file",
-          url: "/api/media/sig/svg",
+          url: "/v0/media/sig/svg",
           name: "growth.svg",
         },
       ],
@@ -1381,7 +1351,7 @@ describe("MessageBubble", () => {
     const { container } = render(<MessageBubble message={message} />);
 
     expect(screen.getByRole("button", { name: /view image: growth.svg/i })).toBeInTheDocument();
-    expect(container.querySelector('img[src="/api/media/sig/svg"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/v0/media/sig/svg"]')).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Download growth.svg" })).not.toBeInTheDocument();
   });
 
@@ -1390,15 +1360,18 @@ describe("MessageBubble", () => {
 it("renders nonhuman inputs as labeled collapsed details rather than human chat bubbles", async () => {
   await setAppLanguage("en");
   const { container } = render(<MessageBubble message={{ id: "system-source", createdAt: 1, role: "user", content: "Check the saved instructions and authorized tasks.", inputOrigin: { kind: "heartbeat", label: "Heartbeat", id: "wake-1" } }} />);
-  const details = container.querySelector("details[data-system-input]");
-  expect(details).not.toHaveAttribute("open");
-  expect(within(details as HTMLElement).getByText("Heartbeat")).toBeInTheDocument();
-  expect(details?.querySelector("summary")).toBeInTheDocument();
+  const details = container.querySelector<HTMLElement>("[data-system-input]")!;
+  const toggle = within(details).getByRole("button", { name: "Heartbeat" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText("Check the saved instructions and authorized tasks.")).not.toBeInTheDocument();
+  await userEvent.setup().click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(await screen.findByText("Check the saved instructions and authorized tasks.")).toBeVisible();
 });
 
-it("localizes Cirno supervisory records while retaining the @cirno source", async () => {
+it("localizes Router supervisory records while retaining the @cirno source", async () => {
   await setAppLanguage("zh-CN");
-  render(<MessageBubble message={{ id: "supervisor-source", role: "user", createdAt: 1, content: 'Cirno supervisory operation: {"action":"stop"}', inputOrigin: { kind: "supervision", label: "@cirno", id: "control-1", action: "stop", values: {} }, sessionMessage: { message_id: "control-1", session: { id: "handle_00000000000000000000000000000000", name: "cirno" } } }} />);
+  render(<MessageBubble message={{ id: "supervisor-source", role: "user", createdAt: 1, content: 'Router supervisory operation: {"action":"stop"}', inputOrigin: { kind: "supervision", label: "@cirno", id: "control-1", action: "stop", values: {} }, sessionMessage: { message_id: "control-1", session: { id: "handle_00000000000000000000000000000000", name: "cirno" } } }} />);
   expect(screen.getByText("@cirno")).toBeInTheDocument();
   expect(screen.getByText("已停止此会话")).toBeInTheDocument();
   expect(screen.queryByText(/supervisory operation/)).not.toBeInTheDocument();

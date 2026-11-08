@@ -1,13 +1,12 @@
 import sys
 
 import pytest
-from typer.testing import CliRunner
-
-from cirno_server.cli.commands import app
 from cirno_core.config import home as instance_home
 from cirno_core.config import loader
-from cirno_core.config.schema import Config
 from cirno_core.config.paths import get_media_dir
+from cirno_core.config.schema import Config
+from cirno_server.cli.commands import app
+from typer.testing import CliRunner
 
 
 @pytest.fixture(autouse=True)
@@ -71,7 +70,7 @@ def test_home_bare_command_opens_webui_and_restores_selection(monkeypatch, tmp_p
 
 
 def test_gateway_child_receives_home_after_cli_selection_ends(tmp_path):
-    from cirno_server.lifecycle import ServerInstance, build_server_command
+    from cirno_server.lifecycle.instance import ServerInstance, build_server_command
 
     home = tmp_path / "instance with spaces"
     instance_home.set_instance_path(home)
@@ -85,21 +84,21 @@ def test_gateway_child_receives_home_after_cli_selection_ends(tmp_path):
 
 
 def test_fresh_instance_separates_agent_home_runtime_state_and_workspace(tmp_path, monkeypatch):
-    from cirno_core.config.paths import get_data_dir
-    from cirno_core.config.home import get_home_path
-    from cirno_core.notifications.inbox import NotificationInbox
-    from cirno_server.channels.telegram.binding import TelegramBinding
-    from cirno_core.storage.instance import InstanceData
     from cirno_core.agent.context import ContextBuilder
-    from cirno_core.utils.helpers import sync_workspace_templates
+    from cirno_core.config.home import get_home_path
+    from cirno_core.config.paths import get_data_dir
+    from cirno_core.notifications.inbox import NotificationInbox
     from cirno_core.session.manager import SessionManager
+    from cirno_core.storage.instance import InstanceData
+    from cirno_core.utils.home_templates import sync_home_templates
+    from cirno_server.channels.telegram.binding import TelegramBinding
 
     root = tmp_path / "instance"
     instance_home.set_instance_path(root)
     loader.save_config(Config())
     workspace = Config().workspace_path
     workspace.mkdir(parents=True)
-    sync_workspace_templates(workspace, silent=True)
+    sync_home_templates(silent=True)
     assert get_home_path() == root / "home"
     assert get_data_dir() == root / "state"
     assert (root / "config.json").is_file()

@@ -5,8 +5,8 @@ or produce text that makes the model hallucinate about unseen images.
 """
 
 from __future__ import annotations
+from cirno_core.providers.messages import strip_image_content, strip_image_content_inplace
 
-from cirno_core.providers.base import LLMProvider
 
 # ---------------------------------------------------------------------------
 # _strip_image_content (returns new list)
@@ -30,7 +30,7 @@ class TestStripImageContent:
                 ],
             }
         ]
-        result = LLMProvider._strip_image_content(messages)
+        result = strip_image_content(messages)
         assert result is not None
         content = result[0]["content"]
         assert len(content) == 2
@@ -47,7 +47,7 @@ class TestStripImageContent:
         messages = [
             {"role": "user", "content": [{"type": "text", "text": "hello"}]}
         ]
-        assert LLMProvider._strip_image_content(messages) is None
+        assert strip_image_content(messages) is None
 
     def test_handles_multiple_images(self):
         messages = [
@@ -68,7 +68,7 @@ class TestStripImageContent:
                 ],
             }
         ]
-        result = LLMProvider._strip_image_content(messages)
+        result = strip_image_content(messages)
         assert result is not None
         content = result[0]["content"]
         # text + 2 placeholders
@@ -90,7 +90,7 @@ class TestStripImageContent:
                 ],
             }
         ]
-        result = LLMProvider._strip_image_content(messages)
+        result = strip_image_content(messages)
         assert result is not None
         placeholder = result[0]["content"][0]["text"]
         assert "not delivered" in placeholder.lower()
@@ -111,7 +111,7 @@ class TestStripImageContent:
             },
             {"role": "assistant", "content": "Hi there!"},
         ]
-        result = LLMProvider._strip_image_content(messages)
+        result = strip_image_content(messages)
         assert result is not None
         # system and assistant messages unchanged
         assert result[0]["content"] == "You are helpful."
@@ -142,7 +142,7 @@ class TestStripImageContentInplace:
                 ],
             }
         ]
-        found = LLMProvider._strip_image_content_inplace(messages)
+        found = strip_image_content_inplace(messages)
         assert found is True
         content = messages[0]["content"]
         assert len(content) == 2
@@ -154,7 +154,7 @@ class TestStripImageContentInplace:
         messages = [
             {"role": "user", "content": [{"type": "text", "text": "hello"}]}
         ]
-        assert LLMProvider._strip_image_content_inplace(messages) is False
+        assert strip_image_content_inplace(messages) is False
 
     def test_mutates_original_messages(self):
         original_content = [
@@ -166,7 +166,7 @@ class TestStripImageContentInplace:
             },
         ]
         messages = [{"role": "user", "content": original_content}]
-        LLMProvider._strip_image_content_inplace(messages)
+        strip_image_content_inplace(messages)
         # The original list was mutated
         assert original_content[1]["type"] == "text"
         assert "/img.png" not in original_content[1]["text"]

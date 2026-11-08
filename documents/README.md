@@ -9,6 +9,7 @@ These guides describe the current Cirno implementation. The Python service owns 
 - [Home and workspaces](home-and-workspaces.md): profiles, storage and working directories.
 - [Goals and coordination](goals-and-dream.md): sustained work, delegation, heartbeat and Skills.
 - [Notification inbox](notification-inbox.md): action requests, conversation reports and system notices.
+- [Instance migration](migrations.md): automatic 0.1.6 import, retained originals and interrupted-startup recovery.
 - [Backup and restore](backups.md): complete instance archives, extra directories and restoration.
 - [Model context and long-running work](model-context.md)
 - [Memory retrieval](memory-retrieval.md)
@@ -26,15 +27,19 @@ These guides describe the current Cirno implementation. The Python service owns 
 
 - [Source layout](development/source-layout.md)
 - [Contributing](development/contributing.md)
+- [API versions](development/api.md): v0 endpoints, transport and authentication.
 - [Example configuration](examples/config.json)
 
 Historical reviews, benchmark runs and earlier implementations are local archive material under ignored `references/`. They are not current product documentation or bundled Agent guidance. Third-party license text remains in its original form.
 
 ## Release notes
 
+- [0.2.0](releases/0.2.0.md): tabbed workspace, local/SSH terminals, request transparency, encrypted credentials and long-task reliability fixes.
 - [0.1.6](releases/0.1.6.md): reliable delegated reports, retryable backup recovery, browser-session revocation and inline message editing.
 - [0.1.5](releases/0.1.5.md): recoverable long-task context, external embeddings, complete backups and supervisor controls.
 - [0.1.4](releases/0.1.4.md): mobile recovery, workspace and AI review settings, MCP editing, remote installation and persistent full images.
 - [0.1.3](releases/0.1.3.md): package boundaries, instance storage, account passwords, conversation controls and independent operation review.
 - [0.1.2](releases/0.1.2.md): useful Overview shortcuts and removal of obsolete migration and compatibility paths.
 - [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.
+
+- [Tabbed workspace, terminals, event inspection and credentials](workspace.md)

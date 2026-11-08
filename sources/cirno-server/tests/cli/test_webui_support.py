@@ -5,12 +5,9 @@ import webbrowser
 from types import SimpleNamespace
 
 import pytest
-
+from cirno_core.config.schema import Config
 from cirno_server.cli import webui_support
 from cirno_server.cli.webui_support import _prepare_webui_bundle_for_gateway
-from cirno_core.config.schema import Config
-
-
 
 
 def test_unix_browser_reports_delayed_launcher_failure_without_raw_output(monkeypatch, tmp_path, capfd) -> None:

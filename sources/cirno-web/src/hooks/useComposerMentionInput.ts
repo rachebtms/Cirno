@@ -13,7 +13,7 @@ export function useComposerMentionInput({
   resetKey,
 }: {
   segments: CapabilityMentionSegment[];
-  inputRef: RefObject<HTMLTextAreaElement>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
   onEdit: (value: string, cursor: number) => void;
   resetKey?: string | null;
 }) {
@@ -26,7 +26,7 @@ export function useComposerMentionInput({
   const [compositionValue, setCompositionValue] = useState<string | null>(null);
   const compositionStart = useRef(text);
   const compositionSegments = useRef(segments);
-  const compositionSelection = useRef<{ start: number; end: number }>();
+  const compositionSelection = useRef<{ start: number; end: number } | undefined>(undefined);
   const lastSelection = useRef({ start: 0, end: 0 });
   const previousResetKey = useRef(resetKey);
 

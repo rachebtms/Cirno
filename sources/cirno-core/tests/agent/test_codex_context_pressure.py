@@ -1,4 +1,6 @@
 """Exercise request governance through the Codex transport boundary."""
+from cirno_core.agent.governance.budget import input_budget
+
 
 from copy import deepcopy
 from types import SimpleNamespace
@@ -7,15 +9,16 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from cirno_core.agent.context_governance import (
+from cirno_core.agent.governance import (
     ContextCompactionState,
     ContextGovernanceConfig,
     ContextGovernor,
     ModelRequestState,
 )
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.config.schema import ModelPresetConfig
-from cirno_core.providers.base import LLMResponse, LLMUsage, ProviderCallContext
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.providers.fallback_provider import FallbackProvider
 from cirno_core.providers.openai_codex_provider import OpenAICodexProvider, _CodexHTTPError
@@ -325,9 +328,8 @@ async def test_fallback_cannot_discard_required_compaction(transport, mode):
 @pytest.mark.parametrize('percent', [40, 100])
 def test_active_compaction_threshold_reserves_output_and_safety(percent):
     from cirno_core.providers.base import CONTEXT_SAFETY_BUFFER
-    from cirno_core.agent.context_governance import ContextGovernor
     from types import SimpleNamespace
     config = SimpleNamespace(context_window_tokens=200000, max_tokens=8192, provider=None, active_compact_percent=percent)
     budget = min(200000 * percent // 100, 200000 - 8192 - CONTEXT_SAFETY_BUFFER)
-    assert ContextGovernor.input_budget(config) == budget
+    assert input_budget(config) == budget
     assert budget < 200000

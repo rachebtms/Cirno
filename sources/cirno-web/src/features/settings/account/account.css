@@ -1,0 +1,11 @@
+.account-settings { display: grid; gap: 2rem; max-width: 38rem; }
+.account-owner { display: flex; align-items: center; gap: 1rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--separator); }
+.account-owner > svg { color: var(--accent); }
+.account-settings h2 { margin-bottom: .35rem; font-size: 1rem; font-weight: 600; }
+.account-owner h2 { color: var(--muted); font-size: .8125rem; font-weight: 400; }
+.account-owner p { overflow-wrap: anywhere; }
+.account-help { margin: .5rem 0 1.5rem; color: var(--muted); font-size: .875rem; line-height: 1.7; }
+.account-password-form { display: flex; flex-direction: column; align-items: stretch; gap: 1.25rem; }
+.account-password-form .description { line-height: 1.6; }
+.account-password-form > footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.account-saved { color: var(--success); font-size: .875rem; }

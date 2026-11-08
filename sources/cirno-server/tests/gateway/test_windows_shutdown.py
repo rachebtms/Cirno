@@ -13,13 +13,9 @@ from ctypes import wintypes
 from pathlib import Path
 
 import pytest
-
-from cirno_server.lifecycle import (
-    ServerInstance,
-    ServerRuntime,
-    ServerRuntimePaths,
-    ServerStartOptions,
-)
+from cirno_server.lifecycle.instance import ServerInstance, ServerRuntimePaths
+from cirno_server.lifecycle.runtime import ServerRuntime
+from cirno_server.lifecycle.contracts import ServerStartOptions
 from cirno_server.lifecycle.windows_shutdown import WindowsShutdownEvent, request_windows_shutdown
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows process lifecycle")
@@ -60,7 +56,7 @@ def test_windowless_gateway_stop_runs_application_cleanup(tmp_path: Path) -> Non
             while True:
                 connection = http.client.HTTPConnection("127.0.0.1", port, timeout=0.2)
                 try:
-                    connection.request("GET", "/health")
+                    connection.request("GET", "/v0/health")
                     if connection.getresponse().status == 200:
                         break
                 except (OSError, http.client.HTTPException):
@@ -224,7 +220,9 @@ def test_failed_foreground_publication_closes_shutdown_signal(tmp_path: Path, mo
 _STALLED_GATEWAY = r"""
 import json, subprocess, sys, time
 from pathlib import Path
-from cirno_server.lifecycle import ServerInstance, ServerRuntime, ServerStartOptions
+from cirno_server.lifecycle.instance import ServerInstance
+from cirno_server.lifecycle.runtime import ServerRuntime
+from cirno_server.lifecycle.contracts import ServerStartOptions
 
 root = Path(sys.argv[1])
 runtime = ServerRuntime(paths=ServerInstance.resolve(config_path=root / 'config.json').paths)

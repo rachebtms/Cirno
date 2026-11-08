@@ -7,19 +7,19 @@
   "app": {
     "brand": "Cirno",
     "loading": {
-      "connecting": "cirno に接続中…",
+      "connecting": "Cirno に接続中…",
       "boot": "Cirno を読み込み中…",
       "failed": "この画面を読み込めませんでした。戻るか、ページを再読み込みしてお試しください。"
     },
     "error": {
-      "title": "cirno に接続できませんでした",
+      "title": "Cirno に接続できませんでした",
       "serverHint": "Cirno server（`cirno`）が起動しており、このブラウザーから WebUI のアドレスに到達できることを確認してください。"
     },
     "auth": {
-      "title": "cirno に接続",
+      "title": "Cirno に接続",
       "label": "WebUI パスワード",
       "helpTitle": "パスワードはどこにありますか？",
-      "helpConfig": "cirno を実行しているデバイスで設定ファイルを開きます。通常は次の場所にあります：",
+      "helpConfig": "Cirno を実行しているデバイスで設定ファイルを開きます。通常は次の場所にあります：",
       "helpSecret": "このフィールドの値をパスワードとしてコピーします：",
       "helpFallback": "値が空の場合は <code>channels.websocket.token</code> を使用してください。",
       "showPassword": "パスワードを表示",
@@ -38,9 +38,7 @@
       "restartHint": "実行時の変更を適用するには cirno を再起動します。",
       "restartAction": "再起動",
       "restart": "cirno を再起動",
-      "restarting": "再起動中...",
-      "restartEngine": "エンジンを再起動",
-      "restartingEngine": "エンジンを再起動中..."
+      "restarting": "再起動中..."
     },
     "restart": {
       "completed": "{{seconds}} 秒で再起動が完了しました。"
@@ -51,18 +49,6 @@
     },
     "meta": {
       "description": "Cirno Web UI — Cirno ワークスペースと会話します。"
-    },
-    "pairing": {
-      "haveCode": "コードを受け取りましたか？",
-      "deliveryFailed": "ペアリングコードを送信できませんでした。ボットのメッセージ送信権限とCirno サーバーのログを確認し、もう一度ボットにダイレクトメッセージを送ってください。",
-      "deliverySending": "チャットにペアリングコードを送信しています。届かない場合は、もう一度ボットにダイレクトメッセージを送ってください。",
-      "title": "アカウント連携",
-      "description": "チャットで受け取った連携コードを入力します。",
-      "code": "ペアリングコード",
-      "matched": "{{channel}} と一致しました。接続中…",
-      "expiresInline": "コードの有効期限: {{expires}}。",
-      "queueCount": "{{count}} 件待機中",
-      "noMatch": "このコードに一致する保留中のリクエストはありません。"
     }
   },
   "ptc": {
@@ -275,8 +261,8 @@
           "help": "会話がアイドル圧縮の条件を満たすか確認する間隔です。非アクティブ時間とは別です。再起動後に適用されます。"
         },
         "network_request_timeout_s": {
-          "label": "Compatible API request timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "モデル接続・応答タイムアウト（秒）",
+          "help": "接続または非ストリーミング応答を待つ時間。ストリーミングには個別のアイドルタイムアウトを使います。"
         },
         "network_stream_idle_timeout_s": {
           "label": "Compatible API stream idle timeout (seconds)",
@@ -335,7 +321,7 @@
           "help": "リクエスト単位の制限時間です。失敗時は BM25 に戻ります。"
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "圧縮済みの実行状態を解放",
+          "label": "圧縮後にメモリを解放",
           "help": "圧縮後も証拠と表示履歴はディスクに保持し、古い実行メッセージのメモリを解放します。"
         },
         "agents_defaults_dream_max_tool_iterations": {
@@ -461,6 +447,18 @@
         "agents_defaults_memory_embedding_provider": {
           "label": "埋め込みサービス",
           "help": "BM25 と併用する任意のベクトル検索です。ローカル CPU または外部 API を選びます。API には検索と記憶の断片を送信します。既定は無効です。"
+        },
+        "server_uploads_max_file_mb": {
+          "label": "ファイルサイズ上限（MiB）",
+          "help": "画像・文書1件あたりの上限です。サービスを再起動し、ページを更新すると適用されます。"
+        },
+        "server_uploads_max_video_mb": {
+          "label": "動画サイズ上限（MiB）",
+          "help": "動画1件あたりの上限です。1メッセージに動画は1件までです。再起動とページ更新後に適用されます。"
+        },
+        "server_uploads_max_total_mb": {
+          "label": "メッセージ内の合計サイズ（MiB）",
+          "help": "動画を除く画像・文書の合計です。ローカルファイル参照は含みません。再起動とページ更新後に適用されます。"
         }
       },
       "groups": {
@@ -565,6 +563,9 @@
         },
         "embedding": {
           "title": "埋め込みサービス"
+        },
+        "uploads": {
+          "title": "ファイルアップロード"
         }
       },
       "save": "変更を保存",
@@ -672,12 +673,10 @@
       "capabilities": "機能",
       "cliApps": "CLI アプリ",
       "mcp": "MCP サービス",
-      "apps": "アプリ",
-      "nativeHost": "デスクトップアプリ",
-      "hostSafety": "アプリの安全性"
+      "apps": "アプリ"
     },
     "notifications": {
-      "scope": "このブラウザー",
+      "scope": "通知とサウンド",
       "intro": "タスク終了時の通知方法を選んでください。",
       "pageRequired": "ページの終了・一時停止・切断中は、新しい通知を受信できません。",
       "revoked": "通知の許可が取り消されたため、通知をオフにしました。このブラウザーのサイト設定で通知を許可してから、ここでオンにしてください。",
@@ -740,7 +739,6 @@
       "restart": "cirno を再起動",
       "configPath": "設定のパス",
       "activePreset": "アクティブなプリセット",
-      "gateway": "Cirno サーバー",
       "restartState": "再起動状態",
       "pendingChanges": "適用待ちの変更",
       "selectedPreset": "選択中のプリセット",
@@ -762,13 +760,11 @@
       "notificationSound": "完了時の音",
       "cliAppsCatalog": "カタログ",
       "cliAppsFilter": "フィルター",
-      "engine": "エンジン",
-      "logs": "ログ",
-      "diagnostics": "診断",
       "contextWindow": "コンテキストウィンドウ",
       "voiceLimits": "制限",
       "reasoningDetailMode": "思考過程の表示",
-      "toolDetailMode": "ツール実行の表示"
+      "toolDetailMode": "ツール実行の表示",
+      "healthListener": "ヘルスチェックの待受先"
     },
     "help": {
       "theme": "ライトとダークの表示を切り替えます。",
@@ -796,10 +792,6 @@
       "notificationSound": "返信の終了時に、バックグラウンドでも通知音を鳴らします。",
       "cliAppsCatalog": "cirno 用の CLI ツールをインストールします。デスクトップアプリは変わりません。\n\ncirno がこのマシンで使用できるコマンドラインツールをインストールします。デスクトップアプリは変更しません。",
       "cliAppsFilter": "名前、分類、機能で検索します。",
-      "logs": "デスクトップアプリのエンジンログを開きます。",
-      "diagnostics": "問題の診断に使うレポートを出力します。",
-      "localServiceAccessNative": "フルアクセスの Shell コマンドでこの Mac のサービスに接続できます。\n\nフルアクセスの shell コマンドがこの Mac 上のサービスにアクセスできるようにします。",
-      "webuiDefaultAccessNative": "プロジェクト権限がないデスクトップチャットの既定値です。\n\nプロジェクト固有の権限がないネイティブチャットで使用します。",
       "contextWindow": "このモデルのコンテキスト Token 数です。"
     },
     "values": {
@@ -821,16 +813,15 @@
       "collapsedDiff": "差分を折りたたむ",
       "on": "オン",
       "off": "オフ",
-      "defaultPermission": "既定の権限",
       "fullAccess": "フルアクセス",
       "configured": "設定済み",
       "notConfigured": "未設定",
       "pending": "保留中",
-      "restartingEngine": "再起動中",
       "checking": "確認中",
       "running": "実行中",
       "needsSetup": "設定が必要",
-      "detailed": "詳細"
+      "detailed": "詳細",
+      "inheritToolPolicy": "ツール設定を継承"
     },
     "status": {
       "loading": "設定を読み込んでいます...",
@@ -841,12 +832,7 @@
       "restartAfterSaving": "変更を保存してから、準備ができたら再起動してください。",
       "savedRestartApply": "保存しました。変更を反映するには cirno を再起動してください。",
       "hostRestartAfterSaving": "保存すると cirno がエンジンを再起動します。",
-      "hostRestartPending": "保存しました。準備ができたらエンジンを再起動します。",
-      "hostApiUnavailable": "この操作はデスクトップアプリでのみ利用できます。",
-      "logsOpened": "ログフォルダーを開きました。",
-      "logsOpenFailed": "ログフォルダーを開けませんでした。",
-      "diagnosticsExported": "診断を {{path}} に書き出しました。",
-      "diagnosticsExportFailed": "診断を書き出せませんでした。"
+      "hostRestartPending": "保存しました。準備ができたらエンジンを再起動します。"
     },
     "actions": {
       "save": "保存",
@@ -1022,7 +1008,7 @@
       "newPresetHelp": "モデルと設定を保存して再利用します。",
       "presets": "モデルプリセット",
       "presetName": "プリセット名",
-      "presetNameHelp": "名前は重複できません。/model でも使用します。",
+      "presetNameHelp": "名前は重複できません。名前を変更してもモデル ID は変わりません。",
       "presetNameDuplicate": "同じ名前のプリセットがすでに存在します。",
       "presetNamePlaceholder": "例：文章作成用",
       "advancedOptions": "詳細オプション",
@@ -1066,7 +1052,8 @@
         "auto": "自動",
         "preserve": "保持",
         "omit": "送信しない"
-      }
+      },
+      "catalogErrorDetails": "エラーの詳細"
     },
     "timezone": {
       "select": "タイムゾーンを選択",
@@ -1404,7 +1391,7 @@
         "noOutput": "この記録に応答本文は保存されていません。"
       },
       "create": "タスクを作成",
-      "createPrompt": "cirno に何を自動化してほしいですか？",
+      "createPrompt": "どのようなタスクを自動化しますか？",
       "createInput": "自動タスクを説明",
       "errors": {},
       "calendar": {
@@ -1542,7 +1529,8 @@
         "second": "秒",
         "minute": "分",
         "hour": "時間",
-        "day": "日"
+        "day": "日",
+        "millisecond": "ミリ秒"
       },
       "validation": {
         "nameRequired": "名前は必須です。",
@@ -1581,7 +1569,9 @@
       "openChatGPT": "ChatGPT を開く",
       "pasteCallbackToContinue": "続行するにはコールバック URL を貼り付けてください。",
       "waitingForCallback": "サインインの完了を待機中…",
-      "finishSignIn": "サインインを完了"
+      "finishSignIn": "サインインを完了",
+      "cancelFailed": "{{provider}} のログインをキャンセルできませんでした",
+      "cancelling": "ログインをキャンセル中…"
     },
     "skills": {
       "description": "チャットで使えるスキルを選びます。",
@@ -1610,15 +1600,15 @@
       "disableSkill": "{{name}} を無効にする",
       "updateFailed": "このスキルを更新できませんでした。",
       "deleteTitle": "スキルを削除",
-      "deleteDescription": "現在のワークスペースからこのスキルを削除します。",
+      "deleteDescription": "このスキルを Agent Home から削除します。",
       "deleteAction": "削除",
       "deleteFailed": "このスキルを削除できませんでした。",
       "deleteConfirmTitle": "{{name}} を削除しますか？",
-      "deleteConfirmDescription": "ワークスペースからスキルファイルを削除します。元に戻せません。",
+      "deleteConfirmDescription": "Agent Home からスキルファイルを削除します。保存済みの履歴は引き続き参照できます。",
       "deleteConfirmAction": "スキルを削除",
       "instructionsTitle": "スキルの説明",
       "setupRequired": "セットアップが必要",
-      "setupDescription": "Cirno サーバー端末に依存パッケージを入れ、再確認します。\n\ncirno を実行しているマシンに不足している依存関係をインストールしてから、再確認してください。",
+      "setupDescription": "Cirno サーバーを実行している端末に不足している依存関係をインストールして、再確認してください。",
       "copySetupCommand": "コマンドをコピー",
       "checkAgain": "再確認",
       "marketplaceSearchFailed": "スキルマーケットを検索できませんでした。",
@@ -1634,7 +1624,7 @@
       "marketplaceTrendingUnavailable": "トレンドスキルを一時的に取得できません。",
       "marketplaceEmpty": "「{{query}}」に一致するスキルはありません。",
       "marketplaceConfirmTitle": "{{name}} をインストールしますか？",
-      "marketplaceConfirmDescription": "サードパーティーのスキルには指示やスクリプトが含まれる場合があります。\n\nこのサードパーティ製スキルは {{provider}}（{{source}}）から提供され、指示や実行可能なスクリプトを含む場合があります。",
+      "marketplaceConfirmDescription": "このサードパーティ製スキルは {{provider}}（{{source}}）から提供され、指示や実行可能なスクリプトを含む場合があります。",
       "marketplaceConfirmInstall": "スキルをインストール",
       "marketplaceOpen": "{{provider}} で {{name}} を開く",
       "marketplaceOpenProvider": "{{provider}} を開く",
@@ -1648,7 +1638,6 @@
       "marketplaceTrendLabel": "8週間のインストール推移",
       "featured": "スキル",
       "empty": "利用可能なスキルはありません。",
-      "sourceWorkspace": "カスタム",
       "sourceBuiltin": "組み込み",
       "statusAvailable": "利用可能",
       "statusUnavailable": "利用不可",
@@ -1668,46 +1657,55 @@
       "unavailableReasonLabel": "不足しているもの",
       "rawInstructions": "SKILL.md の内容",
       "rawInstructionsEmpty": "指示はありません。",
-      "detailDescription": "{{name}} の詳細。"
+      "detailDescription": "{{name}} の詳細。",
+      "sourceHome": "カスタム",
+      "copySetupFailed": "コマンドをコピーできませんでした。",
+      "sourcePlugin": "Agent プラグイン",
+      "marketplaceResultsFor": "「{{query}}」の検索結果",
+      "retryTrends": "推移を再取得",
+      "historyTab": "検証と履歴"
     },
     "homeFiles": {
       "title": "Home files",
       "save": "Save",
       "reload": "Reload",
       "saved": "Saved",
-      "soul": "Personality",
+      "soul": "Router の人格",
       "user": "Preferences",
       "instructions": "Instructions",
       "memory": "Long-term memory",
-      "heartbeat": "Heartbeat instructions"
+      "heartbeat": "Heartbeat instructions",
+      "worker": "通常の会話の人格"
     },
     "categories": {
       "interface": "画面",
       "agent": "エージェント",
       "connections": "接続",
-      "system": "システム"
+      "system": "システム",
+      "general": "一般"
     },
     "telegram": {
-      "account": "Personal account",
-      "configureBot": "Configure bot",
-      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
-      "unbound": "Not connected",
-      "boundHelp": "Only this Telegram account can access your personal Cirno.",
-      "pinHelp": "Generate a PIN here, then send it to your bot.",
-      "unbind": "Disconnect",
-      "generatePin": "Generate PIN",
-      "pin": "Pairing PIN",
-      "copyPin": "Copy binding command",
-      "refreshPin": "Refresh PIN",
-      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
-      "sendPin": "Send {{command}} to your Telegram bot.",
-      "delivery": "Messages and notifications",
-      "enabled": "Enable Telegram",
-      "cirno": "Cirno messages",
-      "actionLinks": "Action links",
-      "webuiUrl": "Web UI address (optional)",
-      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
-      "settingsLink": "Configure Telegram notifications"
+      "account": "個人アカウント",
+      "configureBot": "ボットを設定",
+      "help": "Telegram のプライベートチャットを Cirno に接続します。グループには対応していません。先にチャンネル設定でボットトークンを設定してください。",
+      "unbound": "未接続",
+      "boundHelp": "この Telegram アカウントだけが個人用 Router にアクセスできます。",
+      "pinHelp": "ここで PIN を生成してボットに送信してください。",
+      "unbind": "接続を解除",
+      "generatePin": "PIN を生成",
+      "pin": "ペアリング PIN",
+      "copyPin": "連携コマンドをコピー",
+      "refreshPin": "PIN を更新",
+      "expires": "{{seconds}} 秒後に期限切れになります。",
+      "sendPin": "Telegram ボットに {{command}} を送信してください。",
+      "delivery": "メッセージと通知",
+      "enabled": "Telegram を有効化",
+      "actionLinks": "操作リンク",
+      "webuiUrl": "Web UI のアドレス（任意）",
+      "urlHelp": "スマートフォンから開けるアドレスを使用してください。通知には、受信トレイの対応する項目を開くボタンが表示されます。",
+      "settingsLink": "Telegram の通知を設定",
+      "expired": "PIN の有効期限が切れました",
+      "router": "Router のメッセージ"
     },
     "account": {
       "owner": "インスタンス所有者",
@@ -1718,10 +1716,13 @@
       "saved": "パスワードを変更しました。このブラウザーのログインは維持されます。",
       "unavailable": "アカウント設定はブラウザーで登録・ログインする場合に利用できます。",
       "loading": "アカウントを読み込み中…",
-      "retry": "再試行"
+      "retry": "再試行",
+      "routerNameHelp": "Renaming keeps the same conversation ID, memory and task links. Historical text stays as written.",
+      "saveRouterName": "Save name",
+      "routerNameSaved": "Name updated."
     },
     "heartbeat": {
-      "help": "HEARTBEAT.md を定期確認し、タスクがあれば Cirno を起動します。サービスの稼働確認とは別の機能です。"
+      "help": "HEARTBEAT.md を定期確認し、タスクがあれば Router を起動します。サービスの稼働確認とは別の機能です。"
     },
     "backup": {
       "instance": "インスタンス全体",
@@ -1751,7 +1752,21 @@
       "skip": "空欄ならスキップ",
       "extrasRestore": "追加パスは変更できます。同名ファイルは上書きし、無関係な既存ファイルは残します。パッケージや外部ツールには互換性のある OS と CPU が必要です。",
       "restore": "復元して再起動"
-    }
+    },
+    "balance": {
+      "title": "アカウント残高",
+      "enabled": "残高照会を有効化",
+      "endpoint": "残高 API URL",
+      "endpointHelp": "モデル API とは異なる URL を指定できます。",
+      "format": "応答形式",
+      "json": "カスタム JSON",
+      "amountPath": "残高フィールド（JSON Pointer）",
+      "currency": "通貨 / 単位",
+      "apiKey": "残高 API キー（任意）",
+      "apiKeyHelp": "空欄の場合はプロバイダーの API キーを使用します。",
+      "refresh": "残高を更新"
+    },
+    "navigationSearch": "設定を検索"
   },
   "chat": {
     "fallbackTitle": "トピック {{id}}",
@@ -1774,7 +1789,7 @@
     "rename": "名前を変更",
     "renamePlaceholder": "トピック名",
     "renameProjectTitle": "プロジェクト名を変更",
-    "renameProjectDescription": "WebUI のサイドバーに表示するプロジェクト名だけを変更します。",
+    "renameProjectDescription": "プロジェクト名を変更します。会話とファイルは保持されます。",
     "renameProjectPlaceholder": "プロジェクト名",
     "renameSave": "保存",
     "renameFailed": "名前を保存できませんでした。再試行してください。",
@@ -1794,7 +1809,8 @@
       "yesterday": "昨日",
       "earlier": "以前",
       "archived": "アーカイブ済み"
-    }
+    },
+    "bulkDeleteUnavailable": "この画面では、一度に1つの会話のみ削除できます。"
   },
   "archiveConfirm": {
     "title": "このトピックをアーカイブしますか？",
@@ -1802,7 +1818,7 @@
     "unarchiveTitle": "このトピックのアーカイブを解除しますか？",
     "unarchiveTitleMany": "{{count}} 件のトピックのアーカイブを解除しますか？",
     "description": "会話履歴は保持され、いつでもアーカイブを解除できます。",
-    "unarchiveDescription": "これらのトピックがサイドバーに再表示されます。"
+    "unarchiveDescription": "これらの会話が会話一覧に再表示されます。"
   },
   "deleteConfirm": {
     "title": "このチャットを削除しますか？",
@@ -2015,7 +2031,16 @@
         "estimated": "現在のコンテキストと生成中の出力から推定し、応答後にプロバイダーの使用量で補正します。",
         "unavailable": "現在の文脈使用量は未記録です。グラフは過去の要求を示します。"
       },
+      "draftStorage": {
+        "read": "このブラウザーの下書きを復元できませんでした。",
+        "save": "下書きの変更を保存できませんでした。このページを開いたまま再試行してください。",
+        "remove": "保存済みの下書きを削除できませんでした。再読み込みの前に再試行してください。",
+        "clearFailed": "このブラウザーに保存された下書きを消去できませんでした。"
+      },
       "queued": {
+        "sendRejected": "メッセージは送信されませんでした。送信待ちの内容は保持されています。",
+        "restoreFailed": "このブラウザーの送信待ちメッセージを復元できませんでした。",
+        "saveFailed": "送信待ちメッセージの変更を保存できませんでした。このページを開いたまま再試行してください。",
         "label": "送信待ち",
         "guide": "今すぐ送信",
         "delete": "メッセージを削除",
@@ -2106,16 +2131,12 @@
             "title": "ヘルプを表示",
             "description": "使用できるスラッシュコマンドを表示します。"
           },
-          "pairing": {
-            "title": "ペアリング",
-            "description": "連携のリクエストを管理します。"
-          },
           "resume": {
             "title": "タスクを再開",
             "description": "保存したコンテキストから停止したタスクを再開します。"
           },
           "clear": {
-            "title": "Cirno のコンテキストを消去",
+            "title": "Router の会話を消去",
             "description": "個人用 Cirno の会話を消去します。ファイルの変更は元に戻りません。"
           },
           "temporary": {
@@ -2168,14 +2189,14 @@
         "label": "アプリ",
         "cliGroup": "CLI アプリ",
         "mcpGroup": "MCP サービス",
-        "sessionGroup": "Cirno の会話",
+        "sessionGroup": "会話",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "@{{name}} で CLI を呼び出します。",
         "mcpDescription": "@{{name}} で MCP を呼び出します。",
         "cliTitle": "CLI アプリ: {{name}}",
         "mcpTitle": "MCP サーバー: {{name}}",
-        "sessionBadge": "Cirno の会話",
+        "sessionBadge": "会話",
         "sessionDescription": "@{{name}} を過去のチャットとして参照"
       },
       "workspace": {
@@ -2188,7 +2209,7 @@
         "defaultDescription": "作業ディレクトリ内でのみファイルの読み書きとコマンド実行を行います。",
         "fullDescription": "作業ディレクトリ外でのファイルアクセスとコマンド実行を許可します。",
         "review": "AI 承認",
-        "reviewDescription": "既定の制限を維持します。独立 AI が Cirno の記憶を使わず制限された操作を審査し、不明な場合は受信箱で確認を求めます。AI の誤判断によりファイル流出や有害なコマンド実行が起こる可能性があります。"
+        "reviewDescription": "既定の制限を維持します。独立 AI が Router の記憶を使わず制限された操作を審査し、不明な場合は受信箱で確認を求めます。AI の誤判断によりファイル流出や有害なコマンド実行が起こる可能性があります。"
       },
       "goalStatus": {
         "blocked": "進行不能",
@@ -2214,7 +2235,7 @@
       "railAria": "自分のメッセージのナビゲーション"
     },
     "clear": {
-      "title": "Cirno の会話を消去",
+      "title": "Router の会話を消去",
       "description": "現在の実行を停止し、この会話のメッセージとコンテキストを消去します。保存済みの記憶と他の会話は保持されます。",
       "confirm": "会話を消去"
     },
@@ -2226,10 +2247,10 @@
       "subagent": "サブエージェントの結果",
       "continuation": "自動続行",
       "system": "システムイベント",
-      "supervision": "Cirno がこの会話を更新しました"
+      "supervision": "Router がこの会話を更新しました"
     },
     "supervision": {
-      "changed": "Cirno がこの会話を更新しました",
+      "changed": "Router がこの会話を更新しました",
       "actions": {
         "stop": "この会話を停止しました",
         "continue": "この会話を再開しました",
@@ -2486,7 +2507,8 @@
     "automationTriggered": "自動実行",
     "expandStep": "詳細を展開",
     "collapseStep": "詳細を折りたたむ",
-    "edit": "メッセージを編集"
+    "edit": "メッセージを編集",
+    "loadMoreTools": "ツールイベントをさらに {{count}} 件表示"
   },
   "recovery": {
     "actionFailed": "復元操作に失敗しました。もう一度お試しください。",
@@ -2563,45 +2585,16 @@
     "copy": "コピー",
     "copied": "コピーしました"
   },
-  "workbench": {
-    "aria": "ワークベンチ",
-    "panes": "ペイン",
-    "tabAria": "グループ：{{title}}",
-    "panesInTab": "{{title}} のペイン",
-    "collapseTabGroup": "{{title}} のペインを折りたたむ",
-    "expandTabGroup": "{{title}} のペインを展開する",
-    "dropPane": "{{pane}} を {{tab}} に移動",
-    "createGroup": "グループを作成",
-    "moveTo": "移動先",
-    "renameGroupTitle": "グループ名を変更",
-    "renameGroupDescription": "このグループに名前を付けます。",
-    "renameGroupPlaceholder": "グループ名",
-    "dissolveTab": "グループを解除",
-    "layout": "レイアウト",
-    "addPane": "ペインを追加",
-    "paneLimit": "最大 {{count}} ペイン",
-    "deleteConversations": "グループ内の全チャットを削除",
-    "movePane": "{{title}} ペインを移動",
-    "movePaneHint": "ドラッグで移動. 矢印キーでも移動できます",
-    "resizePaneBoundary": "ペイン境界 {{index}} のサイズを変更",
-    "promotePane": "{{title}} をメインペインにする",
-    "paneActions": "{{title}} ペインの操作",
-    "detachPane": "外す",
-    "composerAria": "{{title}} へのメッセージ",
-    "layouts": {
-      "columns": "左右に並べる",
-      "rows": "上下に並べる",
-      "grid": "グリッド",
-      "bsp": "BSP",
-      "main-stack": "メインとサブ"
-    }
-  },
   "common": {
     "retry": "再試行",
     "dismiss": "閉じる",
     "close": "閉じる",
     "current": "現在",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "refresh": "更新",
+    "copyFailed": "クリップボードにコピーできませんでした。",
+    "chooseDate": "日付を選択",
+    "moreActions": "その他の操作"
   },
   "errors": {
     "messageTooBig": {
@@ -2627,10 +2620,13 @@
       "serverTitle": "モデルプロバイダーでサービスエラーが発生しました",
       "unknownTitle": "モデルプロバイダーへのリクエストに失敗しました",
       "bodyWithAttempt": "{{attempts}} 回試行して停止しました。後でもう一度試すか、別のモデルを選んでください。",
-      "body": "後でもう一度試すか、別のモデルを選んでください。"
+      "body": "後でもう一度試すか、別のモデルを選んでください。",
+      "configurationTitle": "先にモデルを選択してください",
+      "configurationBody": "設定 → モデルでモデルプリセットを作成・選択してから、メッセージを再送信してください。"
     }
   },
   "workspace": {
+    "directoryRefreshError": "作業ディレクトリを更新できませんでした",
     "dialog": {
       "manual": "パスを貼り付け",
       "absolutePathRequired": "このマシン上の絶対フォルダーパスを入力してください。"
@@ -2660,7 +2656,118 @@
       "retry": "再試行",
       "cancel": "キャンセル",
       "switchDirectory": "ディレクトリ切り替え"
-    }
+    },
+    "files": "ファイル",
+    "file": "ファイル",
+    "terminal": "ターミナル",
+    "browser": "ブラウザー",
+    "trace": "トレース",
+    "credentials": "認証情報",
+    "settings": "設定",
+    "conversation": "会話",
+    "library": "会話一覧",
+    "inbox": "受信箱",
+    "automations": "自動化",
+    "launcher": "Launcher",
+    "split": "分割表示",
+    "unsplit": "単一表示",
+    "resizeSplit": "分割幅を調整",
+    "tabs": "タブ",
+    "closeTab": "{{title}} を閉じる",
+    "newTab": "新しいタブ",
+    "loading": "読み込み中…",
+    "localServer": "ローカルサーバー",
+    "terminalHost": "接続先",
+    "connect": "接続",
+    "terminalExited": "プロセス終了（{{code}}）",
+    "terminalHint": "選択したサーバーの対話型シェルです。タブを閉じるとローカル接続が終了します。切り離されたリモートプロセスは継続する場合があります。",
+    "addRecord": "認証情報を追加",
+    "vaultHint": "値はメモリーと分離して暗号化されます。完全バックアップには暗号鍵が含まれるため厳重に保管してください。認証情報ツールは値を返さずに記録を管理します。以前チャットに貼り付けた秘密は履歴に残ります。",
+    "label": "名前",
+    "recordType": "種類",
+    "secretValue": "機密の値",
+    "reveal": "保存済みの値を表示",
+    "noRecords": "保存済みの認証情報はありません",
+    "deleteRecord": "この認証情報を削除しますか？",
+    "delete": "削除",
+    "loadOlder": "古い",
+    "chooseConversation": "会話からこのタブを開いてください。",
+    "loadMore": "メッセージを追加読み込み",
+    "toolDefinitions": "ツール定義",
+    "modelResponse": "モデル応答",
+    "address": "ウェブサイトのアドレス",
+    "go": "移動",
+    "openExternal": "ブラウザーで開く",
+    "browserHint": "埋め込みを禁止するサイトもあります。表示されない場合はブラウザーで開いてください。埋め込みサイトはCirnoのアカウントやローカルファイルにアクセスできません。",
+    "enterUrl": "ウェブサイトのアドレスを入力してください。",
+    "invalidUrl": "HTTPまたはHTTPSのアドレスを入力してください。",
+    "browserSameOrigin": "Cirnoを内部に埋め込まず、直接タブで開いてください。",
+    "kind": {
+      "password": "アカウント / パスワード",
+      "text": "長文",
+      "identity": "個人識別情報",
+      "token": "トークン / 有効化コード",
+      "ssh": "SSH"
+    },
+    "openItem": "{{title}} を開く",
+    "username": "アカウント名",
+    "discardDescription": "このタブの未保存の変更は失われます。",
+    "debug": {
+      "time": "時刻",
+      "type": "種類",
+      "summary": "イベント",
+      "status": "状態",
+      "turn": "ターン",
+      "size": "サイズ",
+      "filter": "このページを絞り込み",
+      "all": "すべて",
+      "newest": "最新",
+      "newer": "新しい",
+      "refresh": "トレースを更新",
+      "inspector": "イベント詳細",
+      "messages": "メッセージ",
+      "response": "応答",
+      "tools": "ツール定義",
+      "raw": "生データ",
+      "noEvents": "このページにイベントはありません。",
+      "count": "{{count}} / {{total}} 件",
+      "events": "記録したイベント",
+      "kinds": {
+        "input": "ユーザー入力",
+        "answer": "モデル応答",
+        "reasoning": "推論",
+        "tool": "ツール呼び出し",
+        "compaction": "圧縮",
+        "request": "API 要求",
+        "file": "ファイル変更",
+        "lifecycle": "ライフサイクル",
+        "system": "システム入力"
+      },
+      "source": "送信元の会話",
+      "allSources": "すべての会話",
+      "pause": "録画を一時停止",
+      "start": "録画を開始",
+      "clear": "録画を消去",
+      "recording": "記録中",
+      "paused": "一時停止",
+      "waiting": "新しいイベントを記録します。過去の会話は取り込みません。",
+      "capacity": "保存上限で停止しました。消去して続行してください。",
+      "storage_error": "一時ストレージのエラーで記録を停止しました。"
+    },
+    "moveOtherGroup": "Move to other tab group",
+    "emptyGroup": "Open a page from the Launcher or drag a tab here.",
+    "sshNodeAccess": "SSH Nodes に追加",
+    "sshNodeAccessHint": "リモート端末で使用します。Agent の実行には Agent への公開も必要です。",
+    "sshCredential": "SSH 認証情報",
+    "loadSSH": "接続情報を読み込む",
+    "sshNodePickerHint": "Credentials の SSH 認証情報を選択します。Node を削除しても認証情報は残ります。",
+    "noSSHCredentials": "まず Credentials に SSH 認証情報を作成してください。",
+    "agentVisibility": "Agent に公開",
+    "agentVisibilityHint": "Agent ツールによる一覧表示と管理を許可します。認証情報ツールは秘密の値を返しません。",
+    "agentVisible": "Agent に公開中",
+    "agentHidden": "非公開",
+    "keepSecret": "空欄の場合、保存済みの値を保持します。",
+    "sshNode": "SSH Node"
   },
   "files": {
     "title": "Files",
@@ -2686,7 +2793,8 @@
     "create": "Create",
     "discardTitle": "Discard unsaved changes?",
     "discardDescription": "Your changes have not been saved to the file.",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "openPreview": "プレビュータブを開く"
   },
   "memoryLibrary": {
     "search": "記憶を検索",
@@ -2746,12 +2854,16 @@
     "semanticMode": "ベクトル",
     "hybridMode": "ハイブリッド · BM25 + ベクトル",
     "searchEngine": "使用方式：{{mode}}",
-    "fallback_disabled": "ローカル埋め込みは無効です。BM25 を使用しました。",
+    "fallback_disabled": "ベクトル検索は無効です。BM25 を使用します。",
     "fallback_busy": "埋め込み処理中のため、BM25 を使用しました。",
     "fallback_lexical_only": "原文、タスク状態、履歴は BM25 で検索します。ベクトル検索は有効な知識とプロフィールが対象です。",
     "fallback_unavailable": "ベクトル検索を利用できないため、BM25 を使用しました。",
     "searchDetails": "理由",
-    "indexPending": "ベクトル索引は未完成です。検索結果は索引済みの内容のみです。再検索で索引作成を続行できます。"
+    "indexPending": "ベクトル索引は未完成です。検索結果は索引済みの内容のみです。再検索で索引作成を続行できます。",
+    "statusTitle": "インデックスと記憶整理",
+    "noTags": "タグはまだありません。",
+    "resultsFor": "「{{query}}」の検索結果",
+    "noMatches": "検索条件に一致する記憶はありません。"
   },
   "userQuestion": {
     "title": "確認したいこと",
@@ -2770,7 +2882,6 @@
     "remaining_other": "未回答の質問：{{count}} 件"
   },
   "features": {
-    "globalConversation": "Cirno",
     "projects": "プロジェクト",
     "ordinaryConversations": "会話",
     "createProject": "プロジェクトを作成",
@@ -2819,7 +2930,8 @@
     "command": "コマンド",
     "runCommand": "実行",
     "close": "閉じる",
-    "commandCompleted": "コマンドが完了しました。"
+    "commandCompleted": "コマンドが完了しました。",
+    "removeNode": "Nodes から削除"
   },
   "inbox": {
     "title": "通知ボックス",
@@ -2833,7 +2945,7 @@
     "empty": "通知はありません",
     "loading": "通知を読み込み中",
     "retained": "既読にしても操作は完了しません。",
-    "muteHelp": "ミュートすると、このブラウザーでこの分類の通知と通知音を停止します。履歴は残ります。ブラウザー通知には全体設定と権限も必要です。",
+    "muteHelp": "ブラウザー通知の設定はデバイス間で同期されます。ミュートすると、この分類の通知と通知音が停止します。受信箱の履歴は残ります。通知の許可は各ブラウザーで必要です。",
     "muted": "ミュート",
     "notify": "通知する",
     "unread": "未読",
@@ -2850,7 +2962,6 @@
     },
     "kind": {
       "question": "質問",
-      "pairing": "アクセス承認",
       "recovery": "会話の復旧",
       "compaction": "コンテキスト圧縮",
       "dream": "記憶の整理",
@@ -2912,7 +3023,57 @@
       "connection_failed": "Cirno に接続できません。ネットワークを確認してください。",
       "request_failed": "リクエストに失敗しました。再試行してください。",
       "incorrect_password": "現在のパスワードが正しくありません。",
-      "unauthorized": "もう一度ログインしてください。"
+      "unauthorized": "もう一度ログインしてください。",
+      "invalid_router_handle": "Use 3–32 lowercase letters, digits or underscores, starting with a letter.",
+      "router_handle_taken": "Another conversation already uses this name.",
+      "router_unavailable": "The Router conversation is unavailable. Try again later."
+    },
+    "routerHandle": "Router @name",
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+  },
+  "themes": {
+    "title": "配色テーマ",
+    "name": "テーマ名",
+    "newName": "私のスノー",
+    "customize": "テーマを作成",
+    "syncHint": "各テーマにはライトとダークの配色が含まれます。設定は Cirno に保存され、端末間で同期されます。",
+    "save": "テーマを保存",
+    "edit": "テーマを編集",
+    "remove": "テーマを削除",
+    "saveFailed": "設定を保存できませんでした。",
+    "contrast": "文字と背景・パネルのコントラストを高めてください。",
+    "colors": {
+      "background": "背景",
+      "surface": "ナビゲーション",
+      "panel": "パネル",
+      "text": "文字",
+      "muted": "補助文字",
+      "accent": "アクセント",
+      "border": "枠線"
     }
+  },
+  "conversationCatalog": {
+    "newProject": "新しいプロジェクト",
+    "projectName": "プロジェクト名",
+    "search": "会話とプロジェクトを検索",
+    "more": "さらに表示",
+    "unfiled": "未分類の会話",
+    "move": "{{title}} をプロジェクトに移動",
+    "newInProject": "{{name}} で新しい会話",
+    "renameProject": "{{name}} の名前を変更",
+    "deleteProject": "{{name}} を削除",
+    "emptyProject": "このプロジェクトには会話がありません。",
+    "empty": "一致する会話はありません。",
+    "deleteHelp": "プロジェクトを削除します。会話、履歴、ファイルは保持されます。",
+    "create": "作成",
+    "directory": "作業ディレクトリ（任意）",
+    "sort": "会話の並び順",
+    "order": {
+      "updated_desc": "更新が新しい順",
+      "created_desc": "作成が新しい順",
+      "title_asc": "タイトル順",
+      "manual": "保存した順序"
+    },
+    "projectActions": "プロジェクト「{{name}}」の操作"
   }
 }

@@ -6,18 +6,21 @@ from copy import deepcopy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from agent.runner_helpers import make_run_spec
 from cirno_core.agent.progress_hook import AgentProgressHook
-from cirno_core.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER, AgentRunner
-from cirno_core.config.schema import ModelPresetConfig
-from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.agent.runner.history import _PERSISTED_MODEL_ERROR_PLACEHOLDER
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.fallback_provider import FallbackProvider
 from cirno_core.providers.model_api import ModelAPICapabilities
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.providers.openai_responses import parse_response_output
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.providers.unconfigured_provider import UnconfiguredProvider
 from cirno_core.utils.progress_events import output_events
+
+from sources.development.testing.runtime import make_run_spec
 
 
 @pytest.mark.asyncio
@@ -139,7 +142,7 @@ async def test_nonstreaming_provider_error_is_not_observed_as_assistant_body():
     ))
 
     assert result.stop_reason == "error"
-    assert result.failure_error_kind == "unknown"
+    assert result.failure_error_kind == "configuration"
     assert result.error == result.final_content
     assert "Open Settings → Models" in result.final_content
     assert result.messages[-1]["content"] == _PERSISTED_MODEL_ERROR_PLACEHOLDER
@@ -171,7 +174,7 @@ class _StreamingProvider(LLMProvider):
 async def test_retry_and_fallback_preserve_failed_segments_only_on_terminal_error(
     monkeypatch, fallback_fails,
 ):
-    monkeypatch.setattr(LLMProvider, "_CHAT_RETRY_DELAYS", (0,))
+    monkeypatch.setattr(LLMProvider.retry_policy, "delays", (0,))
     timeout = LLMResponse(content="stream timeout diagnostic", finish_reason="error", error_kind="timeout")
     primary = _StreamingProvider([
         ("First attempt.", timeout), ("Second attempt.", timeout),

@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppViewport } from "@/hooks/useAppViewport";
 
 let touch = true;
-let native = false;
 vi.mock("@/hooks/useMediaQuery", () => ({ useMediaQuery: () => touch }));
-vi.mock("@/lib/runtime", () => ({ isNativeRuntime: () => native }));
 
 function AppSurface() {
   useAppViewport();
@@ -17,7 +15,6 @@ describe("app visual viewport", () => {
   let viewport: EventTarget & { height: number; offsetTop: number; scale: number };
   beforeEach(() => {
     touch = true;
-    native = false;
     root = document.createElement("div");
     root.id = "root";
     document.body.append(root);
@@ -73,9 +70,8 @@ describe("app visual viewport", () => {
     expect(document.documentElement.style.getPropertyValue("--app-viewport-top")).toBe("416px");
   });
 
-  it.each(["desktop", "native", "unsupported"])("leaves %s layout ownership unchanged", (kind) => {
+  it.each(["desktop", "unsupported"])("leaves %s layout ownership unchanged", (kind) => {
     touch = kind !== "desktop";
-    native = kind === "native";
     if (kind === "unsupported") vi.stubGlobal("visualViewport", undefined);
     render(<AppSurface />, { container: root });
     resize(396, 350);

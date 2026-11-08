@@ -1,4 +1,8 @@
 from __future__ import annotations
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
+from cirno_core.providers.generation import GenerationSettings
+from cirno_usage.types import LLMUsage
+from cirno_core.providers.errors import is_transient_response
 
 import asyncio
 import io
@@ -69,7 +73,7 @@ async def test_codex_provider_reuses_tls_context_for_concurrent_requests(monkeyp
     async def fake_request(_url, _headers, _body, *, verify, **_kwargs):
         request_contexts.append(verify)
         await asyncio.sleep(0)
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     monkeypatch.setattr(
         "cirno_core.providers.openai_codex_provider.httpx.create_ssl_context",
@@ -129,18 +133,18 @@ def test_codex_error_details_do_not_retain_arbitrary_messages(raw: str) -> None:
 @pytest.mark.asyncio
 async def test_codex_title_omits_effort_even_with_high_chat_reasoning(monkeypatch, tmp_path) -> None:
     from cirno_core.session.manager import SessionManager
-    from cirno_core.session.webui_turns import maybe_generate_webui_title
+    from cirno_core.session.webui_turns.titles import maybe_generate_webui_title
 
     _mock_codex_token(monkeypatch)
     requests: list[dict[str, Any]] = []
 
     async def fake_request(url, headers, body, **kwargs):
         requests.append(body)
-        return provider_base.LLMResponse(content="Context Compaction")
+        return LLMResponse(content="Context Compaction")
 
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     provider = OpenAICodexProvider()
-    provider.generation = provider_base.GenerationSettings(reasoning_effort="high")
+    provider.generation = GenerationSettings(reasoning_effort="high")
     sessions = SessionManager(tmp_path)
     session = sessions.get_or_create("websocket:default-effort-title")
     session.metadata["webui"] = True
@@ -164,7 +168,7 @@ async def test_codex_title_failure_logs_request_purpose_and_safe_upstream_detail
     monkeypatch, tmp_path,
 ) -> None:
     from cirno_core.session.manager import SessionManager
-    from cirno_core.session.webui_turns import maybe_generate_webui_title
+    from cirno_core.session.webui_turns.titles import maybe_generate_webui_title
     from cirno_core.utils.log_config import add_console_log_sink
 
     _mock_codex_token(monkeypatch)
@@ -243,7 +247,7 @@ async def test_codex_diagnostics_distinguish_compaction_from_following_request(
     async def fake_request(url, headers, body, **kwargs):
         compacting = body["input"][-1].get("type") == "compaction_trigger"
         if compacting and failed_stage != "codex_compaction":
-            return provider_base.LLMResponse(content=None, provider_state=build_responses_state(
+            return LLMResponse(content=None, provider_state=build_responses_state(
                 provider=state_provider, model="gpt-5.6-sol", input_items=body["input"],
                 output_items=[{"type": "compaction", "encrypted_content": "PRIVATE STATE"}],
             ))
@@ -258,7 +262,7 @@ async def test_codex_diagnostics_distinguish_compaction_from_following_request(
         extra_body={"reasoning": {"effort": "low"}},
     ).chat(
         [{"role": "user", "content": "new question"}], reasoning_effort="high",
-        provider_context=provider_base.ProviderCallContext(
+        provider_context=ProviderCallContext(
             conversation_state=state, compaction_input_budget=10000,
         ),
     )
@@ -294,7 +298,8 @@ async def test_codex_request_non_200_populates_http_metadata(monkeypatch) -> Non
         verify: bool,
         **_kwargs: object,
     ) -> httpx.AsyncClient:
-        assert timeout == 90
+        assert timeout.read == 90
+        assert timeout.connect == 120
         assert verify is True
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
@@ -373,7 +378,7 @@ async def test_codex_request_honors_stream_idle_timeout_env(monkeypatch) -> None
         verify: bool,
         **_kwargs: object,
     ) -> httpx.AsyncClient:
-        seen["timeout"] = timeout
+        seen["timeout"] = timeout.read
         return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
 
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.AsyncClient", fake_client)
@@ -434,12 +439,11 @@ async def test_codex_omits_prompt_cache_key_without_session_id(monkeypatch) -> N
         proxy=None,
         on_content_delta=None,
         on_thinking_delta=None,
-        on_tool_call_delta=None,
-    ):
+        on_tool_call_delta=None, timeouts=None):
         _ = proxy, on_thinking_delta, on_tool_call_delta
         bodies.append(body)
         headers_seen.append(headers)
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
 
@@ -466,7 +470,7 @@ async def test_codex_prompt_cache_key_prefers_stable_session_id(monkeypatch) -> 
     async def fake_request(_url, headers, body, **_kwargs):
         bodies.append(body)
         headers_seen.append(headers)
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     async def http_only(_self, *_args, **_kwargs):
         return None
@@ -485,7 +489,7 @@ async def test_codex_prompt_cache_key_prefers_stable_session_id(monkeypatch) -> 
                 {"role": "system", "content": "You are cirno."},
                 {"role": "user", "content": first_request},
             ],
-            provider_context=provider_base.ProviderCallContext(
+            provider_context=ProviderCallContext(
                 session_id=session_id,
             ),
         )
@@ -508,7 +512,7 @@ async def test_codex_provider_applies_extra_body_from_config(monkeypatch) -> Non
     async def fake_request(_url, headers, body, **_kwargs):
         bodies.append(body)
         headers_seen.append(headers)
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     config = Config.model_validate({
@@ -573,7 +577,7 @@ async def test_codex_mid_stream_server_error_is_treated_as_transient(monkeypatch
     response = await provider.chat([{"role": "user", "content": "hello"}])
 
     assert response.finish_reason == "error"
-    assert provider_base.LLMProvider.is_transient_response(response) is True
+    assert is_transient_response(response) is True
 
 
 @pytest.mark.asyncio
@@ -581,7 +585,8 @@ async def test_codex_provider_passes_proxy_to_oauth_and_response_request(monkeyp
     proxy = "http://127.0.0.1:23458"
     seen: dict[str, object] = {}
 
-    def fake_token(*, proxy=None):
+    def fake_token(*, proxy=None, storage=None):
+        seen["token_storage"] = storage
         seen["token_proxy"] = proxy
         return SimpleNamespace(account_id="acct", access="token")
 
@@ -593,11 +598,10 @@ async def test_codex_provider_passes_proxy_to_oauth_and_response_request(monkeyp
         proxy=None,
         on_content_delta=None,
         on_thinking_delta=None,
-        on_tool_call_delta=None,
-    ):
+        on_tool_call_delta=None, timeouts=None):
         _ = url, headers, body, verify, on_content_delta, on_thinking_delta, on_tool_call_delta
         seen["request_proxy"] = proxy
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider.get_codex_token", fake_token)
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
@@ -607,6 +611,7 @@ async def test_codex_provider_passes_proxy_to_oauth_and_response_request(monkeyp
 
     assert response.content == "ok"
     assert seen["token_proxy"] == proxy
+    assert seen["token_storage"].get_token_path().parts[-3:] == ("providers", "openai_codex", "codex.json")
     assert seen["request_proxy"] == proxy
 
 
@@ -685,7 +690,7 @@ async def test_codex_retry_uses_structured_transient_error_metadata(monkeypatch,
         calls += 1
         if calls == 1:
             raise error
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     async def fake_sleep(delay: float) -> None:
         delays.append(delay)
@@ -897,10 +902,9 @@ async def test_codex_replayed_tool_turn_omits_server_item_ids(monkeypatch) -> No
         proxy=None,
         on_content_delta=None,
         on_thinking_delta=None,
-        on_tool_call_delta=None,
-    ):
+        on_tool_call_delta=None, timeouts=None):
         bodies.append(body)
-        return provider_base.LLMResponse(content="done")
+        return LLMResponse(content="done")
 
     monkeypatch.setattr(
         "cirno_core.providers.openai_codex_provider._request_codex",
@@ -909,7 +913,7 @@ async def test_codex_replayed_tool_turn_omits_server_item_ids(monkeypatch) -> No
 
     response = await provider.chat(
         [{"role": "user", "content": "Check the weather"}],
-        provider_context=provider_base.ProviderCallContext(
+        provider_context=ProviderCallContext(
             conversation_state=state.with_pending_messages([{
                 "role": "tool",
                 "tool_call_id": "call_read|fc_read",
@@ -953,7 +957,7 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
                 "content": [{"type": "output_text", "text": "old answer"}],
             },
         ],
-        usage=provider_base.LLMUsage.reported(input_tokens=90, output_tokens=5),
+        usage=LLMUsage.reported(input_tokens=90, output_tokens=5),
     )
     bodies: list[dict[str, Any]] = []
     timeline: list[str] = []
@@ -975,8 +979,7 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
         proxy=None,
         on_content_delta=None,
         on_thinking_delta=None,
-        on_tool_call_delta=None,
-    ):
+        on_tool_call_delta=None, timeouts=None):
         _ = (url, headers, verify, proxy, on_thinking_delta, on_tool_call_delta)
         bodies.append(body)
         if body["input"][-1].get("type") == "compaction_trigger":
@@ -1019,7 +1022,7 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
         ],
         max_tokens=5,
         on_content_delta=answer_delta,
-        provider_context=provider_base.ProviderCallContext(
+        provider_context=ProviderCallContext(
             conversation_state=state.with_pending_messages([
                 {"role": "user", "content": "new question"},
             ]),
@@ -1083,7 +1086,7 @@ async def test_codex_disables_unsupported_native_compaction_and_continues(
         model="gpt-5.6-sol",
         input_items=[{"type": "message", "role": "user", "content": "old"}],
         output_items=[{"type": "reasoning", "encrypted_content": "opaque"}],
-        usage=provider_base.LLMUsage.reported(input_tokens=90, output_tokens=5),
+        usage=LLMUsage.reported(input_tokens=90, output_tokens=5),
     )
     bodies: list[dict[str, Any]] = []
     notices: list[ContextCompactionEvent] = []
@@ -1100,8 +1103,7 @@ async def test_codex_disables_unsupported_native_compaction_and_continues(
         proxy=None,
         on_content_delta=None,
         on_thinking_delta=None,
-        on_tool_call_delta=None,
-    ):
+        on_tool_call_delta=None, timeouts=None):
         _ = (
             url,
             headers,
@@ -1118,7 +1120,7 @@ async def test_codex_disables_unsupported_native_compaction_and_continues(
                 status_code=400,
                 compaction_unsupported=True,
             )
-        return provider_base.LLMResponse(content="done")
+        return LLMResponse(content="done")
 
     monkeypatch.setattr(
         "cirno_core.providers.openai_codex_provider._request_codex",
@@ -1128,7 +1130,7 @@ async def test_codex_disables_unsupported_native_compaction_and_continues(
     response = await provider.chat(
         [{"role": "user", "content": "new"}],
         max_tokens=5,
-        provider_context=provider_base.ProviderCallContext(
+        provider_context=ProviderCallContext(
             conversation_state=state.with_pending_messages([
                 {"role": "user", "content": "new"},
             ]),
@@ -1157,7 +1159,7 @@ async def test_codex_native_compaction_terminal_survives_cancellation(monkeypatc
         provider=state_provider, model="gpt-5.6-sol",
         input_items=[{"type": "message", "role": "user", "content": "old"}],
         output_items=[{"type": "reasoning", "encrypted_content": "opaque"}],
-        usage=provider_base.LLMUsage.reported(input_tokens=90, output_tokens=5),
+        usage=LLMUsage.reported(input_tokens=90, output_tokens=5),
     )
     entered = asyncio.Event()
     settle = asyncio.Event()
@@ -1177,7 +1179,7 @@ async def test_codex_native_compaction_terminal_survives_cancellation(monkeypatc
         if stage == cancel_during:
             entered.set()
             await asyncio.Future()
-        return provider_base.LLMResponse(content=None, provider_state=build_responses_state(
+        return LLMResponse(content=None, provider_state=build_responses_state(
             provider=state_provider, model="gpt-5.6-sol", input_items=body["input"],
             output_items=[{"type": "compaction", "encrypted_content": "compacted"}],
         ))
@@ -1185,7 +1187,7 @@ async def test_codex_native_compaction_terminal_survives_cancellation(monkeypatc
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     task = asyncio.create_task(provider.chat(
         [{"role": "user", "content": "new"}], max_tokens=5,
-        provider_context=provider_base.ProviderCallContext(
+        provider_context=ProviderCallContext(
             conversation_state=state.with_pending_messages([{"role": "user", "content": "new"}]),
             context_window_tokens=100, events=EventSink(observe),
         ),
@@ -1220,18 +1222,17 @@ async def test_codex_stream_surfaces_reasoning_summary(monkeypatch) -> None:
         proxy=None,
         on_content_delta=None,
         on_thinking_delta=None,
-        on_tool_call_delta=None,
-    ):
+        on_tool_call_delta=None, timeouts=None):
         _ = url, headers, verify, proxy, on_tool_call_delta
         assert body["reasoning"] == {"summary": "auto", "effort": "medium"}
         if on_content_delta:
             await on_content_delta("answer")
         if on_thinking_delta:
             await on_thinking_delta("summary")
-        return provider_base.LLMResponse(
+        return LLMResponse(
             content="answer",
             finish_reason="stop",
-            usage=provider_base.LLMUsage.reported(input_tokens=10, output_tokens=5),
+            usage=LLMUsage.reported(input_tokens=10, output_tokens=5),
             reasoning_content="summary",
         )
 
@@ -1251,7 +1252,7 @@ async def test_codex_stream_surfaces_reasoning_summary(monkeypatch) -> None:
     assert content_deltas == ["answer"]
     assert thinking_deltas == ["summary"]
     assert response.content == "answer"
-    assert response.usage == provider_base.LLMUsage.reported(input_tokens=10, output_tokens=5)
+    assert response.usage == LLMUsage.reported(input_tokens=10, output_tokens=5)
     assert response.reasoning_content == "summary"
 
 
@@ -1265,7 +1266,7 @@ async def test_codex_request_preserves_optional_tool_fields(monkeypatch):
 
     async def fake_request(_url, _headers, body, **_kwargs):
         captured.update(body)
-        return provider_base.LLMResponse(content="ok")
+        return LLMResponse(content="ok")
 
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", fake_request)
     parameters = {
@@ -1283,3 +1284,17 @@ async def test_codex_request_preserves_optional_tool_fields(monkeypatch):
     assert response.content == "ok"
     assert captured["tools"][0]["strict"] is False
     assert captured["tools"][0]["parameters"] == parameters
+
+
+@pytest.mark.asyncio
+async def test_certificate_failure_never_retries_without_verification(monkeypatch):
+    _mock_codex_token(monkeypatch)
+    attempts = []
+    async def failed_request(_url, _headers, _body, *, verify, **kwargs):
+        attempts.append(verify)
+        raise httpx.ConnectError("CERTIFICATE_VERIFY_FAILED")
+    monkeypatch.setattr("cirno_core.providers.openai_codex_provider._request_codex", failed_request)
+    response = await OpenAICodexProvider().chat([{"role": "user", "content": "Hello"}])
+    assert response.finish_reason == "error"
+    assert len(attempts) == 1
+    assert attempts[0].verify_mode == ssl.CERT_REQUIRED

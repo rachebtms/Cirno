@@ -15,12 +15,12 @@ function startupSkeleton(): Plugin {
       order: "post",
       handler(html) {
         if (!html.includes("<!--startup-shell-->")) return html;
-        const css = readFileSync(path.resolve(__dirname, "src/components/startup-skeleton.css"), "utf8");
+        const css = ["src/styles/layout-metrics.css", "src/components/startup-skeleton.css"]
+          .map(file => readFileSync(path.resolve(__dirname, file), "utf8")).join("\n");
         const initialize = `var shell = document.querySelector('.startup-shell'); var layout = (${readStartupLayout.toString()})();
           shell.dataset.startupSurface = layout.surface; shell.dataset.startupSection = layout.section;
-          shell.dataset.sidebarExpanded = String(layout.sidebarExpanded); shell.dataset.existingChat = String(layout.existingChat);
-          shell.dataset.calendarWeeks = String(layout.calendarWeeks);
-          shell.style.setProperty('--startup-sidebar-width', (layout.sidebarExpanded ? layout.sidebarWidth : 56) + 'px');`;
+          shell.dataset.existingChat = String(layout.existingChat);
+          shell.dataset.calendarWeeks = String(layout.calendarWeeks);`;
         return html.replace("<!--startup-style-->", `<style>${css}</style>`)
           .replace("<!--startup-shell-->", renderToStaticMarkup(createElement(StartupSkeleton)))
           .replace("<!--startup-script-->", `<script>${initialize}</script>`)
@@ -144,7 +144,7 @@ export default defineConfig(({ mode }) => {
   const hmrPath = "/__cirno_vite_hmr";
 
   return {
-    plugins: [react(), startupSkeleton(), componentGallery(path.resolve(__dirname, "..")), guardWebuiEntryChunk(), gzipWebuiAssets()],
+    plugins: [react(), startupSkeleton(), componentGallery(path.resolve(__dirname, "../..")), guardWebuiEntryChunk(), gzipWebuiAssets()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -173,6 +173,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: webuiManualChunk,
+            onlyExplicitManualChunks: true,
         },
       },
     },
@@ -191,14 +192,11 @@ export default defineConfig(({ mode }) => {
         path: hmrPath,
       },
       proxy: {
-        "/webui": { target, changeOrigin: true },
-        "/api": { target, changeOrigin: true },
-        "/auth": { target, changeOrigin: true },
+        "/v0": { target, changeOrigin: true },
       },
     },
     test: {
       maxWorkers: 2,
-      minWorkers: 1,
       testTimeout: 15_000,
       hookTimeout: 20_000,
       environment: "happy-dom",

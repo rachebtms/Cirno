@@ -7,7 +7,6 @@ import socket
 from typing import Any
 
 import pytest
-
 from cirno_server.channels.websocket.runtime import WebSocketChannel
 
 

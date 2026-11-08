@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from cirno_core.config.schema import Config, ProviderConfig, ProvidersConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.providers import ProviderConfig, ProvidersConfig
 from cirno_core.providers.factory import provider_signature
 from cirno_core.providers.registry import create_dynamic_spec
 

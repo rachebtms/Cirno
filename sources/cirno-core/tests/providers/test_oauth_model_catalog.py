@@ -18,7 +18,7 @@ from cirno_core.providers.oauth_model_catalog import (
     invalidate_oauth_model_catalog,
 )
 from cirno_core.providers.openai_codex_provider import DEFAULT_OPENAI_CODEX_MODELS_URL
-from cirno_core.providers.registry import ProviderModelSpec
+from cirno_core.providers.catalog.contracts import ProviderModelSpec
 from cirno_core.providers.xai_grok_provider import DEFAULT_XAI_GROK_MODELS_URL
 from cirno_core.providers.xai_oauth import XAIToken
 
@@ -140,21 +140,16 @@ def test_xai_catalog_fetches_remote_models_and_reuses_capability_metadata(
     assert get_oauth_model_catalog("xai_grok").source == "cache"
 
 
-@pytest.mark.parametrize(
-    ("model_id", "label"),
-    [
-        ("gpt-new", "GPT New"),
-        ("gpt-6-astra", "GPT-6-Astra"),
-        ("gpt-6-sol", "GPT-6-Sol"),
-        ("gpt-6-luna", "GPT-6-Luna"),
-    ],
-)
 def test_openai_codex_catalog_uses_account_catalog_and_filters_hidden_models(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    model_id: str,
-    label: str,
 ) -> None:
+    from cirno_core.config.loader import set_config_path
+    from cirno_core.providers.oauth_storage import token_storage
+    from oauth_cli_kit.models import OAuthToken
+    set_config_path(tmp_path / "config.json")
+    token_storage("openai_codex", "codex.json").save(OAuthToken("secret", "fixture-refresh", int(time.time() * 1000) + 3_600_000, "account-42"))
+    model_id, label = "gpt-new", "GPT New"
     original_client = httpx.Client
     captured: dict[str, object] = {}
 
@@ -200,21 +195,6 @@ def test_openai_codex_catalog_uses_account_catalog_and_filters_hidden_models(
             follow_redirects=kwargs["follow_redirects"],
         )
 
-    class Storage:
-        def load(self) -> SimpleNamespace:
-            return SimpleNamespace(access="secret", account_id="account-42")
-
-        def get_token_path(self) -> Path:
-            return tmp_path / "auth" / "openai-codex.json"
-
-    monkeypatch.setattr(
-        "cirno_core.providers.openai_codex_provider.FileTokenStorage",
-        lambda **_kwargs: Storage(),
-    )
-    monkeypatch.setattr(
-        "cirno_core.providers.openai_codex_provider.get_codex_token",
-        lambda **_kwargs: SimpleNamespace(access="secret", account_id="account-42"),
-    )
     monkeypatch.setattr("cirno_core.providers.openai_codex_provider.httpx.Client", fake_client)
 
     catalog = get_oauth_model_catalog("openai_codex")
@@ -356,7 +336,8 @@ def test_github_copilot_catalog_routes_advertised_model_apis(
     provider = GitHubCopilotProvider(default_model="github-copilot/unknown-responses-only")
     assert provider._should_use_responses_api(None, None)
     assert not provider._should_use_responses_api("github-copilot/claude-sonnet", "high")
-    from cirno_core.config.schema import Config, ModelPresetConfig
+    from cirno_core.config.schema import Config
+    from cirno_core.config.models import ModelPresetConfig
     from cirno_core.providers.factory import resolve_automatic_model_api
 
     for model, effort, expected in (

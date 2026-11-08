@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import type { CirnoClient } from "@/lib/cirno-client";
-import type { WebUIIngressLimits } from "@/lib/types";
+import type { WebUIIngressLimits } from "@/lib/contracts/bootstrap";
 
 interface ClientContextValue {
   client: CirnoClient;

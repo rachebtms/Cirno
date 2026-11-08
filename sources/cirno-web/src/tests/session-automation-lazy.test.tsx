@@ -1,6 +1,7 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SessionAutomationJob } from "@/lib/types";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
 
 const job: SessionAutomationJob = {
   id: "job-1", name: "Morning check", enabled: true,
@@ -14,28 +15,28 @@ let moduleLoad: Promise<unknown> | undefined;
 async function loadView(fail = false) {
   const loaded = vi.fn();
   const gate = new Promise<void>((resolve) => { release = resolve; });
-  vi.doMock("@/components/settings/system/AutomationsSettings", (original) => {
+  vi.doMock("@/features/automations/detail/AutomationDetailDialog", (original) => {
     loaded();
     moduleLoad = gate.then(() => {
       if (fail) throw new Error("Automation chunk unavailable");
-      return original<typeof import("@/components/settings/system/AutomationsSettings")>();
+      return original<typeof import("@/features/automations/detail/AutomationDetailDialog")>();
     });
     return moduleLoad;
   });
   const { initializeI18n, loadAllLocaleResources } = await import("@/i18n");
   await initializeI18n();
   await loadAllLocaleResources();
-  const { SessionInfoPopoverView } = await import("@/components/thread/SessionInfoPopoverView");
-  render(<><textarea aria-label="Unsent draft" defaultValue="Keep this draft" /><SessionInfoPopoverView
-    title="Release work" jobs={[job]} loading={false} loadFailed={false} now={Date.now()}
+  const { SessionAutomationsDialog } = await import("@/features/automations/session/SessionAutomationsDialog");
+  render(<><textarea aria-label="Unsent draft" defaultValue="Keep this draft" /><SessionAutomationsDialog
+    title="Release work" jobs={[job]} loading={false} loadError={null} now={Date.now()}
     onAction={async () => []} onEdit={async () => [job]}
   /></>);
   return loaded;
 }
 
 async function selectJob() {
-  fireEvent.click(screen.getByRole("button", { name: "Session details" }));
-  fireEvent.click(await screen.findByRole("button", { name: /Morning check/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Session details" }));
+  await userEvent.click(await screen.findByRole("button", { name: /Morning check/ }));
   return screen.findByRole("dialog", { name: "Morning check" });
 }
 
@@ -45,7 +46,7 @@ afterEach(async () => {
   await act(async () => { release?.(); await moduleLoad?.catch(() => {}); });
   release = undefined;
   moduleLoad = undefined;
-  vi.doUnmock("@/components/settings/system/AutomationsSettings");
+  vi.doUnmock("@/features/automations/detail/AutomationDetailDialog");
   vi.restoreAllMocks();
 });
 
@@ -54,10 +55,10 @@ describe("session automation dialog loading", () => {
     const loaded = await loadView();
     await vi.dynamicImportSettled();
     expect(loaded).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Session details" }));
+    await userEvent.click(screen.getByRole("button", { name: "Session details" }));
     const row = await screen.findByRole("button", { name: /Morning check/ });
     expect(loaded).not.toHaveBeenCalled();
-    fireEvent.click(row);
+    await userEvent.click(row);
     const pending = await screen.findByRole("dialog", { name: "Morning check" });
     expect(within(pending).getByRole("status", { name: "Loading automations..." })).toHaveAttribute("aria-busy", "true");
     await act(async () => { release?.(); await moduleLoad; });
@@ -65,7 +66,7 @@ describe("session automation dialog loading", () => {
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled();
     expect(screen.getByRole("textbox", { name: "Unsent draft", hidden: true })).toHaveValue("Keep this draft");
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Session details" })).toHaveFocus());
   });
 
@@ -73,7 +74,7 @@ describe("session automation dialog loading", () => {
     const loaded = await loadView();
     const dialog = await selectJob();
     await waitFor(() => expect(loaded).toHaveBeenCalledOnce());
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Session details" })).toHaveFocus());
     await act(async () => { release?.(); await moduleLoad; });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -90,7 +91,7 @@ describe("session automation dialog loading", () => {
     await act(async () => { release?.(); await moduleLoad?.catch(() => {}); });
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load automations.");
     expect(screen.getByRole("textbox", { name: "Unsent draft", hidden: true })).toHaveValue("Keep this draft");
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Session details" })).toHaveFocus());
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

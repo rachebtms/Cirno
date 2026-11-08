@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchLatestWebuiThread } from "@/lib/latest-thread-request";
 import { CirnoClient } from "@/lib/cirno-client";
 import { webuiThreadCache } from "@/lib/webui-thread-cache";
-import type { WebuiThreadPersistedPayload } from "@/lib/types";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 const KEY = "websocket:shared";
 
@@ -43,7 +43,7 @@ describe("shared latest thread requests", () => {
     const surviving = fetchLatestWebuiThread(client, "token", KEY);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Ashared/webui-thread?limit=40&direction=latest",
+      "/v0/sessions/websocket%3Ashared/webui-thread?limit=40&direction=latest",
       expect.objectContaining({ headers: { Authorization: "Bearer token", "If-None-Match": '"cached"' } }),
     );
     const rejected = expect(first).rejects.toMatchObject({ name: "AbortError" });
@@ -72,7 +72,7 @@ describe("shared latest thread requests", () => {
     await expect(recovered).resolves.toEqual(body);
   });
 
-  it.each(["thread update", "turn end"] as const)("replaces surviving reads only for their own chat's %s", async (invalidation) => {
+  it.each(["thread update", "turn end", "reset"] as const)("fences a replaced context but lets an append snapshot finish after %s", async (invalidation) => {
     const socket = {
       readyState: 1, onopen: null as (() => void) | null,
       onmessage: null as ((event: MessageEvent) => void) | null, send() {}, close() {},
@@ -91,7 +91,7 @@ describe("shared latest thread requests", () => {
     receive("shared", "metadata");
     receive("another-chat", "thread");
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
-    if (invalidation === "thread update") receive("shared", "thread");
+    if (invalidation === "thread update" || invalidation === "reset") receive("shared", invalidation === "reset" ? "reset" : "thread");
     else socket.onmessage?.({
       data: JSON.stringify({ event: "turn_end", chat_id: "shared", turn_id: "turn-shared" }),
     } as MessageEvent);
@@ -100,7 +100,9 @@ describe("shared latest thread requests", () => {
     const body = cachedThread("complete");
     reads[0].resolve(new Response(JSON.stringify(cachedThread("stale")), { status: 200 }));
     reads[1].resolve(new Response(JSON.stringify(body), { status: 200 }));
-    await Promise.all([first, surviving, fresh].map((read) => expect(read).resolves.toEqual(body)));
+    await expect(fresh).resolves.toEqual(body);
+    const expected = invalidation === "reset" ? body : cachedThread("stale");
+    await Promise.all([first, surviving].map((read) => expect(read).resolves.toEqual(expected)));
   });
 
   it("keeps host clients and renewed credentials in separate reads", async () => {

@@ -1,6 +1,6 @@
-import { useLocalPreferences } from "@/hooks/useLocalPreferences";
-import type { FileEditDisplayMode } from "@/lib/local-preferences";
+import { usePreferences } from "@/hooks/usePreferences";
+import type { FileEditDisplayMode } from "@/features/preferences/store";
 
 export function useFileEditDisplayMode(): FileEditDisplayMode {
-  return useLocalPreferences().fileEditDisplayMode;
+  return usePreferences().fileEditDisplayMode;
 }

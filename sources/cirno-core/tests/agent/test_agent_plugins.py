@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 import shutil
@@ -5,7 +6,6 @@ from pathlib import Path
 from threading import Event, Thread
 
 import pytest
-
 from cirno_core.agent import plugins as agent_plugins
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.plugins import (
@@ -17,18 +17,21 @@ from cirno_core.agent.plugins import (
     enabled_agent_plugin_skills,
     set_agent_plugin_enabled,
 )
-from cirno_core.skills.loader import SkillsLoader
 from cirno_core.agent.tools.context import ToolContext
 from cirno_core.agent.tools.filesystem import ReadFileTool, WriteFileTool
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import ToolsConfig
-from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse
+from cirno_core.config.tools import ToolsConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     reset_workspace_scope,
     validate_workspace_scope_payload,
 )
 from cirno_core.session.manager import SessionManager
+from cirno_core.skills.context import SkillContext
+from cirno_core.skills.loader import SkillsLoader
 
 
 @pytest.fixture(autouse=True)
@@ -81,17 +84,17 @@ def test_plugin_skill_lifecycle_and_precedence(tmp_path: Path) -> None:
     )
     loader = SkillsLoader(tmp_path, builtin_skills_dir=tmp_path / "builtin")
 
-    assert [entry["source"] for entry in loader.list_skills()] == ["workspace"]
+    assert [entry["source"] for entry in loader.list_skills()] == ["home"]
     assert "Workspace version" in (loader.load_skill("shared") or "")
     set_agent_plugin_enabled(tmp_path, "demo", True)
-    assert [entry["source"] for entry in loader.list_skills()] == ["workspace"]
+    assert [entry["source"] for entry in loader.list_skills()] == ["home"]
 
     shutil.rmtree(workspace_skill)
     assert [entry["source"] for entry in loader.list_skills()] == ["plugin"]
-    assert loader.get_explicitly_invoked_skills("Use $shared") == ["shared"]
+    assert SkillContext(loader).get_explicitly_invoked_skills("Use $shared") == ["shared"]
     assert loader.get_always_skills() == ["shared"]
     assert loader.load_skill("shared") == plugin_content
-    summary = loader.build_skills_summary()
+    summary = SkillContext(loader).build_skills_summary()
     assert "### Agent Plugin skills (`plugins`)" in summary
     assert "`demo/skills/shared/SKILL.md`" in summary
     assert str(tmp_path.resolve()) not in summary
@@ -488,9 +491,12 @@ def test_plugin_state_symlink_cannot_escape_config_root(
     config.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.mkdir(parents=True)
+    (config / "state").mkdir()
     try:
         (config / "state" / "plugin-data").symlink_to(outside, target_is_directory=True)
     except OSError as exc:
+        if exc.errno not in {errno.EPERM, errno.EACCES, errno.ENOSYS, errno.ENOTSUP}:
+            raise
         pytest.skip(f"directory symlink unavailable: {exc}")
     monkeypatch.setattr(agent_plugins, "get_config_path", lambda: config / "config.json")
     _plugin(tmp_path, "desktop")

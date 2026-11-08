@@ -2,11 +2,11 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AutomationRunDialog } from "@/components/settings/system/AutomationRunDialog";
-import { AutomationRunDialogView } from "@/components/settings/system/AutomationRunDialogView";
+import { AutomationRunDialog } from "@/features/automations/runs/AutomationRunDialog";
+import { AutomationRunDialogView } from "@/features/automations/runs/AutomationRunDialogView";
 import { fetchAutomationRunResult } from "@/lib/api";
 import i18n from "@/i18n";
-import type { SessionAutomationJob } from "@/lib/types";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
 
 vi.mock("@/lib/api", () => ({ fetchAutomationRunResult: vi.fn() }));
 const fetchResult = vi.mocked(fetchAutomationRunResult);
@@ -17,7 +17,7 @@ const job: SessionAutomationJob = {
 };
 const run = { run_at_ms: 1000, status: "ok", duration_ms: 3000 };
 const props = { token: "test-token", job, run, locale: "en", open: true,
-  onOpenChange: vi.fn(), onCloseAutoFocus: vi.fn() };
+  onOpenChange: vi.fn() };
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -30,13 +30,13 @@ describe("Automation run response", () => {
     const retry = vi.fn();
     const { rerender } = render(<AutomationRunDialogView job={job} run={run} locale="en" open
       result={{ status: "error", response: null }} onRetry={retry}
-      onOpenChange={props.onOpenChange} onCloseAutoFocus={props.onCloseAutoFocus} />);
+      onOpenChange={props.onOpenChange} />);
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledTimes(1);
     expect(fetchResult).not.toHaveBeenCalled();
     rerender(<AutomationRunDialogView job={job} run={run} locale="en" open
       result={{ status: "loaded", response: "A supplied result" }} onRetry={retry}
-      onOpenChange={props.onOpenChange} onCloseAutoFocus={props.onCloseAutoFocus} />);
+      onOpenChange={props.onOpenChange} />);
     expect(await screen.findByText("A supplied result")).toBeVisible();
     expect(fetchResult).not.toHaveBeenCalled();
   });
@@ -60,7 +60,7 @@ describe("Automation run response", () => {
     fetchResult.mockResolvedValueOnce({ response: "Recovered response" });
     const user = userEvent.setup();
     render(<AutomationRunDialog {...props} />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn’t load the response.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Network error");
     expect(screen.queryByText("This record doesn’t include the response text.")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Recovered response")).toBeVisible();

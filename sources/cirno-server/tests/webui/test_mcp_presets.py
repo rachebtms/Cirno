@@ -9,9 +9,8 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
-from pydantic import ValidationError
-
 from cirno_server.webui.mcp.presets import _parse_presets
+from pydantic import ValidationError
 
 
 @pytest.fixture
@@ -70,11 +69,12 @@ def test_owned_resources_survive_regular_wheel_build(tmp_path, owner, resource):
     source.mkdir(parents=True)
     for file in ("pyproject.toml", "hatch_build.py", "LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copyfile(package / file, source / file)
-    content = (package / resource).read_bytes()
-    target = source / resource
+    content = (package / "src" / f"cirno_{owner}" / resource).read_bytes()
+    module_root = source / "src" / f"cirno_{owner}"
+    target = module_root / resource
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
-    (source / "__init__.py").write_text("")
+    (module_root / "__init__.py").write_text("")
     result = subprocess.run([sys.executable, "-c", "import hatchling.build; hatchling.build.build_wheel('dist')"],
                             cwd=source, env={**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"}, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr

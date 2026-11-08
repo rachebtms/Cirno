@@ -11,12 +11,13 @@ import aiohttp
 import pytest
 import pytest_asyncio
 from aiohttp import web
-
-from cirno_core.agent.tools.mcp import MCPProvider, MCPToolWrapper, connect_mcp_servers
+from cirno_core.agent.tools.mcp.connector import connect_mcp_servers
+from cirno_core.agent.tools.mcp.provider import MCPProvider
+from cirno_core.agent.tools.mcp.wrappers import MCPToolWrapper
 from cirno_core.agent.tools.mcp_oauth import MCPOAuthStorage
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.config.network import NetworkConfig
-from cirno_core.config.schema import MCPServerConfig
+from cirno_core.config.tools import MCPServerConfig
 from cirno_core.runtime.admission import RuntimeAdmission
 from cirno_core.security import network as security_network
 from cirno_server.webui.mcp.oauth_api import McpOAuthManager
@@ -200,7 +201,7 @@ async def test_oauth_discovery_tokens_reconnect_and_tool_calls_share_real_proxy(
         return {"ok": provider.connected_server_names == {"local"}, "connected": ["local"]}
 
     started = await asyncio.wait_for(manager.start(
-        "local", cfg, "http://127.0.0.1:8765/auth/mcp/callback",
+        "local", cfg, "http://127.0.0.1:8765/v0/mcp/oauth/callback",
         reload_mcp=reload_mcp, network=network,
     ), timeout=10)
     try:

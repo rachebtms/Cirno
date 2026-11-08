@@ -8,19 +8,20 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from agent.runner_helpers import make_run_spec
 from cirno_core.agent.hook import AgentHook, AgentHookContext
-from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.agent.tools.base import Tool, ToolResult
 from cirno_core.agent.tools.context import ToolContext
 from cirno_core.agent.tools.execution import execute_tool_calls
 from cirno_core.agent.tools.loader import ToolLoader
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMResponse, ToolCallRequest
-from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.chat_completions.complete import parse_response
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.openai_responses.parsing import parse_response_output
+from cirno_core.providers.tool_calls import ToolCallRequest
+
+from sources.development.testing.runtime import make_run_spec
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -34,14 +35,14 @@ _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
     ({"type": "array", "items": {"type": "integer"}}, '["1","2"]', [1, 2]),
 ])
 async def test_nested_arguments_reach_mcp_without_rewriting_model_history(schema, emitted, expected):
+    from cirno_core.agent.execution.persistence import TurnPersistence
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.tools.mcp.wrappers import MCPToolWrapper
+    from cirno_core.session.model import Session
     from mcp.server.lowlevel import Server
     from mcp.shared.memory import create_connected_server_and_client_session
     from mcp.types import TextContent
     from mcp.types import Tool as MCPTool
-
-    from cirno_core.agent.loop import AgentLoop
-    from cirno_core.agent.tools.mcp import MCPToolWrapper
-    from cirno_core.session.manager import Session
 
     server = Server("nested-arguments-test")
     received = []
@@ -82,7 +83,7 @@ async def test_nested_arguments_reach_mcp_without_rewriting_model_history(schema
         assert call.to_openai_tool_call() == original_call
         assert all(json.dumps(r.kwargs["tools"]) == schemas_before for r in requests)
         session = Session(key="test:nested-arguments")
-        AgentLoop.__new__(AgentLoop)._save_turn(session, result.messages, skip=0)
+        TurnPersistence(AgentLoop.__new__(AgentLoop)).save_messages(session, result.messages, skip=0)
         replay = next(m for m in session.get_history() if m.get("tool_calls"))
         assert replay["tool_calls"] == [original_call]
 
@@ -413,23 +414,22 @@ async def test_runner_rejects_near_miss_tool_name_without_executing():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("arguments", ['{path:"notes.txt"}', "null"])
 async def test_runner_rejects_openai_compat_invalid_arguments_without_executing(arguments):
-    with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
-        parsed = OpenAICompatProvider()._parse({
-            "choices": [{
-                "message": {
-                    "tool_calls": [{
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {
-                            "name": "optional_tool",
-                            "arguments": arguments,
-                        },
-                    }],
-                },
-                "finish_reason": "tool_calls",
-            }],
-            "usage": {},
-        })
+    parsed = parse_response({
+        "choices": [{
+            "message": {
+                "tool_calls": [{
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "optional_tool",
+                        "arguments": arguments,
+                    },
+                }],
+            },
+            "finish_reason": "tool_calls",
+        }],
+        "usage": {},
+    })
 
     result, shared_events = await _run_optional_tool_response(parsed)
 

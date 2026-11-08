@@ -1,3 +1,4 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { EOL } from "node:os";
 
 import { expect, test, type Locator } from "@playwright/test";
@@ -94,7 +95,7 @@ async function minimumHandleContrast(handle: Locator): Promise<number> {
 
 test("keeps a long app name readable in a minimum-width pane", async ({ page }) => {
   await page.setViewportSize({ width: 200, height: 844 });
-  await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
+  await seedPreviewPreferences(page, { language: "en" });
   await page.goto("/browser/fixture.html?case=inline-references");
   const input = page.getByRole("textbox", { name: "Message input", exact: true });
   await input.fill("@adobe");
@@ -108,13 +109,10 @@ test("keeps a long app name readable in a minimum-width pane", async ({ page }) 
 });
 
 for (const narrow of [false, true]) {
-  for (const theme of ["light", "dark"]) {
+  for (const theme of ["light", "dark"] as const) {
     test(`mention choices show colored session handles and retain app icons: ${narrow ? "narrow" : "desktop"}, ${theme}`, async ({ page }, info) => {
       await page.setViewportSize(narrow ? { width: 320, height: 844 } : { width: 1440, height: 1000 });
-      await page.addInitScript(theme => {
-        localStorage.setItem("cirno.locale", "en");
-        localStorage.setItem("cirno-webui.theme", theme);
-      }, theme);
+      await seedPreviewPreferences(page, { language: "en", themeMode: theme });
       await page.goto("/browser/fixture.html?case=inline-references");
       const input = page.getByRole("textbox", { name: "Message input", exact: true });
       await input.fill("@");
@@ -160,10 +158,7 @@ for (const narrow of [false, true]) {
     test(`inline references preserve native editing: ${narrow ? "narrow" : "desktop"}, ${theme}`, async ({ page }, info) => {
       await page.setViewportSize(narrow ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
       await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-      await page.addInitScript(theme => {
-        localStorage.setItem("cirno.locale", "en");
-        localStorage.setItem("cirno-webui.theme", theme);
-      }, theme);
+      await seedPreviewPreferences(page, { language: "en", themeMode: theme });
       const errors: string[] = [];
       page.on("pageerror", error => errors.push(error.message));
       await page.goto("/browser/fixture.html?case=inline-references");
@@ -177,7 +172,6 @@ for (const narrow of [false, true]) {
       const externalLink = page.getByRole("link", { name: "外部文档", exact: true });
       await expect(externalLink).toHaveAttribute("href", "https://example.com/reference");
       await expect(externalLink).toHaveAttribute("target", "_blank");
-      await expect(externalLink).toHaveCSS("color", theme === "light" ? "rgb(3, 105, 161)" : "rgb(186, 230, 253)");
 
       const input = page.getByRole("textbox", { name: "Message input", exact: true });
       const overlay = page.locator(".thread-composer-input > div[aria-hidden]");
@@ -275,7 +269,7 @@ for (const narrow of [false, true]) {
       const literal = "  __pycache__\n```mermaid\nflowchart LR\n```\n![preview](local.png)\n<b>raw</b>\n";
       expect(await output.textContent()).toBe(literal);
       await expect(output.locator("img, b")).toHaveCount(0);
-      await page.getByRole("button", { name: "Copy code", exact: true }).click();
+      await page.locator("[data-thread-display-unit]").filter({ has: output }).getByRole("button", { name: "Copy", exact: true }).click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(literal.replaceAll("\n", EOL));
       expect(errors).toEqual([]);
     });

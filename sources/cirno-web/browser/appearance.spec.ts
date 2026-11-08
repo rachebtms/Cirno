@@ -1,7 +1,9 @@
+import { radioControl } from "./control-driver";
+import { seedPreviewPreferences, readPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  await page.route("**/api/**", (route) => route.abort());
+  await page.route("**/v0/**", (route) => route.abort());
 });
 
 test("system theme stays live, explicit choices persist, and tabs agree", async ({ page, context }) => {
@@ -30,13 +32,7 @@ test("system theme stays live, explicit choices persist, and tabs agree", async 
 });
 
 test("custom reading size previews, persists and survives preset changes", async ({ page }) => {
-  await page.addInitScript(() => {
-    if (!localStorage.getItem("cirno-webui.settings-preferences")) {
-      localStorage.setItem("cirno-webui.settings-preferences", JSON.stringify({
-        schemaVersion: 1, notificationSound: true, browserNotifications: true, brandLogos: false,
-      }));
-    }
-  });
+  await seedPreviewPreferences(page, { notificationSound: true, browserNotifications: true, brandLogos: false });
   await page.goto("/browser/fixture.html?case=appearance");
   const title = page.getByRole("heading", { name: "Appearance", exact: true });
   const titleSize = await title.evaluate((element) => getComputedStyle(element).fontSize);
@@ -51,13 +47,13 @@ test("custom reading size previews, persists and survives preset changes", async
   await expect(input).toHaveValue("24");
   await page.reload();
   await expect(input).toHaveValue("24");
-  await page.getByRole("radio", { name: "Small reading text", exact: true }).click();
-  await expect(paragraph).toHaveCSS("font-size", "16px");
+  await radioControl(page, "Small reading text").click();
+  await expect(paragraph).toHaveCSS("font-size", "14px");
   await page.getByRole("spinbutton", { name: "Custom text size", exact: true }).click();
   await expect(input).toHaveValue("24");
   await expect(paragraph).toHaveCSS("font-size", "24px");
   await expect(title).toHaveCSS("font-size", titleSize);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cirno-webui.settings-preferences")!))).toMatchObject({
+  expect(await readPreviewPreferences(page)).toMatchObject({
     readingTextSize: "custom", customReadingTextSize: 24, notificationSound: true, browserNotifications: true, brandLogos: false,
   });
 });
@@ -65,18 +61,15 @@ test("custom reading size previews, persists and survives preset changes", async
 for (const narrow of [false, true]) {
   test(`appearance remains usable at maximum size: ${narrow ? "narrow dark" : "desktop light"}`, async ({ page }, info) => {
     await page.setViewportSize(narrow ? { width: 390, height: 844 } : { width: 1280, height: 1000 });
-    await page.addInitScript((dark) => {
-      localStorage.setItem("cirno.locale", "zh-CN");
-      localStorage.setItem("cirno-webui.theme", dark ? "dark" : "light");
-    }, narrow);
+    await seedPreviewPreferences(page, { language: "zh-CN", themeMode: narrow ? "dark" : "light" });
     await page.goto("/browser/fixture.html?case=appearance");
     await page.getByRole("spinbutton", { name: "自定义字号", exact: true }).click();
     await page.getByRole("spinbutton", { name: "自定义字号" }).fill("28");
     await expect(page.locator("[data-reading-preview-content] .markdown-content p").first()).toHaveCSS("font-size", "28px");
     expect(await page.locator("main").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     const checkbox = page.getByRole("switch", { name: "品牌图标" });
-    await checkbox.click();
-    await expect(checkbox).toHaveAttribute("aria-checked", "false");
+    await page.locator("[data-slot=switch]").filter({ has: checkbox }).locator("[data-slot=switch-content]").click();
+    await expect(checkbox).not.toBeChecked();
     await page.getByRole("button", { name: "折叠修改", exact: true }).click();
     await page.getByRole("button", { name: "修改预览", exact: true }).click();
     await expect(page.getByRole("tooltip")).toHaveText("默认收起代码差异，需要时点开。");
@@ -135,7 +128,7 @@ test("long localized labels fit a small phone without hiding their meaning", asy
   const context = await browser.newContext({ baseURL, viewport: { width: 320, height: 800 }, hasTouch: true, isMobile: true });
   try {
     const page = await context.newPage();
-    await page.route("**/api/**", (route) => route.abort());
+    await page.route("**/v0/**", (route) => route.abort());
     await page.goto("/browser/fixture.html?case=appearance&lang=fr");
     const custom = page.locator(".appearance-size-options").getByRole("spinbutton");
     await page.locator(".appearance-custom-label").tap();
@@ -163,7 +156,8 @@ test("long localized labels fit a small phone without hiding their meaning", asy
 test("the inline custom field is keyboard-editable without moving the size control", async ({ page }) => {
   await page.goto("/browser/fixture.html?case=appearance");
   const preset = page.getByRole("radio", { name: "Large reading text", exact: true });
-  await preset.click();
+  const presetControl = radioControl(page, "Large reading text");
+  await presetControl.click();
   const input = page.getByRole("spinbutton", { name: "Custom text size", exact: true });
   const before = (await input.boundingBox())!;
   await preset.press("Tab");
@@ -175,7 +169,7 @@ test("the inline custom field is keyboard-editable without moving the size contr
   const after = (await input.boundingBox())!;
   expect(after.y).toBe(before.y);
   expect(after.height).toBe(before.height);
-  const presetBox = (await preset.boundingBox())!;
+  const presetBox = (await presetControl.boundingBox())!;
   const groupBox = (await page.locator(".appearance-size-presets").boundingBox())!;
   const customBox = (await page.locator(".appearance-custom-option").boundingBox())!;
   expect(Math.abs((customBox.y + customBox.height / 2) - (presetBox.y + presetBox.height / 2))).toBeLessThan(1);
@@ -200,8 +194,8 @@ test("reading-size guidance opens on hover and focus, and invalid entries explai
   await input.press("Enter");
   await expect(input).toHaveValue("40");
   await expect(input).toHaveAttribute("aria-invalid", "true");
-  await expect(hint).toContainText("Your text remains at 18 px.");
-  await expect(page.locator("[data-reading-preview-content] .markdown-content p").first()).toHaveCSS("font-size", "18px");
+  await expect(hint).toContainText("Your text remains at 16 px.");
+  await expect(page.locator("[data-reading-preview-content] .markdown-content p").first()).toHaveCSS("font-size", "16px");
   await input.fill("22");
   await input.press("Enter");
   await expect(input).not.toHaveAttribute("aria-invalid", "true");
@@ -220,7 +214,7 @@ test("the visible Custom label activates the same inline editor from a preset", 
   await input.pressSequentially("23");
   await input.press("Enter");
   await expect(page.locator("[data-reading-preview-content] .markdown-content p").first()).toHaveCSS("font-size", "23px");
-  await page.getByRole("radio", { name: "Small reading text", exact: true }).click();
+  await radioControl(page, "Small reading text").click();
   await label.click();
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("23");
@@ -238,11 +232,11 @@ test("unfinished numeric input reports an error instead of acting like a cleared
     expect(await input.evaluate((element: HTMLInputElement) => element.validity.badInput)).toBe(true);
     await input.press("Enter");
     await expect(input).toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByRole("tooltip", { name: /Your text remains at 18 px\./ })).toBeVisible();
-    await expect(paragraph).toHaveCSS("font-size", "18px");
+    await expect(page.getByRole("tooltip", { name: /Your text remains at 16 px\./ })).toBeVisible();
+    await expect(paragraph).toHaveCSS("font-size", "16px");
     await input.click();
     await input.press("Escape");
-    await expect(input).toHaveValue("18");
+    await expect(input).toHaveValue("16");
     await expect(input).not.toHaveAttribute("aria-invalid", "true");
     await input.press("Tab");
   }

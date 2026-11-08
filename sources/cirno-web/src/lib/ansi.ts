@@ -196,8 +196,8 @@ function styleFromState(state: AnsiState, theme: AnsiTheme): AnsiStyle | undefin
     ? ANSI_PALETTE[state.backgroundColor] : state.backgroundColor;
   const style: AnsiStyle = {};
   if (state.inverse) {
-    style.color = background ?? "hsl(var(--background))";
-    style.backgroundColor = foreground ?? "hsl(var(--foreground))";
+    style.color = background ?? "hsl(var(--cirno-background))";
+    style.backgroundColor = foreground ?? "hsl(var(--cirno-foreground))";
   } else {
     if (foreground) style.color = foreground;
     if (background) style.backgroundColor = background;

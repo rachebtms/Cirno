@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BackupSettings } from "@/components/settings/system/BackupSettings";
+import { BackupSettings } from "@/features/settings/system/BackupSettings";
 import { CirnoClient } from "@/lib/cirno-client";
 import { setAppLanguage } from "@/i18n";
 
@@ -20,10 +20,10 @@ it("offers old workspaces and credential folders while avoiding duplicate instan
   fireEvent.click(screen.getByRole("checkbox", { name: "/home/owner/.config/gh" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Absolute file or folder path" }), { target: { value: "/mnt/other" } });
   fireEvent.click(screen.getByRole("button", { name: "Add path" }));
-  api.mockResolvedValueOnce({ url: "/api/backups/download?ticket=test", filename: "test.tar.gz" });
+  api.mockResolvedValueOnce({ url: "/v0/backups/download?ticket=test", filename: "test.tar.gz" });
   fireEvent.click(screen.getByRole("button", { name: "Export backup" }));
   await waitFor(() => expect(api).toHaveBeenCalledWith("export", { paths: ["/work/research", "/home/owner/.config/gh", "/mnt/other"] }));
-  expect(await screen.findByRole("link", { name: "Download backup" })).toHaveAttribute("href", "/api/backups/download?ticket=test");
+  expect(await screen.findByRole("link", { name: "Download backup" })).toHaveAttribute("href", "/v0/backups/download?ticket=test");
 });
 
 it("previews an import and requires explicit restore before restarting", async () => {

@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from cirno_core.bus.events import InboundMessage
-from cirno_core.command.builtin import build_help_text, register_builtin_commands
+from cirno_core.command.builtin.catalog import build_help_text
+from cirno_core.command.builtin.registration import register_builtin_commands
 from cirno_core.command.router import CommandContext, CommandRouter
 from cirno_core.triggers.local_store import LocalTriggerStore
 
@@ -42,7 +43,8 @@ async def test_trigger_command_creates_session_bound_local_trigger(tmp_path: Pat
     assert trigger.channel == "websocket"
     assert trigger.chat_id == "chat-1"
     assert trigger.session_key == "websocket:chat-1"
-    assert f"cirno trigger {trigger.id} \"message\"" in response.content
+    assert "-m cirno_core.triggers --store" in response.content
+    assert f"{trigger.id} message" in response.content
 
 
 

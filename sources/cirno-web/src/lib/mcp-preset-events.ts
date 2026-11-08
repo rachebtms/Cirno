@@ -1,4 +1,4 @@
-import type { McpPresetInfo, McpPresetsPayload } from "@/lib/types";
+import type { McpPresetInfo, McpPresetsPayload } from "@/lib/contracts/mcp";
 
 export const MCP_PRESETS_CHANGED_EVENT = "cirno:mcp-presets-changed";
 

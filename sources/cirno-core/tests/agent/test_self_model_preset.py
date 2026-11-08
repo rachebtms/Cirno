@@ -9,7 +9,7 @@ from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.agent.tools.runtime_control import AgentRuntimeControl
 from cirno_core.agent.tools.self import MyTool
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.config.models import ModelPresetConfig
 from cirno_core.providers.factory import ProviderSnapshot
 from cirno_core.session.model_selection import model_preset_from_metadata
 

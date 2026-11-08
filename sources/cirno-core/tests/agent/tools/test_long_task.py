@@ -24,7 +24,7 @@ from cirno_core.bus.queue import MessageBus
 from cirno_core.session.goal_state import GOAL_STATE_KEY, MAX_GOAL_OBJECTIVE_CHARS
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.turn_continuation import should_finalize_on_max_iterations
-from cirno_core.session.webui_turns import WebuiTurnCoordinator
+from cirno_core.session.webui_turns.coordinator import WebuiTurnCoordinator
 
 
 def _goal_metadata() -> dict[str, object]:

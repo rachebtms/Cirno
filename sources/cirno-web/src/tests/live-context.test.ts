@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { liveContextUsage, visibleContextTokens } from "@/lib/live-context";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 it("updates an explicitly estimated context during reasoning and tool output", () => {
   const base = { contextTokens: 1000, contextWindowTokens: 8000 };

@@ -15,7 +15,7 @@ from cirno_core.bus.runtime_events import (
     TurnRunStatusChanged,
     TurnRuntimeAdmitted,
 )
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 
 
 async def test_local_state_subscriber_does_not_block_routed_delivery():

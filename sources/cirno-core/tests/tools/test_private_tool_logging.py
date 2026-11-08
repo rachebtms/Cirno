@@ -1,3 +1,5 @@
+from cirno_core.agent.tools.web.searches import duckduckgo
+
 """Synthetic privacy regressions for tool diagnostics, without external requests."""
 
 import asyncio
@@ -7,30 +9,31 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from agent.runner_helpers import make_run_spec
-from loguru import logger
-from mcp import types
-from mcp.shared.exceptions import McpError
-
 from cirno_core.agent.hook import AgentHook, AgentHookContext
-from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.agent.tools.context import (
     RequestContext,
     request_context,
     tool_log_content_allowed,
 )
 from cirno_core.agent.tools.execution import _classify_violation, execute_tool_calls
-from cirno_core.agent.tools.mcp import (
-    MCPPromptWrapper,
-    MCPProvider,
-    MCPResourceWrapper,
-    MCPToolWrapper,
-)
+from cirno_core.agent.tools.mcp.provider import MCPProvider
+from cirno_core.agent.tools.mcp.wrappers import MCPPromptWrapper, MCPResourceWrapper, MCPToolWrapper
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.agent.tools.web import WebFetchTool, WebSearchTool, _redact_url_for_log
+from cirno_core.agent.tools.web.fetch import WebFetchTool
+from cirno_core.agent.tools.web.safety import _redact_url_for_log
+from cirno_core.agent.tools.web.search import WebSearchTool
+from cirno_core.agent.tools.web_config import WebSearchConfig
 from cirno_core.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
-from cirno_core.config.schema import MCPServerConfig, WebSearchConfig
-from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.config.tools import MCPServerConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
+from loguru import logger
+from mcp import types
+from mcp.shared.exceptions import McpError
+
+from sources.development.testing.runtime import make_run_spec
 
 _SECRET = "synthetic-private-detail"
 
@@ -98,7 +101,7 @@ async def test_runner_recovery_diagnostics_obey_private_policy(log_content, kind
         spec.hook = BrokenFinallyHook()
 
     with request_context(RequestContext(channel="websocket", chat_id="test", log_content=log_content)):
-        if kind == "finally":
+        if kind in {"injection", "continuation", "finally"}:
             with pytest.raises(ValueError, match=_SECRET):
                 await AgentRunner().run(spec)
         else:
@@ -134,7 +137,7 @@ async def test_mcp_private_errors_exclude_exception_payloads(
         else:
             if kind == "retry":
                 error = ConnectionResetError(_SECRET)
-                monkeypatch.setattr("cirno_core.agent.tools.mcp.asyncio.sleep", AsyncMock())
+                monkeypatch.setattr("cirno_core.agent.tools.mcp.wrappers.asyncio.sleep", AsyncMock())
             session.call_tool = AsyncMock(side_effect=error)
     elif kind == "resource":
         tool = MCPResourceWrapper(session, "test", types.Resource(
@@ -168,17 +171,17 @@ async def test_web_private_diagnostics_keep_error_category_not_content(
     error = RuntimeError(url)
     with request_context(RequestContext(channel="websocket", chat_id="test", log_content=log_content)):
         if kind == "fetch":
-            monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", MagicMock(side_effect=error))
+            monkeypatch.setattr("httpx.AsyncClient", MagicMock(side_effect=error))
             result = await WebFetchTool()._fetch_readability(url, "text", 100)
             assert url in result
         elif kind == "jina":
             tool = WebSearchTool(config=WebSearchConfig(provider="jina", api_key="synthetic"))
-            monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", MagicMock(side_effect=error))
-            monkeypatch.setattr(tool, "_search_duckduckgo", AsyncMock(return_value="fallback"))
-            assert await tool._search_jina(_SECRET, 1) == "fallback"
+            monkeypatch.setattr("httpx.AsyncClient", MagicMock(side_effect=error))
+            monkeypatch.setattr(duckduckgo, "search", AsyncMock(return_value="fallback"))
+            assert await tool.execute(_SECRET, count=1) == "fallback"
         elif kind == "duckduckgo":
             monkeypatch.setitem(sys.modules, "ddgs", SimpleNamespace(DDGS=MagicMock(side_effect=error)))
-            result = await WebSearchTool()._search_duckduckgo(_SECRET, 1)
+            result = await WebSearchTool().execute(_SECRET, count=1)
             assert _SECRET in result
         else:
             raw = f"Error: private/internal address {url}"
@@ -220,7 +223,7 @@ async def test_search_refresh_traceback_cannot_capture_private_call_arguments(
     log_content, monkeypatch,
 ):
     tool = WebSearchTool(config_loader=MagicMock(side_effect=ValueError("config unavailable")))
-    monkeypatch.setattr(tool, "_search_duckduckgo", AsyncMock(return_value="synthetic result"))
+    monkeypatch.setattr(duckduckgo, "search", AsyncMock(return_value="synthetic result"))
     tools = ToolRegistry()
     tools.register(tool)
     rendered: list[str] = []

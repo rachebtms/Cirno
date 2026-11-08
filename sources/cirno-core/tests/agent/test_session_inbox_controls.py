@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.session_helpers import run_session
+from sources.development.testing.sessions import run_session
 from cirno_core.agent.automation_turns import AutomationTurnError
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import current_request_context
@@ -15,17 +15,17 @@ from cirno_core.bus.events import InboundMessage, OutboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.cron.service import CronService
 from cirno_core.cron.session_turns import CRON_DEFER_UNTIL_IDLE_META, CRON_TRIGGER_META
-from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import public_history_messages
 from cirno_core.session.automation_turns import AUTOMATION_HISTORY_META
 from cirno_core.session.goal_state import GOAL_STATE_KEY
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.recovery import (
-    PENDING_FOLLOWUPS_KEY,
-    pending_followups,
-)
+from cirno_core.session.recovery.contracts import PENDING_FOLLOWUPS_KEY
+from cirno_core.session.recovery.pending import pending_followups
 from cirno_core.triggers.local_session_turns import LOCAL_TRIGGER_META
-from cirno_core.session.display_recovery import RecoveryCoordinator
+from cirno_core.session.recovery.coordinator import RecoveryCoordinator
 
 
 @pytest.fixture
@@ -111,8 +111,25 @@ async def test_rejected_input_does_not_stop_other_sessions(loop, monkeypatch, re
                 content="/stop" if rejection == "stop" else "rejected follow-up",
                 metadata={"webui": True}, session_generation=session.generation,
             )
+            rejected_handled = asyncio.Event()
+            dispatch = loop.dispatch.receive
+
+            async def observe_dispatch(message):
+                try:
+                    await dispatch(message)
+                finally:
+                    if message is rejected:
+                        rejected_handled.set()
+
+            monkeypatch.setattr(loop.dispatch, "receive", observe_dispatch)
             await loop.bus.publish_inbound(rejected)
-            assert (await reply("busy")).content == "Sorry, I encountered an error."
+            if rejection == "replaced-followup":
+                await asyncio.wait_for(rejected_handled.wait(), 3)
+                # An old-generation request cannot post an error into the new context.
+                assert not any(message.chat_id == "busy" and message.event is None
+                               for message in loop.bus.outbound._queue)
+            else:
+                assert (await reply("busy")).content == "Sorry, I encountered an error."
         assert not run_task.done()
 
         release_readers.set()
@@ -176,9 +193,9 @@ async def test_automation_turn_is_deferred_while_session_active(loop, kind):
         assert coordinator.deferred_queues[key] == [msg]
         assert pending_ids(key) == {"deferred"}
 
-        loop._process_message = AsyncMock(return_value=None)
-        await loop._run_session_queue(key, pending)
-        assert loop._process_message.await_args.args[0] is msg
+        loop.processing.process = AsyncMock(return_value=None)
+        await loop.dispatch.run_queue(key, pending)
+        assert loop.processing.process.await_args.args[0] is msg
         assert key not in coordinator.deferred_queues
         assert pending_ids(key) == set()
     finally:
@@ -341,12 +358,12 @@ async def test_stopped_followups_are_not_recovered_but_shutdown_preserves_them(
 
     loop.provider.chat_stream_with_retry = chat
     key = "websocket:test"
-    (await loop._enqueue_session_message(InboundMessage(
+    (await loop.dispatch.enqueue(InboundMessage(
         channel="websocket", sender_id="u", chat_id="test", content="first",
         metadata={"webui": True},
     )))
     await asyncio.wait_for(started.wait(), timeout=3)
-    (await loop._enqueue_session_message(InboundMessage(
+    (await loop.dispatch.enqueue(InboundMessage(
         channel="websocket", sender_id="u", chat_id="test", content="cancel me",
         metadata={"webui": True},
     )))
@@ -364,7 +381,7 @@ async def test_stopped_followups_are_not_recovered_but_shutdown_preserves_them(
         stop = InboundMessage(
             channel="websocket", sender_id="u", chat_id="test", content="/stop",
         )
-        await loop._dispatch_command_inline(stop, key, "/stop", loop.commands.dispatch_priority)
+        await loop.command_execution.dispatch_inline(stop, key, "/stop", loop.commands.dispatch_priority)
 
     # Use fresh managers and the real startup scan: a cache-only assertion can
     # miss the canceled journal being replayed from disk on the next restart.
@@ -409,7 +426,7 @@ async def test_cancel_preserves_followups_accepted_after_cancellation_started(lo
     task = asyncio.create_task(worker())
     loop._track_active_task(key, task)
     await started.wait()
-    stop = asyncio.create_task(loop._cancel_active_tasks(key))
+    stop = asyncio.create_task(loop.cancel_session_work(key))
     try:
         await asyncio.wait_for(cancelling.wait(), timeout=3)
         await journal("new followup")
@@ -431,7 +448,7 @@ async def test_cancel_before_worker_runs_completes_automation(loop, action):
         await asyncio.sleep(0)
         assert "websocket:test" in loop._pending_queues
         if action == "stop":
-            await loop._cancel_active_tasks("websocket:test")
+            await loop.cancel_session_work("websocket:test")
         else:
             await loop.aclose()
         with pytest.raises(AutomationTurnError, match="CancelledError"):
@@ -469,7 +486,7 @@ async def test_cancel_before_execution_completes_automation(loop, kind, action, 
             while key not in loop._pending_queues or not loop._pending_queues[key].empty():
                 await asyncio.sleep(0)
         if action == "stop":
-            await loop._cancel_active_tasks(key)
+            await loop.cancel_session_work(key)
         else:
             await loop.aclose()
         with pytest.raises(AutomationTurnError, match="CancelledError"):
@@ -497,7 +514,7 @@ async def test_ingress_sources_share_one_session_worker(loop, bus_running):
             await release.wait()
         return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=msg.content)
 
-    loop._process_message = process
+    loop.processing.process = process
     tasks = []
     if bus_running:
         tasks.append(asyncio.create_task(loop.run()))
@@ -506,7 +523,7 @@ async def test_ingress_sources_share_one_session_worker(loop, bus_running):
         if bus_running:
             await loop.bus.publish_inbound(first)
         else:
-            (await loop._enqueue_session_message(first))
+            (await loop.dispatch.enqueue(first))
         await asyncio.wait_for(started.wait(), timeout=3)
         cron = asyncio.create_task(loop.submit_cron_turn(_automation_message("cron", "cron")))
         trigger = asyncio.create_task(loop.submit_local_trigger_turn(
@@ -521,9 +538,9 @@ async def test_ingress_sources_share_one_session_worker(loop, bus_running):
                 while loop._pending_queues[key].empty():
                     await asyncio.sleep(0)
         else:
-            (await loop._enqueue_session_message(second))
+            (await loop.dispatch.enqueue(second))
         compact = InboundMessage(channel="websocket", sender_id="u", chat_id="test", content="/compact")
-        await loop._dispatch_command_inline(compact, key, compact.content, loop.commands.dispatch)
+        await loop.command_execution.dispatch_inline(compact, key, compact.content, loop.commands.dispatch)
         assert len(loop._active_tasks[key]) == 1
         release.set()
         results = await asyncio.wait_for(asyncio.gather(cron, trigger), timeout=3)
@@ -645,3 +662,15 @@ async def test_goal_continuation_after_followup_keeps_control_identity(loop, com
         await asyncio.wait_for(run_task, timeout=3)
 
 
+
+
+@pytest.mark.parametrize("kind", ["cron", "local_trigger"])
+async def test_setup_failure_releases_real_automation_waiter(loop, kind):
+    from types import SimpleNamespace
+    loop.recovery_admission = SimpleNamespace(admit=AsyncMock(side_effect=OSError("Recovery admission unavailable")))
+    submit = loop.submit_cron_turn if kind == "cron" else loop.submit_local_trigger_turn
+    pending = loop.pending_cron_job_ids_for_session if kind == "cron" else loop.pending_local_trigger_ids_for_session
+    message = _automation_message(kind, "admission-failure")
+    with pytest.raises(AutomationTurnError, match="Recovery admission unavailable"):
+        await asyncio.wait_for(submit(message), 3)
+    assert pending(message.session_key) == set()

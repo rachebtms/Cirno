@@ -1,4 +1,4 @@
-import { readLocalPreferences, writeLocalPreferences } from "./local-preferences";
+import { readPreferences, writePreferences } from "../features/preferences/store";
 import type { TaskNotice } from "./cirno-client";
 
 export type NotificationProblem = "insecure" | "unsupported" | "denied" | "revoked" | "dismissed" | "permissionFailed" | "workerUnavailable" | "displayFailed";
@@ -19,9 +19,9 @@ export function notificationProblem(): NotificationProblem | null {
 }
 
 export function reconcileNotificationPermission(): void {
-  const preferences = readLocalPreferences();
+  const preferences = readPreferences();
   if (!preferences.browserNotifications || (typeof Notification !== "undefined" && Notification.permission === "granted")) return;
-  writeLocalPreferences({ ...preferences, browserNotifications: false });
+  writePreferences({ ...preferences, browserNotifications: false });
   lastProblem = typeof Notification === "undefined" ? "unsupported" : "revoked";
   window.dispatchEvent(new Event(NOTIFICATION_STATUS_EVENT));
 }
@@ -104,8 +104,8 @@ export async function showBrowserNotification(body: string, options: {
 
 async function submitNotification(body: string, options: { key: string; url: string; test?: boolean; category?: "operations" | "conversations" | "system" }): Promise<NotificationResult> {
   reconcileNotificationPermission();
-  const eligible = () => options.test || (readLocalPreferences().browserNotifications
-    && !readLocalPreferences().mutedNotificationCategories?.includes(options.category ?? "conversations")
+  const eligible = () => options.test || (readPreferences().browserNotifications
+    && !readPreferences().mutedNotificationCategories?.includes(options.category ?? "conversations")
     && document.visibilityState !== "visible");
   if (!eligible()) return "skipped";
   const problem = notificationProblem();

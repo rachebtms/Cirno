@@ -6,14 +6,11 @@ import json
 import socket
 from unittest.mock import patch
 
+import cirno_core.agent.tools.web.fetch as web_fetch
+import cirno_core.agent.tools.web.network as web_network
 import pytest
-
-from cirno_core.agent.tools import web as web_module
-from cirno_core.agent.tools.web import (
-    WebFetchTool,
-    _redact_url_for_log,
-    _url_carries_credentials,
-)
+from cirno_core.agent.tools.web.fetch import WebFetchTool
+from cirno_core.agent.tools.web.safety import _redact_url_for_log, _url_carries_credentials
 
 
 def _fake_resolve_public(hostname, port, family=0, type_=0):
@@ -52,7 +49,7 @@ class _RecordingJinaClient:
 @pytest.fixture
 def jina_client():
     _RecordingJinaClient.requested = []
-    with patch("cirno_core.agent.tools.web.httpx.AsyncClient", _RecordingJinaClient):
+    with patch("httpx.AsyncClient", _RecordingJinaClient):
         yield _RecordingJinaClient
 
 
@@ -122,7 +119,7 @@ async def test_jina_skip_log_does_not_contain_url_credentials(
     jina_client, monkeypatch
 ) -> None:
     logged: list[tuple[object, ...]] = []
-    monkeypatch.setattr(web_module.logger, "debug", lambda *args: logged.append(args))
+    monkeypatch.setattr(web_fetch.logger, "debug", lambda *args: logged.append(args))
 
     result = await WebFetchTool()._fetch_jina(
         "https://user:secret@example.com/private/webhook-token?token=abc",
@@ -203,8 +200,8 @@ async def test_execute_fetches_credential_urls_locally(monkeypatch) -> None:
             return FakeResponse()
 
     monkeypatch.setattr(tool, "_extract_readable_html", lambda html, mode: "ok")
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", FakeClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr("httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public):
         result = await tool.execute(url="https://example.com/download?token=abc123")
@@ -267,8 +264,8 @@ async def test_execute_does_not_send_redirected_credential_url_to_jina(monkeypat
             return FakeResponse()
 
     monkeypatch.setattr(tool, "_extract_readable_html", lambda html, mode: "ok")
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", FakeClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr("httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public):
         result = await tool.execute(url=short_url)

@@ -7,7 +7,6 @@ from contextlib import suppress
 from unittest.mock import AsyncMock
 
 import pytest
-
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.outbound_events import (
     ContextCompactionEvent,
@@ -15,9 +14,9 @@ from cirno_core.bus.outbound_events import (
     outbound_message_for_event,
 )
 from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import Config
 from cirno_server.channels.base import BaseChannel
 from cirno_server.channels.manager import ChannelManager
-from cirno_core.config.schema import Config
 
 
 class _MockChannel(BaseChannel):
@@ -42,7 +41,7 @@ class _MockChannel(BaseChannel):
 def manager(tmp_path) -> ChannelManager:
     config = Config.model_validate({"channels": {"websocket": {"enabled": False}}})
     mgr = ChannelManager(config, MessageBus(), config_path=tmp_path / "config.json")
-    mgr.channels["mock"] = _MockChannel({}, mgr.bus)
+    mgr.runtimes.channels["mock"] = _MockChannel({}, mgr.bus)
     return mgr
 
 
@@ -50,7 +49,7 @@ def manager(tmp_path) -> ChannelManager:
 async def test_dispatch_forwards_all_compaction_phases_before_adapter_filtering(
     manager: ChannelManager,
 ) -> None:
-    channel = manager.channels["mock"]
+    channel = manager.runtimes.channels["mock"]
     channel.send_progress = False
     channel.show_compaction_notices = False
     events = [
@@ -79,7 +78,7 @@ async def test_dispatch_forwards_all_compaction_phases_before_adapter_filtering(
             delivered.set()
 
     channel._send_mock.side_effect = record_send
-    task = asyncio.create_task(manager._dispatch_outbound())
+    task = asyncio.create_task(manager.dispatcher.run())
     try:
         await asyncio.wait_for(delivered.wait(), timeout=2)
     finally:
@@ -94,28 +93,28 @@ async def test_dispatch_forwards_all_compaction_phases_before_adapter_filtering(
     assert [msg.content for msg in received[-3:]] == [
         "Compressing context…", "Context compacted.", "Final",
     ]
-    assert not manager._outbound_tasks
-    assert not manager._outbound_tails
+    assert not manager.delivery.tasks
+    assert not manager.delivery.tails
 
 
 @pytest.mark.parametrize("global_value", [False, True])
 @pytest.mark.parametrize("override", [None, False, True])
 @pytest.mark.parametrize("key", ["show_compaction_notices", "showCompactionNotices"])
 def test_global_notice_policy_and_channel_override(manager, global_value, override, key):
-    manager.config.channels.show_compaction_notices = global_value
+    manager.runtimes.config.channels.show_compaction_notices = global_value
     section = {} if override is None else {key: override}
-    channel = manager._build_channel(_MockChannel, section)
+    channel = manager.activation.factory.build(manager.runtimes.config, _MockChannel, section)
     assert channel.show_compaction_notices is (global_value if override is None else override)
 
 
 def test_global_notice_config_round_trip_and_rebuild(manager):
     assert Config().channels.show_compaction_notices is False
-    manager.config = Config.model_validate({"channels": {"showCompactionNotices": True}})
-    manager.config = Config.model_validate_json(manager.config.model_dump_json(by_alias=True))
-    assert manager._build_channel(_MockChannel, {}).show_compaction_notices is True
+    manager.runtimes.config = Config.model_validate({"channels": {"showCompactionNotices": True}})
+    manager.runtimes.config = Config.model_validate_json(manager.runtimes.config.model_dump_json(by_alias=True))
+    assert manager.activation.factory.build(manager.runtimes.config, _MockChannel, {}).show_compaction_notices is True
     # Rebuilding an adapter after a config change must resolve the new default.
-    manager.config.channels.show_compaction_notices = False
-    assert manager._build_channel(_MockChannel, {}).show_compaction_notices is False
-    assert manager._build_channel(
+    manager.runtimes.config.channels.show_compaction_notices = False
+    assert manager.activation.factory.build(manager.runtimes.config, _MockChannel, {}).show_compaction_notices is False
+    assert manager.activation.factory.build(manager.runtimes.config,
         _MockChannel, {"showCompactionNotices": True},
     ).show_compaction_notices

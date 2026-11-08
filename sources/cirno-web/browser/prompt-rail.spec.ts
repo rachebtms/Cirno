@@ -1,12 +1,16 @@
 import { expect, test } from "@playwright/test";
 
 test("complete rail scrolls independently, jumps to unloaded history and returns to latest", async ({ page }) => {
+  test.setTimeout(60_000);
   const reads: string[] = [];
-  const prompts = Array.from({ length: 2000 }, (_, index) => ({ id: `u${index}`, preview: `Question ${index}`,
+  const prompts = Array.from({ length: 2000 }, (_, index) => ({ id: `u${index}`, index, preview: `Question ${index}`,
     answerPreview: "A synthetic answer", cursor: String(index), turnId: `turn${index}`, createdAt: index + 1 }));
-  await page.route("**/api/sessions/**", async (route) => {
+  await page.route("**/v0/sessions/**", async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/prompts")) return route.fulfill({ json: { prompts } });
+    if (url.pathname.endsWith("/prompts")) {
+      const offset = Number(url.searchParams.get("offset") ?? Math.max(0, prompts.length - 64));
+      return route.fulfill({ json: { prompts: prompts.slice(offset, offset + 64), offset, total: prompts.length, count: prompts.length, revision: "r1" } });
+    }
     reads.push(url.search);
     const start = Number(url.searchParams.get("after") ?? Number(url.searchParams.get("before")) - 10);
     await route.fulfill({ json: { schemaVersion: 3, projection: "events", events: Array.from({ length: 10 }, (_, offset) => [
@@ -22,9 +26,12 @@ test("complete rail scrolls independently, jumps to unloaded history and returns
   await expect(rail).toBeVisible();
   // Center against the complete chat pane, not the rail's own (possibly shifted) box.
   const expectRailCentered = async () => {
-    const pane = await page.getByRole("region", { name: "Workbench", exact: true }).boundingBox();
-    const bounds = await rail.boundingBox();
-    expect(Math.abs(bounds!.y + bounds!.height / 2 - (pane!.y + pane!.height / 2))).toBeLessThan(2);
+    await expect(rail).toBeVisible();
+    await expect.poll(async () => {
+      const pane = await page.getByRole("region", { name: "Workbench", exact: true }).boundingBox();
+      const bounds = await rail.boundingBox();
+      return pane && bounds ? Math.abs(bounds.y + bounds.height / 2 - (pane.y + pane.height / 2)) : Infinity;
+    }).toBeLessThan(2);
   };
   await expectRailCentered();
   await expect.poll(() => rail.evaluate((node) => node.scrollHeight)).toBe(32024);

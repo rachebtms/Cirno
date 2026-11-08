@@ -113,7 +113,7 @@ export function FileReferenceChip({
                 data-sheen-text={active ? displayText : undefined}
                 className={cn(
                   "min-w-0 max-w-full",
-                  !truncateFromStart && "[overflow-wrap:anywhere] sm:truncate",
+                  !truncateFromStart && "[overflow-wrap:anywhere] @min-[640px]/cirno-tab:truncate",
                   active && !truncateFromStart && "streaming-text-sheen file-reference-sheen",
                   textClassName,
                 )}
@@ -194,7 +194,7 @@ function FileImageQuickLook({ path }: { path: string }) {
   return <span data-testid="file-image-quick-look" className="block w-max max-w-full overflow-hidden rounded-mark" aria-hidden>
     {source ? <img src={source} alt="" decoding="async" draggable={false}
       className="block h-auto max-h-36 w-auto max-w-[min(14rem,calc(100vw-3rem))] rounded-mark object-contain" onError={() => setResult({ load, source: null })} />
-      : <span className="block h-36 w-56 max-w-[calc(100vw-3rem)] animate-pulse bg-muted/40 motion-reduce:animate-none" />}
+      : <span className="block h-36 w-56 max-w-[calc(100vw-3rem)] animate-pulse bg-surface-secondary/40 motion-reduce:animate-none" />}
   </span>;
 }
 

@@ -1,6 +1,6 @@
 import type { ThreadTranscriptSnapshot } from "./thread-transcript";
 import { MemoryLruCache } from "./memory-lru-cache";
-import type { UIMessage } from "./types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 export type LoadedThreadMessages = readonly UIMessage[][];
 

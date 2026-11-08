@@ -6,7 +6,7 @@ import {
   installSettingsViewTestHooks, renderSettingsView, requestMutationMock, settingsPayload,
 } from "@/tests/settings-test-utils";
 
-vi.mock("@/components/settings/capabilities/HomeFilesSettings", () => ({ HomeFilesSettings: () => null }));
+vi.mock("@/features/profile/ProfileFiles", () => ({ ProfileFiles: () => null }));
 
 const path = "agents.defaults.idle_compact_after_minutes";
 
@@ -28,7 +28,7 @@ const input = () => screen.getByRole("textbox", { name: "Idle timeout" });
 const toggle = () => screen.getByRole("switch", { name: "Auto-compact idle sessions" });
 
 function edit(next: string) {
-  fireEvent.focus(input());
+  act(() => input().focus());
   fireEvent.change(input(), { target: { value: next } });
 }
 
@@ -44,9 +44,7 @@ describe("Idle compaction settings", () => {
   it.each([15, 720, 0])("reads %i minutes in Context compaction", (minutes) => {
     setup(minutes);
     const sessions = within(screen.getByRole("region", { name: "Context compaction" }));
-    expect(sessions.getByRole("switch", { name: "Auto-compact idle sessions" })).toHaveAttribute(
-      "aria-checked", String(minutes > 0),
-    );
+    expect(sessions.getByRole("switch", { name: "Auto-compact idle sessions" })).toHaveProperty("checked", minutes > 0);
     if (minutes) expect(input()).toHaveValue(String(minutes));
     else expect(screen.queryByRole("textbox", { name: "Idle timeout" })).not.toBeInTheDocument();
   });
@@ -103,7 +101,7 @@ describe("Idle compaction settings", () => {
     setup();
     edit("0");
     expect(input()).toHaveValue("0");
-    fireEvent.keyDown(input(), { key: "Enter" });
+    await userEvent.setup().keyboard("{Enter}");
     await waitFor(() => expectSaved(0));
     expect(toggle()).not.toBeChecked();
     expect(screen.queryByRole("textbox", { name: "Idle timeout" })).not.toBeInTheDocument();
@@ -126,7 +124,7 @@ describe("Idle compaction settings", () => {
     fireEvent.blur(input());
     expect(await screen.findByText("Could not save settings")).toBeVisible();
     expect(input()).toHaveValue("37");
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(2));
     expectSaved(37);
     await waitFor(() => expect(screen.queryByText("Could not save settings")).not.toBeInTheDocument());

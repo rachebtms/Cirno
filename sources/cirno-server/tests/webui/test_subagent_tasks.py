@@ -7,17 +7,17 @@ from unittest.mock import MagicMock
 from urllib.parse import quote
 
 import pytest
-from websockets.datastructures import Headers
-from websockets.http11 import Request
-
-from cirno_core.memory.consolidation import Consolidator
 from cirno_core.agent.subagents.manager import SubagentManager
 from cirno_core.bus.queue import MessageBus
-from cirno_server.channels.websocket.runtime import WebSocketConfig
-from cirno_core.providers.base import GenerationSettings, LLMProvider
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.session.manager import SessionManager
 from cirno_core.utils.llm_runtime import LLMRuntime
-from cirno_server.webui.services import build_gateway_services
+from cirno_server.channels.websocket.config import WebSocketConfig
+from cirno_server.webui.services import build_server_services
+from websockets.datastructures import Headers
+from websockets.http11 import Request
 
 
 @pytest.mark.asyncio
@@ -30,11 +30,11 @@ async def test_webui_task_access_and_targeted_idempotent_cancel(tmp_path):
     provider = MagicMock(spec=LLMProvider)
     provider.generation = GenerationSettings()
     runtime = LLMRuntime.capture(provider, "test", context_window_tokens=128000)
-    gateway = build_gateway_services(
+    gateway = build_server_services(
         config=WebSocketConfig(), bus=bus, session_manager=SessionManager(tmp_path),
         static_dist_path=None, workspace_path=tmp_path, default_restrict_to_workspace=True,
         config_path=tmp_path / "config.json", runtime_model_name=None,
-        runtime_surface="gateway", runtime_capabilities_overrides=None,
+
         subagent_manager=manager,
     )
     connection = SimpleNamespace(remote_address=("127.0.0.1", 12345))
@@ -46,14 +46,14 @@ async def test_webui_task_access_and_targeted_idempotent_cancel(tmp_path):
         await entered.put(True)
         await asyncio.Event().wait()
 
-    manager.runner.run = blocked
+    manager.execution.runner.run = blocked
     try:
         for owner in ("websocket:a", "websocket:a", "websocket:b"):
             await manager.spawn("work", session_key=owner, runtime=runtime)
             await asyncio.wait_for(entered.get(), timeout=2)
         first, sibling = manager.statuses_for_session("websocket:a")
         foreign, = manager.statuses_for_session("websocket:b")
-        path = f"/api/sessions/{quote('websocket:a', safe='')}/subagents"
+        path = f"/v0/sessions/{quote('websocket:a', safe='')}/subagents"
         denied = await gateway.http.dispatch(connection, Request(path, Headers()))
         assert denied.status_code == 401
         response = await gateway.http.dispatch(connection, Request(path, headers))
@@ -64,7 +64,7 @@ async def test_webui_task_access_and_targeted_idempotent_cancel(tmp_path):
         assert all(task["state"] == "running" and "owner" not in task for task in tasks)
 
         http_stop = await gateway.http.dispatch(
-            connection, Request("/api/webui/subagents/cancel", headers),
+            connection, Request("/v0/webui/subagents/cancel", headers),
         )
         assert http_stop.status_code == 405
         errors = []

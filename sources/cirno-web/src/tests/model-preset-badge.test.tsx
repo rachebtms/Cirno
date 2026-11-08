@@ -1,187 +1,130 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-
-import { ModelPresetBadge } from "@/components/thread/ModelPresetBadge";
-
+import { expect, it, vi } from "vitest";
+import { ModelSelector } from "@/features/model-selection/ModelSelector";
 const presets = [
-  { name: "zhipu", model: "glm-5", provider: "zhipu", contextWindowTokens: 1_000_000, reasoningEffort: "high" },
-  { name: "codex", model: "openai-codex/gpt-5.5", provider: "openai_codex" },
+  {
+    id: "zhipu",
+    name: "Zhipu",
+    model: "glm-5",
+    provider: "zhipu",
+    contextWindowTokens: 1000000,
+    reasoningEffort: "high",
+  },
+  { id: "codex", name: "Codex", model: "openai-codex/gpt-5.5", provider: "openai_codex" },
 ];
-
-describe("ModelPresetBadge setup tooltip", () => {
-  it.each([true, false])("keeps setup actionable without repeating its prompt in a tooltip (hero: %s)", async (isHero) => {
-    const user = userEvent.setup();
-    const onClick = vi.fn();
-    render(
-      <ModelPresetBadge
-        label="Choose your AI"
-        modelDetail="claude-opus-4-5"
-        provider="anthropic"
-        providerLabel="Anthropic"
-        needsSetup
-        onClick={onClick}
-        isHero={isHero}
-      />,
-    );
-
-    const trigger = screen.getByRole("button", { name: "Choose your AI" });
-    await user.hover(trigger);
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    await user.unhover(trigger);
-    fireEvent.keyDown(trigger, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
-    fireEvent.focus(trigger);
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    await user.click(trigger);
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it(
-    "keeps the localized setup prompt instead of an available preset",
-    async () => {
-      render(
-        <ModelPresetBadge
-          label="选择你的 AI"
-          modelDetail="claude-opus-4-5"
-          providerLabel="Anthropic"
-          modelPresets={presets}
-          needsSetup
-          onClick={vi.fn()}
-          isHero={false}
-        />,
-      );
-
-      const trigger = screen.getByRole("button", { name: "选择你的 AI" });
-      expect(trigger).toHaveTextContent("选择你的 AI");
-      expect(trigger.querySelector("[data-fallback]")).toBeNull();
-      fireEvent.focus(trigger);
-      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    },
+it("opens setup without replacing its prompt with a preset or showing a repeated tooltip", async () => {
+  const action = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <ModelSelector label="Choose your AI" modelPresets={presets} needsSetup onClick={action} />,
   );
+  const button = screen.getByRole("button", { name: "Choose your AI" });
+  await user.hover(button);
+  expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  await user.click(button);
+  expect(action).toHaveBeenCalledOnce();
 });
-
-describe("ModelPresetBadge selected preset tooltip", () => {
-  it.each([true, false])("keeps the single-preset menu and management reachable (hero: %s)", async (isHero) => {
-    const user = userEvent.setup();
-    const onPresetChange = vi.fn();
-    const onManageModels = vi.fn();
-    render(
-      <ModelPresetBadge
-        label="deepseek-flash"
-        modelPreset="deepseek-flash"
-        modelDetail="deepseek/deepseek-v4-flash"
-        modelPresets={[{ name: "deepseek-flash", provider: "deepseek" }]}
-        onPresetChange={onPresetChange}
-        onManageModels={onManageModels}
-        isHero={isHero}
-      />,
-    );
-    const trigger = screen.getByRole("button", { name: "deepseek-flash" });
-    expect(trigger).not.toHaveClass("cursor-grab");
-    await user.tab();
-    expect(trigger).toHaveFocus();
-    await user.keyboard("{Enter}");
-    const selected = await screen.findByRole("option", { name: "deepseek-flash" });
-    expect(selected).toHaveAttribute("aria-selected", "true");
-    expect(selected).toHaveFocus();
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    await user.click(selected);
-    expect(onPresetChange).not.toHaveBeenCalled();
-    await user.click(trigger);
-    await user.tab();
-    expect(screen.getByRole("button", { name: "Manage presets" })).toHaveFocus();
-    await user.keyboard("{Enter}");
-    expect(onManageModels).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("does not start drag switching with only one preset", () => {
-    vi.useFakeTimers();
-    try {
-      render(<ModelPresetBadge label="only" modelPreset="only" onPresetChange={vi.fn()} onManageModels={vi.fn()} isHero />);
-      const trigger = screen.getByRole("button", { name: "only" });
-      fireEvent.pointerDown(trigger, { pointerId: 1, pointerType: "touch", clientY: 100 });
-      act(() => vi.advanceTimersByTime(500));
-      expect(screen.queryByTestId("composer-model-pill-viewport")).not.toBeInTheDocument();
-      fireEvent.pointerUp(trigger, { pointerId: 1, pointerType: "touch", clientY: 100 });
-      fireEvent.click(trigger);
-      expect(screen.getByRole("button", { name: "Manage presets" })).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("offers management for an implicit default without inventing a named preset", async () => {
-    const onPresetChange = vi.fn();
-    const onManageModels = vi.fn();
-    render(<ModelPresetBadge label="deepseek-chat" provider="deepseek" onPresetChange={onPresetChange} onManageModels={onManageModels} isHero />);
-    fireEvent.click(screen.getByRole("button", { name: "deepseek-chat" }));
-    const current = screen.getByRole("option", { name: "deepseek-chat" });
-    expect(current).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(current);
-    expect(onPresetChange).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "deepseek-chat" }));
-    fireEvent.click(screen.getByRole("button", { name: "Manage presets" }));
-    expect(onManageModels).toHaveBeenCalledTimes(1);
-  });
-
-  it("moves focus within an open picker without changing the model until selection", async () => {
-    const user = userEvent.setup();
-    const onPresetChange = vi.fn();
-    render(<ModelPresetBadge label="zhipu" modelPreset="zhipu" modelPresets={presets} onPresetChange={onPresetChange} isHero />);
-    await user.click(screen.getByRole("button", { name: "zhipu" }));
-    await user.keyboard("{ArrowDown}");
-    expect(screen.getByRole("option", { name: "codex" })).toHaveFocus();
-    expect(onPresetChange).not.toHaveBeenCalled();
-    await user.keyboard("{Enter}");
-    expect(onPresetChange).toHaveBeenCalledWith("codex");
-  });
-
-  it("shows the selected preset on hover and preserves the preset picker", async () => {
-    const user = userEvent.setup();
-    const onPresetChange = vi.fn();
-    const { container } = render(
-      <ModelPresetBadge
-        label="zhipu"
-        modelPreset="zhipu"
-        modelDetail="glm-5"
-        provider="zhipu"
-        modelPresets={presets}
-        onPresetChange={onPresetChange}
-        isHero={false}
-      />,
-    );
-
-    const trigger = screen.getByRole("button", { name: "zhipu" });
-    expect(container.querySelector("[title]")).toBeNull();
-    await user.hover(trigger);
-    const tooltip = await screen.findByRole("tooltip");
-    expect(tooltip).toHaveTextContent("zhipu glm-5 1M high");
-    expect(tooltip).not.toHaveTextContent("codex");
-    await user.click(trigger);
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
-    await user.click(screen.getByRole("option", { name: "codex" }));
-    expect(onPresetChange).toHaveBeenCalledWith("codex");
-  });
-
-  it("exposes the current preset to keyboard focus without a picker", async () => {
-    render(
-      <ModelPresetBadge
-        label="zhipu"
-        modelDetail="glm-5"
-        modelPresets={presets}
-        isHero
-      />,
-    );
-    const trigger = screen.getByLabelText("zhipu");
-    expect(trigger).toHaveAttribute("tabindex", "0");
-    fireEvent.focus(trigger);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "zhipu glm-5",
-    );
-    fireEvent.keyDown(trigger, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
-  });
+it("switches a preset by its ID and returns editing focus", async () => {
+  const change = vi.fn();
+  const focus = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <ModelSelector
+      label="Zhipu"
+      modelPreset="zhipu"
+      modelPresets={presets}
+      onPresetChange={change}
+      onRequestComposerFocus={focus}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: "Zhipu" }));
+  const menu = screen.getByRole("menu", { name: "Zhipu" });
+  expect(within(menu).getByRole("menuitemradio", { name: /Zhipu/ })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await user.click(within(menu).getByRole("menuitemradio", { name: /Codex/ }));
+  expect(change).toHaveBeenCalledWith("codex");
+  await waitFor(() => expect(focus).toHaveBeenCalledOnce());
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+});
+it("keeps model management available with one preset", async () => {
+  const manage = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <ModelSelector
+      label="Zhipu"
+      modelPreset="zhipu"
+      modelPresets={presets.slice(0, 1)}
+      onManageModels={manage}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: "Zhipu" }));
+  await user.click(screen.getByRole("menuitem", { name: "Manage presets" }));
+  expect(manage).toHaveBeenCalledOnce();
+});
+it("offers management without inventing a default preset", async () => {
+  render(<ModelSelector label="No model" onManageModels={vi.fn()} />);
+  await userEvent.setup().click(screen.getByRole("button", { name: "No model" }));
+  expect(screen.queryByRole("menuitemradio")).not.toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Manage presets" })).toBeVisible();
+});
+it.each([false, true])("shows model details with a working selection menu: %s", async selectable => {
+  render(
+    <ModelSelector
+      label="Zhipu"
+      modelPreset="zhipu"
+      modelPresets={presets}
+      modelDetail="glm-5"
+      onPresetChange={selectable ? vi.fn() : undefined}
+      providerLabel="Zhipu AI"
+    />,
+  );
+  await userEvent.setup().hover(screen.getByRole("button", { name: "Zhipu" }));
+  const hint = await screen.findByRole("tooltip");
+  expect(hint).toHaveTextContent("glm-5");
+  expect(hint).toHaveTextContent("Zhipu AI");
+  expect(hint).toHaveTextContent("high");
+});
+it("supports keyboard open and Escape without changing the model", async () => {
+  const change = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <ModelSelector
+      label="Zhipu"
+      modelPreset="zhipu"
+      modelPresets={presets}
+      onPresetChange={change}
+    />,
+  );
+  screen.getByRole("button", { name: "Zhipu" }).focus();
+  await user.keyboard("{Enter}");
+  expect(screen.getByRole("menu")).toBeVisible();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(change).not.toHaveBeenCalled();
+});
+it("focuses an explicitly requested configuration action", () => {
+  const { rerender } = render(
+    <ModelSelector label="Configure model" needsSetup onClick={vi.fn()} />,
+  );
+  rerender(
+    <ModelSelector label="Configure model" needsSetup attentionRequest={1} onClick={vi.fn()} />,
+  );
+  expect(screen.getByRole("button", { name: "Configure model" })).toHaveFocus();
+});
+it("does not call the model setter when selecting the current preset", async () => {
+  const change = vi.fn();
+  render(
+    <ModelSelector
+      label="Zhipu"
+      modelPreset="zhipu"
+      modelPresets={presets}
+      onPresetChange={change}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Zhipu" }));
+  await userEvent.setup().click(screen.getByRole("menuitemradio", { name: /Zhipu/ }));
+  expect(change).not.toHaveBeenCalled();
 });

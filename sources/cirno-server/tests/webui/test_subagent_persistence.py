@@ -11,12 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import quote
 
 import pytest
-from websockets.datastructures import Headers
-from websockets.http11 import Request
-
-from cirno_core.memory.consolidation import Consolidator
-from cirno_core.agent.runner import AgentRunResult
-from cirno_core.agent.subagents.manager import SubagentControlError, SubagentManager
+from cirno_core.agent.runner.contracts import AgentRunResult
+from cirno_core.agent.subagents.contracts import SubagentControlError
+from cirno_core.agent.subagents.manager import SubagentManager
 from cirno_core.agent.subagents.sessions import SUBAGENT, TASK_METADATA_KEY, SubagentSessions
 from cirno_core.agent.tools.context import RequestContext, current_request_context, request_context
 from cirno_core.agent.tools.session_messages import SendSessionMessageTool
@@ -24,21 +21,22 @@ from cirno_core.agent.tools.sessions import ReadSessionTool, SearchSessionsTool
 from cirno_core.agent.tools.subagent import SubagentTool
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import SubagentTaskChanged
-from cirno_server.channels.websocket.runtime import WebSocketChannel, WebSocketConfig
-from cirno_core.providers.base import (
-    GenerationSettings,
-    LLMProvider,
-    LLMResponse,
-    ProviderConversationState,
-    ToolCallRequest,
-)
+from cirno_core.memory.consolidation import Consolidator
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_handles import SessionHandleResolver
 from cirno_core.session.summary import SessionSummaryCheckpoint, is_summary_checkpoint
 from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY
-from cirno_core.session.webui_turns import WebuiTurnCoordinator
+from cirno_core.session.webui_turns.coordinator import WebuiTurnCoordinator
 from cirno_core.utils.llm_runtime import LLMRuntime
-from cirno_server.webui.services import build_gateway_services
+from cirno_server.channels.websocket.config import WebSocketConfig
+from cirno_server.channels.websocket.runtime import WebSocketChannel
+from cirno_server.webui.services import build_server_services
+from websockets.datastructures import Headers
+from websockets.http11 import Request
 
 
 def manager_with_storage(workspace, sessions_root):
@@ -54,11 +52,11 @@ def manager_with_storage(workspace, sessions_root):
 
 
 def gateway_for(manager, sessions, workspace):
-    gateway = build_gateway_services(
+    gateway = build_server_services(
         config=WebSocketConfig(), bus=manager.bus, session_manager=sessions,
         static_dist_path=None, workspace_path=workspace, default_restrict_to_workspace=True,
         config_path=workspace.parent / "config.json", runtime_model_name=None,
-        runtime_surface="gateway", runtime_capabilities_overrides=None, subagent_manager=manager,
+          subagent_manager=manager,
     )
     token = gateway.tokens.issue_api_token(60)
     return gateway, SimpleNamespace(remote_address=("127.0.0.1", 12345)), Headers({"Authorization": f"Bearer {token}"})
@@ -83,7 +81,7 @@ async def test_cancelled_task_creation_removes_committed_child(tmp_path, monkeyp
             assert release.wait(5), "test did not release child persistence"
 
     monkeypatch.setattr(sessions._store, "save", blocked_save)
-    manager.runner.run = AsyncMock()
+    manager.execution.runner.run = AsyncMock()
 
     async def create():
         with request_context(RequestContext(
@@ -104,7 +102,7 @@ async def test_cancelled_task_creation_removes_committed_child(tmp_path, monkeyp
         assert sessions.child_session_keys(owner) == []
         assert manager.statuses_for_session(owner) == {}
         assert manager.get_running_count() == 0
-        manager.runner.run.assert_not_awaited()
+        manager.execution.runner.run.assert_not_awaited()
         assert await sessions.state.read(owner) is not None
     finally:
         release.set()
@@ -143,7 +141,7 @@ async def test_child_thread_reads_real_session_through_parent_without_new_persis
         await asyncio.wait_for(entered.wait(), 5)
         task_id, = manager.statuses_for_session("websocket:parent")
         child_key = SubagentSessions.key(task_id)
-        path = f"/api/sessions/websocket%3Aparent/subagents/{task_id}/webui-thread"
+        path = f"/v0/sessions/websocket%3Aparent/subagents/{task_id}/webui-thread"
         files_before = set(root.rglob("*"))
         denied = await gateway.http.dispatch(connection, Request(path, Headers()))
         assert denied.status_code == 401
@@ -154,7 +152,7 @@ async def test_child_thread_reads_real_session_through_parent_without_new_persis
             unknown.append(response.body)
         assert unknown[0] == unknown[1]
         direct = await gateway.http.dispatch(connection, Request(
-            f"/api/sessions/{quote(child_key, safe='')}/webui-thread", headers,
+            f"/v0/sessions/{quote(child_key, safe='')}/webui-thread", headers,
         ))
         assert direct.status_code == 404
         response = await gateway.http.dispatch(connection, Request(path, headers))
@@ -199,7 +197,7 @@ async def test_new_unsaved_parent_has_an_empty_task_collection(tmp_path):
     key = "websocket:new-chat"
     try:
         response = await gateway.http.dispatch(
-            connection, Request(f"/api/sessions/{quote(key, safe='')}/subagents", headers),
+            connection, Request(f"/v0/sessions/{quote(key, safe='')}/subagents", headers),
         )
         assert response.status_code == 200
         assert json.loads(response.body) == {"tasks": []}
@@ -265,7 +263,7 @@ async def test_child_activity_replays_real_tool_errors_and_file_diffs(tmp_path):
             finally:
                 request.cancel()
                 await asyncio.gather(request, return_exceptions=True)
-        path = f"/api/sessions/websocket%3Aparent/subagents/{task_id}/webui-thread"
+        path = f"/v0/sessions/websocket%3Aparent/subagents/{task_id}/webui-thread"
 
         async def assert_activity(gateway, connection, headers):
             before = {file.name: file.read_bytes() for file in root.glob("*.jsonl")}
@@ -322,7 +320,7 @@ async def test_provider_hosted_activity_is_visible_before_response_and_replays_i
         await manager.spawn("Search documentation", session_key="websocket:parent", runtime=runtime)
         await asyncio.wait_for(entered.wait(), 5)
         task_id, = manager.statuses_for_session("websocket:parent")
-        path = f"/api/sessions/websocket%3Aparent/subagents/{task_id}/webui-thread"
+        path = f"/v0/sessions/websocket%3Aparent/subagents/{task_id}/webui-thread"
         response = await gateway.http.dispatch(connection, Request(path, headers))
         running = json.loads(response.body)
         tool = next(event for event in running["events"] if event.get("kind") == "tool_hint")
@@ -357,7 +355,7 @@ async def test_task_changes_use_parent_chat_events_and_saved_child_observations(
     manager, sessions, runtime = manager_with_storage(tmp_path / "agent", tmp_path / "sessions")
     gateway, _, _ = gateway_for(manager, sessions, tmp_path / "agent")
     channel = WebSocketChannel(WebSocketConfig(), manager.bus, gateway=gateway)
-    channel._safe_send_to = AsyncMock()
+    channel.writers.send = AsyncMock()
     parent_connection, other_connection = MagicMock(), MagicMock()
     channel._attach(parent_connection, "parent")
     channel._attach(other_connection, "other")
@@ -378,10 +376,10 @@ async def test_task_changes_use_parent_chat_events_and_saved_child_observations(
             await channel.send(message)
         return [
             (call.args[0], json.loads(call.args[1]))
-            for call in channel._safe_send_to.await_args_list
+            for call in channel.writers.send.await_args_list
         ]
 
-    manager.runner.run = held
+    manager.execution.runner.run = held
     try:
         with coordinator.connected():
             for chat in ("parent", "parent", "other"):
@@ -406,14 +404,14 @@ async def test_task_changes_use_parent_chat_events_and_saved_child_observations(
                 assert payload["task"]["phase"] == "awaiting_model"
                 assert payload["task"]["revision"] > 1
             previous_revision = manager.check(first, "websocket:parent").revision
-            channel._safe_send_to.reset_mock()
+            channel.writers.send.reset_mock()
             stopped = await manager.cancel(first, "websocket:parent")
             routed = await deliver()
             assert routed and all(conn is parent_connection for conn, _ in routed)
             assert all(payload["task"]["state"] == "cancelled" for _, payload in routed)
             assert stopped.revision > previous_revision
             assert manager.check(sibling, "websocket:parent").state == "running"
-            channel._safe_send_to.reset_mock()
+            channel.writers.send.reset_mock()
             release.set()
             await asyncio.gather(*list(manager._running_tasks.values()), return_exceptions=True)
             routed = await deliver()
@@ -423,7 +421,7 @@ async def test_task_changes_use_parent_chat_events_and_saved_child_observations(
             assert saved.revision == manager.check(sibling, "websocket:parent").revision
             assert saved.result == "## Private findings\n\n- Verified"
 
-            channel._safe_send_to.reset_mock()
+            channel.writers.send.reset_mock()
             await manager.spawn(
                 "Queued before parent deletion", origin_channel="websocket", origin_chat_id="parent",
                 session_key="websocket:parent", runtime=runtime,
@@ -450,10 +448,13 @@ async def test_abrupt_process_exit_preserves_terminal_records_and_interrupts_pen
         from unittest.mock import AsyncMock, MagicMock
         from cirno_core.agent.hook import AgentHookContext
         from cirno_core.memory.consolidation import Consolidator
-        from cirno_core.agent.runner import AgentRunResult
+        from cirno_core.agent.runner.contracts import AgentRunResult
         from cirno_core.agent.subagents.manager import SubagentManager
         from cirno_core.bus.queue import MessageBus
-        from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, LLMUsage
+        from cirno_core.providers.base import LLMProvider
+        from cirno_core.providers.generation import GenerationSettings
+        from cirno_core.providers.contracts import LLMResponse
+        from cirno_usage.types import LLMUsage
         from cirno_core.session.manager import SessionManager
         from cirno_core.utils.llm_runtime import LLMRuntime
 
@@ -468,7 +469,7 @@ async def test_abrupt_process_exit_preserves_terminal_records_and_interrupts_pen
             provider = MagicMock(spec=LLMProvider)
             provider.generation = GenerationSettings()
             runtime = LLMRuntime.capture(provider, "test", context_window_tokens=128000)
-            manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
+            manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
             await manager.run_inline("completed", session_key=parent.key, origin_turn_id="turn-1", runtime=runtime)
             done, = manager.statuses_for_session(parent.key)
             entered = asyncio.Event()
@@ -476,7 +477,7 @@ async def test_abrupt_process_exit_preserves_terminal_records_and_interrupts_pen
                 await spec.hook.after_iteration(AgentHookContext(iteration=1, messages=[], response=LLMResponse(content="Partial findings"), usage=LLMUsage.reported(input_tokens=10, output_tokens=5)))
                 entered.set()
                 await asyncio.Event().wait()
-            manager.runner.run = pending
+            manager.execution.runner.run = pending
             await manager.spawn("running", session_key=parent.key, origin_turn_id="turn-1", runtime=runtime)
             await entered.wait()
             await manager.spawn("queued", session_key=parent.key, origin_turn_id="turn-1", runtime=runtime)
@@ -490,11 +491,11 @@ async def test_abrupt_process_exit_preserves_terminal_records_and_interrupts_pen
     subprocess.run([sys.executable, str(script), str(workspace), str(sessions_root), str(result_path)], check=True, timeout=15)
     ids = json.loads(result_path.read_text())
     manager, sessions, _ = manager_with_storage(workspace, sessions_root)
-    manager.runner.run = AsyncMock()
+    manager.execution.runner.run = AsyncMock()
     assert manager.check(ids["running"], "websocket:parent").state == "running"
     await manager.recover_interrupted()
     gateway, connection, headers = gateway_for(manager, sessions, workspace)
-    path = f"/api/sessions/{quote('websocket:parent', safe='')}/subagents"
+    path = f"/v0/sessions/{quote('websocket:parent', safe='')}/subagents"
     try:
         first = await gateway.http.dispatch(connection, Request(path, headers))
         assert first.status_code == 200
@@ -513,7 +514,7 @@ async def test_abrupt_process_exit_preserves_terminal_records_and_interrupts_pen
         assert all(task["created_at"] > 0 and task["completed_at"] > 0 for task in by_id.values())
         assert manager.get_running_count() == 0
         assert manager.bus.inbound_size == 0
-        manager.runner.run.assert_not_called()
+        manager.execution.runner.run.assert_not_called()
         second = await gateway.http.dispatch(connection, Request(path, headers))
         assert second.body == first.body
         persisted_parent = sessions.read_session_file("websocket:parent")
@@ -559,7 +560,7 @@ async def test_child_preserves_transcript_provider_state_and_summary_in_common_s
             summary_checkpoint=SessionSummaryCheckpoint("Configuration inspected", 4),
         )
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     try:
         await manager.run_inline("Inspect the config", session_key="websocket:parent", runtime=runtime)
         task_id, = manager.statuses_for_session("websocket:parent")
@@ -581,7 +582,7 @@ async def test_child_preserves_transcript_provider_state_and_summary_in_common_s
 async def test_child_is_unavailable_to_public_session_tools(tmp_path):
     manager, sessions, runtime = manager_with_storage(tmp_path / "agent", tmp_path / "sessions")
     sessions.save(sessions.get_or_create("websocket:other"))
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Private findings"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Private findings"))
     try:
         await manager.run_inline("Private investigation", session_key="websocket:parent", runtime=runtime)
         task_id, = manager.statuses_for_session("websocket:parent")
@@ -611,7 +612,7 @@ async def test_constructing_another_reader_does_not_interrupt_running_work(tmp_p
         await release.wait()
         return AgentRunResult(messages=[], final_content="Verified")
 
-    manager.runner.run = held
+    manager.execution.runner.run = held
     try:
         await manager.spawn("inspect", session_key="websocket:parent", runtime=runtime)
         await entered.wait()
@@ -640,7 +641,7 @@ async def test_webui_deletion_cancels_parent_work_and_removes_child_sessions(tmp
         entered.set()
         await asyncio.Event().wait()
 
-    manager.runner.run = held
+    manager.execution.runner.run = held
     await manager.spawn("inspect", session_key="websocket:parent", runtime=runtime)
     await entered.wait()
     task_id, = manager.statuses_for_session("websocket:parent")
@@ -671,7 +672,7 @@ async def test_webui_deletion_cancels_parent_work_and_removes_child_sessions(tmp
 async def test_history_outlives_the_runtime_cache_and_follows_parent_deletion(tmp_path):
     manager, sessions, runtime = manager_with_storage(tmp_path / "agent", tmp_path / "sessions")
     manager.MAX_TERMINAL = 1
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
     try:
         for name in ("first", "second"):
             await manager.run_inline(name, session_key="websocket:parent", origin_turn_id="turn-1", runtime=runtime)
@@ -711,7 +712,7 @@ async def test_task_progress_does_not_rewrite_parent_history_or_invalidate_check
     )
     await sessions.state.checkpoint_view(parent, {"phase": "tools_completed"})
     before = sessions.read_session_file(parent.key)
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
     try:
         await manager.run_inline("check", session_key=parent.key, runtime=runtime)
         assert sessions.read_session_file(parent.key) == before
@@ -730,7 +731,7 @@ async def test_task_control_and_panel_do_not_read_parent_or_child_history(tmp_pa
     parent.add_message("user", "Inspect configuration.")
     sessions.save(parent)
     await sessions.state.read(parent.key)
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
     gateway, connection, headers = gateway_for(manager, sessions, tmp_path / "agent")
     try:
         assert await manager.run_inline("check", session_key=parent.key, runtime=runtime) == "Verified"
@@ -752,7 +753,7 @@ async def test_task_control_and_panel_do_not_read_parent_or_child_history(tmp_pa
         assert metadata[TASK_METADATA_KEY]["revision"] == status.revision
         assert manager.check(status.task_id, parent.key).result == "Verified"
         response = await gateway.http.dispatch(
-            connection, Request("/api/sessions/websocket%3Aparent/subagents", headers),
+            connection, Request("/v0/sessions/websocket%3Aparent/subagents", headers),
         )
         assert response.status_code == 200
         assert [task["task_id"] for task in json.loads(response.body)["tasks"]] == [status.task_id]
@@ -783,7 +784,7 @@ async def test_task_panel_reads_storage_off_loop_and_keeps_newer_completion(tmp_
         assert release_history.wait(5), "task panel history read was not released"
         return original_load(owner)
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     try:
         await manager.spawn("check", session_key="websocket:parent", runtime=runtime)
         await asyncio.wait_for(runner_entered.wait(), 5)
@@ -792,7 +793,7 @@ async def test_task_panel_reads_storage_off_loop_and_keeps_newer_completion(tmp_
         execution = manager._running_tasks[task_id]
         monkeypatch.setattr(manager.sessions, "load", paused_history)
         request_task = asyncio.create_task(gateway.http.dispatch(
-            connection, Request("/api/sessions/websocket%3Aparent/subagents", headers),
+            connection, Request("/v0/sessions/websocket%3Aparent/subagents", headers),
         ))
         await asyncio.wait_for(history_entered.wait(), 5)
         finish_task.set()
@@ -821,7 +822,7 @@ async def test_temporary_parent_never_persists_task_content(tmp_path, monkeypatc
         assert current_request_context().log_content is False
         return AgentRunResult(messages=[], final_content="Private findings")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     try:
         await manager.run_inline("private task", session_key=parent.key, runtime=runtime)
         assert len(manager.statuses_for_session(parent.key)) == 1
@@ -850,7 +851,7 @@ async def test_unreadable_task_history_is_not_an_empty_list(tmp_path):
     manager, sessions, runtime = manager_with_storage(tmp_path / "agent", tmp_path / "sessions")
     parent = sessions.get_or_create("websocket:parent")
     sessions.save(parent)
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="Verified"))
     await manager.run_inline("inspect", session_key=parent.key, runtime=runtime)
     task_id, = manager.statuses_for_session(parent.key)
     child = sessions.get_existing(SubagentSessions.key(task_id))
@@ -858,7 +859,7 @@ async def test_unreadable_task_history_is_not_an_empty_list(tmp_path):
     await sessions.state.update_metadata(child.key, {TASK_METADATA_KEY: "damaged"})
     gateway, connection, headers = gateway_for(manager, sessions, tmp_path / "agent")
     try:
-        path = f"/api/sessions/{quote(parent.key, safe='')}/subagents"
+        path = f"/v0/sessions/{quote(parent.key, safe='')}/subagents"
         response = await gateway.http.dispatch(connection, Request(path, headers))
         assert response.status_code == 503
         assert "task history unavailable" in response.body.decode()

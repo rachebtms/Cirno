@@ -1,6 +1,6 @@
+import { Window } from "happy-dom";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Window } from "happy-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -8,13 +8,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { MessageBubble } from "@/features/messages";
 import { StartupSkeleton } from "@/components/StartupSkeleton";
-import { MessageBubble } from "@/components/MessageBubble";
 import { ContextCompactionNotice } from "@/components/thread/ContextCompactionNotice";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
+import { readOwnerPreferences } from "@/features/preferences/store";
 import { resources, setAppLanguage } from "@/i18n";
 import {
-  LOCALE_STORAGE_KEY,
   resolveInitialLocale,
   supportedLocales,
 } from "@/i18n/config";
@@ -36,7 +36,6 @@ const SLASH_COMMAND_KEYS = [
   "goal",
   "trigger",
   "help",
-  "pairing",
 ];
 const SETTINGS_NAV_KEYS = [
   "overview",
@@ -214,7 +213,7 @@ const LOCALIZED_SETTINGS_COPY_KEYS = [
   "settings.values.expanded",
   "settings.values.enabled",
   "settings.values.disabled",
-  "settings.values.defaultPermission",
+  "settings.values.inheritToolPolicy",
   "settings.values.fullAccess",
   "settings.values.configured",
   "settings.values.notConfigured",
@@ -296,22 +295,6 @@ const LOCALIZED_NEW_SURFACE_KEYS = [
   "chat.groups.yesterday",
   "chat.groups.earlier",
   "chat.groups.archived",
-  "workbench.tabAria",
-  "workbench.panesInTab",
-  "workbench.collapseTabGroup",
-  "workbench.expandTabGroup",
-  "workbench.dropPane",
-  "workbench.createGroup",
-  "workbench.moveTo",
-  "workbench.renameGroupTitle",
-  "workbench.renameGroupDescription",
-  "workbench.renameGroupPlaceholder",
-  "workbench.dissolveTab",
-  "workbench.deleteConversations",
-  "workbench.paneLimit",
-  "workbench.paneActions",
-  "workbench.detachPane",
-  "workbench.composerAria",
   "thread.promptNavigator.railAria",
   "thread.composer.mentions.cliTitle",
   "thread.composer.mentions.mcpTitle",
@@ -365,10 +348,10 @@ const INDEX_HTML = readFileSync(resolve(process.cwd(), "index.html"), "utf8")
 async function runPrebootLocale(storedLocale: string) {
   const preboot = new Window({
     url: "http://preboot.test",
-    settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true },
+    settings: { enableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, disableCSSFileLoading: true },
   });
   try {
-    preboot.localStorage.setItem(LOCALE_STORAGE_KEY, storedLocale);
+    Object.defineProperty(preboot.navigator, "languages", { configurable: true, value: [storedLocale] });
     // Parse the shipped document and execute inline scripts in parser order.
     // External/module loading stays disabled: React must not repair the splash.
     preboot.document.write(INDEX_HTML);
@@ -469,19 +452,19 @@ describe("webui i18n", () => {
     }
   });
 
-  it("defaults to English until the user chooses another language", () => {
-    localStorage.removeItem(LOCALE_STORAGE_KEY);
+  it("uses the browser locale before authenticated preferences arrive", () => {
+    localStorage.removeItem("cirno.locale");
     expect(resolveInitialLocale()).toBe("en");
 
-    localStorage.setItem(LOCALE_STORAGE_KEY, "zh-CN");
-    expect(resolveInitialLocale()).toBe("zh-CN");
+    localStorage.setItem("cirno.locale", "zh-CN");
+    expect(resolveInitialLocale()).toBe("en");
   });
 
   it("lists each language by its native name", async () => {
     const user = userEvent.setup();
 
     render(<LanguageSwitcher />);
-    await user.click(screen.getByRole("combobox", { name: "Change language" }));
+    await user.click(screen.getByRole("button", { name: /Change language/ }));
 
     for (const { nativeLabel } of supportedLocales) {
       expect(screen.getByRole("option", { name: nativeLabel })).toBeInTheDocument();
@@ -503,13 +486,13 @@ describe("webui i18n", () => {
     ).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
 
-    await user.click(screen.getByRole("combobox", { name: "Change language" }));
+    await user.click(screen.getByRole("button", { name: /Change language/ }));
     await user.click(screen.getByRole("option", { name: /简体中文/i }));
 
     await waitFor(() => {
       expect(document.documentElement.lang).toBe("zh-CN");
     });
-    expect(localStorage.getItem("cirno.locale")).toBe("zh-CN");
+    expect(readOwnerPreferences().language).toBe("zh-CN");
     expect(screen.getByPlaceholderText("输入消息…")).toBeInTheDocument();
   });
 
@@ -674,25 +657,13 @@ describe("webui i18n", () => {
     expect(settings.skills.marketplaceTrendingTitle).toBe("热门技能");
   });
 
-  it("keeps the Simplified Chinese group workflow localized", () => {
-    const workbench = resources["zh-CN"].common.workbench;
-
-    expect(workbench.tabAria).toBe("分组：{{title}}");
-    expect(workbench.createGroup).toBe("创建分组");
-    expect(workbench.renameGroupTitle).toBe("分组改名");
-    expect(workbench.renameGroupDescription).toBe("为这个分组命名。");
-    expect(workbench.renameGroupPlaceholder).toBe("分组名称");
-    expect(workbench.moveTo).toBe("移动到");
-    expect(workbench.detachPane).toBe("移出");
-  });
-
   it("keeps Indonesian and Vietnamese settings free of copied Spanish help text", () => {
     const spanish = flattenResource(resources.es.common);
 
     for (const locale of ["id", "vi"] as const) {
       const current = flattenResource(resources[locale].common);
       const copied = ACCIDENTALLY_SPANISH_SETTINGS_KEYS.filter(
-        (key) => current.get(key) === spanish.get(key),
+        (key) => typeof current.get(key) === "string" && current.get(key) === spanish.get(key),
       );
       expect({ locale, copied }).toEqual({ locale, copied: [] });
     }

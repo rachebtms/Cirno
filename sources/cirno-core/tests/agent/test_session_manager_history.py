@@ -4,7 +4,8 @@ from cirno_core.runtime.context import (
     append_runtime_context,
 )
 from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
-from cirno_core.session.manager import Session, SessionManager
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
 from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT
 
 
@@ -696,7 +697,7 @@ def test_get_history_does_not_paste_assistant_media_paths_into_replay():
 
 
 def test_get_history_preserves_assistant_bytes_for_prompt_cache():
-    session = Session(key="websocket:global")
+    session = Session(key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")
     text = '  An example:\nmessage("hello")\n\n'
     session.messages.extend([{"role": "user", "content": "Show an example"}, {"role": "assistant", "content": text}])
     assert session.get_history()[-1]["content"] == text
@@ -717,7 +718,7 @@ def test_get_history_respects_max_tokens(monkeypatch):
 
     token_map = {"u1": 50, "a1": 50, "u2": 50, "a2": 50, "u3": 50, "a3": 50}
     monkeypatch.setattr(
-        "cirno_core.session.manager.estimate_message_tokens",
+        "cirno_core.session.model.estimate_message_tokens",
         lambda message: token_map.get(message.get("content"), 0),
     )
 
@@ -737,7 +738,7 @@ def test_get_history_recovers_user_when_token_slice_would_be_assistant_only(monk
     )
     token_map = {"u1": 100, "a1": 100, "u2": 100, "a2": 100}
     monkeypatch.setattr(
-        "cirno_core.session.manager.estimate_message_tokens",
+        "cirno_core.session.model.estimate_message_tokens",
         lambda message: token_map.get(message.get("content"), 0),
     )
 

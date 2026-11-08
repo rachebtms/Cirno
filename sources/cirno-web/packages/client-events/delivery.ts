@@ -1,18 +1,28 @@
-/** Bounded receipt wait: a socket write is not message acceptance. */
+interface PendingReceipt {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: Error) => void;
+}
+
+/** A turn ID owns one send and one bounded wait for server acceptance. */
 export class DeliveryReceipts {
-  private pending = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+  private pending = new Map<string, PendingReceipt>();
 
   wait(turnId: string, send: () => void): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const finish = (error?: Error) => {
-        clearTimeout(timer);
-        this.pending.delete(turnId);
-        if (error) reject(error); else resolve();
-      };
-      const timer = setTimeout(() => finish(new Error("Message acceptance not confirmed; draft retained")), 30_000);
-      this.pending.set(turnId, { resolve: () => finish(), reject: finish });
-      try { send(); } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
-    });
+    const existing = this.pending.get(turnId);
+    if (existing) return existing.promise;
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<void>((accept, fail) => { resolve = accept; reject = fail; });
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      this.pending.delete(turnId);
+      if (error) reject(error); else resolve();
+    };
+    const timer = setTimeout(() => finish(new Error("Message acceptance not confirmed; draft retained")), 30_000);
+    this.pending.set(turnId, { promise, resolve: () => finish(), reject: finish });
+    try { send(); } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
+    return promise;
   }
 
   event(event: { event: string; turn_id?: string; detail?: string; reason?: string }): void {

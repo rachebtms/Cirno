@@ -16,11 +16,11 @@ function readPalette(element: HTMLElement): DiagramPalette {
   const style = getComputedStyle(element);
   const color = (token: string) => `hsl(${style.getPropertyValue(token).trim()})`;
   return {
-    "--pele-bg": color("--background"), "--pele-fg": color("--foreground"),
-    "--pele-muted": color("--muted-foreground"), "--pele-line": color("--foreground"),
-    "--pele-surface": color("--muted"), "--pele-surface-alt": color("--secondary"),
-    "--pele-border": color("--border"), "--pele-accent": color("--primary"),
-    "--pele-critical": color("--destructive"),
+    "--pele-bg": color("--cirno-background"), "--pele-fg": color("--cirno-foreground"),
+    "--pele-muted": color("--cirno-muted-foreground"), "--pele-line": color("--cirno-foreground"),
+    "--pele-surface": color("--cirno-muted"), "--pele-surface-alt": color("--cirno-secondary"),
+    "--pele-border": color("--cirno-border"), "--pele-accent": color("--cirno-primary"),
+    "--pele-critical": color("--cirno-destructive"),
   };
 }
 
@@ -38,7 +38,7 @@ export default function MermaidBlock({ source }: { source: string }) {
   const [view, setView] = useState<"diagram" | "source">("diagram");
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const demand = useRef({ view, open });
   demand.current = { view, open };
 
@@ -109,7 +109,7 @@ export default function MermaidBlock({ source }: { source: string }) {
     clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopied(false), 2000);
   };
-  const buttonClass = "rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const buttonClass = "rounded px-2 py-1 text-xs text-muted-foreground hover:bg-surface-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const showSource = view === "source" || state.kind === "failed";
   const image = state.kind === "ready" ? state.image : null;
 
@@ -117,8 +117,8 @@ export default function MermaidBlock({ source }: { source: string }) {
     <span ref={mono} className="hidden font-mono" aria-hidden />
     <div className="flex flex-wrap items-center gap-1 border-b border-border/60 px-2 py-1">
       <span className="mr-auto px-1 text-xs text-muted-foreground">Mermaid</span>
-      <button type="button" aria-pressed={view === "diagram"} className={cn(buttonClass, view === "diagram" && "bg-muted text-foreground")} onClick={() => setView("diagram")}>{t("diagram.graph")}</button>
-      <button type="button" aria-pressed={view === "source"} className={cn(buttonClass, view === "source" && "bg-muted text-foreground")} onClick={() => setView("source")}>{t("diagram.source")}</button>
+      <button type="button" aria-pressed={view === "diagram"} className={cn(buttonClass, view === "diagram" && "bg-surface-secondary text-foreground")} onClick={() => setView("diagram")}>{t("diagram.graph")}</button>
+      <button type="button" aria-pressed={view === "source"} className={cn(buttonClass, view === "source" && "bg-surface-secondary text-foreground")} onClick={() => setView("source")}>{t("diagram.source")}</button>
       <HoverHint content={t("diagram.copy")}>
         <button type="button" className={buttonClass} aria-label={t("diagram.copy")} onClick={() => void copy()}>
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

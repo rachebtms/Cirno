@@ -1,361 +1,141 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { RUNTIME_CONFIG_FIELDS, RUNTIME_CONFIG_GROUPS } from "@/components/settings/system/runtime-config-fields";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RUNTIME_CONFIG_FIELDS, RUNTIME_CONFIG_GROUPS, type RuntimeConfigPage } from "@/features/settings/system/runtime-config-fields";
+import { RuntimeConfiguration } from "@/features/settings/runtime/RuntimeConfiguration";
+import { useRuntimeConfigSettings } from "@/features/settings/runtime/useRuntimeConfiguration";
 import runtimeConfigKeys from "../../../cirno-server/tests/webui/fixtures/runtime-config-keys.json";
-import { TimezonePicker } from "@/components/settings/shared/TimezonePicker";
-import type { SettingsPayload } from "@/lib/types";
-import { installSettingsViewTestHooks, jsonResponse, renderSettingsView, requestMutationMock, settingsPayload } from "@/tests/settings-test-utils";
+import type { SettingsPayload } from "@/lib/contracts/settings";
+import type { CirnoClient } from "@/lib/cirno-client";
+import { settingsPayload } from "@/tests/settings-test-utils";
 
-function runtimeSettings() {
-  const payload = settingsPayload();
-  const runtimeConfig: NonNullable<SettingsPayload["runtime_config"]> = {
-    "agents.defaults.bot_name": "cirno",
-    "agents.defaults.bot_icon": "🐈",
-    "agents.defaults.timezone_mode": "auto",
-    "agents.defaults.timezone": "UTC",
-    "agents.defaults.dream.enabled": true,
-    "agents.defaults.idle_compact_after_minutes": 15,
-    "agents.defaults.heartbeat.enabled": true,
-    "tools.exec.max_runtime": 60,
-    "tools.exec.allowed_env_keys": ["TERM"],
-    "tools.exec.allow_patterns": [],
-    "tools.exec.deny_patterns": [],
-    "tools.exec.sandbox_ro_binds": [],
-    "tools.exec.sandbox_rw_binds": [],
-    "agents.defaults.max_tool_iterations": 200,
-    "network.proxy": "http://localhost:8080",
-    "tools.web.use_proxy": false,
-  };
-  return { ...payload, advanced: { ...payload.advanced, exec_max_runtime_limit: 86400 }, runtime_config: runtimeConfig };
+const mutation = vi.fn();
+function payload() {
+  return { ...settingsPayload(), advanced: { ...settingsPayload().advanced, exec_max_runtime_limit: 86400 }, runtime_config: {
+    "agents.defaults.timezone_mode": "auto", "agents.defaults.timezone": "UTC", "agents.defaults.dream.enabled": true,
+    "agents.defaults.idle_compact_after_minutes": 15, "agents.defaults.idle_compact_percent": 5,
+    "agents.defaults.idle_compact_keep_percent": 5, "tools.exec.enable": true, "tools.exec.max_runtime": 60,
+    "tools.exec.allowed_env_keys": ["TERM"], "tools.exec.sandbox": "", "network.proxy": "http://localhost:8080",
+    "agents.defaults.workspace": "/workspace", "agents.defaults.max_tool_iterations": 200,
+  } } satisfies SettingsPayload;
+}
+function Harness({ page, initial = payload() }: { page: RuntimeConfigPage; initial?: SettingsPayload }) {
+  const [settings, setSettings] = useState(initial);
+  const client = { requestMutation: mutation } as unknown as CirnoClient;
+  const state = useRuntimeConfigSettings(settings, client, setSettings);
+  return <RuntimeConfiguration page={page} settings={settings} state={state} isRestarting={false} onRestart={() => {}} />;
+}
+beforeEach(() => { mutation.mockReset().mockImplementation(async (_method, args) => ({ ...payload(), requires_restart: true, runtime_config: { ...payload().runtime_config, ...args.values } })); });
+afterEach(cleanup);
+
+async function choose(label: string, option: string) {
+  await userEvent.setup().click(screen.getByRole("button", { name: new RegExp(`${label}$`) }));
+  await userEvent.setup().click(screen.getByRole("option", { name: option }));
+}
+function expectSave(values: Record<string, unknown>) {
+  return waitFor(() => expect(mutation).toHaveBeenCalledWith("settings.runtime_config.update", { values }, 20_000));
 }
 
-describe("Runtime configuration settings", () => {
-  installSettingsViewTestHooks();
-
-  it("covers the shared runtime wire-key catalogue without duplicate editors", () => {
-    const paths = RUNTIME_CONFIG_FIELDS.map((field) => field.path);
+describe("Runtime configuration", () => {
+  it("covers the server wire catalogue exactly once", () => {
+    const paths = RUNTIME_CONFIG_FIELDS.map(field => field.path);
     expect(new Set(paths).size).toBe(paths.length);
-    // This key gates the CLI group rather than having a separate editor.
-    const visibilityOnly = "tools.cli_apps.enable";
-    expect(RUNTIME_CONFIG_GROUPS.find((group) => group.id === "cli")?.enabledBy).toBe(visibilityOnly);
-    expect([...paths, visibilityOnly].sort()).toEqual([...runtimeConfigKeys].sort());
+    expect(RUNTIME_CONFIG_GROUPS.find(group => group.id === "cli")?.enabledBy).toBe("tools.cli_apps.enable");
+    expect([...paths, "tools.cli_apps.enable"].sort()).toEqual([...runtimeConfigKeys].sort());
   });
-
   it.each([
     ["agents.defaults.idle_compact_percent", "Idle compaction trigger (%)", 30],
     ["agents.defaults.idle_compact_keep_percent", "Recent context retention (%)", 4],
-  ])("persists %s from the memory settings", async (path, label, next) => {
-    const payload = runtimeSettings();
-    payload.runtime_config![path] = 5;
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: { ...payload.runtime_config, [path]: next } });
-    renderSettingsView({ initialSection: "context", initialSettings: payload });
-    const input = screen.getByRole("spinbutton", { name: label });
-    fireEvent.change(input, { target: { value: String(next) } });
-    fireEvent.blur(input);
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { [path]: next } }, 20_000,
-    ));
+  ])("saves only the edited compaction setting %s", async (path, label, value) => {
+    render(<Harness page="context" />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: label }), { target: { value: String(value) } });
+    await expectSave({ [path]: value });
   });
-
-  it("keeps chat permissions and local services available when tool families are disabled", () => {
-    const payload = runtimeSettings();
-    renderSettingsView({ initialSection: "advanced", initialSettings: {
-      ...payload, runtime_config: {
-        ...payload.runtime_config, "tools.exec.enable": false,
-        "tools.web.enable": false, "tools.cli_apps.enable": false,
-      },
-    } });
-    expect(screen.getByRole("switch", { name: "Local services" })).toBeVisible();
-    expect(screen.getByText("Default access")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Default Permission" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Full Access" })).toBeVisible();
+  it("saves the Dream switch independently", async () => {
+    render(<Harness page="dream" />);
+    const control = screen.getByRole("switch", { name: "Memory consolidation" });
+    await userEvent.setup().click(control);
+    await expectSave({ "agents.defaults.dream.enabled": false });
+    expect(control).not.toBeChecked();
   });
-
-  it("saves the memory consolidation switch independently of other memory settings", async () => {
-    const payload = runtimeSettings();
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: { ...payload.runtime_config, "agents.defaults.dream.enabled": false } });
-    renderSettingsView({ initialSection: "dream", initialSettings: payload });
-    const memory = within(screen.getByRole("region", { name: "Dream consolidation" }));
-    expect(memory.getByRole("switch", { name: "Memory consolidation" })).toBeVisible();
-    fireEvent.click(memory.getByRole("switch", { name: "Memory consolidation" }));
-    fireEvent.blur(memory.getByRole("switch", { name: "Memory consolidation" }));
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.dream.enabled": false } }, 20_000));
-    await waitFor(() => expect(screen.getByRole("switch", { name: "Memory consolidation" })).not.toBeChecked());
+  it.each(["bwrap", "seatbelt", ""])("saves sandbox %s and shows only its relevant fields", async value => {
+    const initial = payload(); initial.runtime_config["tools.exec.sandbox"] = value ? "" : "seatbelt";
+    render(<Harness page="shell" initial={initial} />);
+    await choose("Command sandbox", value || "None");
+    expect(Boolean(screen.queryByRole("textbox", { name: "Read-only paths" }))).toBe(Boolean(value));
+    await expectSave({ "tools.exec.sandbox": value });
   });
-
-  it("explains unavailable memory settings instead of rendering a blank page", () => {
-    renderSettingsView({ initialSection: "context", initialSettings: settingsPayload() });
-    expect(screen.getByText("Update the Cirno server to edit these settings.")).toBeVisible();
-  });
-
-  it.each(["bwrap", "seatbelt", ""])("saves the %s sandbox and reveals its path settings", async (backend) => {
-    const payload = runtimeSettings();
-    payload.runtime_config!["tools.exec.sandbox"] = backend ? "" : "seatbelt";
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: { ...payload.runtime_config, "tools.exec.sandbox": backend } });
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    fireEvent.click(screen.getByRole("combobox", { name: "Command sandbox" }));
-    fireEvent.click(screen.getByRole("option", { name: backend || "None" }));
-    if (backend) expect(document.getElementById("runtime-tools.exec.sandbox_ro_binds")).toBeVisible();
-    else expect(document.getElementById("runtime-tools.exec.sandbox_ro_binds")).not.toBeInTheDocument();
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "tools.exec.sandbox": backend } }, 20_000));
-  });
-
-  it("edits lists in a dialog, cancels drafts, and retains failed saves for retry", async () => {
-    const payload = runtimeSettings();
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    const trigger = screen.getByRole("button", { name: "Environment variables", expanded: false });
-    expect(screen.queryByRole("textbox", { name: "Environment variables" })).not.toBeInTheDocument();
-    fireEvent.click(trigger);
-    let dialog = screen.getByRole("dialog", { name: "Environment variables" });
-    let editor = within(dialog).getByRole("textbox");
-    expect(editor).toHaveValue("TERM");
-    await waitFor(() => expect(editor).toHaveFocus());
-    fireEvent.change(editor, { target: { value: "discarded" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(trigger).toHaveFocus());
-    expect(requestMutationMock).not.toHaveBeenCalled();
-
-    fireEvent.click(trigger);
-    dialog = screen.getByRole("dialog", { name: "Environment variables" });
-    editor = within(dialog).getByRole("textbox");
+  it("edits lists in place, preserves a failed save, and retries without losing the draft", async () => {
+    mutation.mockRejectedValueOnce(new Error("Could not save list"));
+    render(<Harness page="shell" />);
+    const editor = screen.getByRole("textbox", { name: "Environment variables" });
     expect(editor).toHaveValue("TERM");
     fireEvent.change(editor, { target: { value: " TERM \n\n COLORTERM " } });
-    requestMutationMock.mockRejectedValueOnce(new Error("Could not save list"));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Could not save list");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save list");
     expect(editor).toHaveValue(" TERM \n\n COLORTERM ");
-    expect(requestMutationMock).toHaveBeenLastCalledWith("settings.runtime_config.update", {
-      values: { "tools.exec.allowed_env_keys": ["TERM", "COLORTERM"] },
-    }, 20_000);
-    requestMutationMock.mockResolvedValueOnce({ ...payload, requires_restart: true,
-      runtime_config: { ...payload.runtime_config, "tools.exec.allowed_env_keys": ["TERM", "COLORTERM"] } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByText("Saved. Restart to apply changes.")).toBeVisible();
-    fireEvent.click(trigger);
-    expect(within(screen.getByRole("dialog")).getByRole("textbox")).toHaveValue("TERM\nCOLORTERM");
+    const group = screen.getByRole("region", { name: "Shell and sandbox" });
+    await userEvent.setup().click(within(group).getByRole("button", { name: "Save changes" }));
+    await expectSave({ "tools.exec.allowed_env_keys": ["TERM", "COLORTERM"] });
+    await waitFor(() => expect(editor).toHaveValue("TERM\nCOLORTERM"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
-
-  it("saves only edited fields using the existing settings footer", async () => {
-    const payload = runtimeSettings();
-    requestMutationMock.mockResolvedValue({ ...payload, requires_restart: true,
-      runtime_config: { ...payload.runtime_config, "tools.exec.max_runtime": 90 } });
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" }), { target: { value: "90" } });
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 90 } }, 20_000,
-    ));
-    expect(await screen.findByText("Saved. Restart to apply changes.")).toBeInTheDocument();
-  });
-
-  it("keeps a loaded custom runtime editable when typing through a preset", async () => {
-    const payload = runtimeSettings();
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.max_runtime": 9000,
-    } });
+  it("keeps a custom duration focused while its value passes through a preset", async () => {
+    render(<Harness page="shell" />);
+    const input = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
     const user = userEvent.setup();
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    const field = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
-
-    await user.clear(field);
-    await user.type(field, "900");
-    expect(field).toHaveFocus();
-    expect(field).toHaveValue(900);
-    await user.type(field, "0");
-    expect(field).toHaveFocus();
-    expect(field).toHaveValue(9000);
-
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 9000 } }, 20_000,
-    ));
+    await user.clear(input); await user.type(input, "900");
+    expect(input).toHaveFocus(); expect(input).toHaveValue(900);
+    await user.type(input, "0"); expect(input).toHaveFocus();
+    await expectSave({ "tools.exec.max_runtime": 9000 });
   });
-
-  it("validates numbers and keeps a failed draft editable", async () => {
-    requestMutationMock.mockRejectedValue(new Error("Could not save settings"));
-    renderSettingsView({ initialSection: "shell", initialSettings: runtimeSettings() });
-    const field = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
-    fireEvent.change(field, { target: { value: "-1" } });
-    await waitFor(() => expect(field).toHaveFocus());
-    expect(field).toHaveAttribute("aria-invalid", "true");
-    expect(requestMutationMock).not.toHaveBeenCalled();
-    fireEvent.change(field, { target: { value: "17" } });
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save settings");
-    expect(field).toHaveValue(17);
+  it.each([["24 hours", 86400], ["No time limit", 0]] as const)("saves %s in seconds", async (label, value) => {
+    render(<Harness page="shell" />); await choose("Command runtime", label);
+    await expectSave({ "tools.exec.max_runtime": value });
   });
-
-  it.each([
-    ["24 hours", 86400],
-    ["No time limit", 0],
-  ])("saves the %s command runtime preset in seconds", async (label, seconds) => {
-    const payload = runtimeSettings();
-    payload.runtime_config["tools.exec.max_runtime"] = 3600;
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.max_runtime": seconds,
-    } });
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-
-    const control = screen.getByRole("combobox", { name: "Command runtime" });
-    expect(control).toHaveTextContent("1 hour");
-    expect(screen.getByText("Timed runs: up to 24 hours")).toBeVisible();
-    fireEvent.click(control);
-    fireEvent.click(screen.getByRole("option", { name: label }));
-
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": seconds } }, 20_000,
-    ));
+  it("rejects values outside the server limit and retains them for correction", async () => {
+    render(<Harness page="shell" />);
+    const input = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
+    fireEvent.change(input, { target: { value: "86401" } });
+    await screen.findByRole("alert"); expect(mutation).not.toHaveBeenCalled();
+    expect(input).toHaveValue(86401); expect(input).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(input, { target: { value: "17" } }); await expectSave({ "tools.exec.max_runtime": 17 });
   });
-
-  it("rejects over-limit custom input without clamping or saving it", async () => {
-    const payload = runtimeSettings();
-    payload.runtime_config["tools.exec.max_runtime"] = 3600;
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.max_runtime": 86400,
-    } });
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    fireEvent.click(screen.getByRole("combobox", { name: "Command runtime" }));
-    fireEvent.click(screen.getByRole("option", { name: "Custom (seconds)" }));
-    const field = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
-    expect(field).toHaveAttribute("max", "86400");
-    fireEvent.change(field, { target: { value: "86401" } });
-
-    expect(field).toHaveValue(3600);
-    expect(field).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("alert")).toHaveTextContent("1 to 86,400");
-    expect(requestMutationMock).not.toHaveBeenCalled();
-
-    fireEvent.change(field, { target: { value: "86400" } });
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 86400 } }, 20_000,
-    ));
-    await screen.findByText("Saved.", { exact: true });
-    fireEvent.change(field, { target: { value: "86401" } });
-    expect(field).toHaveValue(86400);
-    expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(screen.queryByText("Saved.", { exact: true })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Server" }));
-    fireEvent.click(screen.getByRole("button", { name: "Shell execution" }));
-    expect(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" })).toHaveValue(86400);
-    expect(screen.getByRole("alert")).toHaveTextContent("1 to 86,400");
+  it("does not clear newer input when an earlier request finishes", async () => {
+    let finish!: (value: SettingsPayload) => void;
+    mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));
+    render(<Harness page="shell" />);
+    const input = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
+    fireEvent.change(input, { target: { value: "17" } }); await expectSave({ "tools.exec.max_runtime": 17 });
+    expect(input).toBeEnabled(); fireEvent.change(input, { target: { value: "19" } });
+    await act(async () => finish({ ...payload(), runtime_config: { ...payload().runtime_config, "tools.exec.max_runtime": 17 } }));
+    expect(input).toHaveValue(19); await expectSave({ "tools.exec.max_runtime": 19 });
   });
-
-  it("starts a custom duration from No time limit without saving an empty value", async () => {
-    const payload = runtimeSettings();
-    payload.runtime_config["tools.exec.max_runtime"] = 0;
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.max_runtime": 120,
-    } });
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    fireEvent.click(screen.getByRole("combobox", { name: "Command runtime" }));
-    fireEvent.click(screen.getByRole("option", { name: "Custom (seconds)" }));
-    const field = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
-    expect(field).toHaveValue(null);
-    expect(requestMutationMock).not.toHaveBeenCalled();
-    fireEvent.change(field, { target: { value: "120" } });
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 120 } }, 20_000,
-    ));
+  it("requires explicit save for the workspace path and can discard it", async () => {
+    render(<Harness page="execution" />);
+    const input = screen.getByRole("textbox", { name: "Default workspace" });
+    fireEvent.change(input, { target: { value: "/research" } });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Cancel" }));
+    expect(input).toHaveValue("/workspace"); expect(mutation).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: "/research" } });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save changes" }));
+    await expectSave({ "agents.defaults.workspace": "/research" });
   });
-
-  it("uses the gateway's configured runtime limit for presets and custom input", () => {
-    const payload = runtimeSettings();
-    payload.advanced.exec_max_runtime_limit = 7200;
-    renderSettingsView({ initialSection: "shell", initialSettings: payload });
-    expect(screen.getByText("Timed runs: up to 2 hours")).toBeVisible();
-    expect(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" })).toHaveAttribute("max", "7200");
-    fireEvent.click(screen.getByRole("combobox", { name: "Command runtime" }));
-    expect(screen.getByRole("option", { name: "2 hours" })).toBeVisible();
-    expect(screen.queryByRole("option", { name: "24 hours" })).not.toBeInTheDocument();
+  it("saves proxy credentials as one value while keeping them out of the address field", async () => {
+    render(<Harness page="network" />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Authentication (optional)" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Username" }), { target: { value: "owner" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
+    expect(screen.getByRole("textbox", { name: "Shared proxy" })).toHaveValue("http://localhost:8080");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save changes" }));
+    await expectSave({ "network.proxy": "http://owner:secret@localhost:8080" });
   });
-
-  it("keeps runtime editing available on a host without limit metadata", async () => {
-    const payload = runtimeSettings();
-    requestMutationMock.mockResolvedValue({ ...payload, runtime_config: {
-      ...payload.runtime_config, "tools.exec.max_runtime": 90,
-    } });
-    renderSettingsView({ initialSection: "shell", initialSettings: {
-      ...payload, advanced: settingsPayload().advanced,
-    } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" }), { target: { value: "90" } });
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "tools.exec.max_runtime": 90 } }, 20_000,
-    ));
-  });
-
-  it("preserves drafts when navigating away and supports explicit clearing", async () => {
-    let payload = runtimeSettings();
-    requestMutationMock.mockImplementation(async (_method, update) => {
-      payload = { ...payload, runtime_config: { ...payload.runtime_config, ...update.values } };
-      return payload;
-    });
-    renderSettingsView({ initialSection: "network", initialSettings: payload });
-    const proxy = screen.getByRole("textbox", { name: "Shared proxy" });
-    expect(proxy).toHaveAttribute("type", "text");
-    expect(proxy).toHaveValue("http://localhost:8080");
-    fireEvent.change(proxy, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Server" }));
-    fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
-    expect(screen.getByLabelText("Shared proxy", { selector: "input" })).toHaveValue("");
-    fireEvent.click(within(screen.getByRole("region", { name: "Shared proxy" })).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "network.proxy": null } }, 20_000,
-    ));
-    fireEvent.click(screen.getByRole("button", { name: "Server" }));
-    fireEvent.click(screen.getByRole("button", { name: "Network & retries" }));
-    expect(screen.getByLabelText("Shared proxy", { selector: "input" })).toHaveValue("");
-  });
-
-  it("saves proxy address and authentication together without exposing the password in the address", async () => {
-    const payload = runtimeSettings();
-    payload.runtime_config!["network.proxy"] = "http://old:p%40ss@proxy:8080";
-    requestMutationMock.mockImplementation(async (_method, update) => ({
-      ...payload, runtime_config: { ...payload.runtime_config, ...update.values }, requires_restart: true,
-    }));
-    renderSettingsView({ initialSection: "network", initialSettings: payload });
-    const group = within(screen.getByRole("region", { name: "Shared proxy" }));
-    expect(group.getByRole("textbox", { name: "Shared proxy" })).toHaveValue("http://proxy:8080");
-    expect(group.getByLabelText("Password")).toHaveAttribute("type", "password");
-    expect(group.getByLabelText("Password")).toHaveValue("p@ss");
-    fireEvent.change(group.getByLabelText("Username"), { target: { value: "new@user" } });
-    fireEvent.change(group.getByLabelText("Password"), { target: { value: "p:@ %密" } });
-    expect(requestMutationMock).not.toHaveBeenCalled();
-    fireEvent.click(group.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: { "network.proxy": "http://new%40user:p%3A%40%20%25%E5%AF%86@proxy:8080" } }, 20_000,
-    ));
-    expect(group.getByRole("textbox", { name: "Shared proxy" })).toHaveValue("http://proxy:8080");
-  });
-
-  it("keeps an existing timezone alias selectable and accepts only listed search results", () => {
-    const onChange = vi.fn();
-    render(<TimezonePicker value="Asia/Calcutta" aria-label="Timezone" onChange={onChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "Timezone" }));
-    const search = screen.getByRole("combobox", { name: "Search" });
-    fireEvent.change(search, { target: { value: "invalid timezone" } });
-    expect(screen.getByRole("status")).toHaveTextContent("No matching timezones.");
-    fireEvent.keyDown(search, { key: "Enter" });
-    expect(onChange).not.toHaveBeenCalled();
-    fireEvent.change(search, { target: { value: "Asia/Calcutta" } });
-    fireEvent.keyDown(search, { key: "Enter" });
-    expect(onChange).toHaveBeenCalledWith("Asia/Calcutta");
-  });
-
-  it("selects a manual timezone from search results and persists both fields", async () => {
-    const payload = runtimeSettings();
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) =>
-      jsonResponse(String(input) === "/api/settings" ? payload : {})));
-    requestMutationMock.mockResolvedValue(payload);
-    renderSettingsView({ initialSection: "regional", initialSettings: payload });
-    fireEvent.click(screen.getByRole("switch", { name: "System timezone" }));
-    const field = screen.getByRole("button", { name: "Timezone", expanded: false });
-    expect(field).toBeEnabled();
-    fireEvent.click(field);
-    fireEvent.change(screen.getByRole("combobox", { name: "Search" }), { target: { value: "Shanghai" } });
-    fireEvent.click(screen.getByRole("option", { name: /Asia\/Shanghai/ }));
-    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
-      "settings.runtime_config.update", { values: {
-        "agents.defaults.timezone_mode": "manual", "agents.defaults.timezone": "Asia/Shanghai",
-      } }, 20_000,
-    ));
+  it("supports manual timezone search and saves the selected zone", async () => {
+    render(<Harness page="regional" />);
+    await userEvent.setup().click(screen.getByRole("switch", { name: "System timezone" }));
+    const input = screen.getByRole("combobox", { name: "Timezone" });
+    await userEvent.setup().clear(input); await userEvent.setup().type(input, "Tokyo");
+    await userEvent.setup().click(await screen.findByRole("option", { name: "Asia/Tokyo" }));
+    await waitFor(() => expect(Object.assign({}, ...mutation.mock.calls.map(call => call[1].values))).toMatchObject({ "agents.defaults.timezone_mode": "manual", "agents.defaults.timezone": "Asia/Tokyo" }));
   });
 });

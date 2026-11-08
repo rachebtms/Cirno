@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from cirno_core.bus.queue import MessageBus
+from cirno_core.config.schema import Config
 from cirno_server.channels.base import BaseChannel
 from cirno_server.channels.contracts import (
     ChannelInstanceSpec,
@@ -13,7 +13,6 @@ from cirno_server.channels.contracts import (
 )
 from cirno_server.channels.manager import ChannelManager
 from cirno_server.channels.plugin import ChannelPlugin
-from cirno_core.config.schema import Config
 
 
 class _HotChannel(BaseChannel):
@@ -126,24 +125,24 @@ async def test_apply_channel_feature_action_starts_and_stops_channel(monkeypatch
 
     configs = iter([enabled, disabled])
     _stub_registry(monkeypatch, _plugin(_HotChannel))
-    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda: next(configs))
+    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: next(configs))
 
     manager = ChannelManager(disabled, MessageBus())
-    manager._started = True
+    manager.runtimes.started = True
 
-    enabled_result = await manager.apply_channel_feature_action("enable", "hot")
+    enabled_result = await manager.activation.apply("enable", "hot")
 
     assert enabled_result["handled"] is True
     assert enabled_result["requires_restart"] is False
-    channel = manager.channels["hot"]
+    channel = manager.runtimes.channels["hot"]
     await asyncio.wait_for(channel.started.wait(), timeout=1)
     assert channel.is_running is True
 
-    disabled_result = await manager.apply_channel_feature_action("disable", "hot")
+    disabled_result = await manager.activation.apply("disable", "hot")
 
     assert disabled_result["handled"] is True
     assert disabled_result["requires_restart"] is False
-    assert "hot" not in manager.channels
+    assert "hot" not in manager.runtimes.channels
     assert channel.is_running is False
 
 
@@ -157,22 +156,22 @@ async def test_apply_channel_feature_action_keeps_running_channel_when_rebuild_f
     })
 
     _stub_registry(monkeypatch, _plugin(_HotChannel))
-    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda: enabled)
+    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: enabled)
 
     manager = ChannelManager(enabled, MessageBus())
-    old_channel = manager.channels["hot"]
+    old_channel = manager.runtimes.channels["hot"]
     old_channel._running = True
 
     def fail_build(*_args, **_kwargs):
         raise RuntimeError("invalid replacement config")
 
-    monkeypatch.setattr(manager, "_build_channel", fail_build)
+    monkeypatch.setattr(manager.activation.factory, "build", fail_build)
 
-    result = await manager.apply_channel_feature_action("enable", "hot")
+    result = await manager.activation.apply("enable", "hot")
 
     assert result["requires_restart"] is False
     assert result["ok"] is False
-    assert manager.channels["hot"] is old_channel
+    assert manager.runtimes.channels["hot"] is old_channel
     assert old_channel.is_running is True
     assert not old_channel.stopped.is_set()
 
@@ -193,17 +192,17 @@ async def test_apply_channel_feature_action_uses_channel_runtime_name(monkeypatc
     })
 
     _stub_registry(monkeypatch, _plugin(_MultiHotChannel, multi_instance=True))
-    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda: config)
+    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: config)
 
     manager = ChannelManager(config, MessageBus())
-    product = manager.channels["multi.product"]
+    product = manager.runtimes.channels["multi.product"]
     product._running = True
 
-    result = await manager.apply_channel_feature_action("disable", "multi", "product")
+    result = await manager.activation.apply("disable", "multi", "product")
 
     assert result["requires_restart"] is False
-    assert "multi" in manager.channels
-    assert "multi.product" not in manager.channels
+    assert "multi" in manager.runtimes.channels
+    assert "multi.product" not in manager.runtimes.channels
     assert product.is_running is False
 
 
@@ -248,21 +247,112 @@ async def test_default_multi_channel_action_reconciles_only_default_runtime(monk
 
     _stub_registry(monkeypatch, _plugin(_MultiHotChannel, multi_instance=True))
     configs = iter([disabled, enabled])
-    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda: next(configs))
+    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: next(configs))
 
     manager = ChannelManager(initial, MessageBus())
-    default = manager.channels["multi"]
-    product = manager.channels["multi.product"]
+    default = manager.runtimes.channels["multi"]
+    product = manager.runtimes.channels["multi.product"]
 
-    disabled_result = await manager.apply_channel_feature_action("disable", "multi")
+    disabled_result = await manager.activation.apply("disable", "multi")
 
     assert disabled_result["requires_restart"] is False
-    assert set(manager.channels) == {"multi.product"}
+    assert set(manager.runtimes.channels) == {"multi.product"}
     assert default.stopped.is_set()
     assert not product.stopped.is_set()
 
-    enabled_result = await manager.apply_channel_feature_action("enable", "multi")
+    enabled_result = await manager.activation.apply("enable", "multi")
 
     assert enabled_result["requires_restart"] is False
-    assert set(manager.channels) == {"multi", "multi.product"}
-    assert manager.channels["multi.product"] is product
+    assert set(manager.runtimes.channels) == {"multi", "multi.product"}
+    assert manager.runtimes.channels["multi.product"] is product
+
+
+async def test_parallel_reconfiguration_never_leaves_an_unowned_running_channel(tmp_path, monkeypatch):
+    config = Config.model_validate({"channels": {"websocket": {"enabled": False}, "hot": {"enabled": True}}})
+    _stub_registry(monkeypatch, _plugin(_HotChannel))
+    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: config)
+    manager = ChannelManager(config, MessageBus(), config_path=tmp_path / "config.json")
+    manager.runtimes.started = True
+    old = manager.runtimes.channels["hot"]
+    old._running = True
+    entered, release = asyncio.Event(), asyncio.Event()
+    stop_old, build, start = old.stop, manager.activation.factory.build, manager.runtimes.start_task
+    created, started = [], []
+
+    async def gated_stop():
+        entered.set()
+        await release.wait()
+        await stop_old()
+
+    def record_build(*args, **kwargs):
+        channel = build(*args, **kwargs)
+        created.append(channel)
+        return channel
+
+    def record_start(*args, **kwargs):
+        task = start(*args, **kwargs)
+        started.append(task)
+        return task
+
+    monkeypatch.setattr(old, "stop", gated_stop)
+    monkeypatch.setattr(manager.activation.factory, "build", record_build)
+    monkeypatch.setattr(manager.runtimes, "start_task", record_start)
+    first = asyncio.create_task(manager.activation.apply("enable", "hot"))
+    second = None
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        second = asyncio.create_task(manager.activation.apply("enable", "hot"))
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, second)
+        assert sum(channel.is_running for channel in created) == 1
+        assert manager.runtimes.channels["hot"].is_running
+    finally:
+        release.set()
+        await asyncio.gather(*(task for task in (first, second) if task is not None), return_exceptions=True)
+        await manager.stop_all()
+        for channel in created:
+            await channel.stop()
+        await asyncio.gather(*started, return_exceptions=True)
+
+
+async def test_live_reconfiguration_reads_the_owning_instance_config(tmp_path, monkeypatch):
+    from cirno_core.config.loader import save_config
+
+    _stub_registry(monkeypatch, _plugin(_HotChannel))
+    disabled = Config.model_validate({"channels": {"websocket": {"enabled": False}, "hot": {"enabled": False}}})
+    enabled = Config.model_validate({"channels": {"websocket": {"enabled": False}, "hot": {"enabled": True}}})
+    custom_path = tmp_path / "other-instance" / "config.json"
+    save_config(enabled, custom_path)
+    manager = ChannelManager(disabled, MessageBus(), config_path=custom_path)
+    try:
+        result = await manager.activation.apply("enable", "hot")
+        assert result["ok"] is True
+        assert "hot" in manager.runtimes.channels
+    finally:
+        await manager.stop_all()
+
+
+async def test_runtime_import_failure_reports_status_and_exception_diagnostics(monkeypatch):
+    from loguru import logger
+
+    _stub_registry(monkeypatch, _plugin(_HotChannel))
+    disabled = Config.model_validate({"channels": {"websocket": {"enabled": False}, "hot": {"enabled": False}}})
+    enabled = Config.model_validate({"channels": {"websocket": {"enabled": False}, "hot": {"enabled": True}}})
+    monkeypatch.setattr("cirno_core.config.loader.load_config", lambda _path=None: enabled)
+    manager = ChannelManager(disabled, MessageBus())
+
+    def broken_runtime(_plugin):
+        raise ImportError("Channel runtime dependency is unavailable")
+
+    monkeypatch.setattr(ChannelPlugin, "load_channel_class", broken_runtime)
+    records = []
+    sink = logger.add(lambda message: records.append(message.record), level="ERROR")
+    try:
+        result = await manager.activation.apply("enable", "hot")
+        assert result["ok"] is False
+        assert manager.runtimes.status()["hot"]["state"] == "failed"
+        assert any(record["exception"] and record["exception"].type is ImportError for record in records)
+    finally:
+        logger.remove(sink)
+        await manager.stop_all()

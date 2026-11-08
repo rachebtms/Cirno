@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from cirno_core.agent.model_runtime import ModelRuntimeResolver
-from cirno_core.config.schema import Config, ModelPresetConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.models import ModelPresetConfig
 from cirno_core.providers import factory
-from cirno_core.providers.base import LLMProvider, LLMResponse
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.utils.llm_runtime import runtime_from_provider_snapshot
 
 

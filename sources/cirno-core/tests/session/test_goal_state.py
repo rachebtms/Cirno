@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cirno_core.session.goal_state import (
     GOAL_STATE_KEY,
     MAX_GOAL_OBJECTIVE_CHARS,
@@ -47,7 +49,8 @@ def test_runtime_lines_preserve_maximum_accepted_objective():
     )
 
     assert lines[:2] == ["Goal (active):", objective]
-    assert "update_goal(action=complete)" in lines[2]
+    assert "goals__update" in lines[2]
+    assert "tools.goals.update(action='complete')" in lines[2]
 
 
 def test_goal_state_key_takes_precedence_over_legacy():
@@ -65,6 +68,12 @@ def test_parse_goal_state_accepts_json_string():
         "status": "active",
         "objective": "x",
     }
+
+
+@pytest.mark.parametrize("damaged", ["{", "[]", [], 42, False])
+def test_damaged_goal_is_not_silently_treated_as_inactive(damaged):
+    with pytest.raises(ValueError, match="Stored Goal state"):
+        sustained_goal_active({GOAL_STATE_KEY: damaged})
 
 
 def test_goal_state_ws_blob_inactive_when_missing_or_completed():

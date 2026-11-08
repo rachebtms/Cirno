@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { IMAGE_GAP, imageFrameRatio, layoutImageRows, type ImageDimensions } from "@/lib/image-gallery-layout";
-import type { UIImage } from "@/lib/types";
+import type { UIImage } from "@/lib/contracts/messages";
 import { cn } from "@/lib/utils";
 
 /** A bounded, quiet preview; the viewer still contains every delivered image. */
@@ -96,7 +96,7 @@ export function ImageThumbnail({ image, size = "large", frame, onOpen, label, ov
   const { t } = useTranslation();
   const [failed, setFailed] = useState(false);
   const classes = cn(
-    "relative block max-w-full shrink-0 overflow-hidden rounded-control bg-muted/25 ring-1 ring-inset ring-border/60",
+    "relative block max-w-full shrink-0 overflow-hidden rounded-control bg-surface-secondary/25 ring-1 ring-inset ring-border/60",
     !frame && (size === "large" ? "w-[min(100%,28rem)]" : "w-48"),
   );
   const style: CSSProperties | undefined = frame ? { ...frame, position: "absolute" } : undefined;

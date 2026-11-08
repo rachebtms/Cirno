@@ -9,13 +9,13 @@ import socket
 from unittest.mock import AsyncMock, patch
 from urllib.request import getproxies_environment
 
+import cirno_core.agent.tools.web.network as web_network
 import httpx
 import pytest
-
-from cirno_core.agent.tools import web as web_module
 from cirno_core.agent.tools.registry import is_tool_error_result
-from cirno_core.agent.tools.web import WebFetchTool, _get_with_safe_redirects
-from cirno_core.config.schema import WebFetchConfig
+from cirno_core.agent.tools.web.fetch import WebFetchTool
+from cirno_core.agent.tools.web.network import _get_with_safe_redirects
+from cirno_core.agent.tools.web_config import WebFetchConfig
 from cirno_core.security.network import PinnedDNSAsyncTransport
 from cirno_core.security.workspace_access import (
     bind_workspace_scope,
@@ -83,8 +83,8 @@ def _patch_web_fetch_fake_client(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
         async def get(self, url, headers=None, **kwargs):
             return FakeJinaResponse()
 
-    monkeypatch.setattr(web_module.httpx, "AsyncClient", FakeClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr(web_network.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
     monkeypatch.setattr(
         "cirno_core.security.network.httpx.AsyncHTTPTransport",
         lambda **_kwargs: object(),
@@ -237,13 +237,13 @@ async def test_web_fetch_env_proxy_adds_proxy_mounts_and_keeps_pinned_transport(
 def test_web_fetch_no_proxy_env_keeps_pinned_direct_route(monkeypatch):
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
     monkeypatch.setenv("NO_PROXY", "example.com")
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
     monkeypatch.setattr(
         "cirno_core.security.network.httpx.AsyncHTTPTransport",
         lambda **_kwargs: object(),
     )
 
-    kwargs = web_module._fetch_client_kwargs(None, 15.0)
+    kwargs = web_network._fetch_client_kwargs(None, 15.0)
 
     assert "transport" in kwargs
     assert any(transport is None for transport in kwargs["mounts"].values())
@@ -274,9 +274,7 @@ async def test_web_fetch_does_not_fallback_after_pinned_dns_rebind_rejection(mon
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
             raise AssertionError("rebound target must be rejected before transport")
 
-    monkeypatch.setattr(
-        web_module,
-        "_pinned_dns_transport",
+    monkeypatch.setattr(web_network, "_pinned_dns_transport",
         lambda: PinnedDNSAsyncTransport(inner=FailTransport()),
     )
 
@@ -345,8 +343,8 @@ async def test_web_fetch_can_skip_jina_and_use_custom_user_agent(monkeypatch):
 
     monkeypatch.setattr(tool, "_fetch_jina", _fail_jina)
     monkeypatch.setattr(tool, "_extract_readable_html", lambda html, mode: "Hello world")
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", FakeClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr("httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public):
         result = await tool.execute(url="https://example.com/page")
@@ -389,8 +387,8 @@ async def test_web_fetch_falls_back_when_readability_dependency_is_missing(monke
         raise ModuleNotFoundError("No module named 'lxml_html_clean'")
 
     monkeypatch.setattr(tool, "_extract_readable_html", _missing_readability)
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", FakeClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr("httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public):
         result = await tool._fetch_readability("https://example.com/page", "markdown", 5000)
@@ -447,8 +445,8 @@ async def test_web_fetch_blocks_private_redirect_before_readability_request(monk
                 raise AssertionError("private redirect target should not be requested")
             return FakeRedirectResponse()
 
-    monkeypatch.setattr(web_module.httpx, "AsyncClient", FakeClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr(web_network.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     def resolve_public_start_only(hostname, port, family=0, type_=0):
         if hostname == "attacker.example":
@@ -499,8 +497,8 @@ async def test_web_fetch_image_media_type_is_case_insensitive(
             kwargs.pop("transport", None)
             super().__init__(*args, transport=transport, **kwargs)
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", TransportAsyncClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr("httpx.AsyncClient", TransportAsyncClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
     with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public):
         result = await tool.execute(url="https://example.com/image.png")
 
@@ -541,8 +539,8 @@ async def test_web_fetch_blocks_private_redirect_before_returning_image(monkeypa
             kwargs.pop("transport", None)
             super().__init__(*args, transport=transport, **kwargs)
 
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", TransportAsyncClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr("httpx.AsyncClient", TransportAsyncClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     def resolve_public_start_only(hostname, port, family=0, type_=0):
         if hostname == "example.com":
@@ -583,8 +581,8 @@ async def test_web_fetch_does_not_request_private_redirect_target(monkeypatch):
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(web_module.httpx, "AsyncClient", TransportAsyncClient)
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: object())
+    monkeypatch.setattr(web_network.httpx, "AsyncClient", TransportAsyncClient)
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: object())
 
     def resolve_public_start_only(hostname, port, family=0, type_=0):
         if hostname == "attacker.example":
@@ -616,7 +614,7 @@ async def test_web_fetch_marks_terminal_fetch_failures_as_errors(monkeypatch, fa
             raise httpx.ProxyError("proxy unavailable", request=request)
         return httpx.Response(404, request=request)
 
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: httpx.MockTransport(handler))
 
     result = await tool.execute(url=url)
 
@@ -635,7 +633,7 @@ async def test_web_fetch_jina_fallback_keeps_json_error_content_successful(monke
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=source, request=request)
 
-    monkeypatch.setattr(web_module, "_pinned_dns_transport", lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(web_network, "_pinned_dns_transport", lambda: httpx.MockTransport(handler))
     monkeypatch.setattr(tool, "_fetch_jina", jina)
 
     result = await tool.execute(url=url)

@@ -5,14 +5,16 @@ field: ``{"google": {"thought_signature": "..."}}``.  This MUST survive the
 parse → serialize round-trip so the model can continue reasoning.
 """
 
+from cirno_core.providers.chat_completions.complete import parse_response
+from sources.development.testing.providers import parse_chat_chunks
 from unittest.mock import patch
 
 import pytest
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
-from cirno_core.providers.base import ToolCallRequest
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import ProviderSpec
+from cirno_core.providers.catalog.contracts import ProviderSpec
 
 GEMINI_EXTRA = {"google": {"thought_signature": "sig-abc-123"}}
 
@@ -90,7 +92,7 @@ def test_parse_sdk_object_preserves_extra_content() -> None:
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    result = provider._parse(_make_sdk_response_with_extra_content())
+    result = parse_response(_make_sdk_response_with_extra_content(), spec=provider._spec)
 
     assert len(result.tool_calls) == 1
     tc = result.tool_calls[0]
@@ -127,7 +129,7 @@ def test_parse_dict_preserves_extra_content() -> None:
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }
 
-    result = provider._parse(response_dict)
+    result = parse_response(response_dict, spec=provider._spec)
 
     assert len(result.tool_calls) == 1
     tc = result.tool_calls[0]
@@ -179,7 +181,7 @@ def test_parse_deduplicates_duplicate_tool_call_ids(as_sdk: bool) -> None:
     }
 
     response = ChatCompletion.model_validate(response_dict) if as_sdk else response_dict
-    result = provider._parse(response)
+    result = parse_response(response, spec=provider._spec)
 
     ids = [tc.id for tc in result.tool_calls]
     assert len(ids) == 2
@@ -213,7 +215,7 @@ def test_parse_chunks_sdk_preserves_extra_content() -> None:
         }],
     })
 
-    result = OpenAICompatProvider._parse_chunks([chunk])
+    result = parse_chat_chunks([chunk])
 
     assert len(result.tool_calls) == 1
     tc = result.tool_calls[0]
@@ -243,7 +245,7 @@ def test_parse_chunks_dict_preserves_extra_content() -> None:
         }],
     }
 
-    result = OpenAICompatProvider._parse_chunks([chunk])
+    result = parse_chat_chunks([chunk])
 
     assert len(result.tool_calls) == 1
     tc = result.tool_calls[0]
@@ -278,7 +280,7 @@ def test_stale_extra_content_in_tool_calls_survives_sanitize() -> None:
         {"role": "user", "content": "thanks"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert sanitized[1]["tool_calls"][0]["extra_content"] == GEMINI_EXTRA
 
@@ -320,7 +322,7 @@ def test_gemini_backfills_unsigned_tool_calls_and_keeps_results() -> None:
         {"role": "user", "content": "thanks"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert [m["role"] for m in sanitized] == ["user", "assistant", "tool", "user"]
     call = sanitized[1]["tool_calls"][0]
@@ -349,7 +351,7 @@ def test_gemini_preserves_parallel_calls_when_only_first_is_signed() -> None:
         {"role": "user", "content": "thanks"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert [m["role"] for m in sanitized] == [
         "user",
@@ -384,7 +386,7 @@ def test_gemini_backfills_only_first_cross_provider_parallel_call() -> None:
         {"role": "tool", "content": "done", "tool_call_id": "call_2"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     calls = sanitized[1]["tool_calls"]
     assert len(calls) == 2
@@ -411,7 +413,7 @@ def test_gemini_requires_signature_on_first_parallel_call() -> None:
         {"role": "tool", "content": "done", "tool_call_id": "call_2"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     calls = sanitized[1]["tool_calls"]
     assert calls[0]["extra_content"]["google"]["thought_signature"] == (
@@ -434,7 +436,7 @@ def test_gemini_replay_preserves_signed_tool_calls() -> None:
         {"role": "user", "content": "thanks"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert [m["role"] for m in sanitized] == ["user", "assistant", "tool", "user"]
     calls = sanitized[1]["tool_calls"]
@@ -459,7 +461,7 @@ def test_non_gemini_provider_keeps_unsigned_tool_calls() -> None:
         {"role": "user", "content": "thanks"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert len(sanitized[1]["tool_calls"]) == 1
     assert sanitized[2]["role"] == "tool"
@@ -474,7 +476,7 @@ def test_gemini_drops_malformed_tool_call_entries_without_crashing() -> None:
         {"role": "user", "content": "continue"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert not any(message.get("tool_calls") for message in sanitized)
 
@@ -498,7 +500,7 @@ def test_gemini_matches_duplicate_tool_ids_by_call_instance() -> None:
         {"role": "tool", "content": "new result", "tool_call_id": "reused"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert any(message.get("content") == "old result" for message in sanitized)
     assert any(message.get("content") == "new result" for message in sanitized)
@@ -524,7 +526,7 @@ def test_gemini_backfill_does_not_mutate_caller_history() -> None:
         {"role": "tool", "content": "contents", "tool_call_id": "call_1"},
     ]
 
-    sanitized = provider._sanitize_messages(messages)
+    sanitized = provider.prepare_messages(messages)
 
     assert "extra_content" not in call
     assert sanitized[1]["tool_calls"][0]["extra_content"]["google"][

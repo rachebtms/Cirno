@@ -6,13 +6,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from cirno_core.agent.context import TranscriptInput
-from cirno_core.agent.loop import AgentLoop, TurnContext, TurnKind
+from cirno_core.agent.loop import AgentLoop
+from cirno_core.agent.execution.context import TurnContext, TurnKind
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.agent.tools.filesystem import ReadFileTool
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import ChannelsConfig
-from cirno_core.providers.base import LLMResponse
+from cirno_core.config.channels import ChannelsConfig
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.runtime.context import public_history_message
 from cirno_core.utils.document import reference_non_image_attachments
 
@@ -33,14 +34,14 @@ def _make_loop(
     )
 
 
-def _turn_context(loop: AgentLoop, msg: InboundMessage) -> TurnContext:
+async def _turn_context(loop: AgentLoop, msg: InboundMessage) -> TurnContext:
     return TurnContext(
         msg=msg,
         session_key=f"{msg.channel}:{msg.chat_id}",
         turn_id="turn-1",
         runtime=loop.llm_runtime(),
         kind=TurnKind.USER,
-        delivery=loop.turn_delivery_factory.create(msg, f"{msg.channel}:{msg.chat_id}"),
+        delivery=(await loop.turn_delivery_factory.create(msg, f"{msg.channel}:{msg.chat_id}")),
     )
 
 
@@ -70,9 +71,9 @@ async def test_document_attachment_is_referenced_and_read_on_demand(
         content="import this report",
         media=[str(csv_path)],
     )
-    ctx = _turn_context(loop, msg)
+    ctx = (await _turn_context(loop, msg))
 
-    await loop._restore_turn(ctx)
+    await loop.preparation.restore(ctx)
 
     assert ctx.msg.content == f"import this report\n\n[Attachment: {csv_path}]"
     assert "name,value" not in ctx.msg.content
@@ -93,7 +94,7 @@ async def test_document_reference_survives_session_reload(tmp_path: Path) -> Non
     doc_path.write_text("name,value", encoding="utf-8")
 
     loop = _make_loop(workspace)
-    loop._run_agent_loop = AsyncMock(side_effect=RuntimeError("interrupt"))  # type: ignore[method-assign]
+    loop.model_turn.run = AsyncMock(side_effect=RuntimeError("interrupt"))  # type: ignore[method-assign]
     msg = InboundMessage(
         channel="websocket",
         sender_id="u",
@@ -103,7 +104,7 @@ async def test_document_reference_survives_session_reload(tmp_path: Path) -> Non
     )
 
     with pytest.raises(RuntimeError, match="interrupt"):
-        await loop._process_message(msg)
+        await loop.processing.process(msg)
 
     session_key = "websocket:persisted-attachment"
     loop.sessions.invalidate(session_key)
@@ -149,7 +150,7 @@ async def test_pending_document_attachment_keeps_body_out_of_prompt(
     )
 
     runtime = loop.llm_runtime()
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(
             history=[{"role": "user", "content": "hello"}],
             current_message=None,
@@ -224,13 +225,13 @@ async def test_borrowed_image_origin_survives_canonical_reload(tmp_path: Path) -
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+yF9kAAAAASUVORK5CYII="
     ))
     loop = _make_loop(tmp_path)
-    loop._run_agent_loop = AsyncMock(side_effect=RuntimeError("interrupt"))
+    loop.model_turn.run = AsyncMock(side_effect=RuntimeError("interrupt"))
     message = InboundMessage(
         channel="websocket", sender_id="u", chat_id="borrowed-origin", content="look",
         media=[str(source)], metadata={"local_media_paths": [str(source)]},
     )
     with pytest.raises(RuntimeError, match="interrupt"):
-        await loop._process_message(message)
+        await loop.processing.process(message)
     loop.sessions.invalidate(message.session_key)
     persisted = loop.sessions.get_or_create(message.session_key)
     assert persisted.messages[0]["local_media_paths"] == [str(source)]

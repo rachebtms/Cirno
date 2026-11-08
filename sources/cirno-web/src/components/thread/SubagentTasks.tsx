@@ -21,7 +21,7 @@ import { useThreadVisibility } from "@/hooks/useThreadVisibility";
 import { cancelSubagentTask, fetchSubagentTasks } from "@/lib/api";
 import type { CirnoClient } from "@/lib/cirno-client";
 import { isActiveSubagentTask, isSubagentTask, mergeSubagentTasks, type ObservedSubagentTask } from "@/lib/subagent-tasks";
-import type { SubagentTaskSnapshot } from "@/lib/types";
+import type { SubagentTaskSnapshot } from "@/lib/contracts/messages";
 
 interface TaskContext {
   sessionKey: string | null;
@@ -157,9 +157,9 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
       {children}
       <Sheet open={!!selected} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
         <SheetContent ref={detailPanel} tabIndex={-1}
-          className="w-full gap-0 overflow-hidden border-l p-0 outline-none sm:w-[min(32rem,calc(100vw-1rem))] sm:max-w-none"
+          className="w-full gap-0 overflow-hidden border-l p-0 outline-none @min-[640px]/cirno-tab:w-[min(32rem,calc(100vw-1rem))] @min-[640px]/cirno-tab:max-w-none"
           overlayClassName="bg-black/20 backdrop-blur-[8px]"
-          closeButtonClassName="right-2 top-2 grid h-11 w-11 place-items-center rounded-full sm:right-3 sm:top-3 sm:h-9 sm:w-9"
+          closeButtonClassName="right-2 top-2 grid h-11 w-11 place-items-center rounded-full @min-[640px]/cirno-tab:right-3 @min-[640px]/cirno-tab:top-3 @min-[640px]/cirno-tab:h-9 @min-[640px]/cirno-tab:w-9"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             detailPanel.current?.focus({ preventScroll: true });
@@ -183,7 +183,7 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
             </SheetDescription>
             {selected && canStopSelected ? <HoverHint content={t("thread.subagents.stopTask", { label: selected.label })}>
               <Button type="button" size="icon"
-                className="composer-primary-action touch-target h-11 w-11 shrink-0 rounded-full border border-transparent bg-foreground/[0.045] bg-clip-padding text-foreground/85 hover:bg-foreground/[0.08] hover:text-foreground disabled:text-muted-foreground/50 sm:h-9 sm:w-9"
+                className="composer-primary-action touch-target h-11 w-11 shrink-0 rounded-full border border-transparent bg-foreground/[0.045] bg-clip-padding text-foreground/85 hover:bg-foreground/[0.08] hover:text-foreground disabled:text-muted-foreground/50 @min-[640px]/cirno-tab:h-9 @min-[640px]/cirno-tab:w-9"
                 aria-label={t("thread.subagents.stopTask", { label: selected.label })} aria-busy={stoppingId === selected.task_id}
                 disabled={stoppingId !== null} onClick={() => void stop(selected)}>
                 {selected.state === "running" ? <ComposerActionIcon state="stop" /> : <StopIcon className="h-3.5 w-3.5" aria-hidden />}
@@ -243,11 +243,11 @@ export function SubagentTaskButton({ task, surface = "archive" }: { task: Observ
   }}
     onClick={(event) => context?.open(task, event.currentTarget)}
     className={activity
-      ? "grid min-h-11 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 rounded-lg px-2 py-2 text-left text-[13px] leading-5 transition-colors duration-150 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none sm:min-h-9 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:py-1.5"
-      : "col-span-full grid min-h-11 min-w-0 grid-cols-subgrid items-center gap-y-0.5 rounded-control py-2 text-left text-[13px] leading-5 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 sm:py-1.5"}>
+      ? "grid min-h-11 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 rounded-lg px-2 py-2 text-left text-[13px] leading-5 transition-colors duration-150 hover:bg-surface-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none @min-[640px]/cirno-tab:min-h-9 @min-[640px]/cirno-tab:grid-cols-[auto_minmax(0,1fr)_auto_auto] @min-[640px]/cirno-tab:py-1.5"
+      : "col-span-full grid min-h-11 min-w-0 grid-cols-subgrid items-center gap-y-0.5 rounded-control py-2 text-left text-[13px] leading-5 hover:bg-surface-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[640px]/cirno-tab:min-h-9 @min-[640px]/cirno-tab:py-1.5"}>
     <span className="col-start-1 row-start-1 self-center"><TaskStateIcon task={task} /></span>
-    <span className={`col-start-2 row-start-1 min-w-0 line-clamp-2 break-words font-medium sm:line-clamp-none sm:truncate ${activity ? "" : "col-span-2 sm:col-span-1"}`}>{task.label}</span>
-    <span className={completed ? "sr-only" : `col-start-2 row-start-2 text-xs leading-4 text-muted-foreground sm:col-start-3 sm:row-start-1 ${activity ? "" : "col-span-2 sm:col-span-1"}`}>{t(`thread.subagents.states.${task.state}`)}</span>
-    <span className={`${activity ? "col-start-3 sm:col-start-4" : "col-start-4"} text-right text-xs tabular-nums text-muted-foreground sm:row-start-1 sm:min-w-[5ch] ${completed ? "row-start-1" : "row-start-2"}`}><TaskElapsed task={task} /></span>
+    <span className={`col-start-2 row-start-1 min-w-0 line-clamp-2 break-words font-medium @min-[640px]/cirno-tab:line-clamp-none @min-[640px]/cirno-tab:truncate ${activity ? "" : "col-span-2 @min-[640px]/cirno-tab:col-span-1"}`}>{task.label}</span>
+    <span className={completed ? "sr-only" : `col-start-2 row-start-2 text-xs leading-4 text-muted-foreground @min-[640px]/cirno-tab:col-start-3 @min-[640px]/cirno-tab:row-start-1 ${activity ? "" : "col-span-2 @min-[640px]/cirno-tab:col-span-1"}`}>{t(`thread.subagents.states.${task.state}`)}</span>
+    <span className={`${activity ? "col-start-3 @min-[640px]/cirno-tab:col-start-4" : "col-start-4"} text-right text-xs tabular-nums text-muted-foreground @min-[640px]/cirno-tab:row-start-1 @min-[640px]/cirno-tab:min-w-[5ch] ${completed ? "row-start-1" : "row-start-2"}`}><TaskElapsed task={task} /></span>
   </button>;
 }

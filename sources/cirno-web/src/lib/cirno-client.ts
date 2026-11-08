@@ -1,19 +1,18 @@
+import { ClientTranscripts } from "./client-transcripts";
+import { ClientListeners } from "./client-listeners";
+import { ClientChatRequests } from "./client-chat-requests";
+import { ClientMutations } from "./client-mutations";
+import { ClientConnection, type ClientConnectionOptions } from "./client-connection";
+import type { PreferencesSnapshot } from "@/features/preferences/contracts";
 import { uploadAttachments, uploadCapability, type AttachmentReference, type UploadCapability } from "../../packages/client-events/attachments";
 import { DeliveryReceipts } from "../../packages/client-events/delivery";
 import { decodeNotification } from "../../packages/client-events/notifications";
-import type {
-  ConnectionStatus,
-  InboundEvent,
-  Outbound,
-  OutboundCliAppMention,
-  OutboundMcpPresetMention,
-  OutboundMedia,
-  SessionMention,
-  SidebarStatePayload,
-  GoalStateWsPayload,
-  WorkspaceScopePayload,
-} from "./types";
-import { createHostWebSocket } from "./runtime";
+import type { ConnectionStatus, Outbound } from "@/lib/contracts/transport";
+import type { InboundEvent } from "@/lib/contracts/events";
+import type { OutboundCliAppMention, OutboundMcpPresetMention, OutboundMedia, SessionMention } from "@/lib/contracts/messages";
+import type { SidebarStatePayload } from "@/lib/contracts/conversation-preferences";
+import type { GoalStateWsPayload } from "@/lib/contracts/activity";
+import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 import { ClientRunLedger } from "./client-run-ledger";
 import type { CanonicalRunSnapshot, RunEffect, RunObservation, RunState } from "./client-run-ledger";
 
@@ -22,15 +21,6 @@ export type { CanonicalRunSnapshot, RunState } from "./client-run-ledger";
 /** WebSocket readyState constants, referenced by value to stay portable
  * across runtimes that don't expose a global ``WebSocket`` (tests, SSR). */
 const WS_OPEN = 1;
-const WS_CLOSING = 2;
-const HOST_SOCKET_URL_PREFIX = "cirno-host://";
-
-function createDefaultSocket(url: string): WebSocket {
-  if (url.startsWith(HOST_SOCKET_URL_PREFIX)) {
-    return createHostWebSocket(url);
-  }
-  return new WebSocket(url);
-}
 
 /** Inbound WebSocket ``console.log`` / parse-failure ``console.warn``.
  *
@@ -87,7 +77,6 @@ type SessionUpdateHandler = (
   workspaceScope?: WorkspaceScopePayload,
 ) => void;
 type SidebarStateUpdateHandler = (state: SidebarStatePayload) => void;
-type PairingChangeHandler = () => void;
 type RunStatusHandler = (chatId: string, state: RunState) => void;
 
 /** Structured errors surfaced to the UI.
@@ -130,24 +119,6 @@ interface PendingRequest<T> {
   timer: ReturnType<typeof setTimeout>;
 }
 
-interface PendingWebUIRequest extends PendingRequest<unknown> {
-  serializedFrame: string;
-}
-
-class WebUIMutationError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-    this.name = "WebUIMutationError";
-  }
-}
-
-interface PendingChatRequest extends PendingRequest<string> {
-  temporary: boolean;
-}
-
 const SYSTEM_COMMAND_TURN_PREFIX = "webui-system:";
 
 
@@ -155,17 +126,9 @@ export function isSystemCommandTurnId(value: string | null | undefined): value i
   return typeof value === "string" && value.startsWith(SYSTEM_COMMAND_TURN_PREFIX);
 }
 
-export interface CirnoClientOptions {
-  url: string;
-  reconnect?: boolean;
+export interface CirnoClientOptions extends ClientConnectionOptions {
   /** Maximum UTF-8 bytes accepted for one websocket message. */
   maxFrameBytes?: number;
-  /** Called when a connection drops so the app can refresh its token. */
-  onReauth?: () => Promise<string | null>;
-  /** Inject a custom WebSocket factory (used by unit tests). */
-  socketFactory?: (url: string) => WebSocket;
-  /** Delay-cap for reconnect backoff (ms). */
-  maxBackoffMs?: number;
 }
 
 function runObservation(event: InboundEvent): RunObservation | null {
@@ -222,24 +185,24 @@ function runObservation(event: InboundEvent): RunObservation | null {
  * per chat. Reconnects are transparent and re-attach every known chat_id.
  */
 export class CirnoClient {
-  private socket: WebSocket | null = null;
+  private readonly connection: ClientConnection;
+
+  private get socket(): WebSocket | null { return this.connection.socket; }
+  private get currentUrl(): string { return this.connection.url; }
   private upload: UploadCapability | null = null;
   private receipts = new DeliveryReceipts();
-  private statusHandlers = new Set<StatusHandler>();
-  private runtimeModelHandlers = new Set<RuntimeModelHandler>();
-  private sessionUpdateHandlers = new Set<SessionUpdateHandler>();
-  private sidebarStateUpdateHandlers = new Set<SidebarStateUpdateHandler>();
-  private runStatusHandlers = new Set<RunStatusHandler>();
-  private runCompletionHandlers = new Set<RunCompletionHandler>();
-  private errorHandlers = new Set<ErrorHandler>();
-  private taskNoticeHandlers = new Set<(notice: TaskNotice) => void>();
-  private pairingChangeHandlers = new Set<PairingChangeHandler>();
-  private readyHandlers = new Set<() => void>();
-  private chatHandlers = new Map<string, Set<EventHandler>>();
-  private transcriptHandlers = new Map<string, { handler: EventHandler }>();
-  /** Inbound frames received while the transcript owner is absent, regardless of observers. */
-  private pendingInboundByChat = new Map<string, InboundEvent[]>();
-  private static readonly PENDING_INBOUND_MAX = 2000;
+  private statusHandlers = new ClientListeners<Parameters<StatusHandler>>("status");
+  private runtimeModelHandlers = new ClientListeners<Parameters<RuntimeModelHandler>>("runtime model");
+  private sessionUpdateHandlers = new ClientListeners<Parameters<SessionUpdateHandler>>("session update");
+  private sidebarStateUpdateHandlers = new ClientListeners<Parameters<SidebarStateUpdateHandler>>("sidebar state");
+  private runStatusHandlers = new ClientListeners<Parameters<RunStatusHandler>>("run status");
+  private runCompletionHandlers = new ClientListeners<Parameters<RunCompletionHandler>>("completion");
+  private errorHandlers = new ClientListeners<Parameters<ErrorHandler>>("error");
+  private taskNoticeHandlers = new ClientListeners<Parameters<(notice: TaskNotice) => void>>("task notice");
+  private readyHandlers = new ClientListeners<Parameters<() => void>>("ready");
+  private readonly transcripts = new ClientTranscripts(
+    chatId => this.attach(chatId), chatId => this.temporaryChatIds.has(chatId),
+  );
   // chat_ids we've attached to since connect; re-attached after reconnects
   private knownChats = new Set<string>();
   /** Temporary chats are connection-owned and intentionally not reattached. */
@@ -249,31 +212,27 @@ export class CirnoClient {
   private lastSocketMessageSend: { chatId: string; turnId: string } | null = null;
   /** Latest ``goal_state`` snapshot per ``chat_id`` (multi-session isolation). */
   private goalStateByChatId = new Map<string, GoalStateWsPayload>();
-  private pendingNewChat: PendingChatRequest | null = null;
+  private readonly chatRequests = new ClientChatRequests(
+    frame => this.queueSend(frame),
+    id => { this.sendQueue = this.sendQueue.filter(frame => !("request_id" in frame && frame.request_id === id)); },
+  );
   private pendingSystemCommands = new Map<string, PendingRequest<void>>();
-  private pendingWebUIRequests = new Map<string, PendingWebUIRequest>();
+  private readonly mutations = new ClientMutations(() => this.socket, () => this.maxFrameBytes);
   // Frames queued while the socket is not yet OPEN
   private sendQueue: Outbound[] = [];
-  private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly shouldReconnect: boolean;
-  private readonly maxBackoffMs: number;
   private maxFrameBytes: number | undefined;
-  private socketFactory: (url: string) => WebSocket;
-  private currentUrl: string;
   private status_: ConnectionStatus = "idle";
   private readyChatId: string | null = null;
-  // Set by ``close()`` so the onclose handler knows the drop was intentional
-  // and must not schedule a reconnect or flip status back to "reconnecting".
-  private intentionallyClosed = false;
   private foregroundCheck: Promise<void> | null = null;
 
-  constructor(private options: CirnoClientOptions) {
-    this.shouldReconnect = options.reconnect ?? true;
-    this.maxBackoffMs = options.maxBackoffMs ?? 15_000;
+  constructor(options: CirnoClientOptions) {
     this.maxFrameBytes = this.normalizeMaxFrameBytes(options.maxFrameBytes);
-    this.socketFactory = options.socketFactory ?? createDefaultSocket;
-    this.currentUrl = options.url;
+    this.connection = new ClientConnection(options, {
+      status: (status) => this.setStatus(status),
+      opened: () => this.handleOpen(),
+      message: (event) => this.handleMessage(event),
+      closed: (event, willReconnect) => this.handleClose(event, willReconnect),
+    });
   }
 
   get status(): ConnectionStatus {
@@ -284,75 +243,54 @@ export class CirnoClient {
     return this.readyChatId;
   }
 
-  /** Swap the URL (e.g. after fetching a fresh token) then reconnect. */
+  /** Update the address and factory used by the next connection. */
   updateUrl(url: string, socketFactory?: (url: string) => WebSocket): void {
-    this.currentUrl = url;
-    if (socketFactory) {
-      this.socketFactory = socketFactory;
-    }
+    this.connection.updateUrl(url, socketFactory);
   }
 
   onStatus(handler: StatusHandler): Unsubscribe {
-    this.statusHandlers.add(handler);
-    handler(this.status_);
-    return () => {
-      this.statusHandlers.delete(handler);
-    };
+    const unsubscribe = this.statusHandlers.subscribe(handler);
+    this.statusHandlers.invoke(handler, this.status_);
+    return unsubscribe;
   }
 
   onRuntimeModelUpdate(handler: RuntimeModelHandler): Unsubscribe {
-    this.runtimeModelHandlers.add(handler);
-    return () => {
-      this.runtimeModelHandlers.delete(handler);
-    };
+    return this.runtimeModelHandlers.subscribe(handler);
   }
 
   onSessionUpdate(handler: SessionUpdateHandler): Unsubscribe {
-    this.sessionUpdateHandlers.add(handler);
-    return () => {
-      this.sessionUpdateHandlers.delete(handler);
-    };
-  }
-
-  onPairingChange(handler: PairingChangeHandler): Unsubscribe {
-    this.pairingChangeHandlers.add(handler);
-    return () => { this.pairingChangeHandlers.delete(handler); };
+    return this.sessionUpdateHandlers.subscribe(handler);
   }
 
   onReady(handler: () => void): Unsubscribe {
-    this.readyHandlers.add(handler);
-    return () => { this.readyHandlers.delete(handler); };
+    return this.readyHandlers.subscribe(handler);
+  }
+
+  private readonly preferenceHandlers = new ClientListeners<Parameters<(snapshot: PreferencesSnapshot) => void>>("preferences");
+  onPreferencesUpdate(handler: (snapshot: PreferencesSnapshot) => void): Unsubscribe {
+    return this.preferenceHandlers.subscribe(handler);
   }
 
   onSidebarStateUpdate(handler: SidebarStateUpdateHandler): Unsubscribe {
-    this.sidebarStateUpdateHandlers.add(handler);
-    return () => {
-      this.sidebarStateUpdateHandlers.delete(handler);
-    };
+    return this.sidebarStateUpdateHandlers.subscribe(handler);
   }
 
   onRunStatus(handler: RunStatusHandler): Unsubscribe {
-    this.runStatusHandlers.add(handler);
+    const unsubscribe = this.runStatusHandlers.subscribe(handler);
     for (const { chatId, state } of this.runs.states()) {
-      handler(chatId, state);
+      this.runStatusHandlers.invoke(handler, chatId, state);
     }
-    return () => {
-      this.runStatusHandlers.delete(handler);
-    };
+    return unsubscribe;
   }
 
   /** Live lifecycle events, independent of mounted chats. Never replays history. */
   onTaskNotice(handler: (notice: TaskNotice) => void): Unsubscribe {
-    this.taskNoticeHandlers.add(handler);
-    return () => { this.taskNoticeHandlers.delete(handler); };
+    return this.taskNoticeHandlers.subscribe(handler);
   }
 
   /** Subscribe to transport-level faults (see :type:`StreamError`). */
   onError(handler: ErrorHandler): Unsubscribe {
-    this.errorHandlers.add(handler);
-    return () => {
-      this.errorHandlers.delete(handler);
-    };
+    return this.errorHandlers.subscribe(handler);
   }
 
   getRunState(chatId: string): RunState {
@@ -396,8 +334,7 @@ export class CirnoClient {
   }
 
   onRunCompletion(handler: RunCompletionHandler): Unsubscribe {
-    this.runCompletionHandlers.add(handler);
-    return () => this.runCompletionHandlers.delete(handler);
+    return this.runCompletionHandlers.subscribe(handler);
   }
 
   getUnsettledRunChatIds(): string[] {
@@ -453,7 +390,7 @@ export class CirnoClient {
           this.emitRunStatus(effect.chatId, effect.state);
           break;
         case "completion":
-          for (const handler of this.runCompletionHandlers) handler(effect.chatId);
+          this.runCompletionHandlers.emit(effect.chatId);
           break;
         case "discard-send":
           this.sendQueue = this.sendQueue.filter((frame) => !(
@@ -462,19 +399,9 @@ export class CirnoClient {
             && frame.turn_id === effect.turnId
           ));
           break;
-        case "prune-inbound": {
-          const pending = this.pendingInboundByChat.get(effect.chatId);
-          if (!pending) break;
-          const turnIds = new Set(effect.turnIds);
-          const remaining = pending.filter((event) => (
-            !("turn_id" in event)
-            || typeof event.turn_id !== "string"
-            || !turnIds.has(event.turn_id)
-          ));
-          if (remaining.length > 0) this.pendingInboundByChat.set(effect.chatId, remaining);
-          else this.pendingInboundByChat.delete(effect.chatId);
+        case "prune-inbound":
+          this.transcripts.prune(effect.chatId, effect.turnIds);
           break;
-        }
         default: {
           const exhaustive: never = effect;
           return exhaustive;
@@ -495,73 +422,25 @@ export class CirnoClient {
 
   /** Observe live chat events without consuming transcript replay. Auto-attaches. */
   onChat(chatId: string, handler: EventHandler): Unsubscribe {
-    let handlers = this.chatHandlers.get(chatId);
-    if (!handlers) {
-      handlers = new Set();
-      this.chatHandlers.set(chatId, handlers);
-    }
-    handlers.add(handler);
-    this.attach(chatId);
-    return () => {
-      const current = this.chatHandlers.get(chatId);
-      if (!current) return;
-      current.delete(handler);
-      if (current.size === 0) this.chatHandlers.delete(chatId);
-    };
+    return this.transcripts.observe(chatId, handler);
   }
 
   /** Own transcript delivery: consume the pending tail once, then receive live events. */
   onTranscript(chatId: string, handler: EventHandler): Unsubscribe {
-    if (this.transcriptHandlers.has(chatId)) {
-      throw new Error(`Transcript already subscribed: ${chatId}`);
-    }
-    const subscription = { handler };
-    this.transcriptHandlers.set(chatId, subscription);
-    const pending = this.pendingInboundByChat.get(chatId);
-    this.pendingInboundByChat.delete(chatId);
-    for (const event of pending ?? []) handler(event);
-    this.attach(chatId);
-    return () => {
-      if (this.transcriptHandlers.get(chatId) === subscription) {
-        this.transcriptHandlers.delete(chatId);
-      }
-    };
+    return this.transcripts.subscribe(chatId, handler);
   }
 
   connect(): void {
-    if (this.socket && this.socket.readyState < WS_CLOSING) return;
-    this.intentionallyClosed = false;
-    this.setStatus("connecting");
-    const sock = this.socketFactory(this.currentUrl);
-    this.socket = sock;
-    sock.onopen = () => this.handleOpen();
-    sock.onmessage = (ev) => this.handleMessage(ev);
-    sock.onerror = () => this.setStatus("error");
-    sock.onclose = (ev) => this.handleClose(ev);
+    this.connection.connect();
   }
 
   close(): void {
-    this.upload = null;
-    this.receipts.close();
-    this.intentionallyClosed = true;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    const sock = this.socket;
-    this.socket = null;
-    try {
-      sock?.close();
-    } catch {
-      // ignore
-    }
-    this.clearTemporaryChats();
-    this.setStatus("closed");
+    this.connection.close();
   }
 
   /** Mobile browsers can leave a suspended socket looking OPEN after it has died. */
   resumeFromBackground(): Promise<void> {
-    if (this.intentionallyClosed || this.status_ === "idle" || this.status_ === "connecting") return Promise.resolve();
+    if (this.connection.closed || this.status_ === "idle" || this.status_ === "connecting") return Promise.resolve();
     if (this.foregroundCheck) return this.foregroundCheck;
     this.foregroundCheck = this.restoreForegroundConnection().finally(() => { this.foregroundCheck = null; });
     return this.foregroundCheck;
@@ -572,21 +451,14 @@ export class CirnoClient {
     if (socket?.readyState === WS_OPEN) {
       try {
         await this.requestMutation("connection.check", {}, 5_000);
-        if (socket !== this.socket || this.intentionallyClosed) return;
+        if (socket !== this.socket || this.connection.closed) return;
         for (const chatId of this.knownChats) this.rawSend({ type: "attach", chat_id: chatId });
         return;
       } catch {
-        if (socket !== this.socket || this.intentionallyClosed) return;
+        if (socket !== this.socket || this.connection.closed) return;
       }
     }
-    if (!this.shouldReconnect || this.intentionallyClosed) return;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    if (socket) {
-      socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
-      socket.close();
-    }
-    this.handleClose(undefined, true);
+    this.connection.reconnectNow(socket);
   }
 
   discardTemporaryChat(chatId: string): void {
@@ -598,38 +470,18 @@ export class CirnoClient {
   }
 
   /** Ask the server to provision a new chat_id; resolves with the assigned id. */
-  newChat(timeoutMs: number = 5_000, workspaceScope?: WorkspaceScopePayload | null, projectId?: string | null, ptcMode = false): Promise<string> {
-    if (this.pendingNewChat) {
-      return Promise.reject(new Error("newChat already in flight"));
-    }
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingNewChat = null;
-        reject(new Error("newChat timed out"));
-      }, timeoutMs);
-      this.pendingNewChat = { resolve, reject, timer, temporary: false };
-      this.queueSend({
-        type: "new_chat",
-        ...(ptcMode ? { ptc_mode: true } : {}),
-        ...(projectId ? { project_id: projectId } : {}),
-        ...(workspaceScope ? { workspace_scope: workspaceScope } : {}),
-      });
-    });
+  newChat(timeoutMs = 5_000, workspaceScope?: WorkspaceScopePayload | null, projectId?: string | null, ptcMode = false): Promise<string> {
+    return this.chatRequests.request({
+      type: "new_chat",
+      ...(ptcMode ? { ptc_mode: true } : {}),
+      ...(projectId ? { project_id: projectId } : {}),
+      ...(workspaceScope ? { workspace_scope: workspaceScope } : {}),
+    }, timeoutMs, "newChat");
   }
 
-  /** Ask the WebUI gateway to create a connection-owned non-persistent chat. */
-  newTemporaryChat(timeoutMs: number = 5_000, ptcMode = false): Promise<string> {
-    if (this.pendingNewChat) {
-      return Promise.reject(new Error("newChat already in flight"));
-    }
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingNewChat = null;
-        reject(new Error("newTemporaryChat timed out"));
-      }, timeoutMs);
-      this.pendingNewChat = { resolve, reject, timer, temporary: true };
-      this.queueSend({ type: "new_temporary_chat", ...(ptcMode ? { ptc_mode: true } : {}) });
-    });
+  /** Create a connection-owned conversation without persistent history. */
+  newTemporaryChat(timeoutMs = 5_000, ptcMode = false): Promise<string> {
+    return this.chatRequests.request({ type: "new_temporary_chat", ...(ptcMode ? { ptc_mode: true } : {}) }, timeoutMs, "newTemporaryChat");
   }
 
   /**
@@ -637,86 +489,16 @@ export class CirnoClient {
    * replayed with the same request_id after reconnect so the gateway can join or
    * replay the original operation. A client-side timeout still ends all retries.
    */
-  requestMutation<T>(
-    action: string,
-    payload: Record<string, unknown> = {},
-    timeoutMs: number = 20_000,
-  ): Promise<T> {
-    const socket = this.socket;
-    if (!socket || socket.readyState !== WS_OPEN) {
-      return Promise.reject(
-        new WebUIMutationError(503, "WebUI connection is not open"),
-      );
-    }
-    const requestId = crypto.randomUUID();
-    const frame: Outbound = {
-      type: "webui_request",
-      request_id: requestId,
-      action,
-      payload,
-    };
-    if (!this.frameFitsTransport(frame)) {
-      return Promise.reject(
-        new WebUIMutationError(413, "WebUI mutation payload is too large"),
-      );
-    }
-
-    return new Promise<T>((resolve, reject) => {
-      let serializedFrame: string;
-      try {
-        serializedFrame = JSON.stringify(frame);
-      } catch {
-        reject(new WebUIMutationError(503, "Could not encode WebUI request"));
-        return;
-      }
-      const timer = setTimeout(() => {
-        this.pendingWebUIRequests.delete(requestId);
-        reject(
-          new WebUIMutationError(
-            504,
-            `WebUI request timed out after ${timeoutMs}ms`,
-          ),
-        );
-      }, timeoutMs);
-      this.pendingWebUIRequests.set(requestId, {
-        resolve: (value) => resolve(value as T),
-        reject,
-        timer,
-        serializedFrame,
-      });
-      try {
-        socket.send(serializedFrame);
-      } catch {
-        clearTimeout(timer);
-        this.pendingWebUIRequests.delete(requestId);
-        reject(new WebUIMutationError(503, "Could not send WebUI request"));
-      }
-    });
+  requestMutation<T>(action: string, payload: Record<string, unknown> = {}, timeoutMs = 20_000): Promise<T> {
+    return this.mutations.request<T>(action, payload, timeoutMs);
   }
 
   /** Ask the server to create a non-destructive fork before a user-message index. */
-  forkChat(
-    sourceChatId: string,
-    beforeUserIndex: number,
-    title?: string,
-    timeoutMs: number = 5_000,
-  ): Promise<string> {
-    if (this.pendingNewChat) {
-      return Promise.reject(new Error("newChat already in flight"));
-    }
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingNewChat = null;
-        reject(new Error("forkChat timed out"));
-      }, timeoutMs);
-      this.pendingNewChat = { resolve, reject, timer, temporary: false };
-      this.queueSend({
-        type: "fork_chat",
-        source_chat_id: sourceChatId,
-        before_user_index: beforeUserIndex,
-        ...(title?.trim() ? { title: title.trim() } : {}),
-      });
-    });
+  forkChat(sourceChatId: string, beforeUserIndex: number, title?: string, timeoutMs = 5_000): Promise<string> {
+    return this.chatRequests.request({
+      type: "fork_chat", source_chat_id: sourceChatId, before_user_index: beforeUserIndex,
+      ...(title?.trim() ? { title: title.trim() } : {}),
+    }, timeoutMs, "forkChat");
   }
 
   attach(chatId: string): void {
@@ -729,7 +511,7 @@ export class CirnoClient {
 
   async backupRequest<T>(action: "catalog" | "export" | "upload" | "restore" | "cancel", body: Blob | Record<string, unknown> = {}): Promise<T> {
     if (!this.upload || this.socket?.readyState !== WS_OPEN) throw new Error("Reconnect to Cirno before transferring backups.");
-    const url = new URL(`/api/backups/${action}`, typeof window !== "undefined" ? window.location.href : this.currentUrl);
+    const url = new URL(`/v0/backups/${action}`, typeof window !== "undefined" ? window.location.href : this.currentUrl);
     const response = await fetch(url, {
       method: "POST", headers: { Authorization: `Bearer ${this.upload.token}`,
         "Content-Type": body instanceof Blob ? "application/gzip" : "application/json" },
@@ -767,6 +549,26 @@ export class CirnoClient {
       this.applyRunEffects(this.runs.transition({ kind: "reject", chatId, turnId }));
       this.emitError({ kind: "turn_rejected", chatId, turnId, detail: "attachment_rejected",
         reason: error instanceof Error ? error.message : "Attachment send failed" });
+      throw error;
+    }
+  }
+
+  async sendTextMessage(
+    chatId: string, content: string, options?: Parameters<CirnoClient["sendMessage"]>[3],
+  ): Promise<void> {
+    const turnId = options?.turnId ?? crypto.randomUUID();
+    try {
+      await this.receipts.wait(turnId, () => {
+        if (!this.sendMessage(chatId, content, undefined, { ...options, turnId })) {
+          throw new Error("Message was not sent; draft retained");
+        }
+      });
+    } catch (error) {
+      // A timed-out offline send must not reappear after the user retries it.
+      this.sendQueue = this.sendQueue.filter(frame => !(frame.type === "message" && frame.turn_id === turnId));
+      this.applyRunEffects(this.runs.transition({ kind: "reject", chatId, turnId }));
+      this.emitError({ kind: "turn_rejected", chatId, turnId, detail: "message_rejected",
+        reason: error instanceof Error ? error.message : "Message send failed" });
       throw error;
     }
   }
@@ -887,19 +689,15 @@ export class CirnoClient {
   private setStatus(status: ConnectionStatus): void {
     if (this.status_ === status) return;
     this.status_ = status;
-    for (const handler of this.statusHandlers) handler(status);
+    this.statusHandlers.emit(status);
   }
 
   private handleOpen(): void {
-    this.setStatus("open");
-    this.reconnectAttempts = 0;
     // Re-attach every known chat_id so deliveries continue routing after a drop.
     for (const chatId of this.knownChats) {
       this.rawSend({ type: "attach", chat_id: chatId });
     }
-    for (const pending of this.pendingWebUIRequests.values()) {
-      this.rawSendSerialized(pending.serializedFrame);
-    }
+    this.mutations.replay();
     // Flush anything queued during reconnect.
     const queued = this.sendQueue.splice(0);
     for (const frame of queued) this.rawSend(frame);
@@ -926,22 +724,11 @@ export class CirnoClient {
     }
 
     if (parsed.event === "webui_response") {
-      const pending = this.pendingWebUIRequests.get(parsed.request_id);
-      if (!pending) return;
-      clearTimeout(pending.timer);
-      this.pendingWebUIRequests.delete(parsed.request_id);
-      if (parsed.ok) {
-        pending.resolve(parsed.result);
-      } else {
-        const status = Number.isFinite(parsed.error?.status)
-          ? parsed.error.status
-          : 500;
-        const message = parsed.error?.message || "WebUI mutation failed";
-        pending.reject(new WebUIMutationError(status, message));
-      }
+      this.mutations.accept(parsed);
       return;
     }
 
+    if (parsed.event === "error") this.chatRequests.accept(parsed);
     this.receipts.event(parsed);
     const turnId = "turn_id" in parsed && typeof parsed.turn_id === "string"
       ? parsed.turn_id
@@ -993,9 +780,7 @@ export class CirnoClient {
       this.upload = uploadCapability(parsed.upload);
       this.readyChatId = parsed.chat_id;
       this.knownChats.add(parsed.chat_id);
-      for (const handler of this.readyHandlers) {
-        try { handler(); } catch (error) { console.error("WebSocket ready listener failed", error); }
-      }
+      this.readyHandlers.emit();
       return;
     }
 
@@ -1005,22 +790,8 @@ export class CirnoClient {
       } else {
         this.knownChats.add(parsed.chat_id);
       }
-      if (
-        this.pendingNewChat
-        && this.pendingNewChat.temporary === (parsed.temporary === true)
-      ) {
-        clearTimeout(this.pendingNewChat.timer);
-        this.pendingNewChat.resolve(parsed.chat_id);
-        this.pendingNewChat = null;
-      }
+      this.chatRequests.accept(parsed);
       this.dispatch(parsed.chat_id, parsed);
-      return;
-    }
-
-    if (parsed.event === "pairing_changed") {
-      for (const handler of this.pairingChangeHandlers) {
-        try { handler(); } catch (error) { console.error("Pairing listener failed", error); }
-      }
       return;
     }
 
@@ -1033,10 +804,15 @@ export class CirnoClient {
     if (parsed.event === "session_updated") {
       if (parsed.scope === "reset" && parsed.chat_id) {
         this.goalStateByChatId.delete(parsed.chat_id);
-        this.pendingInboundByChat.delete(parsed.chat_id);
+        this.transcripts.clearPending(parsed.chat_id);
         this.applyRunEffects(this.runs.transition({ kind: "forget", chatId: parsed.chat_id }));
       }
       this.emitSessionUpdate(parsed.chat_id, parsed.scope, parsed.workspace_scope);
+      return;
+    }
+
+    if (parsed.event === "preferences_updated") {
+      this.preferenceHandlers.emit(parsed.preferences);
       return;
     }
 
@@ -1052,39 +828,20 @@ export class CirnoClient {
         chatId: parsed.chat_id,
         turnId: parsed.turn_id,
       });
-      if (this.pendingNewChat) {
-        clearTimeout(this.pendingNewChat.timer);
-        this.pendingNewChat.reject(new Error(`workspace_scope_rejected:${parsed.reason || ""}`));
-        this.pendingNewChat = null;
-      }
-    }
-
-    if (parsed.event === "error" && this.pendingNewChat) {
-      clearTimeout(this.pendingNewChat.timer);
-      const detail = typeof parsed.detail === "string" ? parsed.detail : "server error";
-      const reason = typeof parsed.reason === "string" && parsed.reason ? `:${parsed.reason}` : "";
-      this.pendingNewChat.reject(new Error(`${detail}${reason}`));
-      this.pendingNewChat = null;
     }
 
     if (correlatedChatId) {
       this.recordGoalStateSnapshot(correlatedChatId, parsed);
       if ((parsed.event === "turn_end" || parsed.event === "recovery_state")
         && (this.knownChats.has(correlatedChatId) || this.temporaryChatIds.has(correlatedChatId))) {
-        for (const handler of this.taskNoticeHandlers) {
-          // Optional browser features must not interrupt delivery or cleanup.
-          try { handler({ event: parsed, temporary: this.temporaryChatIds.has(correlatedChatId) }); }
-          catch { /* The notification owner reports its own delivery failure. */ }
-        }
+        this.taskNoticeHandlers.emit({ event: parsed, temporary: this.temporaryChatIds.has(correlatedChatId) });
       }
       this.dispatch(correlatedChatId, parsed);
     }
   }
 
   private emitRuntimeModelUpdate(modelName: string | null, modelPreset?: string | null): void {
-    for (const handler of this.runtimeModelHandlers) {
-      handler(modelName, modelPreset);
-    }
+    this.runtimeModelHandlers.emit(modelName, modelPreset);
   }
 
   private emitSessionUpdate(
@@ -1092,63 +849,27 @@ export class CirnoClient {
     scope?: SessionUpdateScope,
     workspaceScope?: WorkspaceScopePayload,
   ): void {
-    for (const handler of this.sessionUpdateHandlers) {
-      handler(chatId, scope, workspaceScope);
-    }
+    this.sessionUpdateHandlers.emit(chatId, scope, workspaceScope);
   }
 
   private emitSidebarStateUpdate(state: SidebarStatePayload): void {
-    for (const handler of this.sidebarStateUpdateHandlers) {
-      handler(state);
-    }
+    this.sidebarStateUpdateHandlers.emit(state);
   }
 
   private emitRunStatus(chatId: string, state: RunState): void {
-    for (const handler of this.runStatusHandlers) {
-      handler(chatId, state);
-    }
+    this.runStatusHandlers.emit(chatId, state);
   }
 
   private dispatch(chatId: string, ev: InboundEvent): void {
-    const transcript = this.transcriptHandlers.get(chatId);
-    if (transcript) {
-      transcript.handler(ev);
-    } else {
-      let pending = this.pendingInboundByChat.get(chatId);
-      if (!pending) {
-        pending = [];
-        this.pendingInboundByChat.set(chatId, pending);
-      }
-      pending.push(ev);
-      // Temporary chats have no canonical history to recover evicted events from.
-      if (!this.temporaryChatIds.has(chatId)) {
-        const over = pending.length - CirnoClient.PENDING_INBOUND_MAX;
-        if (over > 0) pending.splice(0, over);
-      }
-    }
-    for (const handler of this.chatHandlers.get(chatId) ?? []) handler(ev);
+    this.transcripts.dispatch(chatId, ev);
   }
 
-  private handleClose(event?: { code?: number }, immediate = false): void {
+  private handleClose(event: { code?: number } | undefined, willReconnect: boolean): void {
     this.upload = null;
     this.receipts.close();
-    this.socket = null;
     this.clearTemporaryChats();
-    const willReconnect = !this.intentionallyClosed && this.shouldReconnect;
-    if (this.pendingNewChat) {
-      clearTimeout(this.pendingNewChat.timer);
-      this.pendingNewChat.reject(new Error("socket closed"));
-      this.pendingNewChat = null;
-    }
-    if (!willReconnect) {
-      for (const pending of this.pendingWebUIRequests.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(
-          new WebUIMutationError(503, "Socket closed before WebUI response"),
-        );
-      }
-      this.pendingWebUIRequests.clear();
-    }
+    this.chatRequests.close();
+    this.mutations.disconnected(willReconnect);
     for (const pending of this.pendingSystemCommands.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error("socket closed"));
@@ -1176,25 +897,11 @@ export class CirnoClient {
     }
     this.applyRunEffects(this.runs.transition({ kind: "transport-lost" }));
     this.lastSocketMessageSend = null;
-    if (!willReconnect) {
-      this.setStatus("closed");
-      return;
-    }
-    this.scheduleReconnect(immediate ? 0 : undefined);
+
   }
 
   private emitError(error: StreamError): void {
-    // Isolate subscribers so a throwing handler cannot abort the surrounding
-    // ``handleClose`` flow (which still owes us a reconnect decision + status
-    // update). We deliberately swallow here: error reporting is best-effort
-    // and must never be allowed to compound the failure it's reporting.
-    for (const handler of this.errorHandlers) {
-      try {
-        handler(error);
-      } catch {
-        // best-effort: subscriber fault must not stall transport bookkeeping
-      }
-    }
+    this.errorHandlers.emit(error);
   }
 
   private resolveSystemCommand(turnId: string): void {
@@ -1211,25 +918,6 @@ export class CirnoClient {
     clearTimeout(pending.timer);
     this.pendingSystemCommands.delete(turnId);
     pending.reject(new Error(detail));
-  }
-
-  private scheduleReconnect(delayOverride?: number): void {
-    this.setStatus("reconnecting");
-    const attempt = this.reconnectAttempts++;
-    // Exponential backoff: 0.5s, 1s, 2s, 4s, capped.
-    const delay = delayOverride ?? Math.min(500 * 2 ** attempt, this.maxBackoffMs);
-    this.reconnectTimer = setTimeout(async () => {
-      this.reconnectTimer = null;
-      if (this.options.onReauth) {
-        try {
-          const refreshed = await this.options.onReauth();
-          if (refreshed) this.currentUrl = refreshed;
-        } catch {
-          // fall through to retry with current URL
-        }
-      }
-      this.connect();
-    }, delay);
   }
 
   private queueSend(frame: Outbound): void {
@@ -1249,9 +937,7 @@ export class CirnoClient {
   private forgetTemporaryChat(chatId: string): void {
     this.temporaryChatIds.delete(chatId);
     this.knownChats.delete(chatId);
-    this.chatHandlers.delete(chatId);
-    this.transcriptHandlers.delete(chatId);
-    this.pendingInboundByChat.delete(chatId);
+    this.transcripts.forget(chatId);
     const effects = this.runs.transition({ kind: "forget", chatId });
     this.goalStateByChatId.delete(chatId);
     this.sendQueue = this.sendQueue.filter((frame) => (
@@ -1286,12 +972,5 @@ export class CirnoClient {
     }
   }
 
-  private rawSendSerialized(serializedFrame: string): void {
-    if (!this.socket) return;
-    try {
-      this.socket.send(serializedFrame);
-    } catch {
-      // The pending request remains available for the next successful reconnect.
-    }
-  }
+
 }

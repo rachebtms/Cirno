@@ -7,12 +7,9 @@ import { ThreadVisibilityContext } from "@/hooks/useThreadVisibility";
 import { normalizeActivityTimeline } from "@/lib/activity-timeline";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import type { CirnoClient, StreamError } from "@/lib/cirno-client";
-import type {
-  ConnectionStatus,
-  InboundEvent,
-  UIMediaAttachment,
-  UIMessage,
-} from "@/lib/types";
+import type { ConnectionStatus } from "@/lib/contracts/transport";
+import type { InboundEvent } from "@/lib/contracts/events";
+import type { UIMediaAttachment, UIMessage } from "@/lib/contracts/messages";
 import { ClientProvider } from "@/providers/ClientProvider";
 import projectionFixture from "./fixtures/live-replay-event-projection.json";
 import { createStreamClient } from "./stream-client";
@@ -73,6 +70,7 @@ function normalizeProjection(messages: UIMessage[]): Array<Record<string, unknow
 
 function fakeClient() {
   const { client: lifecycle, receive } = createStreamClient();
+  const sendMessage = vi.spyOn(lifecycle, "sendMessage");
   const statusHandlers = new Set<(status: ConnectionStatus) => void>();
   const errorHandlers = new Set<(error: StreamError) => void>();
   const requestMutation = vi.fn().mockResolvedValue({});
@@ -89,6 +87,7 @@ function fakeClient() {
       },
       onRunStatus: lifecycle.onRunStatus.bind(lifecycle),
       getRunState: lifecycle.getRunState.bind(lifecycle),
+      isRunCompleted: lifecycle.isRunCompleted.bind(lifecycle),
       getRunGeneration: lifecycle.getRunGeneration.bind(lifecycle),
       restorePendingRun: lifecycle.restorePendingRun.bind(lifecycle),
       getRunStartedAt: lifecycle.getRunStartedAt.bind(lifecycle),
@@ -100,7 +99,8 @@ function fakeClient() {
         errorHandlers.add(handler);
         return () => errorHandlers.delete(handler);
       },
-      sendMessage: vi.fn(lifecycle.sendMessage.bind(lifecycle)),
+      sendMessage,
+      sendTextMessage: vi.fn(async (chatId: string, content: string, options?: Parameters<CirnoClient["sendMessage"]>[3]) => { lifecycle.sendMessage(chatId, content, undefined, options); }),
       sendUserShellCommand: vi.fn(lifecycle.sendUserShellCommand.bind(lifecycle)),
       sendAttachments: vi.fn(async (...args: Parameters<CirnoClient["sendAttachments"]>) => {
         lifecycle.sendMessage(args[0], args[1], undefined, args[3]);
@@ -2519,7 +2519,7 @@ describe("useCirnoStream", () => {
       active_turn_id: "remote-turn",
       starts_turn: true,
       started_at: 1_700_000_000,
-      media_urls: [{ kind: "file", url: "/api/media/sig/report", name: "report.pdf" }],
+      media_urls: [{ kind: "file", url: "/v0/media/sig/report", name: "report.pdf" }],
       cli_apps: [{ name: "drawio", display_name: "Draw.io" }],
       mcp_presets: [{ name: "github", display_name: "GitHub" }],
       session_mentions: [{
@@ -2541,7 +2541,7 @@ describe("useCirnoStream", () => {
         turnId: "remote-turn",
         deliveryStatus: "accepted",
         createdAt: expect.any(Number),
-        media: [{ kind: "file", url: "/api/media/sig/report", name: "report.pdf" }],
+        media: [{ kind: "file", url: "/v0/media/sig/report", name: "report.pdf" }],
         cliApps: [{ name: "drawio", display_name: "Draw.io" }],
         mcpPresets: [{ name: "github", display_name: "GitHub" }],
         sessionMentions: [{
@@ -2886,7 +2886,7 @@ describe("useCirnoStream", () => {
     });
     const optimistic = result.current.messages[0];
     expect(optimistic.media).toEqual([{ kind: "video", name: "clip.webm" }]);
-    const media = [{ kind: "video" as const, url: "/api/media/sig/upload", name: "clip.webm" }];
+    const media = [{ kind: "video" as const, url: "/v0/media/sig/upload", name: "clip.webm" }];
     act(() => fake.emit("uploaded-video", {
       event: "message_accepted", chat_id: "uploaded-video",
       turn_id: optimistic.turnId!, starts_turn: true, media_urls: media,
@@ -2907,7 +2907,7 @@ describe("useCirnoStream", () => {
       }]);
     });
     const optimistic = result.current.messages[0];
-    const media = [{ kind: "video" as const, url: "/api/media/sig/local-video", name: "video.mp4" }];
+    const media = [{ kind: "video" as const, url: "/v0/media/sig/local-video", name: "video.mp4" }];
     act(() => fake.emit("local-video", {
       event: "user_message", chat_id: "local-video", text: "watch",
       turn_id: optimistic.turnId!, starts_turn: true, media_urls: media,
@@ -2964,19 +2964,19 @@ describe("useCirnoStream", () => {
         event: "message",
         chat_id: "chat-m",
         text: "video ready",
-        media_urls: [{ url: "/api/media/sig/payload", name: "demo.mp4" }],
+        media_urls: [{ url: "/v0/media/sig/payload", name: "demo.mp4" }],
       });
     });
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].media).toEqual([
-      { kind: "video", url: "/api/media/sig/payload", name: "demo.mp4" },
+      { kind: "video", url: "/v0/media/sig/payload", name: "demo.mp4" },
     ]);
   });
 
   it.each([
-    { name: "index.html", kind: "file", url: "/api/media/sig/html" },
-    { name: "growth.svg", kind: "image", url: "/api/media/sig/svg" },
+    { name: "index.html", kind: "file", url: "/v0/media/sig/html" },
+    { name: "growth.svg", kind: "image", url: "/v0/media/sig/svg" },
   ])("classifies assistant $name media as $kind", ({ name, kind, url }) => {
     const fake = fakeClient();
     const { result } = renderHook(() => useCirnoStream("chat-media", EMPTY_MESSAGES), {
@@ -3003,7 +3003,7 @@ describe("useCirnoStream", () => {
 
     // Some peers include a kind hint in addition to the message envelope's URL.
     const media = {
-      kind: "image", url: "/api/media/sig/html", name: "index.html",
+      kind: "image", url: "/v0/media/sig/html", name: "index.html",
     } satisfies UIMediaAttachment;
     act(() => {
       fake.emit("chat-mislabelled-html", {
@@ -3015,7 +3015,7 @@ describe("useCirnoStream", () => {
     });
 
     expect(result.current.messages[0].media).toEqual([
-      { kind: "file", url: "/api/media/sig/html", name: "index.html" },
+      { kind: "file", url: "/v0/media/sig/html", name: "index.html" },
     ]);
   });
 
@@ -3030,7 +3030,7 @@ describe("useCirnoStream", () => {
         event: "message",
         chat_id: "chat-img-result",
         text: "image ready",
-        media_urls: [{ url: "/api/media/sig/image", name: "generated.png" }],
+        media_urls: [{ url: "/v0/media/sig/image", name: "generated.png" }],
       });
       fake.emit("chat-img-result", {
         event: "message",
@@ -3107,7 +3107,7 @@ describe("useCirnoStream", () => {
     let shell!: ReturnType<typeof result.current.send>;
     act(() => { shell = result.current.send("!pwd", undefined, { sideChannel: true, userShell: true }); });
     expect(fake.client.sendUserShellCommand).toHaveBeenCalledWith("shell", "!pwd", expect.objectContaining({ turnId: shell!.turnId, startsNewRun: false }));
-    expect(fake.client.sendMessage).toHaveBeenCalledOnce();
+    expect(fake.client.sendMessage).toHaveBeenCalledTimes(2);
     act(() => {
       fake.emit("shell", { event: "message_accepted", chat_id: "shell", turn_id: shell!.turnId, starts_turn: false, active_turn_id: activeTurnId });
       fake.emit("shell", { event: "message", chat_id: "shell", text: "```text\nPath\n----\n```", turn_id: shell!.turnId });
@@ -3514,14 +3514,14 @@ describe("useCirnoStream", () => {
       fake.emit("chat-stream-final", {
         event: "stream_end",
         chat_id: "chat-stream-final",
-        text: "![Diagram](/api/media/sig/payload)",
+        text: "![Diagram](/v0/media/sig/payload)",
       });
     });
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0]).toMatchObject({
       role: "assistant",
-      content: "![Diagram](/api/media/sig/payload)",
+      content: "![Diagram](/v0/media/sig/payload)",
       isStreaming: true,
     });
   });
@@ -3536,14 +3536,14 @@ describe("useCirnoStream", () => {
       fake.emit("chat-stream-end-only", {
         event: "stream_end",
         chat_id: "chat-stream-end-only",
-        text: "![Diagram](/api/media/sig/payload)",
+        text: "![Diagram](/v0/media/sig/payload)",
       });
     });
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0]).toMatchObject({
       role: "assistant",
-      content: "![Diagram](/api/media/sig/payload)",
+      content: "![Diagram](/v0/media/sig/payload)",
       isStreaming: true,
     });
   });

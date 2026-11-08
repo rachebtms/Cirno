@@ -14,11 +14,12 @@ from PIL import Image
 
 from cirno_core.providers.anthropic_provider import AnthropicProvider
 from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno_core.providers.base import ProviderCallContext
-from cirno_core.providers.bedrock_provider import BedrockProvider
+from cirno_core.providers.contracts import ProviderCallContext
+from cirno_core.providers.bedrock.provider import BedrockProvider
 from cirno_core.providers.github_copilot_provider import GitHubCopilotProvider
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import ModelAPICapabilities, find_by_name
+from cirno_core.providers.model_api import ModelAPICapabilities
+from cirno_core.providers.registry import find_by_name
 from cirno_core.providers.xai_grok_provider import XAIGrokProvider
 
 

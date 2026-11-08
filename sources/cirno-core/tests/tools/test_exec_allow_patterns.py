@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import pytest
-
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell import tokens as shell_tokens
 
 
 def test_deny_patterns_block_rm_rf():
     """Baseline: rm -rf is blocked by default deny list."""
     tool = ExecTool()
-    result = tool._guard_command("rm -rf /tmp/build", "/tmp")
+    result = tool.preparation.policy.check("rm -rf /tmp/build", "/tmp")
     assert result is not None
     assert "deny pattern filter" in result.lower()
 
@@ -43,7 +43,7 @@ def test_deny_patterns_block_rm_rf():
 )
 def test_allow_patterns_accept_matching_commands(command, allow_pattern):
     tool = ExecTool(allow_patterns=[allow_pattern])
-    result = tool._guard_command(command, "/tmp")
+    result = tool.preparation.policy.check(command, "/tmp")
     assert result is None
 
 
@@ -90,7 +90,7 @@ def test_allow_patterns_accept_matching_commands(command, allow_pattern):
 )
 def test_allow_patterns_do_not_bypass_rejected_commands(command, reason, allow_pattern):
     tool = ExecTool(allow_patterns=[allow_pattern])
-    result = tool._guard_command(command, "/tmp")
+    result = tool.preparation.policy.check(command, "/tmp")
     assert result is not None
     assert reason in result.lower()
 
@@ -99,9 +99,9 @@ def test_extra_deny_patterns_from_config():
     """User-supplied deny patterns are appended to built-in list."""
     tool = ExecTool(deny_patterns=[r"\bping\b"])
     # ping is blocked by extra deny
-    assert tool._guard_command("ping example.com", "/tmp") is not None
+    assert tool.preparation.policy.check("ping example.com", "/tmp") is not None
     # rm -rf still blocked by built-in deny
-    assert tool._guard_command("rm -rf /tmp/x", "/tmp") is not None
+    assert tool.preparation.policy.check("rm -rf /tmp/x", "/tmp") is not None
 
 
 def test_allow_patterns_bypass_extra_deny():
@@ -110,7 +110,7 @@ def test_allow_patterns_bypass_extra_deny():
         deny_patterns=[r"\bping\b"],
         allow_patterns=[r"\bping\s+example\.com\b"],
     )
-    result = tool._guard_command("ping example.com", "/tmp")
+    result = tool.preparation.policy.check("ping example.com", "/tmp")
     assert result is None
 
 
@@ -118,16 +118,16 @@ def test_allow_patterns_is_whitelist_only():
     """When allow_patterns is set, non-matching non-denied commands are blocked."""
     tool = ExecTool(allow_patterns=[r"echo\s+hello"])
     # echo matches allow → ok
-    assert tool._guard_command("echo hello", "/tmp") is None
+    assert tool.preparation.policy.check("echo hello", "/tmp") is None
     # ls does not match allow and is not in deny → blocked by allowlist
-    result = tool._guard_command("ls /tmp", "/tmp")
+    result = tool.preparation.policy.check("ls /tmp", "/tmp")
     assert result is not None
     assert "allowlist" in result.lower()
 
 
 def test_split_shell_segments_keep_line_continuation_intact():
     """A backslash-escaped newline continues one command, not a new segment."""
-    assert ExecTool._split_shell_segments("echo allowlisted \\\nextra") == [
+    assert shell_tokens.split_shell_segments("echo allowlisted \\\nextra") == [
         "echo allowlisted \\\nextra"
     ]
 
@@ -135,7 +135,7 @@ def test_split_shell_segments_keep_line_continuation_intact():
 def test_deny_patterns_search_original_command_with_quoted_hash():
     """Deny checks must still inspect text after a quoted hash."""
     tool = ExecTool(deny_patterns=[r"\brm\s+-rf\s+/"])
-    result = tool._guard_command('echo "#"; rm -rf /', "/tmp")
+    result = tool.preparation.policy.check('echo "#"; rm -rf /', "/tmp")
     assert result is not None
     assert "deny pattern filter" in result.lower()
 
@@ -148,6 +148,6 @@ def test_guard_allow_patterns_allow_multiple_matching_segments():
         ]
     )
 
-    result = tool._guard_command("echo allowlisted && echo also_allowed", "/tmp")
+    result = tool.preparation.policy.check("echo allowlisted && echo also_allowed", "/tmp")
 
     assert result is None

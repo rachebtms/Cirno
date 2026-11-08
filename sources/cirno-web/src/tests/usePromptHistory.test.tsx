@@ -1,16 +1,19 @@
 import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { createRef, type ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
+import type { PromptPage } from "@/lib/contracts/history";
 import { usePromptHistory } from "@/hooks/usePromptHistory";
 import * as api from "@/lib/api";
 import { CirnoClient } from "@/lib/cirno-client";
 import { ClientProvider } from "@/providers/ClientProvider";
-import type { UIMessage, WebuiThreadPersistedPayload } from "@/lib/types";
-import { ThreadViewport, type ThreadViewportHandle } from "@/components/thread/ThreadViewport";
+import type { UIMessage } from "@/lib/contracts/messages";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
+import { ThreadViewport } from "@/components/thread/ThreadViewport";
+import type { ThreadViewportHandle } from "@/components/thread/viewport/contracts";
 
-vi.mock("@/lib/api", async (original) => ({ ...await original<typeof api>(), fetchPromptIndex: vi.fn(), fetchWebuiThread: vi.fn() }));
+vi.mock("@/lib/api", async (original) => ({ ...await original<typeof api>(), fetchPromptPage: vi.fn(), fetchWebuiThread: vi.fn() }));
 const index = Array.from({ length: 2000 }, (_, index) => ({ id: `u${index}`, preview: `question ${index}`,
-  answerPreview: "answer", createdAt: index + 1, cursor: String(index), turnId: `turn${index}` }));
+  answerPreview: "answer", createdAt: index + 1, cursor: String(index), index, turnId: `turn${index}` }));
 const latest: UIMessage[] = [{ id: "u1999", content: "question 1999", role: "user", createdAt: 2000 }];
 function page(start: number): WebuiThreadPersistedPayload {
   return { schemaVersion: 3, projection: "events", events: [
@@ -24,20 +27,33 @@ function wrapper(enabled = true) {
   return ({ children }: { children: ReactNode }) => <ClientProvider client={client} token="test"
     webuiCapabilities={enabled ? ["webui.prompt-navigation.v1"] : []}>{children}</ClientProvider>;
 }
+async function prepareNavigation(result: { current: ReturnType<typeof usePromptHistory> }) {
+  await waitFor(() => expect(result.current.directory?.total).toBe(2000));
+  act(() => result.current.source?.ensure("", 0, 64));
+  await waitFor(() => expect(result.current.prompts.some((prompt) => prompt.id === "u10")).toBe(true));
+}
+function asPage(rows: Array<Omit<PromptPage["prompts"][number], "index">>, revision = "custom"): PromptPage {
+  return { prompts: rows.map((row, index) => ({ ...row, index })), revision, total: rows.length, count: rows.length, offset: 0 };
+}
 beforeEach(() => {
-  vi.mocked(api.fetchPromptIndex).mockReset().mockResolvedValue({ prompts: index, revision: "first" });
+  vi.mocked(api.fetchPromptPage).mockReset().mockImplementation(async (_token, _key, _signal, options = {}) => {
+    const offset = options.offset ?? Math.max(0, index.length - 64);
+    return { prompts: index.slice(offset, offset + 64), offset, total: index.length, count: index.length, revision: "first" };
+  });
   vi.mocked(api.fetchWebuiThread).mockReset().mockImplementation(async (_token, _key, options) => {
     if (typeof options === "string") throw new Error("expected page options");
     return page(Number(options?.after ?? Number(options?.before) - 1));
   });
 });
 
-it("loads the complete index without bodies, reads bounded windows and leaves live history alone", async () => {
+it("loads bounded directory pages and history windows without replacing live history", async () => {
   const { result, rerender } = renderHook(({ messages }) => usePromptHistory("a", 1, messages), {
     wrapper: wrapper(), initialProps: { messages: latest },
   });
-  await waitFor(() => expect(result.current.prompts).toHaveLength(2000));
+  await prepareNavigation(result);
   expect(api.fetchWebuiThread).not.toHaveBeenCalled();
+  act(() => result.current.source?.ensure("", 500, 501));
+  await waitFor(() => expect(result.current.prompts.some((prompt) => prompt.id === "u500")).toBe(true));
   await act(async () => result.current.jump("u500"));
   expect(result.current.window?.userMessageOffset).toBe(500);
   expect(result.current.target?.id).toBe("u500");
@@ -57,7 +73,7 @@ it("loads the complete index without bodies, reads bounded windows and leaves li
 
 it.each(["older", "newer"] as const)("keeps one pending %s page when boundary inputs arrive before the next render", async (operation) => {
   const { result } = renderHook(() => usePromptHistory("a", 1, latest), { wrapper: wrapper() });
-  await waitFor(() => expect(result.current.prompts).toHaveLength(2000));
+  await prepareNavigation(result);
   await act(async () => result.current.jump("u10"));
   let finish!: (body: WebuiThreadPersistedPayload) => void;
   vi.mocked(api.fetchWebuiThread).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -80,7 +96,7 @@ it("keeps the current page on failure and offers retry; superseded jumps and ses
   const { result, rerender } = renderHook(({ key }) => usePromptHistory(key, 1, latest), {
     wrapper: wrapper(), initialProps: { key: "a" },
   });
-  await waitFor(() => expect(result.current.prompts).toHaveLength(2000));
+  await prepareNavigation(result);
   await act(async () => result.current.jump("u10"));
   vi.mocked(api.fetchWebuiThread).mockRejectedValueOnce(new Error("offline"));
   await act(async () => result.current.jump("u20"));
@@ -102,10 +118,10 @@ it("keeps the current page on failure and offers retry; superseded jumps and ses
   expect(result.current.loading).toBe(false);
 });
 
-it("does not request new endpoints from an older compatible host", () => {
+it("does not request directory endpoints when the host does not advertise navigation", () => {
   const { result } = renderHook(() => usePromptHistory("a", 1, latest), { wrapper: wrapper(false) });
   expect(result.current.prompts[0].id).toBe("u1999");
-  expect(api.fetchPromptIndex).not.toHaveBeenCalled();
+  expect(api.fetchPromptPage).not.toHaveBeenCalled();
   expect(api.fetchWebuiThread).not.toHaveBeenCalled();
 });
 
@@ -136,7 +152,7 @@ it.each([false, true])("a local jump supersedes a pending history read without d
 });
 
 it("keeps legacy backfilled and newly sent prompts navigable without a transcript cursor", async () => {
-  vi.mocked(api.fetchPromptIndex).mockResolvedValue({ prompts: [] });
+  vi.mocked(api.fetchPromptPage).mockResolvedValue(asPage([]));
   const { result, rerender } = renderHook(({ messages }) => usePromptHistory("a", 1, messages), {
     wrapper: wrapper(), initialProps: { messages: latest },
   });
@@ -147,22 +163,22 @@ it("keeps legacy backfilled and newly sent prompts navigable without a transcrip
   expect(api.fetchWebuiThread).not.toHaveBeenCalled();
 });
 
-it("reuses the full directory during token updates and conditional revalidation", async () => {
+it("reuses loaded metadata during token updates and refreshes one bounded page", async () => {
   const user: UIMessage = { id: "live", role: "user", content: "new question", createdAt: 2001 };
   const { result, rerender } = renderHook(({ version, messages }) => usePromptHistory("a", version, messages), {
     wrapper: wrapper(), initialProps: { version: 1, messages: [...latest, user] },
   });
-  await waitFor(() => expect(result.current.prompts).toHaveLength(2001));
+  await waitFor(() => expect(result.current.directory?.total).toBe(2001));
   const anchors = result.current.prompts;
   for (let chunk = 0; chunk < 100; chunk++) {
     rerender({ version: 1, messages: [...latest, user, { id: "answer", role: "assistant", content: String(chunk), createdAt: 2002 }] });
     expect(result.current.prompts).toBe(anchors);
   }
-  expect(api.fetchPromptIndex).toHaveBeenCalledTimes(1);
+  expect(api.fetchPromptPage).toHaveBeenCalledTimes(1);
   rerender({ version: 2, messages: [...latest, user] });
-  await waitFor(() => expect(api.fetchPromptIndex).toHaveBeenCalledTimes(2));
-  expect(api.fetchPromptIndex).toHaveBeenLastCalledWith("test", "a", expect.any(AbortSignal), { prompts: index, revision: "first" });
-  expect(result.current.prompts).toBe(anchors);
+  await waitFor(() => expect(api.fetchPromptPage).toHaveBeenCalledTimes(2));
+  expect(api.fetchPromptPage).toHaveBeenLastCalledWith("test", "a", expect.any(AbortSignal), { query: "", offset: undefined, limit: 64 });
+  expect(result.current.prompts.map((prompt) => prompt.id)).toEqual(anchors.map((prompt) => prompt.id));
 });
 
 
@@ -171,7 +187,7 @@ it("merges a live input by transport identity without adding an anchor or reorde
     { id: "old", preview: "older", answerPreview: "", createdAt: 1000, cursor: "0", turnId: "old-input" },
     { id: "persisted", preview: "same", answerPreview: "answer", createdAt: 0, cursor: "1", turnId: "input" },
   ];
-  vi.mocked(api.fetchPromptIndex).mockResolvedValue({ prompts: recovered, revision: "recovered" });
+  vi.mocked(api.fetchPromptPage).mockResolvedValue(asPage(recovered, "recovered"));
   const users: UIMessage[] = [
     { id: "optimistic", role: "user", content: "same", createdAt: 2000, turnId: "input" },
     { id: "distinct", role: "user", content: "same", createdAt: 3000, turnId: "other-input" },
@@ -188,10 +204,10 @@ it("merges a live input by transport identity without adding an anchor or reorde
   expect(result.current.target?.id).toBe("persisted");
   expect(result.current.window?.messages[0].createdAt).toBe(0);
   rerender({ key: "a", version: 2 });
-  await waitFor(() => expect(api.fetchPromptIndex).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(api.fetchPromptPage).toHaveBeenCalledTimes(2));
   expect(result.current.prompts.map((prompt) => prompt.id)).toEqual(["old", "persisted", "distinct"]);
   rerender({ key: "b", version: 1 });
-  await waitFor(() => expect(api.fetchPromptIndex).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(api.fetchPromptPage).toHaveBeenCalledTimes(3));
   expect(result.current.prompts.map((prompt) => prompt.id)).toEqual(["old", "persisted", "distinct"]);
   expect(result.current.window).toBeNull();
   expect(result.current.target).toBeNull();
@@ -200,7 +216,7 @@ it("merges a live input by transport identity without adding an anchor or reorde
 
 it("keeps the request operation with failures and retries", async () => {
   const { result } = renderHook(() => usePromptHistory("a", 1, latest), { wrapper: wrapper() });
-  await waitFor(() => expect(result.current.prompts).toHaveLength(2000));
+  await prepareNavigation(result);
   let finish!: (body: WebuiThreadPersistedPayload) => void;
   vi.mocked(api.fetchWebuiThread).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   act(() => result.current.jump("u10"));
@@ -220,4 +236,18 @@ it("keeps the request operation with failures and retries", async () => {
   }
   act(() => result.current.cancel());
   expect(result.current.operation).toBeNull();
+});
+
+it("uses the shared search-page metadata to jump without downloading the intervening directory", async () => {
+  const { result } = renderHook(() => usePromptHistory("a", 1, latest), { wrapper: wrapper() });
+  await waitFor(() => expect(result.current.directory?.total).toBe(2000));
+  vi.mocked(api.fetchPromptPage).mockResolvedValueOnce({
+    prompts: [index[500]], offset: 0, total: 1, count: 2000, revision: "first",
+  });
+  act(() => result.current.source?.ensure("question 500", 0, 10));
+  await waitFor(() => expect(result.current.prompts.some((prompt) => prompt.id === "u500")).toBe(true));
+  await act(async () => result.current.jump("u500"));
+  expect(result.current.window?.userMessageOffset).toBe(500);
+  expect(result.current.directory?.get(500)?.id).toBe("u500");
+  expect(api.fetchPromptPage).toHaveBeenCalledTimes(2);
 });

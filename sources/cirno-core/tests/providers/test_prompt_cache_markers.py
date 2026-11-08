@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from cirno_core.providers.chat_completions.cache import apply_cache_control
 from typing import Any
 
 from cirno_core.providers.anthropic_provider import AnthropicProvider
-from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
 def _openai_tools(*names: str) -> list[dict[str, Any]]:
@@ -53,7 +53,7 @@ def test_openai_compat_marks_builtin_boundary_and_tail_tool() -> None:
         {"role": "assistant", "content": "assistant"},
         {"role": "user", "content": "user"},
     ]
-    _, marked_tools = OpenAICompatProvider._apply_cache_control(
+    _, marked_tools = apply_cache_control(
         messages,
         _openai_tools("read_file", "write_file", "mcp_fs_ls", "mcp_git_status"),
     )
@@ -80,7 +80,7 @@ def test_openai_compat_marks_only_tail_without_mcp() -> None:
         {"role": "assistant", "content": "assistant"},
         {"role": "user", "content": "user"},
     ]
-    _, marked_tools = OpenAICompatProvider._apply_cache_control(
+    _, marked_tools = apply_cache_control(
         messages,
         _openai_tools("read_file", "write_file"),
     )
@@ -92,7 +92,7 @@ def test_cache_markers_include_first_user_input_and_do_not_mutate_it() -> None:
 
     messages = [{"role": "system", "content": "stable rules"}, {"role": "user", "content": "long document"}]
     original = deepcopy(messages)
-    marked, _ = OpenAICompatProvider._apply_cache_control(messages, None)
+    marked, _ = apply_cache_control(messages, None)
     assert "cache_control" in marked[-1]["content"][-1]
     _, native, _ = AnthropicProvider._apply_cache_control("stable rules", messages[1:], None)
     assert "cache_control" in native[-1]["content"][-1]
@@ -105,7 +105,7 @@ def test_cache_markers_include_latest_tool_result() -> None:
         {"role": "assistant", "content": "", "tool_calls": []},
         {"role": "tool", "tool_call_id": "read-1", "content": "large tool result"},
     ]
-    marked, _ = OpenAICompatProvider._apply_cache_control(messages, None)
+    marked, _ = apply_cache_control(messages, None)
     assert marked[-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
     assert marked[1] == messages[1]
     native_messages = [

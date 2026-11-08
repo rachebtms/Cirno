@@ -1,32 +1,26 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test, type Locator } from "@playwright/test";
 
-async function rowGeometry(row: Locator) {
-  return row.evaluate((element) => {
-    const body = element.querySelector<HTMLButtonElement>("button")!;
-    const actions = body.nextElementSibling!;
-    const title = body.querySelector("h3")!;
-    const rowBox = element.getBoundingClientRect();
-    const bodyBox = body.getBoundingClientRect();
-    const actionsBox = actions.getBoundingClientRect();
-    return {
-      height: rowBox.height,
-      sameLine: Math.abs(bodyBox.y + bodyBox.height / 2 - actionsBox.y - actionsBox.height / 2) < 1,
-      noOverlap: bodyBox.right <= actionsBox.left,
-      titleFits: title.clientWidth >= title.scrollWidth,
-      noOverflow: element.scrollWidth <= element.clientWidth,
-    };
-  });
+async function expectCardFits(row: Locator) {
+  await expect.poll(() => row.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const controls = [...element.querySelectorAll("button, h3, [data-slot=chip]")];
+    return element.scrollWidth <= element.clientWidth && controls.every(control => {
+      const box = control.getBoundingClientRect();
+      return box.left >= bounds.left && box.right <= bounds.right;
+    });
+  })).toBe(true);
 }
 
 for (const width of [314, 390, 1280]) {
   for (const locale of ["en", "zh-CN", "fr"] as const) {
-    test(`MCP connection controls stay on one row at ${width}px in ${locale}`, async ({ page }) => {
+    test(`MCP connection controls remain usable at ${width}px in ${locale}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 850 });
-      await page.addInitScript((language) => localStorage.setItem("cirno.locale", language), locale);
+      await seedPreviewPreferences(page, { language: locale });
       await page.goto("/browser/fixture.html?case=apps&connection-layout");
-      const body = page.getByRole("button", { name: "Linear", exact: true });
-      const row = page.locator("article").filter({ has: body });
-      const initial = await rowGeometry(row);
+      const row = page.getByRole("article", { name: "Linear", exact: true });
+      const body = row.getByRole("button", { name: "Linear", exact: true });
+      await expectCardFits(row);
       await body.click();
       const dialog = page.getByRole("dialog", { name: "Linear", exact: true });
       await dialog.getByRole("tab").last().click();
@@ -35,30 +29,24 @@ for (const width of [314, 390, 1280]) {
       const cancel = row.getByRole("button", { name: /^(Cancel|取消|Annuler)$/ });
       await expect(cancel).toBeEnabled();
       await expect(body).toHaveAccessibleDescription({ en: "Connecting…", "zh-CN": "正在连接…", fr: "Connexion…" }[locale]);
-      const connecting = await rowGeometry(row);
-      expect(connecting).toEqual({
-        height: initial.height, sameLine: true, noOverlap: true, titleFits: true, noOverflow: true,
-      });
+      await expectCardFits(row);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await body.focus();
       await page.keyboard.press("Tab");
       await expect(cancel).toBeFocused();
       await page.keyboard.press("Enter");
       await expect(cancel).not.toBeVisible();
-      expect(await rowGeometry(row)).toEqual(initial);
+      await expectCardFits(row);
     });
   }
 }
 
 for (const width of [314, 1280]) {
-  test(`runtime MCP connection stays on one row at ${width}px`, async ({ page }) => {
+  test(`runtime MCP connection controls fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 850 });
     await page.goto("/browser/fixture.html?case=apps&connection-layout&runtime");
-    const body = page.getByRole("button", { name: "Linear", exact: true });
-    const row = page.locator("article").filter({ has: body });
+    const row = page.getByRole("article", { name: "Linear", exact: true });
     await expect(row.getByRole("button", { name: "Remove", exact: true })).toBeEnabled();
-    expect(await rowGeometry(row)).toMatchObject({
-      sameLine: true, noOverlap: true, titleFits: true, noOverflow: true,
-    });
+    await expectCardFits(row);
   });
 }

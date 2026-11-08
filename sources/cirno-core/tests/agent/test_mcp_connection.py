@@ -9,19 +9,22 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import anyio
+import cirno_core.agent.tools.mcp.connections as mcp_connections
+import cirno_core.agent.tools.mcp.progress as mcp_progress
+import cirno_core.agent.tools.mcp.provider as mcp_provider
 import pytest
+from cirno_core.agent.tools.base import Tool
+from cirno_core.agent.tools.mcp.provider import MCPProvider
+from cirno_core.agent.tools.mcp.wrappers import MCPResourceWrapper, MCPToolWrapper
+from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.loader import load_config, save_config
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.tools import MCPServerConfig
 from mcp import types as mcp_types
 from mcp.shared.exceptions import McpError
 from mcp.shared.message import SessionMessage
 from mcp.types import ErrorData
-
-from cirno_core.agent.tools import mcp as mcp_runtime
-from cirno_core.agent.tools.base import Tool
-from cirno_core.agent.tools.mcp import MCPProvider, MCPResourceWrapper, MCPToolWrapper
-from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.config.loader import load_config, save_config
-from cirno_core.config.network import NetworkConfig
-from cirno_core.config.schema import Config, MCPServerConfig
 
 
 def _mcp_notification(method: str, params: dict[str, Any] | None = None) -> SessionMessage:
@@ -50,8 +53,8 @@ def test_mcp_progress_detection_accepts_flattened_sdk_message_shape():
         )
     )
 
-    assert mcp_runtime._is_malformed_mcp_progress_notification(malformed) is True
-    assert mcp_runtime._is_malformed_mcp_progress_notification(valid) is False
+    assert mcp_progress._is_malformed_mcp_progress_notification(malformed) is True
+    assert mcp_progress._is_malformed_mcp_progress_notification(valid) is False
 
 
 class _FakeMcpTool(Tool):
@@ -108,7 +111,7 @@ async def test_mcp_read_filter_drops_progress_notifications_without_progress_tok
     await send.send(valid_progress)
     await send.aclose()
 
-    wrapped = mcp_runtime._filter_malformed_mcp_progress_notifications(receive, "brightdata")
+    wrapped = mcp_progress._filter_malformed_mcp_progress_notifications(receive, "brightdata")
     forwarded = []
     async with wrapped:
         async for message in wrapped:
@@ -130,7 +133,7 @@ async def test_owned_mcp_connection_closes_from_its_owner_task():
         tasks["close"] = asyncio.current_task()  # type: ignore[assignment]
 
     owner = asyncio.create_task(own_connection())
-    connection = mcp_runtime._OwnedMCPConnection(owner, close_requested)
+    connection = mcp_connections.OwnedMCPConnection(owner, close_requested)
     await ready.wait()
 
     await connection.aclose()
@@ -150,7 +153,7 @@ async def test_connect_mcp_retries_when_no_servers_connect(tmp_path, monkeypatch
         attempts += 1
         return {}
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
 
     await provider.connect()
     await provider.connect()
@@ -172,7 +175,7 @@ async def test_connect_mcp_does_not_report_failure_before_oauth_authorization(
     )
     provider, _registry = _make_provider(mcp_servers={"oauth-app": cfg})
     connect = AsyncMock()
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", connect)
     monkeypatch.setattr(
         "cirno_core.agent.tools.mcp_oauth.mcp_oauth_has_credentials",
         lambda _name, _url: False,
@@ -208,7 +211,7 @@ async def test_mcp_provider_closes_connections_independently_from_agent_loop(
         stacks = {name: _OwnerCheckedStack() for name in servers}
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
 
     await provider.connect()
     registry.register(_FakeMcpTool("mcp_playwright_search"))
@@ -344,7 +347,7 @@ async def test_reload_mcp_servers_adds_and_removes_tools_without_restart(
             stacks[name] = stack
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
     provider, registry = _make_provider(mcp_servers={})
 
     added = await provider.reload()
@@ -393,7 +396,7 @@ async def test_reload_is_a_direct_provider_operation_without_an_agent_loop(
             stacks[name] = stack
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
     registry = ToolRegistry()
     provider = MCPProvider({}, registry, server_loader=lambda: (configured, NetworkConfig()))
 
@@ -433,7 +436,7 @@ async def test_reload_timeout_marks_attempted_server_failed_and_allows_retry(
         await stack.__aenter__()
         return {name: stack for name in servers}
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
     provider = MCPProvider(
         {"test": server},
         ToolRegistry(),
@@ -479,7 +482,7 @@ async def test_reload_mcp_servers_retries_configured_server_without_live_stack(
             stacks[name] = stack
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
     provider, registry = _make_provider(
         mcp_servers={"browserbase": config.tools.mcp_servers["browserbase"]}
     )
@@ -523,7 +526,7 @@ async def test_reload_mcp_servers_skips_oauth_server_waiting_for_authorization(
         await stack.__aenter__()
         return {"linear": stack}
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
     monkeypatch.setattr(
         "cirno_core.agent.tools.mcp_oauth.mcp_oauth_has_credentials",
         lambda name, _url: name == "linear",
@@ -588,7 +591,7 @@ async def test_mcp_tool_reconnects_after_session_terminated(
             stacks[name] = stack
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
 
     await provider.connect()
     old_tool = registry.get("mcp_remote_quote")
@@ -643,17 +646,17 @@ async def test_mcp_reconnect_handler_uses_sanitized_server_prefix(
             stacks[name] = stack
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
 
     await provider.connect()
-    old_tool = registry.get("mcp_remote_quote")
+    old_tool = registry.get("mcp_remote_quote_a20a9e74")
     assert isinstance(old_tool, MCPToolWrapper)
 
     output = await old_tool.execute()
 
     assert output == "recovered"
     assert connect_count == 2
-    assert registry.get("mcp_remote_quote") is not old_tool
+    assert registry.get("mcp_remote_quote_a20a9e74") is not old_tool
 
 
 @pytest.mark.asyncio
@@ -705,7 +708,7 @@ async def test_concurrent_mcp_reconnect_reuses_fresh_session(
             stacks[name] = stack
         return stacks
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.provider.connect_mcp_servers", _fake_connect)
 
     await provider.connect()
     old_alpha = registry.get("mcp_remote_resource_alpha")
@@ -762,7 +765,7 @@ async def test_shared_proxy_snapshot_survives_reconnect_and_reloads_only_opted_i
             connections[name] = stack
         return connections
 
-    monkeypatch.setattr(mcp_runtime, "connect_mcp_servers", connect)
+    monkeypatch.setattr(mcp_provider, "connect_mcp_servers", connect)
     registry = ToolRegistry()
     provider = MCPProvider.from_config(
         config,

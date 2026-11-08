@@ -1,6 +1,7 @@
 """Regression tests for turns that stop at the tool-iteration limit (#5924)."""
 
 from __future__ import annotations
+from cirno_core.providers.messages import sanitize_empty_content
 
 import asyncio
 import json
@@ -13,7 +14,9 @@ import pytest
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import public_history_messages
 from cirno_core.session.goal_state import GOAL_STATE_KEY
 
@@ -30,7 +33,7 @@ class BudgetProvider(LLMProvider):
         return "test-model"
 
     async def chat(self, messages, tools=None, **kwargs):
-        self.requests.append(deepcopy(self._sanitize_empty_content(messages)))
+        self.requests.append(deepcopy(sanitize_empty_content(messages)))
         self.schemas.append(deepcopy(tools))
         last_user = next(m for m in reversed(messages) if m.get("role") == "user")
         if str(last_user.get("content")).startswith("run the tests") and tools is not None:
@@ -127,7 +130,7 @@ async def test_goal_budget_handoff_is_not_an_abandoned_turn(tmp_path):
         await loop.sessions.state.update_metadata("cli:goal", {
             GOAL_STATE_KEY: {"status": "active", "objective": "run the tests"},
         })
-        await loop._process_message(
+        await loop.processing.process(
             InboundMessage(channel="cli", sender_id="user", chat_id="goal", content="run the tests"),
             pending_queue=pending,
         )
@@ -139,7 +142,7 @@ async def test_goal_budget_handoff_is_not_an_abandoned_turn(tmp_path):
         await loop.process_direct("give me a progress update", session_key="cli:goal")
         assert _STOP_MARKER not in _last_user_content(requests[next_request])
         next_request = len(requests)
-        await loop._process_message(continuation, pending_queue=pending)
+        await loop.processing.process(continuation, pending_queue=pending)
         assert _STOP_MARKER not in _last_user_content(requests[next_request])
     finally:
         await loop.aclose()

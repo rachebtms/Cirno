@@ -15,7 +15,9 @@ from cirno_core.cron.bound_runner import run_bound_cron_job
 from cirno_core.cron.service import CronService
 from cirno_core.cron.session_turns import CRON_TRIGGER_META
 from cirno_core.cron.types import CronSchedule
-from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.manager import SessionManager
 
 

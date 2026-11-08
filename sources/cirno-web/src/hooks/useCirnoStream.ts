@@ -1,3 +1,4 @@
+import { useStreamBuffer } from "./stream/useStreamBuffer";
 import { acceptsCompactionPhase } from "../../packages/client-events/notifications";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useThreadVisibility } from "@/hooks/useThreadVisibility";
@@ -12,6 +13,8 @@ import { ThreadTranscript, type ThreadPaging, type ThreadRead, type ThreadTransc
 import type { ThreadMessageCache } from "@/lib/thread-message-cache";
 import type { StreamError } from "@/lib/cirno-client";
 import {
+  appendProjectedSessionInput,
+  transitionTurnDelivery,
   clearThreadProjectionActivity,
   closeThreadProjectionAnswer,
   finalizeStreamedTurn,
@@ -20,32 +23,14 @@ import {
 } from "@/lib/thread-event-projection";
 import type {
   ThreadProjectionEvent,
-  UIMessageTurnFields,
 } from "@/lib/thread-event-projection";
 import { formatQuotedUserMessage } from "@/lib/user-message-quote";
 import { playTurnCompleteSound } from "@/lib/notification-sound";
-import type {
-  InboundEvent,
-  OutboundCliAppMention,
-  OutboundMcpPresetMention,
-  OutboundMedia,
-  SessionMention,
-  GoalStateWsPayload,
-  MessageDeliveryStatus,
-  RecoveryState,
-  RetryStatus,
-  UIMediaAttachment,
-  UIMessage,
-  WorkspaceScopePayload,
-} from "@/lib/types";
+import type { InboundEvent, RecoveryState } from "@/lib/contracts/events";
+import type { OutboundCliAppMention, OutboundMcpPresetMention, OutboundMedia, SessionMention, RetryStatus, UIMediaAttachment, UIMessage } from "@/lib/contracts/messages";
+import type { GoalStateWsPayload } from "@/lib/contracts/activity";
+import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 
-type PendingStreamEvent =
-  | { kind: "delta"; text: string; turn: UIMessageTurnFields; streamId?: string; source?: UIMessage["source"]; responseSources?: UIMessage["responseSources"] }
-  | { kind: "reasoning"; text: string; turn: UIMessageTurnFields; streamId?: string };
-
-const BACKGROUND_STREAM_FLUSH_INTERVAL_MS = 1_000;
-// Markdown and layout work must leave room for input between visible updates.
-const VISIBLE_STREAM_FLUSH_INTERVAL_MS = 50;
 const EMPTY_INITIAL_MESSAGES: UIMessage[] = [];
 const EMPTY_COMPLETED_TURN_IDS: readonly string[] = [];
 
@@ -84,50 +69,6 @@ export interface SubmittedTurn {
 
 function eventTurnId(ev: InboundEvent): string | undefined {
   return "turn_id" in ev && typeof ev.turn_id === "string" ? ev.turn_id : undefined;
-}
-
-function transitionTurnDelivery(
-  messages: UIMessage[],
-  turnId: string,
-  status: MessageDeliveryStatus,
-): UIMessage[] {
-  let changed = false;
-  const next = messages.map((message) => {
-    if (
-      message.role !== "user"
-      || message.turnId !== turnId
-      || message.deliveryStatus === status
-      || (status === "accepted" && message.deliveryStatus !== "sending")
-    ) {
-      return message;
-    }
-    changed = true;
-    return { ...message, deliveryStatus: status };
-  });
-  return changed ? next : messages;
-}
-
-function appendProjectedSessionInput(
-  messages: UIMessage[],
-  event: Extract<InboundEvent, { event: "user_message" }>,
-): UIMessage[] {
-  const sessionMessage = event.provenance?.session_message;
-  const messageId = sessionMessage?.message_id?.trim();
-  if (!sessionMessage || !messageId) return messages;
-  if (messages.some((message) => message.sessionMessage?.message_id === messageId)) return messages;
-
-  const row: UIMessage = {
-    id: `session-message:${messageId}`,
-    role: "user",
-    content: event.text,
-    createdAt: typeof event.created_at_ms === "number"
-      && Number.isFinite(event.created_at_ms)
-      ? event.created_at_ms
-      : Date.now(),
-    sessionMessage,
-    ...turnFieldsFromEvent(event, "user"),
-  };
-  return [...messages, row];
 }
 
 function createTranscript(messages: UIMessage[], saved: ThreadTranscriptSnapshot | undefined, historyKey: string | null) {
@@ -187,7 +128,15 @@ export function useCirnoStream(
   const [historyState, setHistoryState] = useState(initialTranscript.paging);
   const publishHistory = useCallback(() => setHistoryState(transcriptRef.current.paging), []);
   const [refreshSeq, setRefreshSeq] = useState(0);
-  const refreshHistory = useCallback(() => setRefreshSeq((value) => value + 1), []);
+  const latestReadRef = useRef<AbortController | undefined>(undefined);
+  const latestRefreshQueued = useRef(false);
+  const refreshHistory = useCallback(() => {
+    if (latestReadRef.current) {
+      latestRefreshQueued.current = true;
+      return;
+    }
+    setRefreshSeq((value) => value + 1);
+  }, []);
   useEffect(() => {
     let connected = client.status === "open";
     const unsubscribe = client.onStatus(status => {
@@ -199,8 +148,6 @@ export function useCirnoStream(
     return () => { unsubscribe(); window.removeEventListener("pageshow", onPageShow); };
   }, [client, historyKey, refreshHistory]);
   const threadVisible = useThreadVisibility();
-  const threadVisibleRef = useRef(threadVisible);
-  threadVisibleRef.current = threadVisible;
   const [runState, setRunState] = useState(() => chatId ? client.getRunState(chatId) : null);
   const isStreaming = runState?.active ?? false;
   const runStartedAt = runState?.startedAt ?? null;
@@ -233,26 +180,13 @@ export function useCirnoStream(
   const [recoveryState, setRecoveryState] = useState<RecoveryState | null>(null);
   const [streamError, setStreamError] = useState<StreamError | null>(null);
 
-  const pendingStreamEventsRef = useRef<PendingStreamEvent[]>([]);
-  const streamFrameRef = useRef<number | null>(null);
-  const streamTimerRef = useRef<number | null>(null);
-  const lastStreamFlushRef = useRef(0);
-
+  const onForeground = useCallback(() => { if (historyKey) refreshHistory(); }, [historyKey, refreshHistory]);
+  const {
+    enqueue: enqueueStreamEvent, discardTurn: discardBufferedTurn, snapshot: snapshotStreamEvents,
+    flush: flushPendingStreamEvents, clear: clearPendingStreamWork,
+  } = useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisible, onForeground });
 
   const dismissStreamError = useCallback(() => setStreamError(null), []);
-
-  const clearPendingStreamWork = useCallback(() => {
-    if (streamFrameRef.current !== null) {
-      window.cancelAnimationFrame(streamFrameRef.current);
-      streamFrameRef.current = null;
-    }
-    if (streamTimerRef.current !== null) {
-      window.clearTimeout(streamTimerRef.current);
-      streamTimerRef.current = null;
-    }
-    pendingStreamEventsRef.current = [];
-    lastStreamFlushRef.current = 0;
-  }, []);
 
   const isSideChannelEvent = useCallback((ev: InboundEvent) => {
     const turnId = eventTurnId(ev);
@@ -279,9 +213,7 @@ export function useCirnoStream(
     if (!err.turnId) return;
 
     const rejectedTurnId = err.turnId;
-    pendingStreamEventsRef.current = pendingStreamEventsRef.current.filter(
-      (event) => event.turn.turnId !== rejectedTurnId,
-    );
+    discardBufferedTurn(rejectedTurnId);
     transcriptRef.current.sideChannelTurnIds.delete(rejectedTurnId);
     setMessages((prev) => {
       const rejectedRows = prev.filter((message) => message.turnId === rejectedTurnId);
@@ -331,164 +263,21 @@ export function useCirnoStream(
         suppressUntilTurnEnd: false,
       };
     }
-  }, [chatId, client, setMessages]);
+  }, [chatId, client, discardBufferedTurn, setMessages]);
 
   useEffect(() => client.onError(applyStreamError), [applyStreamError, client]);
-
-  const applyPendingStreamEvents = useCallback(
-    (prev: UIMessage[], events: PendingStreamEvent[]): UIMessage[] => {
-      transcriptRef.current.projection = { ...transcriptRef.current.projection, messages: prev };
-      for (let index = 0; index < events.length; index++) {
-        const event = events[index];
-        const chunks = [event.text];
-        const members = event.turn.turnSeq === undefined ? [] : [event.turn.turnSeq];
-        let turn = event.turn;
-        while (index + 1 < events.length) {
-          const nextEvent = events[index + 1];
-          if (nextEvent.kind !== event.kind
-            || nextEvent.turn.turnId !== event.turn.turnId
-            || nextEvent.turn.turnPhase !== event.turn.turnPhase
-            || nextEvent.streamId !== event.streamId
-            || (nextEvent.kind === "delta" && event.kind === "delta"
-              && (nextEvent.source !== event.source
-                || JSON.stringify(nextEvent.responseSources) !== JSON.stringify(event.responseSources)))) break;
-          chunks.push(nextEvent.text);
-          if (nextEvent.turn.turnSeq !== undefined) members.push(nextEvent.turn.turnSeq);
-          turn = { ...turn, ...nextEvent.turn };
-          index++;
-        }
-        const text = chunks.join("");
-        const projectedEvent: ThreadProjectionEvent = event.kind === "delta"
-          ? {
-              event: "delta",
-              chat_id: chatId ?? "",
-              text,
-              turn_id: turn.turnId,
-              turn_phase: turn.turnPhase,
-              turn_seq: turn.turnSeq,
-              source: event.source,
-              response_sources: event.responseSources,
-            }
-          : {
-              event: "reasoning_delta",
-              chat_id: chatId ?? "",
-              text,
-              turn_id: turn.turnId,
-              turn_phase: turn.turnPhase,
-              turn_seq: turn.turnSeq,
-            };
-        projectedEvent.stream_id = event.streamId;
-        if (turn.turnId && members.length) {
-          const ranges: Array<[number, number]> = [];
-          for (const seq of members) {
-            const last = ranges[ranges.length - 1];
-            if (last && last[1] + 1 === seq) last[1] = seq;
-            else ranges.push([seq, seq]);
-          }
-          projectedEvent.projection_receipts = [{ turn_id: turn.turnId, ranges }];
-        }
-        transcriptRef.current.project(projectedEvent, {
-          createId: () => crypto.randomUUID(), now: Date.now(), startSeq: event.turn.turnSeq,
-        });
-      }
-      return transcriptRef.current.messages;
-    },
-    [chatId],
-  );
-
-  const flushPendingStreamEvents = useCallback((end?: Extract<ThreadProjectionEvent, { event: "stream_end" }>) => {
-    lastStreamFlushRef.current = 0;
-    if (streamFrameRef.current !== null) {
-      window.cancelAnimationFrame(streamFrameRef.current);
-      streamFrameRef.current = null;
-    }
-    if (streamTimerRef.current !== null) {
-      window.clearTimeout(streamTimerRef.current);
-      streamTimerRef.current = null;
-    }
-    const events = pendingStreamEventsRef.current;
-    if (events.length === 0 && !end) return;
-    pendingStreamEventsRef.current = [];
-    setMessages((prev) => {
-      const nextMessages = events.length > 0 ? applyPendingStreamEvents(prev, events) : prev;
-      transcriptRef.current.projection = { ...transcriptRef.current.projection, messages: nextMessages };
-      if (end) transcriptRef.current.project(end, {
-        createId: () => crypto.randomUUID(), now: Date.now(),
-      });
-      return transcriptRef.current.messages;
-    });
-  }, [applyPendingStreamEvents, setMessages]);
-
-  const schedulePendingStreamFlush = useCallback(function schedule() {
-    if (streamFrameRef.current !== null || streamTimerRef.current !== null) return;
-    if (document.visibilityState === "hidden" || !threadVisibleRef.current) {
-      streamTimerRef.current = window.setTimeout(() => {
-        streamTimerRef.current = null;
-        const events = pendingStreamEventsRef.current;
-        if (events.length === 0) return;
-        pendingStreamEventsRef.current = [];
-        setMessages((prev) => applyPendingStreamEvents(prev, events));
-      }, BACKGROUND_STREAM_FLUSH_INTERVAL_MS);
-      return;
-    }
-    const delay = VISIBLE_STREAM_FLUSH_INTERVAL_MS
-      - (performance.now() - lastStreamFlushRef.current);
-    if (delay > 0) {
-      streamTimerRef.current = window.setTimeout(() => {
-        streamTimerRef.current = null;
-        schedule();
-      }, delay);
-      return;
-    }
-    streamFrameRef.current = window.requestAnimationFrame(() => {
-      streamFrameRef.current = null;
-      const events = pendingStreamEventsRef.current;
-      if (events.length === 0) return;
-      pendingStreamEventsRef.current = [];
-      lastStreamFlushRef.current = performance.now();
-      setMessages((prev) => applyPendingStreamEvents(prev, events));
-    });
-  }, [applyPendingStreamEvents, setMessages]);
-
-  useEffect(() => {
-    if (threadVisible) {
-      flushPendingStreamEvents();
-    } else if (streamFrameRef.current !== null || streamTimerRef.current !== null) {
-      if (streamFrameRef.current !== null) window.cancelAnimationFrame(streamFrameRef.current);
-      streamFrameRef.current = null;
-      if (streamTimerRef.current !== null) window.clearTimeout(streamTimerRef.current);
-      streamTimerRef.current = null;
-      schedulePendingStreamFlush();
-    }
-  }, [threadVisible, flushPendingStreamEvents, schedulePendingStreamFlush]);
-
-  useEffect(() => {
-    let hidden = document.visibilityState === "hidden";
-    const onVisibilityChange = () => {
-      const wasHidden = hidden;
-      hidden = document.visibilityState === "hidden";
-      if (wasHidden && !hidden && threadVisibleRef.current && historyKey) refreshHistory();
-      if (pendingStreamEventsRef.current.length === 0) return;
-      if (document.visibilityState === "visible" && threadVisibleRef.current) {
-        flushPendingStreamEvents();
-      } else {
-        if (streamFrameRef.current !== null) window.cancelAnimationFrame(streamFrameRef.current);
-        streamFrameRef.current = null;
-        if (streamTimerRef.current !== null) window.clearTimeout(streamTimerRef.current);
-        streamTimerRef.current = null;
-        schedulePendingStreamFlush();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [flushPendingStreamEvents, schedulePendingStreamFlush, historyKey, refreshHistory]);
 
   useEffect(() => {
     if (!chatId) return;
     return client.onRunStatus((runChatId, state) => {
       if (runChatId !== chatId) return;
       setRunState(state);
-      if (state.active) return;
+      if (state.active) {
+        // A server-confirmed run supersedes the previous interruption, even
+        // when a supervisor or another device started it.
+        if (state.startedAt !== null) { setRecoveryState(null); setStreamError(null); }
+        return;
+      }
       flushPendingStreamEvents();
       setMessages((prev) => {
         const settled = prev.map((message) => (
@@ -547,6 +336,9 @@ export function useCirnoStream(
     if (transcriptRef.current === pending.owner) publishHistory();
   }, [publishHistory]);
   const resetHistory = useCallback((keepTurnId?: string) => {
+    latestReadRef.current?.abort();
+    latestReadRef.current = undefined;
+    latestRefreshQueued.current = false;
     flushPendingStreamEvents();
     cancelOlderRead();
     const retained = keepTurnId ? transcriptRef.current.messages.filter(message => message.turnId === keepTurnId) : [];
@@ -557,9 +349,9 @@ export function useCirnoStream(
     setGoalState(undefined); setRecoveryState(null); setRetryStatus(null); setStreamError(null);
     if (chatId) messageCache?.set(chatId, owner.save());
     if (historyKey) webuiThreadCache.delete(historyKey);
-    refreshHistory();
-  }, [chatId, historyKey, messageCache, flushPendingStreamEvents, cancelOlderRead, refreshHistory, setMessages]);
-  const latestReadOwnerRef = useRef<ThreadTranscript>();
+    setRefreshSeq((value) => value + 1);
+  }, [chatId, historyKey, messageCache, flushPendingStreamEvents, cancelOlderRead, setMessages]);
+  const latestReadOwnerRef = useRef<ThreadTranscript | undefined>(undefined);
   const detailRequestsRef = useRef(new Map<string, {
     owner: ThreadTranscript;
     promise: Promise<{ ref: string; events: ThreadProjectionEvent[] } | null>;
@@ -569,6 +361,8 @@ export function useCirnoStream(
     if (!historyKey) return;
     const owner = transcriptRef.current;
     const controller = new AbortController();
+    latestReadRef.current = controller;
+    latestRefreshQueued.current = false;
     const generation = chatId ? client.getRunGeneration(chatId) : 0;
     const read = owner.begin(latestReadOwnerRef.current === owner ? "latest" : "initial");
     latestReadOwnerRef.current = owner;
@@ -581,6 +375,16 @@ export function useCirnoStream(
       flushPendingStreamEvents();
       const decision = ownRead ? read : owner.begin(seed ? "initial" : "latest");
       const canonical = body ? persistedCanonicalRunState(body) : null;
+      const historyChatId = chatId ?? (historyKey.startsWith("websocket:") ? historyKey.slice(10) : null);
+      if (historyChatId && canonical?.snapshot.activeTurnId
+        && client.isRunCompleted(historyChatId, canonical.snapshot.activeTurnId)) {
+        // An HTTP snapshot captured before a received terminal fact cannot
+        // restore that turn's pending state or enter the shared replay cache.
+        owner.observeTurnCompletion(canonical.snapshot.activeTurnId);
+        owner.finishRead(decision);
+        publishHistory();
+        return;
+      }
       const settle = chatId && canonical && !canonical.snapshot.hasPendingToolCalls
         && client.canReconcileCanonicalCompletion(chatId, generation, canonical.completedTurnIds, canonical.snapshot);
       const accepted = owner.accept(body, decision);
@@ -615,8 +419,24 @@ export function useCirnoStream(
         if (disposed || superseded || controller.signal.aborted || transcriptRef.current !== owner) return;
         if (error instanceof ApiError && error.status === 404) install(null, true);
         else { owner.finishRead(read, (error as Error).message); publishHistory(); }
+      }).finally(() => {
+        if (latestReadRef.current !== controller) return;
+        latestReadRef.current = undefined;
+        if (latestRefreshQueued.current) {
+          latestRefreshQueued.current = false;
+          setRefreshSeq((value) => value + 1);
+        }
       });
-    return () => { disposed = true; controller.abort(); cancelOlderRead(); unsubscribe(); };
+    return () => {
+      disposed = true;
+      controller.abort();
+      cancelOlderRead();
+      unsubscribe();
+      if (latestReadRef.current === controller) {
+        latestReadRef.current = undefined;
+        latestRefreshQueued.current = false;
+      }
+    };
   }, [cancelOlderRead, chatId, client, flushPendingStreamEvents, getToken, historyKey, messageCache, publishHistory, refreshSeq, setMessages]);
 
   const loadOlder = useCallback(async () => {
@@ -754,6 +574,12 @@ export function useCirnoStream(
         return;
       }
       const sideChannelEvent = isSideChannelEvent(ev);
+      if (!sideChannelEvent && (ev.event === "delta" || ev.event === "reasoning_delta"
+        || ev.event === "file_edit" || ev.event === "message")
+        && (!turnId || !client.isRunCompleted(chatId, turnId))) {
+        setRecoveryState(null);
+        setStreamError(null);
+      }
       if (ev.event === "context_compaction") {
         flushPendingStreamEvents();
         closeActiveAssistantStream();
@@ -773,7 +599,7 @@ export function useCirnoStream(
         if (transcriptRef.current.projection.suppressUntilTurnEnd || transcriptRef.current.represented(ev)) return;
         const chunk = typeof ev.text === "string" ? ev.text : "";
         if (!chunk) return;
-        pendingStreamEventsRef.current.push({
+        enqueueStreamEvent({
           kind: "delta",
           text: chunk,
           turn: turnFieldsFromEvent(ev, "answer"),
@@ -781,7 +607,6 @@ export function useCirnoStream(
           source: ev.source,
           responseSources: ev.response_sources,
         });
-        schedulePendingStreamFlush();
         return;
       }
 
@@ -789,13 +614,12 @@ export function useCirnoStream(
         if (transcriptRef.current.projection.suppressUntilTurnEnd || transcriptRef.current.represented(ev)) return;
         const chunk = ev.text;
         if (!chunk) return;
-        pendingStreamEventsRef.current.push({
+        enqueueStreamEvent({
           kind: "reasoning",
           text: chunk,
           turn: turnFieldsFromEvent(ev, "reasoning"),
           streamId: ev.stream_id,
         });
-        schedulePendingStreamFlush();
         return;
       }
 
@@ -826,7 +650,7 @@ export function useCirnoStream(
       }
 
       if (ev.event === "goal_status") {
-        if (ev.status === "running") setStreamError(null);
+        if (ev.status === "running") { setStreamError(null); setRecoveryState(null); }
         else setRetryStatus(null);
         return;
       }
@@ -960,18 +784,15 @@ export function useCirnoStream(
       unsub();
       // Navigation may happen before the throttled paint. Snapshot the pending
       // deltas synchronously while they still belong to this subscription.
-      const pending = pendingStreamEventsRef.current;
-      const snapshot = pending.length > 0
-        ? applyPendingStreamEvents(messagesRef.current, pending)
-        : messagesRef.current;
+      const snapshot = snapshotStreamEvents(messagesRef.current);
       onStreamDetach?.(snapshot);
-      if (pending.length > 0) setMessages(snapshot);
+      if (snapshot !== messagesRef.current) setMessages(snapshot);
       messageCache?.set(chatId, transcriptRef.current.save());
       clearPendingStreamWork();
     };
   }, [
     applyProjectionEvent,
-    applyPendingStreamEvents,
+    snapshotStreamEvents,
     applyStreamError,
     chatId,
     closeActiveAssistantStream,
@@ -983,7 +804,7 @@ export function useCirnoStream(
     onTurnEnd,
     onStreamDetach,
     messageCache,
-    schedulePendingStreamFlush,
+    enqueueStreamEvent,
     setMessages,
   ]);
 
@@ -1063,8 +884,7 @@ export function useCirnoStream(
         ? client.sendUserShellCommand(chatId, outboundContent, clientOptions)
         : wireMedia?.length
           ? client.sendAttachments(chatId, outboundContent, wireMedia, clientOptions)
-          : undefined;
-      if (!delivery) client.sendMessage(chatId, outboundContent, undefined, clientOptions);
+          : client.sendTextMessage(chatId, outboundContent, clientOptions);
       // Every caller may keep this promise to retain its draft until accepted.
       // Also observe it here for queued/landing sends without an active composer.
       void delivery?.catch(() => {});
@@ -1101,10 +921,16 @@ export function useCirnoStream(
 
   const recoveryAction = useCallback(async (action: "continue" | "dismiss") => {
     if (!chatId || !recoveryState) return;
+    const owner = transcriptRef.current;
     await client.requestMutation(`recovery.${action}`, {
       chat_id: chatId,
       recovery_id: recoveryState.recovery_id,
     });
+    if (transcriptRef.current === owner) {
+      setRecoveryState(current => current === recoveryState
+        ? { ...current, status: action === "continue" ? "resuming" : "recovered" }
+        : current);
+    }
   }, [chatId, client, recoveryState]);
 
   const continueRecovery = useCallback(

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import {
   installSettingsViewTestHooks,
+  openPopover,
   jsonResponse,
   renderSettingsView,
   requestMutationMock,
@@ -56,8 +57,8 @@ describe("SettingsView Apps catalog", () => {
     };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({
         apps: [
           cliApp,
           { ...cliApp, name: "figma-pending", display_name: "Figma pending", installed: false },
@@ -65,7 +66,7 @@ describe("SettingsView Apps catalog", () => {
         ],
         installed_count: 2,
       });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({
         presets: [figmaLocal, figmaConnected], installed_count: 1,
       });
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -95,9 +96,9 @@ describe("SettingsView Apps catalog", () => {
     const settings = { ...settingsPayload(), runtime_config: { "network.proxy": proxy } };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settings);
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [xmindMcpPreset], installed_count: 0 });
+      if (url === "/v0/settings") return jsonResponse(settings);
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [xmindMcpPreset], installed_count: 0 });
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
     }));
     renderSettingsView({ initialSection: "apps" });
@@ -140,9 +141,9 @@ describe("SettingsView Apps catalog", () => {
     };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [metabasePreset], installed_count: 0 });
       }
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -182,11 +183,11 @@ describe("SettingsView Apps catalog", () => {
     let connected = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({
           presets: [connected
             ? {
@@ -202,7 +203,7 @@ describe("SettingsView Apps catalog", () => {
           installed_count: connected ? 1 : 0,
         });
       }
-      if (url === "/api/settings/mcp-oauth/status?flow_id=flow-123") {
+      if (url === "/v0/settings/mcp-oauth/status?flow_id=flow-123") {
         connected = true;
         return jsonResponse({
           flow_id: "flow-123",
@@ -288,7 +289,7 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.getByRole("switch", { name: "Use proxy" })).toBeChecked();
     expect(replace).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/mcp-oauth/status?flow_id=flow-123",
+      "/v0/settings/mcp-oauth/status?flow_id=flow-123",
       expect.objectContaining({ headers: { Authorization: "Bearer tok" } }),
     );
   });
@@ -305,11 +306,11 @@ describe("SettingsView Apps catalog", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [failedPreset], installed_count: 1 });
       }
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -324,12 +325,9 @@ describe("SettingsView Apps catalog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "MCP" }));
 
     const heading = await screen.findByRole("heading", { name: "Xmind" });
-    const row = heading.closest("article");
+    const row = heading.closest('[role="article"]');
     expect(row).not.toBeNull();
-    expect(row?.parentElement).toHaveClass("xl:grid-cols-2");
-    const failed = within(row as HTMLElement).getByText("Connection failed.");
-    expect(failed.closest("button")).toHaveAccessibleName("Xmind");
-    expect(failed.closest("p")?.querySelector(".lucide-triangle-alert")).not.toBeNull();
+    expect(within(row as HTMLElement).getByRole("alert")).toHaveTextContent("Connection failed.");
     expect(row?.querySelector(".lucide-check")).toBeNull();
     expect(within(row as HTMLElement).getByRole("button", { name: "Manage Xmind" })).toHaveTextContent(
       "Fix connection",
@@ -342,7 +340,7 @@ describe("SettingsView Apps catalog", () => {
     fireEvent.click(manage);
     const dialog = screen.getByRole("dialog", { name: "Xmind" });
     expect(within(dialog).getByRole("tab", { name: "连接" })).toHaveAttribute("aria-selected", "true");
-    expect(within(dialog).getByText("创建、读取和编辑云端思维导图")).toHaveClass("sr-only");
+    expect(within(row as HTMLElement).getByText("创建、读取和编辑云端思维导图")).toBeInTheDocument();
     expect(within(dialog).getByText("连接失败", { exact: true })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "移除连接" })).toBeInTheDocument();
     const reconnect = within(dialog).getByRole("button", { name: "重新连接" });
@@ -368,11 +366,11 @@ describe("SettingsView Apps catalog", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [failedPreset], installed_count: 1 });
       }
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -383,7 +381,7 @@ describe("SettingsView Apps catalog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "MCP" }));
 
     const heading = await screen.findByRole("heading", { name: "Xmind" });
-    const row = heading.closest("article");
+    const row = heading.closest('[role="article"]');
     expect(row).not.toBeNull();
     expect(within(row as HTMLElement).getByText("Connection failed.")).toBeInTheDocument();
     expect(within(row as HTMLElement).getByRole("button", { name: "Manage Xmind" }))
@@ -403,11 +401,11 @@ describe("SettingsView Apps catalog", () => {
     let mcpPresetRequests = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         mcpPresetRequests += 1;
         return jsonResponse({
           presets: [{
@@ -453,11 +451,11 @@ describe("SettingsView Apps catalog", () => {
     const connectedCustom = { ...failedCustom, runtime_status: "connected" };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [failedCustom], installed_count: 1 });
       }
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -493,7 +491,7 @@ describe("SettingsView Apps catalog", () => {
     expect(connected).toHaveTextContent("Manage");
     fireEvent.click(screen.getByRole("button", { name: "MCP" }));
     const readyHeading = await screen.findByRole("heading", { name: "team-docs" });
-    expect(within(readyHeading.closest("article") as HTMLElement).getByRole("button", { name: "Manage team-docs" }))
+    expect(within(readyHeading.closest('[role="article"]') as HTMLElement).getByRole("button", { name: "Manage team-docs" }))
       .toBeInTheDocument();
   });
 
@@ -510,11 +508,11 @@ describe("SettingsView Apps catalog", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [], installed_count: 0 });
       }
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -540,26 +538,27 @@ describe("SettingsView Apps catalog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "MCP" }));
     fireEvent.click(await screen.findByRole("button", { name: "Custom" }));
 
-    fireEvent.change(screen.getByLabelText("Server name"), {
+    fireEvent.change(screen.getByLabelText(/^Server name/), {
       target: { value: "team-mcp" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "HTTP" }));
-    fireEvent.change(screen.getByLabelText("URL"), {
+    await openPopover(screen.getByRole("button", { name: /Transport$/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "HTTP" }));
+    fireEvent.change(screen.getByLabelText(/^URL/), {
       target: { value: "https://mcp.example.com/mcp" },
     });
 
-    const authentication = screen.getByRole("group", { name: "Authentication" });
-    const oauth = within(authentication).getByRole("button", { name: "OAuth" });
-    expect(oauth).toHaveAttribute("aria-pressed", "false");
-
-    fireEvent.click(within(authentication).getByRole("button", { name: "Headers" }));
+    const authentication = screen.getByRole("button", { name: /Authentication$/ });
+    expect(authentication).toHaveTextContent("None");
+    await openPopover(authentication);
+    fireEvent.click(await screen.findByRole("option", { name: "Headers" }));
     fireEvent.change(screen.getByLabelText("Headers (JSON)"), {
       target: { value: '{"Authorization":"Bearer stale"}' },
     });
     expect(screen.getByText("Enter the headers required by the service.")).toBeInTheDocument();
 
-    fireEvent.click(oauth);
-    expect(oauth).toHaveAttribute("aria-pressed", "true");
+    await openPopover(authentication);
+    fireEvent.click(await screen.findByRole("option", { name: "OAuth" }));
+    expect(authentication).toHaveTextContent("OAuth");
     expect(
       screen.getByText("Save the server, then select Connect to sign in."),
     ).toBeInTheDocument();
@@ -592,14 +591,14 @@ describe("SettingsView Apps catalog", () => {
   it("offers a pasted callback flow when the remote WebUI uses HTTP", async () => {
     let completed = false;
     const callbackUrl =
-      "http://127.0.0.1:8765/auth/mcp/callback?code=oauth-code&state=manual-state";
+      "http://127.0.0.1:8765/v0/mcp/oauth/callback?code=oauth-code&state=manual-state";
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({
           presets: [completed
             ? {
@@ -614,7 +613,7 @@ describe("SettingsView Apps catalog", () => {
           installed_count: completed ? 1 : 0,
         });
       }
-      if (url === "/api/settings/mcp-oauth/status?flow_id=flow-manual") {
+      if (url === "/v0/settings/mcp-oauth/status?flow_id=flow-manual") {
         return jsonResponse({
           flow_id: "flow-manual",
           name: "xmind",
@@ -689,12 +688,12 @@ describe("SettingsView Apps catalog", () => {
   it("lets the user cancel an active OAuth connection after closing the popup", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [xmindMcpPreset], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-oauth/status?flow_id=flow-cancel") {
+      if (url === "/v0/settings/mcp-oauth/status?flow_id=flow-cancel") {
         return new Promise<Response>(() => {});
       }
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
@@ -751,11 +750,11 @@ describe("SettingsView Apps catalog", () => {
   it("silently removes an MCP when the card already shows the result", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") {
         return jsonResponse({ apps: [], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({
           presets: [{
             ...xmindMcpPreset,
@@ -804,9 +803,9 @@ describe("SettingsView Apps catalog", () => {
   it("offers a one-click recovery when the OAuth popup is blocked", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [xmindMcpPreset], installed_count: 0 });
       }
       return new Promise<Response>(() => {});
@@ -857,12 +856,12 @@ describe("SettingsView Apps catalog", () => {
     let statusCalls = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [xmindMcpPreset], installed_count: 0 });
       }
-      if (url === "/api/settings/mcp-oauth/status?flow_id=flow-coop") {
+      if (url === "/v0/settings/mcp-oauth/status?flow_id=flow-coop") {
         statusCalls += 1;
         return jsonResponse({
           flow_id: "flow-coop",

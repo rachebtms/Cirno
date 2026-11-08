@@ -1,5 +1,3 @@
-export const LOCALE_STORAGE_KEY = "cirno.locale";
-
 export const supportedLocales = [
   { code: "en", nativeLabel: "English" },
   { code: "zh-CN", nativeLabel: "简体中文" },
@@ -51,27 +49,8 @@ export function normalizeLocale(
   return baseMatch?.code ?? defaultLocale;
 }
 
-function readStoredLocale(): SupportedLocale | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    return raw ? normalizeLocale(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function resolveInitialLocale(): SupportedLocale {
-  return readStoredLocale() ?? defaultLocale;
-}
-
-export function persistLocale(locale: SupportedLocale): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-  } catch {
-    // ignore storage errors
-  }
+  return normalizeLocale(typeof navigator === "undefined" ? defaultLocale : navigator.language);
 }
 
 export function applyDocumentLocale(locale: SupportedLocale): void {

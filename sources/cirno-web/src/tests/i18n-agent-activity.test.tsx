@@ -9,7 +9,7 @@ import { describeTraceLine } from "@/components/thread/activity/trace-activity-m
 import { presentWebSearchAction } from "@/components/thread/activity/web-search-model";
 import i18n, { resources, setAppLanguage } from "@/i18n";
 import { supportedLocales } from "@/i18n/config";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 function placeholders(value: string): string[] {
   return [...value.matchAll(/{{\s*(\w+)\s*}}/g)].map((match) => match[1]).sort();

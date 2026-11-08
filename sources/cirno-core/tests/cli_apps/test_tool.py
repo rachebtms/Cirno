@@ -8,7 +8,8 @@ from pathlib import Path
 
 from cirno_core.agent.tools.cli_apps import CliAppsTool
 from cirno_core.agent.tools.context import RequestContext
-from cirno_core.apps.cli.service import CliAppManager, CliAppsRuntimeConfig
+from cirno_core.apps.cli.contracts import CliAppsRuntimeConfig
+from cirno_core.apps.cli.service import CliAppManager
 
 
 def _write_cache(path: Path, registry: dict) -> None:
@@ -43,7 +44,7 @@ def test_run_cli_app_uses_installed_registry_app(
     _write_cache(data_dir / "harness_registry_cache.json", registry)
     _write_cache(data_dir / "public_registry_cache.json", {"meta": {}, "clis": []})
     _write_cache(data_dir / "extensions_registry_cache.json", {"meta": {}, "clis": []})
-    CliAppManager(workspace=workspace, data_dir=data_dir)._save_installed(
+    CliAppManager(workspace=workspace, data_dir=data_dir).installed.replace(
         {"gimp": {"entry_point": "cli-anything-gimp"}}
     )
     resolved = str(tmp_path / "bin" / "cli-anything-gimp")
@@ -61,7 +62,7 @@ def test_run_cli_app_uses_installed_registry_app(
             stderr="",
         )
 
-    monkeypatch.setattr("cirno_core.apps.cli.service.subprocess.run", fake_run)
+    monkeypatch.setattr("cirno_core.apps.cli.service.run_cli", fake_run)
     monkeypatch.setattr("cirno_core.apps.cli.service.get_runtime_subdir", lambda _name: data_dir)
 
     tool = CliAppsTool(
@@ -117,7 +118,7 @@ def test_run_cli_app_description_names_only_settings_installed_apps(tmp_path: Pa
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     data_dir = tmp_path / "data"
-    CliAppManager(workspace=workspace, data_dir=data_dir)._save_installed(
+    CliAppManager(workspace=workspace, data_dir=data_dir).installed.replace(
         {"drawio": {"entry_point": "cli-anything-drawio"}}
     )
     monkeypatch.setattr("cirno_core.apps.cli.service.get_runtime_subdir", lambda _name: data_dir)

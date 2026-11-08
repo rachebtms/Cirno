@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from loguru import logger
 
-from agent.session_helpers import run_session
+from sources.development.testing.sessions import run_session
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.loop import AgentLoop
-from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.runner.contracts import AgentRunResult
 from cirno_core.agent.subagents.sessions import SubagentSessions
 from cirno_core.agent.tools.context import current_request_context
 from cirno_core.agent.tools.registry import ToolRegistry
@@ -17,9 +17,11 @@ from cirno_core.bus.events import (
     InboundMessage,
 )
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import RuntimeContextBlock
-from cirno_core.session.manager import SessionPolicy
+from cirno_core.session.model import SessionPolicy
 from cirno_server.webui.temporary_chats import WebUITemporaryChats
 from cirno_server.webui.workspaces import WebUIWorkspaceController
 
@@ -65,8 +67,8 @@ async def test_transient_session_keeps_history_without_persisting_or_durable_too
     )
     key = f"websocket:{await temporary_chats.create(object(), trusted_webui=True)}"
 
-    await loop._process_message(_message(key, "first question"))
-    await loop._process_message(_message(key, "second question"))
+    await loop.processing.process(_message(key, "first question"))
+    await loop.processing.process(_message(key, "second question"))
 
     calls = loop.provider.chat_stream_with_retry.await_args_list
     assert "private durable memory" not in str(calls[0].kwargs["messages"])
@@ -121,7 +123,7 @@ async def test_turn_tool_selection_preserves_empty_registries(tmp_path, monkeypa
         requests = loop.provider.chat_stream_with_retry.await_args_list
         assert len(requests) == 2
         allowed = selection == "default"
-        expected_names = {item["function"]["name"] for item in loop.tools.get_definitions() if item["function"]["name"] not in {"user__message", "conversations__control", "goals__control"}} if allowed else set()
+        expected_names = {item["function"]["name"] for item in loop.tools.get_definitions() if not item["function"]["name"].startswith("projects__") and item["function"]["name"] not in {"user__message", "conversations__control", "goals__control"}} if allowed else set()
         for request in requests:
             assert {item["function"]["name"] for item in request.kwargs["tools"]} == expected_names
             assert (tool_context.content in str(request.kwargs["messages"])) is allowed
@@ -163,6 +165,7 @@ async def test_session_policy_controls_tool_logs_and_result_offload(
     loop.tools.unregister("message")
     loop.tools.unregister("control_session")
     loop.tools.unregister("control_goal")
+    loop.tools.unregister("project")
     loop.tools.prepare_call = MagicMock(return_value=(None, {"query": secret}, None))
     loop.tools.execute = AsyncMock(return_value=result)
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -174,7 +177,7 @@ async def test_session_policy_controls_tool_logs_and_result_offload(
     logs: list[str] = []
     sink = logger.add(lambda message: logs.append(str(message)), format="{message}")
     try:
-        await loop._process_message(_message(key, "synthetic question"))
+        await loop.processing.process(_message(key, "synthetic question"))
     finally:
         logger.remove(sink)
 
@@ -206,6 +209,7 @@ async def test_direct_transient_run_never_spills_before_cancellation(tmp_path) -
     loop.tools.unregister("message")
     loop.tools.unregister("control_session")
     loop.tools.unregister("control_goal")
+    loop.tools.unregister("project")
     loop.tools.prepare_call = MagicMock(return_value=(None, {}, None))
     loop.tools.execute = AsyncMock(return_value="synthetic large result" * 1000)
     second_call = asyncio.Event()
@@ -226,7 +230,7 @@ async def test_direct_transient_run_never_spills_before_cancellation(tmp_path) -
 
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=respond)
     # The session policy must suffice even without passing ephemeral=True.
-    task = asyncio.create_task(loop._run_agent_loop(
+    task = asyncio.create_task(loop.model_turn.run(
         TranscriptInput(history=[], current_message="synthetic question"),
         runtime=loop.llm_runtime(), session=session,
     ))
@@ -262,8 +266,8 @@ async def test_session_worker_errors_keep_private_content_out_of_logs(
             loop.sessions.invalidate(key)
             raise ValueError(secret)
 
-        target = "_process_message" if failure == "discard" else "_dispatch_one"
-        monkeypatch.setattr(loop, target, fail_after_discard)
+        target, method = (loop.processing, "process") if failure == "discard" else (loop.dispatch, "execute")
+        monkeypatch.setattr(target, method, fail_after_discard)
     records = []
     sink = logger.add(lambda message: records.append(message.record), format="{message}")
     try:
@@ -287,7 +291,7 @@ async def test_missing_required_session_cannot_fall_back_to_disk(tmp_path) -> No
     loop.sessions.invalidate(key)
 
     with pytest.raises(RuntimeError, match="required session is not active"):
-        await loop._process_message(_message(key, "stale private message"))
+        await loop.processing.process(_message(key, "stale private message"))
 
     loop.provider.chat_stream_with_retry.assert_not_awaited()
     assert loop.sessions.read_session_file(key) is None
@@ -302,7 +306,7 @@ async def test_required_durable_session_survives_cache_eviction(tmp_path) -> Non
     loop.sessions.save(session)
     loop.sessions.invalidate(key)
     try:
-        response = await loop._process_message(_message(key, "follow-up"))
+        response = await loop.processing.process(_message(key, "follow-up"))
         assert response is not None and response.content == "received"
         assert "earlier question" in str(loop.provider.chat_stream_with_retry.await_args.kwargs["messages"])
     finally:
@@ -313,7 +317,7 @@ async def test_required_durable_session_survives_cache_eviction(tmp_path) -> Non
 async def test_deleted_child_cannot_notify_a_recreated_parent(tmp_path) -> None:
     loop = _loop(tmp_path, [])
     key = "websocket:recreated-parent"
-    loop.subagents.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="old result"))
+    loop.subagents.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="old result"))
     try:
         await loop.subagents.spawn("old task", session_key=key, runtime=loop.llm_runtime())
         await asyncio.gather(*loop.subagents._running_tasks.values())
@@ -325,9 +329,9 @@ async def test_deleted_child_cannot_notify_a_recreated_parent(tmp_path) -> None:
         await loop.sessions.state.get(key)
 
         assert loop.subagents.statuses_for_session(key) == {}
-        await loop._enqueue_session_message(notice)
+        await loop.dispatch.enqueue(notice)
         assert key not in loop._pending_queues
-        assert await loop._process_message(notice) is None
+        assert await loop.processing.process(notice) is None
         loop.provider.chat_stream_with_retry.assert_not_awaited()
         assert loop.sessions.read_session_file(key)["messages"] == []
     finally:

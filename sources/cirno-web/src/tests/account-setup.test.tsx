@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AccountForm } from "@/components/setup/AccountForm";
+import { AccountEntry } from "@/features/entry/AccountEntry";
 import { BootstrapAuthRequiredError, fetchBootstrap } from "@/lib/bootstrap";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -27,14 +27,14 @@ describe("browser account setup", () => {
     vi.stubGlobal("fetch", request);
     const onSuccess = vi.fn();
     const user = userEvent.setup();
-    render(<AccountForm mode="register" onSuccess={onSuccess} />);
+    render(<AccountEntry mode="register" onSuccess={onSuccess} />);
     await user.type(screen.getByLabelText("Username"), "owner");
     await user.type(screen.getByLabelText("Password", { exact: true }), "CirnoTest!");
     await user.type(screen.getByLabelText("Confirm password"), "CirnoTest!");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
-    expect(request).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({
-      method: "POST", credentials: "same-origin", body: JSON.stringify({ username: "owner", password: "CirnoTest!" }),
+    expect(request).toHaveBeenCalledWith("/v0/auth/register", expect.objectContaining({
+      method: "POST", credentials: "same-origin", body: JSON.stringify({ username: "owner", password: "CirnoTest!", router_handle: "cirno" }),
     }));
     expect(Object.values(localStorage)).not.toContain("CirnoTest!");
   });
@@ -42,7 +42,7 @@ describe("browser account setup", () => {
   it.each(["Short!A", "lowercase!", "UPPERCASEONLY", "Uppercase ", "Password中文", "PasswordA\u200b"])("rejects an incomplete password rule before registration: %s", async (password) => {
     const request = vi.fn();
     vi.stubGlobal("fetch", request);
-    render(<AccountForm mode="register" onSuccess={vi.fn()} />);
+    render(<AccountEntry mode="register" onSuccess={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "owner" } });
     fireEvent.change(screen.getByLabelText("Password", { exact: true }), { target: { value: password } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: password } });
@@ -54,7 +54,7 @@ describe("browser account setup", () => {
   it("does not truncate long passwords", async () => {
     const request = vi.fn(async () => new Response('{"ok":true}', { status: 201 }));
     vi.stubGlobal("fetch", request);
-    render(<AccountForm mode="register" onSuccess={vi.fn()} />);
+    render(<AccountEntry mode="register" onSuccess={vi.fn()} />);
     const password = "A".repeat(1100) + "!";
     const field = screen.getByLabelText("Password", { exact: true });
     expect(field).not.toHaveAttribute("maxlength");
@@ -63,13 +63,13 @@ describe("browser account setup", () => {
     fireEvent.change(field, { target: { value: password } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: password } });
     fireEvent.submit(screen.getByRole("button", { name: "Create account" }).closest("form")!);
-    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({ body: JSON.stringify({ username: "owner", password }) })));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/v0/auth/register", expect.objectContaining({ body: JSON.stringify({ username: "owner", password, router_handle: "cirno" }) })));
   });
 
   it("keeps password confirmation errors beside the form", async () => {
     const request = vi.fn();
     vi.stubGlobal("fetch", request);
-    render(<AccountForm mode="register" onSuccess={vi.fn()} />);
+    render(<AccountEntry mode="register" onSuccess={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "owner" } });
     fireEvent.change(screen.getByLabelText("Password", { exact: true }), { target: { value: "A long test password!" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "a different password" } });
@@ -81,7 +81,7 @@ describe("browser account setup", () => {
   it("shows login errors and leaves registration fields out of the login form", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response('{"error":"invalid_credentials"}', { status: 401 })));
     const user = userEvent.setup();
-    render(<AccountForm mode="login" onSuccess={vi.fn()} />);
+    render(<AccountEntry mode="login" onSuccess={vi.fn()} />);
     expect(screen.queryByLabelText("Confirm password")).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("Username"), "owner");
     await user.type(screen.getByLabelText("Password", { exact: true }), "wrong");
@@ -89,4 +89,23 @@ describe("browser account setup", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Incorrect username or password.");
     expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
   });
+});
+
+it("submits the chosen router name only during registration", async () => {
+  const request = vi.fn(async () => new Response('{"ok":true}', { status: 201 }));
+  vi.stubGlobal("fetch", request);
+  const user = userEvent.setup();
+  const { unmount } = render(<AccountEntry mode="register" onSuccess={vi.fn()} />);
+  await user.type(screen.getByLabelText("Username"), "owner");
+  const handle = screen.getByLabelText("Router @name");
+  await user.clear(handle); await user.type(handle, "@Snow_9");
+  await user.type(screen.getByLabelText("Password", { exact: true }), "CirnoTest!");
+  await user.type(screen.getByLabelText("Confirm password"), "CirnoTest!");
+  await user.click(screen.getByRole("button", { name: "Create account" }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith("/v0/auth/register", expect.objectContaining({
+    body: JSON.stringify({ username: "owner", password: "CirnoTest!", router_handle: "snow_9" }),
+  })));
+  unmount();
+  render(<AccountEntry mode="login" onSuccess={vi.fn()} />);
+  expect(screen.queryByLabelText("Router @name")).not.toBeInTheDocument();
 });

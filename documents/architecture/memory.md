@@ -1,12 +1,12 @@
 # Disk-first memory
 
-Cirno defaults to files and SQLite FTS5/BM25. It does not load an embedding model, run a vector database or search memory before every reply. Profiles, evidence, memory and Skills live in Home; workspaces contain task artifacts.
+Cirno defaults to files and SQLite FTS5/BM25. It does not load an embedding model, run a vector database or search memory before every reply. Profiles, evidence, memory and Skills live in Home; workspaces contain task artifacts. The independent `cirno-memory` package owns retrieval and evidence stores; core coordinates Dream and compaction.
 
 ## Recall and editing
 
-Settings separates Memory library, Context compaction, Dream consolidation and Memory retrieval. Settings → Personality edits personality, user preferences, workflow instructions and heartbeat instructions. The memory library and Agent tools share `memory/search.py`: BM25 is the default, with optional semantic and hybrid modes. Filters include layer, scope, tags and dates. The interface reports the actual engine, fallback reason and unfinished vector-index coverage.
+Settings separates Memory library, Context compaction, Dream consolidation and Memory retrieval. Settings → Personality edits Router and Worker personalities, user preferences and workflow instructions. Settings → Agent heartbeat edits heartbeat instructions. The memory library and Agent tools share `cirno_memory.search`: BM25 is the default, with optional semantic and hybrid modes. Filters include layer, scope, tags and dates. The interface reports the actual engine, fallback reason and unfinished vector-index coverage.
 
-An empty query browses records without launching an embedding worker. Evidence, task state and searches including historical records use BM25 because optional vectors do not cover all those records. Expand a result to read its body, versions and original evidence. Index rebuilding is incremental and can be stopped and resumed. Dream failures expose their reasons and can be retried.
+An empty query browses records without launching an embedding worker. Evidence, task state and searches including historical records use BM25 because optional vectors do not cover all those records. Open a result to inspect its body, versions and original evidence. Search pagination retains the submitted filters while the next query is being edited. Evidence pages identify the resolved source record and revision; continuation and retry retain that revision, including when a historical finding points to a separate captured source. Index rebuilding is incremental and can be stopped and resumed. Dream failures expose their reasons and can be retried.
 
 Use `memory.search`, then `memory.read`. Default recall returns knowledge, task checkpoints and profiles. Use `purpose="evidence"` for events and original messages, or `purpose="all"` for both. `memory.tags` discovers visible tag names and counts. `expand_links` adds bounded one-hop relationships: three by default, at most ten across the results. There is no reranker.
 
@@ -30,6 +30,8 @@ Large files, web artifacts and Node job output remain at their original location
 
 Before compaction, Cirno streams original messages to disk and saves the compaction increment in a durable queue. The executing model saves explicit task checkpoints at milestones and before compaction; automatic summaries do not overwrite them. Task recovery does not depend on a successful Dream run.
 
+Journal append and retention share a file lock across instances. Cursor files are replaced atomically. Invalid journal records or cursor counters stop the affected operation with a file location; retention leaves the original file intact. Restore or correct that file before retrying.
+
 Task checkpoints are attached as model-only evidence to the fresh input and saved with that exact input before the model request. A later checkpoint update does not rewrite the system prompt or earlier messages. Skill and tool declarations use deterministic ordering. Claude cache breakpoints cover the latest cacheable input, including first-turn documents and tool results. Changes to profiles, `MEMORY.md`, available tools or compacted summaries still change the request prefix and can invalidate provider caches.
 
 Token totals include cached input; they are not a billable-cost estimate. The cache hit rate divides provider-reported cache reads by input tokens from requests that report cache metrics. Missing cache metrics are unknown, not misses. Cache persistence and pricing remain provider-specific.
@@ -37,6 +39,8 @@ Token totals include cached input; they are not a billable-cost estimate. The ca
 By default Dream runs after 180 seconds of foreground inactivity, processing at most eight inputs and 16,000 characters per batch, with up to 24 model iterations. Interval mode is also available. Each batch has one visibility scope. Derived records inherit their evidence scope and version; project/session batches cannot edit shared profiles. Dream's file tools cannot read configuration or modify original evidence logs.
 
 Leases prevent simultaneous processing, and long calls renew them. New foreground input interrupts automatic idle Dream, releases the lease and does not consume a failure attempt. Knowledge already saved remains; a later run searches for duplicates. Inputs changed during processing stay queued.
+
+Manual and scheduled Dream runs share the same batch lifecycle. Manual runs are tracked background tasks and finish before service shutdown completes. Failed preparation or execution releases the batch for retry and preserves the cursor. Errors reach the command or scheduler; manual runs also send a failure message to their source conversation.
 
 Dream must call its restricted `memory.confirm` operation for every input revision:
 
@@ -75,6 +79,8 @@ Managed edits update the index immediately. Idle scans detect changes and deleti
 Catalog, search and queue writes use attached SQLite databases and rollback-journal transactions. Each database has a 512 KiB page-cache setting; splitting stores does not load the corpus into memory.
 
 Back up the entire instance root while the service is stopped; Agent Home is its `home/` subdirectory. Catalog and Dream databases contain authoritative state. Search and vectors are derived indexes; after losing the text index, perform a full rebuild in Settings. Vector chunks regenerate on explicit searches. Markdown alone cannot restore scopes, revisions, links or processing state. Evidence and revisions do not expire automatically, so disk usage grows with history.
+
+Checkpoint writes and evidence capture run outside the server event loop, including provider-failure and exhausted-budget fallbacks. Runtime history is released only after its checkpoint is committed. Dream renews its batch lease during provider calls; a failed renewal stops the run and leaves its inputs recoverable.
 
 ## Optional embeddings
 

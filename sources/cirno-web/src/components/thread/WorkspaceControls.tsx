@@ -1,3 +1,4 @@
+import { useTabCompact } from "@/ui/layout/TabSurface";
 import { FullAccessIcon, RestrictedAccessIcon, WorkspaceIcon } from "@/components/icons/product-icons";
 import type { HTMLAttributes, ReactElement, RefObject } from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -10,10 +11,11 @@ import { HoverHint, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input, SearchInput } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { SidebarSelectionHighlight, SIDEBAR_SELECTION_ITEM_CLASS } from "@/components/SidebarSelectionHighlight";
-import type { WorkspaceScopePayload, ProjectDirectory, WorkspaceDirectoriesPayload, WorkspacesPayload } from "@/lib/types";
+import { SelectionHighlight, SELECTION_ITEM_CLASS } from "@/components/ui/selection-highlight";
+import type { WorkspaceScopePayload, ProjectDirectory, WorkspaceDirectoriesPayload, WorkspacesPayload } from "@/lib/contracts/workspaces";
 import { createWorkspaceDirectoryCache } from "@/lib/workspace-directory-cache";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useOverlayFocusReturn } from "@/hooks/useOverlayFocusReturn";
 import { cn } from "@/lib/utils";
 import { isAbsoluteWorkspacePath, projectNameFromPath, sameWorkspacePath, scopeWithAccessMode, workspaceBreadcrumbs, workspacePathCompletionQuery, workspaceDirectoryPrefix, selectedProjectScope, type BrowseWorkspaceDirectories } from "@/lib/workspace";
 
@@ -48,7 +50,7 @@ function PickerToolButton({ label, disabled, onClick, children }: {
 }) {
   return <HoverHint content={label}>
     <Button type="button" variant="ghost" size="icon" aria-label={label} disabled={disabled} onClick={onClick}
-      className="h-11 w-11 shrink-0 rounded-control text-muted-foreground sm:h-9 sm:w-9">{children}</Button>
+      className="h-11 w-11 shrink-0 rounded-control text-muted-foreground @min-[640px]/cirno-tab:h-9 @min-[640px]/cirno-tab:w-9">{children}</Button>
   </HoverHint>;
 }
 
@@ -99,7 +101,7 @@ function WorkspaceDirectoryColumn({ options, activeIndex, selectedPath, initialS
   return (
     <div className="flex h-full min-h-0 min-w-0 shrink-0 flex-col justify-center" style={style}>
     <div {...props} ref={viewportRef} className={cn("snap-y snap-proximity", className)} style={{ height: options.length ? visibleRows * DIRECTORY_ROW_HEIGHT : "100%" }} onScroll={event => setFirstRow(Math.floor(event.currentTarget.scrollTop / DIRECTORY_ROW_HEIGHT))}>
-      <SidebarSelectionHighlight role="presentation" className="relative" style={{ height: options.length * DIRECTORY_ROW_HEIGHT }}
+      <SelectionHighlight role="presentation" className="relative" style={{ height: options.length * DIRECTORY_ROW_HEIGHT }}
         scope="workspace-directory" activeId={activeIndex === null ? selectedPath : options[activeIndex]?.path ?? null}
         targetSelector={activeIndex === null ? '[aria-selected="true"]' : '[data-keyboard-active]'}>
         {options.slice(start, end).map((option, offset) => {
@@ -108,7 +110,7 @@ function WorkspaceDirectoryColumn({ options, activeIndex, selectedPath, initialS
             {renderOption(option, index)}
           </div>;
         })}
-      </SidebarSelectionHighlight>
+      </SelectionHighlight>
       {children}
     </div>
     </div>
@@ -178,7 +180,7 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
   const currentVisit = history.visits[history.index];
   const basePath = currentVisit.path;
   const filterQuery = currentVisit.filter;
-  const compact = useMediaQuery("(max-width: 639px)");
+  const compact = useTabCompact(640);
   const [catalog, setCatalog] = useState<WorkspacesPayload | null>(null);
   const [directory, setDirectory] = useState<WorkspaceDirectoriesPayload | null>(null);
   const [loading, setLoading] = useState(false);
@@ -209,7 +211,7 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
   const completionRequest = useRef(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [keyboardInteraction, setKeyboardInteraction] = useState(false);
-  const openedWithKeyboard = useRef(false);
+  const focusReturn = useOverlayFocusReturn();
   const inputRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const optionsId = useId();
@@ -541,40 +543,41 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
     if (index >= 0 && index < history.visits.length) visitDirectory(history.visits[index], false, index);
   }
 
-  const filterToolbar = canBrowse && !(compact && editingPath) && <div className={cn("flex shrink-0 items-center gap-2", compact ? "bg-[#fcfcfc] px-3 py-2 dark:bg-muted" : "w-56 max-w-[40%]")}>
+  const filterToolbar = canBrowse && !(compact && editingPath) && <div className={cn("flex shrink-0 items-center gap-2", compact ? "bg-[#fcfcfc] px-3 py-2 dark:bg-surface-secondary" : "w-56 max-w-[40%]")}>
     {compact && <Button variant="ghost" size="sm" aria-expanded={showLocations} onClick={() => setShowLocations(value => !value)} className="h-11 shrink-0 gap-1.5 rounded-control px-2 text-[13px] leading-5"><Star className="h-3.5 w-3.5" />{t("workspace.picker.shortcuts")}</Button>}
     <div className="relative min-w-0 flex-1">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-      <SearchInput aria-label={t("workspace.picker.filter")} placeholder={t("workspace.picker.filter")} value={filterQuery} disabled={pickingFolder || editingPath || compact && showLocations} onChange={event => { setFilterQuery(event.target.value); setActiveIndex(0); setActiveColumn(currentColumnIndex); setHighlightActive(false); }} className={cn("h-11 rounded-[var(--picker-field-radius)] border-transparent pl-8 text-[16px] leading-5 shadow-none sm:h-9 sm:text-[13px]", compact ? "bg-muted/60" : "bg-background/80")} />
+      <SearchInput aria-label={t("workspace.picker.filter")} placeholder={t("workspace.picker.filter")} value={filterQuery} disabled={pickingFolder || editingPath || compact && showLocations} onChange={event => { setFilterQuery(event.target.value); setActiveIndex(0); setActiveColumn(currentColumnIndex); setHighlightActive(false); }} className={cn("h-11 rounded-[var(--picker-field-radius)] border-transparent pl-8 text-[16px] leading-5 shadow-none @min-[640px]/cirno-tab:h-9 @min-[640px]/cirno-tab:text-[13px]", compact ? "bg-surface-secondary/60" : "bg-background/80")} />
     </div>
   </div>;
 
   if (!visible || !defaultScope || !onChange) return null;
   return (
-    <div className="inline-flex min-w-0 max-w-[17.5rem] shrink items-center">
+    <div className="inline-flex min-w-0 max-w-[min(100%,17.5rem)] shrink items-center">
       <Dialog open={open} onOpenChange={setOpen}>
         <HoverHint content={`${t("workspace.picker.switchDirectory")}\n${displayedScope?.project_path ?? ""}`}>
           <DialogTrigger asChild>
-            <button ref={triggerRef} onClick={event => { openedWithKeyboard.current = event.detail === 0; }} onPointerDown={() => setKeyboardInteraction(false)} onKeyDown={() => setKeyboardInteraction(true)} type="button" disabled={disabled} aria-label={t("workspace.picker.switchDirectory")} className="thread-composer-workspace touch-target inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-muted-foreground outline-none transition-colors motion-reduce:transition-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55">
+            <button ref={triggerRef} onClick={event => { if (event.detail === 0) focusReturn.keyboard(); }} onPointerDown={() => { setKeyboardInteraction(false); focusReturn.pointer(); }} onKeyDown={() => { setKeyboardInteraction(true); focusReturn.keyboard(); }} type="button" disabled={disabled} aria-label={t("workspace.picker.switchDirectory")} className="thread-composer-workspace touch-target inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-muted-foreground outline-none transition-colors motion-reduce:transition-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55">
               <WorkspaceIcon className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 truncate">{projectLabel}</span>
               <ChevronDown className="h-3 w-3 shrink-0" aria-hidden />
             </button>
           </DialogTrigger>
         </HoverHint>
-        <DialogContent showCloseButton={false} layoutAnchor={layoutAnchor} centerInLayoutAnchor className="flex h-[min(37rem,calc(100%-2rem))] max-w-5xl flex-col gap-0 overflow-hidden p-0 text-[13px] leading-5 [--picker-sidebar-width:11rem] [--picker-toolbar-inset:0.75rem] [--picker-field-radius:calc(var(--radius-modal)_-_var(--picker-toolbar-inset))] sm:[--picker-toolbar-inset:1rem] dark:bg-background"
+        <DialogContent showCloseButton={false} layoutAnchor={layoutAnchor} centerInLayoutAnchor className="flex h-[min(37rem,calc(100%-2rem))] max-w-5xl flex-col gap-0 overflow-hidden p-0 text-[13px] leading-5 [--picker-sidebar-width:11rem] [--picker-toolbar-inset:0.75rem] [--picker-field-radius:calc(var(--radius-modal)_-_var(--picker-toolbar-inset))] @min-[640px]/cirno-tab:[--picker-toolbar-inset:1rem] dark:bg-background"
           onOpenAutoFocus={event => { event.preventDefault(); if (canBrowse) focusDirectory(); else inputRef.current?.focus(); }}
-          onPointerDownCapture={() => setKeyboardInteraction(false)}
+          onPointerDownCapture={() => { setKeyboardInteraction(false); focusReturn.pointer(); }}
+          onPointerDownOutside={focusReturn.pointer}
           onKeyDownCapture={event => {
-            if (!["Alt", "Control", "Meta", "Shift"].includes(event.key)) setKeyboardInteraction(true);
+            if (!["Alt", "Control", "Meta", "Shift"].includes(event.key)) { setKeyboardInteraction(true); focusReturn.keyboard(); }
             if (!canBrowse || pickingFolder || event.nativeEvent.isComposing) return;
             if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "g") { event.preventDefault(); editPath(); }
           }}
-          onEscapeKeyDown={event => { if (editingPath) { event.preventDefault(); cancelPathEditing(); } }}
-          onCloseAutoFocus={event => { if (!openedWithKeyboard.current) event.preventDefault(); }}>
+          onEscapeKeyDown={event => { focusReturn.keyboard(); if (editingPath) { event.preventDefault(); cancelPathEditing(); } }}
+          onCloseAutoFocus={focusReturn.onCloseAutoFocus}>
           <DialogTitle className="sr-only">{t("workspace.picker.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("workspace.picker.description")}</DialogDescription>
-          <div className="flex shrink-0 items-center gap-1 bg-muted px-[var(--picker-toolbar-inset)] pt-[var(--picker-toolbar-inset)] pb-3">
+          <div className="flex shrink-0 items-center gap-1 bg-surface-secondary px-[var(--picker-toolbar-inset)] pt-[var(--picker-toolbar-inset)] pb-3">
             {canBrowse && <div className={cn("flex shrink-0 items-center", !compact && "w-[calc(var(--picker-sidebar-width)-var(--picker-toolbar-inset)-0.25rem)]")}>
               <PickerToolButton label={t("workspace.picker.back")} disabled={pickingFolder || history.index === 0} onClick={() => moveHistory(-1)}><ArrowLeft className="h-4 w-4" /></PickerToolButton>
               {!compact && <PickerToolButton label={t("workspace.picker.forward")} disabled={pickingFolder || history.index >= history.visits.length - 1} onClick={() => moveHistory(1)}><ArrowRight className="h-4 w-4" /></PickerToolButton>}
@@ -582,7 +585,7 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
                 onClick={() => history.previous && visitDirectory(history.previous)}><History className="h-4 w-4" /></PickerToolButton>
             </div>}
             <div className="flex min-w-0 flex-1 items-center rounded-[var(--picker-field-radius)] bg-background/80">
-            {editingPath || !canBrowse ? <Input ref={inputRef} role="combobox" aria-expanded={open} aria-controls={`${optionsId}-${activeColumn}`} aria-activedescendant={highlightActive && activeOptions.length ? `${optionsId}-${activeColumn}-${activeOption}` : undefined} aria-autocomplete="list" aria-busy={loading} value={pathDraft} disabled={disabled || pickingFolder} onChange={event => changeDraft(event.target.value)} onBlur={event => { if (canBrowse && !keyboardInteraction && event.relatedTarget !== confirmRef.current) cancelPathEditing(false); }} placeholder={t("workspace.dialog.manual")} aria-label={t("workspace.dialog.manual")} aria-invalid={displayedError ? true : undefined} aria-describedby={displayedError ? errorId : undefined} className="h-9 min-w-0 flex-1 rounded-[var(--picker-field-radius)] border-transparent shadow-none focus-visible:ring-0 text-[16px] leading-5 sm:text-[13px]" onKeyDown={event => {
+            {editingPath || !canBrowse ? <Input ref={inputRef} role="combobox" aria-expanded={open} aria-controls={`${optionsId}-${activeColumn}`} aria-activedescendant={highlightActive && activeOptions.length ? `${optionsId}-${activeColumn}-${activeOption}` : undefined} aria-autocomplete="list" aria-busy={loading} value={pathDraft} disabled={disabled || pickingFolder} onChange={event => changeDraft(event.target.value)} onBlur={event => { if (canBrowse && !keyboardInteraction && event.relatedTarget !== confirmRef.current) cancelPathEditing(false); }} placeholder={t("workspace.dialog.manual")} aria-label={t("workspace.dialog.manual")} aria-invalid={displayedError ? true : undefined} aria-describedby={displayedError ? errorId : undefined} className="h-9 min-w-0 flex-1 rounded-[var(--picker-field-radius)] border-transparent shadow-none focus-visible:ring-0 text-[16px] leading-5 @min-[640px]/cirno-tab:text-[13px]" onKeyDown={event => {
               if (event.nativeEvent.isComposing) return;
               if (event.key === "Tab" && !event.shiftKey && canBrowse && absoluteDraft && !/[\\/]$/.test(pathDraft)) {
                 event.preventDefault(); void completePath();
@@ -594,11 +597,11 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
               }
             }} /> : <nav ref={attachBreadcrumb} aria-label={t("workspace.picker.location")}
               onClick={event => { if (!pickingFolder && !(event.target as HTMLElement).closest("button")) editPath(); }}
-              className="flex h-11 min-w-0 flex-1 cursor-text items-center overflow-x-auto rounded-[var(--picker-field-radius)] sm:h-9 [scrollbar-width:none]">
+              className="flex h-11 min-w-0 flex-1 cursor-text items-center overflow-x-auto rounded-[var(--picker-field-radius)] @min-[640px]/cirno-tab:h-9 [scrollbar-width:none]">
               {breadcrumbs.map((crumb, index) => <span key={crumb.path} className="flex shrink-0 items-center">
                 {index > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />}
                   <button type="button" disabled={pickingFolder} aria-current={index === breadcrumbs.length - 1 ? "location" : undefined} onClick={() => navigate(crumb.path)}
-                    className="h-11 max-w-48 cursor-pointer truncate rounded-[var(--picker-field-radius)] px-2 text-muted-foreground outline-none hover:bg-foreground/[0.055] focus-visible:ring-2 focus-visible:ring-ring aria-[current=location]:font-medium aria-[current=location]:text-foreground sm:h-9">{crumb.name}</button>
+                    className="h-11 max-w-48 cursor-pointer truncate rounded-[var(--picker-field-radius)] px-2 text-muted-foreground outline-none hover:bg-foreground/[0.055] focus-visible:ring-2 focus-visible:ring-ring aria-[current=location]:font-medium aria-[current=location]:text-foreground @min-[640px]/cirno-tab:h-9">{crumb.name}</button>
               </span>)}
               <HoverHint content={t("workspace.picker.editPath")}>
                 <button type="button" disabled={pickingFolder} aria-label={`${t("workspace.picker.editPath")}: ${currentPath}`} onClick={editPath}
@@ -609,16 +612,16 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
             {!compact && filterToolbar}
           </div>
           {compact && filterToolbar}
-          <div className="flex min-h-0 flex-1 bg-muted">
+          <div className="flex min-h-0 flex-1 bg-surface-secondary">
             {(!compact || showLocations || !canBrowse) && <nav aria-label={t("workspace.picker.shortcuts")}
-              className={cn("sidebar-scrollbar flex shrink-0 flex-col overflow-auto bg-muted p-2", compact && canBrowse ? "w-full" : "w-[var(--picker-sidebar-width)]", compact && !canBrowse && "w-40")}>
+              className={cn("sidebar-scrollbar flex shrink-0 flex-col overflow-auto bg-surface-secondary p-2", compact && canBrowse ? "w-full" : "w-[var(--picker-sidebar-width)]", compact && !canBrowse && "w-40")}>
               {hostName && <p className="shrink-0 truncate px-3 py-2 text-xs leading-4 text-muted-foreground">{hostName}</p>}
-              <SidebarSelectionHighlight scope="workspace-saved-location" activeId={currentPath} targetSelector='button[aria-current="location"]' className="relative flex shrink-0 flex-col gap-3"
+              <SelectionHighlight scope="workspace-saved-location" activeId={currentPath} targetSelector='button[aria-current="location"]' className="relative flex shrink-0 flex-col gap-3"
                 highlightClassName={savedSelectionJoin === "top" ? "rounded-t-none" : savedSelectionJoin === "bottom" ? "rounded-b-none" : undefined}>
               {[{ label: t("workspace.picker.favorites"), projects: favorites, favorite: true }, { label: t("workspace.picker.recent"), projects: recentProjects, favorite: false }].map(section => (
                 <section key={section.label} className="min-w-0 shrink-0">
                   <h3 className="px-3 py-2 text-xs font-medium leading-4 text-muted-foreground">{section.label}</h3>
-                  {section.projects.map(project => <div key={project.path} className={cn("workspace-picker-row group/workspace-saved-row", SIDEBAR_SELECTION_ITEM_CLASS)}
+                  {section.projects.map(project => <div key={project.path} className={cn("workspace-picker-row group/workspace-saved-row", SELECTION_ITEM_CLASS)}
                     onPointerEnter={() => setHoveredLocation(project.path)} onPointerLeave={() => setHoveredLocation(null)}>
                       <button type="button" aria-label={project.path} aria-current={sameWorkspacePath(currentPath, project.path) ? "location" : undefined}
                         disabled={pickingFolder} onMouseDown={event => event.preventDefault()} onClick={() => openShortcut(project)}
@@ -632,9 +635,9 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
                   {section.favorite && !favorites.length && canFavorite && <p className="px-3 text-xs leading-5 text-muted-foreground">{t("workspace.picker.favoriteHint")}</p>}
                 </section>
               ))}
-              </SidebarSelectionHighlight>
+              </SelectionHighlight>
             </nav>}
-            <div className={cn("mr-[var(--picker-toolbar-inset)] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--picker-field-radius)] bg-[#fcfcfc] dark:bg-muted", compact && showLocations && canBrowse && "hidden")}>
+            <div className={cn("mr-[var(--picker-toolbar-inset)] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--picker-field-radius)] bg-[#fcfcfc] dark:bg-surface-secondary", compact && showLocations && canBrowse && "hidden")}>
             <div ref={attachColumns} data-workspace-columns className="sidebar-scrollbar flex flex-1 min-h-0 min-w-0 overflow-x-auto overscroll-x-contain">
               {columns.map((column, columnIndex) => (!compact || columnIndex === currentColumnIndex) && <WorkspaceDirectoryColumn key={columnIndex} options={column.options} selectedPath={column.selectedPath} initialScrollTop={previewingPath ? 0 : currentVisit.scrollTops[columnIndex] ?? 0} visitRevision={history.revision} activeIndex={highlightActive && columnIndex === activeColumn ? activeOption : null}
                 id={`${optionsId}-${columnIndex}`} data-workspace-column={columnIndex} data-current-directory={columnIndex === currentColumnIndex ? "" : undefined} role="listbox" tabIndex={0} aria-activedescendant={highlightActive && columnIndex === activeColumn && column.options.length ? `${optionsId}-${columnIndex}-${activeOption}` : undefined} aria-label={column.path || t("thread.composer.workspace.projectAria")} aria-busy={columnIndex === currentColumnIndex && loading} style={{ width: `${compact ? 100 : 100 / columnCount}%` }} className="sidebar-scrollbar relative min-w-0 shrink-0 overflow-x-hidden overflow-y-auto px-2 outline-none [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
@@ -649,7 +652,7 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
                     event.preventDefault(); activate(column.options[Math.min(activeIndex, count - 1)], columnIndex);
                   }
                 }}
-                renderOption={(option, index) => <div role="presentation" className={cn("workspace-picker-row", SIDEBAR_SELECTION_ITEM_CLASS)} data-keyboard-active={highlightActive && columnIndex === activeColumn && index === activeOption ? "" : undefined}>
+                renderOption={(option, index) => <div role="presentation" className={cn("workspace-picker-row", SELECTION_ITEM_CLASS)} data-keyboard-active={highlightActive && columnIndex === activeColumn && index === activeOption ? "" : undefined}>
                   <button id={`${optionsId}-${columnIndex}-${index}`} type="button" role="option" tabIndex={-1} aria-label={option.path} aria-selected={sameWorkspacePath(column.selectedPath, option.path)} aria-posinset={index + 1} aria-setsize={column.options.length} disabled={pickingFolder}
                     onPointerMove={() => { setHighlightActive(false); setActiveColumn(columnIndex); setActiveIndex(index); }}
                     onMouseDown={event => event.preventDefault()} onClick={() => activate(option, columnIndex)}
@@ -668,10 +671,10 @@ export function WorkspaceProjectPicker({ disabled, scope, defaultScope, controls
             </div>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-3 bg-muted px-4 py-3">
-            {canBrowse && <label className="mr-auto flex w-full items-center gap-2 text-muted-foreground sm:w-auto"><ToggleButton checked={showHidden} onChange={setShowHidden} label={t("workspace.picker.hidden")} />{t("workspace.picker.hidden")}</label>}
-            <Button variant="ghost" size="sm" onClick={() => setOpen(false)} className="h-11 rounded-control px-4 text-[13px] leading-5 sm:h-10">{t("workspace.picker.cancel")}</Button>
-            <Button ref={confirmRef} size="sm" className="h-11 rounded-control px-4 text-[13px] leading-5 sm:h-10" disabled={!selectionPath || pickingFolder || (editingPath && !absoluteDraft)} onClick={() => selectionPath && void chooseProject(selectionPath)}>{t("workspace.picker.select")}</Button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-3 bg-surface-secondary px-4 py-3">
+            {canBrowse && <label className="mr-auto flex w-full items-center gap-2 text-muted-foreground @min-[640px]/cirno-tab:w-auto"><ToggleButton checked={showHidden} onChange={setShowHidden} label={t("workspace.picker.hidden")} />{t("workspace.picker.hidden")}</label>}
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)} className="h-11 rounded-control px-4 text-[13px] leading-5 @min-[640px]/cirno-tab:h-10">{t("workspace.picker.cancel")}</Button>
+            <Button ref={confirmRef} size="sm" className="h-11 rounded-control px-4 text-[13px] leading-5 @min-[640px]/cirno-tab:h-10" disabled={!selectionPath || pickingFolder || (editingPath && !absoluteDraft)} onClick={() => selectionPath && void chooseProject(selectionPath)}>{t("workspace.picker.select")}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -689,7 +692,7 @@ export function WorkspaceAccessMenu({
   scope: WorkspaceScopePayload;
   disabled?: boolean;
   onChange?: (scope: WorkspaceScopePayload) => void;
-  hintBoundaryRef: RefObject<HTMLElement>;
+  hintBoundaryRef: RefObject<HTMLElement | null>;
 }) {
   const { t } = useTranslation();
   const coarsePointer = useMediaQuery("(pointer: coarse)");
@@ -699,7 +702,7 @@ export function WorkspaceAccessMenu({
   const [hintPosition, setHintPosition] = useState<{ side: "top" | "bottom"; sideOffset: number }>({ side: "bottom", sideOffset: 8 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hintEnabled = !open && !coarsePointer;
-  const restoreTriggerFocus = useRef(true);
+  const focusReturn = useOverlayFocusReturn();
   const descriptionId = useId();
   const isFull = scope.access_mode === "full";
   const isReview = scope.access_mode === "review";
@@ -739,8 +742,8 @@ export function WorkspaceAccessMenu({
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild disabled={disabled || !onChange}>
               <button ref={triggerRef} type="button" aria-label={accessAriaLabel} aria-describedby={descriptionId}
-                onPointerDown={() => { restoreTriggerFocus.current = false; }}
-                onKeyDown={() => { restoreTriggerFocus.current = true; }}
+                onPointerDown={() => { focusReturn.pointer(); }}
+                onKeyDown={() => { focusReturn.keyboard(); }}
                 className={cn(
                   "thread-composer-access touch-target inline-flex h-8 min-w-0 max-w-full shrink items-center gap-1.5 rounded-md px-2 text-[12px] font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55",
                   isReview ? "text-destructive hover:text-destructive" : isFull ? "text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200" : "text-muted-foreground hover:text-foreground",
@@ -757,10 +760,11 @@ export function WorkspaceAccessMenu({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent side="top" align="start" sideOffset={8} aria-label={t("thread.composer.workspace.accessAria")}
-        onPointerDownCapture={() => { restoreTriggerFocus.current = false; }}
-        onKeyDownCapture={() => { restoreTriggerFocus.current = true; }}
-        onPointerDownOutside={() => { restoreTriggerFocus.current = false; }}
-        onCloseAutoFocus={event => { if (!restoreTriggerFocus.current) event.preventDefault(); }}
+        onPointerDownCapture={() => { focusReturn.pointer(); }}
+        onKeyDownCapture={() => { focusReturn.keyboard(); }}
+        onPointerDownOutside={() => { focusReturn.pointer(); }}
+        onEscapeKeyDown={focusReturn.keyboard}
+        onCloseAutoFocus={focusReturn.onCloseAutoFocus}
         className="w-max min-w-[13rem] max-w-[calc(100vw-2rem)]">
         {(["restricted", "review", "full"] as const).map(mode => {
           const full = mode === "full";

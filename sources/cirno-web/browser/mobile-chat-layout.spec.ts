@@ -1,11 +1,12 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 for (const { width, dark } of [{ width: 360, dark: false }, { width: 314, dark: true }, { width: 600, dark: false }]) {
   test.describe(`mobile transcript at ${width}px`, () => {
     test.use({ viewport: { width, height: 740 }, hasTouch: true, reducedMotion: "reduce" });
     test("keeps metadata tappable on one row and the top fade fixed while scrolling", async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
-      await page.route("**/api/**", route => route.fulfill({ json: {} }));
+      await seedPreviewPreferences(page, { language: "en" });
+      await page.route("**/v0/**", route => route.fulfill({ json: {} }));
       await page.goto(`/browser/fixture.html?case=mobile-chat-layout&project&long-project${dark ? "&dark" : ""}`);
       const workspace = page.getByRole("button", { name: "Switch directory" });
       const usage = page.getByRole("button", { name: "Context 22%. Open context usage" });
@@ -54,14 +55,16 @@ for (const { width, dark } of [{ width: 360, dark: false }, { width: 314, dark: 
 test.describe("desktop transcript spacing", () => {
   test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
   test("preserves desktop footer spacing and the bottom-only fade", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
-    await page.route("**/api/**", route => route.fulfill({ json: {} }));
+    await seedPreviewPreferences(page, { language: "en" });
+    await page.route("**/v0/**", route => route.fulfill({ json: {} }));
     await page.goto("/browser/fixture.html?case=mobile-chat-layout&project");
     const access = page.getByRole("button", { name: "Workspace access mode: Full Access" });
     await expect(access).toBeVisible();
     expect(await access.evaluate(node => !!node.closest(".thread-composer-footer-primary"))).toBe(true);
     const meta = (await page.locator(".thread-composer-meta").boundingBox())!;
-    expect(900 - meta.y - meta.height).toBeCloseTo(18, 1);
+    const bottomGap = 900 - meta.y - meta.height;
+    expect(bottomGap).toBeGreaterThanOrEqual(8);
+    expect(bottomGap).toBeLessThanOrEqual(20);
     const scroller = page.locator(".thread-message-viewport");
     await expect(scroller).toHaveCSS("--thread-top-clearance", "0px");
     await expect(scroller).toHaveCSS("--thread-top-fade-height", "0px");

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { WorkspaceProjectPicker } from "@/components/thread/WorkspaceControls";
-import type { WorkspaceDirectoriesPayload, WorkspacesPayload } from "@/lib/types";
+import type { WorkspaceDirectoriesPayload, WorkspacesPayload } from "@/lib/contracts/workspaces";
 import { workspaceBreadcrumbs, type BrowseWorkspaceDirectories } from "@/lib/workspace";
 
 const scope = { project_path: "/srv/workspace", access_mode: "restricted" as const };
@@ -21,7 +21,7 @@ const directory: WorkspaceDirectoriesPayload = {
 };
 
 describe("Workspace project picker", () => {
-  it.each(["pointer", "keyboard"])("restores the opening focus context after %s entry and Escape", async (entry) => {
+  it.each(["pointer", "keyboard"])("returns keyboard focus on Escape after %s entry", async (entry) => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<WorkspaceProjectPicker scope={scope} defaultScope={scope} controls={catalog.controls} onBrowseDirectories={vi.fn().mockResolvedValue(directory)} onChange={onChange} />);
@@ -36,8 +36,7 @@ describe("Workspace project picker", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     // FocusScope restores focus in a task after its exit cleanup.
     await act(() => new Promise(resolve => setTimeout(resolve, 0)));
-    if (entry === "keyboard") expect(trigger).toHaveFocus();
-    else expect(trigger).not.toHaveFocus();
+    expect(trigger).toHaveFocus();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -189,7 +188,7 @@ describe("Workspace project picker", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     await screen.findByText("No subfolders");
     expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled();
-    await user.type(screen.getByRole("textbox", { name: "Filter folders" }), "missing");
+    await user.type(screen.getByRole("searchbox", { name: "Filter folders" }), "missing");
     await screen.findByText("No matching folders.");
     expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled();
   });
@@ -284,7 +283,7 @@ describe("Workspace project picker", () => {
     render(<WorkspaceProjectPicker scope={scope} defaultScope={scope} controls={catalog.controls} onLoadProjects={vi.fn().mockResolvedValue(catalog)} onBrowseDirectories={onBrowse} onChange={onChange} />);
     await user.click(screen.getByRole("button", { name: "Switch directory" }));
     const shortcut = await screen.findByRole("button", { name: "/srv/beta" });
-    await user.type(screen.getByRole("textbox", { name: "Filter folders" }), "al");
+    await user.type(screen.getByRole("searchbox", { name: "Filter folders" }), "al");
     await waitFor(() => expect(onBrowse).toHaveBeenLastCalledWith("/srv/workspace", "al", false, true));
     expect(shortcut).toBeInTheDocument();
     expect(screen.getAllByRole("listbox")).toHaveLength(1);
@@ -292,9 +291,9 @@ describe("Workspace project picker", () => {
     await user.click(shortcut);
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled());
     expect(screen.getAllByRole("listbox")).toHaveLength(1);
-    expect(screen.getByRole("textbox", { name: "Filter folders" })).toHaveValue("");
+    expect(screen.getByRole("searchbox", { name: "Filter folders" })).toHaveValue("");
     expect(onChange).not.toHaveBeenCalled();
-    await user.type(screen.getByRole("textbox", { name: "Filter folders" }), "oth");
+    await user.type(screen.getByRole("searchbox", { name: "Filter folders" }), "oth");
     await waitFor(() => expect(onBrowse).toHaveBeenLastCalledWith("/srv/beta", "oth", false, true));
     expect(shortcut).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled());
@@ -634,7 +633,7 @@ describe("Workspace project picker", () => {
     render(<WorkspaceProjectPicker scope={scope} defaultScope={scope} controls={catalog.controls} onBrowseDirectories={onBrowse} onChange={onChange} />);
     await user.click(screen.getByRole("button", { name: "Switch directory" }));
     await screen.findByRole("option", { name: "/srv/workspace/alpha" });
-    const input = screen.getByRole("textbox", { name: "Filter folders" });
+    const input = screen.getByRole("searchbox", { name: "Filter folders" });
     await user.type(input, "alp");
     await waitFor(() => expect(onBrowse).toHaveBeenLastCalledWith("/srv/workspace", "alp", false, true));
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
@@ -674,7 +673,7 @@ describe("Workspace project picker", () => {
     expect(browse).toHaveBeenCalledTimes(requests);
     expect(trigger).not.toHaveFocus();
     expect(onChange).not.toHaveBeenCalled();
-    const filter = screen.getByRole("textbox", { name: "Filter folders" });
+    const filter = screen.getByRole("searchbox", { name: "Filter folders" });
     await user.type(filter, "hjkl");
     expect(filter).toHaveValue("hjkl");
     expect(screen.getByRole("listbox", { name: "/srv/workspace" })).toBeInTheDocument();

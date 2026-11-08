@@ -7,16 +7,17 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from agent.session_helpers import run_session
+from sources.development.testing.sessions import run_session
 
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.outbound_events import ContextCompactionEvent
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import TurnCompleted
-from cirno_core.command.builtin import cmd_compact, cmd_stop
+from cirno_core.command.builtin.control import cmd_compact, cmd_stop
 from cirno_core.command.router import CommandContext
-from cirno_core.providers.base import GenerationSettings, LLMResponse, ProviderConversationState
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.history_visibility import is_hidden_history_message
 
@@ -120,7 +121,7 @@ async def test_compact_emits_one_lifecycle_and_keeps_the_session(loop, command) 
     loop.sessions.save(session)
 
     msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content=command)
-    response = await loop._process_message(msg, runtime=loop.llm_runtime())
+    response = await loop.processing.process(msg, runtime=loop.llm_runtime())
 
     assert response is None
     assert bus.outbound_size == 2
@@ -143,9 +144,9 @@ async def test_compact_emits_one_lifecycle_and_keeps_the_session(loop, command) 
     assert reloaded.last_archived == 2
     assert reloaded.get_history() == []
     assert reloaded.metadata["_last_summary"]["text"] == "## Task\nInspect\n## State\nPortable checkpoint.\n## Next\nWait for input."
-    assert len(loop.consolidator.store.read_unprocessed_history(0)) == 1
+    assert len(loop.consolidator.store.journal.read_unprocessed_history(0)) == 1
 
-    response = await loop._process_message(msg, runtime=loop.llm_runtime())
+    response = await loop.processing.process(msg, runtime=loop.llm_runtime())
     assert response is None
     assert bus.outbound_size == 0
     loop.provider.chat_stream_with_retry.assert_awaited_once()
@@ -174,7 +175,7 @@ async def test_compacted_session_waits_for_new_input_without_continuation(
     loop.provider.chat_stream_with_retry.return_value = LLMResponse(content=summary)
 
     if trigger == "manual":
-        await loop._process_message(
+        await loop.processing.process(
             InboundMessage(channel="cli", sender_id="user", chat_id="checkpoint-resume",
                            content="/compact"),
             runtime=loop.llm_runtime(),
@@ -247,7 +248,7 @@ async def test_empty_compact_finishes_silently_and_does_not_schedule_idle_archiv
     reloaded = loop.sessions.get_or_create(key)
     assert reloaded.messages == session.messages
     assert reloaded.last_archived == 2
-    assert loop.consolidator.store.read_unprocessed_history(0) == []
+    assert loop.consolidator.store.journal.read_unprocessed_history(0) == []
 
     loop.auto_compact._ttl = 1
     assert loop.auto_compact._is_expired(reloaded.updated_at)
@@ -265,7 +266,7 @@ async def test_compact_during_active_turn_waits_for_the_session_lock(loop, comma
     )
     lock = loop._get_session_lock(key)
     async with lock:
-        await loop._dispatch_command_inline(msg, key, msg.content, loop.commands.dispatch)
+        await loop.command_execution.dispatch_inline(msg, key, msg.content, loop.commands.dispatch)
         tasks = list(loop._active_tasks[key])
         assert len(tasks) == 1
         await asyncio.sleep(0)
@@ -293,7 +294,7 @@ async def test_stop_completes_a_compact_command_waiting_for_the_session_lock(loo
     completions = []
     loop.bus.subscribe(completions.append, TurnCompleted)
     async with loop._get_session_lock(key):
-        await loop._dispatch_command_inline(msg, key, msg.content, loop.commands.dispatch)
+        await loop.command_execution.dispatch_inline(msg, key, msg.content, loop.commands.dispatch)
         reply = await cmd_stop(CommandContext(
             msg=msg, session=None, key=key, raw="/stop", loop=loop,
         ))
@@ -334,12 +335,12 @@ async def test_compact_is_a_fifo_barrier_during_an_active_turn(loop, command_tex
     try:
         # Include cold context initialization and durable commits on slower CI disks.
         await asyncio.wait_for(started.wait(), timeout=30)
-        (await loop._enqueue_session_message(InboundMessage(
+        (await loop.dispatch.enqueue(InboundMessage(
             channel="cli", sender_id="u", chat_id="test", content="before compaction",
         )))
         command = InboundMessage(channel="cli", sender_id="u", chat_id="test", content=command_text)
-        await loop._dispatch_command_inline(command, key, command.content, loop.commands.dispatch)
-        (await loop._enqueue_session_message(InboundMessage(
+        await loop.command_execution.dispatch_inline(command, key, command.content, loop.commands.dispatch)
+        (await loop.dispatch.enqueue(InboundMessage(
             channel="cli", sender_id="u", chat_id="test", content="after compaction",
         )))
         release.set()
@@ -374,7 +375,7 @@ async def test_stop_completes_compact_queued_behind_an_active_turn(loop, command
     loop.provider.chat_stream_with_retry = chat
     completions = []
     loop.bus.subscribe(completions.append, TurnCompleted)
-    (await loop._enqueue_session_message(InboundMessage(
+    (await loop.dispatch.enqueue(InboundMessage(
         channel="websocket", sender_id="u", chat_id="test", content="question",
     )))
     task = next(iter(loop._active_tasks[key]))
@@ -383,7 +384,7 @@ async def test_stop_completes_compact_queued_behind_an_active_turn(loop, command
         channel="websocket", sender_id="u", chat_id="test", content=command_text,
         metadata={"webui_turn_id": "queued-compact"},
     )
-    await loop._dispatch_command_inline(command, key, command.content, loop.commands.dispatch)
+    await loop.command_execution.dispatch_inline(command, key, command.content, loop.commands.dispatch)
     await cmd_stop(CommandContext(msg=command, session=None, key=key, raw="/stop", loop=loop))
 
     assert task.cancelled()
@@ -414,7 +415,7 @@ async def test_stop_finishes_inflight_compaction_as_cancelled(loop, command) -> 
         channel="websocket", sender_id="user", chat_id="test", content=command,
         metadata={"webui_turn_id": "compact-turn"},
     )
-    (await loop._enqueue_session_message(msg))
+    (await loop.dispatch.enqueue(msg))
     task = next(iter(loop._active_tasks[key]))
     await asyncio.wait_for(entered.wait(), timeout=5)
 
@@ -456,7 +457,7 @@ async def test_idle_and_manual_compact_share_persisted_checkpoint(loop) -> None:
     await loop.consolidator.compact_idle_session(key, runtime=runtime)
     assert loop.sessions.get_or_create(key).get_history() == []
 
-    await loop._process_message(
+    await loop.processing.process(
         InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/compact"),
         runtime=runtime,
     )
@@ -477,3 +478,31 @@ async def test_idle_and_manual_compact_share_persisted_checkpoint(loop) -> None:
     loop.sessions.invalidate(key)
     reloaded = loop.sessions.get_or_create(key)
     assert reloaded.get_history() == []
+
+
+async def test_manual_compact_storage_failure_propagates_and_retains_context(loop, monkeypatch):
+    key = "websocket:compact-storage-failure"
+    session = loop.sessions.get_or_create(key)
+    session.add_message("user", "Preserve the experiment's raw observations.")
+    loop.sessions.save(session)
+    before = list(session.messages)
+    monkeypatch.setattr(loop.sessions.state, "commit_summary", AsyncMock(
+        side_effect=OSError("summary storage unavailable"),
+    ))
+    message = InboundMessage(
+        channel="websocket", sender_id="user", chat_id="compact-storage-failure", content="/compact",
+    )
+
+    with pytest.raises(OSError, match="summary storage unavailable"):
+        await loop.commands.dispatch(CommandContext(
+            msg=message, session=session, key=key, raw="/compact", loop=loop,
+        ))
+
+    events = [loop.bus.outbound.get_nowait().event for _ in range(loop.bus.outbound_size)]
+    assert [event.phase for event in events] == ["started", "failed"]
+    assert events[0].compaction_id == events[1].compaction_id
+    assert "summary storage unavailable" in events[1].error
+    loop.sessions.invalidate(key)
+    restored = loop.sessions.get_or_create(key)
+    assert restored.messages == before
+    assert restored.last_archived == 0

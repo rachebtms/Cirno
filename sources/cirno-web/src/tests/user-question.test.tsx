@@ -6,7 +6,7 @@ import { formatQuestionAnswer, parseUserQuestion, questionReplyPreview } from "@
 import { parseQuotedUserMessage } from "@/lib/user-message-quote";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
 import { normalizeActivityTimeline } from "@/lib/activity-timeline";
-import type { UIMessage, UserQuestion } from "@/lib/types";
+import type { UIMessage, UserQuestion } from "@/lib/contracts/messages";
 
 const question: UserQuestion = { id: "a".repeat(32), question: "Which export format?", options: ["CSV", "JSON"], assumption: "I will inspect the files first." };
 const second: UserQuestion = { ...question, id: "b".repeat(32), question: "Which language?", options: ["English", "中文"] };
@@ -122,4 +122,20 @@ it("allows ordinary messages and stopping work without losing an unfinished ques
   expect(screen.queryByRole("region", { name: "A question for you" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Answer queued questions (1)" }));
   expect(screen.getByRole("textbox", { name: "Other" })).toHaveValue("A draft answer");
+});
+
+it("reopens a question when editing history removes a previously confirmed answer", async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  const ui = (messages: UIMessage[]) => <QuestionReplyProvider messages={messages} send={send}>
+    <UserQuestionQueue><textarea aria-label="Message" /></UserQuestionQueue>
+  </QuestionReplyProvider>;
+  const view = render(ui([questionMessage(question)]));
+  fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "CSV" })).toBeNull());
+  view.rerender(ui([questionMessage(question), {
+    id: "confirmed", role: "user", content: formatQuestionAnswer(question, "CSV"), createdAt: 2,
+  }]));
+  expect(screen.getByLabelText("Message")).toBeVisible();
+  view.rerender(ui([questionMessage(question)]));
+  expect(screen.getByRole("button", { name: "CSV" })).toBeVisible();
 });

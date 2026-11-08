@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cirno_core.providers.base import ProviderCallContext
+from cirno_core.providers.contracts import ProviderCallContext
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.providers.registry import find_by_name
 

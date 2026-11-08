@@ -1,6 +1,6 @@
 """Tests for the MiniMax Anthropic provider registration."""
 
-from cirno_core.config.schema import ProvidersConfig
+from cirno_core.config.providers import ProvidersConfig
 from cirno_core.providers.registry import PROVIDERS
 
 

@@ -13,3 +13,7 @@ references
 **/conftest.py
 .github
 build/
+# Native browser actors are not production inputs. Their edits must not
+# invalidate the browser bundle layer.
+sources/cirno-web/browser
+sources/cirno-web/playwright.config.ts

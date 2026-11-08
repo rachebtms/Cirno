@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from cirno_core.cron.repository import load_jobs
 from cirno_core.cron.service import CronJobSkippedError, CronService
 from cirno_core.cron.types import CronJob, CronPayload, CronSchedule
 from cirno_core.runtime.context import RUNTIME_CONTEXT_INPUT_META
@@ -59,7 +60,7 @@ def test_load_jobs_accepts_snake_case_schedule_and_run_history(tmp_path) -> None
         encoding="utf-8",
     )
 
-    jobs, _version = CronService(store_path)._load_jobs()
+    jobs, _version = load_jobs(store_path)
     assert jobs is not None
     assert jobs[0].schedule.every_ms == 60_000
     assert jobs[0].payload.session_key == "websocket:chat-1"
@@ -109,7 +110,7 @@ def test_load_jobs_coerces_string_schedule_and_state_ms(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    jobs, _version = CronService(store_path)._load_jobs()
+    jobs, _version = load_jobs(store_path)
     assert jobs is not None
     assert jobs[0].schedule.every_ms == 60_000
     assert jobs[0].state.next_run_at_ms == 100
@@ -914,7 +915,7 @@ async def test_save_store_failure_retries_without_replaying_job(tmp_path, monkey
 
     # Spy on _arm_timer so we can assert the scheduler is re-armed even when
     # the tick fails, without actually scheduling a real timer task.
-    def arm_spy() -> None:
+    def arm_spy(**_options) -> None:
         arm_calls.append("arm")
 
     monkeypatch.setattr(service, "_arm_timer", arm_spy)
@@ -1235,7 +1236,7 @@ def test_load_jobs_accepts_null_run_history_ms(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    jobs, _version = CronService(store_path)._load_jobs()
+    jobs, _version = load_jobs(store_path)
     assert jobs is not None
     assert jobs[0].state.run_history[0].run_at_ms == 0
     assert jobs[0].state.run_history[0].duration_ms == 0
@@ -1276,7 +1277,7 @@ def test_load_jobs_skips_null_run_history_elements(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    jobs, _version = CronService(store_path)._load_jobs()
+    jobs, _version = load_jobs(store_path)
     assert jobs is not None
     assert len(jobs[0].state.run_history) == 1
     assert jobs[0].state.run_history[0].run_at_ms == 1

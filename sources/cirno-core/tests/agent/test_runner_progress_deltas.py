@@ -4,17 +4,18 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from agent.runner_helpers import make_run_spec
 from cirno_core.agent.hooks import FileEditActivityHook
 from cirno_core.agent.progress_hook import AgentProgressHook
-from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.agent.tools.apply_patch import ApplyPatchTool
 from cirno_core.agent.tools.filesystem import EditFileTool, WriteFileTool
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.file_edit_events import Indel
 from cirno_core.utils.progress_events import output_events
+
+from sources.development.testing.runtime import make_run_spec
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 

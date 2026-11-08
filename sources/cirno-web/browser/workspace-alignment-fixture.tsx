@@ -1,6 +1,7 @@
+import { TabSurface } from "@/ui/layout/TabSurface";
 import { useState } from "react";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
-import type { WorkspaceScopePayload, WorkspacesPayload } from "@/lib/types";
+import type { WorkspaceScopePayload, WorkspacesPayload } from "@/lib/contracts/workspaces";
 
 const initialScope: WorkspaceScopePayload = { project_path: "/workspace", access_mode: "full" };
 const catalog: WorkspacesPayload = {
@@ -10,7 +11,7 @@ const catalog: WorkspacesPayload = {
 
 export function WorkspaceAlignmentFixture({ parameters }: { parameters: URLSearchParams }) {
   const [scope, setScope] = useState(initialScope);
-  return <main className="mx-auto w-full max-w-5xl px-4 pt-24" style={{ maxWidth: parameters.has("containerWidth") ? Number(parameters.get("containerWidth")) : undefined }}>
+  return <TabSurface className="mx-auto w-full max-w-5xl px-4 pt-24" style={{ maxWidth: parameters.has("containerWidth") ? Number(parameters.get("containerWidth")) : undefined }}>
     <ThreadComposer variant={parameters.get("composerVariant") === "thread" ? "thread" : "hero"}
       onSend={() => {}} workspaceScope={scope} workspaceDefaultScope={initialScope}
       contextUsage={parameters.has("usage") ? { contextTokens: 500, contextWindowTokens: 1000 } : null}
@@ -19,5 +20,5 @@ export function WorkspaceAlignmentFixture({ parameters }: { parameters: URLSearc
       onResolveWorkspaceProject={async path => ({ path, name: "workspace" })}
       onFavoriteWorkspaceProject={async () => []}
       onBrowseWorkspaceDirectories={async path => ({ path, parent: null, entries: [], truncated: false, host: "fixture", platform: "Linux" })} />
-  </main>;
+  </TabSurface>;
 }

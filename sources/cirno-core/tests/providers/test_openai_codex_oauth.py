@@ -257,8 +257,8 @@ def test_remote_flow_expires_while_waiting_for_callback(
 @pytest.mark.parametrize("finish", ["cancel", "expiry", "success"])
 def test_worker_exit_and_credential_commit_are_distinct(monkeypatch, tmp_path, finish):
     entered, release = threading.Event(), threading.Event()
-    target = tmp_path / "oauth.json"
-    monkeypatch.setenv("OAUTH_CLI_KIT_TOKEN_PATH", str(target))
+    target = tmp_path / "state/providers/openai_codex/codex.json"
+    monkeypatch.setattr("cirno_core.providers.oauth_storage.get_data_dir", lambda: tmp_path / "state")
 
     def login(*, print_fn, storage, **_kwargs):
         print_fn(_authorization_url())

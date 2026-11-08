@@ -10,7 +10,9 @@ export function resolveModelRequestFailureCopy(
   t: TFunction,
 ): { title: string; body: string } {
   let titleKey = "errors.modelRequestFailed.unknownTitle";
-  if (details.errorKind === "billing") {
+  if (details.errorKind === "configuration") {
+    titleKey = "errors.modelRequestFailed.configurationTitle";
+  } else if (details.errorKind === "billing") {
     titleKey = "errors.modelRequestFailed.billingTitle";
   } else if (details.errorKind === "authentication") {
     titleKey = "errors.modelRequestFailed.authenticationTitle";
@@ -25,7 +27,9 @@ export function resolveModelRequestFailureCopy(
   }
   const attempts = details.attempts;
   let bodyKey = "errors.modelRequestFailed.body";
-  if (details.errorKind === "billing") {
+  if (details.errorKind === "configuration") {
+    bodyKey = "errors.modelRequestFailed.configurationBody";
+  } else if (details.errorKind === "billing") {
     bodyKey = "errors.modelRequestFailed.billingBody";
   } else if (details.errorKind === "authentication") {
     bodyKey = "errors.modelRequestFailed.authenticationBody";

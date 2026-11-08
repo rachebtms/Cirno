@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ComposerDraftStore } from "@/lib/composer-draft";
 import type { EncodeResponse } from "@/lib/imageEncode";
-import type { WebUIIngressLimits } from "@/lib/types";
+import type { WebUIIngressLimits } from "@/lib/contracts/bootstrap";
 
 const encodeImage = vi.fn<(file: File) => Promise<EncodeResponse>>();
 
@@ -52,11 +52,13 @@ function ingressLimits({
   maxTextBytes = 64 * 1024,
   maxFileBytes = 6 * 1024 * 1024,
   maxTotalBytes = 24 * 1024 * 1024,
+  maxVideoBytes = 20 * 1024 * 1024,
 }: {
   maxFrameBytes?: number;
   maxTextBytes?: number;
   maxFileBytes?: number;
   maxTotalBytes?: number;
+  maxVideoBytes?: number;
 } = {}): WebUIIngressLimits {
   return {
     transport: {
@@ -67,6 +69,7 @@ function ingressLimits({
     attachments: {
       max_count: 4,
       max_file_bytes: maxFileBytes,
+      max_video_bytes: maxVideoBytes,
       max_total_bytes: maxTotalBytes,
     },
   };
@@ -87,7 +90,7 @@ beforeEach(() => {
 });
 
 describe("ThreadComposer — attachments", () => {
-  it("previews a picked image with size details on hover and includes its data url on send", async () => {
+  it("previews a picked image with accessible size details and sends its data URL", async () => {
     const user = userEvent.setup();
     const file = pngFile("a.png", 100);
     encodeImage.mockResolvedValueOnce({ ...resolveReady(file), normalized: true, bytes: 50 });
@@ -105,10 +108,11 @@ describe("ThreadComposer — attachments", () => {
     });
 
     expect(screen.getByRole("img", { name: "a.png" })).toHaveAttribute("src", expect.stringContaining("blob:"));
-    await user.hover(screen.getByRole("button", { name: "a.png" }));
-    const details = await screen.findByRole("tooltip");
+    await user.click(screen.getByRole("button", { name: "a.png" }));
+    const details = await screen.findByRole("dialog", { name: "a.png" });
     expect(details).toHaveTextContent("a.png");
     expect(details).toHaveTextContent("100 B → 50 B (auto)");
+    await user.keyboard("{Escape}");
     expect(screen.getByRole("button", { name: "Remove attachment" })).toHaveAccessibleDescription("a.png");
 
     const textarea = screen.getByLabelText(/message input/i);
@@ -133,11 +137,11 @@ describe("ThreadComposer — attachments", () => {
     const input = textarea.closest("form")!.querySelector('input[type="file"]')!;
     await act(async () => fireEvent.change(input, { target: { files: [first, second] } }));
     const cards = screen.getAllByTestId("composer-chip");
-    expect(cards.map((card) => card.textContent)).toEqual(["JSON", "JSON"]);
+    cards.forEach(card => expect(card).toHaveTextContent("JSON"));
     const firstInfo = within(cards[0]).getByRole("button", { name: first.name });
-    act(() => firstInfo.focus());
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(first.name);
-    expect(screen.getByRole("tooltip")).toHaveTextContent(`${first.size} B`);
+    await user.click(firstInfo);
+    expect(await screen.findByRole("dialog", { name: first.name })).toHaveTextContent(first.name);
+    expect(screen.getByRole("dialog", { name: first.name })).toHaveTextContent(`${first.size} B`);
     await user.keyboard("{Escape}");
     await user.click(within(cards[1]).getByRole("button", { name: second.name }));
     expect(await screen.findByRole("dialog", { name: second.name })).toHaveTextContent(second.name);
@@ -442,7 +446,7 @@ describe("ThreadComposer — attachments", () => {
 
 describe("local attachment paths and video ingress", () => {
   const local = { path: "C:\\project\\my clip.mp4", name: "my clip.mp4", size: 12,
-    mime: "video/mp4", kind: "video" as const, url: "/api/media/sig/local" };
+    mime: "video/mp4", kind: "video" as const, url: "/v0/media/sig/local" };
 
   it("leaves a path pasted into a bang command as Shell text", () => {
     const inspect = vi.fn().mockResolvedValue(local);
@@ -658,4 +662,20 @@ describe("local attachment paths and video ingress", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onSend.mock.calls[0][1][0].media).toEqual({ data_url: `data:video/quicktime;base64,${btoa("movie")}`, name: "clip.mov" });
   });
+});
+
+it("uses the configured video upload limit rather than the built-in default", async () => {
+  const onSend = vi.fn();
+  const view = render(<ThreadComposer onSend={onSend} ingressLimits={ingressLimits({ maxVideoBytes: 4 })} />);
+  const input = screen.getByLabelText(/message input/i);
+  const picker = input.closest("form")!.querySelector('input[type="file"]')!;
+  const video = new File(["movie"], "clip.mp4", { type: "video/mp4" });
+  fireEvent.change(picker, { target: { files: [video] } });
+  expect(screen.getByRole("alert")).toHaveTextContent("maximum 4 B");
+  expect(screen.queryByTestId("composer-chip")).toBeNull();
+  view.rerender(<ThreadComposer onSend={onSend} ingressLimits={ingressLimits({ maxVideoBytes: 10 })} />);
+  fireEvent.change(picker, { target: { files: [video] } });
+  await waitFor(() => expect(screen.getByRole("button", { name: /send message/i })).toBeEnabled());
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(onSend.mock.calls[0][1][0].media).toEqual({ data_url: `data:video/mp4;base64,${btoa("movie")}`, name: "clip.mp4" });
 });

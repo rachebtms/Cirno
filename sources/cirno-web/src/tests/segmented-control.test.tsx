@@ -1,144 +1,49 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
-
+import { describe, expect, it } from "vitest";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-
-function setGeometry(
-  item: HTMLElement,
-  geometry: { left: number; top?: number; width: number; height?: number },
-) {
-  Object.defineProperties(item, {
-    offsetLeft: { configurable: true, value: geometry.left },
-    offsetTop: { configurable: true, value: geometry.top ?? 4 },
-    offsetWidth: { configurable: true, value: geometry.width },
-    offsetHeight: { configurable: true, value: geometry.height ?? 24 },
-  });
+function Example({ mode = "buttons" }: { mode?: "buttons" | "tabs" | "radio" }) {
+  const [value, setValue] = useState("all");
+  return <SegmentedControl value={value} mode={mode} onChange={setValue} ariaLabel="Notifications"
+    options={[{ value: "all", label: "All" }, { value: "operations", label: "Actions · 1" }, { value: "conversations", label: "Reports · 11" }, { value: "system", label: "System" }]} />;
 }
-
-function Example({
-  mode = "buttons",
-  animateIndicator = true,
-}: {
-  mode?: "buttons" | "tabs" | "radio";
-  animateIndicator?: boolean;
-}) {
-  const [value, setValue] = useState("summary");
-  return (
-    <SegmentedControl
-      value={value}
-      mode={mode}
-      animateIndicator={animateIndicator}
-      ariaLabel="File edit display"
-      options={[
-        { value: "summary", label: "Summary" },
-        { value: "diff", label: "Diff" },
-        { value: "collapsed", label: "Collapsed diff" },
-      ]}
-      onChange={setValue}
-    />
-  );
-}
-
-describe("SegmentedControl", () => {
-  it("moves one shared indicator while the segment labels stay in place", () => {
-    const { container } = render(<Example />);
-    const summary = screen.getByRole("button", { name: "Summary" });
-    const diff = screen.getByRole("button", { name: "Diff" });
-    const collapsed = screen.getByRole("button", { name: "Collapsed diff" });
-    setGeometry(summary, { left: 4, width: 64 });
-    setGeometry(diff, { left: 72, width: 48 });
-    setGeometry(collapsed, { left: 124, width: 92 });
-
-    fireEvent(window, new Event("resize"));
-    const indicator = container.querySelector<HTMLElement>(
-      "[data-segmented-control-indicator]",
-    );
-    expect(indicator).not.toBeNull();
-    expect(indicator).toHaveStyle({
-      top: "4px",
-      width: "64px",
-      height: "24px",
-    });
-    expect(indicator?.style.translate).toBe("4px 0");
-    expect(indicator?.style.scale).toBe("1 1");
-    expect(indicator).toHaveAttribute("aria-hidden", "true");
-    expect(indicator).toHaveAttribute("data-animate", "false");
-
-    fireEvent.click(diff);
-
-    expect(indicator).toHaveStyle({ width: "64px" });
-    expect(indicator?.style.translate).toBe("72px 0");
-    expect(indicator?.style.scale).toBe("0.75 1");
-    expect(indicator).toHaveAttribute("data-animate", "true");
-    expect(summary).toHaveAttribute("aria-pressed", "false");
-    expect(diff).toHaveAttribute("aria-pressed", "true");
-
-    fireEvent(window, new Event("resize"));
-    expect(indicator).toHaveStyle({ width: "64px" });
-    setGeometry(diff, { left: 72, width: 96 });
-    fireEvent(window, new Event("resize"));
-    expect(indicator).toHaveStyle({ width: "96px" });
-    expect(indicator?.style.scale).toBe("1 1");
-    expect(indicator).toHaveAttribute("data-animate", "false");
+describe("shared selection controls", () => {
+  it("selects differently sized inbox categories without a scaled indicator", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Example mode="tabs" />);
+    for (const name of ["Actions · 1", "Reports · 11", "System", "All"]) {
+      const tab = screen.getByRole("tab", { name });
+      await user.click(tab);
+      expect(tab).toHaveAttribute("aria-selected", "true");
+    }
+    expect(container.querySelector('[style*="scale:"]')).toBeNull();
   });
-
-  it("uses roving focus and arrow-key activation for tabs", () => {
-    const onChange = vi.fn();
-    render(
-      <SegmentedControl
-        value="summary"
-        mode="tabs"
-        ariaLabel="Views"
-        options={[
-          { value: "summary", label: "Summary" },
-          { value: "diff", label: "Diff" },
-        ]}
-        onChange={onChange}
-      />,
-    );
-    const summary = screen.getByRole("tab", { name: "Summary" });
-    const diff = screen.getByRole("tab", { name: "Diff" });
-    expect(summary).toHaveAttribute("tabindex", "0");
-    expect(diff).toHaveAttribute("tabindex", "-1");
-
-    summary.focus();
-    fireEvent.keyDown(summary, { key: "ArrowRight" });
-
-    expect(onChange).toHaveBeenCalledWith("diff");
-    expect(diff).toHaveFocus();
+  it("supports keyboard navigation through tabs", async () => {
+    const user = userEvent.setup();
+    render(<Example mode="tabs" />);
+    screen.getByRole("tab", { name: "All" }).focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Actions · 1" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Actions · 1" })).toHaveAttribute("aria-selected", "true");
   });
-
-  it("exposes one checked radio and moves selection and focus with the keyboard", () => {
+  it("selects radio values with arrow keys and keeps the selected value on focus return", async () => {
+    const user = userEvent.setup();
     render(<Example mode="radio" />);
-    const summary = screen.getByRole("radio", { name: "Summary" });
-    const diff = screen.getByRole("radio", { name: "Diff" });
-    expect(summary).toBeChecked();
-    expect(summary).toHaveAttribute("tabindex", "0");
-    expect(diff).toHaveAttribute("tabindex", "-1");
-
-    summary.focus();
-    fireEvent.keyDown(summary, { key: "ArrowRight" });
-    expect(diff).toBeChecked();
-    expect(diff).toHaveFocus();
-    expect(summary).not.toBeChecked();
-    fireEvent.keyDown(diff, { key: "Home" });
-    expect(summary).toBeChecked();
-    expect(summary).toHaveFocus();
+    screen.getByRole("radio", { name: "All" }).focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "Actions · 1" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Actions · 1" })).toBeChecked();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
   });
-
-  it("can disable motion when the set of segments is dynamic", () => {
-    const { container } = render(<Example animateIndicator={false} />);
-    const summary = screen.getByRole("button", { name: "Summary" });
-    const diff = screen.getByRole("button", { name: "Diff" });
-    setGeometry(summary, { left: 4, width: 64 });
-    setGeometry(diff, { left: 72, width: 48 });
-
-    fireEvent(window, new Event("resize"));
-    fireEvent.click(diff);
-
-    expect(
-      container.querySelector("[data-segmented-control-indicator]"),
-    ).toHaveAttribute("data-animate", "false");
+  it("retains a selection when the selected option is clicked again", async () => {
+    const user = userEvent.setup();
+    render(<Example />);
+    const option = screen.getByRole("button", { name: "All" });
+    await user.click(option);
+    expect(option).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "System" }));
+    expect(screen.getByRole("button", { name: "System" })).toHaveAttribute("aria-pressed", "true");
   });
 });

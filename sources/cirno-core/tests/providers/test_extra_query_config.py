@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from cirno_core.config.schema import Config, ProviderConfig
+from cirno_core.config.schema import Config
+from cirno_core.config.providers import ProviderConfig
 from cirno_core.providers.factory import provider_signature
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 

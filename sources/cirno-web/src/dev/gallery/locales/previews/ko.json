@@ -1,10 +1,4 @@
 {
-  "rename": {
-    "title": "RenameDialog · 그룹 및 프로젝트 이름 변경",
-    "description": "그룹과 프로젝트의 이름 변경을 시험합니다. 주제 이름은 채팅 목록에서 바로 바꿉니다.",
-    "options": "호출자가 dialogTitle, description, placeholder를 제공합니다. title은 초기값이며 onConfirm은 양끝 공백을 제거한 이름을 받습니다. 빈 이름은 저장할 수 없습니다.",
-    "hint": "저장하면 위의 제목이 바뀝니다."
-  },
   "delete": {
     "title": "DeleteConfirm · 삭제 확인",
     "description": "단일 채팅, 여러 채팅, 자동화가 연결된 채팅의 삭제를 비교합니다.",
@@ -60,17 +54,6 @@
     "options": "path는 참조 텍스트입니다. metadata는 전체 경로와 선택적인 상대 경로를 제공합니다. 갤러리는 파일을 읽지 않고 메타데이터를 제공합니다.",
     "scope": "파일 범위",
     "hint": "오른쪽 클릭으로 복사 메뉴를 열거나 파일에 초점을 두고 Shift+F10을 누르세요."
-  },
-  "workbench": {
-    "title": "PaneWorkbench · 여러 창",
-    "description": "레이아웃을 바꾸고 창을 선택하거나 추가하며 위치와 크기를 조절합니다.",
-    "options": "호출자가 panes, activePaneKey, layout, splitRatios를 제어합니다. renderPane이 내용을 제공하며 콜백이 로컬 상태를 갱신합니다. 좁은 화면에는 활성 창을 표시합니다.",
-    "layout": "창 레이아웃",
-    "limit": "최대 4개 창",
-    "notes": "{{title}} 메모",
-    "active": "활성 창",
-    "activate": "이 창을 선택하여 활성화",
-    "hint": "활성 창: {{title}}. 아래 손잡이를 끌어 창을 이동하고 경계를 끌어 크기를 조절하세요."
   },
   "hostConnection": {
     "title": "HostConnectionStatus · 연결 상태",
@@ -170,7 +153,7 @@
     "retries": "재시도 횟수: {{amount}}"
   },
   "recovery": {
-    "title": "RecoveryNotice · 작업 복구",
+    "title": "ThreadComposer · 작업 복구",
     "description": "중단, 재개 중, 실패, 계속할 수 없음 상태와 계속·닫기 동작을 시험합니다.",
     "options": "state는 복구 스냅샷입니다. onContinue와 onDismiss는 Promise를 반환합니다. 예제 콜백은 미리보기만 갱신합니다.",
     "state": "복구 상태",
@@ -296,22 +279,13 @@
     "selected": "미리보기 호스트: {{name}}"
   },
   "chats": {
-    "title": "ChatList · 채팅 목록",
+    "title": "ConversationsTab · 채팅 목록",
     "description": "채팅을 선택하고 메뉴에서 고정, 보관, 삭제를 시험합니다.",
     "options": "호출자가 sessions, activeKey, 고정 및 보관 키를 제공합니다. 동작 콜백이 예제 목록을 갱신합니다.",
     "state": "채팅 목록 상태",
     "renamed": "변경된 이름: {{name}}",
     "selected": "선택한 채팅: {{name}}",
     "none": "없음"
-  },
-  "sidebarResize": {
-    "title": "SidebarResizeHandle · 사이드바 크기",
-    "description": "마우스나 키보드로 사이드바 크기를 바꾸고 접거나 펼칩니다.",
-    "options": "width와 open은 제어 상태입니다. onResize는 크기와 펼침 상태를 갱신하며 onDraggingChange는 끌기 상태를 알립니다.",
-    "content": "사이드바 내용",
-    "hint": "구분선을 끌거나 초점을 두고 방향키, Home, End, Enter를 사용하세요.",
-    "collapsed": "접힘",
-    "dragging": "끌기 중"
   },
   "language": {
     "title": "LanguageSwitcher · 인터페이스 언어",
@@ -343,7 +317,7 @@
   "channel": {
     "title": "{{channel}} · 채널 설정",
     "description": "실제 채널 설정 양식과 상태를 살펴봅니다.",
-    "options": "채널 등록 정보, Python 설정 계약 스냅샷, 실제 ChannelSetupSurfaceView를 사용합니다. 입력, 자격 증명 표시, 프리셋, 확인, 전환은 이 미리보기만 변경합니다.",
+    "options": "채널 등록 정보, Python 설정 계약 스냅샷, 실제 ChannelSetupView를 사용합니다. 입력, 자격 증명 표시, 프리셋, 확인, 전환은 이 미리보기만 변경합니다.",
     "state": "채널 설정 상태",
     "credentialsError": "예제 자격 증명이 거부되었습니다. 미리보기 값을 수정한 후 다시 시도하세요.",
     "validation": "미리보기 설정"
@@ -376,42 +350,6 @@
     "title": "WhatsAppConnectFlowView · WhatsApp 기기 연결",
     "description": "간단한 QR 화면에서 자동 연결, 성공, 만료, 오류와 다른 계정 연결을 시험합니다.",
     "options": "뷰는 자동 시작과 간결한 레이아웃 표시 규칙을 유지합니다. 호출자가 상태와 재시도를 제어합니다. 실제 자동 시작, 강제 재시도, 폴링은 연결 진입점이 담당합니다."
-  },
-  "linearPanel": {
-    "title": "LinearPanelView · Linear 설정",
-    "description": "앱 정보, 키, 고급 설정, 워크스페이스, 멤버 권한, 브라우저 인증을 살펴봅니다.",
-    "options": "state와 workspaces가 스냅샷을 제공하고 콜백이 워크스페이스, 저장, MCP 동작을 연결합니다. 세 슬롯이 실제 멤버, 인증, 초기화 뷰를 구성합니다.",
-    "state": "Linear 설정 상태",
-    "runtimeError": "Linear webhook을 시작할 수 없습니다.",
-    "saveError": "설정을 저장할 수 없습니다. 초안은 유지됩니다.",
-    "inspectionError": "연결된 워크스페이스를 확인할 수 없습니다.",
-    "refreshed": "예제 워크스페이스를 새로 고쳤습니다.",
-    "removed": "제거한 예제 워크스페이스: {{name}}",
-    "mcp": "Linear MCP 설정을 선택했습니다."
-  },
-  "linearMembers": {
-    "title": "LinearMemberAccessView · 멤버 접근 권한",
-    "description": "멤버 검색, 권한 변경과 로딩, 빈 목록, 저장, 미확인 상태를 비교합니다.",
-    "options": "snapshot은 확인된 멤버 상태입니다. onLoad와 onSetAllowed는 채널 진입점이 담당하며 게이트웨이가 계속 권한을 검증합니다.",
-    "state": "멤버 상태",
-    "loadError": "멤버 디렉터리를 사용할 수 없습니다.",
-    "saveError": "접근 권한을 확인하지 못했습니다."
-  },
-  "linearConnect": {
-    "title": "LinearConnectFlowView · Linear 인증",
-    "description": "브라우저 인증과 대기 안내, 시작, 취소, 성공, 실패 단계를 시험합니다.",
-    "options": "ChannelQrConnectFlowView를 재사용합니다. Linear는 인증 표시, 레이블, 초점을 처리하며 런타임 진입점이 세션 생성과 폴링을 담당합니다.",
-    "state": "인증 단계",
-    "error": "인증을 완료할 수 없습니다.",
-    "hint": "인증 링크와 워크스페이스는 예제입니다. 시작과 취소는 미리보기 단계만 바꿉니다."
-  },
-  "linearReset": {
-    "title": "LinearResetConnectionView · 연결 초기화",
-    "description": "삭제·유지 범위, 처리 중 상태, 부분 초기화 후 재시도를 확인합니다.",
-    "options": "onReset이 전체 권한 취소와 정리 트랜잭션을 수행합니다. 뷰는 확인, 오류, 닫기 제한, 초점 복원을 관리합니다.",
-    "state": "초기화 결과",
-    "error": "채널을 중지할 수 없습니다. 앱 설정은 유지됩니다.",
-    "completed": "미리보기 워크스페이스와 앱 설정을 지웠습니다."
   },
   "weixinPanel": {
     "title": "WeixinPanelView · Weixin 설정",

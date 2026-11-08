@@ -51,6 +51,7 @@ const DialogPositionedContent = React.forwardRef<
     top: "var(--app-viewport-top, 0px)",
     height: "var(--app-viewport-height, 100%)",
     bottom: "auto",
+    container: "cirno-tab / inline-size",
     ...positionerStyle,
   }}>
     <DialogPrimitive.Content ref={ref} {...props} />

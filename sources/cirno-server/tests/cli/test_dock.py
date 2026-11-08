@@ -10,7 +10,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-
 from cirno_server.cli import dock
 from cirno_server.cli._macos_dock import _Clients, _serve, is_local_browser_url
 

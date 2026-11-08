@@ -9,22 +9,24 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from agent.runner_helpers import make_run_spec
 from cirno_core.agent.hook import AgentHook, AgentHookContext
 from cirno_core.agent.tools import ToolResult
 from cirno_core.agent.tools.execution import execute_tool_calls
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.agent.tools.web import WebFetchTool
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.agent.tools.web.fetch import WebFetchTool
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
+
+from sources.development.testing.runtime import make_run_spec
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 @pytest.mark.asyncio
 async def test_runner_returns_tool_exception_to_model_for_recovery():
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -115,10 +117,8 @@ async def test_tool_execution_propagates_control_flow_exceptions(control_error: 
 async def test_llm_error_not_appended_to_session_messages():
     """When LLM returns finish_reason='error', the error content must NOT be
     appended to the messages list (prevents polluting session history)."""
-    from cirno_core.agent.runner import (
-        _PERSISTED_MODEL_ERROR_PLACEHOLDER,
-        AgentRunner,
-    )
+    from cirno_core.agent.runner.history import _PERSISTED_MODEL_ERROR_PLACEHOLDER
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -147,7 +147,8 @@ async def test_llm_error_not_appended_to_session_messages():
 @pytest.mark.asyncio
 async def test_llm_arrearage_error_surfaces_clear_message():
     """Arrearage errors yield a clear user-facing message, not a raw dump (#3006)."""
-    from cirno_core.agent.runner import _ARREARAGE_ERROR_MESSAGE, AgentRunner
+    from cirno_core.agent.runner.engine import _ARREARAGE_ERROR_MESSAGE
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -184,7 +185,7 @@ async def test_runner_ignores_tool_calls_when_finish_reason_blocks_execution(
     expected_stop_reason: str,
 ):
     """Provider/gateway-injected tool calls under terminal block reasons must not run."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -214,7 +215,7 @@ async def test_runner_ignores_tool_calls_when_finish_reason_blocks_execution(
 
 @pytest.mark.asyncio
 async def test_runner_returns_structured_tool_error_to_model_for_recovery():
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
 
@@ -253,14 +254,14 @@ async def test_runner_returns_structured_tool_error_to_model_for_recovery():
     pytest.param("http://127.0.0.1/admin", True, id="blocked-loopback"),
 ])
 async def test_runner_recognizes_web_fetch_errors(monkeypatch, url, ssrf):
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     monkeypatch.setattr("cirno_core.security.network._allowed_networks", [])
     monkeypatch.setattr("cirno_core.security.network.socket.getaddrinfo", MagicMock(
         return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0))],
     ))
     http_client = MagicMock(side_effect=AssertionError("Rejected URLs must not reach HTTP"))
-    monkeypatch.setattr("cirno_core.agent.tools.web.httpx.AsyncClient", http_client)
+    monkeypatch.setattr("httpx.AsyncClient", http_client)
     tools = ToolRegistry()
     tools.register(WebFetchTool())
     hook = AgentHook()
@@ -322,7 +323,7 @@ async def test_runner_recognizes_web_fetch_errors(monkeypatch, url, ssrf):
 
 @pytest.mark.asyncio
 async def test_runner_preserves_successful_exec_output_that_starts_with_error():
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
 
@@ -362,7 +363,7 @@ async def test_runner_preserves_successful_exec_output_that_starts_with_error():
 @pytest.mark.asyncio
 async def test_runner_preserves_tool_error_results_in_messages():
     """Tool errors stay paired with their calls so the model can recover (#2943)."""
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
 
     provider = MagicMock(spec=LLMProvider)
 
@@ -427,7 +428,7 @@ async def test_length_finish_with_blank_content_routes_to_length_recovery():
     retry path. Retrying the same prompt cannot recover from output-budget
     exhaustion.
     """
-    from cirno_core.agent.runner import AgentRunner
+    from cirno_core.agent.runner.engine import AgentRunner
     from cirno_core.utils.runtime import LENGTH_RECOVERY_PROMPT
 
     provider = MagicMock(spec=LLMProvider)

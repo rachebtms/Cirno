@@ -8,7 +8,9 @@ import {
 import { useLogoFallback } from "@/hooks/useLogoFallback";
 import { logoFallbackUrls } from "@/lib/provider-brand";
 import { sessionHandleColor } from "@/lib/session-handle";
-import type { CliAppInfo, McpPresetInfo, SessionMention } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { SessionMention } from "@/lib/contracts/messages";
 import { cn } from "@/lib/utils";
 import {
   composerMentionLabel,

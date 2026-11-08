@@ -1,33 +1,37 @@
+import type { ModelPresetOption } from "@/features/model-selection/contracts";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { FallbackResponseSources } from "@/components/ResponseSourceBadge";
+import { FallbackResponseSources } from "@/features/messages";
 import { AgentActivityCluster } from "@/components/thread/AgentActivityCluster";
 import { ComposerUsagePopover, type ComposerRoundUsage } from "@/components/thread/ComposerUsagePopover";
 import { ContextCompactionNotice } from "@/components/thread/ContextCompactionNotice";
 import { ModelFallbackNotice } from "@/components/thread/ModelFallbackNotice";
-import { ModelPresetBadge, type ModelPresetOption } from "@/components/thread/ModelPresetBadge";
+import { ModelSelector } from "@/features/model-selection/ModelSelector";
 import { PromptNavigator } from "@/components/thread/PromptNavigator";
-import { RecoveryNotice } from "@/components/thread/RecoveryNotice";
 import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { ThreadHistoryStatus } from "@/components/thread/ThreadHistoryStatus";
 import { ThreadMessages } from "@/components/thread/ThreadMessages";
-import { ThreadViewport, type ThreadViewportHandle } from "@/components/thread/ThreadViewport";
+import { ThreadViewport } from "@/components/thread/ThreadViewport";
+import type { ThreadViewportHandle } from "@/components/thread/viewport/contracts";
 import { WorkspaceAccessMenu, WorkspaceProjectPicker } from "@/components/thread/WorkspaceControls";
 import { WebSearchRun } from "@/components/thread/activity/WebSearchRun";
 import { Button } from "@/components/ui/button";
 import type { StreamError } from "@/lib/cirno-client";
 import { formatToolCallTrace } from "@/lib/tool-traces";
-import type { RecoveryState, SlashCommand, ToolProgressEvent, UIContextCompaction, UIMessage, WorkspaceScopePayload, WorkspacesPayload } from "@/lib/types";
+import type { SlashCommand } from "@/lib/contracts/commands";
+import type { ToolProgressEvent } from "@/lib/contracts/activity";
+import type { UIContextCompaction, UIMessage } from "@/lib/contracts/messages";
+import type { WorkspaceScopePayload, WorkspacesPayload } from "@/lib/contracts/workspaces";
 import { Sample, StatePicker, type ComponentExample } from "./example";
 import { useGalleryTranslation } from "./i18n";
 
 const createdAt = Date.UTC(2026, 0, 1, 12);
 const presets: ModelPresetOption[] = [
-  { name: "日常", provider: "openai", model: "gpt-4.1", contextWindowTokens: 1_047_576 },
-  { name: "推理", provider: "anthropic", model: "claude-sonnet-4", reasoningEffort: "high", contextWindowTokens: 200_000 },
+  { id: "日常", provider: "openai", model: "gpt-4.1", contextWindowTokens: 1_047_576 },
+  { id: "推理", provider: "anthropic", model: "claude-sonnet-4", reasoningEffort: "high", contextWindowTokens: 200_000 },
 ];
 const rounds: ComposerRoundUsage[] = [
   { id: "gallery-round-1", timestamp: createdAt, inputTokens: 8_200, cachedTokens: 6_000, outputTokens: 620, generationMs: 3_100 },
@@ -64,16 +68,16 @@ const longConversation: UIMessage[] = Array.from({ length: 8 }, (_, index) => [
 function ComposerPreview() {
   const { t } = useGalleryTranslation();
   const [mode, setMode] = useState<"thread" | "hero" | "streaming" | "disabled">("thread");
-  const [preset, setPreset] = useState(presets[0].name);
+  const [preset, setPreset] = useState(presets[0].id);
   const [sent, setSent] = useState<{ kind: "sent"; content: string; attachments: number } | { kind: "stopped" } | null>(null);
   const [quoted, setQuoted] = useState<string | null>(null);
-  const selected = presets.find((option) => option.name === preset) ?? presets[0];
+  const selected = presets.find((option) => option.id === preset) ?? presets[0];
   return <div className="space-y-4">
     <StatePicker label={t("previews.composer.state")} value={mode} options={["thread", "hero", "streaming", "disabled"]} onChange={setMode} />
     <Button variant="outline" size="sm" onClick={() => setQuoted("组件接收状态，并把操作交给调用方。")}>{t("previews.composer.addQuote")}</Button>
     <ThreadComposer disabled={mode === "disabled"} isStreaming={mode === "streaming"} variant={mode === "hero" ? "hero" : "thread"}
       inputAriaLabel={t("previews.composer.input")} placeholder={t("previews.composer.placeholder")}
-      modelLabel={selected.name} modelDetail={selected.model} modelProvider={selected.provider} modelPreset={preset}
+      modelLabel={selected.id} modelDetail={selected.model} modelProvider={selected.provider} modelPreset={preset}
       modelPresets={presets} onModelPresetChange={setPreset} slashCommands={commands.map((command) => ({ ...command, title: t(command.title), description: t(command.description) }))}
       contextUsage={{ contextTokens: 18_500, contextWindowTokens: 200_000 }} recentRoundUsage={rounds}
       workspaceScope={projectScope} workspaceControlsHidden quotedContext={quoted} onQuotedContextChange={setQuoted}
@@ -88,14 +92,14 @@ function ComposerPreview() {
 function ModelPresetPreview() {
   const { t } = useTranslation();
   const { t: g } = useGalleryTranslation();
-  const [preset, setPreset] = useState(presets[0].name);
+  const [preset, setPreset] = useState(presets[0].id);
   const [mode, setMode] = useState<"ready" | "setup" | "hero">("ready");
   const [action, setAction] = useState("");
-  const selected = presets.find((option) => option.name === preset) ?? presets[0];
+  const selected = presets.find((option) => option.id === preset) ?? presets[0];
   return <div className="space-y-4">
     <StatePicker label={g("previews.modelPreset.state")} value={mode} options={["ready", "setup", "hero"]} onChange={setMode} />
-    <ModelPresetBadge label={mode === "setup" ? t("thread.composer.configureModel") : selected.name} modelPreset={preset} modelPresets={presets}
-      provider={selected.provider} modelDetail={selected.model} isHero={mode === "hero"} needsSetup={mode === "setup"}
+    <ModelSelector label={mode === "setup" ? t("thread.composer.configureModel") : selected.id} modelPreset={preset} modelPresets={presets}
+      provider={selected.provider} modelDetail={selected.model} needsSetup={mode === "setup"}
       onPresetChange={setPreset} onManageModels={() => setAction("previews.modelPreset.manage")}
       onClick={() => setAction("previews.modelPreset.settings")} />
     <p role="status" className="text-sm text-muted-foreground">{action ? g(action) : g("previews.modelPreset.hint", { preset })}</p>
@@ -208,12 +212,11 @@ function RecoveryPreview() {
   const [mode, setMode] = useState<"awaiting_user" | "resuming" | "failed" | "unavailable">("awaiting_user");
   const [action, setAction] = useState("");
   const [visible, setVisible] = useState(true);
-  const state: RecoveryState = { recovery_id: `gallery-recovery-${mode}`, status: mode === "unavailable" ? "failed" : mode, can_continue: mode !== "unavailable" };
   return <div className="space-y-4">
     <StatePicker label={t("previews.recovery.state")} value={mode} options={["awaiting_user", "resuming", "failed", "unavailable"]}
       onChange={(value) => { setMode(value); setVisible(true); setAction(""); }} />
-    {visible ? <RecoveryNotice state={state} onContinue={() => { setVisible(false); setAction("previews.recovery.continued"); return Promise.resolve(); }}
-      onDismiss={() => { setVisible(false); setAction("previews.recovery.dismissed"); return Promise.resolve(); }} /> : null}
+    <ThreadComposer onSend={() => {}} isStreaming={mode === "resuming"}
+      onContinue={visible && mode !== "resuming" && mode !== "unavailable" ? async () => { setVisible(false); setAction("previews.recovery.continued"); } : undefined} />
     <Button variant="outline" size="sm" onClick={() => { setVisible(true); setAction(""); }}>{t("previews.recovery.reset")}</Button>
     <p role="status" className="text-sm text-muted-foreground">{t(action || "previews.recovery.hint")}</p>
   </div>;
@@ -265,7 +268,7 @@ function ClusterPreview() {
   const [status, setStatus] = useState<"running" | "done" | "error">("done");
   const [expanded, setExpanded] = useState(true);
   const [startedAt] = useState(Date.now);
-  const event: ToolProgressEvent = { call_id: "gallery-read", name: "read_file", arguments: { path: "webui/src/components/thread/ThreadComposer.tsx" },
+  const event: ToolProgressEvent = { call_id: "gallery-read", name: "read_file", arguments: { path: "sources/cirno-web/src/components/thread/ThreadComposer.tsx" },
     phase: status === "running" ? "start" : status === "error" ? "error" : "end", error: status === "error" ? t("previews.cluster.error") : undefined };
   const trace = formatToolCallTrace(event) ?? "read_file()";
   const messages: UIMessage[] = [
@@ -297,14 +300,14 @@ function ResponseSourcesPreview() {
   </Sample>;
 }
 
-const components = "webui/src/components/";
+const components = "sources/cirno-web/src/components/";
 export const conversationExamples: ComponentExample[] = [
   { title: "previews.composer.title", files: ["thread/ThreadComposer"], Preview: ComposerPreview,
     description: "previews.composer.description", options: "previews.composer.options",
     code: '<ThreadComposer onSend={send} modelPresets={presets} onModelPresetChange={setPreset} slashCommands={commands} />' },
-  { title: "previews.modelPreset.title", files: ["thread/ModelPresetBadge"], Preview: ModelPresetPreview,
+  { title: "previews.modelPreset.title", files: ["thread/ModelSelector"], Preview: ModelPresetPreview,
     description: "previews.modelPreset.description", options: "previews.modelPreset.options",
-    code: '<ModelPresetBadge label={preset} modelPreset={preset} modelPresets={presets} onPresetChange={setPreset} isHero={false} />' },
+    code: '<ModelSelector label={preset} modelPreset={preset} modelPresets={presets} onPresetChange={setPreset} />' },
   { title: "previews.usage.title", files: ["thread/ComposerUsagePopover"], Preview: UsagePreview,
     description: "previews.usage.description", options: "previews.usage.options",
     code: '<ComposerUsagePopover context={{ contextTokens: 18500, contextWindowTokens: 200000 }} rounds={rounds} showLabel />' },
@@ -326,9 +329,9 @@ export const conversationExamples: ComponentExample[] = [
   { title: "previews.history.title", files: ["thread/ThreadHistoryStatus"], Preview: HistoryPreview,
     description: "previews.history.description", options: "previews.history.options",
     code: '<ThreadHistoryStatus loading={loading} error={error} onRetry={retry} />' },
-  { title: "previews.recovery.title", files: ["thread/RecoveryNotice"], Preview: RecoveryPreview,
+  { title: "previews.recovery.title", files: ["thread/ThreadComposer"], Preview: RecoveryPreview,
     description: "previews.recovery.description", options: "previews.recovery.options",
-    code: '<RecoveryNotice state={recoveryState} onContinue={continueTask} onDismiss={dismissRecovery} />' },
+    code: '<ThreadComposer onSend={sendMessage} onContinue={continueTask} />' },
   { title: "previews.fallback.title", files: ["thread/ModelFallbackNotice"], Preview: FallbackPreview,
     description: "previews.fallback.description", options: "previews.fallback.options",
     code: '<ModelFallbackNotice model="gpt-4.1" onDismiss={dismiss} onOpenSettings={openModelSettings} />' },

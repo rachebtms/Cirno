@@ -6,17 +6,14 @@ import json
 import httpx
 import pytest
 from anthropic import AsyncAnthropic
-from openai import AsyncOpenAI
-from pydantic import ValidationError
-
-from cirno_core.agent.tools.web import WebSearchTool
-from cirno_core.config.schema import (
-    Config,
+from cirno_core.agent.tools.web.search import WebSearchTool
+from cirno_core.config.models import (
     InlineFallbackConfig,
     ModelAPIConfig,
     ModelPresetConfig,
     ProviderAPIConfig,
 )
+from cirno_core.config.schema import Config
 from cirno_core.providers.anthropic_provider import AnthropicProvider
 from cirno_core.providers.factory import (
     make_provider,
@@ -25,6 +22,8 @@ from cirno_core.providers.factory import (
     validate_provider_setup,
 )
 from cirno_core.providers.openai_compat_provider import _RESPONSES_FAILURE_THRESHOLD
+from openai import AsyncOpenAI
+from pydantic import ValidationError
 
 
 def _config() -> Config:
@@ -176,7 +175,7 @@ async def bind_transport():
         )
         clients.append(client)
         provider._client = client
-        provider._CHAT_RETRY_DELAYS = ()
+        provider.retry_policy.delays = ()
         return provider
 
     yield bind

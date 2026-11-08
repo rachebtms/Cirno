@@ -63,7 +63,7 @@ describe("FilePreviewPanel", () => {
 
   it("ignores a late response after changing session", async () => {
     const resolvePath = vi.fn();
-    let resolveFirst!: (payload: import("@/lib/types").FilePreviewPayload) => void;
+    let resolveFirst!: (payload: import("@/lib/contracts/files").FilePreviewPayload) => void;
     vi.mocked(fetchFilePreview).mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }));
     const payload = {
       path: "/workspace/b.txt", display_path: "b.txt", project_path: "/workspace",
@@ -248,9 +248,9 @@ describe("FilePreviewPanel", () => {
     expect(source).toHaveFocus();
     expect(source).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("mock-code-block").textContent).toBe(content);
-    expect(CodeBlock).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(vi.mocked(CodeBlock).mock.calls.at(-1)?.[0]).toMatchObject({
       code: content, chrome: "none", showLineNumbers: true, wrapLongLines: false, viewportHighlight: true,
-    }), expect.anything());
+    });
     expect(screen.getByText(notice)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByRole("heading", { name: "Report" });

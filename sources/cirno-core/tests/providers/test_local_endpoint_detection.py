@@ -1,13 +1,11 @@
-"""Tests for _is_local_endpoint detection and keepalive configuration."""
+"""Tests for is_local_endpoint detection and keepalive configuration."""
 
 from unittest.mock import MagicMock
 
 import pytest
 
-from cirno_core.providers.openai_compat_provider import (
-    OpenAICompatProvider,
-    _is_local_endpoint,
-)
+from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
+from cirno_core.providers.endpoints import is_local_endpoint
 
 
 def _make_spec(is_local: bool = False) -> MagicMock:
@@ -17,16 +15,16 @@ def _make_spec(is_local: bool = False) -> MagicMock:
 
 
 class TestIsLocalEndpoint:
-    """Test the _is_local_endpoint helper."""
+    """Test the is_local_endpoint helper."""
 
     def test_spec_is_local_true(self):
-        assert _is_local_endpoint(_make_spec(is_local=True), None) is True
+        assert is_local_endpoint(_make_spec(is_local=True), None) is True
 
     def test_spec_is_local_false_no_base(self):
-        assert _is_local_endpoint(_make_spec(is_local=False), None) is False
+        assert is_local_endpoint(_make_spec(is_local=False), None) is False
 
     def test_no_spec_no_base(self):
-        assert _is_local_endpoint(None, None) is False
+        assert is_local_endpoint(None, None) is False
 
     @pytest.mark.parametrize(
         "expected, api_base",
@@ -59,11 +57,11 @@ class TestIsLocalEndpoint:
         ],
     )
     def test_endpoint_locality(self, expected, api_base):
-        assert _is_local_endpoint(None, api_base) is expected
+        assert is_local_endpoint(None, api_base) is expected
 
     def test_spec_overrides_public_url(self):
         """spec.is_local=True takes precedence even with a public-looking URL."""
-        assert _is_local_endpoint(_make_spec(is_local=True), "https://api.example.com/v1") is True
+        assert is_local_endpoint(_make_spec(is_local=True), "https://api.example.com/v1") is True
 
 class TestLocalKeepaliveConfig:
     """Verify that local endpoints get keepalive_expiry=0."""

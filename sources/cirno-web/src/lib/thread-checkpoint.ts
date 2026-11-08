@@ -1,5 +1,5 @@
 import { createThreadProjectionState, type ThreadProjectionState } from "./thread-event-projection";
-import type { UIMessage } from "./types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 /** Resumable, memory-only state. Visible rows alone are not a projection cursor. */
 export interface ThreadCheckpoint {

@@ -1,6 +1,6 @@
 [project]
 name = "cirno-ai"
-version = "0.1.6"
+version = "0.2.0"
 description = "A lightweight personal AI assistant framework"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -21,20 +21,20 @@ license-files = [
     "THIRD_PARTY_NOTICES.md",
 ]
 
-dependencies = ["cirno-server==0.1.6"]
+dependencies = ["cirno-server==0.2.0"]
 
 [project.optional-dependencies]
 memory-embedding = [
-    "cirno-core[memory-embedding]==0.1.6",
+    "cirno-core[memory-embedding]==0.2.0",
 ]
 azure = [
-    "cirno-core[azure]==0.1.6",
+    "cirno-core[azure]==0.2.0",
 ]
 bedrock = [
-    "cirno-core[bedrock]==0.1.6",
+    "cirno-core[bedrock]==0.2.0",
 ]
 olostep = [
-    "cirno-core[olostep]==0.1.6",
+    "cirno-core[olostep]==0.2.0",
 ]
 dev = [
     "hatchling",
@@ -57,10 +57,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sources/cirno"]
+packages = ["sources/cirno/src/cirno"]
 
 [tool.hatch.build.targets.sdist]
-include = ["sources/cirno", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml"]
+include = ["sources/cirno/src", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml"]
 
 [tool.ruff]
 line-length = 100
@@ -70,24 +70,20 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
 
-[tool.ruff.lint.per-file-ignores]
-# The source directory is remapped to the valid installed package name cirno.
-"sources/cirno-core/**" = ["N999"]
-"sources/cirno-server/**" = ["N999"]
-
 [tool.basedpyright]
-include = ["sources/cirno-core", "sources/cirno-server", "sources/cirno"]
+include = ["sources/cirno-memory/src", "sources/cirno-usage/src", "sources/cirno-vault/src", "sources/cirno-core/src", "sources/cirno-server/src", "sources/cirno/src"]
 exclude = ["**/tests"]
+extraPaths = ["sources/cirno-memory/src", "sources/cirno-usage/src", "sources/cirno-vault/src", "sources/cirno-core/src", "sources/cirno-server/src", "sources/cirno/src"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["sources/cirno-core/tests", "sources/cirno-server/tests", "sources/cirno-server/channels"]
+testpaths = ["sources/cirno-memory/tests", "sources/cirno-usage/tests", "sources/cirno-vault/tests", "sources/cirno-core/tests", "sources/cirno-server/tests", "sources/cirno-server/src/cirno_server/channels"]
 
 [tool.coverage.run]
-source = ["cirno_core", "cirno_server", "cirno"]
+source = ["cirno_memory", "cirno_usage", "cirno_vault", "cirno_core", "cirno_server", "cirno"]
 omit = ["tests/*", "**/tests/*"]
 
 [tool.coverage.report]

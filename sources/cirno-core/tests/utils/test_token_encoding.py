@@ -10,7 +10,7 @@ import pytest
 import tiktoken.load
 from loguru import logger
 
-from cirno_core.utils import helpers, token_encoding
+from cirno_core.utils import token_estimation as helpers, text as text_helpers, token_encoding
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +51,7 @@ def test_slow_warmup_does_not_block_concurrent_estimates(monkeypatch, byte_encod
             pending = [pool.submit(helpers.estimate_message_tokens, {"content": "🙂你"}) for _ in range(37)]
             assert [task.result(timeout=1) for task in pending] == [11] * 37
         assert helpers.estimate_prompt_tokens_chain(object(), "test", [{"content": "hello"}]) == (9, "heuristic")
-        assert len(helpers.truncate_text_to_tokens("hello " * 100, 40).encode()) <= 40
+        assert len(text_helpers.truncate_text_to_tokens("hello " * 100, 40).encode()) <= 40
         assert len(calls) == 1 and calls[0][0] == "cl100k_base"
         assert calls[0][1] != caller_thread
     finally:
@@ -147,7 +147,7 @@ def test_stalled_download_does_not_hold_up_process_exit(tmp_path):
     code = """
 from threading import Event
 from cirno_core.utils import token_encoding
-from cirno_core.utils.helpers import estimate_message_tokens
+from cirno_core.utils.token_estimation import estimate_message_tokens
 started = Event()
 def blocked(_name):
     started.set()

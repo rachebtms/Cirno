@@ -1,18 +1,18 @@
 # Docker deployment and publishing
 
-The repository workflow `.github/workflows/container.yml` is configured to verify, build and publish images to `ghcr.io/rachebtms/cirno`. A local workflow file is not evidence that an image has already been published.
+The repository workflow `.github/workflows/container.yml` verifies, builds and publishes images to `ghcr.io/rachebtms/cirno`.
 
 ## Publication
 
 - Pull requests run frontend and backend checks and build AMD64 and ARM64 images on native runners for startup smoke tests. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.1.6` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.2.0` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
 Publication uses the workflow's `GITHUB_TOKEN` with `packages: write`; no Docker Hub password or personal access token is needed. OCI source labels associate the package with this repository. If the package is initially private, make it public in the GitHub package settings to allow anonymous server pulls.
 
-The code and workflow must first be committed and pushed to GitHub. A workflow file present only in a local checkout does not start Actions. The checks job is a release gate: test failures prevent container builds. AMD64 and ARM64 images build in parallel on `ubuntu-24.04` and `ubuntu-24.04-arm`. Each image must pass startup verification before its digest is uploaded. A final job publishes the multi-platform manifest only after both architectures succeed.
+The checks job is a release gate: test failures prevent container builds. AMD64 and ARM64 images build in parallel on `ubuntu-24.04` and `ubuntu-24.04-arm`. Each image must pass startup verification before its digest is uploaded. A final job publishes the multi-platform manifest only after both architectures succeed.
 
 Backend tests run with two workers, and Python dependency downloads are cached alongside the existing npm and Docker build caches. The architecture-independent browser bundle builds on the build host's native architecture. CI uses native runners for both architectures and does not use QEMU.
 
@@ -29,18 +29,27 @@ The example publishes only the Web UI port and persists the instance root. Model
 
 Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. The next page configures model providers and model configurations; this step can be deferred to Settings. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.1.6`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.0`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
 The workflow smoke test starts the server, checks its health endpoint and Web UI, and verifies that PID 1 runs as the non-root Cirno user. Startup, registration and Web UI checks run on both AMD64 and ARM64.
 
-## Upgrading from 0.1.3
+## Upgrading from 0.1.6
 
-Version 0.1.6 uses the same instance, account and database layout as 0.1.3, 0.1.4 and 0.1.5. New configuration fields use defaults. Keep the same instance mount (`~/.cirno:/home/cirno/.cirno` in the example); there is no data migration or new registration step.
+Keep the same instance mount (`~/.cirno:/home/cirno/.cirno` in the example).
+Startup automatically imports 0.1.6 conversation and automation state, updates
+configured service paths to `/v0/`, and records `lastRunVersion`. Your account
+remains registered. Originals and a migration report stay in the instance;
+see [instance migration](migrations.md). Older layouts should first be upgraded
+to 0.1.6.
+
+Update external clients, reverse-proxy path rules, MCP OAuth redirect
+registrations and custom health checks to the [versioned endpoints](development/api.md).
+The browser entry stays at `/`.
 
 1. Stop the service and back up the entire mounted instance directory. Also back up workspaces mounted outside that directory.
-2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.1.6`, or `ghcr.io/rachebtms/cirno:0.1.6-full` for the full variant. Preserve your volumes, ports, environment and reverse-proxy network configuration.
+2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.0`, or `ghcr.io/rachebtms/cirno:0.2.0-full` for the full variant. Preserve your volumes, ports, environment and reverse-proxy network configuration.
 3. Pull and recreate the service:
 
    ```sh
@@ -51,7 +60,7 @@ Version 0.1.6 uses the same instance, account and database layout as 0.1.3, 0.1.
 
    If you use Compose overrides, pass the same `-f` files to each command. With `compose.full.yaml`, set the pinned full-image tag in that override because it takes precedence over the base file.
 
-4. Refresh the browser or installed Web app and check Settings → About for 0.1.6. Sign in with the existing account.
+4. Refresh the browser or installed Web app and check Settings → About for 0.2.0. Sign in with the existing account.
 
 Recreating the container interrupts its current process; do this between active operations. Saved progress remains in the instance volume. Packages and files written only into the old container's writable layer do not survive replacement. The full image supplies the bundled tools and persists user Python packages and supported CLI configuration for subsequent recreations. Do not delete or replace the existing instance volume during an upgrade.
 
@@ -80,7 +89,7 @@ The full image includes:
 
 Telegram dependencies and the available Python optional feature extras are installed at image build time. This does not enable Telegram or configure third-party accounts: bot tokens and CLI authorizations remain instance-specific. Authenticated Web UI installation and skill management work through reverse proxies and remote browsers; there is no localhost-only installation policy or remote-install opt-in.
 
-The full image bundles `Xenova/bge-small-zh-v1.5` at revision `75c43b069aac4d136ba6bc1122f995fedcfd2781`, including `model_quantized.onnx`, `tokenizer.json`, its model card and the upstream MIT license. Downloads are checked against SHA-256 hashes. On a fresh instance the model paths are prefilled under Memory retrieval, but embeddings remain disabled until explicitly enabled. The weights live at `/opt/cirno/models/bge-small-zh-v1.5`, outside the mounted instance and workspace. Existing instances can select these same paths in Settings.
+The full image bundles `Xenova/bge-small-zh-v1.5` at revision `75c43b069aac4d136ba6bc1122f995fedcfd2781`, including `model_quantized.onnx`, `tokenizer.json`, its model card and the upstream MIT license. Downloads are checked against SHA-256 hashes. Blank model and tokenizer paths select these bundled assets, including when replacing a slim container; custom paths take precedence. Embeddings remain disabled until explicitly enabled. The weights live at `/opt/cirno/models/bge-small-zh-v1.5`, outside the mounted instance and workspace, and the selected paths appear under Memory retrieval.
 
 The additional commands consume image disk space; they do not run background daemons at startup. The CI smoke test checks command execution as the non-root user, Telegram dependency availability, and actual CPU inference with the bundled model on both architectures.
 
@@ -104,6 +113,6 @@ The entrypoint fixes ownership of the mounted instance root and drops to the Cir
 
 ## Complete backups
 
-The Web UI includes [Backup & restore](backups.md). It archives the instance and selected external folders; historical workspaces and common CLI credential/package directories are suggested automatically. It is included in both v0.1.6 image variants.
+The Web UI includes [Backup & restore](backups.md). It archives the instance and selected external folders; historical workspaces and common CLI credential/package directories are suggested automatically. It is included in both v0.2.0 image variants.
 
 CLI Apps in the full image use the same persistent user Python environment and non-secret directory environment as shell tools. This keeps market-installed Python packages and tools using XDG, npm, uv or pipx paths inside the instance volume. CLI processes do not inherit provider API keys. SSH, Git credential files, `.aws`, `.cargo` and `.local` locations are also linked into instance storage on a fresh full-image container. Existing external locations are offered as optional backup paths.

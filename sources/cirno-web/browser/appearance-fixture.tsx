@@ -1,19 +1,19 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AppearanceSettingsView } from "@/components/settings/overview/AppearanceSettingsView";
+import { AppearanceSettingsView } from "@/features/settings/overview/AppearanceSettingsView";
 import { useReadingTypography } from "@/hooks/useReadingTypography";
-import { useLocalPreferences } from "@/hooks/useLocalPreferences";
+import { usePreferences } from "@/hooks/usePreferences";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
-import { readLocalPreferences, writeLocalPreferences, type LocalPreferences } from "@/lib/local-preferences";
+import { readPreferences, writePreferences, type DisplayPreferences } from "@/features/preferences/store";
 
 /** Actual appearance controls in a browser-local harness, without a gateway. */
 export function AppearanceFixture() {
   const { t } = useTranslation();
   const { theme, preference, setTheme } = useTheme();
-  const preferences = useLocalPreferences();
-  const setPreferences: Dispatch<SetStateAction<LocalPreferences>> = (update) => {
-    writeLocalPreferences(typeof update === "function" ? update(readLocalPreferences()) : update);
+  const preferences = usePreferences();
+  const setPreferences: Dispatch<SetStateAction<DisplayPreferences>> = (update) => {
+    writePreferences(typeof update === "function" ? update(readPreferences()) : update);
   };
   useReadingTypography();
   return <ThemeProvider theme={theme}>
@@ -26,7 +26,7 @@ export function AppearanceFixture() {
         <div className="settings-grid" style={{ margin: 0, width: "100%", maxWidth: "none" }}>
           <h1 className="font-semibold tracking-tight" style={{ fontSize: 28, marginBottom: 20, paddingInline: "var(--settings-inset, 16px)" }}>{t("settings.nav.appearance")}</h1>
           <AppearanceSettingsView themePreference={preference} onChangeTheme={setTheme}
-            localPrefs={preferences} onChangeLocalPrefs={setPreferences} />
+            displayPreferences={preferences} onChangePreferences={setPreferences} />
         </div>
       </div>
     </main>

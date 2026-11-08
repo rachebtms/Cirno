@@ -1,6 +1,7 @@
 """Contract and security regressions for the MyTool runtime boundary."""
 
 from __future__ import annotations
+from cirno_core.providers.messages import sanitize_empty_content
 
 import asyncio
 import json
@@ -19,8 +20,10 @@ from cirno_core.agent.tools.runtime_control import (
 )
 from cirno_core.agent.tools.self import MyTool, MyToolConfig
 from cirno_core.bus.queue import MessageBus
-from cirno_core.config.schema import ToolsConfig
-from cirno_core.providers.base import GenerationSettings, LLMProvider, LLMResponse, ToolCallRequest
+from cirno_core.config.tools import ToolsConfig
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.runtime.context import RUNTIME_CONTEXT_END, RUNTIME_CONTEXT_TAG
 from cirno_core.security.workspace_access import (
@@ -118,7 +121,6 @@ def test_runtime_snapshot_has_exact_allowlist_and_redacts_secrets(tmp_path: Path
         "context_window_tokens",
         "provider_retry_mode",
         "max_tool_result_chars",
-        "workspace",
     })
     assert "provider" not in values
     assert "sessions" not in values
@@ -239,7 +241,7 @@ async def test_allowlisted_commands_preserve_runtime_side_effects(tmp_path: Path
     assert retry_mode == "Set provider_retry_mode = 'persistent' (was 'standard')"
     assert scratchpad == "Set scratchpad.preference = {'concise': True}"
     assert loop.max_iterations == 80
-    assert loop.subagents.max_iterations == 80
+    assert loop.subagents.limits.max_iterations == 80
     assert loop.provider_retry_mode == "persistent"
     assert tool._runtime_control.snapshot().scratchpad == {
         "preference": {"concise": True},
@@ -262,14 +264,14 @@ async def test_registry_exposes_unchanged_my_tool_actions(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_workspace_display_command_cannot_change_path_enforcement(tmp_path: Path) -> None:
+async def test_workspace_is_read_only_actual_directory(tmp_path: Path) -> None:
     loop = _make_loop(tmp_path, allow_set=True)
     tool = _my_tool(loop)
 
     result = await tool.execute(action="set", key="workspace", value="elsewhere")
 
-    assert "Set workspace" in result
-    assert tool._runtime_control.snapshot().workspace == "elsewhere"
+    assert "read-only" in result
+    assert tool._runtime_control.snapshot().workspace == str(tmp_path.resolve())
     assert loop.workspace == tmp_path
     assert loop.workspace_scopes.default_workspace == tmp_path
 
@@ -285,7 +287,6 @@ async def test_workspace_inspection_matches_registered_file_tool(
 ) -> None:
     # A configured shell backend is not proof that an external sandbox is running.
     monkeypatch.delenv("CIRNO_WORKSPACE_SANDBOX_ENFORCED", raising=False)
-    monkeypatch.delenv("CIRNO_WORKSPACE_SANDBOX_ENFORCED", raising=False)
     agent = tmp_path / "agent"
     project = tmp_path / "project"
     project.mkdir()
@@ -297,9 +298,10 @@ async def test_workspace_inspection_matches_registered_file_tool(
     definitions = json.dumps(loop.tools.get_definitions(), sort_keys=True)
     token = bind_workspace_scope(build_workspace_scope(project, mode))
     try:
-        # Legacy display writes must not spoof the effective directory or permission.
-        await tool.execute(action="set", key="workspace", value=str(outside.parent))
-        status = tool._runtime_control.snapshot().workspace_sandbox
+        assert "read-only" in await tool.execute(action="set", key="workspace", value=str(outside.parent))
+        snapshot = tool._runtime_control.snapshot()
+        assert snapshot.workspace == str(project.resolve())
+        status = snapshot.workspace_sandbox
         assert status["workspace_root"] == str(project.resolve())
         assert status["restrict_to_workspace"] is restricted
         assert status["level"] == ("application" if restricted else "off")
@@ -480,7 +482,7 @@ async def test_access_changes_refresh_only_new_message_and_preserve_prefix(tmp_p
             "Check access", channel="websocket", chat_id="scope-changes", session_key=session.key,
         )
     calls = provider.chat_stream_with_retry.await_args_list
-    first, second, third = [LLMProvider._sanitize_empty_content(call.kwargs["messages"]) for call in calls]
+    first, second, third = [sanitize_empty_content(call.kwargs["messages"]) for call in calls]
     # Access changes belong to the new request, not a rewrite of the cached history.
     assert json.dumps(second[:len(first)]) == json.dumps(first)
     assert "File access: project and tool-specific allowed paths only." in first[-1]["content"]
@@ -543,8 +545,8 @@ async def test_workspace_context_compaction_reuses_serialized_prefix(
         provider.estimate_prompt_tokens.side_effect = estimate
         await loop.process_direct("Check again", session_key=session.key)
     compact = provider.chat_stream_with_retry.await_args_list[2].kwargs
-    first_wire = LLMProvider._sanitize_empty_content(first["messages"])
-    compact_wire = LLMProvider._sanitize_empty_content(compact["messages"])
+    first_wire = sanitize_empty_content(first["messages"])
+    compact_wire = sanitize_empty_content(compact["messages"])
     assert len(compact_wire) > len(first_wire)
     assert compact_wire[:len(first_wire)] == first_wire
     assert compact["tools"] == first["tools"]
@@ -581,7 +583,7 @@ async def test_workspace_context_transient_retry_keeps_exact_wire_request(
 
     # Keep the production retry policy; replace only transport and backoff waiting.
     monkeypatch.setattr(provider, "chat_stream_with_context", respond)
-    monkeypatch.setattr(provider, "_sleep_with_heartbeat", AsyncMock())
+    monkeypatch.setattr(provider.retry_executor, "wait", AsyncMock())
     loop.provider.chat_stream_with_retry = provider.chat_stream_with_retry
     loop.provider.generation = GenerationSettings()
     result = await loop.process_direct("Check access", session_key="cli:retry")
@@ -590,7 +592,7 @@ async def test_workspace_context_transient_retry_keeps_exact_wire_request(
     assert len(requests) == 2
     assert json.dumps(requests[0]) == json.dumps(requests[1])
     assert json.dumps(requests[0]).count("Current project (JSON path):") == 1
-    provider._sleep_with_heartbeat.assert_awaited_once()
+    provider.retry_executor.wait.assert_awaited_once()
 
 
 @pytest.fixture
@@ -674,7 +676,7 @@ async def test_subagent_check_without_session_cannot_enumerate_tasks(tmp_path, s
 
 
 async def test_subagent_check_retained_results_and_receipts_are_scoped_and_detached(tmp_path, runtime):
-    from cirno_core.agent.runner import AgentRunResult
+    from cirno_core.agent.runner.contracts import AgentRunResult
 
     loop = _make_loop(tmp_path)
     manager = loop.subagents
@@ -685,7 +687,7 @@ async def test_subagent_check_retained_results_and_receipts_are_scoped_and_detac
         await release.wait()
         return AgentRunResult(messages=[], final_content="PRIVATE_RESULT")
 
-    manager.runner.run = run
+    manager.execution.runner.run = run
     owner = RequestContext("test", "route", session_key="owner:a", runtime=runtime)
     try:
         with request_context(owner):

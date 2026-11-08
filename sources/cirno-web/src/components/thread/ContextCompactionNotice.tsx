@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
-import type { UIContextCompaction } from "@/lib/types";
+import type { UIContextCompaction } from "@/lib/contracts/messages";
 
 export function ContextCompactionNotice({ compaction }: { compaction: UIContextCompaction }) {
   const { t } = useTranslation();
@@ -22,7 +22,7 @@ export function ContextCompactionNotice({ compaction }: { compaction: UIContextC
         <summary className="cursor-pointer rounded-control px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {title}{attempts.length > 1 ? <span className="ml-2 whitespace-nowrap">{t("thread.compaction.attempts", { count: attempts.length })}</span> : null}
         </summary>
-        <ol className="mt-2 space-y-2 rounded-control bg-muted/40 p-3 text-left text-muted-foreground">
+        <ol className="mt-2 space-y-2 rounded-control bg-surface-secondary/40 p-3 text-left text-muted-foreground">
           {attempts.map((attempt, index) => <li key={attempt.id} className="break-words">
             <p>{t("thread.compaction.attempt", { number: index + 1 })} · {titleFor(attempt)}</p>
             {attempt.evidence_checkpoint ? <p>{t("thread.compaction.evidenceCheckpointHelp")}</p> : null}

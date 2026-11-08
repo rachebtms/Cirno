@@ -1,16 +1,16 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   McpManagementDialog,
   type McpManagementTab,
-} from "@/components/settings/system/McpManagementDialog";
-import { createSystemSettingsActions } from "@/components/settings/system/createSystemSettingsActions";
-import { useSystemSettingsState } from "@/components/settings/system/useSystemSettingsState";
+} from "@/features/settings/mcp/McpManagementDialog";
+import { createSystemSettingsActions } from "@/features/settings/system/createSystemSettingsActions";
+import { useSystemSettingsState } from "@/features/settings/system/useSystemSettingsState";
 import i18n from "@/i18n";
 import { CirnoClient } from "@/lib/cirno-client";
-import type { McpPresetInfo, McpPresetsPayload } from "@/lib/types";
+import type { McpPresetInfo, McpPresetsPayload } from "@/lib/contracts/mcp";
 import {
   installSettingsViewTestHooks,
   jsonResponse,
@@ -54,7 +54,6 @@ describe("McpManagementDialog", () => {
     renderDialog({ initialTab: "tools", onToolsChange });
 
     const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
-    expect(dialog).toHaveClass("h-[min(34rem,calc(100dvh-2rem))]");
     expect(within(dialog).getByRole("tab", { name: /Tools/ })).toHaveAttribute("aria-selected", "true");
     expect(within(dialog).getByText("3 enabled")).toBeInTheDocument();
     expect(within(dialog).queryByText("Close")).not.toBeInTheDocument();
@@ -76,7 +75,7 @@ describe("McpManagementDialog", () => {
     renderDialog({ initialTab: "tools", onAction });
 
     const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Search tools" }), {
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search tools" }), {
       target: { value: "write" },
     });
     expect(within(dialog).getByRole("checkbox", { name: /write_note/ })).toBeInTheDocument();
@@ -109,12 +108,10 @@ describe("McpManagementDialog", () => {
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
 
-  it("shows proxy guidance on demand without changing the connection draft", async () => {
+  it("associates proxy guidance with its switch without changing the connection draft", () => {
     const onAction = vi.fn();
     renderDialog({ initialTab: "connection", onAction });
-    expect(screen.queryByText("Uses the shared proxy in Advanced.")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use proxy" }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Uses the shared proxy in Advanced.");
+    expect(screen.getByRole("switch", { name: "Use proxy" })).toHaveAccessibleDescription("Uses the shared proxy in Advanced.");
     expect(onAction).not.toHaveBeenCalled();
     expect(screen.getByRole("switch", { name: "Use proxy" })).not.toBeChecked();
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
@@ -161,7 +158,7 @@ describe("McpManagementDialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
     expect(within(dialog).getByRole("status", { name: "Loading tools…" })).toHaveAttribute("aria-busy", "true");
-    expect(within(dialog).queryByRole("textbox", { name: "Search tools" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("searchbox", { name: "Search tools" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("No tools available")).not.toBeInTheDocument();
 
     updateDialog(connectedPreset);
@@ -175,7 +172,7 @@ describe("McpManagementDialog", () => {
     expect(within(dialog).getByRole("checkbox", { name: /search_docs/ })).not.toBeChecked();
     expect(within(dialog).getByRole("checkbox", { name: /write_note/ })).toBeChecked();
     expect(within(dialog).getByText("2 enabled")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it.each([
@@ -211,9 +208,9 @@ function renderDialog({
   actionKey = null,
 }: {
   initialTab: McpManagementTab;
-  onAction?: ReturnType<typeof vi.fn>;
-  onToolsChange?: ReturnType<typeof vi.fn>;
-  onOAuthConnect?: ReturnType<typeof vi.fn>;
+  onAction?: ComponentProps<typeof McpManagementDialog>["onAction"];
+  onToolsChange?: ComponentProps<typeof McpManagementDialog>["onToolsChange"];
+  onOAuthConnect?: ComponentProps<typeof McpManagementDialog>["onOAuthConnect"];
   preset?: McpPresetInfo;
   actionKey?: string | null;
 }) {
@@ -264,10 +261,10 @@ describe("MCP connection draft lifecycle", () => {
   it("opens management from an uninstalled MCP body without connecting or materializing it", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [{ ...metabasePreset, installed: false, configured: false, available: false, status: "not_installed" }], installed_count: 0 });
       }
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
       return { ok: false, status: 404, text: async () => "Not found" } as Response;
     }));
     renderSettingsView({ initialSection: "apps" });
@@ -305,12 +302,12 @@ describe("MCP connection draft lifecycle", () => {
     vi.stubGlobal("open", vi.fn(() => null));
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") {
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") {
         return jsonResponse({ presets: [preset], installed_count: Number(preset.installed) });
       }
-      if (url === "/api/settings/mcp-oauth/status?flow_id=flow-proxy") {
+      if (url === "/v0/settings/mcp-oauth/status?flow_id=flow-proxy") {
         preset = {
           ...preset,
           installed: true,
@@ -358,13 +355,12 @@ describe("MCP connection draft lifecycle", () => {
     await screen.findByRole("button", { name: "Manage Xmind" });
 
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
-    fireEvent.click(screen.getByRole("button", { name: "Import mcp.json" }));
-    const editor = screen.getByRole("dialog", { name: "Import mcp.json" });
-    fireEvent.change(within(editor).getByRole("textbox", { name: "Import mcp.json" }), {
+    const importForm = screen.getByRole("form", { name: "Import mcp.json" });
+    fireEvent.change(within(importForm).getByRole("textbox", { name: "Import mcp.json" }), {
       target: { value: importedConfig },
     });
-    await act(async () => fireEvent.click(within(editor).getByRole("button", { name: "Save" })));
-    await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Import" })[1]));
+    fireEvent.click(within(importForm).getByRole("button", { name: "Format JSON" }));
+    await act(async () => fireEvent.submit(importForm));
     expect(requestMutationMock).toHaveBeenCalledWith(
       "settings.mcp.import", { config: JSON.stringify(JSON.parse(importedConfig), null, 2) }, 20_000,
     );
@@ -381,14 +377,37 @@ describe("MCP connection draft lifecycle", () => {
     await act(async () => fireEvent.click(cancel));
   });
 
+  it("shows a failed tool-scope save inside management and retries the unchanged draft", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [connectedPreset], installed_count: 1 });
+      throw new Error(`Unexpected read: ${url}`);
+    }));
+    requestMutationMock.mockRejectedValueOnce(new Error("Tool scope save failed"));
+    renderSettingsView({ initialSection: "mcp" });
+    fireEvent.click(await screen.findByRole("button", { name: "Manage Docs MCP" }));
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Tools" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "search_docs" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Tool scope save failed");
+    expect(within(dialog).getByRole("checkbox", { name: "search_docs" })).not.toBeChecked();
+    requestMutationMock.mockResolvedValueOnce({ presets: [{ ...connectedPreset, enabled_tools: ["write_note", "list_sources"] }], installed_count: 1 });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(within(dialog).queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument());
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("edits an existing custom server and preserves the draft when saving fails", async () => {
     const original = { type: "stdio", command: "node", args: ["server.js"], env: { KEY: "keep-me" }, cwd: "/tmp/docs", enabledTools: ["search"], toolTimeout: 90 };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/settings") return jsonResponse(settingsPayload());
-      if (url === "/api/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
-      if (url === "/api/settings/mcp-presets") return jsonResponse({ presets: [connectedPreset], installed_count: 1 });
-      if (url === "/api/settings/mcp-presets/config?name=docs") return jsonResponse({ config: original });
+      if (url === "/v0/settings") return jsonResponse(settingsPayload());
+      if (url === "/v0/settings/cli-apps") return jsonResponse({ apps: [], installed_count: 0 });
+      if (url === "/v0/settings/mcp-presets") return jsonResponse({ presets: [connectedPreset], installed_count: 1 });
+      if (url === "/v0/settings/mcp-presets/config?name=docs") return jsonResponse({ config: original });
       throw new Error(`Unexpected read: ${url}`);
     }));
     requestMutationMock.mockRejectedValueOnce(new Error("Cannot save MCP configuration"));
@@ -529,7 +548,6 @@ function renderMcpActions() {
       getToken: () => "tok",
       t: i18n.t,
       applyPayload: vi.fn(),
-      maybeRestartHostEngine: vi.fn(),
       setPendingRestartSections: vi.fn(),
       refreshAutomations: vi.fn(),
     });

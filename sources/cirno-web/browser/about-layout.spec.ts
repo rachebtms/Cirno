@@ -1,10 +1,11 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 for (const width of [390, 1440]) {
   test(`About centers its wordmark at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 960 });
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
+    await seedPreviewPreferences(page, { language: "en" });
     await page.goto("/browser/fixture.html?case=skeleton-additions&surface=settings&state=loaded&section=about");
     const title = page.getByRole("heading", { name: "Cirno", exact: true });
     await expect(title).toBeVisible();

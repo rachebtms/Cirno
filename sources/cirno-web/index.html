@@ -14,9 +14,9 @@
     />
     <meta
       name="theme-color"
-      content="#ffffff"
-      data-theme-color-light="#ffffff"
-      data-theme-color-dark="#303030"
+      content="#f7fbff"
+      data-theme-color-light="#f7fbff"
+      data-theme-color-dark="#0e1b29"
     />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -43,8 +43,8 @@
 
       body {
         margin: 0;
-        background: #ffffff;
-        color: #0a0a0a;
+        background: #f7fbff;
+        color: #183247;
         font-family:
           system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, "Noto Sans", "Noto Sans SC",
@@ -53,8 +53,8 @@
       }
 
       html.dark body {
-        background: #303030;
-        color: #fafafa;
+        background: #0e1b29;
+        color: #eaf6ff;
       }
 
       /* Work around iOS standalone's scroll-edge blur with a fixed color surface.
@@ -82,15 +82,8 @@
     <script>
       (function () {
         try {
-          var stored = null;
-          try {
-            stored = localStorage.getItem("cirno-webui.theme");
-          } catch {}
-          var dark =
-            stored === "dark" ||
-            (stored !== "light" &&
-              window.matchMedia &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var dark = window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
           if (dark) document.documentElement.classList.add("dark");
           var themeColor = document.querySelector('meta[name="theme-color"]');
           if (themeColor) {
@@ -110,7 +103,6 @@
     <!--startup-script-->
     <script>
       (function () {
-        var localeKey = "cirno.locale";
         var copy = {
           en: {
             boot: "Loading Cirno…",
@@ -179,9 +171,7 @@
         }
 
         try {
-          var stored = localStorage.getItem(localeKey);
           var detected =
-            stored ||
             (navigator.languages && navigator.languages[0]) ||
             navigator.language ||
             "en";

@@ -1,0 +1,22 @@
+import type { ComponentInputs } from "./inputs";
+import type { useConversationActions } from "./useConversationActions";
+import type { useConversationLifecycle } from "./useConversationLifecycle";
+import type { useConversationProjection } from "./useConversationProjection";
+import type { useConversationState } from "./useConversationState";
+import type { useNavigationActions } from "./useNavigationActions";
+import type { useRuntimeActions } from "./useRuntimeActions";
+import type { useWorkspaceActions } from "./useWorkspaceActions";
+import type { useWorkspacePresentation } from "./useWorkspacePresentation";
+import type { useWorkspaceState } from "./useWorkspaceState";
+export type ShellSurfaceProps = {
+  workspaceState: ReturnType<typeof useWorkspaceState>;
+  workspacePresentation: ReturnType<typeof useWorkspacePresentation>;
+  conversationLifecycle: ReturnType<typeof useConversationLifecycle>;
+  conversationActions: ReturnType<typeof useConversationActions>;
+  conversationState: ReturnType<typeof useConversationState>;
+  conversationProjection: ReturnType<typeof useConversationProjection>;
+  workspaceActions: ReturnType<typeof useWorkspaceActions>;
+  runtimeActions: ReturnType<typeof useRuntimeActions>;
+  inputs: ComponentInputs;
+  navigationActions: ReturnType<typeof useNavigationActions>;
+};

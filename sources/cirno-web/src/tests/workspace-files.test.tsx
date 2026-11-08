@@ -6,7 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { WorkspaceFiles } from "@/components/WorkspaceFiles";
+import { WorkspaceFiles } from "@/features/files/WorkspaceFiles";
 import type { CirnoClient } from "@/lib/cirno-client";
 
 vi.mock("@/components/FilePreviewPanelView", () => ({

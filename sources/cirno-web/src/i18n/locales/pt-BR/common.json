@@ -7,19 +7,19 @@
   "app": {
     "brand": "Cirno",
     "loading": {
-      "connecting": "Conectando-se ao cirno…",
+      "connecting": "Conectando-se ao Cirno…",
       "boot": "Carregando Cirno…",
       "failed": "Não foi possível carregar esta tela. Volte ou recarregue a página para tentar novamente."
     },
     "error": {
-      "title": "Não foi possível conectar-se com o cirno",
+      "title": "Não foi possível conectar-se com o Cirno",
       "serverHint": "Verifique se o Cirno server está em execução (`cirno`) e se este navegador consegue acessar o endereço da WebUI."
     },
     "auth": {
-      "title": "Conectar ao cirno",
+      "title": "Conectar ao Cirno",
       "label": "Senha da WebUI",
       "helpTitle": "Onde encontro a senha?",
-      "helpConfig": "No dispositivo que executa o cirno, abra o arquivo de configuração, geralmente em:",
+      "helpConfig": "No dispositivo que executa o Cirno, abra o arquivo de configuração, geralmente em:",
       "helpSecret": "Copie o valor deste campo como senha:",
       "helpFallback": "Se esse valor estiver vazio, use <code>channels.websocket.token</code>.",
       "showPassword": "Mostrar senha",
@@ -38,9 +38,7 @@
       "restartHint": "Reinicie o cirno para aplicar as alterações de tempo de execução.",
       "restartAction": "Reiniciar",
       "restart": "Reiniciar cirno",
-      "restarting": "Reiniciando cirno...",
-      "restartEngine": "Reiniciar motor",
-      "restartingEngine": "Reiniciando motor..."
+      "restarting": "Reiniciando cirno..."
     },
     "restart": {
       "completed": "Reinício concluído em {{seconds}}s."
@@ -51,18 +49,6 @@
     },
     "meta": {
       "description": "Interface web do Cirno — converse com o seu espaço de trabalho do Cirno."
-    },
-    "pairing": {
-      "haveCode": "Já recebeu um código?",
-      "deliveryFailed": "Não foi possível enviar o código. Verifique as permissões de envio do bot e os logs do Cirno server. Depois, envie outra mensagem privada para tentar novamente.",
-      "deliverySending": "Enviando o código ao chat. Se ele não chegar, envie outra mensagem privada ao bot para tentar novamente.",
-      "title": "Parear conta",
-      "description": "Digite o código de pareamento recebido na conversa.",
-      "code": "Código de vinculação",
-      "matched": "Correspondência com {{channel}}. Conectando...",
-      "expiresInline": "O código expira {{expires}}.",
-      "queueCount": "{{count}} pendentes",
-      "noMatch": "Nenhuma solicitação pendente corresponde a este código."
     }
   },
   "ptc": {
@@ -275,8 +261,8 @@
           "help": "Frequência de verificação das conversas para compactação, separada do tempo de inatividade. Reinicie para aplicar."
         },
         "network_request_timeout_s": {
-          "label": "Compatible API request timeout (seconds)",
-          "help": "Restart to apply."
+          "label": "Tempo de conexão / resposta do modelo (segundos)",
+          "help": "Tempo para conectar ou aguardar uma resposta sem transmissão. Fluxos ativos usam o limite de inatividade separado."
         },
         "network_stream_idle_timeout_s": {
           "label": "Compatible API stream idle timeout (seconds)",
@@ -335,7 +321,7 @@
           "help": "Limite por solicitação; em caso de falha, usa BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "Liberar contexto arquivado",
+          "label": "Liberar memória após compactação",
           "help": "Após compactar, mantém as evidências e o histórico em disco e libera mensagens antigas da memória."
         },
         "agents_defaults_dream_max_tool_iterations": {
@@ -461,6 +447,18 @@
         "agents_defaults_memory_embedding_provider": {
           "label": "Serviço de embeddings",
           "help": "Vetores opcionais com BM25. Escolha CPU local ou API externa. A API recebe consultas e trechos de memória; desativada por padrão."
+        },
+        "server_uploads_max_file_mb": {
+          "label": "Limite por arquivo (MiB)",
+          "help": "Tamanho máximo por imagem ou documento. Reinicie o serviço e atualize a página para aplicar."
+        },
+        "server_uploads_max_video_mb": {
+          "label": "Limite por vídeo (MiB)",
+          "help": "Tamanho máximo por vídeo; um vídeo por mensagem. Reinicie e atualize a página para aplicar."
+        },
+        "server_uploads_max_total_mb": {
+          "label": "Total por mensagem (MiB)",
+          "help": "Soma das imagens e documentos enviados, sem vídeos ou referências a arquivos locais. Reinicie e atualize a página para aplicar."
         }
       },
       "groups": {
@@ -565,6 +563,9 @@
         },
         "embedding": {
           "title": "Serviço de embeddings"
+        },
+        "uploads": {
+          "title": "Envio de arquivos"
         }
       },
       "save": "Salvar alterações",
@@ -672,9 +673,7 @@
       "regional": "Região e fuso horário",
       "webuiSafety": "Segurança da WebUI",
       "capabilities": "Recursos",
-      "apps": "Aplicativos",
-      "nativeHost": "Aplicativo para desktop",
-      "hostSafety": "Segurança do app"
+      "apps": "Aplicativos"
     },
     "models": {
       "requestOverridesHint": "Deixe os campos vazios para usar os ajustes do provedor. Trocar de provedor apaga estes valores.",
@@ -691,7 +690,7 @@
       "newPresetHelp": "Salve um modelo e seus ajustes para reutilizar.",
       "presets": "Predefinições de modelo",
       "presetName": "Nome da predefinição",
-      "presetNameHelp": "Os nomes devem ser únicos; também são usados por /model.",
+      "presetNameHelp": "Os nomes devem ser únicos. Renomear mantém o ID do modelo.",
       "presetNameDuplicate": "Já existe uma predefinição com este nome.",
       "presetNamePlaceholder": "ex.: Escrita rápida",
       "advancedOptions": "Opções avançadas",
@@ -735,10 +734,11 @@
         "auto": "Automático",
         "preserve": "Preservar",
         "omit": "Omitir"
-      }
+      },
+      "catalogErrorDetails": "Detalhes do erro"
     },
     "notifications": {
-      "scope": "Este navegador",
+      "scope": "Alertas e sons",
       "intro": "Escolha como receber um aviso quando uma tarefa terminar.",
       "pageRequired": "Sem novos alertas se esta página estiver fechada, suspensa ou desconectada.",
       "revoked": "A permissão para notificações foi revogada. Os avisos agora estão desativados. Permita notificações nas configurações deste site no navegador e depois ative-as aqui.",
@@ -801,7 +801,6 @@
       "restart": "Reiniciar cirno",
       "configPath": "Caminho da configuração",
       "activePreset": "Predefinição ativa",
-      "gateway": "Cirno server",
       "restartState": "Estado do reinício",
       "pendingChanges": "Alterações pendentes",
       "currentModel": "Configuração atual",
@@ -823,13 +822,11 @@
       "webuiDefaultAccess": "Acesso padrão",
       "cliAppsCatalog": "Catálogo",
       "cliAppsFilter": "Filtro",
-      "engine": "Motor",
-      "logs": "Logs",
-      "diagnostics": "Diagnóstico",
       "contextWindow": "Janela de contexto",
       "voiceLimits": "Limites",
       "reasoningDetailMode": "Detalhes do raciocínio",
-      "toolDetailMode": "Detalhes das ferramentas"
+      "toolDetailMode": "Detalhes das ferramentas",
+      "healthListener": "Endereço de verificação de integridade"
     },
     "help": {
       "theme": "Alterne entre aparência clara e escura.",
@@ -857,10 +854,6 @@
       "localServiceAccess": "Comandos Shell com acesso total podem acessar serviços locais.\n\nPermite que comandos shell com acesso completo alcancem serviços locais.",
       "webuiDefaultAccess": "Usado quando o projeto não tem permissão específica.\n\nUsado por chats web sem permissão específica de projeto.",
       "securityManagedControls": "Redes locais e privadas são bloqueadas por padrão.\n\nAs ferramentas web bloqueiam o acesso a serviços locais, redes privadas e serviços de metadados, exceto quando há permissão explícita. As demais configurações de segurança dos canais são gerenciadas em config.json.",
-      "logs": "Abra a pasta de logs do mecanismo do app de desktop.",
-      "diagnostics": "Exporte um relatório para diagnosticar problemas.",
-      "localServiceAccessNative": "Comandos Shell com acesso total podem acessar serviços neste Mac.\n\nPermite que comandos shell com acesso completo alcancem serviços neste Mac.",
-      "webuiDefaultAccessNative": "Padrão para conversas de desktop sem permissões de projeto.\n\nUsado por chats nativos sem permissão específica de projeto.",
       "contextWindow": "Orçamento de tokens de contexto deste modelo."
     },
     "timezone": {
@@ -1037,16 +1030,15 @@
       "collapsedDiff": "Diff recolhido",
       "on": "Ligado",
       "off": "Desligado",
-      "defaultPermission": "Permissão padrão",
       "fullAccess": "Acesso total",
       "configured": "Configurado",
       "notConfigured": "Não configurado",
       "pending": "Pendente",
-      "restartingEngine": "Reiniciando",
       "checking": "Verificando",
       "running": "Em execução",
       "needsSetup": "Requer configuração",
-      "detailed": "Detalhado"
+      "detailed": "Detalhado",
+      "inheritToolPolicy": "Usar política de ferramentas"
     },
     "status": {
       "loading": "Carregando configurações...",
@@ -1057,12 +1049,7 @@
       "restartAfterSaving": "Salve as alterações e reinicie quando estiver pronto.",
       "savedRestartApply": "Salvo. Reinicie o cirno para aplicar as alterações.",
       "hostRestartAfterSaving": "Ao salvar, o cirno reiniciará o motor.",
-      "hostRestartPending": "Salvo. O motor será reiniciado quando estiver pronto.",
-      "hostApiUnavailable": "Estas ações estão disponíveis apenas no aplicativo para desktop.",
-      "logsOpened": "Pasta de logs aberta.",
-      "logsOpenFailed": "Não foi possível abrir a pasta de logs.",
-      "diagnosticsExported": "Diagnóstico exportado para {{path}}.",
-      "diagnosticsExportFailed": "Não foi possível exportar o diagnóstico."
+      "hostRestartPending": "Salvo. O motor será reiniciado quando estiver pronto."
     },
     "actions": {
       "save": "Salvar",
@@ -1404,7 +1391,7 @@
         "noOutput": "Este registro não inclui o texto da resposta."
       },
       "create": "Nova tarefa",
-      "createPrompt": "O que cirno deve automatizar?",
+      "createPrompt": "Qual tarefa você gostaria de automatizar?",
       "createInput": "Descreva uma automação",
       "errors": {},
       "calendar": {
@@ -1542,7 +1529,8 @@
         "second": "Segundos",
         "minute": "Minutos",
         "hour": "Horas",
-        "day": "Dias"
+        "day": "Dias",
+        "millisecond": "Milissegundos"
       },
       "validation": {
         "nameRequired": "O nome é obrigatório.",
@@ -1581,7 +1569,9 @@
       "openChatGPT": "Abrir ChatGPT",
       "pasteCallbackToContinue": "Cole a URL de callback para continuar.",
       "waitingForCallback": "Aguardando a conclusão do login…",
-      "finishSignIn": "Concluir login"
+      "finishSignIn": "Concluir login",
+      "cancelFailed": "Não foi possível cancelar o login em {{provider}}",
+      "cancelling": "Cancelando login…"
     },
     "skills": {
       "description": "Escolha as habilidades disponíveis nas conversas.",
@@ -1610,15 +1600,15 @@
       "disableSkill": "Desativar {{name}}",
       "updateFailed": "Não foi possível atualizar esta habilidade.",
       "deleteTitle": "Excluir habilidade",
-      "deleteDescription": "Remova esta habilidade do espaço de trabalho atual.",
+      "deleteDescription": "Remova esta habilidade do Agent Home.",
       "deleteAction": "Excluir",
       "deleteFailed": "Não foi possível excluir esta habilidade.",
       "deleteConfirmTitle": "Excluir {{name}}?",
-      "deleteConfirmDescription": "Exclua os arquivos da habilidade do espaço. Não é possível desfazer.",
+      "deleteConfirmDescription": "Remova os arquivos da habilidade do Agent Home. As versões salvas continuam disponíveis.",
       "deleteConfirmAction": "Excluir habilidade",
       "instructionsTitle": "Instruções da habilidade",
       "setupRequired": "Requer configuração",
-      "setupDescription": "Instale dependências no host do Cirno server e verifique novamente.\n\nInstale a dependência ausente na máquina que executa o cirno e verifique novamente.",
+      "setupDescription": "Instale as dependências ausentes no servidor Cirno e verifique novamente.",
       "copySetupCommand": "Copiar comando",
       "checkAgain": "Verificar novamente",
       "marketplaceSearchFailed": "Não foi possível pesquisar nos mercados de habilidades.",
@@ -1634,7 +1624,7 @@
       "marketplaceTrendingUnavailable": "As habilidades em alta estão temporariamente indisponíveis.",
       "marketplaceEmpty": "Nenhuma habilidade encontrada para “{{query}}”.",
       "marketplaceConfirmTitle": "Instalar {{name}}?",
-      "marketplaceConfirmDescription": "Habilidades de terceiros podem conter instruções ou scripts.\n\nEsta habilidade de terceiros vem de {{provider}} ({{source}}) e pode incluir instruções ou scripts executáveis.",
+      "marketplaceConfirmDescription": "Esta habilidade de terceiros vem de {{provider}} ({{source}}) e pode incluir instruções ou scripts executáveis.",
       "marketplaceConfirmInstall": "Instalar habilidade",
       "marketplaceOpen": "Abrir {{name}} no {{provider}}",
       "marketplaceOpenProvider": "Abrir {{provider}}",
@@ -1648,7 +1638,6 @@
       "marketplaceTrendLabel": "Tendência de instalações em 8 semanas",
       "featured": "Habilidades",
       "empty": "Nenhuma habilidade disponível.",
-      "sourceWorkspace": "Personalizada",
       "sourceBuiltin": "Integrada",
       "statusAvailable": "Disponível",
       "statusUnavailable": "Indisponível",
@@ -1668,46 +1657,55 @@
       "unavailableReasonLabel": "O que falta",
       "rawInstructions": "Conteúdo de SKILL.md",
       "rawInstructionsEmpty": "Nenhuma instrução disponível.",
-      "detailDescription": "Detalhes de {{name}}."
+      "detailDescription": "Detalhes de {{name}}.",
+      "sourceHome": "Personalizada",
+      "copySetupFailed": "Não foi possível copiar o comando.",
+      "sourcePlugin": "Plugin de Agent",
+      "marketplaceResultsFor": "Resultados para “{{query}}”",
+      "retryTrends": "Tentar tendências novamente",
+      "historyTab": "Validação e histórico"
     },
     "homeFiles": {
       "title": "Home files",
       "save": "Save",
       "reload": "Reload",
       "saved": "Saved",
-      "soul": "Personality",
+      "soul": "Personalidade do Router",
       "user": "Preferences",
       "instructions": "Instructions",
       "memory": "Long-term memory",
-      "heartbeat": "Heartbeat instructions"
+      "heartbeat": "Heartbeat instructions",
+      "worker": "Personalidade das conversas"
     },
     "categories": {
       "interface": "Interface",
       "agent": "Agente",
       "connections": "Conexões",
-      "system": "Sistema"
+      "system": "Sistema",
+      "general": "Geral"
     },
     "telegram": {
-      "account": "Personal account",
-      "configureBot": "Configure bot",
-      "help": "Connect your private Telegram chat to Cirno. Group chats are not supported. Configure the bot token in Channel setup first.",
-      "unbound": "Not connected",
-      "boundHelp": "Only this Telegram account can access your personal Cirno.",
-      "pinHelp": "Generate a PIN here, then send it to your bot.",
-      "unbind": "Disconnect",
-      "generatePin": "Generate PIN",
-      "pin": "Pairing PIN",
-      "copyPin": "Copy binding command",
-      "refreshPin": "Refresh PIN",
-      "expires": "Expires in {{seconds}} seconds; refreshes automatically.",
-      "sendPin": "Send {{command}} to your Telegram bot.",
-      "delivery": "Messages and notifications",
-      "enabled": "Enable Telegram",
-      "cirno": "Cirno messages",
-      "actionLinks": "Action links",
-      "webuiUrl": "Web UI address (optional)",
-      "urlHelp": "Use the address you can open on your phone. Notifications will include a button to open the matching Inbox item.",
-      "settingsLink": "Configure Telegram notifications"
+      "account": "Conta pessoal",
+      "configureBot": "Configurar bot",
+      "help": "Conecte sua conversa privada do Telegram ao Cirno. Grupos não são compatíveis. Configure primeiro o token do bot na configuração de canais.",
+      "unbound": "Não conectado",
+      "boundHelp": "Somente esta conta do Telegram pode acessar seu Router pessoal.",
+      "pinHelp": "Gere um PIN aqui e envie-o ao seu bot.",
+      "unbind": "Desconectar",
+      "generatePin": "Gerar PIN",
+      "pin": "PIN de vinculação",
+      "copyPin": "Copiar comando de vinculação",
+      "refreshPin": "Renovar PIN",
+      "expires": "Expira em {{seconds}} segundos.",
+      "sendPin": "Envie {{command}} ao seu bot do Telegram.",
+      "delivery": "Mensagens e notificações",
+      "enabled": "Ativar Telegram",
+      "actionLinks": "Links de ações",
+      "webuiUrl": "Endereço da interface Web (opcional)",
+      "urlHelp": "Use o endereço que você consegue abrir no celular. As notificações incluirão um botão para abrir o item correspondente na caixa de entrada.",
+      "settingsLink": "Configurar notificações do Telegram",
+      "expired": "PIN expirado",
+      "router": "Mensagens do Router"
     },
     "account": {
       "owner": "Proprietário da instância",
@@ -1718,10 +1716,13 @@
       "saved": "Senha alterada. Este navegador continua conectado.",
       "unavailable": "As configurações da conta estão disponíveis com o cadastro e login pelo navegador.",
       "loading": "Carregando conta…",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "routerNameHelp": "Renaming keeps the same conversation ID, memory and task links. Historical text stays as written.",
+      "saveRouterName": "Save name",
+      "routerNameSaved": "Name updated."
     },
     "heartbeat": {
-      "help": "Verifica HEARTBEAT.md periodicamente e ativa Cirno quando há tarefas. É independente da verificação de saúde do serviço."
+      "help": "Verifica HEARTBEAT.md periodicamente e ativa Router quando há tarefas. É independente da verificação de saúde do serviço."
     },
     "backup": {
       "instance": "Instância completa",
@@ -1751,7 +1752,21 @@
       "skip": "Deixe vazio para ignorar",
       "extrasRestore": "Os caminhos adicionais podem ser alterados. Arquivos correspondentes são sobrescritos e os demais preservados. Pacotes e ferramentas exigem sistema e CPU compatíveis.",
       "restore": "Restaurar e reiniciar"
-    }
+    },
+    "balance": {
+      "title": "Saldo da conta",
+      "enabled": "Ativar consulta de saldo",
+      "endpoint": "URL da API de saldo",
+      "endpointHelp": "Este endereço pode ser diferente da API do modelo.",
+      "format": "Formato da resposta",
+      "json": "JSON personalizado",
+      "amountPath": "Campo de saldo (JSON Pointer)",
+      "currency": "Moeda / unidade",
+      "apiKey": "Chave API de saldo (opcional)",
+      "apiKeyHelp": "Deixe vazio para usar a chave API do provedor.",
+      "refresh": "Atualizar saldo"
+    },
+    "navigationSearch": "Pesquisar configurações"
   },
   "chat": {
     "fallbackTitle": "Tópico {{id}}",
@@ -1774,7 +1789,7 @@
     "rename": "Renomear",
     "renamePlaceholder": "Nome do tópico",
     "renameProjectTitle": "Renomear projeto",
-    "renameProjectDescription": "Altere apenas o nome do projeto na barra lateral WebUI.",
+    "renameProjectDescription": "Renomeie o projeto. Suas conversas e arquivos serão mantidos.",
     "renameProjectPlaceholder": "Nome do projeto",
     "renameSave": "Salvar",
     "renameFailed": "Não foi possível salvar o nome. Tente novamente.",
@@ -1794,7 +1809,8 @@
       "yesterday": "Ontem",
       "earlier": "Anteriores",
       "archived": "Arquivadas"
-    }
+    },
+    "bulkDeleteUnavailable": "Esta visualização só permite excluir uma conversa por vez."
   },
   "archiveConfirm": {
     "title": "Arquivar este tópico?",
@@ -1802,7 +1818,7 @@
     "unarchiveTitle": "Desarquivar este tópico?",
     "unarchiveTitleMany": "Desarquivar {{count}} tópicos?",
     "description": "As conversas são mantidas. Você pode desarquivá-las a qualquer momento.",
-    "unarchiveDescription": "Estes tópicos voltarão à barra lateral."
+    "unarchiveDescription": "Estas conversas voltarão à lista de conversas."
   },
   "deleteConfirm": {
     "title": "Excluir esta conversa?",
@@ -2015,7 +2031,16 @@
         "estimated": "Estimativa do contexto e da saída em andamento, ajustada com o uso real após a resposta.",
         "unavailable": "O uso atual do contexto não foi registrado. O gráfico mostra solicitações anteriores."
       },
+      "draftStorage": {
+        "read": "Não foi possível restaurar o rascunho deste navegador.",
+        "save": "As alterações do rascunho não foram salvas. Mantenha esta página aberta e tente novamente.",
+        "remove": "Não foi possível remover o rascunho salvo. Tente novamente antes de atualizar.",
+        "clearFailed": "Não foi possível limpar os rascunhos salvos neste navegador."
+      },
       "queued": {
+        "sendRejected": "A mensagem não foi enviada. A mensagem pendente foi mantida.",
+        "restoreFailed": "Não foi possível restaurar a mensagem pendente deste navegador.",
+        "saveFailed": "As alterações da mensagem pendente não foram salvas. Mantenha esta página aberta e tente novamente.",
         "label": "Aguardando envio",
         "guide": "Enviar agora",
         "delete": "Excluir mensagem",
@@ -2116,16 +2141,12 @@
             "title": "Mostrar ajuda",
             "description": "Mostre os comandos de barra disponíveis."
           },
-          "pairing": {
-            "title": "Pareamento",
-            "description": "Gerencie solicitações de pareamento."
-          },
           "resume": {
             "title": "Continuar tarefa",
             "description": "Continua a solicitação interrompida com o contexto salvo."
           },
           "clear": {
-            "title": "Limpar contexto do Cirno",
+            "title": "Limpar conversa do Router",
             "description": "Limpa a conversa pessoal do Cirno sem desfazer alterações nos arquivos."
           },
           "temporary": {
@@ -2152,14 +2173,14 @@
         "label": "Aplicativos",
         "cliGroup": "Aplicativos CLI",
         "mcpGroup": "Serviços MCP",
-        "sessionGroup": "Conversas do Cirno",
+        "sessionGroup": "Conversas",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Chame CLI com @{{name}}.",
         "mcpDescription": "Chame MCP com @{{name}}.",
         "cliTitle": "Aplicativo CLI: {{name}}",
         "mcpTitle": "Servidor MCP: {{name}}",
-        "sessionBadge": "Conversa do Cirno",
+        "sessionBadge": "Conversa",
         "sessionDescription": "Referenciar @{{name}} como chat anterior"
       },
       "encoding": "Codificando…",
@@ -2188,7 +2209,7 @@
         "defaultDescription": "Leia e edite arquivos e execute comandos apenas no diretório de trabalho.",
         "fullDescription": "Permita acesso a arquivos e comandos fora do diretório de trabalho.",
         "review": "Revisão por IA",
-        "reviewDescription": "Mantém as restrições. Uma IA independente revisa cada operação bloqueada sem a memória do Cirno; dúvidas vão à caixa de entrada. A IA pode errar e expor arquivos ou executar comandos nocivos."
+        "reviewDescription": "Mantém as restrições. Uma IA independente revisa cada operação bloqueada sem a memória do Router; dúvidas vão à caixa de entrada. A IA pode errar e expor arquivos ou executar comandos nocivos."
       },
       "goalStatus": {
         "blocked": "Bloqueado",
@@ -2214,7 +2235,7 @@
       "railAria": "Navegação das minhas mensagens"
     },
     "clear": {
-      "title": "Limpar conversa do Cirno",
+      "title": "Limpar conversa do Router",
       "description": "Interrompe a execução e limpa as mensagens e o contexto desta conversa. As memórias salvas e as outras conversas são mantidas.",
       "confirm": "Limpar conversa"
     },
@@ -2226,10 +2247,10 @@
       "subagent": "Resultado do subagente",
       "continuation": "Continuação automática",
       "system": "Evento do sistema",
-      "supervision": "Cirno atualizou esta conversa"
+      "supervision": "Router atualizou esta conversa"
     },
     "supervision": {
-      "changed": "Cirno atualizou esta conversa",
+      "changed": "Router atualizou esta conversa",
       "actions": {
         "stop": "Conversa interrompida",
         "continue": "Conversa retomada",
@@ -2486,7 +2507,8 @@
     },
     "expandStep": "Expandir etapa",
     "collapseStep": "Recolher etapa",
-    "edit": "Editar mensagem"
+    "edit": "Editar mensagem",
+    "loadMoreTools": "Mostrar mais {{count}} eventos de ferramentas"
   },
   "recovery": {
     "actionFailed": "A recuperação falhou. Tente novamente.",
@@ -2563,45 +2585,16 @@
     "copy": "Copiar",
     "copied": "Copiado"
   },
-  "workbench": {
-    "aria": "Área de trabalho",
-    "panes": "Painéis",
-    "tabAria": "Grupo: {{title}}",
-    "panesInTab": "Painéis em {{title}}",
-    "collapseTabGroup": "Recolher os painéis em {{title}}",
-    "expandTabGroup": "Expandir os painéis em {{title}}",
-    "dropPane": "Mover {{pane}} para {{tab}}",
-    "createGroup": "Criar grupo",
-    "moveTo": "Mover para",
-    "renameGroupTitle": "Renomear grupo",
-    "renameGroupDescription": "Dê um nome a este grupo.",
-    "renameGroupPlaceholder": "Nome do grupo",
-    "dissolveTab": "Desfazer grupo",
-    "layout": "Layout",
-    "addPane": "Adicionar painel",
-    "paneLimit": "Máximo de {{count}} painéis",
-    "deleteConversations": "Excluir todas as conversas",
-    "movePane": "Mover painel {{title}}",
-    "movePaneHint": "Arraste para mover. As setas também funcionam",
-    "resizePaneBoundary": "Redimensionar limite do painel {{index}}",
-    "promotePane": "Tornar {{title}} o painel principal",
-    "paneActions": "Ações do painel {{title}}",
-    "detachPane": "Remover",
-    "composerAria": "Mensagem para {{title}}",
-    "layouts": {
-      "columns": "Colunas",
-      "rows": "Linhas",
-      "grid": "Grade",
-      "bsp": "BSP",
-      "main-stack": "Principal e pilha"
-    }
-  },
   "common": {
     "retry": "Tentar novamente",
     "dismiss": "Descartar",
     "close": "Fechar",
     "current": "Atual",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "refresh": "Atualizar",
+    "copyFailed": "Não foi possível copiar para a área de transferência.",
+    "chooseDate": "Escolher data",
+    "moreActions": "Mais ações"
   },
   "errors": {
     "messageTooBig": {
@@ -2627,10 +2620,13 @@
       "serverTitle": "Erro no serviço do provedor do modelo",
       "unknownTitle": "Falha na solicitação ao provedor do modelo",
       "bodyWithAttempt": "Interrompido após {{attempts}} tentativas. Tente mais tarde ou escolha outro modelo.",
-      "body": "Tente mais tarde ou escolha outro modelo."
+      "body": "Tente mais tarde ou escolha outro modelo.",
+      "configurationTitle": "Escolha um modelo primeiro",
+      "configurationBody": "Abra Configurações → Modelos para criar e selecionar uma configuração de modelo e envie sua mensagem novamente."
     }
   },
   "workspace": {
+    "directoryRefreshError": "Não foi possível atualizar os diretórios de trabalho",
     "dialog": {
       "manual": "Colar caminho",
       "absolutePathRequired": "Informe um caminho absoluto de pasta nesta máquina."
@@ -2660,7 +2656,118 @@
       "retry": "Tentar novamente",
       "cancel": "Cancelar",
       "switchDirectory": "Trocar diretório"
-    }
+    },
+    "files": "Arquivos",
+    "file": "Arquivo",
+    "terminal": "Terminal",
+    "browser": "Navegador",
+    "trace": "Rastro",
+    "credentials": "Credenciais",
+    "settings": "Configurações",
+    "conversation": "Conversa",
+    "library": "Conversas",
+    "inbox": "Caixa de entrada",
+    "automations": "Automações",
+    "launcher": "Launcher",
+    "split": "Dividir visualização",
+    "unsplit": "Visualização única",
+    "resizeSplit": "Redimensionar divisão",
+    "tabs": "Abas",
+    "closeTab": "Fechar {{title}}",
+    "newTab": "Nova aba",
+    "loading": "Carregando…",
+    "localServer": "Servidor local",
+    "terminalHost": "Servidor do terminal",
+    "connect": "Conectar",
+    "terminalExited": "Processo encerrado ({{code}})",
+    "terminalHint": "Shell interativo do servidor selecionado. Fechar a aba encerra a conexão local; processos remotos desconectados podem continuar.",
+    "addRecord": "Adicionar credencial",
+    "vaultHint": "Os valores são criptografados separadamente da memória. Backups completos incluem a chave: mantenha-os privados. As ferramentas de credenciais gerenciam registros sem retornar valores. Segredos colados antes em chats permanecem no histórico.",
+    "label": "Nome",
+    "recordType": "Tipo",
+    "secretValue": "Valor sensível",
+    "reveal": "Revelar valor salvo",
+    "noRecords": "Nenhuma credencial salva",
+    "deleteRecord": "Excluir esta credencial?",
+    "delete": "Excluir",
+    "loadOlder": "Mais antigos",
+    "chooseConversation": "Abra esta aba a partir de uma conversa.",
+    "loadMore": "Carregar mais mensagens",
+    "toolDefinitions": "Definições das ferramentas",
+    "modelResponse": "Resposta do modelo",
+    "address": "Endereço do site",
+    "go": "Ir",
+    "openExternal": "Abrir no navegador",
+    "browserHint": "Alguns sites bloqueiam incorporação. Se a página ficar vazia, abra-a no navegador. Eles não podem acessar a conta do Cirno ou arquivos locais.",
+    "enterUrl": "Digite o endereço de um site.",
+    "invalidUrl": "Digite um endereço HTTP ou HTTPS.",
+    "browserSameOrigin": "Abra o Cirno diretamente, sem incorporá-lo dentro de si mesmo.",
+    "kind": {
+      "password": "Conta / senha",
+      "text": "Texto longo",
+      "identity": "Identificador pessoal",
+      "token": "Token / código",
+      "ssh": "SSH"
+    },
+    "openItem": "Abrir {{title}}",
+    "username": "Nome de usuário",
+    "discardDescription": "As alterações não salvas nesta aba serão perdidas.",
+    "debug": {
+      "time": "Hora",
+      "type": "Tipo",
+      "summary": "Evento",
+      "status": "Estado",
+      "turn": "Turno",
+      "size": "Tamanho",
+      "filter": "Filtrar esta página",
+      "all": "Todos",
+      "newest": "Recentes",
+      "newer": "Mais novos",
+      "refresh": "Atualizar rastro",
+      "inspector": "Inspetor",
+      "messages": "Mensagens",
+      "response": "Resposta",
+      "tools": "Ferramentas",
+      "raw": "Dados",
+      "noEvents": "Nenhum evento nesta página.",
+      "count": "{{count}} / {{total}} eventos",
+      "events": "Eventos gravados",
+      "kinds": {
+        "input": "Mensagem do usuário",
+        "answer": "Resposta do modelo",
+        "reasoning": "Raciocínio",
+        "tool": "Chamada de ferramenta",
+        "compaction": "Compactação",
+        "request": "Requisição API",
+        "file": "Arquivo alterado",
+        "lifecycle": "Ciclo de vida",
+        "system": "Entrada do sistema"
+      },
+      "source": "Conversa de origem",
+      "allSources": "Todas as conversas",
+      "pause": "Pausar gravação",
+      "start": "Iniciar gravação",
+      "clear": "Limpar gravação",
+      "recording": "Gravando",
+      "paused": "Pausado",
+      "waiting": "Gravando novos eventos, sem importar o histórico anterior.",
+      "capacity": "Limite de armazenamento atingido. Limpe para continuar.",
+      "storage_error": "Gravação interrompida por erro no armazenamento temporário."
+    },
+    "moveOtherGroup": "Move to other tab group",
+    "emptyGroup": "Open a page from the Launcher or drag a tab here.",
+    "sshNodeAccess": "Adicionar aos SSH Nodes",
+    "sshNodeAccessHint": "Usar em terminais remotos. A execução pelo Agent também exige visibilidade para o Agent.",
+    "sshCredential": "Credencial SSH",
+    "loadSSH": "Carregar detalhes da conexão",
+    "sshNodePickerHint": "Escolha uma credencial SSH em Credenciais. Remover um Node mantém sua credencial.",
+    "noSSHCredentials": "Primeiro crie uma credencial SSH em Credenciais.",
+    "agentVisibility": "Disponível para o Agent",
+    "agentVisibilityHint": "Permitir que as ferramentas do Agent listem e gerenciem esta credencial. Elas não retornam valores secretos.",
+    "agentVisible": "Visível para o Agent",
+    "agentHidden": "Privada",
+    "keepSecret": "Deixe em branco para manter o valor salvo.",
+    "sshNode": "SSH Node"
   },
   "files": {
     "title": "Files",
@@ -2686,7 +2793,8 @@
     "create": "Create",
     "discardTitle": "Discard unsaved changes?",
     "discardDescription": "Your changes have not been saved to the file.",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "openPreview": "Abrir aba de pré-visualização"
   },
   "memoryLibrary": {
     "search": "Pesquisar memórias",
@@ -2746,12 +2854,16 @@
     "semanticMode": "Vetorial",
     "hybridMode": "Híbrido · BM25 + vetores",
     "searchEngine": "Utilizado: {{mode}}",
-    "fallback_disabled": "Os embeddings locais estão desativados; foi usado BM25.",
+    "fallback_disabled": "A pesquisa vetorial está desativada; usando BM25.",
     "fallback_busy": "O processo de embeddings está ocupado; foi usado BM25.",
     "fallback_lexical_only": "Evidências originais, estados de tarefas e históricos usam BM25. Os vetores abrangem conhecimentos e perfis ativos.",
     "fallback_unavailable": "Busca vetorial indisponível; foi usado BM25.",
     "searchDetails": "Motivo",
-    "indexPending": "O índice vetorial está incompleto. Apenas o conteúdo indexado aparece; pesquise novamente para continuar a indexação."
+    "indexPending": "O índice vetorial está incompleto. Apenas o conteúdo indexado aparece; pesquise novamente para continuar a indexação.",
+    "statusTitle": "Índice e consolidação",
+    "noTags": "Ainda não há etiquetas.",
+    "resultsFor": "Resultados para “{{query}}”",
+    "noMatches": "Nenhuma memória corresponde a esta pesquisa."
   },
   "userQuestion": {
     "title": "Uma pergunta para você",
@@ -2770,7 +2882,6 @@
     "remaining_other": "{{count}} perguntas pendentes"
   },
   "features": {
-    "globalConversation": "Cirno",
     "projects": "Projetos",
     "ordinaryConversations": "Conversas",
     "createProject": "Criar projeto",
@@ -2819,7 +2930,8 @@
     "command": "Comando",
     "runCommand": "Executar",
     "close": "Fechar",
-    "commandCompleted": "Comando concluído."
+    "commandCompleted": "Comando concluído.",
+    "removeNode": "Remover dos Nodes"
   },
   "inbox": {
     "title": "Caixa de entrada",
@@ -2833,7 +2945,7 @@
     "empty": "Nenhuma notificação",
     "loading": "Carregando notificações",
     "retained": "Ler um aviso não resolve sua ação.",
-    "muteHelp": "Silenciar desativa alertas e sons desta categoria neste navegador. O histórico é mantido. Os alertas também exigem a configuração geral e permissão.",
+    "muteHelp": "As preferências de notificação do navegador são sincronizadas entre dispositivos. Silenciar desativa os alertas e sons desta categoria; o histórico é mantido. Cada navegador precisa da própria permissão de notificação.",
     "muted": "Silenciado",
     "notify": "Notificar",
     "unread": "Não lida",
@@ -2850,7 +2962,6 @@
     },
     "kind": {
       "question": "Pergunta",
-      "pairing": "Aprovação de acesso",
       "recovery": "Recuperação de conversa",
       "compaction": "Compactação de contexto",
       "dream": "Consolidação de memória",
@@ -2912,7 +3023,57 @@
       "connection_failed": "Não foi possível conectar ao Cirno. Verifique sua conexão.",
       "request_failed": "A solicitação falhou. Tente novamente.",
       "incorrect_password": "A senha atual está incorreta.",
-      "unauthorized": "Entre novamente."
+      "unauthorized": "Entre novamente.",
+      "invalid_router_handle": "Use 3–32 lowercase letters, digits or underscores, starting with a letter.",
+      "router_handle_taken": "Another conversation already uses this name.",
+      "router_unavailable": "The Router conversation is unavailable. Try again later."
+    },
+    "routerHandle": "Router @name",
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+  },
+  "themes": {
+    "title": "Temas de cores",
+    "name": "Nome do tema",
+    "newName": "Minha neve",
+    "customize": "Criar tema",
+    "syncHint": "Cada tema inclui cores claras e escuras. As configurações são salvas no Cirno e sincronizadas entre seus dispositivos.",
+    "save": "Salvar tema",
+    "edit": "Editar tema",
+    "remove": "Excluir tema",
+    "saveFailed": "Não foi possível salvar suas preferências.",
+    "contrast": "Aumente o contraste do texto com o fundo e os painéis.",
+    "colors": {
+      "background": "Fundo",
+      "surface": "Navegação",
+      "panel": "Painéis",
+      "text": "Texto",
+      "muted": "Texto secundário",
+      "accent": "Destaque",
+      "border": "Bordas"
     }
+  },
+  "conversationCatalog": {
+    "newProject": "Novo projeto",
+    "projectName": "Nome do projeto",
+    "search": "Buscar conversas e projetos",
+    "more": "Mostrar mais",
+    "unfiled": "Conversas sem projeto",
+    "move": "Mover {{title}} para um projeto",
+    "newInProject": "Nova conversa em {{name}}",
+    "renameProject": "Renomear {{name}}",
+    "deleteProject": "Excluir {{name}}",
+    "emptyProject": "Este projeto não tem conversas.",
+    "empty": "Nenhuma conversa correspondente.",
+    "deleteHelp": "O projeto será excluído. Suas conversas, histórico e arquivos serão mantidos.",
+    "create": "Criar",
+    "directory": "Diretório de trabalho (opcional)",
+    "sort": "Ordenar conversas",
+    "order": {
+      "updated_desc": "Atualizadas recentemente",
+      "created_desc": "Criadas recentemente",
+      "title_asc": "Título A–Z",
+      "manual": "Ordem salva"
+    },
+    "projectActions": "Ações do projeto {{name}}"
   }
 }

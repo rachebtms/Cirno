@@ -1,6 +1,6 @@
-import type { ModelPresetOption } from "@/components/thread/ModelPresetBadge";
+import type { ModelPresetOption } from "@/features/model-selection/contracts";
 import { inferProviderFromModelName, providerDisplayLabel } from "@/lib/provider-brand";
-import type { SettingsPayload } from "@/lib/types";
+import type { SettingsPayload } from "@/lib/contracts/settings";
 
 function compactModelName(modelName: string | null): string | null {
   if (!modelName) return null;
@@ -25,11 +25,11 @@ function modelPresetForBadge(
   if (!settings) return null;
   const presets = settings.model_presets ?? [];
   if (scopedPreset) {
-    return presets.find((preset) => preset.name === scopedPreset) ?? null;
+    return presets.find((preset) => preset.id === scopedPreset) ?? null;
   }
   const configured = settings.agent.model_preset || "default";
   return (
-    presets.find((preset) => preset.name === configured)
+    presets.find((preset) => preset.id === configured)
     ?? presets.find((preset) => preset.active)
     ?? null
   );
@@ -59,7 +59,7 @@ export function toModelBadgeInfo(
       || null
     : rawProvider || inferProviderFromModelName(model);
   const providerRow = provider
-    ? settings?.providers?.find((item) => item.name === provider)
+    ? settings?.providers?.find((item) => item.id === provider)
     : null;
   const needsSetup = Boolean(
     settings && (!model || !provider || !providerRow || !providerRow.configured),
@@ -81,19 +81,31 @@ export function modelPresetOptionsFromSettings(
     (settings.model_call_order ?? []).map((name, index) => [name.trim(), index]),
   );
   return (settings.model_presets ?? [])
-    .filter((preset) => !preset.is_default && preset.name.trim())
+    .filter((preset) => !preset.is_default && preset.id.trim())
     .sort((a, b) => (
-      (order.get(a.name.trim()) ?? Number.POSITIVE_INFINITY)
-      - (order.get(b.name.trim()) ?? Number.POSITIVE_INFINITY)
+      (order.get(a.id.trim()) ?? Number.POSITIVE_INFINITY)
+      - (order.get(b.id.trim()) ?? Number.POSITIVE_INFINITY)
     ))
     .map((preset) => {
-      const name = preset.name.trim();
+      const id = preset.id.trim();
       return {
-        name,
+        id,
+        name: preset.name,
         model: preset.model,
         contextWindowTokens: preset.context_window_tokens,
         reasoningEffort: preset.reasoning_effort,
         provider: preset.resolved_provider || preset.provider,
       };
     });
+}
+
+/** Commands accept a stable ID or an unambiguous display name. */
+export function resolveModelPresetSelection(settings: SettingsPayload | null, value: string): string | null {
+  if (value.toLowerCase() === "default") return "default";
+  const normalized = value.trim().toLowerCase();
+  const presets = settings?.model_presets ?? [];
+  const identity = presets.find(preset => preset.id.toLowerCase() === normalized);
+  if (identity) return identity.id;
+  const matches = presets.filter(preset => preset.name.toLowerCase() === normalized);
+  return matches.length === 1 ? matches[0].id : null;
 }

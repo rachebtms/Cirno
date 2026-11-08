@@ -1,10 +1,11 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test.use({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
-  await page.route("**/api/commands", route => route.fulfill({ json: { commands: [] } }));
+  await seedPreviewPreferences(page, { language: "en" });
+  await page.route("**/v0/commands", route => route.fulfill({ json: { commands: [] } }));
   await page.goto("/browser/fixture.html?case=new-chat-skeleton");
   await expect(page.locator(".thread-composer-access")).toBeVisible();
 });

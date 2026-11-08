@@ -1,4 +1,4 @@
-from cirno_core.agent.context_governance import ContextGovernor
+from cirno_core.agent.governance.messages import drop_orphan_tool_results
 
 
 def _assistant_tool_call(call_id: str) -> dict:
@@ -20,7 +20,7 @@ def test_drop_orphan_tool_results_drops_missing_tool_call_id() -> None:
         {"role": "tool", "tool_call_id": "call_1", "name": "exec", "content": "ok"},
     ]
 
-    result = ContextGovernor.drop_orphan_tool_results(messages)
+    result = drop_orphan_tool_results(messages)
 
     assert [m.get("tool_call_id") for m in result if m.get("role") == "tool"] == ["call_1"]
 
@@ -32,7 +32,7 @@ def test_drop_orphan_tool_results_drops_duplicate_tool_result() -> None:
         {"role": "tool", "tool_call_id": "call_1", "name": "exec", "content": "duplicate"},
     ]
 
-    result = ContextGovernor.drop_orphan_tool_results(messages)
+    result = drop_orphan_tool_results(messages)
 
     tool_results = [m for m in result if m.get("role") == "tool"]
     assert len(tool_results) == 1

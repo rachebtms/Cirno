@@ -25,7 +25,7 @@
 }
 
 /* KaTeX tags are out of flow; reserve equal space to keep the formula centered. */
-.math-fit .katex-html:has(> .tag) {
+.math-fit .katex-html:has(> .katex-tag) {
   padding-inline: calc(var(--math-tag-width) + 1em);
 }
 

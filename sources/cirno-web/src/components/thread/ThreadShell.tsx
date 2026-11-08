@@ -1,241 +1,78 @@
-import { hasToolHistory } from "@/lib/thread-inputs";
-import { liveContextUsage, visibleContextTokens } from "@/lib/live-context";
-import { scopeWithAccessMode } from "@/lib/workspace";
-import { InlineMessageEditor } from "@/components/thread/InlineMessageEditor";
+import { conversationRole } from "@/lib/conversation-role";
 import { QuestionReplyProvider, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
-import { formatQuestionAnswer } from "@/lib/user-question";
-import type { UserQuestion } from "@/lib/types";
-import { FolderOpen } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { HoverHint } from "@/components/ui/tooltip";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
-import { WorkspaceFiles } from "@/components/WorkspaceFiles";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useWorkspaceOpen } from "@/features/workbench/context";
+import type { UserQuestion } from "@/lib/contracts/messages";
+import { hasToolHistory } from "@/lib/thread-inputs";
+import { formatQuestionAnswer } from "@/lib/user-question";
+import { scopeWithAccessMode } from "@/lib/workspace";
+import { FolderOpen, Route } from "lucide-react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { hasInlineDeliveryError, latestActiveTurnId } from "./composer-usage";
+import { HeroGreeting, randomHeroGreetingKey } from "./HeroGreeting";
+import { resolveModelPresetSelection } from "./model-preset";
+import { ThreadPreview } from "./ThreadPreview";
+import { useInstalledSettingItems } from "./useInstalledSettingItems";
+import { useMessageEditing } from "@/features/messages/model/useMessageEditing";
+import { useThreadModels } from "./useThreadModels";
+import { useThreadPreview } from "./useThreadPreview";
+import { useThreadUsage } from "./useThreadUsage";
 
-import { FilePreviewAvailabilityProvider } from "@/components/FilePreviewAvailabilityContext";
-import { FilePreviewPanel } from "@/components/FilePreviewPanel";
-import { PreviewPane } from "@/components/PreviewPane";
 import { FileActionsProvider } from "@/components/FileActions";
-import { createFilePreviewResource } from "@/lib/file-preview-resource";
+import { FilePreviewAvailabilityProvider } from "@/components/FilePreviewAvailabilityContext";
 import { SessionHandleLabel } from "@/components/SessionHandleLabel";
-import { PromptNavigator } from "@/components/thread/PromptNavigator";
-import { usePromptHistory } from "@/hooks/usePromptHistory";
-import { ModelFallbackNotice } from "@/components/thread/ModelFallbackNotice";
-import { RecoveryNotice } from "@/components/thread/RecoveryNotice";
-import { SubagentTasksProvider } from "@/components/thread/SubagentTasks";
-import { SubagentTaskDock } from "@/components/thread/SubagentTaskDock";
-import { latestSubagentInputKey } from "@/lib/subagent-tasks";
-import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
-import type { ComposerDraft, ComposerDraftStore } from "@/lib/composer-draft";
-import { ThreadComposer } from "@/components/thread/ThreadComposer";
-import type {
-  ComposerContextUsage,
-  ComposerRoundUsage,
-} from "@/components/thread/ComposerUsagePopover";
-import {
-  modelPresetOptionsFromSettings,
-  toModelBadgeInfo,
-} from "@/components/thread/model-preset";
 import { ClearConversationButton } from "@/components/thread/ClearConversationButton";
+import { ModelFallbackNotice } from "@/components/thread/ModelFallbackNotice";
+import { PromptNavigator } from "@/components/thread/PromptNavigator";
+import { SessionAutomations } from "@/features/automations/session/SessionAutomations";
+import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
+import { SubagentTaskDock } from "@/components/thread/SubagentTaskDock";
+import { SubagentTasksProvider } from "@/components/thread/SubagentTasks";
+import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { ThreadLoadingSkeleton } from "@/components/thread/ThreadLoadingSkeleton";
-import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
-import { ThreadViewport, type ThreadViewportHandle } from "@/components/thread/ThreadViewport";
+import { ThreadViewport } from "@/components/thread/ThreadViewport";
+import type { ThreadViewportHandle } from "@/components/thread/viewport/contracts";
 import { useCirnoStream, type SendAttachment, type SendOptions } from "@/hooks/useCirnoStream";
-import { useFilePreviewState, type FilePreviewState, type FilePreviewStore } from "@/hooks/useFilePreviewState";
+import { type FilePreviewStore } from "@/hooks/useFilePreviewState";
+import { usePromptHistory } from "@/hooks/usePromptHistory";
 import {
-  ApiError,
-  fetchFilePreviewAvailability,
-  fetchFilePreview,
-  fetchFileReferenceMetadata,
   fetchInstalledCliApps,
   fetchMcpPresets,
-  fetchSettings,
-  fetchWorkspaces,
   fetchWorkspaceDirectories,
-  listSlashCommands,
+  fetchWorkspaces,
+  listSlashCommands
 } from "@/lib/api";
 import {
   CLI_APPS_CHANGED_EVENT,
   installedCliAppsFromPayload,
   isCliAppsPayload,
 } from "@/lib/cli-app-events";
+import type { ComposerDraft, ComposerDraftStore } from "@/lib/composer-draft";
+import type { SlashCommand } from "@/lib/contracts/commands";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { SettingsPayload } from "@/lib/contracts/settings";
+import type { SkillSummary } from "@/lib/contracts/skills";
+import type { ProjectDirectory, WorkspaceScopePayload, WorkspacesPayload } from "@/lib/contracts/workspaces";
 import {
   MCP_PRESETS_CHANGED_EVENT,
   installedMcpPresetsFromPayload,
   isMcpPresetsPayload,
 } from "@/lib/mcp-preset-events";
-import type { StreamError } from "@/lib/cirno-client";
-import { isLocalAttachment } from "../../../packages/client-events/attachments";
-import type {
-  ChatSummary,
-  FilePreviewPayload,
-  FileReferenceMetadata,
-  RoundUsage,
-  SettingsPayload,
-  SlashCommand,
-  SkillSummary,
-  UIMessage,
-  WorkspaceScopePayload,
-  WorkspacesPayload,
-  ProjectDirectory,
-} from "@/lib/types";
-import { projectThreadEvents } from "@/lib/thread-event-projection";
-import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
-import { ThreadMessageCache } from "@/lib/thread-message-cache";
+import { resolveModelRequestFailureCopy } from "@/lib/model-request-failure";
 import { providerDisplayLabel } from "@/lib/provider-brand";
+import { latestSubagentInputKey } from "@/lib/subagent-tasks";
+import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
+import { projectThreadEvents } from "@/lib/thread-event-projection";
+import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { cn } from "@/lib/utils";
 import { useClient } from "@/providers/ClientProvider";
-
-function latestComposerContextUsage(messages: UIMessage[]): ComposerContextUsage | null {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message.kind === "compaction" && message.compaction?.phase === "succeeded") {
-      return message.compaction.context_tokens === undefined ? null : {
-        contextTokens: message.compaction.context_tokens,
-        contextWindowTokens: message.compaction.context_window_tokens,
-        estimated: message.compaction.context_estimated,
-      };
-    }
-    const contextTokens = message.usage?.context_tokens;
-    if (
-      message.role !== "assistant"
-      || message.kind === "trace"
-      || message.isStreaming
-      || typeof contextTokens !== "number"
-      || !Number.isFinite(contextTokens)
-      || contextTokens < 0
-    ) {
-      continue;
-    }
-    return {
-      contextTokens,
-      ...(typeof message.contextWindowTokens === "number"
-        ? { contextWindowTokens: message.contextWindowTokens }
-        : {}),
-    };
-  }
-  return null;
-}
-
-function recentComposerRoundUsage(messages: UIMessage[]): ComposerRoundUsage[] {
-  const recent: ComposerRoundUsage[] = [];
-  const seenTurns = new Set<string>();
-  for (let index = messages.length - 1; index >= 0 && recent.length < 8; index -= 1) {
-    const message = messages[index];
-    const turnKey = message.turnId || message.id;
-    if (
-      message.role !== "assistant"
-      || message.kind === "trace"
-      || message.isStreaming
-      || seenTurns.has(turnKey)
-    ) {
-      continue;
-    }
-
-    seenTurns.add(turnKey);
-    const rounds: RoundUsage[] = message.roundUsages ?? [];
-    for (let roundIndex = rounds.length - 1; roundIndex >= 0; roundIndex -= 1) {
-      const round = rounds[roundIndex];
-      const inputTokens = round.prompt_tokens;
-      if (
-        recent.length >= 8
-        || typeof inputTokens !== "number"
-        || !Number.isFinite(inputTokens)
-        || inputTokens <= 0
-      ) {
-        continue;
-      }
-      const outputTokens = round.completion_tokens;
-      const cachedTokens = round.cached_tokens;
-      const estimatedTokens = round.estimated_tokens;
-      const generationMs = round.generation_ms;
-      const measuredOutputTokens = round.measured_completion_tokens;
-      const ttftMs = round.ttft_ms;
-      const timedRequests = round.timed_requests;
-      recent.push({
-        id: `${turnKey}:${roundIndex}`,
-        timestamp: message.completedAt ?? message.createdAt,
-        inputTokens,
-        ...(typeof outputTokens === "number" && Number.isFinite(outputTokens)
-          ? { outputTokens }
-          : {}),
-        ...(typeof cachedTokens === "number" && Number.isFinite(cachedTokens)
-          ? { cachedTokens }
-          : {}),
-        ...(typeof estimatedTokens === "number" && Number.isFinite(estimatedTokens)
-          ? { estimatedTokens }
-          : {}),
-        ...(typeof generationMs === "number" && Number.isFinite(generationMs)
-          ? { generationMs }
-          : {}),
-        ...(typeof measuredOutputTokens === "number" && Number.isFinite(measuredOutputTokens)
-          ? { measuredOutputTokens }
-          : {}),
-        ...(typeof ttftMs === "number" && Number.isFinite(ttftMs) && ttftMs >= 0
-          && typeof timedRequests === "number" && Number.isFinite(timedRequests) && timedRequests > 0
-          ? { ttftMs: ttftMs / timedRequests }
-          : {}),
-      });
-    }
-  }
-  return recent.reverse();
-}
-
-function latestActiveTurnId(messages: UIMessage[], runStartedAt: number | null): string | null {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message.isStreaming && message.turnId) return message.turnId;
-  }
-  if (runStartedAt === null) return null;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (
-      message.role !== "user"
-      && message.turnId
-      && message.createdAt >= runStartedAt * 1000
-    ) return message.turnId;
-  }
-  return null;
-}
-
-function hasInlineDeliveryError(
-  messages: UIMessage[],
-  error: StreamError | null,
-): boolean {
-  if (!error?.turnId) return false;
-  return messages.some((message) => (
-    message.role === "user"
-    && message.turnId === error.turnId
-    && message.deliveryStatus === "failed"
-    && message.deliveryErrorKind === error.kind
-  ));
-}
-
-const FILE_PREVIEW_DEFAULT_WIDTH = 544;
-const FILE_PREVIEW_MIN_WIDTH = 280;
-const FILE_PREVIEW_MAX_WIDTH = 860;
-const FILE_PREVIEW_MIN_MAIN_WIDTH = 360;
-const FILE_PREVIEW_CLOSE_ANIMATION_MS = 320;
-
-type FilePreviewAvailabilityCacheEntry = {
-  available?: boolean;
-  promise: Promise<boolean>;
-  revision: number;
-};
-
-function clampFilePreviewWidth(width: number, maxWidth: number): number {
-  return Math.min(Math.max(width, FILE_PREVIEW_MIN_WIDTH), maxWidth);
-}
-
-function maxFilePreviewWidth(containerWidth: number): number {
-  // Keep at least half a narrow pane, or 360px in a wider pane, for the conversation.
-  const reserved = Math.min(FILE_PREVIEW_MIN_MAIN_WIDTH, containerWidth / 2);
-  return Math.max(0, Math.min(FILE_PREVIEW_MAX_WIDTH, containerWidth - reserved));
-}
+import { isLocalAttachment } from "../../../packages/client-events/attachments";
 
 const EMPTY_TITLE_OVERRIDES: Record<string, string> = {};
 
@@ -265,7 +102,7 @@ interface ThreadShellProps {
   onTurnEnd?: () => void;
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
-  hideSidebarToggleForHostChrome?: boolean;
+  hideDesktopSidebarToggle?: boolean;
   hideSidebarToggle?: boolean;
   hideThemeButton?: boolean;
   hideHeaderTitle?: boolean;
@@ -291,179 +128,11 @@ interface ThreadShellProps {
   skills?: SkillSummary[];
 }
 
-const HERO_GREETING_KEYS = [
-  "thread.empty.greetings.workOn",
-  "thread.empty.greetings.start",
-  "thread.empty.greetings.build",
-  "thread.empty.greetings.tackle",
-] as const;
-
-function HeroGreeting({ text }: { text: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const heading = headingRef.current;
-    if (!container || !heading) return;
-
-    const fitToWidth = () => {
-      heading.style.removeProperty("font-size");
-      const availableWidth = container.clientWidth;
-      if (availableWidth <= 0) return;
-
-      const naturalWidth = heading.scrollWidth;
-      const maximumFontSize = Number.parseFloat(window.getComputedStyle(heading).fontSize);
-      if (
-        naturalWidth <= availableWidth
-        || !Number.isFinite(maximumFontSize)
-        || maximumFontSize <= 0
-      ) {
-        return;
-      }
-
-      const fittedFontSize = Math.max(
-        12,
-        Math.floor(maximumFontSize * ((availableWidth - 2) / naturalWidth) * 100) / 100,
-      );
-      heading.style.fontSize = `${fittedFontSize}px`;
-    };
-
-    fitToWidth();
-
-    let lastObservedWidth = container.clientWidth;
-    const resizeObserver = typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver(([entry]) => {
-          const nextWidth = entry?.contentRect.width ?? container.clientWidth;
-          if (nextWidth === lastObservedWidth) return;
-          lastObservedWidth = nextWidth;
-          fitToWidth();
-        });
-    resizeObserver?.observe(container);
-    window.addEventListener("resize", fitToWidth);
-
-    let cancelled = false;
-    void document.fonts?.ready.then(() => {
-      if (!cancelled) fitToWidth();
-    });
-
-    return () => {
-      cancelled = true;
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", fitToWidth);
-    };
-  }, [text]);
-
-  return (
-    <div ref={containerRef} className="min-w-0 w-full max-w-[44rem]">
-      <h1
-        ref={headingRef}
-        data-testid="hero-greeting"
-        data-theme-ink
-        className="select-none whitespace-nowrap text-[34px] font-normal leading-[1.08] tracking-normal text-foreground sm:text-[48px] sm:leading-tight"
-      >
-        {text}
-      </h1>
-    </div>
-  );
-}
-
-function randomHeroGreetingKey(): (typeof HERO_GREETING_KEYS)[number] {
-  const index = Math.floor(Math.random() * HERO_GREETING_KEYS.length);
-  return HERO_GREETING_KEYS[index] ?? HERO_GREETING_KEYS[0];
-}
-
 interface PendingFirstMessage {
   finish?: (accepted: boolean) => void;
   content: string;
   images?: SendAttachment[];
   options?: SendOptions;
-}
-
-interface InstalledSettingItemsOptions<Payload, Item> {
-  requestCount: number;
-  getToken: () => string;
-  eventName: string;
-  fetchPayload: (token: string) => Promise<Payload>;
-  isPayload: (value: unknown) => value is Payload;
-  selectItems: (payload: Payload) => Item[];
-}
-
-function useInstalledSettingItems<Payload, Item>({
-  requestCount,
-  getToken,
-  eventName,
-  fetchPayload,
-  isPayload,
-  selectItems,
-}: InstalledSettingItemsOptions<Payload, Item>): Item[] {
-  const [items, setItems] = useState<Item[]>([]);
-  const loadedRef = useRef(false);
-  const pendingRef = useRef<Promise<Payload> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let refreshQueued = false;
-    let refreshAfterFlight = false;
-    let refreshing = false;
-    let payloadVersion = 0;
-    const refresh = async (): Promise<void> => {
-      if (refreshing) return;
-      refreshing = true;
-      const version = payloadVersion;
-      const pending = pendingRef.current ?? fetchPayload(getToken());
-      pendingRef.current = pending;
-      try {
-        const payload = await pending;
-        if (!cancelled && version === payloadVersion) {
-          loadedRef.current = true;
-          setItems(selectItems(payload));
-        }
-      } catch {
-        // Keep the last successful catalog during transient refresh failures.
-      } finally {
-        if (pendingRef.current === pending) pendingRef.current = null;
-        refreshing = false;
-        if (refreshAfterFlight && !cancelled) {
-          refreshAfterFlight = false;
-          void refresh();
-        }
-      }
-    };
-    const queueRefresh = () => {
-      if (!requestCount || document.visibilityState === "hidden" || refreshQueued) return;
-      refreshQueued = true;
-      queueMicrotask(() => {
-        refreshQueued = false;
-        if (!cancelled) void refresh();
-      });
-    };
-    if (requestCount && !loadedRef.current) void refresh();
-
-    const refreshOnChanged = (event: Event) => {
-      const payload = (event as CustomEvent<unknown>).detail;
-      if (isPayload(payload)) {
-        payloadVersion += 1;
-        loadedRef.current = true;
-        setItems(selectItems(payload));
-        return;
-      }
-      if (refreshing) {
-        refreshAfterFlight = true;
-        return;
-      }
-      queueRefresh();
-    };
-
-    window.addEventListener(eventName, refreshOnChanged);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(eventName, refreshOnChanged);
-    };
-  }, [requestCount, eventName, fetchPayload, getToken, isPayload, selectItems]);
-
-  return items;
 }
 
 export function ThreadShell({
@@ -487,8 +156,8 @@ export function ThreadShell({
   onForkChat,
   onTurnEnd,
   theme = "light",
-  onToggleTheme = () => {},
-  hideSidebarToggleForHostChrome = false,
+  onToggleTheme = () => { },
+  hideDesktopSidebarToggle = false,
   hideSidebarToggle = false,
   hideThemeButton = false,
   hideHeaderTitle = false,
@@ -515,6 +184,11 @@ export function ThreadShell({
 }: ThreadShellProps) {
   const { t } = useTranslation();
   const chatId = session?.chatId ?? null;
+  const {
+    settings, modelSettingsError, modelFallback, setModelFallback, modelPresetError, localModelPreset,
+    activeModelPreset, handleModelPresetChange, modelPresetOptions, modelBadge, modelBadgeLabel,
+  } = useThreadModels({ session, settingsSnapshot, settingsLoading });
+  const workspaceOpen = useWorkspaceOpen();
   const historyKey = temporary ? null : session?.key ?? null;
   const previewSessionKey = session?.key ?? null;
   const mentionSessions = useMemo(
@@ -524,7 +198,7 @@ export function ThreadShell({
     }),
     [historyKey, sessions, titleOverrides],
   );
-  const { client, getToken, ingressLimits, modelName, token, webuiCapabilities } = useClient();
+  const { client, getToken, ingressLimits, token, webuiCapabilities } = useClient();
   const favoriteWorkspaceProject = useCallback(
     async (path: string, pinned: boolean) => {
       const response = await client.requestMutation<{ favorite_projects: ProjectDirectory[] }>("workspace.favorite", { path, pinned });
@@ -546,7 +220,7 @@ export function ThreadShell({
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const [mentionCatalogRequestCount, setMentionCatalogRequestCount] = useState(0);
   const requestMentionCatalogs = useCallback(() => setMentionCatalogRequestCount((count) => count + 1), []);
-  const cliApps = useInstalledSettingItems({
+  const { items: cliApps, error: cliAppsError } = useInstalledSettingItems({
     requestCount: mentionCatalogRequestCount,
     getToken,
     eventName: CLI_APPS_CHANGED_EVENT,
@@ -554,7 +228,7 @@ export function ThreadShell({
     isPayload: isCliAppsPayload,
     selectItems: installedCliAppsFromPayload,
   });
-  const mcpPresets = useInstalledSettingItems({
+  const { items: mcpPresets, error: mcpPresetsError } = useInstalledSettingItems({
     requestCount: mentionCatalogRequestCount,
     getToken,
     eventName: MCP_PRESETS_CHANGED_EVENT,
@@ -562,39 +236,9 @@ export function ThreadShell({
     isPayload: isMcpPresetsPayload,
     selectItems: installedMcpPresetsFromPayload,
   });
-  const [settings, setSettings] = useState<SettingsPayload | null>(settingsSnapshot);
-  const [modelFallback, setModelFallback] = useState<{
-    chatId: string;
-    model: string;
-    reauthProvider?: string;
-    dismissed: boolean;
-  } | null>(null);
   const [heroGreetingKey, setHeroGreetingKey] = useState(randomHeroGreetingKey);
   const [submittedViewportTurnId, setSubmittedViewportTurnId] = useState<string | null>(null);
-  const [browserDirty, setBrowserDirty] = useState(false);
-  const [editingMessage, setEditingMessage] = useState<UIMessage | null>(null);
-  const [editingMessageOwner, setEditingMessageOwner] = useState<string | null>(null);
-  const [editedText, setEditedText] = useState("");
-  const [editBusy, setEditBusy] = useState(false);
-  const [editError, setEditError] = useState("");
-  const editOwnerRef = useRef({ key: session?.key });
-  if (editOwnerRef.current.key !== session?.key) editOwnerRef.current = { key: session?.key };
-  useEffect(() => {
-    setEditingMessage(null); setEditingMessageOwner(null); setEditedText(""); setEditError(""); setEditBusy(false);
-  }, [session?.key]);
   const [pendingForkIndex, setPendingForkIndex] = useState<number | null>(null);
-  const [pendingPreviewAction, setPendingPreviewAction] = useState<(() => void) | null>(null);
-  const guardPreview = (action: () => void) => { if (browserDirty) setPendingPreviewAction(() => action); else action(); };
-  const previewStoreKey = previewSessionKey ?? "new:files";
-  const { state: previewState, openFile, openBrowser, resolveFile, selectTab, closeTab, close: closePreview, setWidth: setFilePreviewWidth } =
-    useFilePreviewState(previewStoreKey, filePreviewStore);
-  const [closingPreview, setClosingPreview] = useState<{ key: string; state: FilePreviewState } | null>(null);
-  const filePreviewClosing = closingPreview?.key === previewStoreKey;
-  const visiblePreview = filePreviewClosing ? closingPreview.state : previewState;
-  const activePreview = visiblePreview.tabs.find((tab) => tab.id === visiblePreview.activeId);
-  const previewOpen = Boolean(activePreview);
-  const [filePreviewMaxWidth, setFilePreviewMaxWidth] = useState(FILE_PREVIEW_MAX_WIDTH);
-  const filePreviewWidth = clampFilePreviewWidth(previewState.width, filePreviewMaxWidth);
   const draftKey = session?.key ?? (temporaryChatEnabled ? "new:temporary" : "new:chat");
   const persistDraft = session ? !temporary : !temporaryChatEnabled;
   const [quote, setQuote] = useState<{ key: string; text: string | null } | null>(null);
@@ -605,12 +249,8 @@ export function ThreadShell({
     setQuote({ key: draftKey, text });
   }, [draftKey]);
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
-  const shellRef = useRef<HTMLElement | null>(null);
   const [conversationElement, setConversationElement] = useState<HTMLDivElement | null>(null);
   const composerSurfaceRef = useRef<HTMLDivElement | null>(null);
-  const filePreviewWidthRef = useRef(FILE_PREVIEW_DEFAULT_WIDTH);
-  const filePreviewCloseTimerRef = useRef<number | null>(null);
-  const filePreviewResizeCleanupRef = useRef<(() => void) | null>(null);
   const pendingFirstRef = useRef<(PendingFirstMessage & { draft?: ComposerDraft; draftKey: string }) | null>(null);
   const [restoredFirstDraft, setRestoredFirstDraft] = useState<{ chatId: string; revision: number; error: string } | null>(null);
   const [pendingFirstTargetChatId, setPendingFirstTargetChatId] = useState<string | null>(null);
@@ -638,7 +278,6 @@ export function ThreadShell({
     goalState,
     recoveryState,
     continueRecovery,
-    dismissRecovery,
     send,
     stop,
     history: {
@@ -665,6 +304,12 @@ export function ThreadShell({
     { key: historyKey, cache: messageCacheRef.current },
   );
   const displayMessages = useMemo(() => projectWebuiThreadMessages(messages), [messages]);
+  const preview = useThreadPreview({
+    chatId, previewSessionKey, workspaceScope, temporary, headerActive,
+    filePreviewStore, messageCount: displayMessages.length,
+  });
+  const { shellRef, previewOpen, fileActions, resolveFilePreviewAvailability, openFilePreview } = preview;
+  useEffect(() => setSubmittedViewportTurnId(null), [previewSessionKey]);
   const initialHistoryLoading = loading;
   const showTemporaryChatControl =
     !hideHeader && !session && !loading && !!onTemporaryChatEnabledChange;
@@ -697,20 +342,6 @@ export function ThreadShell({
   }, [chatId, historyKey]);
 
   useEffect(() => {
-    filePreviewWidthRef.current = filePreviewWidth;
-  }, [filePreviewWidth]);
-
-  useEffect(() => {
-    filePreviewResizeCleanupRef.current?.();
-    if (filePreviewCloseTimerRef.current !== null) {
-      window.clearTimeout(filePreviewCloseTimerRef.current);
-      filePreviewCloseTimerRef.current = null;
-    }
-    setClosingPreview(null);
-    setSubmittedViewportTurnId(null);
-  }, [previewSessionKey]);
-
-  useEffect(() => {
     const retained = new Set(temporaryChatIds);
     for (const chatId of retained) knownTemporaryChatIdsRef.current.add(chatId);
     for (const cachedChatId of knownTemporaryChatIdsRef.current) {
@@ -728,54 +359,23 @@ export function ThreadShell({
     setComposerFocusSignal((value) => value + 1);
   }, [setQuotedContext]);
 
-  useEffect(() => {
-    return () => {
-      filePreviewResizeCleanupRef.current?.();
-      if (filePreviewCloseTimerRef.current !== null) {
-        window.clearTimeout(filePreviewCloseTimerRef.current);
-      }
-    };
-  }, []);
-
   const hasAppMentions = displayMessages.some((message) => message.cliApps?.length || message.mcpPresets?.length);
   useEffect(() => {
     if (hasAppMentions) requestMentionCatalogs();
   }, [hasAppMentions, requestMentionCatalogs]);
-  const recordedContextUsage = useMemo(
-    () => latestComposerContextUsage(displayMessages),
-    [displayMessages],
+  const { composerContextUsage, composerContextError, composerRoundUsage } = useThreadUsage(
+    displayMessages, previewSessionKey, isStreaming,
   );
-  const lastCompactionId = [...displayMessages].reverse().find(message => message.kind === "compaction"
-    && message.compaction?.phase === "succeeded")?.compaction?.id;
-  const [measuredContext, setMeasuredContext] = useState<{
-    key: string; compactionId: string | undefined; usage?: ComposerContextUsage; error?: string; visibleTokens?: number;
-  } | null>(null);
-  const needsContextMeasurement = recordedContextUsage === null;
-  useEffect(() => {
-    if (!previewSessionKey || !needsContextMeasurement || displayMessages.length === 0) return;
-    let cancelled = false;
-    const visibleTokens = visibleContextTokens(displayMessages);
-    void client.requestMutation<{ context_tokens: number; context_window_tokens: number; estimated: boolean }>(
-      "session.context_usage", { session_key: previewSessionKey },
-    ).then(value => {
-      if (!cancelled) setMeasuredContext({ key: previewSessionKey, compactionId: lastCompactionId,
-        visibleTokens, usage: { contextTokens: value.context_tokens, contextWindowTokens: value.context_window_tokens, estimated: value.estimated } });
-    }).catch((error: Error) => {
-      if (!cancelled) setMeasuredContext({ key: previewSessionKey, compactionId: lastCompactionId, error: error.message });
-    });
-    return () => { cancelled = true; };
-  }, [client, previewSessionKey, lastCompactionId, needsContextMeasurement, isStreaming, displayMessages.length]);
-  const currentMeasurement = measuredContext?.key === previewSessionKey && measuredContext?.compactionId === lastCompactionId ? measuredContext : null;
-  const composerContextUsage = liveContextUsage(recordedContextUsage ?? currentMeasurement?.usage ?? null, displayMessages, isStreaming, currentMeasurement?.visibleTokens);
-  const composerContextError = needsContextMeasurement ? currentMeasurement?.error : undefined;
-  const composerRoundUsage = useMemo(
-    () => recentComposerRoundUsage(displayMessages),
-    [displayMessages],
-  );
+  const { beginMessageEdit, editBusy, messageEditor } = useMessageEditing({
+    sessionKey: session?.key ?? null, displayMessages, turnActive: messagesReady && isStreaming, resetHistory,
+  });
   const currentGoalState = messagesReady ? goalState : undefined;
   // Recovery decisions gate queued input, not the ledger-owned run state.
   const recoveryNeedsDecision = recoveryState?.status === "awaiting_user"
     || recoveryState?.status === "failed";
+  const recoveryFailure = recoveryState?.reason === "model_request_failed"
+    ? resolveModelRequestFailureCopy({ errorKind: recoveryState.failure_error_kind }, t)
+    : null;
   const currentRunStartedAt = messagesReady ? runStartedAt : null;
   const turnActive = messagesReady && isStreaming;
   const restoredViewportTurnId = useMemo(
@@ -790,9 +390,9 @@ export function ThreadShell({
     : null;
   const viewportTurnId = messagesReady && turnActive
     ? canonicalRunTurnId
-      ?? rememberedViewportTurnId
-      ?? historyActiveTurnId
-      ?? restoredViewportTurnId
+    ?? rememberedViewportTurnId
+    ?? historyActiveTurnId
+    ?? restoredViewportTurnId
     : null;
   const activeTurnStartedHere =
     viewportTurnId !== null && viewportTurnId === submittedViewportTurnId;
@@ -803,140 +403,18 @@ export function ThreadShell({
       current === rememberedViewportTurnId ? null : current,
     );
   }, [chatId, messagesReady, rememberedViewportTurnId, turnActive]);
-  const filePreviewAvailabilityCache = useMemo(
-    () => new Map<string, FilePreviewAvailabilityCacheEntry>(),
-    [previewSessionKey],
-  );
-  const filePreviewAvailabilityRevision = displayMessages.length;
-  const resolveFilePreviewAvailability = useCallback((path: string) => {
-    if (!previewSessionKey) return Promise.resolve(false);
-    const cached = filePreviewAvailabilityCache.get(path);
-    if (
-      cached
-      && (cached.available !== false || cached.revision === filePreviewAvailabilityRevision)
-    ) {
-      return cached.promise;
-    }
-    const request = temporary
-      ? client.requestMutation<{ available: boolean }>("temporary_chat.file_preview", {
-          chat_id: chatId, path, probe: true,
-        }).then((result) => result.available)
-      : fetchFilePreviewAvailability(getToken(), previewSessionKey, path);
-    const pending = request.catch(
-      (error: unknown) => {
-        if (error instanceof ApiError) {
-          if (error.status === 404 && /API route not found/i.test(error.message)) {
-            return true;
-          }
-          if ([400, 403, 404, 413, 415].includes(error.status)) return false;
-        }
-        return false;
-      },
-    );
-    const entry: FilePreviewAvailabilityCacheEntry = {
-      promise: pending,
-      revision: filePreviewAvailabilityRevision,
-    };
-    filePreviewAvailabilityCache.set(path, entry);
-    void pending.then((available) => {
-      if (filePreviewAvailabilityCache.get(path) === entry) {
-        entry.available = available;
-      }
-    });
-    return pending;
-  }, [
-    filePreviewAvailabilityCache,
-    filePreviewAvailabilityRevision,
-    getToken,
-    previewSessionKey,
-    temporary,
-    client,
-    chatId,
-  ]);
-
   const showHeroComposer = displayMessages.length === 0 && !initialHistoryLoading;
   const composerVariant = showHeroComposer ? emptyComposerVariant : "thread";
   // Only unpersisted drafts can choose a project; history pages do not own this state.
   const projectLocked = !!session && session.projectLocked !== false;
   const wasShowingHeroComposerRef = useRef(showHeroComposer);
-  const sessionModelPreset = session?.modelPreset?.trim() || null;
-  const [localModelPreset, setLocalModelPreset] = useState<string | null>(null);
-  const [modelPresetError, setModelPresetError] = useState("");
-  const modelPresetGeneration = useRef(0);
-  useEffect(() => {
-    modelPresetGeneration.current += 1;
-    setLocalModelPreset(null);
-    setModelPresetError("");
-  }, [session?.key, sessionModelPreset]);
-  const configuredPresetNames = useMemo(
-    () => new Set(settings?.model_presets.map((preset) => preset.name) ?? []),
-    [settings],
-  );
-  const activeModelPreset = (
-    (localModelPreset && (!settings || configuredPresetNames.has(localModelPreset))
-      ? localModelPreset
-      : null)
-    || (sessionModelPreset && (!settings || configuredPresetNames.has(sessionModelPreset))
-      ? sessionModelPreset
-      : null)
-    || settings?.agent.model_preset
-    || "default"
-  );
-  useEffect(() => {
-    setModelFallback(null);
-    if (!chatId) return;
-    return client.onChat(chatId, (event) => {
-      if (event.event !== "turn_model_updated") return;
-      if (event.fallback !== true) {
-        // The next turn starts with its configured model, not the previous fallback.
-        setModelFallback(null);
-        return;
-      }
-      const model = event.model_name.trim();
-      if (!model) return;
-      const reauthProvider = typeof event.reauth_provider === "string"
-        ? event.reauth_provider.trim() || undefined : undefined;
-      // A tool loop may report the same fallback repeatedly. Closing the notice
-      // lasts until the next turn/model change, without changing the actual preset.
-      setModelFallback((current) => {
-        if (current?.chatId === chatId && current.model === model) {
-          // An explicit auth rejection is actionable even after dismissing a
-          // generic fallback. A circuit-skipped call must not erase that reason.
-          return reauthProvider && reauthProvider !== current.reauthProvider
-            ? { ...current, reauthProvider, dismissed: false } : current;
-        }
-        return { chatId, model, reauthProvider, dismissed: false };
-      });
-    });
-  }, [activeModelPreset, chatId, client]);
-  const handleModelPresetChange = useCallback((name: string) => {
-    const generation = ++modelPresetGeneration.current;
-    setModelPresetError("");
-    if (!chatId) { setLocalModelPreset(name); return; }
-    void client.sendSystemCommand(chatId, `/model ${name}`).then(() => {
-      if (modelPresetGeneration.current === generation) setLocalModelPreset(name);
-    }).catch((error: unknown) => {
-      if (modelPresetGeneration.current === generation) setModelPresetError(error instanceof Error ? error.message : String(error));
-    });
-  }, [chatId, client]);
-  const modelPresetOptions = useMemo(
-    () => modelPresetOptionsFromSettings(settings),
-    [settings],
-  );
   const availableSlashCommands = useMemo(
     () => temporary && session
       ? slashCommands.filter(({ command }) => command === "/model" || command === "/stop")
       : slashCommands.filter(({ command }) => (!session || !["/ptc", "/temporary"].includes(command))
-        && (command !== "/clear" || session?.key === "websocket:global")),
+        && (command !== "/clear" || conversationRole(session?.key).toolReplies)),
     [slashCommands, temporary, session?.key],
   );
-  const modelBadge = useMemo(
-    () => toModelBadgeInfo(modelName, settings, activeModelPreset),
-    [activeModelPreset, modelName, settings],
-  );
-  const modelBadgeLabel = modelBadge.needsSetup
-    ? t("thread.composer.chooseAI", { defaultValue: "Choose your AI" })
-    : modelBadge.label;
   useEffect(() => {
     if (showHeroComposer && !wasShowingHeroComposerRef.current) {
       setHeroGreetingKey(randomHeroGreetingKey());
@@ -954,28 +432,6 @@ export function ThreadShell({
     },
     [workspaceScope],
   );
-
-  const refreshModelSettings = useCallback(async () => {
-    try {
-      setSettings(await fetchSettings(getToken()));
-    } catch {
-      if (!settingsSnapshot) setSettings(null);
-    }
-  }, [getToken, settingsSnapshot]);
-
-  useEffect(() => {
-    if (settingsSnapshot) {
-      setSettings(settingsSnapshot);
-      return;
-    }
-    if (!settingsLoading) void refreshModelSettings();
-  }, [refreshModelSettings, settingsLoading, settingsSnapshot]);
-
-  useEffect(() => {
-    return client.onRuntimeModelUpdate(() => {
-      void refreshModelSettings();
-    });
-  }, [client, refreshModelSettings]);
 
   const lastRunTurnId = chatId ? client.getRunTurnId(chatId) : null;
   const completedRunTurnId = chatId && lastRunTurnId && client.isRunCompleted(chatId, lastRunTurnId)
@@ -1140,7 +596,7 @@ export function ThreadShell({
     }
     if (name === "/model" && !argument) return null;
     if (name === "/model") {
-      const selected = ["default", ...configuredPresetNames].find(value => value.toLowerCase() === parts.join(" ").toLowerCase());
+      const selected = resolveModelPresetSelection(settings, parts.join(" "));
       if (!selected) { setControlError(t("thread.composer.slash.modelUsage")); return false; }
       handleModelPresetChange(selected); return true;
     }
@@ -1148,7 +604,7 @@ export function ThreadShell({
     if (session || !change) { setControlError(t("thread.composer.slash.creationOnly")); return false; }
     if (argument !== "on" && argument !== "off") { setControlError(t("thread.composer.slash.toggleUsage", { command: name })); return false; }
     change(argument === "on"); return true;
-  }, [session, turnActive, hasPendingToolCalls, t, workspaceScope, onWorkspaceScopeChange, configuredPresetNames, handleModelPresetChange, onPtcModeEnabledChange, onTemporaryChatEnabledChange]);
+  }, [session, turnActive, hasPendingToolCalls, t, workspaceScope, onWorkspaceScopeChange, settings, handleModelPresetChange, onPtcModeEnabledChange, onTemporaryChatEnabledChange]);
 
   const handleWelcomeSend = useCallback(
     async (content: string, images?: SendAttachment[], options?: SendOptions) => {
@@ -1208,172 +664,14 @@ export function ThreadShell({
     handleThreadSend(formatQuestionAnswer(question, answer), undefined,
       turnActive ? { continueActiveTurn: true } : undefined), [handleThreadSend, turnActive]);
 
-  const loadTemporaryFilePreview = useCallback((path: string) =>
-    client.requestMutation<FilePreviewPayload>("temporary_chat.file_preview", {
-      chat_id: chatId, path,
-    }).catch((error: unknown) => {
-      if (error instanceof Error && "status" in error && typeof error.status === "number") {
-        throw new ApiError(error.status, error.message);
-      }
-      throw error;
-    }), [client, chatId]);
-
-  const handleCloseFilePreview = useCallback(() => {
-    if (!previewState.activeId || filePreviewClosing) return;
-    filePreviewResizeCleanupRef.current?.();
-    setClosingPreview({ key: previewStoreKey, state: previewState });
-    // Record the closed state immediately, even if navigation interrupts the animation.
-    closePreview();
-    filePreviewCloseTimerRef.current = window.setTimeout(() => {
-      filePreviewCloseTimerRef.current = null;
-      setClosingPreview(null);
-    }, FILE_PREVIEW_CLOSE_ANIMATION_MS);
-  }, [previewStoreKey, filePreviewClosing, previewState, closePreview]);
-
-  const cancelPreviewClose = useCallback(() => {
-    filePreviewResizeCleanupRef.current?.();
-    if (filePreviewCloseTimerRef.current !== null) {
-      window.clearTimeout(filePreviewCloseTimerRef.current);
-      filePreviewCloseTimerRef.current = null;
-    }
-    setClosingPreview(null);
-  }, []);
-
-  const handleOpenFilePreview = useCallback((path: string) => {
-    cancelPreviewClose();
-    openFile(path);
-  }, [cancelPreviewClose, openFile]);
-
-  const handleClosePreviewTab = useCallback((id: string) => {
-    if (previewState.tabs.length === 1) handleCloseFilePreview();
-    else {
-      filePreviewResizeCleanupRef.current?.();
-      closeTab(id);
-    }
-  }, [previewState.tabs.length, handleCloseFilePreview, closeTab]);
-
-  // Markdown blocks can retain rendered links while their text is unchanged.
-  // Keep their callback stable, but always act on the current pane/session state.
-  const openFilePreviewRef = useRef(handleOpenFilePreview);
-  openFilePreviewRef.current = handleOpenFilePreview;
-  const openFilePreview = useCallback((path: string) => openFilePreviewRef.current(path), []);
-  const resolveFileMetadata = useCallback((path: string) => {
-    if (!previewSessionKey) return Promise.reject(new Error("No active session"));
-    return temporary
-      ? client.requestMutation<FileReferenceMetadata>("temporary_chat.file_preview", {
-        chat_id: chatId, path, metadata: true,
-      })
-      : fetchFileReferenceMetadata(getToken(), previewSessionKey, path);
-  }, [chatId, client, getToken, previewSessionKey, temporary]);
-  const loadFilePreview = useCallback((path: string) => {
-    if (!previewSessionKey) return Promise.reject(new Error("No active session"));
-    return temporary ? loadTemporaryFilePreview(path) : fetchFilePreview(getToken(), previewSessionKey, path);
-  }, [previewSessionKey, temporary, loadTemporaryFilePreview, getToken]);
-  const filePreviews = useMemo(() => createFilePreviewResource(loadFilePreview), [loadFilePreview]);
-  const fileActions = useMemo(() => ({
-    resolveMetadata: resolveFileMetadata,
-    loadPreview: filePreviews.load,
-  }), [resolveFileMetadata, filePreviews]);
-
-  useEffect(() => {
-    if (!previewOpen || !headerActive) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
-      // Let a dialog/menu above the pane consume Escape without closing this preview.
-      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]')) return;
-      event.preventDefault();
-      guardPreview(handleCloseFilePreview);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [previewOpen, headerActive, handleCloseFilePreview, browserDirty]);
-
-  const handleFilePreviewResizeStart = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-    filePreviewResizeCleanupRef.current?.();
-    event.preventDefault();
-    event.stopPropagation();
-    const panel = event.currentTarget.closest<HTMLElement>("[data-file-preview-panel]");
-    const shellRect = shellRef.current?.getBoundingClientRect();
-    const rightEdge = shellRect?.right ?? window.innerWidth;
-    const maxWidth = maxFilePreviewWidth(shellRect?.width ?? window.innerWidth);
-    const originalBodyCursor = document.body.style.cursor;
-    const originalBodyUserSelect = document.body.style.userSelect;
-    const originalPanelTransition = panel?.style.transition ?? "";
-    const frameElement = panel?.querySelector("iframe");
-    const originalFramePointerEvents = frameElement?.style.pointerEvents ?? "";
-    let nextWidth = filePreviewWidthRef.current;
-    let frame: number | null = null;
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    if (panel) panel.style.transition = "none";
-    if (frameElement) frameElement.style.pointerEvents = "none";
-
-    const applyWidth = (clientX: number) => {
-      nextWidth = clampFilePreviewWidth(rightEdge - clientX, maxWidth);
-      filePreviewWidthRef.current = nextWidth;
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = null;
-        panel?.style.setProperty("--file-preview-width", `${nextWidth}px`);
-        panel?.style.setProperty("--file-preview-slot-width", `${nextWidth}px`);
-      });
-    };
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      moveEvent.preventDefault();
-      applyWidth(moveEvent.clientX);
-    };
-    const stopResize = (commit: boolean) => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame);
-        frame = null;
-      }
-      panel?.style.setProperty("--file-preview-width", `${nextWidth}px`);
-      panel?.style.setProperty("--file-preview-slot-width", `${nextWidth}px`);
-      if (panel) panel.style.transition = originalPanelTransition;
-      if (frameElement) frameElement.style.pointerEvents = originalFramePointerEvents;
-      if (commit) setFilePreviewWidth(nextWidth);
-      document.body.style.cursor = originalBodyCursor;
-      document.body.style.userSelect = originalBodyUserSelect;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-      filePreviewResizeCleanupRef.current = null;
-    };
-    const handlePointerUp = () => stopResize(true);
-    filePreviewResizeCleanupRef.current = () => stopResize(false);
-
-    applyWidth(event.clientX);
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-  }, [setFilePreviewWidth]);
-
-  useEffect(() => {
-    if (!previewOpen) return;
-    const clampToShell = () => {
-      const shellWidth = shellRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-      const maxWidth = maxFilePreviewWidth(shellWidth);
-      setFilePreviewMaxWidth(maxWidth);
-    };
-    clampToShell();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(clampToShell);
-    if (shellRef.current) observer?.observe(shellRef.current);
-    window.addEventListener("resize", clampToShell);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", clampToShell);
-    };
-  }, [previewOpen]);
-
   const forkFromSavedContext = useCallback(
     async (beforeUserIndex: number) => {
-      if (!chatId || !onForkChat) return;
+      if (!chatId || !onForkChat || !conversationRole(session?.key).canFork) return;
       const forkedChatId = await onForkChat(chatId, beforeUserIndex);
       if (!forkedChatId) return;
       messageCacheRef.current.delete(forkedChatId);
     },
-    [chatId, onForkChat],
+    [chatId, onForkChat, session?.key],
   );
   const handleForkFromMessage = useCallback((index: number) => {
     if (displayMessages.some(hasToolHistory)) {
@@ -1383,31 +681,6 @@ export function ThreadShell({
     }
   }, [displayMessages, forkFromSavedContext]);
   useEffect(() => setPendingForkIndex(null), [chatId]);
-
-  const beginMessageEdit = useCallback((message: UIMessage) => {
-    if (!session?.key) return;
-    setEditingMessageOwner(session.key);
-    setEditingMessage(message); setEditedText(message.content); setEditError("");
-  }, [session?.key]);
-  const editingHasToolEffects = useMemo(() => {
-    if (!editingMessage) return false;
-    const index = displayMessages.findIndex(message => message.id === editingMessage.id);
-    return displayMessages.slice(index + 1).some(hasToolHistory);
-  }, [displayMessages, editingMessage]);
-  const submitMessageEdit = async () => {
-    if (!session?.key || editingMessageOwner !== session.key || !editingMessage?.turnId || !editedText.trim() || editBusy || turnActive) return;
-    const owner = editOwnerRef.current;
-    setEditBusy(true); setEditError("");
-    try {
-      const result = await client.requestMutation<{ turn_id: string }>("instance.action", { action: "conversations.edit", values: {
-        session_key: session.key, turn_id: editingMessage.turnId, content: editedText,
-      } });
-      if (editOwnerRef.current !== owner) return;
-      setEditingMessage(null);
-      resetHistory(result.turn_id);
-    } catch (reason) { if (editOwnerRef.current === owner) setEditError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { if (editOwnerRef.current === owner) setEditBusy(false); }
-  };
 
   const composer = (
     <div className={composerVariant === "hero" ? "thread-composer-stack is-hero" : "thread-composer-stack"}>
@@ -1422,13 +695,12 @@ export function ThreadShell({
           onDismiss={() => setModelFallback((current) => current && { ...current, dismissed: true })}
         />
       ) : null}
-      {recoveryState ? (
-        <RecoveryNotice
-          state={recoveryState}
-          onContinue={continueRecovery}
-          onDismiss={dismissRecovery}
-          onOpenSettings={onOpenModelSettings}
-        />
+      {recoveryNeedsDecision && !turnActive ? (
+        <p role={recoveryFailure ? "alert" : "status"} className="thread-composer-inline-status px-3 text-xs text-muted-foreground">
+          {recoveryFailure ? `${recoveryFailure.title} ${recoveryFailure.body}` : recoveryState?.can_continue === false
+            ? t("recovery.failedHelp")
+            : t("recovery.interrupted")}
+        </p>
       ) : null}
       {streamError && !hasInlineDeliveryError(messages, streamError) ? (
         <StreamErrorNotice
@@ -1442,26 +714,23 @@ export function ThreadShell({
       ) : null}
       <SubagentTaskDock inputKey={latestSubagentInputKey(displayMessages)} />
       {controlError && <p role="alert" className="px-3 text-sm text-destructive">{controlError}</p>}
+      {(cliAppsError || mcpPresetsError) && <p role="status" className="px-3 text-sm text-destructive">{[cliAppsError, mcpPresetsError].filter(Boolean).join("; ")}</p>}
+      {modelSettingsError && <p role="status" className="px-3 text-sm text-destructive">{modelSettingsError}</p>}
       {modelPresetError && <p role="alert" className="px-3 text-sm text-destructive">{modelPresetError}</p>}
       <UserQuestionQueue isStreaming={turnActive} onStop={stop}>
-      {session ? (
         <ThreadComposer
-          key={`${draftKey}:${restoredFirstDraft?.chatId === chatId ? restoredFirstDraft.revision : 0}`}
+          active={composerActive}
+          key={session ? `${draftKey}:${restoredFirstDraft?.chatId === chatId ? restoredFirstDraft.revision : 0}` : draftKey}
           draftKey={draftKey}
           draftStore={draftStore}
           persistDraft={persistDraft}
-          onSend={handleThreadSend}
-          disabled={!chatId}
+          onSend={session ? handleThreadSend : handleWelcomeSend}
+          disabled={session ? !chatId : booting}
           inputAriaLabel={composerInputAriaLabel}
           isStreaming={turnActive}
-          activeTurnId={turnActive && chatId ? client.getRunTurnId(chatId) ?? historyActiveTurnId : null}
-          completedTurnIds={messagesReady && !recoveryNeedsDecision
-            && chatId && !client.hasUnsettledRun(chatId) ? queueCompletedTurnIds : undefined}
-          placeholder={
-            composerVariant === "hero"
-              ? t("thread.composer.placeholderHero")
-              : t("thread.composer.placeholderThread")
-          }
+          activeTurnId={session && turnActive && chatId ? client.getRunTurnId(chatId) ?? historyActiveTurnId : null}
+          completedTurnIds={session && messagesReady && !recoveryNeedsDecision && chatId && !client.hasUnsettledRun(chatId) ? queueCompletedTurnIds : undefined}
+          placeholder={!session && booting ? t("thread.composer.placeholderOpening") : composerVariant === "hero" || !session ? t("thread.composer.placeholderHero") : t("thread.composer.placeholderThread")}
           modelLabel={modelBadgeLabel}
           modelDetail={modelBadge.model}
           modelPreset={activeModelPreset}
@@ -1472,17 +741,19 @@ export function ThreadShell({
           modelNeedsSetup={modelBadge.needsSetup}
           onModelBadgeClick={modelBadge.needsSetup ? onOpenModelSettings : undefined}
           onManageModels={onOpenModelSettings}
+          showContextUsage={session !== null}
           contextUsage={composerContextUsage}
           contextUsageError={composerContextError}
           recentRoundUsage={composerRoundUsage}
-          variant={composerVariant}
+          variant={session ? composerVariant : "hero"}
           slashCommands={availableSlashCommands}
           onMentionSearch={requestMentionCatalogs}
           cliApps={cliApps}
           mcpPresets={mcpPresets}
           sessions={mentionSessions}
           skills={skills}
-          onStop={stop}
+          onStop={session ? stop : undefined}
+          onContinue={session && recoveryNeedsDecision && recoveryState?.can_continue !== false && !turnActive ? continueRecovery : undefined}
           onInspectAttachment={inspectAttachment}
           goalState={currentGoalState}
           onFavoriteWorkspaceProject={favoriteWorkspaceProject}
@@ -1498,68 +769,13 @@ export function ThreadShell({
           workspaceProjectLocked={projectLocked}
           workspaceError={workspaceError}
           onWorkspaceScopeChange={onWorkspaceScopeChange}
-          pendingQueueKey={temporary ? null : chatId}
+          pendingQueueKey={session && !temporary ? chatId : null}
           ingressLimits={ingressLimits}
           quotedContext={quotedContext}
-          focusRequest={composerFocusSignal}
+          focusRequest={session ? composerFocusSignal : undefined}
           onQuotedContextChange={setQuotedContext}
+          surfaceRef={session ? undefined : composerSurfaceRef}
         />
-      ) : (
-        <ThreadComposer
-          key={draftKey}
-          draftKey={draftKey}
-          draftStore={draftStore}
-          persistDraft={persistDraft}
-          onSend={handleWelcomeSend}
-          disabled={booting}
-          inputAriaLabel={composerInputAriaLabel}
-          isStreaming={turnActive}
-          placeholder={
-            booting
-              ? t("thread.composer.placeholderOpening")
-              : t("thread.composer.placeholderHero")
-          }
-          modelLabel={modelBadgeLabel}
-          modelDetail={modelBadge.model}
-          modelPreset={activeModelPreset}
-          modelPresets={modelPresetOptions}
-          onModelPresetChange={handleModelPresetChange}
-          modelProvider={modelBadge.provider}
-          modelProviderLabel={modelBadge.providerLabel}
-          modelNeedsSetup={modelBadge.needsSetup}
-          onModelBadgeClick={modelBadge.needsSetup ? onOpenModelSettings : undefined}
-          onManageModels={onOpenModelSettings}
-          contextUsage={composerContextUsage}
-          contextUsageError={composerContextError}
-          recentRoundUsage={composerRoundUsage}
-          variant="hero"
-          slashCommands={availableSlashCommands}
-          onMentionSearch={requestMentionCatalogs}
-          cliApps={cliApps}
-          mcpPresets={mcpPresets}
-          sessions={mentionSessions}
-          skills={skills}
-          surfaceRef={composerSurfaceRef}
-          onInspectAttachment={inspectAttachment}
-          goalState={currentGoalState}
-          onFavoriteWorkspaceProject={favoriteWorkspaceProject}
-          onResolveWorkspaceProject={resolveWorkspaceProject}
-          onLoadWorkspaceProjects={loadWorkspaceProjects}
-          workspacePickerLayoutAnchor={conversationElement}
-          onBrowseWorkspaceDirectories={browseWorkspaceDirectories}
-          workspaceScope={workspaceScope}
-          workspaceControlsHidden={temporary}
-          workspaceDefaultScope={workspaceDefaultScope}
-          workspaceControls={workspaceControls}
-          workspaceScopeDisabled={workspaceScopeDisabled}
-          workspaceProjectLocked={projectLocked}
-          workspaceError={workspaceError}
-          onWorkspaceScopeChange={onWorkspaceScopeChange}
-          ingressLimits={ingressLimits}
-          quotedContext={quotedContext}
-          onQuotedContextChange={setQuotedContext}
-        />
-      )}
       </UserQuestionQueue>
     </div>
   );
@@ -1572,12 +788,13 @@ export function ThreadShell({
     </div>
   );
   const sessionInfoAction = historyKey ? (
-    <SessionInfoPopover client={client} sessionKey={historyKey} token={token} title={title} />
+    <SessionAutomations client={client} sessionKey={historyKey} token={token} title={title} />
   ) : undefined;
   const promptNavigatorAction = historyKey ? (
     <PromptNavigator
       messages={displayMessages}
       prompts={promptNavigation.prompts}
+      source={promptNavigation.source}
       onJumpToPrompt={(promptId) => viewportRef.current?.jumpToUserPrompt(promptId)}
     />
   ) : undefined;
@@ -1589,12 +806,12 @@ export function ThreadShell({
       onToggleSidebar={onToggleSidebar}
       theme={theme}
       onToggleTheme={onToggleTheme}
-      hideSidebarToggleForHostChrome={hideSidebarToggleForHostChrome}
+      hideDesktopSidebarToggle={hideDesktopSidebarToggle}
       hideSidebarToggle={hideSidebarToggle}
       hideThemeButton={hideThemeButton}
       hideTitle={hideHeaderTitle}
-      actions={<>{headerActions}{session?.key === "websocket:global" && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="host-no-drag h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
-        onClick={() => guardPreview(() => { cancelPreviewClose(); openBrowser(); })}><FolderOpen className="h-4 w-4" /></Button></HoverHint></>}
+      actions={<>{headerActions}{workspaceOpen && previewSessionKey && !temporary && <HoverHint content={t("workspace.trace")}><Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("workspace.trace")} onClick={() => workspaceOpen("trace", { sessionKey: previewSessionKey, scope: workspaceScope })}><Route className="h-4 w-4" /></Button></HoverHint>}{session && conversationRole(session.key).toolReplies && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
+        onClick={preview.openFiles}><FolderOpen className="h-4 w-4" /></Button></HoverHint></>}
       minimal={!session && !loading}
       promptNavigatorAction={promptNavigatorAction}
       sessionInfoAction={sessionInfoAction}
@@ -1615,128 +832,93 @@ export function ThreadShell({
       historyEnabled={webuiCapabilities.includes("webui.subagents.history.v1")}
       active={composerActive}
       enabled={!temporary && !!session?.key.startsWith("websocket:") && webuiCapabilities.includes("webui.subagents.v1")}>
-    <QuestionReplyProvider messages={displayMessages} send={messagesReady ? answerQuestion : undefined}>
-    <section ref={shellRef} data-preview-open={previewOpen || undefined} className="thread-preview-layout relative flex min-h-0 flex-1 overflow-hidden">
-      <div ref={setConversationElement} className={cn(
-        "thread-conversation relative flex min-w-0 flex-1 flex-col overflow-hidden",
-        headerPortalTarget === undefined && !hideHeader && "thread-workspace",
-      )}>
-        {hideHeaderTitle && inlineHandle && !temporary && session?.handle ? (
-          <div
-            aria-label={`Session @${session.handle.name}`}
-            className="flex h-8 shrink-0 items-center px-3 text-[12px]"
-          >
-            <span
-              className="shrink-0"
+      <QuestionReplyProvider messages={displayMessages} send={messagesReady ? answerQuestion : undefined}>
+        <section ref={shellRef} data-preview-open={previewOpen || undefined} className="thread-preview-layout relative flex min-h-0 flex-1 overflow-hidden">
+          <div ref={setConversationElement} className={cn(
+            "thread-conversation relative flex min-w-0 flex-1 flex-col overflow-hidden",
+            headerPortalTarget === undefined && !hideHeader && "thread-workspace",
+          )}>
+            {hideHeaderTitle && inlineHandle && !temporary && session?.handle ? (
+              <div
+                aria-label={`Session @${session.handle.name}`}
+                className="flex h-8 shrink-0 items-center px-3 text-[12px]"
+              >
+                <span
+                  className="shrink-0"
+                >
+                  <SessionHandleLabel id={session.handle.id}>
+                    @{session.handle.name}
+                  </SessionHandleLabel>
+                </span>
+              </div>
+            ) : null}
+            {headerPortalTarget === undefined ? threadHeader : null}
+            <FilePreviewAvailabilityProvider
+              resolve={previewSessionKey ? resolveFilePreviewAvailability : undefined}
             >
-              <SessionHandleLabel id={session.handle.id}>
-                @{session.handle.name}
-              </SessionHandleLabel>
-            </span>
+              <FileActionsProvider value={previewSessionKey ? fileActions : undefined}>
+                <ThreadViewport
+                  ref={viewportRef}
+                  messages={displayMessages}
+                  navigation={promptNavigation}
+                  navigationFrame={navigationFrame}
+                  temporary={temporary}
+                  isStreaming={turnActive}
+                  runStartedAt={currentRunStartedAt}
+                  retryStatus={retryStatus}
+                  emptyState={emptyState}
+                  initialLoading={initialHistoryLoading}
+                  composer={composerPortalTarget === undefined ? composer : null}
+                  activeTurnId={viewportTurnId}
+                  activeTurnStartedHere={activeTurnStartedHere}
+                  conversationKey={historyKey}
+                  conversationReady={messagesReady}
+                  showScrollToBottomButton={!!session}
+                  cliApps={cliApps}
+                  mcpPresets={mcpPresets}
+                  slashCommands={availableSlashCommands}
+                  forkBoundaryMessageCount={forkBoundaryMessageCount}
+                  hasMoreBefore={hasMoreBefore}
+                  loadingOlder={loadingOlder}
+                  olderError={olderError}
+                  userMessageOffset={userMessageOffset}
+                  onLoadOlder={loadOlder}
+                  traceDetailScope={historyKey}
+                  onLoadTraceDetails={messagesReady ? loadTraceDetails : undefined}
+                  onOpenFilePreview={previewSessionKey ? openFilePreview : undefined}
+                  onForkFromMessage={onForkChat && conversationRole(session?.key).canFork ? handleForkFromMessage : undefined}
+                  onEditMessage={!temporary && !editBusy ? beginMessageEdit : undefined}
+                  messageEditor={messageEditor}
+                  onQuoteSelection={session ? handleQuoteSelection : undefined}
+                />
+              </FileActionsProvider>
+            </FilePreviewAvailabilityProvider>
           </div>
-        ) : null}
-        {headerPortalTarget === undefined ? threadHeader : null}
-        <FilePreviewAvailabilityProvider
-          resolve={previewSessionKey ? resolveFilePreviewAvailability : undefined}
-        >
-          <FileActionsProvider value={previewSessionKey ? fileActions : undefined}>
-          <ThreadViewport
-            ref={viewportRef}
-            messages={displayMessages}
-            navigation={promptNavigation}
-            navigationFrame={navigationFrame}
-            temporary={temporary}
-            isStreaming={turnActive}
-            runStartedAt={currentRunStartedAt}
-            retryStatus={retryStatus}
-            emptyState={emptyState}
-            initialLoading={initialHistoryLoading}
-            composer={composerPortalTarget === undefined ? composer : null}
-            activeTurnId={viewportTurnId}
-            activeTurnStartedHere={activeTurnStartedHere}
-            conversationKey={historyKey}
-            conversationReady={messagesReady}
-            showScrollToBottomButton={!!session}
-            cliApps={cliApps}
-            mcpPresets={mcpPresets}
-            slashCommands={availableSlashCommands}
-            forkBoundaryMessageCount={forkBoundaryMessageCount}
-            hasMoreBefore={hasMoreBefore}
-            loadingOlder={loadingOlder}
-            olderError={olderError}
-            userMessageOffset={userMessageOffset}
-            onLoadOlder={loadOlder}
-            traceDetailScope={historyKey}
-            onLoadTraceDetails={messagesReady ? loadTraceDetails : undefined}
-            onOpenFilePreview={previewSessionKey ? openFilePreview : undefined}
-            onForkFromMessage={onForkChat ? handleForkFromMessage : undefined}
-            onEditMessage={!temporary && !editBusy ? beginMessageEdit : undefined}
-            messageEditor={editingMessage && editingMessageOwner === session?.key ? {
-              messageId: editingMessage.id,
-              content: <InlineMessageEditor value={editedText} busy={editBusy || turnActive} error={editError}
-                hasToolEffects={editingHasToolEffects} onChange={setEditedText}
-                onCancel={() => setEditingMessage(null)} onSubmit={() => void submitMessageEdit()} />,
-            } : undefined}
-            onQuoteSelection={session ? handleQuoteSelection : undefined}
-          />
-          </FileActionsProvider>
-        </FilePreviewAvailabilityProvider>
-      </div>
-      {headerPortalTarget && headerActive
-        ? createPortal(threadHeader, headerPortalTarget)
-        : null}
-      {composerPortalTarget ? createPortal(
-        <div
-          hidden={!composerActive}
-          aria-hidden={!composerActive}
-          data-testid={composerActive ? "active-pane-composer" : undefined}
-        >
-          {composer}
-        </div>,
-        composerPortalTarget,
-      ) : null}
-      {activePreview ? (
-        <FileActionsProvider key={previewStoreKey} value={fileActions}>
-        <PreviewPane
-          key={previewStoreKey}
-          tabs={visiblePreview.tabs}
-          activeId={activePreview.id}
-          width={filePreviewWidth}
-          isClosing={filePreviewClosing}
-          onSelect={id => guardPreview(() => selectTab(id))}
-          onCloseTab={id => guardPreview(() => handleClosePreviewTab(id))}
-          onClose={() => guardPreview(handleCloseFilePreview)}
-          onResizeStart={handleFilePreviewResizeStart}
-        >
-          {activePreview.kind === "browser" ? <WorkspaceFiles key={`${previewStoreKey}:${workspaceScope?.project_path ?? "default"}`} client={client} sessionKey={previewSessionKey} workspaceScope={workspaceScope} onDirtyChange={setBrowserDirty} /> : previewSessionKey ? <FilePreviewPanel
-            key={activePreview.id}
-            sessionKey={previewSessionKey}
-            path={activePreview.value}
-            token={token}
-            loadPreview={filePreviews.load}
-            initialPreview={filePreviews.peek(activePreview.value)}
-            onOpenFilePreview={openFilePreview}
-            onResolvePath={resolveFile}
-          /> : null}
-        </PreviewPane>
-        </FileActionsProvider>
-      ) : null}
-    </section>
-    <AlertDialog open={pendingForkIndex !== null} onOpenChange={open => { if (!open) setPendingForkIndex(null); }}>
-      <AlertDialogContent data-history-effects-warning>
-        <AlertDialogHeader><AlertDialogTitle>{t("thread.historyEffects.title")}</AlertDialogTitle>
-          <AlertDialogDescription className="text-destructive">{t("thread.historyEffects.description")}</AlertDialogDescription></AlertDialogHeader>
-        <AlertDialogFooter><AlertDialogCancel>{t("files.cancel")}</AlertDialogCancel>
-          <AlertDialogAction onClick={() => { if (pendingForkIndex !== null) void forkFromSavedContext(pendingForkIndex); setPendingForkIndex(null); }}>{t("message.forkFromHere")}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    <AlertDialog open={pendingPreviewAction !== null} onOpenChange={open => { if (!open) setPendingPreviewAction(null); }}>
-      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("files.discardTitle")}</AlertDialogTitle><AlertDialogDescription>{t("files.discardDescription")}</AlertDialogDescription></AlertDialogHeader>
-        <AlertDialogFooter><AlertDialogCancel>{t("files.cancel")}</AlertDialogCancel><AlertDialogAction onClick={() => { setBrowserDirty(false); pendingPreviewAction?.(); setPendingPreviewAction(null); }}>{t("files.discard")}</AlertDialogAction></AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    </QuestionReplyProvider>
+          {headerPortalTarget && headerActive
+            ? createPortal(threadHeader, headerPortalTarget)
+            : null}
+          {composerPortalTarget ? createPortal(
+            <div
+              hidden={!composerActive}
+              aria-hidden={!composerActive}
+              data-testid={composerActive ? "active-pane-composer" : undefined}
+            >
+              {composer}
+            </div>,
+            composerPortalTarget,
+          ) : null}
+          <ThreadPreview controller={preview} />
+        </section>
+        <AlertDialog open={pendingForkIndex !== null} onOpenChange={open => { if (!open) setPendingForkIndex(null); }}>
+          <AlertDialogContent data-history-effects-warning>
+            <AlertDialogHeader><AlertDialogTitle>{t("thread.historyEffects.title")}</AlertDialogTitle>
+              <AlertDialogDescription className="text-destructive">{t("thread.historyEffects.description")}</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>{t("files.cancel")}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { if (pendingForkIndex !== null) void forkFromSavedContext(pendingForkIndex); setPendingForkIndex(null); }}>{t("message.forkFromHere")}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </QuestionReplyProvider>
     </SubagentTasksProvider>
   );
 }

@@ -14,11 +14,10 @@ for (const width of [314, 390, 1440]) for (const dark of [false, true]) {
     await page.setViewportSize({ width, height: width === 314 ? 647 : 844 });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.addInitScript(() => { localStorage.setItem("cirno.locale", "en"); });
-    await page.route("**/api/commands", (route) => route.fulfill({ json: { commands: [] } }));
+    await page.route("**/v0/commands", (route) => route.fulfill({ json: { commands: [] } }));
     let releaseHistory!: () => void;
     const historyGate = new Promise<void>((resolve) => { releaseHistory = resolve; });
-    await page.route("**/api/sessions/*/webui-thread?*", async (route) => {
+    await page.route("**/v0/sessions/*/webui-thread?*", async (route) => {
       await historyGate;
       await route.fulfill({ json: history });
     });

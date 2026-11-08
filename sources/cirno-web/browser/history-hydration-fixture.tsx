@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { settings } from "@/dev/gallery/settings";
 import { CirnoClient } from "@/lib/cirno-client";
-import type { ChatSummary, ConnectionStatus } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { ConnectionStatus } from "@/lib/contracts/transport";
 import { ClientProvider } from "@/providers/ClientProvider";
 
 const sessions: ChatSummary[] = ["a", "b"].map((suffix) => ({

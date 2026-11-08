@@ -1,9 +1,10 @@
+import { seedPreviewPreferences } from "./preference-driver";
 import { expect, test } from "@playwright/test";
 
 test.use({ reducedMotion: "reduce" });
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("cirno.locale", "en"));
-  await page.route("**/api/commands", route => route.fulfill({ json: { commands: [] } }));
+  await seedPreviewPreferences(page, { language: "en" });
+  await page.route("**/v0/commands", route => route.fulfill({ json: { commands: [] } }));
 });
 
 for (const width of [1280, 390]) for (const variant of ["hero", "thread", "locked-thread"]) for (const permission of ["Full Access", "Default Permission"]) {
@@ -47,6 +48,8 @@ for (const width of [1280, 390]) for (const variant of ["hero", "thread", "locke
 test("a visible permission hint stays above the composer as a locked-thread draft grows", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 600 });
   await page.goto("/browser/fixture.html?case=mobile-chat-layout&no-context");
+  // Force a wrapped hint taller than the footer clearance, exercising the top placement.
+  await page.addStyleTag({ content: ':root [role="tooltip"] { max-width: 12rem; }' });
   const input = page.getByRole("textbox", { name: "Message input" });
   const hint = page.locator("[data-radix-popper-content-wrapper] > [data-state]");
   await input.fill("Keep this draft visible.");

@@ -7,7 +7,6 @@ import sys
 from typing import Any
 
 import pytest
-
 from cirno_core.bus.events import OutboundMessage
 from cirno_server.channels._setup import channel_setup_spec
 from cirno_server.channels.base import BaseChannel

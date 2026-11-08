@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
-import { MessageBubble } from "@/components/MessageBubble";
-import { AppearanceSettingsView } from "@/components/settings/overview/AppearanceSettingsView";
+import { MessageBubble } from "@/features/messages";
+import { AppearanceSettingsView } from "@/features/settings/overview/AppearanceSettingsView";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { DiffSyntaxHighlight } from "@/components/thread/activity/DiffSyntaxHighlight";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { useReadingTypography } from "@/hooks/useReadingTypography";
-import { readLocalPreferences, writeLocalPreferences } from "@/lib/local-preferences";
-import type { ChatSummary, UIMessage } from "@/lib/types";
+import { readPreferences, writePreferences } from "@/features/preferences/store";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const session: ChatSummary = {
   key: "websocket:typography", channel: "websocket", chatId: "typography",
@@ -78,17 +79,17 @@ const messages: UIMessage[] = [
 export function TypographyFixture() {
   useReadingTypography();
   const { theme, preference, setTheme } = useTheme();
-  const [preferences, setPreferences] = useState(readLocalPreferences);
+  const [preferences, setPreferences] = useState(readPreferences);
   const [sent, setSent] = useState<UIMessage[]>([]);
   const previewMessages = new URLSearchParams(window.location.search).has("stress")
     ? messages.map((message) => message.role === "assistant" ? { ...message, content: content + stressContent } : message)
     : messages;
-  useEffect(() => writeLocalPreferences(preferences), [preferences]);
+  useEffect(() => writePreferences(preferences), [preferences]);
   return <ThemeProvider theme={theme}>
     <main className="h-full overflow-y-auto">
       <div className="settings-grid mx-auto py-6">
-        <AppearanceSettingsView themePreference={preference} onChangeTheme={setTheme} localPrefs={preferences}
-          onChangeLocalPrefs={setPreferences} />
+        <AppearanceSettingsView themePreference={preference} onChangeTheme={setTheme} displayPreferences={preferences}
+          onChangePreferences={setPreferences} />
       </div>
       <section className="mx-auto max-w-[var(--content-column-width)] space-y-6 px-4 pb-8" aria-label="Reading preview">
         {[...previewMessages, ...sent].map((message) => <MessageBubble key={message.id} message={message} />)}

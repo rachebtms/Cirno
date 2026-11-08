@@ -7,10 +7,12 @@ import json
 import httpx
 import pytest
 
-from cirno_core.config.schema import Config, ProvidersConfig
-from cirno_core.providers.base import ProviderCallContext
+from cirno_core.config.schema import Config
+from cirno_core.config.providers import ProvidersConfig
+from cirno_core.providers.contracts import ProviderCallContext
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import PROVIDERS, ModelAPICapabilities, find_by_name
+from cirno_core.providers.registry import PROVIDERS, find_by_name
+from cirno_core.providers.model_api import ModelAPICapabilities
 
 
 def test_opencode_config_fields_exist() -> None:

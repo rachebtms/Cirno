@@ -1,3 +1,4 @@
+import { migrateBrowserCirnoIdentity } from "./lib/migrate-cirno-identity";
 import ReactDOM from "react-dom/client";
 
 import App from "./App";
@@ -36,8 +37,9 @@ async function renderWebui(container: HTMLElement) {
       if (link.sheet) ready();
     }));
   await Promise.all([initializeI18n(), ...styles]);
+  const migrationErrors = migrateBrowserCirnoIdentity();
   /* StrictMode disabled: dev double-invokes state updaters; delta accumulation must stay pure — see useCirnoStream. */
-  ReactDOM.createRoot(container).render(<App />);
+  ReactDOM.createRoot(container).render(<App migrationErrors={migrationErrors} />);
 }
 
 void renderWebui(root);

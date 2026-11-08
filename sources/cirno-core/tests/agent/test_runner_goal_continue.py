@@ -3,11 +3,12 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.config.agents import AgentDefaults
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
 
-from agent.runner_helpers import make_run_spec
-from cirno_core.agent.runner import AgentRunner
-from cirno_core.config.schema import AgentDefaults
-from cirno_core.providers.base import LLMProvider, LLMResponse
+from sources.development.testing.runtime import make_run_spec
 
 
 @pytest.fixture
@@ -92,3 +93,20 @@ async def test_runner_reads_continuation_state_after_each_response(run_spec):
     assert calls == 2
     assert result.stop_reason == "completed"
     assert result.final_content == "The draft is complete."
+
+
+async def test_continuation_failure_reaches_the_run_error_hook(run_spec):
+    from cirno_core.agent.hook import AgentHook
+
+    class Hook(AgentHook):
+        on_error = AsyncMock()
+        after_run = AsyncMock()
+
+    hook = Hook()
+    run_spec.hook = hook
+    run_spec.continuation_callback = AsyncMock(side_effect=RuntimeError("goal state unavailable"))
+    with pytest.raises(RuntimeError, match="goal state unavailable"):
+        await AgentRunner().run(run_spec)
+    hook.on_error.assert_awaited_once()
+    assert hook.on_error.call_args.args[0].stop_reason == "error"
+    hook.after_run.assert_not_awaited()

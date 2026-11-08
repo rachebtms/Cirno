@@ -1,65 +1,38 @@
 import * as React from "react";
+import { Button as HeroButton, buttonVariants as heroButtonVariants } from "@heroui/react";
 import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
-
 import { cn } from "@/lib/utils";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-control text-control-label font-medium ring-offset-background transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        accent: "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-400 dark:text-slate-950 dark:hover:bg-blue-300",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "quiet-control hover:text-accent-foreground",
-        icon: "icon-action relative hover:text-foreground active:text-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3",
-        control: "control-layout",
-        lg: "h-11 px-8",
-        icon: "h-9 w-9",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  },
-);
-
-interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
+type Variant = "default" | "accent" | "destructive" | "outline" | "secondary" | "ghost" | "icon" | "link";
+type Size = "default" | "sm" | "control" | "lg" | "icon";
+const variants = {
+  default: "primary", accent: "primary", destructive: "danger", outline: "outline",
+  secondary: "secondary", ghost: "ghost", icon: "ghost", link: "ghost",
+} as const;
+export function buttonVariants({ variant = "default", size = "default", className }: {
+  variant?: Variant | null; size?: Size | null; className?: string;
+} = {}) {
+  return cn(heroButtonVariants({
+    variant: variants[variant ?? "default"],
+    size: size === "lg" ? "lg" : size === "sm" ? "sm" : "md",
+    isIconOnly: size === "icon",
+  }), "text-control-label", size === "control" && "control-layout", variant === "link" && "underline-offset-4 hover:underline", className);
 }
-
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    const iconOnly = size === "icon";
-    const resolvedVariant = iconOnly && variant === "ghost" ? "icon" : variant;
-    return (
-      <Comp
-        className={cn(
-          buttonVariants({ variant: resolvedVariant, size }),
-          iconOnly && variant === "outline" && "hover:bg-background",
-          className,
-        )}
-        ref={ref}
-        {...props}
-      />
-    );
+interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "value"> {
+  variant?: Variant | null; size?: Size | null; asChild?: boolean; value?: string;
+}
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "default", asChild, disabled, onFocus, onBlur, onClick, onKeyDown, onKeyUp, title, "aria-busy": busy, ...props }, ref) => {
+    const classes = buttonVariants({ variant, size, className });
+    if (asChild) return <Slot ref={ref} className={classes} title={title} aria-busy={busy} onFocus={onFocus} onBlur={onBlur} onClick={onClick} onKeyDown={onKeyDown} onKeyUp={onKeyUp} {...props} />;
+    return <HeroButton ref={ref} render={domProps => <button {...domProps} title={title} aria-busy={busy} />} className={classes} variant={variants[variant ?? "default"]}
+      size={size === "lg" ? "lg" : size === "sm" ? "sm" : "md"}
+      isIconOnly={size === "icon"} isDisabled={disabled}
+      onClick={onClick ? event => onClick(event as React.MouseEvent<HTMLButtonElement>) : undefined}
+      onKeyDown={onKeyDown ? event => onKeyDown(event as React.KeyboardEvent<HTMLButtonElement>) : undefined}
+      onKeyUp={onKeyUp ? event => onKeyUp(event as React.KeyboardEvent<HTMLButtonElement>) : undefined}
+      onFocus={onFocus ? event => onFocus(event as React.FocusEvent<HTMLButtonElement>) : undefined}
+      onBlur={onBlur ? event => onBlur(event as React.FocusEvent<HTMLButtonElement>) : undefined} {...props} />;
   },
 );
 Button.displayName = "Button";
-
-export { Button, buttonVariants };

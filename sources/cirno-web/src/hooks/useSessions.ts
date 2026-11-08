@@ -9,12 +9,9 @@ import {
 } from "@/lib/api";
 import { webuiThreadCache } from "@/lib/webui-thread-cache";
 import { readReloadSessions, writeReloadCache } from "@/lib/reload-cache";
-import type {
-  ChatSummary,
-  SessionAutomationJob,
-  SessionDeleteResult,
-  WorkspaceScopePayload,
-} from "@/lib/types";
+import type { ChatSummary, SessionDeleteResult } from "@/lib/contracts/conversations";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
+import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 
 const CHAT_CREATE_TIMEOUT_MS = 60_000;
 

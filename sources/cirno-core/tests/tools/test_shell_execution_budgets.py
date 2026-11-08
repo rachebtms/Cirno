@@ -11,15 +11,12 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-
 from cirno_core.agent.tools.context import RequestContext, request_context
-from cirno_core.agent.tools.exec_session import (
-    ExecSessionManager,
-    ExecSessionTool,
-    ListExecSessionsTool,
-)
+from cirno_core.agent.tools.exec_session import ExecSessionTool, ListExecSessionsTool
 from cirno_core.agent.tools.registry import is_tool_error_result
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.processes import launch as process_launch
+from cirno_core.processes.sessions import ExecSessionManager
 
 
 def _python(code: str) -> list[str]:
@@ -445,7 +442,7 @@ async def test_execution_stop_stops_pipe_inheriting_child_after_root_exits(
     if not early_root_exit:
         parent_code += f"while not Path({str(release_root)!r}).exists(): time.sleep(0.02)\n"
 
-    real_spawn = ExecTool._spawn
+    real_spawn = process_launch.spawn_process
     spawn_returned = asyncio.Event()
 
     async def spawn_with_exit_order(*args, **kwargs):
@@ -461,10 +458,10 @@ async def test_execution_stop_stops_pipe_inheriting_child_after_root_exits(
         spawn_returned.set()
         return process
 
-    monkeypatch.setattr(ExecTool, "_spawn", staticmethod(spawn_with_exit_order))
+    monkeypatch.setattr(process_launch, "spawn_process", staticmethod(spawn_with_exit_order))
     owner = RequestContext(channel="cli", chat_id="pipe-budget", session_key="cli:pipe-budget")
     manager = ExecSessionManager()
-    max_runtime = 12 if stop_reason == "owner_closed" else 2
+    max_runtime = 12 if stop_reason == "owner_closed" else 5
     tool = ExecTool(
         working_dir=str(tmp_path), max_runtime=max_runtime, max_runtime_limit=max_runtime,
         idle_timeout=1, session_manager=manager,
@@ -494,7 +491,7 @@ async def test_execution_stop_stops_pipe_inheriting_child_after_root_exits(
         if stop_reason == "max_runtime":
             assert is_tool_error_result(final), final
             assert "Reason: max_runtime." in final
-            assert 1.5 <= _elapsed_seconds(final) <= 3.5
+            assert max_runtime - .5 <= _elapsed_seconds(final) <= max_runtime + 1.5
         else:
             assert not is_tool_error_result(final), final
             assert "Session terminated. Reason: owner_closed." in final

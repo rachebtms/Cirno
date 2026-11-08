@@ -4,7 +4,7 @@ import pytest
 
 from cirno_core.providers.anthropic_provider import AnthropicProvider
 from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
-from cirno_core.providers.bedrock_provider import BedrockProvider
+from cirno_core.providers.bedrock.provider import BedrockProvider
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 

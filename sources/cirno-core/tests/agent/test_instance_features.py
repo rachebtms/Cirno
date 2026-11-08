@@ -23,6 +23,7 @@ from cirno_core.nodes.service import Nodes
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.turn_continuation import clear_internal_continuation_state, _goal_continuation_available
 from cirno_core.skills.history import snapshot_skill, skill_versions
+from cirno_core.notifications.inbox import NotificationInbox
 from cirno_server.webui.instance_api import instance_action
 
 
@@ -90,28 +91,51 @@ async def test_goal_wait_wakes_from_storage_and_stopped_goal_stays_stopped(sessi
         await sessions.state.update_metadata('websocket:one', {'goal_state': json.dumps(current)})
     # Discarding the cache simulates a fresh process reading persisted state.
     await sessions.state.discard('websocket:one')
-    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, _enqueue_session_message=AsyncMock())
+    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, dispatch=SimpleNamespace(enqueue=AsyncMock()))
     await wake_due_goals(loop)
-    queued = loop._enqueue_session_message.await_args.args[0]
+    queued = loop.dispatch.enqueue.await_args.args[0]
     assert queued.metadata['_goal_id'] == 'stable'
     assert queued.session_key == 'websocket:one'
+    assert queued.session_generation == (await sessions.state.read_header(queued.session_key)).generation
     metadata = (await sessions.state.read_metadata('websocket:one'))['metadata']
     assert metadata['_sustained_goal_continuation_rounds'] == 51
     assert _goal_continuation_available(metadata)
     await control(sessions, 'stop')
-    loop._enqueue_session_message.reset_mock()
+    loop.dispatch.enqueue.reset_mock()
     await wake_due_goals(loop)
-    loop._enqueue_session_message.assert_not_awaited()
+    loop.dispatch.enqueue.assert_not_awaited()
+
+
+async def test_bad_goal_is_visible_without_preventing_another_goal_from_waking(sessions):
+    await sessions.state.update_metadata('websocket:one', {'goal_state': '{'})
+    await sessions.state.get('websocket:two')
+    await sessions.state.update_metadata('websocket:two', {'goal_state': {
+        'goal_id': 'good', 'status': 'waiting', 'objective': 'Continue verified work',
+        'wake_at': (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+        'continuation_limit': 0,
+    }})
+    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(),
+        goal_continuation_limit=0, dispatch=SimpleNamespace(enqueue=AsyncMock()))
+    await wake_due_goals(loop)
+    queued = loop.dispatch.enqueue.await_args.args[0]
+    assert queued.session_key == 'websocket:two'
+    notices = NotificationInbox().list(category='system')['items']
+    assert len(notices) == 1
+    assert notices[0]['session_key'] == 'websocket:one'
+    assert 'Stored Goal state contains invalid JSON' in notices[0]['body']
+    assert (await sessions.state.read_metadata('websocket:one'))['metadata']['goal_state'] == '{'
+    await wake_due_goals(loop)
+    assert len(NotificationInbox().list(category='system')['items']) == 1
 
 
 async def test_goal_limit_pauses_without_resetting_count(sessions):
     await sessions.state.update_metadata('websocket:one', {'goal_state': {'status': 'active', 'objective': 'Bounded work', 'continuation_limit': 2}, '_sustained_goal_continuation_rounds': 2})
-    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, _enqueue_session_message=AsyncMock())
+    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, dispatch=SimpleNamespace(enqueue=AsyncMock()))
     await wake_due_goals(loop)
     metadata = (await sessions.state.read_metadata('websocket:one'))['metadata']
     assert metadata['goal_state']['status'] == 'paused'
     assert metadata['_sustained_goal_continuation_rounds'] == 2
-    loop._enqueue_session_message.assert_not_awaited()
+    loop.dispatch.enqueue.assert_not_awaited()
 
 
 async def test_project_identity_independent_of_directory_and_delete_preserves_sessions(sessions, home):
@@ -127,9 +151,9 @@ async def test_project_identity_independent_of_directory_and_delete_preserves_se
     assert metadata['title'] == 'One'
     assert InstanceData().get('projects', b['id'])['name'] == 'B'
     result = await api('bootstrap')
-    assert result['global_session_key'] == 'websocket:global'
-    with pytest.raises(ValueError, match='global'):
-        await api('projects.assign', session_key='websocket:global', project_id=b['id'])
+    assert result['router_session_key'] == 'websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb'
+    with pytest.raises(ValueError, match='Router'):
+        await api('projects.assign', session_key='websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb', project_id=b['id'])
 
 
 async def test_ordinary_session_delegates_goal_and_reply_returns_to_owner(sessions):
@@ -138,10 +162,12 @@ async def test_ordinary_session_delegates_goal_and_reply_returns_to_owner(sessio
     target = delegated['session_key']
     await sessions.state.update_metadata(target, {'goal_state': {**delegated['goal'], 'status': 'completed', 'recap': 'Verified'}})
     sender = SimpleNamespace(enqueue=AsyncMock())
-    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, tools=SimpleNamespace(get=lambda name: sender), _enqueue_session_message=AsyncMock())
+    loop = SimpleNamespace(sessions=sessions, _pending_queues={}, _discarding_sessions=set(), goal_continuation_limit=0, tools=SimpleNamespace(get=lambda name: sender), dispatch=SimpleNamespace(enqueue=AsyncMock()))
     await wake_due_goals(loop)
     assert sender.enqueue.await_args.kwargs['source_session_key'] == target
-    assert sender.enqueue.await_args.kwargs['target_handle'].startswith('@')
+    from cirno_core.session.session_handles import SessionHandleResolver
+    owner = await SessionHandleResolver(sessions).ahandle_for_session(delegated['goal']['report_to'])
+    assert sender.enqueue.await_args.kwargs['target_handle'] == owner.id
     assert 'Verified' in sender.enqueue.await_args.kwargs['content']
     await wake_due_goals(loop)
     assert sender.enqueue.await_count == 1
@@ -164,7 +190,7 @@ async def test_memory_keeps_sources_and_scopes_in_home(sessions, home):
 
 
 async def test_memory_tool_defaults_to_knowledge_and_restricts_dream_confirmation(sessions, home):
-    from cirno_core.memory.repository import MemoryRepository
+    from cirno_memory.repository import MemoryRepository
     tool = MemoryTool(sessions)
     with context():
         event = json.loads(await tool.execute(action='save', content='Historical widget setting', source='test:user', tags=['widget'], observed_at='2024-02-29T12:00:00Z'))
@@ -223,8 +249,10 @@ async def test_stop_cancels_the_live_goal_and_scheduler_does_not_restart_it(home
     from unittest.mock import MagicMock
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.events import InboundMessage
-    from cirno_core.providers.base import GenerationSettings, LLMResponse, ToolCallRequest
-    from agent.session_helpers import stop_loop
+    from cirno_core.providers.generation import GenerationSettings
+    from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.tool_calls import ToolCallRequest
+    from sources.development.testing.sessions import stop_loop
 
     waiting = asyncio.Event()
     provider = MagicMock(aclose=AsyncMock())
@@ -263,10 +291,10 @@ async def test_wait_and_round_count_survive_a_new_storage_owner(home):
     await first.state.update_metadata(key, {'goal_state':{'goal_id':'wait-id','objective':'Wake once','status':'waiting','continuation_limit':0,'wake_at':(datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat()},'_sustained_goal_continuation_rounds':4})
     await first.state.aclose()
     second=SessionManager(home/'workspace',sessions_root=path)
-    loop=SimpleNamespace(sessions=second,_pending_queues={},_discarding_sessions=set(),goal_continuation_limit=0,_enqueue_session_message=AsyncMock())
+    loop=SimpleNamespace(sessions=second,_pending_queues={},_discarding_sessions=set(),goal_continuation_limit=0,dispatch=SimpleNamespace(enqueue=AsyncMock()))
     try:
         await wake_due_goals(loop)
-        assert loop._enqueue_session_message.await_args.args[0].metadata['_goal_id']=='wait-id'
+        assert loop.dispatch.enqueue.await_args.args[0].metadata['_goal_id']=='wait-id'
         assert (await second.state.read_metadata(key))['metadata']['_sustained_goal_continuation_rounds']==5
     finally:
         await second.state.aclose()
@@ -291,7 +319,7 @@ async def test_model_percentage_uses_each_model_window_and_skips_short_context(s
 
 
 async def test_dream_cannot_mix_project_evidence_or_update_shared_memory(sessions, home):
-    from cirno_core.memory.repository import MemoryRepository
+    from cirno_memory.repository import MemoryRepository
     repo = MemoryRepository(home / "home")
     own = repo.save('project A fact', source='test:a', session_key='websocket:one', project_id='p1', scope='project')
     other = repo.save('project B fact', source='test:b', session_key='websocket:two', project_id='p2', scope='project')

@@ -2,10 +2,10 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { channelUiPresentation, registeredChannelUiContributions } from "@/channel-plugins/registry";
-import { ChannelLogo } from "@/components/settings/channels/ChannelIdentity";
+import {ChannelLogo} from "@/features/channels/ui/ChannelLogo";
 import { __clearLogoFallbackCacheForTests } from "@/hooks/useLogoFallback";
 import { logoFallbackUrls } from "@/lib/provider-brand";
-import type { CirnoFeatureInfo } from "@/lib/types";
+import type { CirnoFeatureInfo } from "@/lib/contracts/channels";
 
 function feature(name: string): CirnoFeatureInfo {
   return {
@@ -43,7 +43,7 @@ describe("channel logos", () => {
     const presentation = channelUiPresentation(channel)!;
 
     expectFootprint(icon);
-    expect(icon).toHaveClass("bg-muted");
+    expect(icon).toHaveClass("bg-surface-secondary");
     expect(fallback).toHaveClass("opacity-100");
     expect(image).toHaveAttribute("src", presentation.logoUrl);
     expect(image).toHaveAttribute("alt", "");
@@ -72,7 +72,7 @@ describe("channel logos", () => {
       fireEvent.error(image);
       expect(container.firstElementChild).toBe(icon);
       expectFootprint(icon);
-      expect(icon).toHaveClass("bg-muted");
+      expect(icon).toHaveClass("bg-surface-secondary");
       expect(icon.querySelector("span")).toHaveClass("opacity-100");
     }
     expect(icon.querySelector("img")).toBeNull();
@@ -87,7 +87,7 @@ describe("channel logos", () => {
     rerender(<ChannelLogo feature={feature("telegram")} showBrandLogos={false} />);
     expectFootprint(icon);
     expect(icon.querySelector("img")).toBeNull();
-    expect(icon).toHaveClass("bg-muted");
+    expect(icon).toHaveClass("bg-surface-secondary");
     expect(icon.querySelector("span")).toHaveClass("opacity-100");
 
     rerender(<ChannelLogo feature={feature("telegram")} showBrandLogos />);

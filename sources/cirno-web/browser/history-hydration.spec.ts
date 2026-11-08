@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page, type Route, type WebSocketRoute } from "@playwright/test";
 
-import type { InboundEvent, ThreadProjectionEvent, UITurnPhase, WebuiThreadPersistedPayload } from "../src/lib/types";
+import type { InboundEvent, ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { UITurnPhase } from "@/lib/contracts/messages";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 // Controlled synthetic backend traffic, not a replay of an original user recording.
 // Every body assertion goes through the real socket/client/provider/ThreadShell path.
@@ -76,8 +78,8 @@ async function installBackend(page: Page) {
   const errors: string[] = [];
   let socket: WebSocketRoute | undefined;
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.route("**/api/commands", (route) => route.fulfill({ json: { commands: [] } }));
-  await page.route((url) => /^\/api\/sessions\/websocket:nan311-[ab]\/webui-thread$/.test(decodeURIComponent(url.pathname)), (route) => {
+  await page.route("**/v0/commands", (route) => route.fulfill({ json: { commands: [] } }));
+  await page.route((url) => /^\/v0\/sessions\/websocket:nan311-[ab]\/webui-thread$/.test(decodeURIComponent(url.pathname)), (route) => {
     const url = new URL(route.request().url());
     reads.push({ chatId: decodeURIComponent(url.pathname.split("/")[3]!).slice("websocket:".length),
       before: url.searchParams.get("before"), after: url.searchParams.get("after"), route });
@@ -86,10 +88,17 @@ async function installBackend(page: Page) {
   await page.routeWebSocket((url) => url.pathname === "/nan311-fixture-ws", (wire) => {
     socket = wire;
     wire.onMessage((raw) => {
-      const frame = JSON.parse(raw.toString()) as { type?: string; chat_id?: string };
+      const frame = JSON.parse(raw.toString()) as {
+        type?: string; chat_id?: string; action?: string; request_id?: string;
+        payload?: { session_key?: string };
+      };
       if (frame.type === "attach" && [A, B].includes(frame.chat_id ?? "")) {
         attached.push(frame.chat_id!);
         wire.send(JSON.stringify({ event: "attached", chat_id: frame.chat_id }));
+      } else if (frame.type === "webui_request" && frame.action === "session.context_usage"
+        && [`websocket:${A}`, `websocket:${B}`].includes(frame.payload?.session_key ?? "")) {
+        wire.send(JSON.stringify({ event: "webui_response", request_id: frame.request_id, ok: true,
+          result: { context_tokens: 1200, context_window_tokens: 128000, estimated: true } }));
       } else unexpected.push(frame);
     });
     wire.send(JSON.stringify({ event: "ready", chat_id: A, client_id: "nan311-synthetic-client" }));
@@ -133,7 +142,6 @@ async function openFixture(page: Page, width = 1440) {
   await page.setViewportSize({ width, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
-    localStorage.setItem("cirno.locale", "en");
     localStorage.setItem("cirno_debug_ws", "0");
   });
   const backend = await installBackend(page);

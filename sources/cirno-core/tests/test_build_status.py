@@ -1,7 +1,7 @@
 """Tests for build_status_content cache hit rate display."""
 
-from cirno_core.providers.base import LLMUsage
-from cirno_core.utils.helpers import build_status_content
+from cirno_usage.types import LLMUsage
+from cirno_core.utils.runtime_status import build_status_content
 
 
 def test_status_shows_cache_hit_rate():

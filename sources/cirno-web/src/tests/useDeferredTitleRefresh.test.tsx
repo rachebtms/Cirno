@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
-import type { ChatSummary } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
 
 function session(overrides: Partial<ChatSummary> = {}): ChatSummary {
   return {

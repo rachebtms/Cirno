@@ -9,18 +9,18 @@ import { Button } from "@/components/ui/button";
 import sampleVideo from "./fixtures/sample.webm";
 import { ImageGallery } from "@/components/ImageGallery";
 import { MarkdownText } from "@/components/MarkdownText";
-import { MessageBubble } from "@/components/MessageBubble";
+import { MessageBubble } from "@/features/messages";
 import { FileReferenceChip } from "@/components/FileReferenceChip";
 import { ActivityStep } from "@/components/thread/activity/ActivityStep";
 import { ReasoningRow } from "@/components/thread/activity/ReasoningRow";
 import { ThinkingReasoningShell } from "@/components/thread/activity/ThinkingReasoningShell";
 import { FileEditGroup, type FileEditSummary } from "@/components/thread/activity/FileEditRow";
 import { GenericToolRun } from "@/components/thread/activity/GenericToolRun";
-import { SettingsGroup, SettingsRow, SettingsSectionTitle } from "@/components/settings/shared/SettingsControls";
-import { SettingsFeature } from "@/components/settings/shared/SettingsFeature";
+import { SettingsGroup, SettingsRow, SettingsSectionTitle } from "@/features/settings/shared/SettingsControls";
+import { SettingsFeature } from "@/features/settings/shared/SettingsFeature";
 import { Input } from "@/components/ui/input";
 import { ToggleButton } from "@/components/ui/toggle-button";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 import { Sample, StatePicker, type ComponentExample } from "./example";
 import { useGalleryTranslation } from "./i18n";
 
@@ -71,7 +71,7 @@ function ActivityPreview() {
       <ActivityStep icon={state === "error" ? CircleAlert : Check} active={state === "running"}
         tone={state === "error" ? "error" : "success"} label={t(state === "error" ? "controls.activity.readError" : "controls.activity.read")} detail="components/ui/button.tsx" />
       <GenericToolRun items={[{ status: state, trace: {
-        name: "read_file", family: "read", groupKey: "read", fields: [{ key: "path", value: "webui/src/components/ui/button.tsx" }], collectedSource: false,
+        name: "read_file", family: "read", groupKey: "read", fields: [{ key: "path", value: "sources/cirno-web/src/components/ui/button.tsx" }], collectedSource: false,
       } }]} />
     </ThinkingReasoningShell></>;
 }
@@ -178,7 +178,7 @@ function FileReferencePreview() {
     <p role="status" className="text-sm text-muted-foreground">{selected || t("controls.fileReference.select")}</p></div>;
 }
 
-const components = "webui/src/components/";
+const components = "sources/cirno-web/src/components/";
 export const sharedExamples: ComponentExample[] = [
   { title: "controls.markdown.title", files: ["MarkdownText", "MarkdownTextRenderer"], Preview: MarkdownPreview,
     description: "controls.markdown.description", options: "controls.markdown.options",

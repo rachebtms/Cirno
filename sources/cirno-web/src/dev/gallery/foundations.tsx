@@ -249,7 +249,7 @@ function ImageViewports() {
   </div>;
 }
 
-const base = "webui/src/components/ui/";
+const base = "sources/cirno-web/src/components/ui/";
 export const foundationExamples: ComponentExample[] = [
   { title: "controls.button.title", files: ["button"], Preview: Buttons,
     description: "controls.button.description",

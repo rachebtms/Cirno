@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { CirnoFeatureInfo, CirnoFeaturesPayload } from "@/lib/types";
+import type { CirnoFeatureInfo, CirnoFeaturesPayload } from "@/lib/contracts/channels";
 import {
   installSettingsViewTestHooks,
   jsonResponse,
@@ -60,8 +60,8 @@ function payload(channel: CirnoFeatureInfo): CirnoFeaturesPayload {
 function renderChannel(channel: CirnoFeatureInfo) {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url === "/api/settings") return jsonResponse(settingsPayload());
-    if (url === "/api/settings/cirno-features") return jsonResponse(payload(channel));
+    if (url === "/v0/settings") return jsonResponse(settingsPayload());
+    if (url === "/v0/settings/cirno-features") return jsonResponse(payload(channel));
     return { ok: false, status: 404, json: async () => ({}) } as Response;
   }));
   renderSettingsView({ initialSection: "channels" });
@@ -101,20 +101,20 @@ describe("optimistic channel switches", () => {
       } else {
         fireEvent.click(toggle);
       }
-      expect(toggle).toHaveAttribute("aria-checked", String(!initial));
+      expect(toggle).toHaveProperty("checked", !initial);
       expect(toggle).toBeDisabled();
       fireEvent.click(toggle);
-      expect(requestMutationMock).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(1));
       if (surface === "instance") {
         const other = screen.getByRole("switch", { name: "Second instance" });
-        expect(other).toHaveAttribute("aria-checked", "false");
+        expect(other).not.toBeChecked();
         expect(other).toBeDisabled();
         fireEvent.click(other);
         expect(requestMutationMock).toHaveBeenCalledTimes(1);
       }
 
       await act(async () => { fireEvent(window, new Event("focus")); });
-      expect(toggle).toHaveAttribute("aria-checked", String(!initial));
+      expect(toggle).toHaveProperty("checked", !initial);
       expect(toggle).toBeDisabled();
 
       if (surface === "setup" && !initial) {
@@ -123,7 +123,7 @@ describe("optimistic channel switches", () => {
           checks: [], missing_fields: [], requires_restart: false,
         }));
         expect(requestMutationMock).toHaveBeenCalledTimes(2);
-        expect(toggle).toHaveAttribute("aria-checked", "true");
+        expect(toggle).toBeChecked();
         expect(toggle).toBeDisabled();
       }
       const result = payload(feature(!initial, surface === "instance"));
@@ -138,7 +138,7 @@ describe("optimistic channel switches", () => {
         await waitFor(() => expect(toggle).not.toBeInTheDocument());
       } else {
         await waitFor(() => expect(toggle).toBeEnabled());
-        expect(toggle).toHaveAttribute("aria-checked", String(succeeds ? !initial : initial));
+        expect(toggle).toHaveProperty("checked", succeeds ? !initial : initial);
       }
       if (!succeeds) expect(screen.getByText("Channel update failed")).toBeVisible();
       if (surface === "instance") {
@@ -154,13 +154,13 @@ describe("optimistic channel switches", () => {
     fireEvent.click(await screen.findByRole("button", { name: "View Test Chat settings" }));
     const toggle = within(await screen.findByRole("dialog")).getByRole("switch");
     fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(toggle).toBeChecked();
 
     await act(async () => validation.resolve({
       name: "test-chat", status: "invalid", can_enable: false, message: "Credentials rejected",
       checks: [], missing_fields: [], requires_restart: false,
     }));
-    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).not.toBeChecked();
     expect(toggle).toBeEnabled();
     expect(screen.getByText("Credentials rejected")).toBeVisible();
     expect(requestMutationMock).toHaveBeenCalledTimes(1);
@@ -180,10 +180,10 @@ describe("optimistic channel switches", () => {
     channel.installed = true;
     await act(async () => { fireEvent(window, new Event("focus")); });
     const toggle = await screen.findByRole("switch", { name: "Test Chat channel" });
-    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).not.toBeChecked();
     expect(toggle).toBeDisabled();
     await act(async () => installation.resolve(payload(channel)));
-    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).not.toBeChecked();
     expect(toggle).toBeEnabled();
   });
 });

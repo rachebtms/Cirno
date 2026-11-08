@@ -2,7 +2,6 @@ import base64
 from pathlib import Path
 
 import pytest
-
 from cirno_core.security.workspace_access import default_workspace_scope
 from cirno_server.webui.file_preview import (
     WebUIFilePreviewError,

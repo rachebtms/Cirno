@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { MessageBubble } from "@/components/MessageBubble";
+import { MessageBubble } from "@/features/messages";
 
 const source = [
   "# Environment",

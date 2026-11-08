@@ -1,7 +1,11 @@
 import "@testing-library/jest-dom/vitest";
-import { beforeAll, beforeEach } from "vitest";
+import { beforeAll, beforeEach, vi } from "vitest";
 
 import i18n, { initializeI18n, loadAllLocaleResources } from "@/i18n";
+import { clearOwnerPreferences } from "@/features/preferences/store";
+import { installHistoryEvents } from "./helpers/dom-history";
+
+installHistoryEvents();
 
 // The DOM test environment does not implement pointer capture used by Radix Select.
 if (!HTMLElement.prototype.hasPointerCapture) {
@@ -79,8 +83,15 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  // Happy DOM eagerly rejects Animation.finished on cancel even when the app
+  // never reads it; Chromium does not. Use idle handles for DOM-only tests.
+  vi.spyOn(Element.prototype, "animate").mockImplementation(() => {
+    const animation = new Animation();
+    animation.cancel = () => { animation.dispatchEvent(new Event("cancel")); };
+    return animation;
+  });
+  clearOwnerPreferences();
   await i18n.changeLanguage("en");
   document.documentElement.lang = "en";
   document.title = "cirno";
-  localStorage.setItem("cirno.locale", "en");
 });

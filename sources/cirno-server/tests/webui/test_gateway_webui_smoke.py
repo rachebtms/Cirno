@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import signal
 import socket
 import subprocess
@@ -15,12 +16,11 @@ from urllib.parse import quote
 import httpx
 import pytest
 import websockets
-from websockets.exceptions import InvalidStatus
-
 from cirno_core.agent.subagents.sessions import SubagentSessions
 from cirno_core.agent.subagents.status import SubagentStatus
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.recovery import PENDING_USER_TURN_KEY, RUNTIME_CHECKPOINT_KEY
+from cirno_core.session.recovery.contracts import PENDING_USER_TURN_KEY, RUNTIME_CHECKPOINT_KEY
+from websockets.exceptions import InvalidStatus
 
 _BOOTSTRAP_SECRET = "smoke-secret"
 
@@ -79,6 +79,7 @@ def _start_gateway(config_path: Path, log_path: Path) -> subprocess.Popen[bytes]
                 str(config_path),
             ],
             cwd=Path(__file__).resolve().parents[2],
+            env={**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"},
             stdout=log_file,
             stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
@@ -131,7 +132,7 @@ def _wait_for_bootstrap(base_url: str, process: subprocess.Popen[bytes], log_pat
         if process.poll() is not None:
             break
         try:
-            return _get_bootstrap(f"{base_url}/webui/bootstrap")
+            return _get_bootstrap(f"{base_url}/v0/bootstrap")
         except (httpx.HTTPError, OSError) as exc:
             last_error = exc
             time.sleep(0.2)
@@ -170,6 +171,8 @@ async def test_gateway_webui_bootstrap_message_and_thread_hydration(tmp_path: Pa
     try:
         bootstrap = _wait_for_bootstrap(base_url, process, log_path)
         assert bootstrap["model_name"] == "custom/smoke-model"
+        initial_sessions = _get_json(f"{base_url}/v0/sessions", token=bootstrap["api_token"])
+        assert "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb" in {row["key"] for row in initial_sessions["sessions"]}
 
         ws_url = f'{bootstrap["ws_url"]}?token={bootstrap["token"]}&client_id=smoke'
         async with websockets.connect(ws_url) as ws:
@@ -214,13 +217,13 @@ async def test_gateway_webui_bootstrap_message_and_thread_hydration(tmp_path: Pa
             await _recv_until(ws, "turn_end")
 
         api_token = _wait_for_bootstrap(base_url, process, log_path)["api_token"]
-        sessions = _get_json(f"{base_url}/api/sessions", token=api_token)
+        sessions = _get_json(f"{base_url}/v0/sessions", token=api_token)
         key = f"websocket:{chat_id}"
         assert key in {row["key"] for row in sessions["sessions"]}
 
         encoded_key = quote(key, safe="")
         thread = _get_json(
-            f"{base_url}/api/sessions/{encoded_key}/webui-thread",
+            f"{base_url}/v0/sessions/{encoded_key}/webui-thread",
             token=api_token,
         )
         contents = [
@@ -267,7 +270,7 @@ async def test_gateway_recovers_private_children_and_deletes_them_with_parent(tm
     try:
         bootstrap = _wait_for_bootstrap(base_url, process, log_path)
         api_token = bootstrap["api_token"]
-        path = f"{base_url}/api/sessions/{quote(parent.key, safe='')}/subagents"
+        path = f"{base_url}/v0/sessions/{quote(parent.key, safe='')}/subagents"
         first = _get_json(path, token=api_token)
         tasks = {task["task_id"]: task for task in first["tasks"]}
         assert tasks["finished"]["state"] == "done"
@@ -277,8 +280,9 @@ async def test_gateway_recovers_private_children_and_deletes_them_with_parent(tm
         assert tasks["abandoned"]["result"] == "Partial findings"
         assert tasks["abandoned"]["receipts"] == {"follow-up": "undelivered"}
         assert _get_json(path, token=api_token) == first
-        sidebar = _get_json(f"{base_url}/api/sessions", token=api_token)
-        assert {row["key"] for row in sidebar["sessions"]} == {parent.key}
+        sidebar = _get_json(f"{base_url}/v0/sessions", token=api_token)
+        from cirno_core.session.keys import ROUTER_SESSION_KEY
+        assert {row["key"] for row in sidebar["sessions"]} == {parent.key, ROUTER_SESSION_KEY}
         ws_url = bootstrap["ws_url"] + "?token=" + bootstrap["token"] + "&client_id=child-session-smoke"
         async with websockets.connect(ws_url) as ws:
             await _recv_until(ws, "ready")
@@ -308,11 +312,11 @@ async def test_desktop_terminal_identity_and_independent_client_lifetime(tmp_pat
         first = _wait_for_bootstrap(base_url, process, log_path)
         terminal = first["terminal"]
         assert terminal["protocolVersion"] == 1
-        unauthenticated = httpx.get(f"{base_url}/webui/terminal", trust_env=False)
+        unauthenticated = httpx.get(f"{base_url}/v0/connection", trust_env=False)
         assert unauthenticated.status_code == 401
-        probe = _get_bootstrap(f"{base_url}/webui/terminal")
+        probe = _get_bootstrap(f"{base_url}/v0/connection")
         assert probe == terminal  # Contains no token or config information.
-        second = _get_bootstrap(f"{base_url}/webui/bootstrap")
+        second = _get_bootstrap(f"{base_url}/v0/bootstrap")
         assert second["terminal"] == terminal
         identity_query = f'&terminal_protocol=1&terminal_instance={terminal["gatewayId"]}'
         first_url = f'{first["ws_url"]}?token={first["token"]}&client_id=terminal-one'
@@ -334,7 +338,7 @@ async def test_desktop_terminal_identity_and_independent_client_lifetime(tmp_pat
                 assert "custom/smoke-model" in (await _recv_until(two, "message"))["text"]
                 await _recv_until(two, "turn_end")
         assert process.poll() is None
-        after = _get_bootstrap(f"{base_url}/webui/bootstrap")
+        after = _get_bootstrap(f"{base_url}/v0/bootstrap")
         assert after["terminal"] == terminal
         # The ordinary WebUI ready frame remains unchanged (no opt-in metadata).
         async with websockets.connect(f'{after["ws_url"]}?token={after["token"]}&client_id=browser') as browser:

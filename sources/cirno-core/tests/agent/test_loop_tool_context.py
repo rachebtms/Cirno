@@ -14,14 +14,18 @@ from cirno_core.agent.tools.context import (
     reset_request_context,
 )
 from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.base import Tool
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.config.schema import Config
-from cirno_core.providers.base import LLMResponse, ToolCallRequest
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.turn_continuation import INTERNAL_CONTINUATION_META
 
 
-class _ContextRecordingTool:
+class _ContextRecordingTool(Tool):
+    description = "Record execution context"
+    parameters = {"type": "object", "properties": {"action": {"type": "string"}}}
     name = "cron"
     concurrency_safe = False
 
@@ -40,24 +44,6 @@ class _ContextRecordingTool:
             "session_key": ctx.session_key,
         })
         return "created"
-
-
-class _Tools:
-    def __init__(self, tool: _ContextRecordingTool) -> None:
-        self.tool = tool
-
-    @property
-    def tool_names(self) -> list[str]:
-        return ["cron"]
-
-    def get(self, name: str):
-        return self.tool if name == "cron" else None
-
-    def get_definitions(self) -> list:
-        return []
-
-    def prepare_call(self, name: str, arguments: dict):
-        return (self.tool, arguments, None) if name == "cron" else (None, arguments, None)
 
 
 def test_loop_registers_default_tools_in_injected_registry(tmp_path: Path) -> None:
@@ -131,11 +117,12 @@ async def test_loop_binds_request_context_for_tool_execution(tmp_path: Path) -> 
         model="test-model",
     )
     cron = _ContextRecordingTool()
-    loop.tools = _Tools(cron)
+    loop.tools = ToolRegistry()
+    loop.tools.register(cron)
 
     metadata = {"slack": {"thread_ts": "111.222", "channel_type": "channel"}}
     runtime = loop.llm_runtime()
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=runtime,
         request_context=RequestContext(
@@ -236,7 +223,7 @@ async def test_agent_loop_restores_outer_request_context_after_runner_exception(
     outer_token = bind_request_context(outer)
     try:
         with pytest.raises(RuntimeError, match="runner failed"):
-            await loop._run_agent_loop(
+            await loop.model_turn.run(
                 TranscriptInput(history=[], current_message=None),
                 runtime=runtime,
                 request_context=RequestContext(
@@ -282,10 +269,10 @@ async def test_process_message_captures_original_text_before_restore(
         seen.append((ctx.original_user_text, ctx.runtime))
         raise RuntimeError("captured before restore")
 
-    loop._restore_turn = stop_after_capture  # type: ignore[method-assign]
+    loop.preparation.restore = stop_after_capture  # type: ignore[method-assign]
 
     with pytest.raises(RuntimeError, match="captured before restore"):
-        await loop._process_message(
+        await loop.processing.process(
             InboundMessage(
                 channel="slack",
                 sender_id="user",

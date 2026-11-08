@@ -9,10 +9,11 @@ import httpx
 import pytest
 
 from cirno_core.config.schema import Config
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 from cirno_core.providers.factory import make_provider
 from cirno_core.providers.oauth_model_catalog import OAuthModelCatalogSnapshot
-from cirno_core.providers.registry import ProviderModelSpec, find_by_name
+from cirno_core.providers.catalog.contracts import ProviderModelSpec
+from cirno_core.providers.registry import find_by_name
 from cirno_core.providers.xai_grok_provider import (
     DEFAULT_XAI_GROK_MODEL,
     XAIGrokProvider,
@@ -106,7 +107,7 @@ async def test_provider_retries_stream_eof_before_returning_content(monkeypatch)
 
     monkeypatch.setattr("cirno_core.providers.xai_grok_provider._request_xai", fake_request)
     provider = XAIGrokProvider()
-    provider._CHAT_RETRY_DELAYS = (0,)
+    provider.retry_policy.delays = (0,)
 
     response = await provider.chat_stream_with_retry([{"role": "user", "content": "hello"}])
 

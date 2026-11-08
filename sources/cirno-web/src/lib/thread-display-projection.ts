@@ -1,7 +1,7 @@
 import { isModelCommandResponseText, isModelCommandText } from "@/lib/format";
 import { isSystemCommandTurnId } from "@/lib/cirno-client";
 import { scrubSubagentUiMessages } from "@/lib/subagent-channel-display";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 interface PreparedMessage {
   message: UIMessage;

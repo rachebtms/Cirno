@@ -15,6 +15,7 @@ from typing import Callable
 
 import pytest
 
+from cirno_core.cron.repository import load_jobs
 from cirno_core.cron.service import CronService
 from cirno_core.cron.types import CronJob, CronPayload, CronSchedule
 
@@ -50,11 +51,9 @@ def _corrupt_store(tmp_path: Path) -> Path:
     return store_path
 
 
-def _assert_single_corrupt_backup(store_path: Path) -> None:
-    assert not store_path.exists()
-    backups = list(store_path.parent.glob("jobs.json.corrupt-*"))
-    assert len(backups) == 1
-    assert backups[0].read_text(encoding="utf-8") == "{not valid json"
+def _assert_original_unchanged(store_path: Path) -> None:
+    assert store_path.read_text(encoding="utf-8") == "{not valid json"
+    assert not list(store_path.parent.glob("jobs.json.corrupt-*"))
 
 
 def _system_job(job_id: str = "dream") -> CronJob:
@@ -225,24 +224,12 @@ def test_atomic_write_ignores_unsupported_directory_fsync(
     assert list(store_path.parent.glob("*.tmp")) == []
 
 
-def test_load_jobs_preserves_corrupt_store_and_returns_none(
-    tmp_path: Path,
-) -> None:
-    """A corrupt ``jobs.json`` must not be silently treated as an empty
-    list.  The loader returns ``None`` and the corrupt file is moved aside
-    with a ``.corrupt-<ts>`` suffix so an operator can recover it."""
-    store_path = tmp_path / "cron" / "jobs.json"
-    store_path.parent.mkdir(parents=True)
-    store_path.write_text("{not valid json", encoding="utf-8")
-
-    service = CronService(store_path)
-    assert service._load_jobs() is None
-
-    # Original path is gone; a ``.corrupt-<ts>`` backup exists alongside it.
-    assert not store_path.exists()
-    backups = list(store_path.parent.glob("jobs.json.corrupt-*"))
-    assert len(backups) == 1
-    assert backups[0].read_text(encoding="utf-8") == "{not valid json"
+def test_repeated_reads_of_corrupt_store_preserve_original(tmp_path):
+    store_path = _corrupt_store(tmp_path)
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="corrupt.*restore jobs.json"):
+            load_jobs(store_path)
+        _assert_original_unchanged(store_path)
 
 
 def test_start_refuses_to_overwrite_corrupt_store(tmp_path: Path) -> None:
@@ -263,31 +250,18 @@ def test_start_refuses_to_overwrite_corrupt_store(tmp_path: Path) -> None:
     # Service is left in a stopped state so the operator notices.
     assert service._running is False
 
-    # And the corrupt file is still recoverable from the .corrupt-<ts> copy.
-    backups = list(store_path.parent.glob("jobs.json.corrupt-*"))
-    assert len(backups) == 1
+    assert store_path.read_text() == "{still not json"
+    assert not list(store_path.parent.glob("jobs.json.corrupt-*"))
 
 
-def test_load_store_falls_back_to_in_memory_on_corruption_after_start(
-    tmp_path: Path,
-) -> None:
-    """If the store file becomes corrupt *after* a successful start (e.g. a
-    rclone-mounted Drive returns a partial read), the service must keep
-    using its existing in-memory snapshot instead of dropping every job."""
+def test_reload_reports_corruption_without_overwriting_file_or_memory(tmp_path):
     service, store_path = _seeded_store(tmp_path)
-    # Force load so ``self._store`` is populated.
-    service._load_store()
-    snapshot = service._store
-    assert snapshot is not None and len(snapshot.jobs) == 1
-
-    # Now corrupt the file on disk.
-    store_path.write_text("\x00garbage\x00", encoding="utf-8")
-
-    # Subsequent reload returns the in-memory snapshot, not None or empty.
-    result = service._load_store()
-    assert result is snapshot
-    assert len(result.jobs) == 1
-    assert result.jobs[0].name == "Daily Loving Message"
+    snapshot = service._load_store()
+    store_path.write_text("{not valid json")
+    with pytest.raises(RuntimeError, match="corrupt.*restore jobs.json"):
+        service.list_jobs(include_disabled=True)
+    assert service._store is snapshot
+    _assert_original_unchanged(store_path)
 
 
 @pytest.mark.parametrize(
@@ -318,7 +292,7 @@ def test_public_apis_raise_clear_error_for_unavailable_corrupt_store(
 
     assert api_name
     assert str(store_path) in str(exc_info.value)
-    _assert_single_corrupt_backup(store_path)
+    _assert_original_unchanged(store_path)
 
 
 @pytest.mark.asyncio
@@ -332,7 +306,7 @@ async def test_run_job_raises_clear_error_and_restores_running_state_for_corrupt
         await service.run_job("missing")
 
     assert service._running is False
-    _assert_single_corrupt_backup(store_path)
+    _assert_original_unchanged(store_path)
 
 
 @pytest.mark.asyncio
@@ -368,7 +342,7 @@ def test_running_add_job_raises_clear_error_for_unavailable_corrupt_store(
             origin_chat_id="chat-1",
         )
 
-    _assert_single_corrupt_backup(store_path)
+    _assert_original_unchanged(store_path)
 
 
 def test_stopped_add_job_still_appends_action_without_loading_corrupt_store(
@@ -397,18 +371,6 @@ def test_stopped_add_job_still_appends_action_without_loading_corrupt_store(
     assert json.loads(actions[0])["action"] == "add"
 
 
-def test_public_api_uses_in_memory_snapshot_when_disk_becomes_corrupt(
-    tmp_path: Path,
-) -> None:
-    service, store_path = _seeded_store(tmp_path)
-    service._load_store()
-    assert service._store is not None
-    store_path.write_text("{not valid json", encoding="utf-8")
-
-    jobs = service.list_jobs(include_disabled=True)
-
-    assert len(jobs) == 1
-    assert jobs[0].name == "Daily Loving Message"
 
 
 def test_full_round_trip_survives_repeated_save_load(tmp_path: Path) -> None:
@@ -427,3 +389,35 @@ def test_full_round_trip_survives_repeated_save_load(tmp_path: Path) -> None:
     s2._load_store()
     assert s2._store is not None
     assert [j.name for j in s2._store.jobs] == ["Daily Loving Message"]
+
+
+def test_malformed_action_does_not_erase_prior_valid_pending_actions(tmp_path):
+    service, store_path = _seeded_store(tmp_path)
+    service.add_job(name="Keep this pending job", schedule=CronSchedule(kind="every", every_ms=60_000), message="check", session_key="websocket:research", origin_channel="websocket", origin_chat_id="research")
+    actions = store_path.parent / "action.jsonl"
+    with actions.open("a") as stream:
+        stream.write('{"action":"unrecognized","params":{}}\n')
+    before_actions, before_store = actions.read_bytes(), store_path.read_bytes()
+    owner = CronService(store_path)
+    owner._running = True
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="Invalid automation action.*:2:"):
+            owner.list_jobs()
+        assert actions.read_bytes() == before_actions
+        assert store_path.read_bytes() == before_store
+
+
+@pytest.mark.asyncio
+async def test_failed_due_tick_reports_to_owner_and_waits_before_retry(tmp_path):
+    failures, rearmed = [], []
+    service, store_path = _seeded_store(tmp_path)
+    service.on_error = failures.append
+    service._running = True
+    service._arm_timer = lambda **options: rearmed.append(options)
+    store_path.write_text("{not valid json")
+    await service._run_timer()
+    assert len(failures) == 1
+    assert "corrupt" in str(failures[0])
+    assert rearmed == [{"retry": True}]
+    assert service._active_executions == 0
+    _assert_original_unchanged(store_path)

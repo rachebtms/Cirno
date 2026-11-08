@@ -4,7 +4,8 @@ import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { fetchSubagentThread } from "@/lib/api";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
-import type { SubagentTaskSnapshot, UIMessage, WebuiThreadPersistedPayload } from "@/lib/types";
+import type { SubagentTaskSnapshot, UIMessage } from "@/lib/contracts/messages";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 export function useSubagentThread({ token, sessionKey, task, historyEnabled }: {
   token: string;

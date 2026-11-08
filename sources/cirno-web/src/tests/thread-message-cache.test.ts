@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { ThreadTranscript } from "@/lib/thread-transcript";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const rows: UIMessage[] = [{ id: "u", role: "user", content: "hello", createdAt: 1 }];
 const snapshot = new ThreadTranscript(rows).save();

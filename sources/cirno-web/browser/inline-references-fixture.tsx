@@ -1,10 +1,14 @@
 import { useState } from "react";
 
-import { MessageBubble } from "@/components/MessageBubble";
+import { ThreadMessages } from "@/components/thread/ThreadMessages";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { useReadingTypography } from "@/hooks/useReadingTypography";
-import type { ChatSummary, CliAppInfo, McpPresetInfo, SlashCommand, UIMessage } from "@/lib/types";
+import type { ChatSummary } from "@/lib/contracts/conversations";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { SlashCommand } from "@/lib/contracts/commands";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const session: ChatSummary = {
   key: "websocket:typography", channel: "websocket", chatId: "typography",
@@ -43,7 +47,7 @@ export function InlineReferencesFixture() {
   const [sent, setSent] = useState<UIMessage[]>([]);
   return <ThemeProvider theme={theme}>
     <main className="mx-auto h-full max-w-[var(--content-column-width)] space-y-6 overflow-y-auto p-4">
-      {[answer, ...sent].map(message => <MessageBubble key={message.id} message={message} slashCommands={commands} />)}
+      <ThreadMessages messages={[answer, ...sent]} isStreaming={false} slashCommands={commands} />
       <ThreadComposer compactWhenIdle sessions={[session, longSession]} cliApps={cliApps} mcpPresets={mcpPresets} modelLabel="Fixture" persistDraft={false} slashCommands={commands}
         onSend={(text, _media, options) => setSent(current => [...current, {
           id: `sent-${current.length}`, role: "user", content: text, createdAt: current.length + 2,

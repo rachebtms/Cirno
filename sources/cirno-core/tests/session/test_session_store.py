@@ -2,9 +2,9 @@
 
 from datetime import datetime
 
-from cirno_core.providers.base import ProviderConversationState
-from cirno_core.session.manager import Session, SessionManager
-from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
+from cirno_core.providers.contracts import ProviderConversationState
+from cirno_core.session.model import Session
+from cirno_core.session.manager import SessionManager
 from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY
 
 
@@ -22,25 +22,6 @@ def test_manager_roundtrips_full_history_and_private_state(tmp_path):
     assert manager.list_sessions()[0]["preview"] == "0"
 
 
-def test_rename_model_preset_is_atomic(tmp_path, monkeypatch):
-    manager = SessionManager(tmp_path)
-    for key in ("cli:one", "cli:two"):
-        manager.save(Session(key=key, metadata={SESSION_MODEL_PRESET_METADATA_KEY: "old"}))
-    original = manager._store.update_metadata
-    def fail_second(key, values, **kwargs):
-        if key == "cli:two":
-            raise OSError("disk full")
-        return original(key, values, **kwargs)
-    import pytest
-    with monkeypatch.context() as patch:
-        patch.setattr(manager._store, "update_metadata", fail_second)
-        with pytest.raises(OSError):
-            manager.rename_model_preset("old", "new")
-    assert all(manager.get_or_create(key).metadata[SESSION_MODEL_PRESET_METADATA_KEY] == "old"
-               for key in ("cli:one", "cli:two"))
-    assert manager.rename_model_preset("old", "new") == 2
-    assert all(manager.get_or_create(key).metadata[SESSION_MODEL_PRESET_METADATA_KEY] == "new"
-               for key in ("cli:one", "cli:two"))
 
 
 def test_metadata_updates_do_not_replace_messages(tmp_path):

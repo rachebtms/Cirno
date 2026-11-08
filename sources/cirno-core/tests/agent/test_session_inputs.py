@@ -12,11 +12,11 @@ from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.outbound_events import UserInputEvent
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import UserInputAccepted
-from cirno_core.providers.base import LLMResponse
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.session_handles import SessionHandleResolver
 from cirno_core.session.session_messages import SESSION_MESSAGE_METADATA_KEY
-from cirno_core.session.webui_turns import WebuiTurnCoordinator
+from cirno_core.session.webui_turns.coordinator import WebuiTurnCoordinator
 from cirno_core.session.presentation_history import record_from_fact
 
 
@@ -68,7 +68,7 @@ async def test_session_message_runs_as_user_input_and_replies_on_target_route(
     loop.sessions.save(loop.sessions.get_or_create("telegram:target"))
     msg = _message()
 
-    response = await loop._process_message(msg)
+    response = await loop.processing.process(msg)
 
     assert response is not None
     assert (response.channel, response.chat_id, response.content) == (
@@ -95,7 +95,7 @@ async def test_session_message_text_is_not_dispatched_as_a_slash_command(
     loop: AgentLoop,
 ) -> None:
     loop.sessions.save(loop.sessions.get_or_create("telegram:target"))
-    await loop._dispatch_inbound(_message("/stop"))
+    await loop.dispatch.receive(_message("/stop"))
     await asyncio.wait_for(
         asyncio.gather(*loop._active_tasks["telegram:target"]), timeout=2,
     )
@@ -217,3 +217,89 @@ async def test_cross_session_input_preserves_source_in_live_events_and_history(
         disconnect_accepted()
         run.cancel()
         await asyncio.gather(run, return_exceptions=True)
+
+
+@pytest.mark.parametrize("content", ["/stop", "Late request"])
+async def test_replaced_session_rejects_delayed_input_before_commands_or_notifications(loop, monkeypatch, content):
+    key = "websocket:replaced"
+    old = await loop.sessions.state.get(key)
+    await loop.sessions.state.reset(key)
+    accepted = AsyncMock()
+    priority = AsyncMock()
+    enqueue = AsyncMock()
+    monkeypatch.setattr(loop.runtime_event_publisher, "user_input_accepted", accepted)
+    monkeypatch.setattr(loop.command_execution, "dispatch_inline", priority)
+    monkeypatch.setattr(loop.dispatch, "enqueue", enqueue)
+    await loop.dispatch.receive(InboundMessage(
+        channel="websocket", sender_id="user", chat_id="replaced", content=content,
+        require_existing_session=True, session_generation=old.generation,
+    ))
+    accepted.assert_not_awaited()
+    priority.assert_not_awaited()
+    enqueue.assert_not_awaited()
+
+
+async def test_duplicate_coordination_input_has_one_visible_prompt_and_one_execution(loop, monkeypatch):
+    key = "websocket:deduplicated"
+    await loop.sessions.state.get("websocket:source")
+    await loop.sessions.state.get(key)
+    await loop.sessions.state.update_metadata(key, {"webui": True})
+    handles = SessionHandleResolver(loop.sessions)
+    target = await handles.ahandle_for_session(key)
+    sender = SendSessionMessageTool(sessions=loop.sessions, bus=loop.bus)
+    await sender.enqueue(source_session_key="websocket:source", target_handle=target.name,
+                         content="Inspect once", expect_reply=False, message_id="duplicate-display")
+    message = await loop.bus.consume_inbound()
+    coordinator = WebuiTurnCoordinator(loop.bus, loop.sessions, loop.schedule_background)
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def respond(**kwargs):
+        entered.set()
+        await release.wait()
+        return LLMResponse(content="Done")
+
+    monkeypatch.setattr(loop.provider, "chat_stream_with_retry", AsyncMock(side_effect=respond))
+    try:
+        with coordinator.connected():
+            await loop.dispatch.receive(message)
+            await asyncio.wait_for(entered.wait(), 3)
+            await loop.dispatch.receive(message)
+            release.set()
+            await asyncio.wait_for(asyncio.gather(*loop._active_tasks[key]), 3)
+            await loop.dispatch.receive(message)
+        rows = await loop.sessions.state.project_history(key, lambda reader: [
+            record_from_fact(fact, key) for fact in reader.all_facts()
+        ])
+        assert [row["text"] for row in rows if row["event"] == "user"] == ["Inspect once"]
+        loop.provider.chat_stream_with_retry.assert_awaited_once()
+    finally:
+        release.set()
+
+
+async def test_coordination_display_write_is_bound_to_accepted_generation(loop, monkeypatch):
+    from cirno_core.session.webui_turns import coordinator as turns_coordinator
+    from cirno_core.bus.runtime_events import RuntimeEventContext
+
+    key = "websocket:display-race"
+    original_session = await loop.sessions.state.get(key)
+    await loop.sessions.state.update_metadata(key, {"webui": True})
+    append = turns_coordinator.append_session_message_input
+
+    async def replace_before_append(*args, **kwargs):
+        await loop.sessions.state.reset(key)
+        await append(*args, **kwargs)
+
+    monkeypatch.setattr(turns_coordinator, "append_session_message_input", replace_before_append)
+    coordinator = WebuiTurnCoordinator(loop.bus, loop.sessions, loop.schedule_background)
+    with coordinator.connected():
+        await loop.bus.publish(UserInputAccepted(
+            context=RuntimeEventContext(channel="system", chat_id=key, session_key=key,
+                session_generation=original_session.generation,
+                metadata={SESSION_MESSAGE_METADATA_KEY: {
+                    "message_id": "late-display", "created_at_ms": 1, "expect_reply": False,
+                    "source_handle": "cirno", "source_session_key": "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", "target_session_key": key,
+                }}),
+            content="Message accepted before clearing",
+        ))
+    assert await loop.sessions.state.project_history(key, lambda reader: list(reader.all_facts())) == []
+    assert not any(isinstance(message.event, UserInputEvent) for message in loop.bus.outbound._queue)

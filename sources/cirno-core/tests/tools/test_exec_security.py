@@ -7,8 +7,8 @@ import sys
 from unittest.mock import patch
 
 import pytest
-
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.agent.tools.shell import tokens as shell_tokens
 from cirno_core.security.workspace_access import (
     bind_workspace_scope,
     build_workspace_scope,
@@ -53,7 +53,7 @@ def test_exec_full_workspace_scope_allows_loopback(tmp_path):
     token = bind_workspace_scope(scope)
     try:
         with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_localhost):
-            error = tool._guard_command("curl http://localhost:8765/", str(tmp_path))
+            error = tool.preparation.policy.check("curl http://localhost:8765/", str(tmp_path))
     finally:
         reset_workspace_scope(token)
     assert error is None
@@ -65,7 +65,7 @@ def test_exec_core_full_workspace_scope_blocks_loopback(tmp_path):
     token = bind_workspace_scope(scope)
     try:
         with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_localhost):
-            error = tool._guard_command("curl http://localhost:8765/", str(tmp_path))
+            error = tool.preparation.policy.check("curl http://localhost:8765/", str(tmp_path))
     finally:
         reset_workspace_scope(token)
     assert error is not None
@@ -78,7 +78,7 @@ def test_exec_full_workspace_scope_blocks_loopback_when_local_service_disabled(t
     token = bind_workspace_scope(scope)
     try:
         with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_localhost):
-            error = tool._guard_command("curl http://localhost:8765/", str(tmp_path))
+            error = tool.preparation.policy.check("curl http://localhost:8765/", str(tmp_path))
     finally:
         reset_workspace_scope(token)
     assert error is not None
@@ -91,7 +91,7 @@ def test_exec_restricted_workspace_scope_blocks_loopback(tmp_path):
     token = bind_workspace_scope(scope)
     try:
         with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_localhost):
-            error = tool._guard_command("curl http://localhost:8765/", str(tmp_path))
+            error = tool.preparation.policy.check("curl http://localhost:8765/", str(tmp_path))
     finally:
         reset_workspace_scope(token)
     assert error is not None
@@ -104,7 +104,7 @@ def test_exec_full_workspace_scope_still_blocks_metadata(tmp_path):
     token = bind_workspace_scope(scope)
     try:
         with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_private):
-            error = tool._guard_command("curl http://169.254.169.254/latest/meta-data/", str(tmp_path))
+            error = tool.preparation.policy.check("curl http://169.254.169.254/latest/meta-data/", str(tmp_path))
     finally:
         reset_workspace_scope(token)
     assert error is not None
@@ -158,7 +158,7 @@ async def test_exec_allows_curl_to_public_url():
     """Commands with public URLs should not be blocked by the internal URL check."""
     tool = ExecTool()
     with patch("cirno_core.security.network.socket.getaddrinfo", _fake_resolve_public):
-        guard_result = tool._guard_command("curl https://example.com/api", "/tmp")
+        guard_result = tool.preparation.policy.check("curl https://example.com/api", "/tmp")
     assert guard_result is None
 
 
@@ -197,7 +197,7 @@ async def test_exec_blocks_chained_internal_url():
 def test_exec_blocks_writes_to_history_jsonl(command):
     """Direct writes to history.jsonl / .dream_cursor must be blocked (#2989)."""
     tool = ExecTool()
-    result = tool._guard_command(command, "/tmp")
+    result = tool.preparation.policy.check(command, "/tmp")
     assert result is not None
     assert "deny pattern filter" in result.lower()
 
@@ -218,7 +218,7 @@ def test_exec_blocks_writes_to_history_jsonl(command):
 def test_exec_allows_reads_of_history_jsonl(command):
     """Read-only access to history.jsonl must still be allowed."""
     tool = ExecTool()
-    result = tool._guard_command(command, "/tmp")
+    result = tool.preparation.policy.check(command, "/tmp")
     assert result is None
 
 
@@ -337,7 +337,7 @@ def test_exec_allows_benign_device_targets_inside_workspace(tmp_path, command):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
-    assert tool._guard_command(command, str(workspace)) is None
+    assert tool.preparation.policy.check(command, str(workspace)) is None
 
 
 @pytest.mark.asyncio
@@ -368,7 +368,7 @@ def test_exec_still_blocks_real_outside_path_via_redirect(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
-    blocked = tool._guard_command("echo pwn > /etc/issue", str(workspace))
+    blocked = tool.preparation.policy.check("echo pwn > /etc/issue", str(workspace))
     assert blocked is not None
     assert "path outside working dir" in blocked
 
@@ -381,7 +381,7 @@ def test_exec_allows_absolute_path_inside_sandbox_ro_bind(tmp_path, monkeypatch,
     tool_bin.mkdir(parents=True)
     uv = tool_bin / "uv"
     uv.write_text("#!/bin/sh\n")
-    monkeypatch.setattr("cirno_core.agent.tools.shell._IS_WINDOWS", False)
+    monkeypatch.setattr("cirno_core.processes.platform.IS_WINDOWS", False)
     tool = ExecTool(
         working_dir=str(workspace),
         restrict_to_workspace=True,
@@ -389,7 +389,7 @@ def test_exec_allows_absolute_path_inside_sandbox_ro_bind(tmp_path, monkeypatch,
         sandbox_ro_binds=[str(tool_bin)],
     )
 
-    blocked = tool._guard_command(
+    blocked = tool.preparation.policy.check(
         f"{uv} --version",
         str(workspace),
         restrict_to_workspace=True,
@@ -405,7 +405,7 @@ def test_exec_allows_absolute_path_inside_sandbox_rw_bind(tmp_path, monkeypatch,
     workspace.mkdir()
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
-    monkeypatch.setattr("cirno_core.agent.tools.shell._IS_WINDOWS", False)
+    monkeypatch.setattr("cirno_core.processes.platform.IS_WINDOWS", False)
     tool = ExecTool(
         working_dir=str(workspace),
         restrict_to_workspace=True,
@@ -413,7 +413,7 @@ def test_exec_allows_absolute_path_inside_sandbox_rw_bind(tmp_path, monkeypatch,
         sandbox_rw_binds=[str(cache_dir)],
     )
 
-    blocked = tool._guard_command(
+    blocked = tool.preparation.policy.check(
         f"touch {cache_dir / 'stamp'}",
         str(workspace),
         restrict_to_workspace=True,
@@ -437,7 +437,7 @@ def test_exec_bind_roots_do_not_widen_guard_without_sandbox(tmp_path):
         sandbox_ro_binds=[str(tool_bin)],
     )
 
-    blocked = tool._guard_command(
+    blocked = tool.preparation.policy.check(
         f"{uv} --version",
         str(workspace),
         restrict_to_workspace=True,
@@ -454,7 +454,7 @@ def test_exec_sandbox_bind_parent_does_not_widen_workspace_guard(tmp_path, monke
     workspace.mkdir()
     secret = tmp_path / "config.json"
     secret.write_text("secret")
-    monkeypatch.setattr("cirno_core.agent.tools.shell._IS_WINDOWS", False)
+    monkeypatch.setattr("cirno_core.processes.platform.IS_WINDOWS", False)
     tool = ExecTool(
         working_dir=str(workspace),
         restrict_to_workspace=True,
@@ -462,7 +462,7 @@ def test_exec_sandbox_bind_parent_does_not_widen_workspace_guard(tmp_path, monke
         sandbox_ro_binds=[str(tmp_path)],
     )
 
-    blocked = tool._guard_command(
+    blocked = tool.preparation.policy.check(
         f"cat {secret}",
         str(workspace),
         restrict_to_workspace=True,
@@ -492,7 +492,7 @@ def test_exec_sandbox_bind_parent_does_not_widen_workspace_guard(tmp_path, monke
 def test_exec_blocks_format_command(command):
     """The Windows ``format`` disk command must be denied."""
     tool = ExecTool()
-    result = tool._guard_command(command, "/tmp")
+    result = tool.preparation.policy.check(command, "/tmp")
     assert result is not None
     assert "deny pattern filter" in result.lower()
 
@@ -512,7 +512,7 @@ def test_exec_blocks_format_command(command):
 def test_exec_allows_format_in_url_and_args(command):
     """``format`` inside URL parameters or as a non-command arg must be allowed."""
     tool = ExecTool()
-    result = tool._guard_command(command, "/tmp")
+    result = tool.preparation.policy.check(command, "/tmp")
     assert result is None
 
 
@@ -534,7 +534,7 @@ def test_exec_allows_workspace_paths_from_subdirectory(tmp_path):
 
     # A command run from the subdirectory that references a sibling path
     # inside the workspace should be allowed.
-    result = tool._guard_command(
+    result = tool.preparation.policy.check(
         f"git clone {sibling}",
         str(subdir),
         workspace_root=str(workspace),
@@ -553,7 +553,7 @@ def test_exec_blocks_outside_paths_from_subdirectory(tmp_path):
 
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    result = tool._guard_command(
+    result = tool.preparation.policy.check(
         f"cat {outside / 'key.pem'}",
         str(subdir),
         workspace_root=str(workspace),
@@ -575,7 +575,7 @@ def test_exec_blocks_outside_paths_with_redirection_and_delimiters(tmp_path):
         f"({outside / 'key.pem'})",
         f"cat {{{outside / 'key.pem'}}}",
     ):
-        result = tool._guard_command(cmd, str(workspace), workspace_root=str(workspace))
+        result = tool.preparation.policy.check(cmd, str(workspace), workspace_root=str(workspace))
         assert result is not None, f"Expected {cmd} to be blocked"
         assert "path outside working dir" in result
 
@@ -595,8 +595,8 @@ def test_exec_does_not_truncate_parentheses_in_symlink_paths(tmp_path, quoted):
     command = f"cat {rendered}"
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert f"{link}/secret.txt" in tool._extract_absolute_paths(command)
-    result = tool._guard_command(command, str(workspace), workspace_root=str(workspace))
+    assert f"{link}/secret.txt" in shell_tokens.extract_absolute_paths(command)
+    result = tool.preparation.policy.check(command, str(workspace), workspace_root=str(workspace))
 
     assert result is not None
     assert "path outside working dir" in result
@@ -613,8 +613,8 @@ def test_exec_checks_leaf_symlink_inside_command_substitution(tmp_path):
     command = f'cat "$(printf %s {link})"'
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert str(link) in tool._extract_absolute_paths(command)
-    result = tool._guard_command(command, str(workspace), workspace_root=str(workspace))
+    assert str(link) in shell_tokens.extract_absolute_paths(command)
+    result = tool.preparation.policy.check(command, str(workspace), workspace_root=str(workspace))
 
     assert result is not None
     assert "path outside working dir" in result
@@ -631,18 +631,18 @@ def test_exec_checks_leaf_symlink_inside_command_substitution(tmp_path):
     ],
 )
 def test_exec_does_not_misclassify_nonlocal_slash_strings(command, not_a_posix_path):
-    assert not_a_posix_path not in ExecTool._extract_absolute_paths(command)
+    assert not_a_posix_path not in shell_tokens.extract_absolute_paths(command)
 
 
 def test_exec_extracts_quoted_path_with_shell_punctuation():
     path = "/tmp/a file)/with, punctuation"
 
-    assert ExecTool._extract_absolute_paths(f'cat "{path}"') == [path]
+    assert shell_tokens.extract_absolute_paths(f'cat "{path}"') == [path]
 
 
 @pytest.mark.parametrize("uri", ["file:///etc/passwd", "file://localhost/%65tc/passwd"])
 def test_exec_extracts_local_file_uri(uri):
-    assert "/etc/passwd" in ExecTool._extract_absolute_paths(f"curl {uri}")
+    assert "/etc/passwd" in shell_tokens.extract_absolute_paths(f"curl {uri}")
 
 
 def test_exec_blocks_file_uri_outside_workspace(tmp_path):
@@ -652,7 +652,7 @@ def test_exec_blocks_file_uri_outside_workspace(tmp_path):
     outside.write_text("secret")
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    result = tool._guard_command(
+    result = tool.preparation.policy.check(
         f"curl {outside.as_uri()}",
         str(workspace),
         workspace_root=str(workspace),
@@ -673,8 +673,8 @@ def test_exec_checks_file_uri_leaf_symlink_inside_command_substitution(tmp_path)
     command = f'curl "$(printf file://{link})"'
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert str(link) in tool._extract_absolute_paths(command)
-    result = tool._guard_command(command, str(workspace), workspace_root=str(workspace))
+    assert str(link) in shell_tokens.extract_absolute_paths(command)
+    result = tool.preparation.policy.check(command, str(workspace), workspace_root=str(workspace))
 
     assert result is not None
     assert "path outside working dir" in result
@@ -687,7 +687,7 @@ def test_exec_keeps_quoted_parenthesis_path_inside_workspace_allowed(tmp_path):
     inside.write_text("safe")
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert tool._guard_command(
+    assert tool.preparation.policy.check(
         f'cat "{inside}"',
         str(workspace),
         workspace_root=str(workspace),
@@ -706,7 +706,7 @@ def test_exec_keeps_quoted_assignment_punctuation_inside_workspace_allowed(tmp_p
     inside.write_text("safe")
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert tool._guard_command(
+    assert tool.preparation.policy.check(
         f'x="{inside}"; cat "$x"',
         str(workspace),
         workspace_root=str(workspace),
@@ -724,15 +724,15 @@ def test_exec_recursively_checks_compact_shell_command_string(tmp_path):
     command = f'sh -c "x={link};cat \\"$x\\""'
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert str(link) in tool._extract_absolute_paths(command)
-    result = tool._guard_command(command, str(workspace), workspace_root=str(workspace))
+    assert str(link) in shell_tokens.extract_absolute_paths(command)
+    result = tool.preparation.policy.check(command, str(workspace), workspace_root=str(workspace))
 
     assert result is not None
     assert "path outside working dir" in result
 
 
 def test_exec_malformed_quote_still_extracts_path():
-    assert "/etc/passwd" in ExecTool._extract_absolute_paths('cat "/etc/passwd')
+    assert "/etc/passwd" in shell_tokens.extract_absolute_paths('cat "/etc/passwd')
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX double-slash path semantics")
@@ -742,8 +742,8 @@ def test_exec_blocks_double_slash_absolute_paths(tmp_path, path):
     workspace.mkdir()
     tool = ExecTool(working_dir=str(workspace), restrict_to_workspace=True)
 
-    assert path in tool._extract_absolute_paths(f"cat {path}")
-    result = tool._guard_command(
+    assert path in shell_tokens.extract_absolute_paths(f"cat {path}")
+    result = tool.preparation.policy.check(
         f"cat {path}",
         str(workspace),
         workspace_root=str(workspace),

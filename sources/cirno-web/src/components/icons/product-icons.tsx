@@ -71,7 +71,6 @@ export const DreamLogIcon = productIcon("dream-log", <><rect x="4" y="3" width="
 export const RestoreMemoryIcon = productIcon("restore-memory", <><path d="M13 4h5a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-4M4 4v5h5M4 9a6 6 0 1 1 3 5" /></>);
 export const PromptTemplateIcon = productIcon("prompt-template", <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m10 8-3 4 3 4m4-8 3 4-3 4" /></>);
 export const TriggerIcon = productIcon("trigger", <path d="m13 2-9 12h7l-1 8 10-13h-7l0-7Z" />);
-export const PairingIcon = productIcon("pairing", <><path d="m9 15-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m4 2 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0M8 16l8-8" /></>);
 export const HelpIcon = productIcon("help", <><circle cx="12" cy="12" r="9" /><path d="M9 8a3 3 0 0 1 6 0c0 2-3 2-3 5m0 4h.01" /></>);
 export const HistoryIcon = productIcon("history", <><path d="M4 9a8.5 8.5 0 1 1 0 7M4 4v5h5M12 7v5l3 2" /></>);
 export const WebSearchIcon = productIcon("web-search", <><circle cx="10" cy="10" r="7" /><path d="M3 10h14M10 3a12 12 0 0 0 0 14 12 12 0 0 0 0-14" /><circle cx="17" cy="17" r="4" /><path d="m20 20 2 2" /></>);

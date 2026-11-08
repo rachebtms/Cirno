@@ -1,13 +1,16 @@
 import { isModelInput } from "@/lib/thread-inputs";
 import { Fragment, memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageActions, MessageBubble } from "@/components/MessageBubble";
+import { MessageActions, MessageBubble } from "@/features/messages";
 import { AgentActivityCluster } from "@/components/thread/AgentActivityCluster";
 import { AssistantSelectionAction } from "@/components/thread/AssistantSelectionAction";
-import { useLocalPreferences } from "@/hooks/useLocalPreferences";
+import { usePreferences } from "@/hooks/usePreferences";
 import { projectActivityTimeline, type TurnUnit } from "@/lib/activity-timeline";
 import { cn } from "@/lib/utils";
-import type { CliAppInfo, McpPresetInfo, RetryStatus, SlashCommand, UIMessage } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { RetryStatus, UIMessage } from "@/lib/contracts/messages";
+import type { SlashCommand } from "@/lib/contracts/commands";
 
 export interface MessageEditorSlot {
   messageId: string;
@@ -17,6 +20,7 @@ export interface MessageEditorSlot {
 interface ThreadMessagesProps {
   messageEditor?: MessageEditorSlot;
   defaultActivityCollapsed?: boolean;
+  assistantBubbles?: boolean;
   messages: UIMessage[];
   beforeMessages?: ReactNode;
   beforeUnit?: { key: string; content: ReactNode };
@@ -46,8 +50,8 @@ interface ThreadMessagesProps {
 
 export type DisplayUnit = TurnUnit;
 
-export function buildDisplayUnits(messages: UIMessage[]): DisplayUnit[] {
-  return projectActivityTimeline(messages).filter(unit => unit.type !== "message" || !unit.message.userQuestion);
+export function buildDisplayUnits(messages: UIMessage[], preserveReplyBoundaries = false): DisplayUnit[] {
+  return projectActivityTimeline(messages, { preserveReplyBoundaries }).filter(unit => unit.type !== "message" || !unit.message.userQuestion);
 }
 
 export function assistantForkFlags(units: DisplayUnit[]): boolean[] {
@@ -80,6 +84,7 @@ export function assistantForkFlags(units: DisplayUnit[]): boolean[] {
 export function ThreadMessages({
   messageEditor,
   defaultActivityCollapsed = false,
+  assistantBubbles = false,
   messages,
   beforeMessages,
   beforeUnit,
@@ -105,13 +110,13 @@ export function ThreadMessages({
   onActivityToggle,
 }: ThreadMessagesProps) {
   const { t } = useTranslation();
-  const { activityMode } = useLocalPreferences();
+  const { activityMode } = usePreferences();
   const messageListRef = useRef<HTMLDivElement>(null);
   const units = useMemo(
     () => buildDisplayUnits(defaultActivityCollapsed ? messages : messages.map(message =>
       message.activityKind === "model" && message.content.trim()
-        ? { ...message, activityKind: undefined, turnPhase: "answer" as const } : message)),
-    [defaultActivityCollapsed, messages],
+        ? { ...message, activityKind: undefined, turnPhase: "answer" as const } : message), assistantBubbles),
+    [assistantBubbles, defaultActivityCollapsed, messages],
   );
   const forkBoundaryAfterUnitIndex = useMemo(
     () => unitIndexAfterMessageCount(units, forkBoundaryMessageCount),
@@ -243,6 +248,7 @@ export function ThreadMessages({
             suppressActivity={suppressActivity}
             showBlockContext={showBlockContext}
             blockActivity={blockActivity}
+            assistantBubbles={assistantBubbles}
             defaultActivityCollapsed={defaultActivityCollapsed}
             blockActivityExpanded={blockActivityExpanded}
             contextBlockKey={contextBlockKey}
@@ -349,6 +355,7 @@ interface ThreadDisplayUnitProps {
   showBlockContext: boolean;
   blockActivity?: Extract<DisplayUnit, { type: "activity" }>;
   defaultActivityCollapsed: boolean;
+  assistantBubbles: boolean;
   blockActivityExpanded: boolean;
   contextBlockKey?: string;
   deferOffscreenRender: boolean;
@@ -380,6 +387,7 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
   showBlockContext,
   blockActivity,
   defaultActivityCollapsed,
+  assistantBubbles,
   blockActivityExpanded,
   contextBlockKey,
   deferOffscreenRender,
@@ -437,7 +445,7 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
   }, [contextBlockKey, onActivityExpandedChange]);
   const actions = !editor && unit.type === "message" && unit.message.kind !== "compaction" ? <MessageActions
     message={unit.message} isTurnStreaming={isTurnStreaming}
-    onForkFromHere={forkIndex !== undefined ? onForkFromHere : undefined}
+    onForkFromHere={forkIndex !== undefined && onForkFromMessage ? onForkFromHere : undefined}
     onEdit={onEditMessage && !temporary && unit.message.role === "user" && !unit.message.inputOrigin && !unit.message.sessionMessage && unit.message.turnId && !isTurnStreaming
       ? () => onEditMessage(unit.message) : undefined}
   /> : null;
@@ -502,6 +510,7 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
             <MessageBubble
               editor={editor}
               message={unit.message}
+              assistantBubble={assistantBubbles}
               temporary={temporary}
               cliApps={cliApps}
               mcpPresets={mcpPresets}
@@ -530,6 +539,7 @@ function threadDisplayUnitPropsEqual(
     && previous.suppressActivity === next.suppressActivity
     && previous.showBlockContext === next.showBlockContext
     && previous.blockActivity === next.blockActivity
+    && previous.assistantBubbles === next.assistantBubbles
     && previous.defaultActivityCollapsed === next.defaultActivityCollapsed
     && previous.blockActivityExpanded === next.blockActivityExpanded
     && previous.contextBlockKey === next.contextBlockKey

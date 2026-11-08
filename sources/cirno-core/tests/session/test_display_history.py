@@ -177,7 +177,7 @@ asyncio.run(run())
 async def test_large_display_fact_serialization_and_copy_stay_off_runtime_loop(tmp_path, monkeypatch):
     import threading
 
-    import cirno_core.session.state as state_module
+    import cirno_core.session.state.history as state_module
 
     sessions = _manager(tmp_path)
     session = await sessions.state.get_header("websocket:large-activity")
@@ -246,3 +246,41 @@ async def test_new_fork_activity_uses_creation_time_not_inherited_history(tmp_pa
     rows = list_webui_sessions(sessions, await sessions.state.list_metadata())
     assert rows[0]["key"] == fork_key
     await sessions.state.aclose()
+
+
+@pytest.mark.parametrize("before_input", [1, 2])
+async def test_fork_uses_display_boundary_when_internal_context_has_no_user_row(tmp_path, before_input):
+    """Internal reports must not shift a branch selected from visible answers."""
+    from cirno_core.bus.events import INBOUND_META_TURN_ID
+
+    sessions = _manager(tmp_path)
+    try:
+        source = await sessions.state.import_messages("websocket:reports", [
+            {"role": "user", "content": "Task one", INBOUND_META_TURN_ID: "human-1"},
+            {"role": "assistant", "content": "Started"},
+            {"role": "user", "content": "Internal work report"},
+            {"role": "assistant", "content": "Report received"},
+            {"role": "user", "content": "Task two", INBOUND_META_TURN_ID: "human-2"},
+            {"role": "assistant", "content": "Second answer"},
+        ])
+        display = [
+            HistoryFact(HistoryKind.INPUT, {"text": "Task one"}, "human-1"),
+            HistoryFact(HistoryKind.ANSWER, {"text": "Started"}, "human-1"),
+            HistoryFact(HistoryKind.ANSWER, {"text": "Report received"}, "report"),
+            HistoryFact(HistoryKind.INPUT, {"text": "Task two"}, "human-2"),
+            HistoryFact(HistoryKind.ANSWER, {"text": "Second answer"}, "human-2"),
+        ]
+        await sessions.state.append_history(source.key, display, expected_generation=source.generation)
+        forked = await create_webui_chat_fork(sessions, source_chat_id="reports", before_user_index=before_input)
+        assert forked is not None
+        target = await sessions.state.read(forked[1])
+        assert [row["content"] for row in target.messages] == [row["content"] for row in source.messages[:4 if before_input == 1 else 6]]
+        facts = await sessions.state.project_history(target.key, lambda reader: list(reader.all_facts()))
+        assert facts[:-1] == display[:3 if before_input == 1 else 5]
+        assert facts[-1].kind is HistoryKind.FORK_BOUNDARY
+        response = await sessions.state.project_history(target.key, lambda reader: build_webui_thread_response(
+            target.key, history=reader, session_messages=target.messages,
+        ))
+        assert all("Internal work report" not in event.get("text", "") for event in response["events"])
+    finally:
+        await sessions.state.aclose()

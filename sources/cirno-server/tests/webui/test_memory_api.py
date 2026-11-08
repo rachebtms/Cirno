@@ -1,17 +1,16 @@
 """Authenticated settings actions expose bounded memory pages, evidence and maintenance."""
 import pytest
-
 from cirno_core.config.home import get_home_path
 from cirno_core.config.schema import Config
-from cirno_core.memory.repository import MemoryRepository
+from cirno_memory.repository import MemoryRepository
 from cirno_server.webui.instance_api import instance_action
-from cirno_server.webui.settings.runtime import update_runtime_config
 from cirno_server.webui.settings.contracts import WebUISettingsError
+from cirno_server.webui.settings.runtime import update_runtime_config
 
 
 @pytest.mark.asyncio
 async def test_memory_settings_pagination_history_and_source():
-    repo = MemoryRepository()
+    repo = MemoryRepository(get_home_path())
     row = repo.save("seed=42 threshold=0.00003125", source="test:original", session_key="a", kind="fact")
     repo.save("seed=43 threshold=0.00003125", source="test:correction", session_key="a", memory_id=row["id"], expected_revision=1)
     async def api(action, **values):
@@ -48,7 +47,7 @@ def test_memory_runtime_settings_round_trip_and_atomic_validation():
 
 @pytest.mark.asyncio
 async def test_settings_tags_dates_and_database_status():
-    repo = MemoryRepository()
+    repo = MemoryRepository(get_home_path())
     row = repo.save('Historical calibration', source='test:dated', session_key='a', tags=['calibration'], observed_at='2024-02-29T12:00:00Z')
     async def api(action, **values):
         return await instance_action({'action': action, 'values': values}, sessions=None, bus=None)
@@ -60,7 +59,7 @@ async def test_settings_tags_dates_and_database_status():
 
 @pytest.mark.asyncio
 async def test_settings_uses_shared_semantic_search_and_preserves_filters(monkeypatch):
-    import cirno_core.memory.embedding as embedding
+    import cirno_memory.embedding as embedding
     seen = {}
     def semantic(repo, query, config, **filters):
         seen.update(query=query, enabled=config.embedding_enabled, **filters)
@@ -80,7 +79,7 @@ async def test_settings_uses_shared_semantic_search_and_preserves_filters(monkey
 
 @pytest.mark.asyncio
 async def test_settings_disabled_embedding_falls_back_with_reason():
-    repo = MemoryRepository()
+    repo = MemoryRepository(get_home_path())
     row = repo.save('calibration', source='test:fallback', session_key='a', layer='knowledge')
     result = await instance_action({'action': 'memory.list', 'values': {
         'query': 'calibration', 'mode': 'semantic',

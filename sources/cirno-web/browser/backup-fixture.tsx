@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BackupSettings } from "@/components/settings/system/BackupSettings";
+import { BackupSettings } from "@/features/settings/system/BackupSettings";
 import { AgentActivityCluster } from "@/components/thread/AgentActivityCluster";
 import { CirnoClient } from "@/lib/cirno-client";
 

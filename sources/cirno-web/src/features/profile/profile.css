@@ -1,0 +1,40 @@
+.profile-files {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.profile-files > h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.profile-file .card__header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.profile-file .card__header > div:first-child {
+  min-width: 0;
+}
+.profile-file h3 {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.profile-file-path {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.profile-file-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+}
+.profile-file-placeholder {
+  height: 0.875rem;
+  width: 65%;
+  background: var(--surface-secondary);
+  border-radius: var(--radius-sm);
+}

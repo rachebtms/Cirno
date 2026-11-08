@@ -1,6 +1,6 @@
 import pytest
 
-from cirno_core.providers.base import LLMUsage
+from cirno_usage.types import LLMUsage
 
 
 def test_reported_usage_derives_total_and_preserves_unreported_cache() -> None:

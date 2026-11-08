@@ -3,9 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock
 
-import pytest
-
 import cirno_server.webui.forking as forking
+import pytest
 
 
 @pytest.mark.parametrize(
@@ -115,3 +114,16 @@ async def test_fork_copies_prefix_and_boundary_in_the_session_transaction(histor
 async def test_fork_missing_source_leaves_no_partial_session(history):
     assert await forking.create_webui_chat_fork(history.sessions, source_chat_id="missing", before_user_index=1) is None
     assert await history.sessions.state.list_sessions() == []
+
+
+async def test_cirno_fork_is_rejected_without_creating_a_worker(history):
+    from cirno_core.session.router_session import ensure_router_session
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+    key = await ensure_router_session(history.sessions)
+    await history.sessions.state.import_messages(key, [{"role": "user", "content": "hello"}])
+    assert await forking.create_webui_chat_fork(history.sessions, source_chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", before_user_index=1) is None
+    assert [row["key"] for row in await history.sessions.state.list_sessions()] == [ROUTER_SESSION_KEY]
+    channel = SimpleNamespace(send_webui_protocol_error=AsyncMock(), gateway=SimpleNamespace(session_manager=history.sessions))
+    connection = object()
+    await forking.handle_webui_fork_chat(channel, connection, {"source_chat_id": "b1ec9323-2155-5f24-bc56-1da2f59aeecb", "before_user_index": 1})
+    channel.send_webui_protocol_error.assert_awaited_once_with(connection, "The Router conversation cannot be forked")

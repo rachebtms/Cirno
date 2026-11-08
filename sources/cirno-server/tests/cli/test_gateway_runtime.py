@@ -1,6 +1,6 @@
 """Regression tests for gateway runtime resource teardown on stop.
 
-Covers the lifecycle contract of ``_close_gateway_runtime``: runtime tasks
+Covers the lifecycle contract of ``close_runtime``: runtime tasks
 (including the agent loop and in-flight turns) are cancelled and awaited --
 bounded -- before exec sessions, subagents, and MCP servers are closed, the
 close is deterministic and idempotent, and a stuck or failing cleanup cannot
@@ -10,15 +10,15 @@ block the stop.
 import asyncio
 import time
 from contextlib import suppress
+from types import SimpleNamespace
 
+import pytest
 from cirno_core.agent.hook import AgentRunHookContext
-from cirno_core.agent.tools.mcp import MCPProvider
+from cirno_core.agent.tools.mcp.provider import MCPProvider
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_server.application import (
-    _close_gateway_runtime,
-    _gateway_readiness_payload,
-    _MCPReadinessHook,
-)
+from cirno_server.lifecycle.health import channel_readiness
+from cirno_server.lifecycle.mcp import MCPReadinessHook
+from cirno_server.lifecycle.shutdown import close_runtime
 
 
 class _FakeAgent:
@@ -85,7 +85,7 @@ def test_gateway_readiness_is_degraded_when_required_websocket_is_unavailable() 
         },
     )()
 
-    ready, payload = _gateway_readiness_payload(channels)
+    ready, payload = channel_readiness(channels)
 
     assert ready is False
     assert payload == {
@@ -96,9 +96,20 @@ def test_gateway_readiness_is_degraded_when_required_websocket_is_unavailable() 
     }
 
 
+def test_readiness_cannot_report_healthy_after_channel_status_failure() -> None:
+    def failed_status():
+        raise RuntimeError("channel status unavailable")
+
+    channels = SimpleNamespace(enabled_channels=[], get_status=failed_status)
+    ready, payload = channel_readiness(channels)
+
+    assert ready is False
+    assert payload["status"] == "degraded"
+
+
 async def test_mcp_readiness_hook_delegates_to_application_provider() -> None:
     provider = _TrackingMCPProvider()
-    hook = _MCPReadinessHook(provider)
+    hook = MCPReadinessHook(provider)
 
     await hook.before_run(AgentRunHookContext(messages=[]))
 
@@ -131,7 +142,7 @@ async def test_runtime_tasks_cancelled_before_resources_closed() -> None:
     task = asyncio.create_task(_cancellable_task(events))
     await asyncio.sleep(0)  # let the task start (cancellation pre-start skips its body)
 
-    await _close_gateway_runtime(agent, provider, channels, [task], None)
+    await close_runtime(agent, provider, channels, [task], None)
 
     assert events == ["cancelled", "aclose", "mcp_closed"]
     assert channels.stopped == 1
@@ -151,7 +162,7 @@ async def test_pending_background_work_is_drained_before_close_returns() -> None
 
     agent.background = asyncio.create_task(background_work())
 
-    await _close_gateway_runtime(agent, provider, channels, [], None)
+    await close_runtime(agent, provider, channels, [], None)
 
     assert done["done"] is True
     assert agent.close_calls == 1
@@ -167,7 +178,7 @@ async def test_stubborn_task_does_not_block_past_wait_timeout() -> None:
     runtime_tasks = asyncio.gather(task)
 
     start = time.monotonic()
-    await _close_gateway_runtime(
+    await close_runtime(
         agent,
         provider,
         channels,
@@ -187,21 +198,23 @@ async def test_stubborn_task_does_not_block_past_wait_timeout() -> None:
     assert elapsed < 1.0  # bounded, not held open by the stubborn task
 
 
-async def test_hanging_close_is_bounded_and_does_not_raise() -> None:
+async def test_hanging_close_is_bounded_and_reported() -> None:
     agent = _FakeAgent()
     provider = _FakeMCPProvider()
     agent.hang_on_close = True
     channels = _FakeChannels()
 
     start = time.monotonic()
-    await _close_gateway_runtime(
-        agent,
-        provider,
-        channels,
-        [],
-        None,
-        close_timeout=0.05,
-    )
+    with pytest.raises(ExceptionGroup) as failure:
+        await close_runtime(
+            agent,
+            provider,
+            channels,
+            [],
+            None,
+            close_timeout=0.05,
+        )
+    assert isinstance(failure.value.exceptions[0], TimeoutError)
     elapsed = time.monotonic() - start
 
     assert agent.close_calls == 1
@@ -210,13 +223,15 @@ async def test_hanging_close_is_bounded_and_does_not_raise() -> None:
     assert elapsed < 1.0
 
 
-async def test_failing_close_is_logged_but_shutdown_proceeds() -> None:
+async def test_failing_close_is_reported_after_remaining_resources_close() -> None:
     agent = _FakeAgent()
     provider = _FakeMCPProvider()
     agent.raise_on_close = True
     channels = _FakeChannels()
 
-    await _close_gateway_runtime(agent, provider, channels, [], None)
+    with pytest.raises(ExceptionGroup) as failure:
+        await close_runtime(agent, provider, channels, [], None)
+    assert str(failure.value.exceptions[0]) == "cleanup exploded"
 
     assert agent.close_calls == 1
     assert provider.close_calls == 1
@@ -229,8 +244,8 @@ async def test_duplicate_cleanup_is_idempotent() -> None:
     channels = _FakeChannels()
     task = asyncio.create_task(_cancellable_task([]))
 
-    await _close_gateway_runtime(agent, provider, channels, [task], None)
-    await _close_gateway_runtime(agent, provider, channels, [task], None)
+    await close_runtime(agent, provider, channels, [task], None)
+    await close_runtime(agent, provider, channels, [task], None)
 
     assert agent.close_calls == 2  # second pass is a clean no-op
     assert provider.close_calls == 2
@@ -247,7 +262,7 @@ async def test_finished_runtime_tasks_gather_is_retrieved() -> None:
     runtime_tasks = asyncio.gather(finished)
     await asyncio.sleep(0)  # let the gather observe the finished child
 
-    await _close_gateway_runtime(agent, provider, channels, [], runtime_tasks)
+    await close_runtime(agent, provider, channels, [], runtime_tasks)
 
     assert runtime_tasks.done()
     assert agent.close_calls == 1
@@ -261,10 +276,53 @@ async def test_cancelled_runtime_tasks_gather_does_not_raise() -> None:
     runtime_tasks = asyncio.gather(asyncio.sleep(3600))
     runtime_tasks.cancel()
 
-    await _close_gateway_runtime(agent, provider, channels, [], runtime_tasks)
+    await close_runtime(agent, provider, channels, [], runtime_tasks)
     with suppress(asyncio.CancelledError):
         await runtime_tasks  # settle the cancelled gather without raising
 
     assert runtime_tasks.done()  # the cancelled gather was awaited without raising
     assert agent.close_calls == 1
     assert provider.close_calls == 1
+
+
+async def test_channel_shutdown_failure_still_closes_runtime_resources() -> None:
+    class FailedChannels(_FakeChannels):
+        async def stop_all(self) -> None:
+            raise RuntimeError("channel transport failed to close")
+
+    events: list[str] = []
+    agent, provider = _FakeAgent(events), _FakeMCPProvider(events)
+    task = asyncio.create_task(_cancellable_task(events))
+    await asyncio.sleep(0)
+    with pytest.raises(BaseExceptionGroup) as failure:
+        await close_runtime(agent, provider, FailedChannels(), [task], None)
+    assert task.cancelled()
+    assert events == ["cancelled", "aclose", "mcp_closed"]
+    assert "channel transport failed to close" in str(failure.value.exceptions[0])
+
+
+async def test_hanging_channel_stop_is_bounded_and_resources_still_close() -> None:
+    class HangingChannels(_FakeChannels):
+        async def stop_all(self) -> None:
+            await asyncio.sleep(3600)
+
+    agent, provider = _FakeAgent(), _FakeMCPProvider()
+    with pytest.raises(ExceptionGroup) as failure:
+        await close_runtime(agent, provider, HangingChannels(), [], None, close_timeout=0.05)
+    assert isinstance(failure.value.exceptions[0], TimeoutError)
+    assert agent.close_calls == provider.close_calls == 1
+
+
+async def test_failed_runtime_gather_is_reported_after_cleanup() -> None:
+    async def failed_runner() -> None:
+        raise RuntimeError("dispatch runner failed")
+
+    agent, provider = _FakeAgent(), _FakeMCPProvider()
+    task = asyncio.create_task(failed_runner())
+    gathered = asyncio.gather(task)
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    with pytest.raises(ExceptionGroup) as failure:
+        await close_runtime(agent, provider, _FakeChannels(), [task], gathered)
+    assert str(failure.value.exceptions[0]) == "dispatch runner failed"
+    assert agent.close_calls == provider.close_calls == 1

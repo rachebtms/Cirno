@@ -16,10 +16,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent.session_helpers import mock_session_manager, run_session
+from sources.development.testing.sessions import mock_session_manager, run_session
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.queue import MessageBus
-from cirno_core.session.recovery import RUNTIME_CHECKPOINT_KEY
+from cirno_core.session.recovery.contracts import RUNTIME_CHECKPOINT_KEY
 
 
 def _make_provider():
@@ -98,7 +98,7 @@ async def test_dispatch_cancellation_restores_checkpoint():
     async def _cancel(*_args, **_kwargs):
         raise asyncio.CancelledError()
 
-    loop._process_message = _cancel
+    loop.processing.process = _cancel
 
     msg = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="work")
 
@@ -138,7 +138,7 @@ async def test_dispatch_cancellation_keeps_checkpoint_for_gateway_shutdown(tmp_p
     async def _cancel(*_args: object, **_kwargs: object) -> None:
         raise asyncio.CancelledError()
 
-    loop._process_message = _cancel  # type: ignore[method-assign]
+    loop.processing.process = _cancel  # type: ignore[method-assign]
 
     from cirno_core.bus.events import InboundMessage
 

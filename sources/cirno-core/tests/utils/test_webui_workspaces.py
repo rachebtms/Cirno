@@ -428,3 +428,15 @@ def test_favorites_keep_pin_order_across_restart_and_can_remove_deleted_folder(t
     assert restarted.set_favorite_project(str(beta), False) == [{"name": "alpha", "path": str(alpha)}]
     with pytest.raises(WorkspaceScopeError, match="existing directory"):
         restarted.set_favorite_project(str(beta), True)
+
+
+@pytest.mark.parametrize("content", [b"{invalid json", b"\xff", b'{"default_access_mode":"unknown"}', b'x' * (128 * 1024 + 1)])
+def test_unreadable_workspace_preferences_are_not_replaced_by_defaults(tmp_path, monkeypatch, content):
+    from cirno_server.webui.workspaces import write_webui_default_access_mode
+    monkeypatch.setattr("cirno_server.webui.workspaces.get_webui_dir", lambda: tmp_path)
+    path = webui_workspace_state_path()
+    path.write_bytes(content)
+    for _ in range(2):
+        with pytest.raises(ValueError, match="[Ww]orkspace preferences"):
+            write_webui_default_access_mode("full")
+        assert path.read_bytes() == content

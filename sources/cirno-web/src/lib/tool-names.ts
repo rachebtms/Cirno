@@ -1,4 +1,4 @@
-import catalog from "../../../cirno-core/agent/tools/names.json";
+import catalog from "../../../cirno-core/src/cirno_core/agent/tools/names.json";
 
 const implementationNames = new Map(Object.entries(catalog.names).map(([id, name]) => [name, id]));
 const implementationGroups = new Map(Object.entries(catalog.action_groups).map(([id, group]) => [group, id]));

@@ -10,11 +10,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.bus.events import InboundMessage
-from cirno_core.providers.base import LLMResponse, LLMUsage
-from cirno_core.session.manager import Session
+from cirno_usage.types import LLMUsage
+from cirno_core.providers.contracts import LLMResponse
+from cirno_core.session.model import Session
 from cirno_core.session.state import SessionState
 
 
@@ -44,7 +44,7 @@ class TestRestartCommand:
 
     @pytest.mark.asyncio
     async def test_restart_sends_message_and_calls_execv(self):
-        from cirno_core.command.builtin import cmd_restart
+        from cirno_core.command.builtin.service import cmd_restart
         from cirno_core.command.router import CommandContext
         from cirno_core.utils.restart import (
             RESTART_NOTIFY_CHANNEL_ENV,
@@ -73,8 +73,8 @@ class TestRestartCommand:
         )
 
         with patch.dict(os.environ, {}, clear=False), \
-             patch("cirno_core.command.builtin.asyncio", new=fake_asyncio), \
-             patch("cirno_core.command.builtin.os.execv") as mock_execv:
+             patch("cirno_core.command.builtin.service.asyncio", new=fake_asyncio), \
+             patch("cirno_core.command.builtin.service.os.execv") as mock_execv:
             out = await cmd_restart(ctx)
             assert "Restarting" in out.content
             assert os.environ.get(RESTART_NOTIFY_CHANNEL_ENV) == "cli"
@@ -87,7 +87,7 @@ class TestRestartCommand:
 
     @pytest.mark.asyncio
     async def test_restart_windows_auto_spawns_and_exits(self):
-        from cirno_core.command.builtin import cmd_restart
+        from cirno_core.command.builtin.service import cmd_restart
         from cirno_core.command.router import CommandContext
 
         loop, _bus = _make_loop()
@@ -103,12 +103,12 @@ class TestRestartCommand:
             create_task=lambda coro: scheduled.append(asyncio.create_task(coro)) or scheduled[-1],
         )
 
-        with patch("cirno_core.command.builtin.asyncio", new=fake_asyncio), \
-             patch("cirno_core.command.builtin.sys.platform", "win32"), \
-             patch("cirno_core.command.builtin.subprocess.CREATE_NEW_PROCESS_GROUP", 512, create=True), \
-             patch("cirno_core.command.builtin.subprocess.Popen") as mock_popen, \
-             patch("cirno_core.command.builtin.os._exit") as mock_exit, \
-             patch("cirno_core.command.builtin.os.execv") as mock_execv:
+        with patch("cirno_core.command.builtin.service.asyncio", new=fake_asyncio), \
+             patch("cirno_core.command.builtin.service.sys.platform", "win32"), \
+             patch("cirno_core.command.builtin.service.subprocess.CREATE_NEW_PROCESS_GROUP", 512, create=True), \
+             patch("cirno_core.command.builtin.service.subprocess.Popen") as mock_popen, \
+             patch("cirno_core.command.builtin.service.os._exit") as mock_exit, \
+             patch("cirno_core.command.builtin.service.os.execv") as mock_execv:
             await cmd_restart(ctx)
             await scheduled[0]
 
@@ -121,7 +121,7 @@ class TestRestartCommand:
 
     @pytest.mark.asyncio
     async def test_restart_exit_mode_does_not_spawn(self):
-        from cirno_core.command.builtin import cmd_restart
+        from cirno_core.command.builtin.service import cmd_restart
         from cirno_core.command.router import CommandContext
 
         loop, _bus = _make_loop()
@@ -138,10 +138,10 @@ class TestRestartCommand:
             create_task=lambda coro: scheduled.append(asyncio.create_task(coro)) or scheduled[-1],
         )
 
-        with patch("cirno_core.command.builtin.asyncio", new=fake_asyncio), \
-             patch("cirno_core.command.builtin.subprocess.Popen") as mock_popen, \
-             patch("cirno_core.command.builtin.os._exit") as mock_exit, \
-             patch("cirno_core.command.builtin.os.execv") as mock_execv:
+        with patch("cirno_core.command.builtin.service.asyncio", new=fake_asyncio), \
+             patch("cirno_core.command.builtin.service.subprocess.Popen") as mock_popen, \
+             patch("cirno_core.command.builtin.service.os._exit") as mock_exit, \
+             patch("cirno_core.command.builtin.service.os.execv") as mock_execv:
             await cmd_restart(ctx)
             await scheduled[0]
 
@@ -171,9 +171,9 @@ class TestRestartCommand:
             create_task=_capture_task,
         )
 
-        with patch.object(loop, "_enqueue_session_message", new_callable=MagicMock) as mock_dispatch, \
-             patch("cirno_core.command.builtin.asyncio", new=fake_asyncio), \
-             patch("cirno_core.command.builtin.os.execv"):
+        with patch.object(loop.dispatch, "enqueue", new_callable=MagicMock) as mock_dispatch, \
+             patch("cirno_core.command.builtin.service.asyncio", new=fake_asyncio), \
+             patch("cirno_core.command.builtin.service.os.execv"):
             await bus.publish_inbound(msg)
 
             loop._running = True
@@ -197,7 +197,7 @@ class TestRestartCommand:
         loop, bus = _make_loop()
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/status")
 
-        with patch.object(loop, "_enqueue_session_message", new_callable=MagicMock) as mock_dispatch:
+        with patch.object(loop.dispatch, "enqueue", new_callable=MagicMock) as mock_dispatch:
             await bus.publish_inbound(msg)
 
             loop._running = True
@@ -230,7 +230,7 @@ class TestRestartCommand:
         loop, bus = _make_loop()
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/help")
 
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "/restart" in response.content
@@ -240,8 +240,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_status_reports_runtime_info(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = [{"role": "user"}] * 3
+        session = Session(key="telegram:c1")
+        session.messages = [{"role": "user"}] * 3
         session.metadata = {
             "_last_usage": LLMUsage.reported(input_tokens=0, output_tokens=0).to_dict()
         }
@@ -262,7 +262,7 @@ class TestRestartCommand:
             reasoning_effort=None,
         )
 
-        response = await loop._process_message(msg, runtime=runtime)
+        response = await loop.processing.process(msg, runtime=runtime)
 
         assert response is not None
         assert "Model: test-model" in response.content
@@ -280,8 +280,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_status_counts_running_dispatch_and_subagent_tasks(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = [{"role": "user"}]
+        session = Session(key="telegram:c1")
+        session.messages = [{"role": "user"}]
         loop.sessions.state.get = AsyncMock(return_value=session)
         loop.consolidator.estimate_session_prompt_tokens = MagicMock(
             return_value=(1000, "tiktoken")
@@ -296,7 +296,7 @@ class TestRestartCommand:
         loop._active_tasks[msg.session_key] = {running_task, finished_task}
         loop.subagents.get_running_count_by_session.return_value = 2
 
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "Tasks: 3 active" in response.content
@@ -305,11 +305,11 @@ class TestRestartCommand:
     async def test_run_agent_loop_estimates_usage_when_provider_omits_it(self, monkeypatch):
         loop, _bus = _make_loop()
         monkeypatch.setattr(
-            "cirno_core.agent.runner.estimate_prompt_tokens_chain",
+            "cirno_core.agent.runner.usage.estimate_prompt_tokens_chain",
             lambda *_args, **_kwargs: (123, "test"),
         )
         monkeypatch.setattr(
-            "cirno_core.agent.runner.estimate_message_tokens",
+            "cirno_core.agent.runner.usage.estimate_message_tokens",
             lambda _message: 7,
         )
         loop.provider.chat_stream_with_retry = AsyncMock(side_effect=[
@@ -317,13 +317,13 @@ class TestRestartCommand:
             LLMResponse(content="second", usage=None),
         ])
 
-        first = await loop._run_agent_loop(
+        first = await loop.model_turn.run(
             TranscriptInput(history=[], current_message=None),
             runtime=loop.llm_runtime(),
         )
         assert first.usage == LLMUsage.reported(input_tokens=9, output_tokens=4)
 
-        second = await loop._run_agent_loop(
+        second = await loop.model_turn.run(
             TranscriptInput(history=[], current_message=None),
             runtime=loop.llm_runtime(),
         )
@@ -332,8 +332,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_status_falls_back_to_session_usage_when_context_estimate_missing(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = [{"role": "user"}]
+        session = Session(key="telegram:c1")
+        session.messages = [{"role": "user"}]
         session.metadata = {
             "_last_usage": LLMUsage.reported(input_tokens=1200, output_tokens=34).to_dict()
         }
@@ -343,7 +343,7 @@ class TestRestartCommand:
         )
         loop.subagents.get_running_count_by_session.return_value = 0
 
-        response = await loop._process_message(
+        response = await loop.processing.process(
             InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/status")
         )
 
@@ -366,7 +366,7 @@ class TestRestartCommand:
         loop.sessions.state.get = AsyncMock(return_value=session)
 
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/history")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "👤 You: Hello" in response.content
@@ -384,7 +384,7 @@ class TestRestartCommand:
         loop.sessions.state.get = AsyncMock(return_value=session)
 
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/history 3")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "Last 3 message(s)" in response.content
@@ -408,7 +408,7 @@ class TestRestartCommand:
         loop.sessions.state.get = AsyncMock(return_value=session)
 
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/history 999")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "Last 50 message(s)" in response.content
@@ -421,7 +421,7 @@ class TestRestartCommand:
         loop, _bus = _make_loop()
 
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/history nope")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert response.content.startswith("Usage: /history [count]")
@@ -434,7 +434,7 @@ class TestRestartCommand:
         loop.sessions.state.get = AsyncMock(return_value=session)
 
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/history")
-        response = await loop._process_message(msg)
+        response = await loop.processing.process(msg)
 
         assert response is not None
         assert "No conversation history yet." in response.content
@@ -442,8 +442,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_process_direct_preserves_render_metadata(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = []
+        session = Session(key="telegram:c1")
+        session.messages = []
         loop.sessions.state.get = AsyncMock(return_value=session)
         loop.subagents.get_running_count.return_value = 0
         loop.subagents.get_running_count_by_session.return_value = 0

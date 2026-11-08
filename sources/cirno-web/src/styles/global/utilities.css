@@ -1,0 +1,591 @@
+@layer utilities {
+  .composer-model-badge {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .kv-cache-not-reused {
+    background: hsl(var(--usage-token) / 0.84);
+  }
+
+  .kv-cache-reused {
+    background-color: hsl(var(--usage-token) / 0.1);
+    background-image: repeating-linear-gradient(
+      135deg,
+      hsl(var(--usage-token) / 0.46) 0,
+      hsl(var(--usage-token) / 0.46) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+
+  .dark .kv-cache-not-reused {
+    background: hsl(var(--usage-token) / 0.92);
+  }
+
+  .dark .kv-cache-reused {
+    background-color: hsl(var(--usage-token) / 0.15);
+    background-image: repeating-linear-gradient(
+      135deg,
+      hsl(var(--usage-token) / 0.58) 0,
+      hsl(var(--usage-token) / 0.58) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+
+  .composer-model-badge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-color: rgb(236 141 49);
+    opacity: 0;
+    transition: opacity 180ms ease-out;
+  }
+
+  .composer-model-badge[data-fallback="true"] {
+    border-color: rgb(236 141 49 / 0.38);
+  }
+
+  .composer-model-badge[data-fallback="true"]::before {
+    opacity: 0.1;
+  }
+
+  .dark .composer-model-badge[data-fallback="true"]::before {
+    opacity: 0.15;
+  }
+
+  .composer-model-badge > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .composer-model-badge::before {
+      transition-duration: 150ms;
+    }
+  }
+
+  /* Keep the outer document rhythm clean at message boundaries. */
+  .markdown-content > :first-child {
+    @apply mt-0;
+  }
+  .markdown-content > :last-child {
+    @apply mb-0;
+  }
+
+  /* Override Tailwind Typography's built-in colors with our design tokens
+     so assistant messages use the same --cirno-foreground as user messages. */
+  .markdown-content {
+    --tw-prose-body: hsl(var(--cirno-foreground));
+    --tw-prose-headings: hsl(var(--cirno-foreground));
+    --tw-prose-bold: hsl(var(--cirno-foreground));
+    --tw-prose-lead: hsl(var(--cirno-foreground));
+    transition: var(--theme-ink-transition, color 0s);
+    @apply text-reading;
+  }
+
+  .markdown-content :is(h1, h2, h3, h4, h5, h6) {
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .markdown-content h1 { font-size: 1.5em; }
+  .markdown-content h2 { font-size: 1.25em; }
+  .markdown-content h3 { font-size: 1.125em; }
+  .markdown-content :is(h4, h5, h6) { font-size: 1em; }
+  .markdown-content strong { font-weight: 600; }
+  .markdown-content :is(th, td) {
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .markdown-content blockquote {
+    font-size: 1em;
+    line-height: inherit;
+  }
+  .markdown-content summary {
+    font-size: 1em;
+    font-weight: 600;
+    line-height: inherit;
+  }
+
+  .markdown-inline-code {
+    font-size: 0.875em;
+    font-weight: 400;
+  }
+
+  .markdown-content .contains-task-list {
+    @apply list-none pl-0;
+  }
+
+  .markdown-content .task-list-item {
+    @apply list-none pl-0;
+  }
+
+  /* Set the default before locale overrides: html also matches :lang(). */
+  :root {
+    --cjk-line-height: 1.625;
+  }
+
+  :lang(zh),
+  :lang(ja),
+  :lang(ko) {
+    --cjk-line-height: 1.7;
+  }
+
+  /* Balance short headings; preserve explicit line breaks in chat prose. */
+  .markdown-content :is(h1, h2, h3, h4, h5, h6),
+  .settings-section-title {
+    text-wrap: balance;
+  }
+
+  .activity-current,
+  .streaming-text-sheen {
+    --activity-animation: 2.8s ease-in-out infinite;
+  }
+
+  /* L→R sheen clipped to live activity labels. The highlight lives inside
+     the glyphs, not in the row background, so dark mode stays quiet. */
+  @keyframes streaming-text-sheen-ltr {
+    0% {
+      background-position: 140% 50%;
+    }
+    100% {
+      background-position: -40% 50%;
+    }
+  }
+  .streaming-text-sheen {
+    position: relative;
+    color: hsl(var(--cirno-muted-foreground));
+  }
+  .file-reference-sheen {
+    color: inherit;
+  }
+  .streaming-text-sheen::after {
+    content: attr(data-sheen-text) / "";
+    position: absolute;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    padding-right: inherit;
+    color: transparent;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 38%,
+      hsl(var(--cirno-foreground) / 0.98) 50%,
+      transparent 62%,
+      transparent 100%
+    );
+    background-size: 260% 100%;
+    background-position: 140% 50%;
+    background-repeat: no-repeat;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: streaming-text-sheen-ltr var(--activity-animation);
+  }
+  .dark .streaming-text-sheen::after {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 38%,
+      hsl(var(--cirno-foreground) / 0.98) 50%,
+      transparent 62%,
+      transparent 100%
+    );
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .streaming-text-sheen::after {
+      animation: none;
+      content: "";
+    }
+  }
+
+  /**
+   * The composer is one persistent grid item in both landing and thread
+   * layouts. On desktop, the landing's trailing flexible row holds it at the
+   * visual center; collapsing only that row lets the same element dock at the
+   * bottom without a remount or a transform clone.
+   */
+  .thread-layout {
+    --thread-composer-fade-height: 2.25rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(min-content, 1fr) auto 0fr;
+    transition: grid-template-rows 220ms ease-out;
+  }
+  .thread-layout[data-layout="thread"] {
+    grid-template-rows: minmax(0, 1fr) auto 0fr;
+  }
+  .thread-layout[data-layout="external"] {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  @container cirno-tab (min-width: 640px) {
+    .thread-layout[data-layout="hero"] {
+      grid-template-rows: minmax(min-content, 1fr) auto 1fr;
+    }
+  }
+
+  /**
+   * Keep the transcript and composer visually continuous. The scrollport owns
+   * the fade because overflow clips its contents before an adjacent overlay
+   * can soften the edge. On phones, the same mask keeps a clear top edge even
+   * after the initial inset scrolls away. The matching bottom in-flow gap keeps
+   * the last line fully visible once the user reaches the bottom.
+   */
+  .thread-message-viewport {
+    --thread-top-clearance: 0px;
+    --thread-top-fade-height: 0px;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent var(--thread-top-clearance),
+      #000 var(--thread-top-fade-height),
+      #000 calc(100% - var(--thread-composer-fade-height)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent var(--thread-top-clearance),
+      #000 var(--thread-top-fade-height),
+      #000 calc(100% - var(--thread-composer-fade-height)),
+      transparent 100%
+    );
+  }
+  @container cirno-tab (max-width: 639px) {
+    .thread-message-viewport {
+      --thread-top-clearance: 6px;
+      --thread-top-fade-height: 22px;
+    }
+  }
+  .thread-message-end-gap {
+    height: var(--thread-composer-fade-height);
+  }
+
+  .thread-history-status {
+    --thread-history-background: hsl(var(--cirno-background));
+    height: 48px;
+    background: linear-gradient(var(--thread-history-background) 35%, transparent);
+    color: hsl(var(--cirno-muted-foreground));
+    transition: --thread-history-background var(--theme-paint-duration, 0s) linear,
+      var(--theme-ink-transition, color 0s);
+  }
+  .thread-history-reveal {
+    transform: translateY(calc(var(--history-pull, 0px) - 100%));
+  }
+  .thread-history-reveal:focus-within {
+    transform: none;
+  }
+  .thread-history-control {
+    display: flex;
+    width: 120px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+  /* loading.dev Blocks, Copyright (c) 2026 Jakub Krehel (MIT); THIRD_PARTY_NOTICES.md. */
+  .thread-history-blocks {
+    color: hsl(var(--cirno-muted-foreground));
+    display: grid;
+    width: 20px;
+    height: 20px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 2px;
+  }
+  .thread-history-blocks > span {
+    background: currentColor;
+    border-radius: 1.25px;
+    animation: thread-history-blocks 1300ms ease-in-out infinite;
+  }
+  .thread-history-status[data-state="error"] .thread-history-blocks {
+    width: 24px;
+    height: 24px;
+    color: hsl(var(--cirno-destructive));
+  }
+  .thread-history-status:not([data-state="loading"]):not([data-state="error"]) .thread-history-blocks > span {
+    animation: none;
+    transform: none;
+  }
+  @keyframes thread-history-blocks {
+    0%, 70%, 100% { transform: scale(1); }
+    35% { transform: scale(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thread-history-feedback {
+      transform: none;
+    }
+    .thread-history-blocks > span {
+      animation: none;
+      transform: scale(0.8);
+    }
+  }
+  .thread-composer-dock {
+    background: hsl(var(--cirno-background));
+  }
+
+  @keyframes composer-status-strip-enter {
+    0% {
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+    72% {
+      max-height: var(--composer-strip-max-height, 46px);
+      opacity: 1;
+      transform: translateY(-1px) scale(1.004);
+    }
+    100% {
+      max-height: var(--composer-strip-max-height, 46px);
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .composer-status-strip {
+    transform-origin: bottom center;
+    will-change: max-height, opacity, transform;
+  }
+  .composer-status-strip[data-state="enter"] {
+    animation: composer-status-strip-enter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .composer-status-drawer {
+    --composer-status-drawer-duration: 220ms;
+    --composer-status-drawer-easing: ease-out;
+
+    display: grid;
+    grid-template-rows: 0fr;
+    pointer-events: none;
+    transition:
+      grid-template-rows var(--composer-status-drawer-duration)
+        var(--composer-status-drawer-easing);
+  }
+  .composer-status-drawer[data-state="open"] {
+    grid-template-rows: 1fr;
+    pointer-events: auto;
+  }
+  .composer-status-drawer-clip {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .composer-status-drawer-content {
+    opacity: 0;
+    transform: translateY(8px);
+    transform-origin: bottom center;
+    transition:
+      opacity var(--composer-status-drawer-duration)
+        var(--composer-status-drawer-easing),
+      transform var(--composer-status-drawer-duration)
+        var(--composer-status-drawer-easing);
+  }
+  .composer-status-drawer[data-state="open"] .composer-status-drawer-content {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* Shared in-flow disclosure: animate intrinsic height without measuring it. */
+  .inline-disclosure {
+    --inline-disclosure-duration: 220ms;
+
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .inline-disclosure[data-state="open"] {
+    --inline-disclosure-duration: 240ms;
+
+    grid-template-rows: 1fr;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .inline-disclosure-clip {
+    min-height: 0;
+    overflow: hidden;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .expandable-text {
+      transition: height 240ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .inline-disclosure {
+      transition:
+        grid-template-rows var(--inline-disclosure-duration)
+          cubic-bezier(0.4, 0, 0.2, 1),
+        opacity var(--inline-disclosure-duration) ease-in-out;
+    }
+    .inline-disclosure-content {
+      transform: translateY(-6px);
+      transition: transform var(--inline-disclosure-duration)
+        cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .inline-disclosure[data-state="open"] .inline-disclosure-content {
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .composer-status-strip {
+      will-change: auto;
+    }
+    .composer-status-strip[data-state] {
+      animation: none;
+    }
+    .composer-status-drawer {
+      transition-duration: 0.01ms;
+    }
+    .composer-status-drawer-content {
+      transform: none;
+      transition-duration: 120ms, 0.01ms;
+    }
+    .thread-layout {
+      transition-duration: 0.01ms;
+    }
+  }
+
+  .thread-workspace {
+    container: thread-workspace / inline-size;
+  }
+  .thread-preview-layout {
+    container: thread-preview-layout / inline-size;
+  }
+  /* Only phone windows use a full-width preview. A narrow desktop conversation
+     still keeps space beside Files, including before ResizeObserver runs. */
+  @container cirno-tab (min-width: 640px) {
+    .file-preview-pane {
+      position: relative;
+      z-index: auto;
+      width: var(--file-preview-slot-width);
+      max-width: max(50cqw, calc(100cqw - 360px));
+      min-width: 0;
+      flex-shrink: 0;
+    }
+    .file-preview-content {
+      width: var(--file-preview-width);
+      max-width: max(50cqw, calc(100cqw - 360px));
+      padding-bottom: 0;
+    }
+    .file-preview-resize {
+      display: flex;
+    }
+  }
+  @container cirno-tab (width < 640px) {
+    /* Covered conversation controls must not remain in the keyboard/AT order. */
+    .thread-preview-layout[data-preview-open] > .thread-conversation {
+      visibility: hidden;
+    }
+  }
+  /* Split content leaves no margin for floating conversation controls. */
+  .thread-preview-layout[data-preview-open] > .thread-conversation {
+    --thread-header-position: relative;
+  }
+  /* Keep room for the 49.5rem message column and controls in the side margin. */
+  @container thread-workspace (max-width: 72rem) {
+    .thread-workspace > * {
+      --thread-header-position: relative;
+    }
+  }
+
+  /* Subtle scrollbar that doesn't fight the dark background. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--cirno-muted-foreground) / 0.4) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--cirno-muted-foreground) / 0.4);
+    border-radius: var(--radius-pill);
+  }
+  .scrollbar-track-transparent {
+    scrollbar-gutter: stable;
+  }
+  .scrollbar-track-transparent::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /*
+   * Mobile responsive safety net — keep the chat viewport + composer inside a
+   * narrow viewport (see #4693). These are containment rules: long markdown
+   * (URLs, branch names, file paths, code, tables) wraps or scrolls inside its
+   * own box instead of forcing the whole column — and thus the page — wider
+   * than 100vw. Desktop layout is unchanged; the rules only engage when content
+   * would otherwise overflow. Fenced code blocks keep their own internal
+   * horizontal scroll (CodeBlock and the markdown <pre> wrappers already set
+   * overflow-x: auto), so clipping the thread column horizontally is safe.
+   */
+
+  /* Prose container: allow it to shrink within its column and break long words
+     so long URLs / paths never stretch the conversation wider than 100vw. */
+  .markdown-content {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-wrap: break-word;
+  }
+
+  /* Long links and inline code break rather than stretch the column. */
+  .markdown-content a,
+  .markdown-content code {
+    overflow-wrap: anywhere;
+    word-wrap: break-word;
+  }
+
+  /* Fenced / pre blocks scroll inside their own box, never the page. */
+  .markdown-content pre,
+  .not-prose pre {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Prism's Markdown table tokens must not pick up Tailwind's table layout. */
+  .not-prose pre .token.table {
+    display: inline;
+  }
+
+  /* Markdown tables wrap cell text to fit the conversation column. The
+     renderer's overflow-x:auto wrapper remains a fallback for content that
+     cannot shrink. */
+
+  /* Clip any residual horizontal bleed at the thread column edge. Vertical
+     scrolling and internal code-block scroll are unaffected. */
+  .thread-viewport-scrollbar {
+    overflow-x: hidden;
+  }
+
+  .thread-viewport {
+    container-name: thread-viewport;
+    container-type: inline-size;
+  }
+
+  .thread-prompt-rail {
+    display: none;
+    left: 1.75rem;
+  }
+
+  .thread-prompt-rail-scroll {
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  }
+
+  .thread-prompt-rail-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  @container cirno-tab (min-width: 768px) {
+    .thread-prompt-rail {
+      display: block;
+    }
+  }
+
+  @container thread-viewport (max-width: 59rem) {
+    .thread-prompt-rail {
+      display: none;
+    }
+  }
+}

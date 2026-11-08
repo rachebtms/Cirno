@@ -1,0 +1,8 @@
+.browser-panel { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden; }
+.browser-toolbar { display:flex; flex-direction:row; align-items:center; flex-shrink:0; gap:.375rem; padding:.5rem .75rem; border-bottom:1px solid var(--separator); }
+.browser-toolbar > input { flex:1; min-width:0; }
+.browser-toolbar > button,.browser-external { min-height:2.75rem; min-width:2.75rem; flex-shrink:0; }
+.browser-external { display:flex; align-items:center; justify-content:center; border-radius:.75rem; }
+.browser-hint { padding:.5rem 1rem; font-size:.75rem; line-height:1.5; color:var(--muted); }
+.browser-frame { border:0; width:100%; min-height:0; flex:1; background:white; }
+.browser-empty { display:flex; flex:1; flex-direction:column; align-items:center; justify-content:center; gap:.75rem; padding:2rem; font-size:.875rem; color:var(--muted); text-align:center; }

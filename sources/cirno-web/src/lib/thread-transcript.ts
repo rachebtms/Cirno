@@ -6,7 +6,9 @@ import {
 import { persistedCanonicalRunState } from "./canonical-run-snapshot";
 import { copyThreadCheckpoint, createThreadCheckpoint, type ThreadCheckpoint } from "./thread-checkpoint";
 import { hasPendingAgentActivity } from "./activity-timeline";
-import type { ThreadProjectionEvent, UIMessage, WebuiThreadPersistedPayload } from "./types";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { UIMessage } from "@/lib/contracts/messages";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 type Ranges = Array<[number, number]>;
 type Members = Map<string, Ranges>;
@@ -243,9 +245,19 @@ export class ThreadTranscript {
     return text !== null && this.textCoverage.some((certificate) => coversText(certificate, text));
   }
 
+  observeTurnCompletion(turnId: string): void {
+    const ownsPending = this.paging.activeTurnId === turnId;
+    if (!ownsPending && this.paging.completedTurnIds.includes(turnId)) return;
+    this.paging = { ...this.paging,
+      ...(ownsPending ? { activeTurnId: null, hasPendingToolCalls: false } : {}),
+      completedTurnIds: Array.from(new Set([...this.paging.completedTurnIds, turnId])),
+    };
+  }
+
   project(event: ThreadProjectionEvent, options: {
     createId: () => string; now: number; persisted?: boolean; sideChannel?: boolean; startSeq?: number;
   }): UIMessage[] {
+    if (!options.persisted && event.event === "turn_end" && event.turn_id) this.observeTurnCompletion(event.turn_id);
     if (!options.persisted && this.represented(event)) return this.messages;
     if (!event.projection_id && (!event.turn_id || event.turn_seq === undefined)) {
       event = { ...event, projection_id: options.createId() };

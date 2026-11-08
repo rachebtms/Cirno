@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { AgentActivityCluster } from "@/components/thread/AgentActivityCluster";
 import { formatToolCallTrace } from "@/lib/tool-traces";
-import type { CliAppInfo, McpPresetInfo, UIMessage } from "@/lib/types";
+import type { CliAppInfo } from "@/lib/contracts/apps";
+import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 const cliApp: CliAppInfo = {
   name: "blender", display_name: "Blender", category: "3d", description: "Preview app",
@@ -20,7 +22,7 @@ const preset: McpPresetInfo = {
 function messages(phase: "start" | "end" | "error"): UIMessage[] {
   const toolEvents = [
     { name: "mcp_linear_get_workspace", args: {} },
-    { name: "run_cli_app", args: { name: "blender", args: ["--background", "scene.blend"], json: true } },
+    { name: "run_cli_app", args: { name: "blender", args: ["--cirno-background", "scene.blend"], json: true } },
   ].map(({ name, args }) => ({ phase, call_id: `${phase}-${name}`, name, arguments: args,
     ...(phase === "error" ? { error: "Preview failure" } : {}) }));
   const traces = toolEvents.map(event => formatToolCallTrace(event)!);

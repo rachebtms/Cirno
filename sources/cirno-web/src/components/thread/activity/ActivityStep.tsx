@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
 import { useTranslation } from "react-i18next";
-import { useLocalPreferences } from "@/hooks/useLocalPreferences";
+import { usePreferences } from "@/hooks/usePreferences";
 import { StreamingLabelSheen } from "@/components/ui/streaming-label-sheen";
 import { formControlFocusClassName } from "@/components/ui/form-control";
 import { HoverHint, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -54,7 +54,7 @@ export function ActivityStep({
   defaultExpanded,
 }: ActivityStepProps) {
   const { t } = useTranslation();
-  const { toolDetailMode } = useLocalPreferences();
+  const { toolDetailMode } = usePreferences();
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
   const detailsId = useId();
   const expandedByDefault = defaultExpanded ?? toolDetailMode === "detailed";

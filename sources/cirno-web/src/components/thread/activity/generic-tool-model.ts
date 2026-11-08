@@ -8,6 +8,8 @@ export type ToolFamily = "content-search" | "file-search" | "list" | "read" | "m
 
 interface ToolField {
   key:
+    | "to"
+    | "session_key"
     | "command"
     | "node_id"
     | "job_id"
@@ -189,7 +191,7 @@ function safeFields(args: unknown): ToolField[] {
   const record = args as Record<string, unknown>;
   const fields: ToolField[] = [];
   for (const key of [
-    "command", "node_id", "job_id", "remote_path", "local_path",
+    "to", "session_key", "command", "node_id", "job_id", "remote_path", "local_path",
     "query",
     "pattern",
     "glob",
@@ -362,7 +364,7 @@ function activityDetail(items: GenericToolRunItem[], family: ToolFamily, name: s
     case "capture_screenshot":
       return "";
     default:
-      return "";
+      return safeText(fieldValue(trace, "to") || fieldValue(trace, "session_key"));
   }
 }
 

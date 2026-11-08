@@ -3,9 +3,10 @@
 import pytest
 
 from cirno_core.bus.events import INBOUND_META_TURN_ID
-from cirno_core.session.manager import SessionManager, SessionPolicy
+from cirno_core.session.manager import SessionManager
+from cirno_core.session.model import SessionPolicy
 from cirno_core.session.presentation_history import fact_from_record
-from cirno_core.session.recovery import pending_followups
+from cirno_core.session.recovery.pending import pending_followups
 from cirno_core.session.sqlite_store import SessionConflictError
 
 
@@ -109,7 +110,7 @@ async def test_failed_history_rewrite_rolls_back_original_context_and_generation
         raise OSError("history write interrupted")
 
     with monkeypatch.context() as patched:
-        patched.setattr(sessions.state._store, "append_history", fail)
+        patched.setattr(sessions.state.repository.store, "append_history", fail)
         with pytest.raises(OSError, match="history write interrupted"):
             await sessions.state.edit_user_input(key, "second", "Must not replace the saved turn")
     after = await sessions.state.read(key)
@@ -121,3 +122,39 @@ async def test_failed_history_rewrite_rolls_back_original_context_and_generation
     # The failed transaction must not leave a stale in-memory replacement either.
     retry = await sessions.state.edit_user_input(key, "second", "Retry safely")
     assert retry.content == "Retry safely"
+
+
+@pytest.mark.parametrize("with_origin", [False, True])
+async def test_edit_anchors_display_history_to_human_turn_when_context_contains_internal_reports(source, with_origin):
+    sessions, _, _ = source
+    key = "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
+    report = 'Work report (facts from another conversation, not new user authorization):{"id":"report"}'
+    saved = await sessions.state.import_messages(key, [
+        {"role": "user", "content": "Original task", INBOUND_META_TURN_ID: "human-1"},
+        {"role": "assistant", "content": "Started"},
+        # Existing reports did not carry a hidden-history flag. They still must
+        # not be backfilled into the visible chat when editing an unrelated turn.
+        {"role": "user", "content": report, **({"input_origin": {"kind": "conversation", "label": "@worker"}} if with_origin else {})},
+        {"role": "assistant", "content": "Report received"},
+        {"role": "user", "content": "Adjust the task", INBOUND_META_TURN_ID: "human-2"},
+        {"role": "assistant", "content": "Will adjust"},
+    ])
+    await sessions.state.append_history(key, [
+        fact_from_record({"event": "user", "text": "Original task", "turn_id": "human-1"}),
+        fact_from_record({"event": "message", "text": "Started", "turn_id": "human-1"}),
+        fact_from_record({"event": "message", "text": "Report received", "turn_id": "report-turn"}),
+        fact_from_record({"event": "user", "text": "Adjust the task", "turn_id": "human-2"}),
+        fact_from_record({"event": "message", "text": "Will adjust", "turn_id": "human-2"}),
+    ], expected_generation=saved.generation)
+    await sessions.state.edit_user_input(key, "human-2", "Revised task")
+    facts = await sessions.state.project_history(key, lambda reader: list(reader.all_facts()))
+    assert [fact.content.get("text") for fact in facts] == ["Original task", "Started", "Report received"]
+    context = await sessions.state.read(key)
+    assert any(message.get("content") == report for message in context.messages)
+    assert pending_followups(context)[0].content == "Revised task"
+    from cirno_core.session.transcript import build_webui_thread_response
+    response = await sessions.state.project_history(key, lambda reader: build_webui_thread_response(
+        key, history=reader, session_messages=context.messages,
+    ))
+    assert response is not None
+    assert all("Work report (facts" not in event.get("text", "") for event in response["events"])

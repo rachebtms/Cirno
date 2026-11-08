@@ -1,4 +1,5 @@
-import type { SubagentTaskSnapshot, UIMessage } from "./types";
+import { isRecord } from "./record";
+import type { SubagentTaskSnapshot, UIMessage } from "@/lib/contracts/messages";
 
 export interface ObservedSubagentTask extends SubagentTaskSnapshot {
   observedAtMs: number;
@@ -18,9 +19,6 @@ export function latestSubagentInputKey(messages: readonly UIMessage[]): string |
   return null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 export function isSubagentTask(value: unknown): value is SubagentTaskSnapshot {
   if (!isRecord(value)) return false;

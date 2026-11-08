@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ThreadTranscript } from "@/lib/thread-transcript";
-import type { ThreadProjectionEvent, WebuiThreadPersistedPayload } from "@/lib/types";
+import type { ThreadProjectionEvent } from "@/lib/contracts/events";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 
 const NOW = 1_800_000_000_000;
 let nextId = 0;
@@ -672,4 +673,31 @@ describe("ThreadTranscript admission", () => {
     ]);
     expect(thread.messages[1].id).not.toBe(receivedId);
   });
+});
+
+it("prepends earlier activity from the same long turn without duplicating its pinned input or reopening completion", () => {
+  const thread = new ThreadTranscript();
+  const turn = "turn-long-paged";
+  expect(thread.accept(history([
+    input(turn, "One long research task"),
+    { ...at(turn, 8), event: "message", kind: "progress", text: "Recent command" },
+    { ...at(turn, 9), event: "message", text: "Final answer" },
+    { ...at(turn, 10), event: "turn_end" },
+  ], { completed_turn_ids: [turn], page: {
+    before_cursor: "turn-0-position-8", has_more_before: true,
+    user_message_offset: 0, truncated_oversized_turn: true,
+  } }), thread.begin("initial"))).toBe(true);
+  expect(thread.accept(history([
+    input(turn, "One long research task"),
+    { ...at(turn, 2), event: "message", kind: "progress", text: "Earlier command" },
+    { ...at(turn, 3), event: "reasoning_end", text: "Earlier reasoning" },
+  ], { page: { before_cursor: null, has_more_before: false, user_message_offset: 0,
+    after_cursor: "turn-0-position-8", has_more_after: true, truncated_oversized_turn: true } }),
+    thread.begin("older"))).toBe(true);
+  expect(thread.messages.filter(row => row.role === "user")).toHaveLength(1);
+  const serialized = JSON.stringify(thread.messages);
+  for (const text of ["Earlier command", "Earlier reasoning", "Recent command", "Final answer"]) expect(serialized).toContain(text);
+  expect(serialized.indexOf("Earlier command")).toBeLessThan(serialized.indexOf("Recent command"));
+  expect(thread.save().projection.closedTurnIds.has(turn)).toBe(true);
+  expect(thread.paging.hasMoreBefore).toBe(false);
 });

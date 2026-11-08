@@ -16,8 +16,8 @@ import {
   type RenderableFileDiff,
   type RenderableFileDiffHunk,
 } from "@/lib/file-diff";
-import type { FileEditDisplayMode } from "@/lib/local-preferences";
-import type { UIFileDiff, UIFileEdit } from "@/lib/types";
+import type { FileEditDisplayMode } from "@/features/preferences/store";
+import type { UIFileDiff, UIFileEdit } from "@/lib/contracts/activity";
 import { cn } from "@/lib/utils";
 
 import { ActivityStep } from "./ActivityStep";
@@ -239,12 +239,12 @@ function FileUnifiedDiff({
         </div>
       ))}
       {visibleDiff.hiddenLineCount > 0 ? (
-        <div className="border-t border-border/45 bg-muted/30 px-2 py-1">
+        <div className="border-t border-border/45 bg-surface-secondary/30 px-2 py-1">
           <button
             type="button"
             className={cn(
               "inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium",
-              "text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground",
+              "text-muted-foreground transition-colors hover:bg-surface-secondary/65 hover:text-foreground",
             )}
             data-testid="file-edit-diff-expand-lines"
             onClick={() => setExpandedLines(true)}
@@ -257,12 +257,12 @@ function FileUnifiedDiff({
           </button>
         </div>
       ) : expandedLines && shouldLimitLines ? (
-        <div className="border-t border-border/45 bg-muted/30 px-2 py-1">
+        <div className="border-t border-border/45 bg-surface-secondary/30 px-2 py-1">
           <button
             type="button"
             className={cn(
               "inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium",
-              "text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground",
+              "text-muted-foreground transition-colors hover:bg-surface-secondary/65 hover:text-foreground",
             )}
             data-testid="file-edit-diff-collapse-lines"
             onClick={() => setExpandedLines(false)}
@@ -274,7 +274,7 @@ function FileUnifiedDiff({
       ) : null}
       {diff.truncated ? (
         <div
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/45 bg-muted/35 px-2 py-1 text-[11px] text-muted-foreground"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/45 bg-surface-secondary/35 px-2 py-1 text-[11px] text-muted-foreground"
           data-testid="file-edit-diff-truncated"
         >
           <span>
@@ -285,7 +285,7 @@ function FileUnifiedDiff({
               type="button"
               className={cn(
                 "inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium",
-                "text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground",
+                "text-muted-foreground transition-colors hover:bg-surface-secondary/65 hover:text-foreground",
               )}
               data-testid="file-edit-diff-open-file"
               onClick={() => onOpenFilePreview(previewPath)}
@@ -310,8 +310,8 @@ function FileUnifiedDiff({
         data-testid="file-edit-diff-toggle"
         onClick={handleToggleOpen}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2 rounded-md border border-border/45 bg-muted/35 px-2 py-1 text-left",
-          "text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/50",
+          "flex w-full cursor-pointer items-center gap-2 rounded-md border border-border/45 bg-surface-secondary/35 px-2 py-1 text-left",
+          "text-[11px] font-medium text-muted-foreground transition-colors hover:bg-surface-secondary/50",
         )}
       >
         <ChevronRight
@@ -381,7 +381,7 @@ function DiffHunkGap({ lineCount }: { lineCount: number }) {
   const { t } = useTranslation();
   return (
     <div
-      className="flex items-center gap-2 bg-muted/35 px-2 py-1 text-[11px] text-muted-foreground"
+      className="flex items-center gap-2 bg-surface-secondary/35 px-2 py-1 text-[11px] text-muted-foreground"
       data-testid="file-edit-diff-hunk-gap"
     >
       <span

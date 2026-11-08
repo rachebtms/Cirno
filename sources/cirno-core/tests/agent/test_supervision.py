@@ -13,8 +13,8 @@ from cirno_core.agent.tools.selection import conversation_tools
 from cirno_core.bus.input_origin import input_origin
 from cirno_core.bus.queue import MessageBus
 from cirno_core.config.home import set_instance_path
-from cirno_core.providers.base import GenerationSettings
-from cirno_core.session.keys import CIRNO_SESSION_KEY
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.session.keys import ROUTER_SESSION_KEY
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_handles import SessionHandleResolver
 
@@ -23,7 +23,7 @@ from cirno_core.session.session_handles import SessionHandleResolver
 async def supervision(tmp_path):
     set_instance_path(tmp_path)
     sessions = SessionManager(tmp_path / "workspace", sessions_root=tmp_path / "state/sessions")
-    source = await sessions.state.get(CIRNO_SESSION_KEY)
+    source = await sessions.state.get(ROUTER_SESSION_KEY)
     target = await sessions.state.get("websocket:worker")
     await sessions.state.update_metadata(target.key, {"webui": True})
     provider = MagicMock(aclose=AsyncMock())
@@ -31,9 +31,9 @@ async def supervision(tmp_path):
     provider.get_default_model.return_value = "test"
     loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path / "workspace", session_manager=sessions)
     admitted = AsyncMock()
-    loop._enqueue_session_message_unlocked = admitted
+    loop.dispatch.enqueue_locked = admitted
     handle = await SessionHandleResolver(sessions).ahandle_for_session(target.key)
-    context = RequestContext(channel="websocket", chat_id="global", session_key=source.key, session_generation=source.generation)
+    context = RequestContext(channel="websocket", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", session_key=source.key, session_generation=source.generation)
     with request_context(context):
         yield loop, sessions, "@" + handle.name, admitted, context
     await loop.aclose()
@@ -48,15 +48,30 @@ async def test_controls_are_hidden_from_ordinary_and_ptc_conversations(supervisi
     loop, _, _, _, _ = supervision
     for ptc in (False, True):
         regular = conversation_tools(loop.tools, "websocket:worker", ptc_mode=ptc)
-        cirno = conversation_tools(loop.tools, CIRNO_SESSION_KEY, ptc_mode=ptc)
+        cirno = conversation_tools(loop.tools, ROUTER_SESSION_KEY, ptc_mode=ptc)
         if not ptc:
             assert "control_session" not in regular.tool_names
             assert "control_goal" not in regular.tool_names
             assert "control_session" in cirno.tool_names
             assert "control_goal" in cirno.tool_names
         else:
-            assert "conversations__control" not in regular.sdk_prompt()
-            assert "goals__control" not in regular.sdk_prompt()
+            assert "conversations__control" not in regular.model_instructions()
+            assert "goals__control" not in regular.model_instructions()
+
+
+async def test_cirno_receives_all_ordinary_capabilities_in_native_and_ptc(supervision):
+    loop, _, _, _, _ = supervision
+    ordinary = conversation_tools(loop.tools, "websocket:worker")
+    cirno = conversation_tools(loop.tools, ROUTER_SESSION_KEY)
+    assert cirno is loop.tools
+    assert {"exec", "write_file", "edit_file", "node"} <= set(ordinary.tool_names)
+    assert set(ordinary.tool_names) <= set(cirno.tool_names)
+    assert "message" not in ordinary.tool_names
+    assert "message" in cirno.tool_names
+    ptc = conversation_tools(loop.tools, ROUTER_SESSION_KEY, ptc_mode=True)
+    assert {"exec", "write_file", "edit_file", "node", "message", "project"} <= set(ptc.native.tool_names)
+    instructions = ptc.model_instructions()
+    assert "shell.exec" in instructions and "nodes.execute" in instructions
 
 
 async def test_direct_tool_and_service_calls_reject_non_cirno_and_stale_source(supervision):
@@ -87,7 +102,7 @@ async def test_get_configuration_is_read_only_and_lists_model_presets(supervisio
 
 async def test_configure_persists_worker_settings_preserving_history_goal_and_access(supervision, tmp_path):
     from cirno_core.bus.outbound_events import SessionUpdatedEvent
-    from cirno_core.config.schema import ModelPresetConfig
+    from cirno_core.config.models import ModelPresetConfig
     from cirno_core.security.workspace_access import build_workspace_scope
     from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
 
@@ -122,7 +137,7 @@ async def test_configure_persists_worker_settings_preserving_history_goal_and_ac
     assert loop.llm_runtime().model == "test"
     selected_tools = conversation_tools(loop.tools, key, ptc_mode=stored.metadata["ptc_mode"])
     assert "control_session" not in selected_tools.tool_names
-    assert "conversations__control" not in selected_tools.sdk_prompt()
+    assert "conversations__control" not in selected_tools.model_instructions()
     assert stored.metadata["supervision_events"][-1]["source"] == "@cirno"
     events = [await asyncio.wait_for(loop.bus.consume_outbound(), 1) for _ in range(loop.bus.outbound_size)]
     update = next(message.event for message in events if isinstance(message.event, SessionUpdatedEvent))
@@ -223,6 +238,7 @@ async def test_continue_reactivates_goal_and_keeps_original_authorization(superv
     assert result["continuation_queued"]
     message = admitted.await_args.args[0]
     assert message.session_key == "websocket:worker"
+    assert message.session_generation == (await sessions.state.read_header(message.session_key)).generation
     assert message.metadata["_internal_continuation"] is True
     assert input_origin(message)["label"] == "@cirno"
     assert (await goal(sessions))["status"] == "active"
@@ -240,7 +256,7 @@ async def test_goal_controls_reuse_worker_state_and_preserve_limits(supervision)
     result = await tool.execute(to=handle, action="create", objective="Verify result", continuation_limit=7)
     assert not getattr(result, "is_error", False)
     original = await goal(sessions)
-    assert original["report_to"] == CIRNO_SESSION_KEY
+    assert original["report_to"] == ROUTER_SESSION_KEY
     await sessions.state.update_metadata("websocket:worker", {"_sustained_goal_continuation_rounds": 2})
     await tool.execute(to=handle, action="update", recap="Verified half", ui_summary="Verification", continuation_limit=0)
     changed = await goal(sessions)
@@ -274,11 +290,11 @@ async def test_new_input_waits_until_target_control_settles(supervision):
         entered.set()
         await release.wait()
         return 0
-    loop._cancel_active_tasks = cancel
+    loop.cancel_session_work = cancel
     controlling = asyncio.create_task(loop.conversation_control.execute(handle, "stop"))
     await entered.wait()
     from cirno_core.bus.events import InboundMessage
-    incoming = asyncio.create_task(loop._enqueue_session_message(InboundMessage(channel="websocket", sender_id="owner", chat_id="worker", content="New request")))
+    incoming = asyncio.create_task(loop.dispatch.enqueue(InboundMessage(channel="websocket", sender_id="owner", chat_id="worker", content="New request")))
     await asyncio.sleep(0)
     admitted.assert_not_awaited()
     release.set()
@@ -288,7 +304,7 @@ async def test_new_input_waits_until_target_control_settles(supervision):
 
 async def test_fork_after_supervisory_display_does_not_shift_model_input_boundary(supervision):
     from cirno_core.session.presentation_history import fact_from_record
-    from cirno_core.session.manager import SessionPolicy
+    from cirno_core.session.model import SessionPolicy
     loop, sessions, handle, _, _ = supervision
     key = "websocket:worker"
     await sessions.state.import_messages(key, [{"role": "user", "content": "First task"}, {"role": "assistant", "content": "First answer"}])
@@ -303,3 +319,26 @@ async def test_fork_after_supervisory_display_does_not_shift_model_input_boundar
     copied = await sessions.state.project_history(fork.key, lambda reader: list(reader.navigation()))
     assert not any(fact.content.get("text") == "Second task" for _, _, fact in copied)
     assert any(fact.content.get("input_origin", {}).get("kind") == "supervision" for _, _, fact in copied)
+
+
+async def test_cirno_continue_uses_durable_recovery_path_after_model_failure(supervision):
+    from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+    from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY, RECOVERY_INBOUND_METADATA_KEY
+    loop, sessions, handle, admitted, _ = supervision
+    loop.recovery_admission = RecoveryCoordinator(sessions, loop.bus)
+    await sessions.state.import_messages("websocket:worker", [{"role": "user", "content": "Authorized task"},
+                                                          {"role": "assistant", "content": "Saved partial result"}])
+    await sessions.state.update_metadata("websocket:worker", {RECOVERY_METADATA_KEY: {
+        "status": "awaiting_user", "recovery_id": "api-failure", "reason": "model_request_failed", "can_continue": True,
+    }})
+    result = json.loads(await loop.tools.get("control_session").execute(to=handle, action="continue"))
+    assert result["continuation_queued"]
+    message = await loop.bus.consume_inbound()
+    assert message.session_key == "websocket:worker"
+    assert message.metadata[RECOVERY_INBOUND_METADATA_KEY] == "api-failure"
+    restored = await sessions.state.read_header(message.session_key)
+    assert restored.metadata[RECOVERY_METADATA_KEY]["status"] == "resuming"
+    admitted.assert_not_awaited()  # No generic prompt or duplicate continuation.
+    assert await loop.recovery_admission.admit(message)
+    await loop.recovery_admission.turn_completed(message.session_key)
+    assert (await sessions.state.read_header(message.session_key)).metadata[RECOVERY_METADATA_KEY]["status"] == "recovered"

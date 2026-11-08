@@ -1,3 +1,4 @@
+import { DEFAULT_PREFERENCES, writePreferences } from "@/features/preferences/store";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Window as HappyWindow } from "happy-dom";
@@ -9,7 +10,7 @@ import {
   unitKeysForDisplay,
 } from "@/components/thread/ThreadMessages";
 import { preloadMarkdownText } from "@/components/MarkdownText";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -85,10 +86,7 @@ describe("ThreadMessages", () => {
   it.each(["diff", "collapsed_diff"] as const)(
     "keeps completed %s edits visible when answer activity is toggled",
     (fileEditDisplayMode) => {
-      localStorage.setItem(
-        "cirno-webui.settings-preferences",
-        JSON.stringify({ fileEditDisplayMode }),
-      );
+      writePreferences({ ...DEFAULT_PREFERENCES, ...{ fileEditDisplayMode } });
       const messages: UIMessage[] = [
         { id: "user", role: "user", content: "edit the file", createdAt: 1 },
         { id: "before", role: "assistant", content: "", reasoning: "Before edit", createdAt: 2 },
@@ -1621,7 +1619,7 @@ describe("ThreadMessages", () => {
         id: "attachment",
         role: "assistant",
         content: "",
-        media: [{ kind: "file", url: "/api/media/result.csv", name: "result.csv" }],
+        media: [{ kind: "file", url: "/v0/media/result.csv", name: "result.csv" }],
         turnPhase: "answer",
         isStreaming: false,
         createdAt: 3,
@@ -1644,7 +1642,7 @@ describe("ThreadMessages", () => {
       message: {
         id: "attachment",
         content: "",
-        media: [{ kind: "file", url: "/api/media/result.csv", name: "result.csv" }],
+        media: [{ kind: "file", url: "/v0/media/result.csv", name: "result.csv" }],
       },
       sourceMessageCount: 1,
     });
@@ -1653,7 +1651,7 @@ describe("ThreadMessages", () => {
     const information = screen.getByRole("button", { name: "result.csv" });
     const download = screen.getByRole("link", { name: "Download result.csv" });
     expect(information).toBeVisible();
-    expect(download).toHaveAttribute("href", "/api/media/result.csv");
+    expect(download).toHaveAttribute("href", "/v0/media/result.csv");
     expect(download).toHaveAttribute("download", "result.csv");
     expect(download.closest("[data-testid='activity-model-message'], [data-testid='agent-activity-content']")).toBeNull();
     const ownerRow = information.closest<HTMLElement>("[data-thread-display-unit]")!;

@@ -8,12 +8,14 @@ from unittest.mock import AsyncMock
 import pytest
 
 from cirno_core.agent.hook import AgentHook
-from cirno_core.agent.runner import AgentRunner
+from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.agent.tools.context import current_request_context
-from cirno_core.providers.base import LLMProvider, LLMResponse, LLMUsage
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import LLMResponse
+from cirno_usage.types import LLMUsage
 from cirno_core.runtime.context import public_history_message
 from cirno_core.security.workspace_access import current_workspace_scope
-from cirno_core.session.manager import Session
+from cirno_core.session.model import Session
 
 
 class ControlledProvider(LLMProvider):
@@ -112,8 +114,8 @@ async def test_preparation_allows_status_heartbeat_and_cancellation(
 
         monkeypatch.setattr(Session, "get_history", history)
     else:
-        module = "context_governance" if phase == "request" else "runner"
-        from cirno_core.utils.helpers import estimate_prompt_tokens_chain
+        module = "governance.budget" if phase == "request" else "runner.usage"
+        from cirno_core.utils.token_estimation import estimate_prompt_tokens_chain
 
         def count(*args, **kwargs):
             request = current_request_context()
@@ -157,7 +159,7 @@ async def test_preparation_allows_status_heartbeat_and_cancellation(
                 if phase != "prompt":
                     assert snapshot
             # Observe the new session entering the real semaphore, not a settling delay.
-            slots = loop.runner.context_governor._preparation_slots
+            slots = loop.runner.context_governor.preparation._preparation_slots
             acquire_slot = slots.acquire
             queued = asyncio.Event()
             acquired = asyncio.Event()
@@ -429,7 +431,7 @@ async def test_cancelled_prompt_keeps_its_worker_slot_until_read_finishes() -> N
             if not task.done():
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        await asyncio.gather(*tuple(runner.context_governor._preparation_jobs), return_exceptions=True)
+        await asyncio.gather(*tuple(runner.context_governor.preparation._preparation_jobs), return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -454,7 +456,7 @@ async def test_local_token_estimation_leaves_loop_available(
 
     loop._extra_hooks.append(Lifecycle())
 
-    from cirno_core.utils.helpers import estimate_prompt_tokens_chain
+    from cirno_core.utils.token_estimation import estimate_prompt_tokens_chain
 
     def count(*args, **kwargs):
         captured.append((current_request_context(), threading.get_ident()))
@@ -465,7 +467,7 @@ async def test_local_token_estimation_leaves_loop_available(
         finally:
             runtime_loop.call_soon_threadsafe(completed.set)
 
-    module = "context_governance" if phase == "request" else "runner"
+    module = "governance.budget" if phase == "request" else "runner.usage"
     monkeypatch.setattr(f"cirno_core.agent.{module}.estimate_prompt_tokens_chain", count)
     task = asyncio.create_task(loop.process_direct("Hello", session_key="cli:token-work"))
     entry = asyncio.create_task(entered.wait())

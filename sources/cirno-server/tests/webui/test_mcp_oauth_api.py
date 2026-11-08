@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from cirno_core.config.network import NetworkConfig
-from cirno_core.config.schema import MCPServerConfig
+from cirno_core.config.tools import MCPServerConfig
 from cirno_core.runtime.admission import RuntimeAdmission, RuntimeBusyError, RuntimeMaintenanceError
 from cirno_server.webui.mcp.oauth_api import (
     McpOAuthError,
@@ -93,7 +92,7 @@ async def test_browser_flow_retries_current_server_and_ignores_unrelated_reload_
     started = await manager.start(
         "xmind",
         cfg,
-        "https://agent.example.com/auth/mcp/callback",
+        "https://agent.example.com/v0/mcp/oauth/callback",
         reload_mcp=reload_mcp,
         network=network_config,
     )
@@ -170,7 +169,7 @@ async def test_browser_flow_activates_tools_before_probe_cleanup_completes(
     started = await manager.start(
         "linear",
         _config(),
-        "https://agent.example.com/auth/mcp/callback",
+        "https://agent.example.com/v0/mcp/oauth/callback",
         reload_mcp=reload_mcp,
     )
     manager.submit_callback(state="blocked-close", code="oauth-code", error=None)
@@ -227,7 +226,7 @@ async def test_browser_flow_remains_busy_through_cancelled_or_expired_cleanup(
 
     monkeypatch.setattr("cirno_server.webui.mcp.oauth_api.connect_mcp_servers", connect)
     started = await manager.start(
-        "linear", _config(), "https://agent.example.com/auth/mcp/callback",
+        "linear", _config(), "https://agent.example.com/v0/mcp/oauth/callback",
         reload_mcp=lambda: asyncio.sleep(0, result={"ok": True}),
     )
     with pytest.raises(RuntimeBusyError), admission.pause_if_idle(lambda: False):
@@ -251,7 +250,7 @@ async def test_browser_flow_remains_busy_through_cancelled_or_expired_cleanup(
     with admission.pause_if_idle(lambda: False):
         with pytest.raises(RuntimeMaintenanceError):
             await manager.start(
-                "linear", _config(), "https://agent.example.com/auth/mcp/callback",
+                "linear", _config(), "https://agent.example.com/v0/mcp/oauth/callback",
                 reload_mcp=lambda: asyncio.sleep(0, result={"ok": True}),
             )
 
@@ -283,7 +282,7 @@ async def test_remote_http_flow_accepts_a_pasted_loopback_callback(
     started = await manager.start(
         "linear",
         _config(),
-        "http://192.0.2.10:8765/auth/mcp/callback",
+        "http://192.0.2.10:8765/v0/mcp/oauth/callback",
         reload_mcp=lambda: asyncio.sleep(
             0,
             result={"ok": True, "requires_restart": False},
@@ -292,7 +291,7 @@ async def test_remote_http_flow_accepts_a_pasted_loopback_callback(
 
     assert started["status"] == "authorization_required"
     assert started["completion_input"] == "callback_url"
-    assert received["redirect_uri"] == "http://127.0.0.1:8765/auth/mcp/callback"
+    assert received["redirect_uri"] == "http://127.0.0.1:8765/v0/mcp/oauth/callback"
 
     with pytest.raises(McpOAuthError, match="complete callback URL"):
         manager.submit_callback_url(
@@ -305,7 +304,7 @@ async def test_remote_http_flow_accepts_a_pasted_loopback_callback(
         manager.submit_callback_url(
             flow_id=started["flow_id"],
             callback_url=(
-                "http://127.0.0.1:8765/auth/mcp/callback"
+                "http://127.0.0.1:8765/v0/mcp/oauth/callback"
                 "?code=oauth-code&state=other-state"
             ),
         )
@@ -313,7 +312,7 @@ async def test_remote_http_flow_accepts_a_pasted_loopback_callback(
     submitted = manager.submit_callback_url(
         flow_id=started["flow_id"],
         callback_url=(
-            "http://127.0.0.1:8765/auth/mcp/callback"
+            "http://127.0.0.1:8765/v0/mcp/oauth/callback"
             "?code=oauth-code&state=manual-state"
         ),
     )
@@ -352,7 +351,7 @@ async def test_browser_flow_surfaces_provider_denial_without_callback_descriptio
     started = await manager.start(
         "notion",
         _config(),
-        "https://agent.example.com/auth/mcp/callback",
+        "https://agent.example.com/v0/mcp/oauth/callback",
         reload_mcp=lambda: asyncio.sleep(0, result={"ok": True}),
     )
 
@@ -397,7 +396,7 @@ async def test_browser_flow_blocks_unsafe_authorization_url(
     result = await manager.start(
         "linear",
         _config(),
-        "https://agent.example.com/auth/mcp/callback",
+        "https://agent.example.com/v0/mcp/oauth/callback",
         reload_mcp=lambda: asyncio.sleep(0, result={"ok": True}),
     )
 
@@ -409,25 +408,25 @@ async def test_browser_flow_blocks_unsafe_authorization_url(
 
 def test_redirect_uri_requires_https_except_for_loopback() -> None:
     assert validate_mcp_oauth_redirect_uri(
-        "https://agent.example.com/auth/mcp/callback"
-    ) == "https://agent.example.com/auth/mcp/callback"
+        "https://agent.example.com/v0/mcp/oauth/callback"
+    ) == "https://agent.example.com/v0/mcp/oauth/callback"
     assert validate_mcp_oauth_redirect_uri(
-        "http://127.0.0.1:8765/auth/mcp/callback"
-    ) == "http://127.0.0.1:8765/auth/mcp/callback"
+        "http://127.0.0.1:8765/v0/mcp/oauth/callback"
+    ) == "http://127.0.0.1:8765/v0/mcp/oauth/callback"
 
     with pytest.raises(McpOAuthError, match="HTTPS or localhost"):
-        validate_mcp_oauth_redirect_uri("http://192.0.2.10/auth/mcp/callback")
+        validate_mcp_oauth_redirect_uri("http://192.0.2.10/v0/mcp/oauth/callback")
     with pytest.raises(McpOAuthError, match="Invalid"):
         validate_mcp_oauth_redirect_uri("https://agent.example.com/wrong")
 
 
 def test_remote_http_redirect_prepares_a_manual_loopback_callback() -> None:
     assert prepare_mcp_oauth_redirect_uri(
-        "https://agent.example.com/auth/mcp/callback"
-    ) == ("https://agent.example.com/auth/mcp/callback", False)
+        "https://agent.example.com/v0/mcp/oauth/callback"
+    ) == ("https://agent.example.com/v0/mcp/oauth/callback", False)
     assert prepare_mcp_oauth_redirect_uri(
-        "http://127.0.0.1:8765/auth/mcp/callback"
-    ) == ("http://127.0.0.1:8765/auth/mcp/callback", False)
+        "http://127.0.0.1:8765/v0/mcp/oauth/callback"
+    ) == ("http://127.0.0.1:8765/v0/mcp/oauth/callback", False)
     assert prepare_mcp_oauth_redirect_uri(
-        "http://agent.example.com:9443/auth/mcp/callback"
-    ) == ("http://127.0.0.1:9443/auth/mcp/callback", True)
+        "http://agent.example.com:9443/v0/mcp/oauth/callback"
+    ) == ("http://127.0.0.1:9443/v0/mcp/oauth/callback", True)

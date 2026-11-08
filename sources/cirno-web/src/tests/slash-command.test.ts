@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { isRegisteredSlashCommand, matchingSlashCommand, slashCommandLifecycle } from "@/lib/slash-command";
-import type { SlashCommand } from "@/lib/types";
+import type { SlashCommand } from "@/lib/contracts/commands";
 
 const commands: SlashCommand[] = [
   { command: "/goal", title: "Goal", description: "Run a goal", icon: "target", acceptsArgs: true, lifecycle: "agent_turn_with_args" },

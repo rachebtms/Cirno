@@ -1,10 +1,4 @@
 {
-  "rename": {
-    "title": "RenameDialog · Đổi tên nhóm và dự án",
-    "description": "Thử hộp thoại đổi tên nhóm và dự án. Chủ đề được đổi tên ngay trong danh sách trò chuyện.",
-    "options": "Bên gọi cung cấp dialogTitle, description và placeholder. title đặt giá trị ban đầu; onConfirm nhận tên đã bỏ khoảng trắng ở hai đầu. Không thể lưu tên trống.",
-    "hint": "Khi lưu, tiêu đề phía trên sẽ được cập nhật."
-  },
   "delete": {
     "title": "DeleteConfirm · Xác nhận xóa",
     "description": "So sánh việc xóa một cuộc trò chuyện, nhiều cuộc trò chuyện hoặc cuộc trò chuyện có tác vụ tự động.",
@@ -60,17 +54,6 @@
     "options": "path là văn bản tham chiếu. metadata cung cấp đường dẫn đầy đủ và đường dẫn tương đối tùy chọn. Thư viện cung cấp siêu dữ liệu mà không tải tệp.",
     "scope": "Phạm vi tệp",
     "hint": "Nhấp chuột phải để mở menu sao chép, hoặc đưa tiêu điểm vào tệp rồi nhấn Shift+F10."
-  },
-  "workbench": {
-    "title": "PaneWorkbench · Nhiều ngăn",
-    "description": "Đổi bố cục, kích hoạt hoặc thêm ngăn, điều chỉnh vị trí và kích thước.",
-    "options": "Bên gọi điều khiển panes, activePaneKey, layout và splitRatios. renderPane cung cấp nội dung; hàm gọi lại cập nhật trạng thái cục bộ. Màn hình hẹp chỉ hiển thị ngăn đang hoạt động.",
-    "layout": "Bố cục ngăn",
-    "limit": "Tối đa bốn ngăn",
-    "notes": "Ghi chú {{title}}",
-    "active": "Ngăn đang hoạt động",
-    "activate": "Chọn ngăn này để kích hoạt",
-    "hint": "Đang hoạt động: {{title}}. Kéo tay nắm bên dưới để di chuyển ngăn, kéo đường biên để đổi kích thước."
   },
   "hostConnection": {
     "title": "HostConnectionStatus · Trạng thái kết nối",
@@ -170,7 +153,7 @@
     "retries": "Số lần thử lại: {{amount}}"
   },
   "recovery": {
-    "title": "RecoveryNotice · Khôi phục tác vụ",
+    "title": "ThreadComposer · Khôi phục tác vụ",
     "description": "So sánh gián đoạn, tiếp tục, lỗi và không thể tiếp tục; thử tiếp tục hoặc đóng.",
     "options": "state cung cấp ảnh chụp trạng thái khôi phục. onContinue và onDismiss trả về Promise. Hàm gọi lại chỉ cập nhật bản xem trước.",
     "state": "Trạng thái khôi phục",
@@ -296,22 +279,13 @@
     "selected": "Máy chủ xem trước: {{name}}"
   },
   "chats": {
-    "title": "ChatList · Danh sách trò chuyện",
+    "title": "ConversationsTab · Danh sách trò chuyện",
     "description": "Chọn cuộc trò chuyện và thử ghim, lưu trữ hoặc xóa từ menu.",
     "options": "Bên gọi cung cấp sessions, activeKey và khóa đã ghim hoặc lưu trữ. Hàm gọi lại thao tác cập nhật danh sách ví dụ.",
     "state": "Trạng thái danh sách trò chuyện",
     "renamed": "Đã đổi tên: {{name}}",
     "selected": "Cuộc trò chuyện đã chọn: {{name}}",
     "none": "Không có"
-  },
-  "sidebarResize": {
-    "title": "SidebarResizeHandle · Kích thước thanh bên",
-    "description": "Đổi kích thước, thu gọn và mở rộng thanh bên bằng chuột hoặc bàn phím.",
-    "options": "width và open là trạng thái được điều khiển. onResize cập nhật kích thước và mở rộng; onDraggingChange thông báo trạng thái kéo.",
-    "content": "Nội dung thanh bên",
-    "hint": "Kéo đường phân cách, hoặc đưa tiêu điểm vào đó rồi dùng phím mũi tên, Home, End và Enter.",
-    "collapsed": "Đã thu gọn",
-    "dragging": "Đang kéo"
   },
   "language": {
     "title": "LanguageSwitcher · Ngôn ngữ giao diện",
@@ -343,7 +317,7 @@
   "channel": {
     "title": "{{channel}} · Thiết lập kênh",
     "description": "Khám phá biểu mẫu thiết lập kênh thực và các trạng thái.",
-    "options": "Dùng đăng ký kênh, ảnh chụp hợp đồng thiết lập Python và ChannelSetupSurfaceView thực. Nội dung nhập, hiện thông tin xác thực, cấu hình sẵn, kiểm tra và bật tắt chỉ tác động đến bản xem trước này.",
+    "options": "Dùng đăng ký kênh, ảnh chụp hợp đồng thiết lập Python và ChannelSetupView thực. Nội dung nhập, hiện thông tin xác thực, cấu hình sẵn, kiểm tra và bật tắt chỉ tác động đến bản xem trước này.",
     "state": "Trạng thái thiết lập kênh",
     "credentialsError": "Thông tin xác thực ví dụ bị từ chối. Cập nhật giá trị xem trước rồi thử lại.",
     "validation": "Cấu hình xem trước"
@@ -376,42 +350,6 @@
     "title": "WhatsAppConnectFlowView · Liên kết thiết bị WhatsApp",
     "description": "So sánh liên kết tự động, thành công, hết hạn và lỗi; thử liên kết tài khoản khác.",
     "options": "Giao diện giữ quy tắc hiển thị tự bắt đầu và bố cục tối giản. Bên gọi điều khiển trạng thái và thử lại. Điểm vào thực quản lý tự bắt đầu, buộc thử lại và thăm dò."
-  },
-  "linearPanel": {
-    "title": "LinearPanelView · Thiết lập Linear",
-    "description": "Khám phá ứng dụng, khóa, cài đặt nâng cao, không gian làm việc, quyền và ủy quyền web.",
-    "options": "state và workspaces cung cấp ảnh chụp trạng thái; hàm gọi lại nối thao tác không gian làm việc, lưu và MCP. Ba vị trí kết hợp giao diện thành viên, ủy quyền và đặt lại dùng trong sản phẩm.",
-    "state": "Trạng thái thiết lập Linear",
-    "runtimeError": "Không thể khởi động webhook Linear.",
-    "saveError": "Không thể lưu cài đặt. Bản nháp đã được giữ lại.",
-    "inspectionError": "Không thể kiểm tra không gian làm việc đã kết nối.",
-    "refreshed": "Đã làm mới không gian làm việc ví dụ.",
-    "removed": "Đã gỡ không gian làm việc ví dụ: {{name}}",
-    "mcp": "Đã chọn thiết lập Linear MCP."
-  },
-  "linearMembers": {
-    "title": "LinearMemberAccessView · Quyền truy cập thành viên",
-    "description": "Tìm thành viên, sửa quyền và so sánh đang tải, trống, lưu và chưa xác nhận.",
-    "options": "snapshot chứa trạng thái thành viên đã xác nhận. onLoad và onSetAllowed thuộc điểm vào kênh; gateway vẫn kiểm tra quyền.",
-    "state": "Trạng thái thành viên",
-    "loadError": "Danh bạ thành viên hiện không khả dụng.",
-    "saveError": "Quyền truy cập chưa được xác nhận."
-  },
-  "linearConnect": {
-    "title": "LinearConnectFlowView · Ủy quyền Linear",
-    "description": "Thử ủy quyền qua trình duyệt với chờ, bắt đầu, hủy, thành công và thất bại.",
-    "options": "Tái sử dụng ChannelQrConnectFlowView. Linear cung cấp cách hiển thị, nhãn và xử lý tiêu điểm; điểm vào runtime tạo phiên và thăm dò.",
-    "state": "Giai đoạn ủy quyền",
-    "error": "Không thể hoàn tất ủy quyền.",
-    "hint": "Liên kết ủy quyền và không gian làm việc là ví dụ. Bắt đầu và Hủy chỉ thay đổi giai đoạn xem trước."
-  },
-  "linearReset": {
-    "title": "LinearResetConnectionView · Đặt lại kết nối",
-    "description": "Xem phần bị xóa hoặc giữ lại, trạng thái bận và thử lại sau khi đặt lại một phần.",
-    "options": "onReset thực hiện toàn bộ giao dịch thu hồi và dọn dẹp. Giao diện quản lý xác nhận, lỗi, giới hạn đóng và khôi phục tiêu điểm.",
-    "state": "Kết quả đặt lại",
-    "error": "Không thể dừng kênh. Cài đặt ứng dụng đã được giữ lại.",
-    "completed": "Đã xóa không gian làm việc và cài đặt ứng dụng trong bản xem trước."
   },
   "weixinPanel": {
     "title": "WeixinPanelView · Cài đặt Weixin",

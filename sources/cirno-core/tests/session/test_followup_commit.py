@@ -11,15 +11,21 @@ from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.bus.events import INBOUND_META_TURN_ID, InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.base import GenerationSettings, LLMResponse
+from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.recovery import PENDING_FOLLOWUP_ID_KEY, pending_followups
-from cirno_core.session.display_recovery import RecoveryCoordinator
+from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
+from cirno_core.session.recovery.pending import pending_followups
+from cirno_core.session.recovery.coordinator import RecoveryCoordinator
 
 
 def _loop(sessions):
     loop = AgentLoop.__new__(AgentLoop)
+    from cirno_core.agent.execution.persistence import TurnPersistence
+    loop.persistence = TurnPersistence(loop)
+    from cirno_core.agent.execution.inputs import TurnInputs
+    loop.inputs = TurnInputs(loop)
     loop.sessions = sessions
     return loop
 
@@ -46,7 +52,7 @@ async def test_late_consumption_commits_history_and_only_its_ids(tmp_path, monke
             message = _input(f"follow-up {index}", f"input-{index}")
             consumed.append(await state.queue_followup(draft.key, message))
         await state.checkpoint_view(draft, {"phase": "final_response"})
-        _loop(sessions)._save_turn(draft, [
+        _loop(sessions).persistence.save_messages(draft, [
             *[
                 {"role": "user", "content": f"follow-up {index}", PENDING_FOLLOWUP_ID_KEY: identifier}
                 for index, identifier in enumerate(consumed)
@@ -86,7 +92,7 @@ async def test_failed_followup_commit_rolls_back_history_and_ack_then_can_retry(
         draft.add_message("user", "initial input")
         await state.prepare_input(draft)
         identifier = await state.queue_followup(draft.key, _input("consumed input", "follow-up"))
-        _loop(sessions)._save_turn(draft, [
+        _loop(sessions).persistence.save_messages(draft, [
             {"role": "user", "content": "consumed input", PENDING_FOLLOWUP_ID_KEY: identifier},
             {"role": "assistant", "content": "completed answer"},
         ], skip=0)
@@ -121,7 +127,7 @@ async def test_recovered_input_keeps_admission_identity_and_timestamp(tmp_path):
         recovered = pending_followups(await state.get(draft.key))[0]
         assert recovered.timestamp == message.timestamp
         assert recovered.metadata[INBOUND_META_TURN_ID] == "original-input"
-        assert await _loop(sessions)._persist_user_message_early(recovered, draft)
+        assert await _loop(sessions).inputs.persist_early(recovered, draft)
         row = (await state.get(draft.key)).messages[-1]
         assert row["timestamp"] == message.timestamp.isoformat()
         assert row[INBOUND_META_TURN_ID] == "original-input"
@@ -150,7 +156,7 @@ async def test_injected_inputs_keep_their_own_identity_through_runner_and_commit
             message.metadata[PENDING_FOLLOWUP_ID_KEY] = identifier
             queue.put_nowait(message)
         runtime = loop.llm_runtime()
-        result = await loop._run_agent_loop(
+        result = await loop.model_turn.run(
             TranscriptInput(history=draft.get_history(), current_message=None),
             runtime=runtime, session=draft, pending_queue=queue,
             request_context=RequestContext(
@@ -158,7 +164,7 @@ async def test_injected_inputs_keep_their_own_identity_through_runner_and_commit
                 turn_id="active-run", runtime=runtime,
             ),
         )
-        loop._save_turn(draft, result.messages, skip=2)
+        loop.persistence.save_messages(draft, result.messages, skip=2)
         await loop.sessions.state.finish_turn(draft)
         stored = await loop.sessions.state.get(draft.key)
         injected = [row for row in stored.messages if row.get("role") == "user"][1:]

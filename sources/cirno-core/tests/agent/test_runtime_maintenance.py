@@ -11,12 +11,12 @@ from unittest.mock import AsyncMock
 import pytest
 from cirno_core.utils.llm_runtime import LLMRuntime
 
-from cirno_core.agent.runner import AgentRunResult
+from cirno_core.agent.runner.contracts import AgentRunResult
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.runtime_events import RuntimeModelChanged
 from cirno_core.cron.service import CronService
 from cirno_core.cron.types import CronSchedule
-from cirno_core.providers.base import LLMResponse
+from cirno_core.providers.contracts import LLMResponse
 from cirno_core.runtime.admission import RuntimeBusyError, RuntimeMaintenanceError
 from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.triggers.local_runner import run_local_trigger_queue
@@ -48,7 +48,7 @@ def message(content="hello", *, kind=None):
 
 async def settle(agent):
     async with asyncio.timeout(3):
-        while agent._has_pending_work():
+        while agent.lifecycle.has_pending_work():
             await asyncio.sleep(0)
 
 
@@ -197,7 +197,7 @@ async def test_rejected_input_keeps_failure_delivery_owned(agent, monkeypatch):
         entered.set()
         await release.wait()
 
-    monkeypatch.setattr(agent, "_dispatch_inbound", reject)
+    monkeypatch.setattr(agent.dispatch, "receive", reject)
     monkeypatch.setattr(agent.turn_delivery_factory, "unrouted",
                         lambda *args: SimpleNamespace(fail=fail))
     await agent.bus.publish_inbound(message())
@@ -237,7 +237,7 @@ async def test_scheduled_background_work_blocks_before_it_starts(agent):
         release.set()
         await settle(agent)
     with agent.maintenance():
-        await agent._check_expired_sessions_if_due()
+        await agent.lifecycle.expire_sessions()
         assert not agent._background_tasks
 
 
@@ -283,7 +283,7 @@ async def test_async_idle_scan_keeps_storage_work_owned(agent, monkeypatch):
 
     monkeypatch.setattr(agent.auto_compact, "check_expired", scan)
     agent._next_idle_compact_check_at = 0
-    task = asyncio.create_task(agent._check_expired_sessions_if_due())
+    task = asyncio.create_task(agent.lifecycle.expire_sessions())
     try:
         async with asyncio.timeout(3):
             await entered.wait()
@@ -451,7 +451,7 @@ async def test_cancelled_exec_close_keeps_unfinished_cleanup_owned(agent, tmp_pa
 
 async def test_subagent_execution_and_cleanup_are_both_busy(agent, monkeypatch):
     manager = agent.subagents
-    manager.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="finished"))
+    manager.execution.runner.run = AsyncMock(return_value=AgentRunResult(messages=[], final_content="finished"))
     runtime = LLMRuntime.capture(agent.provider, "test-model", context_window_tokens=4096)
     await manager.spawn("child", runtime=runtime)
     record = next(iter(manager._tasks.values()))

@@ -15,13 +15,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from cirno_core.bus.events import OutboundMessage
-from cirno_core.bus.outbound_events import (
-    StreamDeltaEvent,
-    StreamedResponseEvent,
-    StreamEndEvent,
-    outbound_message_for_event,
-)
 from cirno_core.bus.queue import MessageBus
+from cirno_core.config.channels import ChannelsConfig
+from cirno_core.config.loader import load_config, save_config
+from cirno_core.config.schema import Config
+from cirno_core.utils.restart import RestartNotice
 from cirno_server.channels.base import BaseChannel
 from cirno_server.channels.contracts import (
     ChannelFieldSpec,
@@ -30,11 +28,9 @@ from cirno_server.channels.contracts import (
     ChannelSetupSpec,
     SetupRequirement,
 )
-from cirno_server.channels.manager import ORIGIN_REPLY_FINGERPRINTS_MAX_SIZE, ChannelManager
+from cirno_server.channels.delivery.duplicates import FINGERPRINT_LIMIT
+from cirno_server.channels.manager import ChannelManager
 from cirno_server.channels.plugin import ChannelPlugin, load_channel_package
-from cirno_core.config.loader import load_config, save_config
-from cirno_core.config.schema import ChannelsConfig, Config
-from cirno_core.utils.restart import RestartNotice
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -318,9 +314,9 @@ def test_channel_manager_delegates_instance_expansion_to_channel(monkeypatch: py
 
     manager = ChannelManager(cfg, MessageBus())
 
-    assert set(manager.channels) == {"multi", "multi.product"}
-    assert manager.channels["multi"].name == "multi"
-    assert manager.channels["multi.product"].name == "multi.product"
+    assert set(manager.runtimes.channels) == {"multi", "multi.product"}
+    assert manager.runtimes.channels["multi"].name == "multi"
+    assert manager.runtimes.channels["multi.product"].name == "multi.product"
 
 
 def test_channel_manager_loads_descriptor_but_not_disabled_runtime(monkeypatch):
@@ -350,7 +346,7 @@ def test_channel_manager_loads_descriptor_but_not_disabled_runtime(monkeypatch):
 
     manager = ChannelManager(config, MessageBus())
 
-    assert manager.channels == {}
+    assert manager.runtimes.channels == {}
     assert load_calls == ["descriptor"]
 
 
@@ -467,7 +463,7 @@ async def test_single_channel_enable_applies_defaults_before_hot_reload(
     )
 
     payload = cirno_features_action("enable", {"name": ["singleplugin"]})
-    hot_reload = await manager.apply_channel_feature_action("enable", "singleplugin")
+    hot_reload = await manager.activation.apply("enable", "singleplugin")
 
     saved = json.loads(config_path.read_text(encoding="utf-8"))["channels"]["singleplugin"]
     assert saved == {
@@ -478,9 +474,9 @@ async def test_single_channel_enable_applies_defaults_before_hot_reload(
     assert payload["features"][0]["enabled"] is True
     assert hot_reload["ok"] is True
     assert hot_reload["requires_restart"] is False
-    assert set(manager.channels) == {"singleplugin"}
-    assert manager.channels["singleplugin"].endpoint == "https://plugin.example/api"
-    assert manager.channels["singleplugin"].retries == 3
+    assert set(manager.runtimes.channels) == {"singleplugin"}
+    assert manager.runtimes.channels["singleplugin"].endpoint == "https://plugin.example/api"
+    assert manager.runtimes.channels["singleplugin"].retries == 3
 
 
 def test_channel_manager_preserves_single_instance_plugin_owned_instances(monkeypatch):
@@ -496,8 +492,8 @@ def test_channel_manager_preserves_single_instance_plugin_owned_instances(monkey
 
     manager = ChannelManager(config, MessageBus())
 
-    assert set(manager.channels) == {"fakeplugin"}
-    assert manager.channels["fakeplugin"].config["instances"] == ["plugin-owned-value"]
+    assert set(manager.runtimes.channels) == {"fakeplugin"}
+    assert manager.runtimes.channels["fakeplugin"].config["instances"] == ["plugin-owned-value"]
 
 
 # ---------------------------------------------------------------------------
@@ -626,8 +622,8 @@ def test_plugin_setup_contract_drives_save_and_validation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ):
-    from cirno_server.channels.validation import validate_channel_config
     from cirno_core.config import loader
+    from cirno_server.channels.validation import validate_channel_config
     from cirno_server.webui.settings.routes import WebUISettingsRouter
     from cirno_server.webui.settings.services import WebUISettingsServices
 
@@ -663,8 +659,8 @@ def test_generic_plugin_validation_enforces_composite_requirements(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from cirno_server.channels.validation import validate_channel_config
     from cirno_core.config import loader
+    from cirno_server.channels.validation import validate_channel_config
 
     class _CompositeSetupPlugin(_FakePlugin):
         name = "compositeplugin"
@@ -850,8 +846,8 @@ def test_manager_loads_plugin_from_dict_config(monkeypatch, proxy):
 
     mgr = ChannelManager(fake_config, MessageBus())
 
-    assert "fakeplugin" in mgr.channels
-    assert isinstance(mgr.channels["fakeplugin"], _FakePlugin)
+    assert "fakeplugin" in mgr.runtimes.channels
+    assert isinstance(mgr.runtimes.channels["fakeplugin"], _FakePlugin)
 
 
 def test_manager_installs_manifest_dependencies_before_loading_enabled_channel(monkeypatch):
@@ -886,7 +882,7 @@ def test_manager_installs_manifest_dependencies_before_loading_enabled_channel(m
     manager = ChannelManager(config, MessageBus())
 
     assert installs == [("fakeplugin", ["fake-sdk>=1"])]
-    assert "fakeplugin" in manager.channels
+    assert "fakeplugin" in manager.runtimes.channels
 
 
 def test_manager_reports_dependency_install_failure_as_runtime_failure(monkeypatch):
@@ -914,8 +910,8 @@ def test_manager_reports_dependency_install_failure_as_runtime_failure(monkeypat
 
     manager = ChannelManager(config, MessageBus())
 
-    assert manager.channels == {}
-    assert manager.get_status()["fakeplugin"] == {
+    assert manager.runtimes.channels == {}
+    assert manager.runtimes.status()["fakeplugin"] == {
         "enabled": True,
         "running": False,
         "state": "failed",
@@ -944,9 +940,9 @@ def test_manager_loads_websocket_from_default_config():
     with patch("cirno_server.channels.registry.discover_plugins", return_value={"websocket": plugin}):
         mgr = ChannelManager(Config(), MessageBus(), webui_static_dist=False)
 
-    assert "websocket" in mgr.channels
-    assert mgr.channels["websocket"].config["enabled"] is True
-    assert mgr.channels["websocket"].config["host"] == "127.0.0.1"
+    assert "websocket" in mgr.runtimes.channels
+    assert mgr.runtimes.channels["websocket"].config["enabled"] is True
+    assert mgr.runtimes.channels["websocket"].config["host"] == "127.0.0.1"
 
 
 def test_manager_respects_explicitly_disabled_websocket_config():
@@ -962,7 +958,7 @@ def test_manager_respects_explicitly_disabled_websocket_config():
     with patch("cirno_server.channels.registry.discover_plugins", return_value={"websocket": plugin}):
         mgr = ChannelManager(config, MessageBus(), webui_static_dist=False)
 
-    assert "websocket" not in mgr.channels
+    assert "websocket" not in mgr.runtimes.channels
 
 
 # ---------------------------------------------------------------------------
@@ -1043,6 +1039,7 @@ def test_repository_dependency_installer_selects_all_channel_manifests(monkeypat
 
 def test_repository_dependency_installer_batches_missing_manifests(monkeypatch):
     from cirno_server.features.service import InstallResult
+
     from sources.deployment import install_channel_dependencies as dependencies
 
     plugins = {
@@ -1098,6 +1095,7 @@ def test_repository_dependency_installer_batches_missing_manifests(monkeypatch):
 
 def test_repository_dependency_installer_falls_back_after_batch_failure(monkeypatch):
     from cirno_server.features.service import InstallResult
+
     from sources.deployment import install_channel_dependencies as dependencies
 
     plugins = {
@@ -1141,6 +1139,7 @@ def test_repository_dependency_installer_falls_back_after_batch_failure(monkeypa
 
 def test_repository_dependency_installer_rechecks_each_channel_after_batch(monkeypatch):
     from cirno_server.features.service import InstallResult
+
     from sources.deployment import install_channel_dependencies as dependencies
 
     plugins = {
@@ -1190,6 +1189,7 @@ def test_repository_dependency_installer_rechecks_each_channel_after_batch(monke
 
 def test_repository_dependency_installer_reports_conflict_after_fallback(monkeypatch):
     from cirno_server.features.service import InstallResult
+
     from sources.deployment import install_channel_dependencies as dependencies
 
     plugins = {
@@ -1627,8 +1627,8 @@ def test_run_install_command_returns_failure_on_timeout(monkeypatch):
 
 
 def test_optional_dependency_metadata_for_enable():
-    from cirno_server.features import service as optional_features
     from cirno_server.channels.plugin import load_channel_package
+    from cirno_server.features import service as optional_features
 
     data = tomllib.loads(Path("sources/cirno-core/pyproject.toml").read_text(encoding="utf-8"))
     deps = data["project"]["optional-dependencies"]
@@ -1824,14 +1824,13 @@ async def test_manager_skips_disabled_channel_package(monkeypatch):
     )
 
     _stub_channel_registry(monkeypatch, _channel_plugin(_FakePlugin))
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {}
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
+    mgr.runtimes.channels = {}
     mgr._dispatch_task = None
-    mgr._init_channels()
+    mgr.activation.initialize()
 
-    assert "fakeplugin" not in mgr.channels
+    assert "fakeplugin" not in mgr.runtimes.channels
 
 
 # ---------------------------------------------------------------------------
@@ -1870,252 +1869,15 @@ def test_channels_config_send_max_retries_upper_bound():
         ChannelsConfig(send_max_retries=11)
 
 
-# ---------------------------------------------------------------------------
-# _send_with_retry
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_send_with_retry_succeeds_first_try():
-    """_send_with_retry should succeed on first try and not retry."""
-    call_count = 0
-
-    class _FailingChannel(BaseChannel):
-        name = "failing"
-        display_name = "Failing"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            nonlocal call_count
-            call_count += 1
-            # Succeeds on first try
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=3),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"failing": _FailingChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = OutboundMessage(channel="failing", chat_id="123", content="test")
-    await mgr._send_with_retry(mgr.channels["failing"], msg)
-
-    assert call_count == 1
 
 
-@pytest.mark.asyncio
-async def test_send_with_retry_retries_on_failure():
-    """_send_with_retry should retry on failure up to max_retries times."""
-    call_count = 0
-
-    class _FailingChannel(BaseChannel):
-        name = "failing"
-        display_name = "Failing"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            nonlocal call_count
-            call_count += 1
-            raise RuntimeError("simulated failure")
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=3),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"failing": _FailingChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = OutboundMessage(channel="failing", chat_id="123", content="test")
-
-    # Patch asyncio.sleep to avoid actual delays
-    with patch("cirno_server.channels.manager.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        await mgr._send_with_retry(mgr.channels["failing"], msg)
-
-    assert call_count == 3  # 3 total attempts (initial + 2 retries)
-    assert mock_sleep.call_count == 2  # 2 sleeps between retries
 
 
-@pytest.mark.asyncio
-async def test_send_with_retry_no_retry_when_max_is_zero():
-    """_send_with_retry should not retry when send_max_retries is 0."""
-    call_count = 0
-
-    class _FailingChannel(BaseChannel):
-        name = "failing"
-        display_name = "Failing"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            nonlocal call_count
-            call_count += 1
-            raise RuntimeError("simulated failure")
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=0),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"failing": _FailingChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = OutboundMessage(channel="failing", chat_id="123", content="test")
-
-    with patch("cirno_server.channels.manager.asyncio.sleep", new_callable=AsyncMock):
-        await mgr._send_with_retry(mgr.channels["failing"], msg)
-
-    assert call_count == 1  # Called once but no retry (max(0, 1) = 1)
 
 
-@pytest.mark.asyncio
-async def test_send_with_retry_calls_send_delta():
-    """_send_with_retry should call send_delta for stream delta events."""
-    calls: list[tuple[str, str, str | None, bool, bool, bool]] = []
-
-    class _StreamingChannel(BaseChannel):
-        name = "streaming"
-        display_name = "Streaming"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            pass  # Should not be called
-
-        async def send_delta(
-            self,
-            chat_id: str,
-            delta: str,
-            metadata: dict | None = None,
-            *,
-            stream_id: str | None = None,
-            stream_end: bool = False,
-            resuming: bool = False,
-            merge_next: bool = False,
-        ) -> None:
-            calls.append((chat_id, delta, stream_id, stream_end, resuming, merge_next))
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=3),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"streaming": _StreamingChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = outbound_message_for_event(
-        channel="streaming",
-        chat_id="123",
-        event=StreamDeltaEvent(content="test delta", stream_id="s1"),
-    )
-    await mgr._send_with_retry(mgr.channels["streaming"], msg)
-    end = outbound_message_for_event(
-        channel="streaming",
-        chat_id="123",
-        event=StreamEndEvent(
-            content="",
-            stream_id="s1",
-            resuming=True,
-            merge_next=True,
-        ),
-    )
-    await mgr._send_with_retry(mgr.channels["streaming"], end)
-
-    assert calls == [
-        ("123", "test delta", "s1", False, False, False),
-        ("123", "", "s1", True, True, True),
-    ]
 
 
-@pytest.mark.asyncio
-async def test_send_with_retry_skips_send_when_streamed():
-    """_send_with_retry should not call send for streamed response events."""
-    send_called = False
-    send_delta_called = False
 
-    class _StreamedChannel(BaseChannel):
-        name = "streamed"
-        display_name = "Streamed"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            nonlocal send_called
-            send_called = True
-
-        async def send_delta(
-            self,
-            chat_id: str,
-            delta: str,
-            metadata: dict | None = None,
-            *,
-            stream_id: str | None = None,
-            stream_end: bool = False,
-            resuming: bool = False,
-        ) -> None:
-            nonlocal send_delta_called
-            send_delta_called = True
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=3),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"streamed": _StreamedChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = outbound_message_for_event(
-        channel="streamed",
-        chat_id="123",
-        event=StreamedResponseEvent(),
-        content="test",
-    )
-    await mgr._send_with_retry(mgr.channels["streamed"], msg)
-
-    assert send_called is False
-    assert send_delta_called is False
 
 
 def test_outbound_duplicate_suppression_is_scoped_to_origin_message() -> None:
@@ -2124,12 +1886,11 @@ def test_outbound_duplicate_suppression_is_scoped_to_origin_message() -> None:
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
 
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {}
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
+    mgr.runtimes.channels = {}
     mgr._dispatch_task = None
-    mgr._origin_reply_fingerprints = OrderedDict()
+    mgr.dispatcher.origins.fingerprints = OrderedDict()
 
     first = OutboundMessage(
         channel="feishu",
@@ -2156,24 +1917,24 @@ def test_outbound_duplicate_suppression_is_scoped_to_origin_message() -> None:
         metadata={"origin_message_id": "msg-1"},
     )
 
-    assert mgr._should_suppress_outbound(first) is False
-    assert mgr._should_suppress_outbound(duplicate) is True
-    assert mgr._should_suppress_outbound(separate_turn) is False
-    assert mgr._should_suppress_outbound(new_origin_content) is False
+    assert mgr.dispatcher.origins.matches(first) is False
+    assert mgr.dispatcher.origins.matches(duplicate) is True
+    assert mgr.dispatcher.origins.matches(separate_turn) is False
+    assert mgr.dispatcher.origins.matches(new_origin_content) is False
 
 
 def test_outbound_duplicate_suppression_cache_is_bounded() -> None:
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr._origin_reply_fingerprints = OrderedDict()
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.dispatcher.origins.fingerprints = OrderedDict()
 
-    for index in range(ORIGIN_REPLY_FINGERPRINTS_MAX_SIZE):
+    for index in range(FINGERPRINT_LIMIT):
         msg = OutboundMessage(
             channel="feishu",
             chat_id="chat123",
             content="Done",
             metadata={"message_id": f"msg-{index}"},
         )
-        assert mgr._should_suppress_outbound(msg) is False
+        assert mgr.dispatcher.origins.matches(msg) is False
 
     duplicate = OutboundMessage(
         channel="feishu",
@@ -2185,120 +1946,24 @@ def test_outbound_duplicate_suppression_cache_is_bounded() -> None:
         channel="feishu",
         chat_id="chat123",
         content="Done",
-        metadata={"message_id": f"msg-{ORIGIN_REPLY_FINGERPRINTS_MAX_SIZE}"},
+        metadata={"message_id": f"msg-{FINGERPRINT_LIMIT}"},
     )
 
-    assert mgr._should_suppress_outbound(duplicate) is True
-    assert mgr._should_suppress_outbound(newest) is False
-    assert len(mgr._origin_reply_fingerprints) == ORIGIN_REPLY_FINGERPRINTS_MAX_SIZE
-    assert ("feishu", "chat123", "msg-0") in mgr._origin_reply_fingerprints
-    assert ("feishu", "chat123", "msg-1") not in mgr._origin_reply_fingerprints
+    assert mgr.dispatcher.origins.matches(duplicate) is True
+    assert mgr.dispatcher.origins.matches(newest) is False
+    assert len(mgr.dispatcher.origins.fingerprints) == FINGERPRINT_LIMIT
+    assert ("feishu", "chat123", "msg-0") in mgr.dispatcher.origins.fingerprints
+    assert ("feishu", "chat123", "msg-1") not in mgr.dispatcher.origins.fingerprints
 
 
-@pytest.mark.asyncio
-async def test_send_with_retry_propagates_cancelled_error():
-    """_send_with_retry should re-raise CancelledError for graceful shutdown."""
-    class _CancellingChannel(BaseChannel):
-        name = "cancelling"
-        display_name = "Cancelling"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            raise asyncio.CancelledError("simulated cancellation")
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=3),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"cancelling": _CancellingChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = OutboundMessage(channel="cancelling", chat_id="123", content="test")
-
-    with pytest.raises(asyncio.CancelledError):
-        await mgr._send_with_retry(mgr.channels["cancelling"], msg)
 
 
-@pytest.mark.asyncio
-async def test_send_with_retry_propagates_cancelled_error_during_sleep():
-    """_send_with_retry should re-raise CancelledError during sleep."""
-    call_count = 0
-
-    class _FailingChannel(BaseChannel):
-        name = "failing"
-        display_name = "Failing"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            nonlocal call_count
-            call_count += 1
-            raise RuntimeError("simulated failure")
-
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(send_max_retries=3),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"failing": _FailingChannel(fake_config, mgr.bus)}
-    mgr._dispatch_task = None
-    mgr._outbound_sends = asyncio.Semaphore(32)
-
-    msg = OutboundMessage(channel="failing", chat_id="123", content="test")
-
-    # Mock sleep to raise CancelledError
-    async def cancel_during_sleep(_):
-        raise asyncio.CancelledError("cancelled during sleep")
-
-    with patch("cirno_server.channels.manager.asyncio.sleep", side_effect=cancel_during_sleep):
-        with pytest.raises(asyncio.CancelledError):
-            await mgr._send_with_retry(mgr.channels["failing"], msg)
-
-    # Should have attempted once before sleep was cancelled
-    assert call_count == 1
 
 
 # ---------------------------------------------------------------------------
 # ChannelManager - lifecycle and getters
 # ---------------------------------------------------------------------------
 
-class _ChannelWithAllowFrom(BaseChannel):
-    """Channel with configurable allow_from."""
-    name = "withallow"
-    display_name = "With Allow"
-
-    def __init__(self, config, bus, allow_from):
-        super().__init__(config, bus)
-        if isinstance(self.config, dict):
-            self.config["allow_from"] = allow_from
-        else:
-            self.config.allow_from = allow_from
-
-    async def start(self) -> None:
-        pass
-
-    async def stop(self) -> None:
-        pass
-
-    async def send(self, msg: OutboundMessage) -> None:
-        pass
 
 
 class _StartableChannel(BaseChannel):
@@ -2321,92 +1986,12 @@ class _StartableChannel(BaseChannel):
         pass
 
 
-@pytest.mark.asyncio
-async def test_validate_allow_from_allows_empty_list():
-    """Empty allow_from is valid now — pairing store handles unapproved senders."""
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.channels = {"test": _ChannelWithAllowFrom(fake_config, None, [])}
-    mgr._dispatch_task = None
-
-    # Should not raise — empty list defers to pairing store
-    mgr._validate_allow_from()
-    assert list(mgr.channels) == ["test"]
-    assert mgr.channels["test"].config.allow_from == []
 
 
-@pytest.mark.asyncio
-async def test_validate_allow_from_passes_with_asterisk():
-    """_validate_allow_from should not raise when allow_from contains '*'."""
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.channels = {"test": _ChannelWithAllowFrom(fake_config, None, ["*"])}
-    mgr._dispatch_task = None
-
-    # Should not raise
-    mgr._validate_allow_from()
-    assert list(mgr.channels) == ["test"]
-    assert mgr.channels["test"].config.allow_from == ["*"]
 
 
-@pytest.mark.asyncio
-async def test_validate_allow_from_allows_empty_dict_allow_from():
-    """Empty dict-backed allow_from is valid — pairing store handles approval."""
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.channels = {"test": _ChannelWithAllowFrom({"enabled": True}, None, [])}
-    mgr._dispatch_task = None
-
-    mgr._validate_allow_from()
-    assert list(mgr.channels) == ["test"]
-    assert mgr.channels["test"].config["allow_from"] == []
 
 
-@pytest.mark.asyncio
-async def test_validate_allow_from_allows_missing_allow_from():
-    """Omitted allowFrom is valid — channel operates in pairing-only mode."""
-    fake_config = SimpleNamespace(
-        channels=ChannelsConfig(),
-        providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
-    )
-
-    class _NoAllowFromChannel(BaseChannel):
-        name = "noallow"
-        display_name = "No Allow"
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-        async def send(self, msg: OutboundMessage) -> None:
-            pass
-
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.channels = {"test": _NoAllowFromChannel({"enabled": True}, None)}
-    mgr._dispatch_task = None
-
-    # Should not raise — pairing-only mode
-    mgr._validate_allow_from()
-    assert list(mgr.channels) == ["test"]
-    assert "allow_from" not in mgr.channels["test"].config
 
 
 @pytest.mark.asyncio
@@ -2417,10 +2002,9 @@ async def test_get_channel_returns_channel_if_exists():
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
 
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {"telegram": _StartableChannel(fake_config, mgr.bus)}
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
+    mgr.runtimes.channels = {"telegram": _StartableChannel(fake_config, mgr.bus)}
     mgr._dispatch_task = None
 
     assert mgr.get_channel("telegram") is not None
@@ -2435,14 +2019,13 @@ async def test_get_status_returns_running_state():
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
 
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
     ch = _StartableChannel(fake_config, mgr.bus)
-    mgr.channels = {"startable": ch}
+    mgr.runtimes.channels = {"startable": ch}
     mgr._dispatch_task = None
 
-    status = mgr.get_status()
+    status = mgr.runtimes.status()
 
     assert status["startable"]["enabled"] is True
     assert status["startable"]["running"] is False  # Not started yet
@@ -2456,10 +2039,9 @@ async def test_enabled_channels_returns_channel_names():
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
 
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
+    mgr.runtimes.channels = {
         "telegram": _StartableChannel(fake_config, mgr.bus),
         "slack": _StartableChannel(fake_config, mgr.bus),
     }
@@ -2481,13 +2063,13 @@ async def test_stop_all_cancels_dispatcher_and_stops_channels():
     )
 
     mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
-    mgr.config = fake_config
+    mgr.runtimes.config = fake_config
 
     ch = _StartableChannel(fake_config, mgr.bus)
-    mgr.channels = {"startable": ch}
-    mgr._channel_tasks = {}
-    mgr._outbound_tasks = {}
-    mgr._stopping_channels = set()
+    mgr.runtimes.channels = {"startable": ch}
+    mgr.runtimes.tasks = {}
+    mgr.delivery.tasks = {}
+    mgr.runtimes.stopping = set()
 
     # Create a real cancelled task
     async def dummy_task():
@@ -2526,23 +2108,22 @@ async def test_start_channel_logs_error_on_failure():
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
 
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr.channels = {}
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
+    mgr.runtimes.channels = {}
     mgr._dispatch_task = None
 
     ch = _FailingChannel(fake_config, mgr.bus)
 
     # Should not raise, just log error
-    await mgr._start_channel("failing", ch)
-    assert mgr.channels == {}
+    await mgr.runtimes.start("failing", ch)
+    assert mgr.runtimes.channels == {}
     assert mgr._dispatch_task is None
 
 
 @pytest.mark.asyncio
 async def test_stop_all_handles_channel_exception():
-    """stop_all should handle exceptions when stopping channels gracefully."""
+    """A failed channel stop is reported after other channels settle."""
     class _StopFailingChannel(BaseChannel):
         name = "stopfailing"
         display_name = "Stop Failing"
@@ -2562,16 +2143,19 @@ async def test_stop_all_handles_channel_exception():
     )
 
     mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
-    mgr.config = fake_config
-    mgr.channels = {"stopfailing": _StopFailingChannel(fake_config, mgr.bus)}
-    mgr._channel_tasks = {}
-    mgr._outbound_tasks = {}
-    mgr._stopping_channels = set()
+    mgr.runtimes.config = fake_config
+    next_channel = _StartableChannel(fake_config, mgr.bus)
+    mgr.runtimes.channels = {"stopfailing": _StopFailingChannel(fake_config, mgr.bus), "next": next_channel}
+    mgr.runtimes.tasks = {}
+    mgr.delivery.tasks = {}
+    mgr.runtimes.stopping = set()
     mgr._dispatch_task = None
 
-    # Should not raise even if channel.stop() raises
-    await mgr.stop_all()
-    assert list(mgr.channels) == ["stopfailing"]
+    with pytest.raises(ExceptionGroup) as failure:
+        await mgr.stop_all()
+    assert str(failure.value.exceptions[0]) == "stop failed"
+    assert next_channel.stopped is True
+    assert list(mgr.runtimes.channels) == ["stopfailing", "next"]
     assert mgr._dispatch_task is None
 
 
@@ -2598,15 +2182,15 @@ async def test_stop_all_handles_channel_stop_cancelled_task():
     )
 
     mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
-    mgr.config = fake_config
+    mgr.runtimes.config = fake_config
     next_channel = _StartableChannel(fake_config, mgr.bus)
-    mgr.channels = {
+    mgr.runtimes.channels = {
         "stopcancelled": _StopCancelledChannel(fake_config, mgr.bus),
         "next": next_channel,
     }
-    mgr._channel_tasks = {}
-    mgr._outbound_tasks = {}
-    mgr._stopping_channels = set()
+    mgr.runtimes.tasks = {}
+    mgr.delivery.tasks = {}
+    mgr.runtimes.stopping = set()
     mgr._dispatch_task = None
 
     await mgr.stop_all()
@@ -2623,8 +2207,8 @@ async def test_start_all_no_channels_logs_warning():
     )
 
     mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
-    mgr.config = fake_config
-    mgr.channels = {}  # No channels
+    mgr.runtimes.config = fake_config
+    mgr.runtimes.channels = {}  # No channels
     mgr._dispatch_task = None
 
     # Should return early without creating dispatch task
@@ -2642,11 +2226,11 @@ async def test_start_all_creates_dispatch_task():
     )
 
     mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
-    mgr.config = fake_config
+    mgr.runtimes.config = fake_config
 
     ch = _StartableChannel(fake_config, mgr.bus)
-    mgr.channels = {"startable": ch}
-    mgr._channel_tasks = {}
+    mgr.runtimes.channels = {"startable": ch}
+    mgr.runtimes.tasks = {}
     mgr._dispatch_task = None
 
     # Cancel immediately after start to avoid running forever
@@ -2680,27 +2264,26 @@ async def test_notify_restart_done_waits_until_channel_starts():
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
 
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
     channel = _StartableChannel(fake_config, mgr.bus)
-    mgr.channels = {"feishu": channel}
+    mgr.runtimes.channels = {"feishu": channel}
     mgr._dispatch_task = None
-    mgr._send_with_retry = AsyncMock()
+    mgr.delivery.retry.send = AsyncMock()
 
     notice = RestartNotice(channel="feishu", chat_id="oc_123", started_at_raw="100.0")
     with patch("cirno_server.channels.manager.consume_restart_notice_from_env", return_value=notice):
         task = mgr._notify_restart_done_if_needed()
 
     await asyncio.sleep(0)
-    mgr._send_with_retry.assert_not_awaited()
+    mgr.delivery.retry.send.assert_not_awaited()
 
     channel._running = True
     assert task is not None
     await asyncio.wait_for(task, timeout=1.0)
 
-    mgr._send_with_retry.assert_awaited_once()
-    sent_channel, sent_msg = mgr._send_with_retry.await_args.args
+    mgr.delivery.retry.send.assert_awaited_once()
+    sent_channel, sent_msg = mgr.delivery.retry.send.await_args.args
     assert sent_channel is channel
     assert sent_msg.channel == "feishu"
     assert sent_msg.chat_id == "oc_123"
@@ -2714,18 +2297,17 @@ async def test_websocket_restart_notice_does_not_overwrite_recovery_state():
         channels=ChannelsConfig(),
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
     channel = _StartableChannel(fake_config, mgr.bus)
     channel._running = True
-    mgr.channels = {"websocket": channel}
-    mgr._send_with_retry = AsyncMock()
+    mgr.runtimes.channels = {"websocket": channel}
+    mgr.delivery.retry.send = AsyncMock()
 
     notice = RestartNotice(channel="websocket", chat_id="chat", started_at_raw="100.0")
     await mgr._send_restart_notice_when_started(notice)
 
-    mgr._send_with_retry.assert_not_awaited()
+    mgr.delivery.retry.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -2748,18 +2330,35 @@ async def test_restart_notice_retries_until_running_channel_accepts_delivery():
         channels=ChannelsConfig(send_max_retries=1),
         providers=SimpleNamespace(groq=SimpleNamespace(api_key="")),
     )
-    mgr = ChannelManager.__new__(ChannelManager)
-    mgr.config = fake_config
-    mgr.bus = MessageBus()
-    mgr._outbound_sends = asyncio.Semaphore(32)
+    mgr = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}), MessageBus())
+    mgr.runtimes.config = fake_config
     channel = _EventuallyDeliverableChannel(fake_config, mgr.bus)
     channel._running = True
-    mgr.channels = {"discord": channel}
+    mgr.runtimes.channels = {"discord": channel}
 
     notice = RestartNotice(channel="discord", chat_id="123", started_at_raw="")
-    with patch("cirno_server.channels.manager._SEND_RETRY_DELAYS", (0,)):
+    with patch("cirno_server.channels.delivery.retry.RETRY_DELAYS", (0,)):
         await mgr._send_restart_notice_when_started(notice, timeout_s=0.1, poll_s=0.01)
 
     assert channel.attempts == 2
     assert channel.sent is not None
     assert channel.sent.content == "Restart completed."
+
+
+@pytest.mark.asyncio
+async def test_failed_dispatcher_does_not_skip_channel_transport_cleanup():
+    config = Config.model_validate({"channels": {"websocket": {"enabled": False}}})
+    manager = ChannelManager(config, MessageBus())
+    channel = _StartableChannel(config, manager.bus)
+    manager.runtimes.channels = {"startable": channel}
+
+    async def failed_dispatcher():
+        raise RuntimeError("dispatcher failed")
+
+    manager._dispatch_task = asyncio.create_task(failed_dispatcher())
+    await asyncio.sleep(0)
+    with pytest.raises(ExceptionGroup) as failure:
+        await manager.stop_all()
+    assert str(failure.value.exceptions[0]) == "dispatcher failed"
+    assert channel.stopped
+    assert manager._dispatch_task is None

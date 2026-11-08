@@ -8,7 +8,7 @@ import pytest
 from cirno_core.memory.idle import MemoryIdleCoordinator
 from cirno_core.config.home import set_instance_path
 from cirno_core.config.schema import Config
-from cirno_core.memory.repository import MemoryRepository
+from cirno_memory.repository import MemoryRepository
 
 
 @pytest.fixture

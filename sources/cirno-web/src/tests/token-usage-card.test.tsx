@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TokenUsageCard } from "@/components/settings/TokenUsageCard";
-import { TokenUsageModelTrend } from "@/components/settings/TokenUsageModelTrend";
-import type { SettingsPayload } from "@/lib/types";
+import { TokenUsageCard } from "@/features/settings/TokenUsageCard";
+import { TokenUsageModelTrend } from "@/features/settings/TokenUsageModelTrend";
+import type { SettingsPayload } from "@/lib/contracts/settings";
 
 type Usage = NonNullable<SettingsPayload["usage"]>;
 function day(date: string, tokens: number): Usage["days"][number] {
@@ -112,4 +112,29 @@ describe("Token usage card", () => {
     const legend = screen.getByLabelText("model-5: Total tokens: 600 (27.3%), Cache hit rate: 80%");
     expect(legend).toHaveAttribute("tabindex", "0");
   });
+});
+
+it("pins overview chart details after clicking until explicitly dismissed", async () => {
+  render(<TokenUsageCard usage={usage([day(new Date().toISOString().slice(0, 10), 100)])} />);
+  const bar = screen.getByRole("img", { name: /100 tokens, 1 requests/ });
+  fireEvent.click(bar);
+  const details = await screen.findByRole("dialog");
+  fireEvent.pointerLeave(bar);
+  fireEvent.blur(bar);
+  expect(details).toBeVisible();
+  fireEvent.click(bar);
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("pins model trend and legend details with keyboard or pointer activation", async () => {
+  const days = Array.from({ length: 30 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, "0")}`, usage: day(`2026-09-${String(i + 1).padStart(2, "0")}`, i ? 0 : 1234) }));
+  render(<TokenUsageModelTrend days={days} modelDays={[{ date: days[0].date, model: "model-a", provider: "test", total_tokens: 1234 }]} />);
+  const bar = screen.getByRole("img", { name: /1,234 tokens;/ });
+  fireEvent.click(bar);
+  expect(await screen.findByRole("dialog")).toHaveTextContent("model-a");
+  fireEvent.pointerLeave(bar);
+  expect(screen.getByRole("dialog")).toHaveTextContent("1,234");
+  fireEvent.click(bar);
+  fireEvent.click(screen.getByRole("button", { name: /model-a: Total tokens/ }));
+  expect(await screen.findByRole("dialog")).toHaveTextContent("Cache hit rate");
 });

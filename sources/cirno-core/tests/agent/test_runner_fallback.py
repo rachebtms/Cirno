@@ -8,19 +8,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from loguru import logger
-
-from cirno_core.config.schema import ModelPresetConfig
 from cirno_core.bus.agent_events import RetryStatusEvent
-from cirno_core.providers.base import (
-    LLMProvider,
+from cirno_core.config.models import ModelPresetConfig
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.contracts import (
     LLMResponse,
     ProviderCallContext,
     ProviderConversationState,
 )
 from cirno_core.providers.conversation_state import ProviderConversationStateController
+from cirno_core.providers.errors import is_transient_response, public_error_kind
 from cirno_core.providers.fallback_provider import FallbackModelSelection, FallbackProvider
 from cirno_core.providers.openai_responses import resolve_compact_threshold
+from loguru import logger
 
 
 def _make_response(
@@ -134,7 +134,7 @@ class _FakeProvider(LLMProvider):
 
 
 def test_fallback_models_default_empty() -> None:
-    from cirno_core.config.schema import AgentDefaults
+    from cirno_core.config.agents import AgentDefaults
 
     defaults = AgentDefaults()
 
@@ -142,7 +142,8 @@ def test_fallback_models_default_empty() -> None:
 
 
 def test_fallback_models_accept_preset_refs_and_inline_configs() -> None:
-    from cirno_core.config.schema import Config, InlineFallbackConfig
+    from cirno_core.config.models import InlineFallbackConfig
+    from cirno_core.config.schema import Config
 
     config = Config.model_validate({
         "agents": {
@@ -321,7 +322,8 @@ def test_factory_injects_configured_identity_into_primary_and_fallback_leaves() 
 
 
 def test_inline_fallback_reasoning_effort_does_not_inherit_primary() -> None:
-    from cirno_core.config.schema import Config, InlineFallbackConfig
+    from cirno_core.config.models import InlineFallbackConfig
+    from cirno_core.config.schema import Config
     from cirno_core.providers.factory import provider_signature
 
     config = Config.model_validate({
@@ -1179,7 +1181,7 @@ class TestRetryBeforeFailover:
         fallback = _FakeProvider("fallback", _retryable_error("fallback unavailable"))
         provider = FallbackProvider(primary, [_fallback("fallback-a")],
                                     MagicMock(return_value=fallback))
-        provider._PERSISTENT_IDENTICAL_ERROR_LIMIT = 2
+        provider.retry_policy.identical_error_limit = 2
         observe = AsyncMock()
         with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
@@ -1310,9 +1312,9 @@ class TestRetryBeforeFailover:
 
         assert len(primary.chat_calls) == 4
         assert len(fallback.chat_calls) == 1
-        assert LLMProvider.public_error_kind(result) == "connection"
+        assert public_error_kind(result) == "connection"
         assert result.preserve_provider_state_on_error is True
-        assert not LLMProvider.is_transient_response(result)  # Retry policy is still terminal.
+        assert not is_transient_response(result)  # Retry policy is still terminal.
         assert statuses[-1] == RetryStatusEvent(
             state="exhausted", attempt=4, max_attempts=4, error_kind="connection",
         )
@@ -1332,7 +1334,7 @@ class TestRetryBeforeFailover:
         )
         terminal_event = AsyncMock()
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
-        provider._PERSISTENT_IDENTICAL_ERROR_LIMIT = 2
+        provider.retry_policy.identical_error_limit = 2
 
         with patch("cirno_core.providers.base.asyncio.sleep", new_callable=AsyncMock):
             result = await provider.chat_with_retry(
@@ -1356,7 +1358,7 @@ class TestRetryBeforeFailover:
         terminal_event = AsyncMock()
         provider = FallbackProvider(primary, [_fallback("fallback-a")], factory)
         provider._primary_tripped_at = 100.0
-        provider._PERSISTENT_IDENTICAL_ERROR_LIMIT = 2
+        provider.retry_policy.identical_error_limit = 2
 
         with (
             patch("cirno_core.providers.fallback_provider.time.monotonic", return_value=100.0),
@@ -1967,7 +1969,7 @@ class TestCircuitBreaker:
 
 class TestGenerationForwarded:
     def test(self) -> None:
-        from cirno_core.providers.base import GenerationSettings
+        from cirno_core.providers.generation import GenerationSettings
         primary = _FakeProvider("primary")
         primary.generation = GenerationSettings(temperature=0.5, max_tokens=1024)
         fb = FallbackProvider(

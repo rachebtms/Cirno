@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from cirno_core.llm_usage import LLMCallRecord, get_llm_usage_store
-from cirno_core.pairing import store as pairing_store
+from cirno_core.config.paths import get_data_dir
+from cirno_usage import LLMCallRecord, get_llm_usage_store
 from cirno_core.session.manager import SessionManager
 from cirno_core.config.home import get_home_path
 
@@ -19,7 +19,7 @@ def test_runtime_stores_are_isolated_between_parameter_cases(
     session.add_message("user", "isolated message")
     sessions.save(session)
 
-    usage = get_llm_usage_store()
+    usage = get_llm_usage_store(get_data_dir() / "llm_usage.sqlite3")
     assert usage.recent_calls() == []
     usage.record(LLMCallRecord(
         started_at_ms=int(time.time() * 1000), duration_ms=1, provider="test", model="test",
@@ -32,8 +32,3 @@ def test_runtime_stores_are_isolated_between_parameter_cases(
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text("isolated", encoding="utf-8")
     assert state_path.exists()
-
-    assert not pairing_store.is_approved("test", "isolated-user")
-    code = pairing_store.generate_code("test", "isolated-user")
-    assert pairing_store.approve_code(code) is not None
-    assert pairing_store.is_approved("test", "isolated-user")

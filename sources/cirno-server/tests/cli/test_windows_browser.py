@@ -13,7 +13,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 from cirno_server.cli import webui_support
 from cirno_server.cli import windows_browser as browser
 

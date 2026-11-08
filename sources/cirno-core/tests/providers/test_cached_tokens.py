@@ -1,6 +1,8 @@
 """Tests for cached token extraction from OpenAI-compatible providers."""
 
 from __future__ import annotations
+from cirno_core.providers.chat_completions.complete import parse_response
+from sources.development.testing.providers import parse_chat_chunks
 
 import pytest
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
@@ -52,7 +54,7 @@ def test_extract_usage_openai_cached_tokens_dict():
             "prompt_tokens_details": {"cached_tokens": 1200},
         }
     }
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 1200
     assert result.usage.input_tokens == 2000
@@ -71,7 +73,7 @@ def test_extract_usage_deepseek_cached_tokens_dict():
             "prompt_cache_miss_tokens": 300,
         }
     }
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 1200
 
@@ -87,7 +89,7 @@ def test_extract_usage_no_cached_tokens_dict():
             "total_tokens": 1200,
         }
     }
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens is None
     assert result.usage.cache_write_tokens is None
@@ -105,7 +107,7 @@ def test_extract_usage_openai_cached_zero_dict():
             "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
         }
     }
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 0
     assert result.usage.cache_write_tokens == 0
@@ -125,7 +127,7 @@ def test_extract_usage_preserves_reported_total_and_cache_write_dict():
         },
     }
 
-    result = _provider()._parse(response)
+    result = parse_response(response, spec=_provider()._spec)
 
     assert result.usage is not None
     assert result.usage.total_tokens == 175
@@ -135,7 +137,7 @@ def test_extract_usage_preserves_reported_total_and_cache_write_dict():
 
 
 def test_extract_usage_missing_is_none():
-    result = _provider()._parse({"choices": [_DICT_CHOICE]})
+    result = parse_response({'choices': [_DICT_CHOICE]}, spec=_provider()._spec)
 
     assert result.usage is None
 
@@ -155,7 +157,7 @@ def test_extract_usage_openai_cached_tokens_obj(cache_read, cache_write):
             "cache_write_tokens": cache_write,
         },
     })
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == cache_read
     assert result.usage.cache_write_tokens == cache_write
@@ -169,7 +171,7 @@ def test_extract_usage_preserves_reported_total_and_cache_write_obj():
         "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 7},
     })
 
-    result = _provider()._parse(response)
+    result = parse_response(response, spec=_provider()._spec)
 
     assert result.usage is not None
     assert result.usage.total_tokens == 175
@@ -187,7 +189,7 @@ def test_extract_usage_deepseek_cached_tokens_obj():
         "total_tokens": 1700,
         "prompt_cache_hit_tokens": 1200,
     })
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 1200
 
@@ -204,7 +206,7 @@ def test_extract_usage_stepfun_top_level_cached_tokens_dict():
             "cached_tokens": 512,
         }
     }
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 512
 
@@ -218,7 +220,7 @@ def test_extract_usage_stepfun_top_level_cached_tokens_obj():
         "total_tokens": 711,
         "cached_tokens": 512,
     })
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 512
 
@@ -236,7 +238,7 @@ def test_extract_usage_priority_nested_over_top_level_dict():
             "cached_tokens": 500,
         }
     }
-    result = p._parse(response)
+    result = parse_response(response, spec=p._spec)
     assert result.usage is not None
     assert result.usage.cache_read_tokens == 100
 
@@ -264,7 +266,7 @@ def test_parse_chunks_preserves_usage_only_chunk(as_sdk: bool) -> None:
             **chunk,
         }) for chunk in chunks]
 
-    result = OpenAICompatProvider._parse_chunks(chunks)
+    result = parse_chat_chunks(chunks)
 
     assert result.content == "Hello"
     assert result.finish_reason == "stop"

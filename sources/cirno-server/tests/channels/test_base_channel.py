@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_server.channels.base import BaseChannel
@@ -57,131 +56,31 @@ def test_is_allowed_star_allows_all() -> None:
     assert channel.is_allowed("anyone") is True
 
 
-def test_is_allowed_pairing_fallback(monkeypatch) -> None:
-    channel = _DummyChannel({"allowFrom": []}, MessageBus())
-    monkeypatch.setattr(
-        "cirno_server.channels.base.is_approved", lambda _ch, sid: sid == "paired"
-    )
-    assert channel.is_allowed("paired") is True
-    assert channel.is_allowed("unknown") is False
-
-
 @pytest.mark.asyncio
-async def test_handle_message_dm_sends_pairing_code(monkeypatch) -> None:
-    channel = _DummyChannel({"allowFrom": []}, MessageBus())
-    monkeypatch.setattr(
-        "cirno_server.channels.base.generate_code", lambda _ch, sid, **_kwargs: "ABCD-EFGH"
-    )
-
-    await channel._handle_message(
-        sender_id="stranger", chat_id="chat1", content="hello", is_dm=True
-    )
-
-    assert len(channel._sent) == 1
-    msg = channel._sent[0]
-    assert "ABCD-EFGH" in msg.content
-    assert msg.metadata.get("_pairing_code") == "ABCD-EFGH"
-
-
-@pytest.mark.asyncio
-async def test_dm_during_transient_store_failure_keeps_approvals(
-    tmp_path, monkeypatch
-) -> None:
-    """An unapproved DM while pairing.json is unreadable must not wipe approvals.
-
-    The pairing store treated a transient OSError like corruption and returned
-    an empty store; the DM pairing path then persisted that empty view,
-    erasing every approved sender.
-    """
-    import builtins
-    from pathlib import Path
-
-    from cirno_core.pairing import store
-
-    path = tmp_path / "pairing.json"
-    monkeypatch.setattr(store, "_store_path", lambda: path)
-    code = store.generate_code("dummy", "friend")
-    store.approve_code(code)
-
-    channel = _DummyChannel({"allowFrom": []}, MessageBus())
-
-    real_open = builtins.open
-
-    def flaky_open(file, mode="r", *args, **kwargs):
-        try:
-            same = Path(file) == path
-        except TypeError:
-            same = False
-        if same and "r" in mode and "+" not in mode:
-            raise PermissionError(13, "temporarily locked", str(path))
-        return real_open(file, mode, *args, **kwargs)
-
-    with monkeypatch.context() as m:
-        m.setattr(builtins, "open", flaky_open)
-        await channel._handle_message(
-            sender_id="stranger", chat_id="chat1", content="hello", is_dm=True
-        )
-
-    assert channel._sent == []
-    assert store.is_approved("dummy", "friend") is True
-
-
-@pytest.mark.asyncio
-async def test_handle_message_group_ignores_unknown() -> None:
-    channel = _DummyChannel({"allowFrom": []}, MessageBus())
-
-    await channel._handle_message(
-        sender_id="stranger", chat_id="chat1", content="hello", is_dm=False
-    )
-
-    assert channel._sent == []
-
-
-@pytest.mark.asyncio
-async def test_handle_message_uses_authorization_id_without_changing_sender() -> None:
+@pytest.mark.parametrize("config", [{"allowFrom": []}, {"enabled": True}, {"allow_from": ["friend"]}])
+async def test_unauthorized_input_is_not_published_or_answered(config) -> None:
     bus = MessageBus()
-    channel = _DummyChannel({"allowFrom": ["group@g.us"]}, bus)
-
-    await channel._handle_message(
-        sender_id="member-lid",
-        authorization_id="group@g.us",
-        chat_id="group@g.us",
-        content="hello",
-    )
-
-    msg = await bus.consume_inbound()
-    assert msg.sender_id == "member-lid"
-    assert msg.chat_id == "group@g.us"
+    channel = _DummyChannel(config, bus)
+    await channel._handle_message("stranger", "chat1", "hello")
+    assert bus.inbound_size == 0
+    assert channel._sent == []
 
 
 @pytest.mark.asyncio
-async def test_handle_message_rejects_when_authorization_id_is_not_allowed() -> None:
+async def test_authorized_input_preserves_sender_and_session_envelope() -> None:
     bus = MessageBus()
     channel = _DummyChannel({"allowFrom": ["member-lid"]}, bus)
-
     await channel._handle_message(
-        sender_id="member-lid",
-        authorization_id="other-group@g.us",
-        chat_id="other-group@g.us",
-        content="hello",
+        "member-lid", "private-chat", "hello", media=["/tmp/file.txt"],
+        metadata={"source": "private"}, session_key="websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb",
+        require_existing_session=True, session_generation="current-generation",
     )
-
-    assert bus.inbound_size == 0
-
-
-
-@pytest.mark.asyncio
-async def test_dm_publishes_pairing_changes_without_a_file_watcher(monkeypatch, tmp_path) -> None:
-    from cirno_core.pairing import store
-    from cirno_core.pairing.events import PairingChanged
-
-    monkeypatch.setattr(store, "_store_path", lambda: tmp_path / "pairing.json")
-    bus = MessageBus()
-    observed = []
-    bus.subscribe(lambda _event: observed.append(store.list_pending()), PairingChanged)
-    channel = _DummyChannel({"allowFrom": []}, bus)
-    await channel._handle_message("alice", "dm", "hello", is_dm=True)
-    await bus.drain()
-    assert observed and observed[-1][0]["delivery_status"] == "sent"
-    assert observed[-1][0]["code"] in channel._sent[0].content
-    assert not store.is_approved("dummy", "alice")
+    msg = await bus.consume_inbound()
+    assert msg.sender_id == "member-lid"
+    assert msg.chat_id == "private-chat"
+    assert msg.content == "hello"
+    assert msg.media == ["/tmp/file.txt"]
+    assert msg.metadata == {"source": "private"}
+    assert msg.session_key_override == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
+    assert msg.require_existing_session is True
+    assert msg.session_generation == "current-generation"

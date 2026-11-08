@@ -38,3 +38,25 @@ def test_console_log_sink_keeps_exception_traceback_multiline() -> None:
     rendered = output.getvalue()
     assert "operation failed" in rendered
     assert "RuntimeError: broken" in rendered
+
+
+def test_exception_diagnostics_do_not_dump_configuration_credentials() -> None:
+    output = StringIO()
+    sink = add_console_log_sink(output)
+    configuration = {"api_key": "test-only-credential-9c638"}
+
+    def connect(settings):
+        raise RuntimeError("Connection failed")
+
+    try:
+        try:
+            connect(configuration)
+        except RuntimeError:
+            logger.exception("Provider connection failed")
+    finally:
+        logger.remove(sink)
+
+    rendered = output.getvalue()
+    assert "test-only-credential-9c638" not in rendered
+    assert "connect" in rendered
+    assert "RuntimeError: Connection failed" in rendered

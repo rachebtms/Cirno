@@ -7,7 +7,7 @@ import { useCirnoStream } from "@/hooks/useCirnoStream";
 import { useSessionHistory } from "@/hooks/useSessions";
 import { CirnoClient } from "@/lib/cirno-client";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
-import type { WebuiThreadPersistedPayload } from "@/lib/types";
+import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 import { webuiThreadCache } from "@/lib/webui-thread-cache";
 import { ClientProvider } from "@/providers/ClientProvider";
 
@@ -177,7 +177,7 @@ describe("durable run recovery", () => {
     close();
   });
 
-  it.each(["together", "separate"] as const)("starts fresh terminal history without adopting the old read when completion frames arrive %s", async (timing) => {
+  it.each(["together", "separate"] as const)("fences a stale active snapshot while coalescing terminal refreshes arriving %s", async (timing) => {
     const idle: WebuiThreadPersistedPayload = {
       schemaVersion: 1, projection: "events", events: [],
       completed_turn_ids: [], has_pending_tool_calls: false, active_turn_id: null,
@@ -230,27 +230,29 @@ describe("durable run recovery", () => {
       }
     });
     await act(async () => {});
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(reads[0].signal.aborted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(reads[0].signal.aborted).toBe(false);
     await act(async () => { reads[0].resolve(response(active)); });
     expect(mounted.result.current.history.hasPendingToolCalls).toBe(false);
     expect(mounted.result.current.stream.isStreaming).toBe(false);
     const completed = completedThread();
     completed.completed_turn_ids = ["turn-old"];
     if (timing === "separate") {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      act(() => sockets.at(-1)!.receive({ event: "session_updated", chat_id: "inactive", scope: "thread" }));
+      await act(async () => {});
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await act(async () => { reads[1].resolve(response(completed)); });
+    expect(mounted.result.current.history.messages.at(-1)?.content).toBe("The complete answer");
+    if (timing === "separate") {
       act(() => sockets.at(-1)!.receive({ event: "session_updated", chat_id: "inactive", scope: "thread" }));
       await act(async () => {});
       expect(fetchMock).toHaveBeenCalledTimes(4);
-      await act(async () => {
-        reads[1].resolve(response(completed));
-        reads[2].resolve(new Response("unavailable", { status: 503 }));
-      });
+      await act(async () => { reads[2].resolve(new Response("unavailable", { status: 503 })); });
       expect(mounted.result.current.history.error).toBe("unavailable");
       expect(mounted.result.current.history.loading).toBe(false);
       expect(mounted.result.current.stream.messages.at(-1)?.content).toBe("The complete answer");
-    } else {
-      await act(async () => { reads[1].resolve(response(completed)); });
-      expect(mounted.result.current.history.messages.at(-1)?.content).toBe("The complete answer");
     }
     expect(mounted.result.current.stream.isStreaming).toBe(false);
     expect(client.hasUnsettledRun("inactive")).toBe(false);
@@ -306,7 +308,7 @@ describe("durable run recovery", () => {
     await reopen();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/sessions/websocket%3Ainactive/webui-thread?limit=40&direction=latest",
+      "/v0/sessions/websocket%3Ainactive/webui-thread?limit=40&direction=latest",
       expect.objectContaining({ headers: { Authorization: "Bearer renewed-token" } }),
     );
     expect(client.getRunStartedAt("inactive")).toBeNull();

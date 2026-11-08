@@ -289,11 +289,11 @@ class TestRevert:
 
 class TestMemoryStoreGitProperty:
     def test_git_property_exposes_gitstore(self, tmp_path):
-        from cirno_core.memory.consolidation import MemoryStore
+        from cirno_core.memory.store import MemoryStore
         store = MemoryStore(tmp_path)
         assert isinstance(store.git, GitStore)
 
     def test_git_property_is_same_object(self, tmp_path):
-        from cirno_core.memory.consolidation import MemoryStore
+        from cirno_core.memory.store import MemoryStore
         store = MemoryStore(tmp_path)
         assert store.git is store._git

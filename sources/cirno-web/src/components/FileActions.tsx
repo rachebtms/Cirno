@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { floatingItemClassName, floatingItemFocusClassName, floatingSurfaceClassName, floatingSurfaceMotionClassName } from "@/components/ui/floating-surface";
 import { useFloatingPortal } from "@/components/ui/floating-portal";
 import { copyTextToClipboard } from "@/lib/clipboard";
-import type { FileReferenceMetadata, FilePreviewPayload } from "@/lib/types";
+import type { FileReferenceMetadata, FilePreviewPayload } from "@/lib/contracts/files";
 import { cn } from "@/lib/utils";
 
 interface FileActionsContextValue {

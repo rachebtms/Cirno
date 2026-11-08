@@ -7,15 +7,12 @@ from cirno_core.agent.goals.permission import goal_mutation_allowed
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.bus.events import InboundMessage, OutboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.command.builtin import (
-    build_help_text,
-    builtin_command_palette,
-    cmd_goal,
-    cmd_model,
-    register_builtin_commands,
-)
+from cirno_core.command.builtin.catalog import build_help_text, builtin_command_palette
+from cirno_core.command.builtin.control import cmd_goal
+from cirno_core.command.builtin.models import cmd_model
+from cirno_core.command.builtin.registration import register_builtin_commands
 from cirno_core.command.router import CommandContext, CommandRouter
-from cirno_core.config.schema import ModelPresetConfig
+from cirno_core.config.models import ModelPresetConfig
 from cirno_core.session.history_visibility import HIDDEN_HISTORY_META
 from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
@@ -319,3 +316,14 @@ def test_goal_command_in_help_and_palette() -> None:
     assert goal["lifecycle"] == "agent_turn_with_args"
     assert goal["accepts_args"] is True
     assert "/goal <goal>" in build_help_text()
+
+
+@pytest.mark.asyncio
+async def test_model_command_resolves_display_name_but_persists_stable_id(tmp_path):
+    loop = _make_loop(tmp_path, model_presets={
+        "model-123": ModelPresetConfig(display_name="Research model", model="research-llm"),
+    })
+    out = await cmd_model(_ctx(loop, "/model Research model", args="Research model"))
+    assert "Could not switch" not in out.content
+    assert _saved_model_preset(loop) == "model-123"
+    assert loop.model_presets["model-123"].display_name == "Research model"

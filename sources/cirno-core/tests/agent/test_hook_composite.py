@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent.session_helpers import mock_session_manager
+from sources.development.testing.sessions import mock_session_manager
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.hook import (
     AgentHook,
@@ -442,7 +442,7 @@ def _make_loop(tmp_path, hooks=None, hook_factories=None):
 @pytest.mark.asyncio
 async def test_agent_loop_extra_hook_receives_calls(tmp_path):
     """Extra hook passed to AgentLoop is called alongside core LoopHook."""
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     events: list[str] = []
 
@@ -465,7 +465,7 @@ async def test_agent_loop_extra_hook_receives_calls(tmp_path):
     )
     loop.tools.get_definitions = MagicMock(return_value=[])
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hi"}], current_message=None),
         runtime=loop.llm_runtime(),
     )
@@ -480,7 +480,7 @@ async def test_agent_loop_extra_hook_receives_calls(tmp_path):
 @pytest.mark.asyncio
 async def test_agent_loop_turn_hook_factories_receive_context(tmp_path):
     """Turn-scoped hooks can be supplied externally and see turn-local context."""
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     captured: list[tuple[str, AgentTurnHookContext]] = []
     events: list[str] = []
@@ -510,7 +510,7 @@ async def test_agent_loop_turn_hook_factories_receive_context(tmp_path):
         pass
 
     runtime = loop.llm_runtime()
-    await loop._run_agent_loop(
+    await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hi"}], current_message=None),
         runtime=runtime,
         events=output_events(on_progress=on_progress),
@@ -546,7 +546,7 @@ async def test_agent_loop_turn_hook_factories_receive_context(tmp_path):
 @pytest.mark.asyncio
 async def test_agent_loop_extra_hook_error_isolation(tmp_path):
     """A faulty extra hook does not crash the agent loop."""
-    from cirno_core.providers.base import LLMResponse
+    from cirno_core.providers.contracts import LLMResponse
 
     class BadHook(AgentHook):
         async def before_iteration(self, context):
@@ -558,7 +558,7 @@ async def test_agent_loop_extra_hook_error_isolation(tmp_path):
     )
     loop.tools.get_definitions = MagicMock(return_value=[])
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[{"role": "user", "content": "hi"}], current_message=None),
         runtime=loop.llm_runtime(),
     )
@@ -569,7 +569,8 @@ async def test_agent_loop_extra_hook_error_isolation(tmp_path):
 @pytest.mark.asyncio
 async def test_agent_loop_extra_hooks_do_not_swallow_loop_hook_errors(tmp_path):
     """Extra hooks must not change the core LoopHook failure behavior."""
-    from cirno_core.providers.base import LLMResponse, ToolCallRequest
+    from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     loop = _make_loop(tmp_path, hooks=[AgentHook()])
     loop.provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -584,7 +585,7 @@ async def test_agent_loop_extra_hooks_do_not_swallow_loop_hook_errors(tmp_path):
         raise RuntimeError("progress failed")
 
     with pytest.raises(RuntimeError, match="progress failed"):
-        await loop._run_agent_loop(
+        await loop.model_turn.run(
             TranscriptInput(history=[], current_message=None),
             runtime=loop.llm_runtime(),
             events=output_events(on_progress=bad_progress),
@@ -594,7 +595,8 @@ async def test_agent_loop_extra_hooks_do_not_swallow_loop_hook_errors(tmp_path):
 @pytest.mark.asyncio
 async def test_agent_loop_no_hooks_backward_compat(tmp_path):
     """Without hooks param, behavior is identical to before."""
-    from cirno_core.providers.base import LLMResponse, ToolCallRequest
+    from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.tool_calls import ToolCallRequest
 
     loop = _make_loop(tmp_path)
     loop.provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(
@@ -605,7 +607,7 @@ async def test_agent_loop_no_hooks_backward_compat(tmp_path):
     loop.tools.execute = AsyncMock(return_value="ok")
     loop.max_iterations = 2
 
-    result = await loop._run_agent_loop(
+    result = await loop.model_turn.run(
         TranscriptInput(history=[], current_message=None),
         runtime=loop.llm_runtime(),
     )

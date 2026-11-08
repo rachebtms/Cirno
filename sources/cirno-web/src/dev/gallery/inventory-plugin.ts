@@ -14,7 +14,7 @@ function sourceFiles(directory: string): string[] {
 }
 
 function groupFor(file: string): string {
-  if (file.startsWith("cirno/channels/")) return `Channels / ${file.split("/")[2]}`;
+  if (file.startsWith("sources/cirno-web/channels/")) return `Channels / ${file.split("/")[3]}`;
   if (file.startsWith(foundationPath)) return "Foundations";
   if (file.includes("/settings/shared/")) return "Settings / shared";
   if (file.includes("/settings/")) return "Settings";
@@ -27,8 +27,8 @@ function groupFor(file: string): string {
 
 /** Index source modules and direct imports without executing application code. */
 export function componentInventory(repo: string): ComponentSource[] {
-  const frontend = path.join(repo, "webui/src");
-  const channels = path.join(repo, "cirno/channels");
+  const frontend = path.join(repo, "sources/cirno-web/src");
+  const channels = path.join(repo, "sources/cirno-web/channels");
   const channelRoots = readdirSync(channels, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
@@ -70,7 +70,7 @@ export function componentInventory(repo: string): ComponentSource[] {
   }
 
   return [...sources].filter(([file]) =>
-    (file.endsWith(".tsx") && file.startsWith(path.join(frontend, "components") + path.sep))
+    (file.endsWith(".tsx") && ["components", "features"].some(directory => file.startsWith(path.join(frontend, directory) + path.sep)))
     || channelRoots.some((root) => file.startsWith(root + path.sep)
       && (file.endsWith(".tsx") || file === path.join(root, "index.ts"))))
     .map(([file, source]) => {

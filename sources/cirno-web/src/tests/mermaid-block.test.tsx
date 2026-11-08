@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MessageBubble } from "@/components/MessageBubble";
+import { MessageBubble } from "@/features/messages";
 import MarkdownTextRenderer from "@/components/MarkdownTextRenderer";
 import { DiagramScope } from "@/components/markdown-diagrams/context";
 import type { DiagramInput } from "@/components/markdown-diagrams/types";

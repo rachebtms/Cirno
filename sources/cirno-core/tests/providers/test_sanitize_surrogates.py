@@ -2,7 +2,7 @@
 
 These lock down two behaviors:
 
-1. ``cirno_core.utils.helpers.sanitize_surrogates`` / ``sanitize_surrogates_deep``
+1. ``cirno_core.utils.text.sanitize_surrogates`` / ``sanitize_surrogates_deep``
    produce strings that can round-trip through ``str.encode('utf-8')`` even
    when the input contains unpaired surrogates.
 
@@ -15,13 +15,10 @@ These lock down two behaviors:
 """
 
 from __future__ import annotations
+from cirno_core.providers.messages import sanitize_empty_content
 
 
-from cirno_core.providers.base import LLMProvider
-from cirno_core.utils.helpers import (
-    sanitize_surrogates,
-    sanitize_surrogates_deep,
-)
+from cirno_core.utils.text import sanitize_surrogates, sanitize_surrogates_deep
 
 
 class TestSanitizeSurrogates:
@@ -104,7 +101,7 @@ class TestProviderSanitizeEmptyContent:
         messages = [
             {"role": "user", "content": "leak \ud83e here"},
         ]
-        result = LLMProvider._sanitize_empty_content(messages)
+        result = sanitize_empty_content(messages)
         text = result[0]["content"]
         assert "\ud83e" not in text
         text.encode("utf-8")  # would raise pre-fix
@@ -118,7 +115,7 @@ class TestProviderSanitizeEmptyContent:
                 ],
             },
         ]
-        result = LLMProvider._sanitize_empty_content(messages)
+        result = sanitize_empty_content(messages)
         text = result[0]["content"][0]["text"]
         assert "\ud83e" not in text
         text.encode("utf-8")
@@ -127,7 +124,7 @@ class TestProviderSanitizeEmptyContent:
         messages = [
             {"role": "user", "content": "robot \ud83e\udd16 hello"},
         ]
-        result = LLMProvider._sanitize_empty_content(messages)
+        result = sanitize_empty_content(messages)
         assert result[0]["content"] == "robot 🤖 hello"
 
     def test_clean_input_semantics_unchanged(self):
@@ -135,7 +132,7 @@ class TestProviderSanitizeEmptyContent:
             {"role": "user", "content": "plain 🤖 content"},
             {"role": "assistant", "content": [{"type": "text", "text": "ok"}]},
         ]
-        result = LLMProvider._sanitize_empty_content(messages)
+        result = sanitize_empty_content(messages)
         assert result[0]["content"] == "plain 🤖 content"
         assert result[1]["content"][0]["text"] == "ok"
 
@@ -154,7 +151,7 @@ class TestProviderSanitizeEmptyContent:
                 ],
             },
         ]
-        cleaned = LLMProvider._sanitize_empty_content(messages)
+        cleaned = sanitize_empty_content(messages)
         # This is the operation that previously raised UnicodeEncodeError.
         json.dumps({"model": "x", "messages": cleaned}, ensure_ascii=False).encode("utf-8")
         assert cleaned[0]["content"] == "You are a 🐱 assistant."

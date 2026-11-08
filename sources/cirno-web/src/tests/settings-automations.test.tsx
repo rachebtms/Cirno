@@ -1,14 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AutomationsSettings } from "@/components/settings/system/AutomationsSettings";
+import { AutomationsPage } from "@/features/automations";
 import i18n from "@/i18n";
 
 afterEach(cleanup);
 
 function renderAutomationDetail(channel: string) {
   render(
-    <AutomationsSettings
+    <AutomationsPage
       payload={{ jobs: [{
         id: "task-1",
         name: "Scheduled task",

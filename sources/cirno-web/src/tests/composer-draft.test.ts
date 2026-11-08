@@ -69,6 +69,21 @@ describe("composer draft storage", () => {
     expect(new ComposerDraftStore().get(key, false)).toBeUndefined();
   });
 
+  it("does not access browser storage for memory-only drafts or their cleanup", () => {
+    const read = vi.spyOn(localStorage, "getItem");
+    const write = vi.spyOn(localStorage, "setItem");
+    const remove = vi.spyOn(localStorage, "removeItem");
+    const store = new ComposerDraftStore();
+    store.set(key, draft, false);
+    expect(store.get(key, false)).toBe(draft);
+    store.delete(key);
+    store.delete("new:temporary", false);
+    expect(read).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(store.getStorageIssue(key)).toBeNull();
+  });
+
   it("removes saved text when discarded, even if attachments remain", () => {
     const store = new ComposerDraftStore();
     store.set(key, draft, true);
@@ -106,14 +121,15 @@ describe("composer draft storage", () => {
     expect(new ComposerDraftStore().get(key, true)).toEqual({ ...draft, attachments: [] });
   });
 
-  it("keeps editing usable when storage is unavailable and removes stale saved text", () => {
+  it("keeps editing usable when storage fails and reports the unsaved revision", () => {
     const store = new ComposerDraftStore();
     store.set(key, draft, true);
     vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
     const updated = { ...draft, text: "latest draft" };
     store.set(key, updated, true);
     expect(store.get(key)).toBe(updated);
-    expect(new ComposerDraftStore().get(key, true)).toBeUndefined();
+    expect(store.getStorageIssue(key)).toEqual({ action: "save", detail: "quota" });
+    expect(new ComposerDraftStore().get(key, true)?.text).toBe(draft.text);
     vi.spyOn(localStorage, "getItem").mockImplementation(() => { throw new Error("disabled"); });
     expect(new ComposerDraftStore().get(key, true)).toBeUndefined();
   });

@@ -7,6 +7,8 @@ Validates that:
 """
 
 from __future__ import annotations
+from cirno_core.providers.chat_completions.generation import supports_temperature
+from cirno_core.providers.chat_completions.complete import parse_response
 
 import asyncio
 from types import SimpleNamespace
@@ -15,9 +17,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
-from cirno_core.providers.base import ProviderCallContext
+from cirno_core.providers.contracts import ProviderCallContext
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
-from cirno_core.providers.registry import ModelAPICapabilities, find_by_name
+from cirno_core.providers.model_api import ModelAPICapabilities
+from cirno_core.providers.registry import find_by_name
 
 
 def _fake_chat_response(content: str = "ok") -> ChatCompletion:
@@ -588,7 +591,7 @@ def test_openai_compat_parse_preserves_malformed_tool_arguments() -> None:
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    result = provider._parse(_fake_tool_call_response_with_arguments('{path:"foo.txt"}'))
+    result = parse_response(_fake_tool_call_response_with_arguments('{path:"foo.txt"}'), spec=provider._spec)
 
     assert result.tool_calls[0].arguments == '{path:"foo.txt"}'
 
@@ -597,7 +600,7 @@ def test_openai_compat_parse_preserves_array_tool_arguments() -> None:
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    result = provider._parse(_fake_tool_call_response_with_arguments('["foo.txt"]'))
+    result = parse_response(_fake_tool_call_response_with_arguments('["foo.txt"]'), spec=provider._spec)
 
     assert result.tool_calls[0].arguments == ["foo.txt"]
 
@@ -900,9 +903,9 @@ async def test_direct_openai_responses_rate_limit_does_not_fallback() -> None:
 
 
 def test_openai_compat_supports_temperature_matches_reasoning_model_rules() -> None:
-    assert OpenAICompatProvider._supports_temperature("gpt-4o") is True
-    assert OpenAICompatProvider._supports_temperature("gpt-5-chat") is False
-    assert OpenAICompatProvider._supports_temperature("o3-mini") is False
+    assert supports_temperature("gpt-4o") is True
+    assert supports_temperature("gpt-5-chat") is False
+    assert supports_temperature("o3-mini") is False
 
 
 @pytest.mark.parametrize(
@@ -1057,7 +1060,7 @@ def test_openai_compat_preserves_message_level_reasoning_fields() -> None:
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "hi"},
         {
             "role": "assistant",
@@ -1177,7 +1180,7 @@ def test_openai_compat_preserves_tool_call_ids_after_consecutive_assistant_messa
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "不错"},
         {"role": "assistant", "content": "对，破 4 万指日可待"},
         {
@@ -1205,7 +1208,7 @@ def test_mistral_normalizes_tool_call_ids_after_consecutive_assistant_messages()
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(spec=find_by_name("mistral"))
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "不错"},
         {"role": "assistant", "content": "对，破 4 万指日可待"},
         {
@@ -1233,7 +1236,7 @@ def test_openai_compat_deduplicates_duplicate_tool_call_ids_in_history() -> None
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "check both files"},
         {
             "role": "assistant",
@@ -1268,7 +1271,7 @@ def test_openai_compat_stringifies_dict_tool_arguments() -> None:
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "hi"},
         {
             "role": "assistant",
@@ -1292,7 +1295,7 @@ def test_openai_compat_repairs_object_like_history_tool_arguments_string() -> No
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "hi"},
         {
             "role": "assistant",
@@ -1316,7 +1319,7 @@ def test_openai_compat_defaults_missing_tool_arguments_to_empty_object() -> None
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
-    sanitized = provider._sanitize_messages([
+    sanitized = provider.prepare_messages([
         {"role": "user", "content": "hi"},
         {
             "role": "assistant",
@@ -1466,7 +1469,7 @@ def test_minimax_off_presets_map_to_low_effort(model, effort) -> None:
 
 @pytest.mark.parametrize("model", ["MiniMax-M2.7", "MiniMax-M3"])
 def test_minimax_effort_menu_unchanged_for_models_without_metadata(model) -> None:
-    from cirno_server.webui.settings.models import reasoning_effort_values_for
+    from cirno_server.webui.settings.models.payload import reasoning_effort_values_for
 
     assert reasoning_effort_values_for("minimax", model) == ["", "low", "medium", "high"]
 

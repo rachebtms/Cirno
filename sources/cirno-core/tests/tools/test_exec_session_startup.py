@@ -4,10 +4,13 @@ import asyncio
 import sys
 
 import pytest
-
-from cirno_core.agent.tools.context import RequestContext, bind_request_context, reset_request_context
-from cirno_core.agent.tools.exec_session import ExecSessionManager
+from cirno_core.agent.tools.context import (
+    RequestContext,
+    bind_request_context,
+    reset_request_context,
+)
 from cirno_core.agent.tools.shell import ExecTool
+from cirno_core.processes.sessions import ExecSessionManager
 
 
 async def test_owner_cancellation_during_startup_preserves_other_execution(tmp_path, monkeypatch):

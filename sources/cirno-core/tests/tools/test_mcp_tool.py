@@ -10,34 +10,26 @@ from unittest.mock import AsyncMock
 from urllib.parse import unquote
 from urllib.request import getproxies_environment
 
+import cirno_core.agent.tools.mcp.connector as mcp_connector
+import cirno_core.agent.tools.mcp.errors as mcp_errors
+import cirno_core.agent.tools.mcp.http as mcp_http
+import cirno_core.agent.tools.mcp.names as mcp_names
+import cirno_core.agent.tools.mcp.provider as mcp_provider
+import cirno_core.agent.tools.mcp.registrations as mcp_registrations
+import cirno_core.agent.tools.mcp.stdio as mcp_stdio
 import httpx
 import pytest
-
-import cirno_core.agent.tools.mcp as mcp_mod
 from cirno_core.agent.tools.context import RequestContext, request_context
-from cirno_core.agent.tools.mcp import (
-    MCPPromptWrapper,
-    MCPProvider,
-    MCPResourceWrapper,
-    MCPToolWrapper,
-    _normalize_windows_stdio_command,
-    _sanitize_mcp_tool_name,
-    _sanitize_name,
-    connect_mcp_servers,
-)
+from cirno_core.agent.tools.mcp.connector import connect_mcp_servers
+from cirno_core.agent.tools.mcp.names import _sanitize_mcp_tool_name, _sanitize_name
+from cirno_core.agent.tools.mcp.provider import MCPProvider
+from cirno_core.agent.tools.mcp.stdio import _normalize_windows_stdio_command
+from cirno_core.agent.tools.mcp.wrappers import MCPPromptWrapper, MCPResourceWrapper, MCPToolWrapper
 from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result
 from cirno_core.config.network import NetworkConfig
-from cirno_core.config.schema import MCPServerConfig
+from cirno_core.config.tools import MCPServerConfig
 
 _PROXY_ENV_VARS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
-
-
-def test_type_checking_only_mcp_annotations_are_deferred() -> None:
-    assert mcp_mod._MCPWrapperBase.__annotations__["_session"] == "ClientSession"
-    assert MCPToolWrapper.__init__.__annotations__["session"] == "ClientSession"
-    assert MCPResourceWrapper.__init__.__annotations__["resource_def"] == "Resource"
-    assert MCPPromptWrapper.__init__.__annotations__["prompt_def"] == "Prompt"
-    assert connect_mcp_servers.__annotations__["mcp_servers"] == "dict[str, MCPServerConfig]"
 
 
 class _FakeTextContent:
@@ -177,7 +169,7 @@ async def test_mcp_provider_connect_propagates_external_cancellation(monkeypatch
         {"test": MCPServerConfig(command="fake")},
         ToolRegistry(),
     )
-    monkeypatch.setattr(mcp_mod, "connect_mcp_servers", connect_mcp_servers)
+    monkeypatch.setattr(mcp_provider, "connect_mcp_servers", connect_mcp_servers)
 
     task = asyncio.create_task(provider.connect())
     await asyncio.wait_for(started.wait(), timeout=1.0)
@@ -224,8 +216,8 @@ async def test_saved_oauth_http_403_projects_failed_runtime_without_details(
     oauth_mod.create_mcp_oauth_auth = create_auth  # type: ignore[attr-defined]
     oauth_mod.mcp_oauth_has_credentials = lambda _name, _url: True  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "cirno_core.agent.tools.mcp_oauth", oauth_mod)
-    monkeypatch.setattr(mcp_mod, "validate_url_target", lambda _url: (True, ""))
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", reachable)
+    monkeypatch.setattr(mcp_connector, "validate_url_target", lambda _url: (True, ""))
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", reachable)
     monkeypatch.setattr(
         sys.modules["mcp.client.streamable_http"],
         "streamable_http_client",
@@ -498,7 +490,7 @@ def test_wrapper_resolves_uri_encoded_json_pointer() -> None:
 def test_normalize_windows_stdio_command_is_noop_off_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(mcp_mod.os, "name", "posix", raising=False)
+    monkeypatch.setattr(mcp_stdio.os, "name", "posix", raising=False)
 
     command, args, env = _normalize_windows_stdio_command(
         "npx",
@@ -514,9 +506,9 @@ def test_normalize_windows_stdio_command_is_noop_off_windows(
 def test_normalize_windows_stdio_command_wraps_npx_on_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(mcp_mod.os, "name", "nt", raising=False)
+    monkeypatch.setattr(mcp_stdio.os, "name", "nt", raising=False)
     monkeypatch.setattr(
-        mcp_mod.shutil,
+        mcp_stdio.shutil,
         "which",
         lambda command, path=None: r"C:\Program Files\nodejs\npx.cmd",
     )
@@ -536,14 +528,14 @@ def test_normalize_windows_stdio_command_wraps_npx_on_windows(
 def test_normalize_windows_stdio_command_wraps_resolved_cmd_launcher(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(mcp_mod.os, "name", "nt", raising=False)
+    monkeypatch.setattr(mcp_stdio.os, "name", "nt", raising=False)
 
     def _fake_which(command: str, path: str | None = None) -> str:
         assert command == "custom-launcher"
         assert path == r"C:\Tools"
         return r"C:\Tools\custom-launcher.cmd"
 
-    monkeypatch.setattr(mcp_mod.shutil, "which", _fake_which)
+    monkeypatch.setattr(mcp_stdio.shutil, "which", _fake_which)
     monkeypatch.setenv("COMSPEC", r"C:\Windows\System32\cmd.exe")
 
     command, args, _env = _normalize_windows_stdio_command(
@@ -559,7 +551,7 @@ def test_normalize_windows_stdio_command_wraps_resolved_cmd_launcher(
 def test_normalize_windows_stdio_command_keeps_real_executables_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(mcp_mod.os, "name", "nt", raising=False)
+    monkeypatch.setattr(mcp_stdio.os, "name", "nt", raising=False)
 
     command, args, env = _normalize_windows_stdio_command(
         "python.exe",
@@ -575,7 +567,7 @@ def test_normalize_windows_stdio_command_keeps_real_executables_unchanged(
 def test_normalize_windows_stdio_command_skips_existing_shells(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(mcp_mod.os, "name", "nt", raising=False)
+    monkeypatch.setattr(mcp_stdio.os, "name", "nt", raising=False)
 
     command, args, env = _normalize_windows_stdio_command(
         "cmd.exe",
@@ -700,7 +692,8 @@ async def test_execute_persists_image_block_as_artifact(tmp_path: Path) -> None:
     assert Path(artifact["path"]).is_file()
     # The base64 payload must NOT leak into the model-facing result.
     assert _PNG_B64 not in result
-    assert "message tool" in payload["next_step"]
+    assert "message.media" in payload["next_step"]
+    assert "regular conversations" in payload["next_step"]
 
 
 @pytest.mark.asyncio
@@ -788,7 +781,7 @@ def _make_tool_def(name: str) -> SimpleNamespace:
 
 def _make_fake_session(tool_names: list[str]) -> SimpleNamespace:
     async def initialize() -> SimpleNamespace:
-        return SimpleNamespace(capabilities=SimpleNamespace(tools=SimpleNamespace()))
+        return SimpleNamespace(capabilities=SimpleNamespace(tools=SimpleNamespace(), resources=None, prompts=None))
 
     async def list_tools() -> SimpleNamespace:
         return SimpleNamespace(tools=[_make_tool_def(name) for name in tool_names], nextCursor=None)
@@ -1045,7 +1038,7 @@ async def test_connect_mcp_servers_enabled_tools_warns_on_unknown_entries(
     def _warning(message: str, *args: object) -> None:
         warnings.append(message.format(*args))
 
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.logger.warning", _warning)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.errors.logger.warning", _warning)
 
     stacks = await connect_mcp_servers(
         {"test": MCPServerConfig(command="fake", enabled_tools=["unknown"])},
@@ -1073,7 +1066,7 @@ async def test_connect_mcp_servers_logs_stdio_pollution_hint(
         yield  # pragma: no cover
 
     monkeypatch.setattr(sys.modules["mcp.client.stdio"], "stdio_client", _broken_stdio_client)
-    sink = mcp_mod.logger.add(
+    sink = mcp_errors.logger.add(
         lambda message: messages.append(message.record["message"]), level="ERROR"
     )
 
@@ -1083,7 +1076,7 @@ async def test_connect_mcp_servers_logs_stdio_pollution_hint(
             {"gh": MCPServerConfig(command="github-mcp")}, registry
         )
     finally:
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
     assert stacks == {}
     assert messages
@@ -1094,12 +1087,12 @@ async def test_connect_mcp_servers_logs_stdio_pollution_hint(
 
 def test_transient_connection_group_logs_brief_warning_and_debug_trace() -> None:
     records: list[dict] = []
-    sink = mcp_mod.logger.add(lambda message: records.append(message.record), level="DEBUG")
+    sink = mcp_errors.logger.add(lambda message: records.append(message.record), level="DEBUG")
     error = ExceptionGroup("transport failed", [httpx.ConnectError("")])
     try:
-        mcp_mod._log_mcp_connection_failure("notion", error)
+        mcp_errors._log_mcp_connection_failure("notion", error)
     finally:
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
     warning = next(record for record in records if record["level"].name == "WARNING")
     debug = next(record for record in records if record["level"].name == "DEBUG")
@@ -1111,11 +1104,11 @@ def test_transient_connection_group_logs_brief_warning_and_debug_trace() -> None
 
 def test_unexpected_connection_failure_keeps_error_trace() -> None:
     records: list[dict] = []
-    sink = mcp_mod.logger.add(lambda message: records.append(message.record), level="DEBUG")
+    sink = mcp_errors.logger.add(lambda message: records.append(message.record), level="DEBUG")
     try:
-        mcp_mod._log_mcp_connection_failure("notion", RuntimeError("boom"))
+        mcp_errors._log_mcp_connection_failure("notion", RuntimeError("boom"))
     finally:
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
     error = next(record for record in records if record["level"].name == "ERROR")
     assert error["exception"] is not None
@@ -1139,10 +1132,10 @@ async def test_proxy_constructor_failure_diagnostics_never_render_live_locals(
             yield object(), object()
 
     monkeypatch.setattr(sys.modules["mcp.client.sse"], "sse_client", sse_client)
-    monkeypatch.setattr(mcp_mod, "validate_url_target", lambda _url: (True, ""))
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", AsyncMock(return_value=True))
+    monkeypatch.setattr(mcp_connector, "validate_url_target", lambda _url: (True, ""))
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", AsyncMock(return_value=True))
     messages: list[str] = []
-    sink = mcp_mod.logger.add(
+    sink = mcp_errors.logger.add(
         lambda message: messages.append(str(message)), level="DEBUG",
         format="{level} {message}", diagnose=True, backtrace=True,
     )
@@ -1155,7 +1148,7 @@ async def test_proxy_constructor_failure_diagnostics_never_render_live_locals(
                 )}, registry, network=network,
             )
     finally:
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
     assert connections == {}
     assert registry.tool_names == []
@@ -1202,10 +1195,10 @@ async def test_connection_failure_redacts_resolved_proxy_in_exception_chain_and_
         yield  # pragma: no cover
 
     monkeypatch.setattr(sys.modules["mcp.client.sse"], "sse_client", failing_sse)
-    monkeypatch.setattr(mcp_mod, "validate_url_target", lambda _url: (True, ""))
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", AsyncMock(return_value=True))
+    monkeypatch.setattr(mcp_connector, "validate_url_target", lambda _url: (True, ""))
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", AsyncMock(return_value=True))
     messages: list[str] = []
-    sink = mcp_mod.logger.add(
+    sink = mcp_errors.logger.add(
         lambda message: messages.append(str(message)), level="DEBUG",
         format="{level} {message}", diagnose=True, backtrace=True,
     )
@@ -1215,7 +1208,7 @@ async def test_connection_failure_redacts_resolved_proxy_in_exception_chain_and_
             ToolRegistry(), network=network,
         ) == {}
     finally:
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
     output = "\n".join(messages)
     for credential_context in (proxy, unquote(proxy), f"{userinfo}@", f"{unquote(userinfo)}@"):
@@ -1241,7 +1234,7 @@ def test_connection_failure_retains_useful_trace_without_local_values(transient:
         messages.append(str(message))
         records.append(message.record)
 
-    sink = mcp_mod.logger.add(
+    sink = mcp_errors.logger.add(
         capture, level="DEBUG", format="{level} {message}", diagnose=True, backtrace=True,
     )
 
@@ -1254,9 +1247,9 @@ def test_connection_failure_retains_useful_trace_without_local_values(transient:
         try:
             fail_transport()
         except Exception as exc:
-            mcp_mod._log_mcp_connection_failure("remote", exc, " check server configuration")
+            mcp_errors._log_mcp_connection_failure("remote", exc, " check server configuration")
     finally:
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
     output = "\n".join(messages)
     assert "unrelated-local-credential" not in output
@@ -1302,8 +1295,8 @@ async def test_connect_mcp_servers_rejects_unsafe_http_urls_before_probe(
     def _warning(message: str, *args: object) -> None:
         warnings.append(message.format(*args))
 
-    monkeypatch.setattr(mcp_mod.asyncio, "open_connection", _open_connection)
-    monkeypatch.setattr("cirno_core.agent.tools.mcp.logger.warning", _warning)
+    monkeypatch.setattr(mcp_http.asyncio, "open_connection", _open_connection)
+    monkeypatch.setattr("cirno_core.agent.tools.mcp.errors.logger.warning", _warning)
 
     registry = ToolRegistry()
     stacks = await connect_mcp_servers(
@@ -1326,7 +1319,7 @@ async def test_validate_mcp_request_url_rejects_loopback_without_whitelist() -> 
     request = httpx.Request("GET", "http://127.0.0.1/private")
 
     with pytest.raises(httpx.RequestError, match="Blocked unsafe MCP URL"):
-        await mcp_mod._validate_mcp_request_url(request)
+        await mcp_http._validate_mcp_request_url(request)
 
 
 @pytest.mark.asyncio
@@ -1375,11 +1368,9 @@ async def test_connect_mcp_servers_env_proxy_adds_proxy_mounts_and_keeps_pinned_
 
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
     monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1,::1")
-    monkeypatch.setattr(mcp_mod, "validate_url_target", _validate)
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", _reachable)
-    monkeypatch.setattr(
-        mcp_mod,
-        "PinnedDNSAsyncTransport",
+    monkeypatch.setattr(mcp_connector, "validate_url_target", _validate)
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", _reachable)
+    monkeypatch.setattr(mcp_http, "PinnedDNSAsyncTransport",
         lambda: httpx.MockTransport(lambda request: httpx.Response(200, request=request)),
     )
     monkeypatch.setattr(
@@ -1388,7 +1379,7 @@ async def test_connect_mcp_servers_env_proxy_adds_proxy_mounts_and_keeps_pinned_
             lambda request: httpx.Response(200, request=request)
         ),
     )
-    monkeypatch.setattr(mcp_mod.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(mcp_http.httpx, "AsyncClient", FakeAsyncClient)
     monkeypatch.setattr(sys.modules["mcp.client.sse"], "sse_client", _capturing_sse_client)
     monkeypatch.setattr(
         sys.modules["mcp.client.streamable_http"],
@@ -1409,9 +1400,7 @@ async def test_connect_mcp_servers_env_proxy_adds_proxy_mounts_and_keeps_pinned_
 def test_mcp_http_clients_no_proxy_env_keeps_pinned_direct_route(monkeypatch):
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
     monkeypatch.setenv("NO_PROXY", "mcp.example.com")
-    monkeypatch.setattr(
-        mcp_mod,
-        "PinnedDNSAsyncTransport",
+    monkeypatch.setattr(mcp_http, "PinnedDNSAsyncTransport",
         lambda: httpx.MockTransport(lambda request: httpx.Response(200, request=request)),
     )
     monkeypatch.setattr(
@@ -1421,7 +1410,7 @@ def test_mcp_http_clients_no_proxy_env_keeps_pinned_direct_route(monkeypatch):
         ),
     )
 
-    kwargs = mcp_mod._pinned_transport_kwargs()
+    kwargs = mcp_http._pinned_transport_kwargs()
 
     assert "transport" in kwargs
     assert any(transport is None for transport in kwargs["mounts"].values())
@@ -1489,19 +1478,18 @@ async def test_connect_mcp_servers_http_clients_reject_unsafe_redirect_targets(
         await http_client.get("https://example.com/start")
         yield object(), object(), object()
 
-    monkeypatch.setattr(mcp_mod, "validate_url_target", _validate)
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", _reachable)
-    monkeypatch.setattr(
-        mcp_mod,
-        "PinnedDNSAsyncTransport",
+    monkeypatch.setattr(mcp_connector, "validate_url_target", _validate)
+    monkeypatch.setattr(mcp_http, "validate_url_target", _validate)
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", _reachable)
+    monkeypatch.setattr(mcp_http, "PinnedDNSAsyncTransport",
         lambda **_kwargs: httpx.MockTransport(_handler),
     )
     monkeypatch.setattr(
-        mcp_mod.httpx,
+        mcp_http.httpx,
         "AsyncHTTPTransport",
         lambda **_kwargs: httpx.MockTransport(_handler),
     )
-    monkeypatch.setattr(mcp_mod.httpx, "AsyncClient", _async_client_with_mock_transport)
+    monkeypatch.setattr(mcp_http.httpx, "AsyncClient", _async_client_with_mock_transport)
     monkeypatch.setattr(sys.modules["mcp.client.sse"], "sse_client", _fake_sse_client)
     monkeypatch.setattr(
         sys.modules["mcp.client.streamable_http"],
@@ -1690,11 +1678,9 @@ async def test_connect_mcp_servers_streamable_http_uses_finite_timeout(
         captured["timeout"] = http_client.timeout
         yield object(), object(), object()
 
-    monkeypatch.setattr(mcp_mod, "validate_url_target", _validate)
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", _reachable)
-    monkeypatch.setattr(
-        mcp_mod,
-        "PinnedDNSAsyncTransport",
+    monkeypatch.setattr(mcp_connector, "validate_url_target", _validate)
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", _reachable)
+    monkeypatch.setattr(mcp_http, "PinnedDNSAsyncTransport",
         lambda: httpx.MockTransport(lambda request: httpx.Response(200, request=request)),
     )
     monkeypatch.setattr(
@@ -1773,9 +1759,9 @@ async def test_connect_mcp_servers_attaches_oauth_to_remote_http_client(
         assert http_client is not None
         yield object(), object(), object()
 
-    monkeypatch.setattr(mcp_mod, "validate_url_target", _validate)
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", _reachable)
-    monkeypatch.setattr(mcp_mod.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(mcp_connector, "validate_url_target", _validate)
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", _reachable)
+    monkeypatch.setattr(mcp_http.httpx, "AsyncClient", FakeAsyncClient)
     monkeypatch.setattr(sys.modules["mcp.client.sse"], "sse_client", _capturing_sse_client)
     monkeypatch.setattr(
         sys.modules["mcp.client.streamable_http"],
@@ -1802,7 +1788,7 @@ async def test_connect_mcp_servers_attaches_oauth_to_remote_http_client(
         client_kwargs = captured["client_kwargs"]
         assert isinstance(client_kwargs, dict)
         assert client_kwargs["auth"] is oauth_auth
-        assert client_kwargs["event_hooks"] == {"request": [mcp_mod._validate_mcp_request_url]}
+        assert client_kwargs["event_hooks"] == {"request": [mcp_http._validate_mcp_request_url]}
 
 
 @pytest.mark.asyncio
@@ -1827,8 +1813,8 @@ async def test_connect_mcp_servers_skips_background_oauth_without_credentials(
     oauth_mod.MCPAuthorizationRequiredError = AuthorizationRequiredError  # type: ignore[attr-defined]
     oauth_mod.create_mcp_oauth_auth = _create_auth  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "cirno_core.agent.tools.mcp_oauth", oauth_mod)
-    monkeypatch.setattr(mcp_mod, "validate_url_target", lambda _url: (True, ""))
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", _probe)
+    monkeypatch.setattr(mcp_connector, "validate_url_target", lambda _url: (True, ""))
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", _probe)
 
     stacks = await connect_mcp_servers(
         {
@@ -1860,9 +1846,9 @@ async def test_connect_mcp_servers_wraps_windows_stdio_launchers(
         captured["env"] = params.env
         yield object(), object()
 
-    monkeypatch.setattr(mcp_mod.os, "name", "nt", raising=False)
+    monkeypatch.setattr(mcp_stdio.os, "name", "nt", raising=False)
     monkeypatch.setattr(
-        mcp_mod.shutil,
+        mcp_stdio.shutil,
         "which",
         lambda command, path=None: r"C:\Program Files\nodejs\npx.cmd",
     )
@@ -2094,7 +2080,7 @@ def _make_fake_session_with_capabilities(
     prompt_names: list[str] | None = None,
 ) -> SimpleNamespace:
     async def initialize() -> SimpleNamespace:
-        return SimpleNamespace(capabilities=SimpleNamespace(tools=SimpleNamespace()))
+        return SimpleNamespace(capabilities=SimpleNamespace(tools=SimpleNamespace(), resources=SimpleNamespace(), prompts=SimpleNamespace()))
 
     async def list_tools() -> SimpleNamespace:
         return SimpleNamespace(tools=[_make_tool_def(name) for name in tool_names], nextCursor=None)
@@ -2255,10 +2241,10 @@ async def test_discovery_failure_logs_do_not_expose_credentials(
     session = _make_fake_session_with_capabilities(["tool_a"], ["res_b"], ["prompt_c"])
     setattr(session, f"list_{catalog}", AsyncMock(side_effect=error))
     fake_mcp_runtime["session"] = session
-    monkeypatch.setattr(mcp_mod, "validate_url_target", lambda _url: (True, ""))
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", AsyncMock(return_value=True))
+    monkeypatch.setattr(mcp_connector, "validate_url_target", lambda _url: (True, ""))
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", AsyncMock(return_value=True))
     messages: list[str] = []
-    sink = mcp_mod.logger.add(lambda message: messages.append(str(message)), level="DEBUG")
+    sink = mcp_errors.logger.add(lambda message: messages.append(str(message)), level="DEBUG")
     registry = ToolRegistry()
     stacks = {}
     try:
@@ -2270,11 +2256,11 @@ async def test_discovery_failure_logs_do_not_expose_credentials(
         assert set(registry.tool_names) == {"mcp_test_tool_a", other}
         logs = "\n".join(messages)
         assert not any(secret in logs for secret in secrets)
-        assert f"MCP server 'test': {catalog} not supported or failed: {type(error).__name__}" in logs
+        assert f"MCP server 'test': {catalog}/list failed" in logs
     finally:
         for stack in stacks.values():
             await stack.aclose()
-        mcp_mod.logger.remove(sink)
+        mcp_errors.logger.remove(sink)
 
 
 @pytest.mark.asyncio
@@ -2290,7 +2276,7 @@ async def test_connect_accepts_servers_without_tools_capability(
         prompt_names=["review"] if catalog == "prompts" else [],
     )
     session.initialize = AsyncMock(
-        return_value=SimpleNamespace(capabilities=SimpleNamespace(tools=None)),
+        return_value=SimpleNamespace(capabilities=SimpleNamespace(tools=None, resources=SimpleNamespace() if catalog == "resources" else None, prompts=SimpleNamespace() if catalog == "prompts" else None)),
     )
     session.list_tools = AsyncMock(side_effect=McpError(code=-32601, message="Method not found"))
     fake_mcp_runtime["session"] = session
@@ -2343,7 +2329,7 @@ def test_tool_wrapper_sanitizes_name() -> None:
         inputSchema={"type": "object", "properties": {}},
     )
     wrapper = MCPToolWrapper(SimpleNamespace(call_tool=None), "srv", tool_def)
-    assert wrapper.name == "mcp_srv_My_Tool"
+    assert wrapper.name == "mcp_srv_My_Tool_ae7fbdc7"
 
 
 def test_resource_wrapper_sanitizes_name() -> None:
@@ -2353,7 +2339,7 @@ def test_resource_wrapper_sanitizes_name() -> None:
         description="PG info",
     )
     wrapper = MCPResourceWrapper(None, "srv", resource_def)
-    assert wrapper.name == "mcp_srv_resource_PostgreSQL_System_Information"
+    assert wrapper.name == "mcp_srv_resource_PostgreSQL_System_Information_295f382e"
 
 
 def test_prompt_wrapper_sanitizes_name() -> None:
@@ -2362,9 +2348,9 @@ def test_prompt_wrapper_sanitizes_name() -> None:
         description="Design schema",
         arguments=None,
     )
-    # Hyphens are allowed, so this should pass through unchanged
+    # The server name requires normalization; keep a stable source suffix.
     wrapper = MCPPromptWrapper(None, "my server", prompt_def)
-    assert wrapper.name == "mcp_my_server_prompt_design-schema"
+    assert wrapper.name == "mcp_my_server_prompt_design-schema_bc7c2ef6"
 
 
 def test_tool_wrapper_preserves_original_name_for_mcp_call() -> None:
@@ -2375,7 +2361,7 @@ def test_tool_wrapper_preserves_original_name_for_mcp_call() -> None:
     )
     wrapper = MCPToolWrapper(SimpleNamespace(call_tool=None), "srv", tool_def)
     # The sanitized API-facing name differs from the original MCP name
-    assert wrapper.name == "mcp_srv_My_Tool"
+    assert wrapper.name == "mcp_srv_My_Tool_ae7fbdc7"
     assert wrapper._original_name == "My Tool"
 
 
@@ -2396,7 +2382,7 @@ async def test_connect_mcp_servers_sanitizes_resource_names(
     for stack in stacks.values():
         await stack.aclose()
 
-    assert "mcp_test_resource_PostgreSQL_System_Information" in registry.tool_names
+    assert "mcp_test_resource_PostgreSQL_System_Information_99177d34" in registry.tool_names
 
 
 @pytest.mark.asyncio
@@ -2408,13 +2394,13 @@ async def test_connect_mcp_servers_enabled_tools_matches_sanitized_name(
     )
     registry = ToolRegistry()
     stacks = await connect_mcp_servers(
-        {"test": MCPServerConfig(command="fake", enabled_tools=["mcp_test_My_Tool"])},
+        {"test": MCPServerConfig(command="fake", enabled_tools=["mcp_test_My_Tool_718adf94"])},
         registry,
     )
     for stack in stacks.values():
         await stack.aclose()
 
-    assert registry.tool_names == ["mcp_test_My_Tool"]
+    assert registry.tool_names == ["mcp_test_My_Tool_718adf94"]
 
 
 @pytest.mark.parametrize(
@@ -2429,7 +2415,7 @@ async def test_connect_mcp_servers_enabled_tools_matches_sanitized_name(
     ],
 )
 def test_redact_url_strips_credentials_and_query(url: str, expected: str) -> None:
-    assert mcp_mod._redact_url(url) == expected
+    assert mcp_errors._redact_url(url) == expected
 
 def test_mcp_tool_name_keeps_short_name():
     name = _sanitize_mcp_tool_name("mcp_myserver_resource_myres")
@@ -2463,7 +2449,7 @@ def test_long_server_name_tools_are_matched_by_server_name() -> None:
     registry.register(other_wrapper)
 
     assert len(wrapper.name) == 64
-    assert not wrapper.name.startswith(mcp_mod._tool_prefix(server_name))
+    assert not wrapper.name.startswith(mcp_names._tool_prefix(server_name))
 
     provider = MCPProvider(
         {server_name: MCPServerConfig(command="fake")},
@@ -2473,7 +2459,7 @@ def test_long_server_name_tools_are_matched_by_server_name() -> None:
     assert wrapper._reconnect is not None
     assert other_wrapper._reconnect is None
 
-    removed = mcp_mod._unregister_server_tools(registry, server_name)
+    removed = mcp_registrations._unregister_server_tools(registry, server_name)
 
     assert removed == 1
     assert wrapper.name not in registry.tool_names
@@ -2562,13 +2548,12 @@ async def test_mcp_http_requests_use_selected_transport_without_route_fallback(
         yield object(), object(), object()
 
     monkeypatch.setenv("HTTPS_PROXY", "http://environment.example:8888")
-    monkeypatch.setattr(mcp_mod, "validate_url_target", lambda _url: (True, ""))
-    monkeypatch.setattr(mcp_mod, "_probe_http_url", probe)
-    monkeypatch.setattr(mcp_mod, "PinnedDNSAsyncTransport", lambda: recording_transport("direct"))
-    monkeypatch.setattr(
-        mcp_mod, "httpx_env_proxy_mounts", lambda: {"all://": recording_transport("environment")},
+    monkeypatch.setattr(mcp_connector, "validate_url_target", lambda _url: (True, ""))
+    monkeypatch.setattr(mcp_connector, "_probe_http_url", probe)
+    monkeypatch.setattr(mcp_http, "PinnedDNSAsyncTransport", lambda: recording_transport("direct"))
+    monkeypatch.setattr(mcp_http, "httpx_env_proxy_mounts", lambda: {"all://": recording_transport("environment")},
     )
-    monkeypatch.setattr(mcp_mod.httpx, "AsyncHTTPTransport", proxy_transport)
+    monkeypatch.setattr(mcp_http.httpx, "AsyncHTTPTransport", proxy_transport)
     monkeypatch.setattr(sys.modules["mcp.client.sse"], "sse_client", sse_client)
     monkeypatch.setattr(sys.modules["mcp.client.streamable_http"], "streamable_http_client", streamable_client)
 

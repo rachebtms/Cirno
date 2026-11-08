@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LocalAttachment } from "../../packages/client-events/attachments";
 
 import { encodeImage, type EncodeFailure } from "@/lib/imageEncode";
-import type { WebUIIngressLimits } from "@/lib/types";
+import type { WebUIIngressLimits } from "@/lib/contracts/bootstrap";
 
 /** Lifecycle stages of one attachment:
  *
@@ -269,6 +269,7 @@ export function useAttachedImages({
     ingressLimits?.attachments.max_file_bytes,
     MAX_ATTACHMENT_BYTES,
   );
+  const maxVideoBytes = positiveLimit(ingressLimits?.attachments.max_video_bytes, MAX_VIDEO_BYTES);
   const maxTotalBytes = positiveLimit(
     ingressLimits?.attachments.max_total_bytes,
     MAX_TOTAL_ATTACHMENT_BYTES,
@@ -311,7 +312,7 @@ export function useAttachedImages({
           rejected.push({ file, reason: "empty_file" });
           continue;
         }
-        if (!restoringDraft && kind !== "image" && file.size > (kind === "video" ? MAX_VIDEO_BYTES : maxFileBytes)) {
+        if (!restoringDraft && kind !== "image" && file.size > (kind === "video" ? maxVideoBytes : maxFileBytes)) {
           rejected.push({ file, reason: "too_large" });
           continue;
         }
@@ -345,7 +346,7 @@ export function useAttachedImages({
           queueMicrotask(() => {
             const work = entry.kind === "image"
               ? encodeImage(entry.file)
-              : encodeFile(entry.file, entry.kind === "video" ? MAX_VIDEO_BYTES : maxFileBytes);
+              : encodeFile(entry.file, entry.kind === "video" ? maxVideoBytes : maxFileBytes);
             work.then(
               (result) => {
                 if (result.ok) {
@@ -376,7 +377,7 @@ export function useAttachedImages({
       }
       return { rejected };
     },
-    [maxAttachments, maxFileBytes, maxTotalBytes, setEntry],
+    [maxAttachments, maxFileBytes, maxVideoBytes, maxTotalBytes, setEntry],
   );
 
   const addLocal = useCallback((local: LocalAttachment, { restoringDraft = false } = {}): AttachmentCountError | null => {

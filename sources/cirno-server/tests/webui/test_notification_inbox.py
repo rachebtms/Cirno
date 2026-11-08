@@ -1,10 +1,8 @@
 """Notification history preserves source workflows and remains separate from memory."""
-from types import SimpleNamespace
 
 import pytest
-
-from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.agent_events import ContextCompactionEvent
+from cirno_core.bus.events import OutboundMessage
 from cirno_core.config.home import set_instance_path
 from cirno_core.notifications.inbox import NotificationInbox
 from cirno_server.webui.instance_api import instance_action
@@ -60,20 +58,6 @@ def test_pagination_and_category_read_are_persistent_and_independent(inbox):
     assert inbox.path.stat().st_mode & 0o777 == 0o600
 
 
-def test_pairing_refresh_keeps_original_approval_state(inbox, monkeypatch):
-    rows = [{"code": "ABCD-EFGH", "channel": "telegram", "expires_at": 900}]
-    monkeypatch.setattr("cirno_core.pairing.store.list_pending", lambda **kwargs: rows)
-    inbox.sync_pairing()
-    assert inbox.list()["items"][0]["status"] == "pending"
-    def failed(**kwargs):
-        raise OSError("pairing store is busy")
-    monkeypatch.setattr("cirno_core.pairing.store.list_pending", failed)
-    with pytest.raises(OSError, match="busy"):
-        inbox.sync_pairing()
-    assert inbox.list()["items"][0]["status"] == "pending"
-    monkeypatch.setattr("cirno_core.pairing.store.list_pending", lambda **kwargs: [])
-    inbox.sync_pairing()
-    assert inbox.list()["items"][0]["status"] == "resolved"
 
 
 async def test_instance_api_reads_and_marks_only_requested_category(inbox):
@@ -108,30 +92,30 @@ async def test_open_notification_does_not_recreate_deleted_or_reset_conversation
 
 
 def test_dream_notifications_include_partial_and_failure_results(inbox, monkeypatch):
-    from cirno_core.memory.consolidation import MemoryStore
-    monkeypatch.setattr("cirno_core.memory.repository.MemoryRepository.finish", lambda *args, **kwargs: {"retained": 2})
-    store = SimpleNamespace(workspace=inbox.path.parent.parent, _dream_batch_token="batch")
-    MemoryStore.finish_dream_batch(store, "batch")
+    from cirno_core.memory.store import MemoryStore
+    monkeypatch.setattr("cirno_memory.repository.MemoryRepository.finish", lambda *args, **kwargs: {"retained": 2})
+    store = MemoryStore(inbox.path.parent.parent)
+    store.dream.finish_batch("batch")
     item = inbox.list()["items"][0]
     assert item["kind"] == "dream" and item["status"] == "partial" and item["data"]["retained"] == 2
-    MemoryStore.finish_dream_batch(store, "other-batch", error="API unavailable")
+    store.dream.finish_batch("other-batch", error="API unavailable")
     assert inbox.list()["items"][0]["body"] == "API unavailable"
-    MemoryStore.finish_dream_batch(store, "preempted", preempted=True)
+    store.dream.finish_batch("preempted", preempted=True)
     assert len(inbox.list()["items"]) == 2
 
 
 async def test_temporary_questions_never_enter_inbox(inbox, tmp_path):
     from cirno_core.bus.queue import MessageBus
-    from cirno_server.channels.manager import ChannelManager
     from cirno_core.config.schema import Config
     from cirno_core.session.manager import SessionManager
+    from cirno_server.channels.manager import ChannelManager
     sessions = SessionManager(tmp_path / "workspace", sessions_root=tmp_path / "sessions")
     await sessions.state.register_transient("websocket:temporary-test")
     bus = MessageBus()
     config = Config.model_validate({"channels": {"websocket": {"enabled": False}}})
     manager = ChannelManager(config, bus, session_manager=sessions, config_path=tmp_path / "config.json")
     try:
-        await manager._record_notification(OutboundMessage(channel="websocket", chat_id="temporary-test", content="Private", metadata={
+        await manager.notifications.record(OutboundMessage(channel="websocket", chat_id="temporary-test", content="Private", metadata={
             "_agent_ui": {"kind": "user_question", "data": {"id": "b" * 32, "question": "Private"}},
         }))
         assert not inbox.path.exists()
@@ -142,9 +126,9 @@ async def test_temporary_questions_never_enter_inbox(inbox, tmp_path):
 
 async def test_question_survives_metadata_cache_eviction(inbox, tmp_path):
     from cirno_core.bus.queue import MessageBus
-    from cirno_server.channels.manager import ChannelManager
     from cirno_core.config.schema import Config
     from cirno_core.session.manager import SessionManager
+    from cirno_server.channels.manager import ChannelManager
     sessions = SessionManager(tmp_path / "workspace", sessions_root=tmp_path / "sessions")
     key = "websocket:renamed"
     original = await sessions.state.get(key)
@@ -154,7 +138,7 @@ async def test_question_survives_metadata_cache_eviction(inbox, tmp_path):
     manager = ChannelManager(Config.model_validate({"channels": {"websocket": {"enabled": False}}}),
                              MessageBus(), session_manager=sessions, config_path=tmp_path / "config.json")
     try:
-        await manager._record_notification(OutboundMessage(channel="websocket", chat_id="renamed", content="Which value?", metadata={
+        await manager.notifications.record(OutboundMessage(channel="websocket", chat_id="renamed", content="Which value?", metadata={
             "_session_key": key, "_session_generation": original.generation,
             "_agent_ui": {"kind": "user_question", "data": {"id": "c" * 32, "question": "Which value?"}},
         }))
@@ -168,10 +152,21 @@ async def test_question_survives_metadata_cache_eviction(inbox, tmp_path):
 
 def test_ordinary_replies_and_successful_turns_do_not_enter_inbox(inbox):
     from cirno_core.bus.outbound_events import TurnEndEvent
-    for chat_id in ("global", "worker"):
+    for chat_id in ("cirno", "worker"):
         inbox.capture(OutboundMessage(channel="websocket", chat_id=chat_id, content="Hello"))
         inbox.capture(OutboundMessage(channel="websocket", chat_id=chat_id, content="", metadata={"webui_turn_id": "done"},
                                       event=TurnEndEvent(outcome="completed")))
     assert inbox.list()["items"] == []
     inbox.record("report:ready", "conversations", "report", status="ready", body="Task verified")
     assert inbox.list()["items"][0]["body"] == "Task verified"
+
+
+def test_failed_turns_are_system_events_not_work_reports(inbox):
+    from cirno_core.bus.outbound_events import TurnEndEvent
+    inbox.capture(OutboundMessage(channel="websocket", chat_id="b1ec9323-2155-5f24-bc56-1da2f59aeecb", content="",
+        metadata={"webui_turn_id": "setup"}, event=TurnEndEvent(outcome="failed",
+            failure_kind="model", failure_error_kind="configuration", failure_message="Configure a model")))
+    assert inbox.list(category="conversations")["items"] == []
+    notice = inbox.list(category="system")["items"][0]
+    assert notice["kind"] == "turn"
+    assert notice["body"] == "Configure a model"

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { InlineMessageEditor } from "@/components/thread/InlineMessageEditor";
+import { InlineMessageEditor } from "@/features/messages/InlineMessageEditor";
 import { ThreadMessages } from "@/components/thread/ThreadMessages";
-import type { UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/contracts/messages";
 
 export function MessageActionsFixture() {
   const { i18n } = useTranslation();

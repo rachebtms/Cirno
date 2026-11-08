@@ -10,7 +10,7 @@ import {
 
 describe("provider brand logos", () => {
   it.each(["deepseek", "anthropic", "openai", "openai_codex", "gemini"])("bundles %s's primary logo without an external request", (provider) => {
-    expect(providerBrand(provider)?.logoUrl).toMatch(/^\/src\/assets\/providers\/.*\.svg$/);
+    expect(providerBrand(provider)?.logoUrl).toMatch(/^(?:\/src\/assets\/providers\/.*\.svg|data:image\/svg\+xml[,;])/);
     expect(providerBrand(provider)?.logoUrl).toBe(providerBrand(provider)?.logoUrls[0]);
   });
 
@@ -129,7 +129,7 @@ describe("provider brand logos", () => {
   });
 
   it("reuses the bundled DeepSeek brand for DeepSeek web search settings", () => {
-    expect(providerBrand("deepseek")?.logoUrl).toMatch(/^\/src\/assets\/providers\/.*\.svg$/);
+    expect(providerBrand("deepseek")?.logoUrl).toMatch(/^(?:\/src\/assets\/providers\/.*\.svg|data:image\/svg\+xml[,;])/);
     expect(providerBrand("deepseek")?.initials).toBe("DS");
   });
 

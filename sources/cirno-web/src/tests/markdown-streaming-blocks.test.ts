@@ -43,8 +43,14 @@ describe("math-aware streaming blocks", () => {
     expect(parseMathAwareMarkdownBlocks(mixedMath).join("")).toBe(mixedMath);
   });
 
-  it("accepts every repaired prefix of a mixed math response", () => {
-    for (let end = 1; end <= mixedMath.length; end++) {
+  it("accepts repaired prefixes around mixed math and Markdown delimiters", () => {
+    const boundaries = new Set([mixedMath.length]);
+    for (const token of mixedMath.matchAll(/\\[()[\]]|\${1,3}|`{1,3}|\n/g)) {
+      for (let end = token.index - 1; end <= token.index + token[0].length + 1; end++) {
+        if (end > 0 && end <= mixedMath.length) boundaries.add(end);
+      }
+    }
+    for (const end of boundaries) {
       const source = remend(mixedMath.slice(0, end), { htmlTags: false });
       expect(parseMathAwareMarkdownBlocks(source).join("")).toBe(source);
     }

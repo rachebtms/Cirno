@@ -3,17 +3,17 @@
 from functools import partial
 
 import pytest
-
 from cirno_core.agent.tools.context import RequestContext, request_context
 from cirno_core.agent.tools.message import MessageTool
-from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.events import OutboundMessage
-from cirno_core.session.state import SessionConflictError
-from cirno_server.channels.websocket.runtime import WebSocketChannel, WebSocketConfig
-from cirno_server.application import _deliver_to_channel
+from cirno_core.bus.queue import MessageBus
 from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno_core.session.manager import SessionManager
-from cirno_server.webui.services import build_gateway_services
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_server.channels.delivery.publish import publish_to_channel
+from cirno_server.channels.websocket.config import WebSocketConfig
+from cirno_server.channels.websocket.runtime import WebSocketChannel
+from cirno_server.webui.services import build_server_services
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ async def delivery(tmp_path):
     sessions = SessionManager(workspace, sessions_root=tmp_path / "sessions")
     bus = MessageBus()
     tool = MessageTool(
-        send_callback=partial(_deliver_to_channel, bus=bus, session_manager=sessions),
+        send_callback=partial(publish_to_channel, bus=bus, session_manager=sessions),
         workspace=workspace,
     )
     try:
@@ -42,7 +42,7 @@ async def test_thread_media_is_recorded_in_its_admitted_session(delivery, channe
     session = await sessions.state.get(key)
     coarse_key = f"{channel}:{chat_id}"
     await sessions.state.get(coarse_key)
-    await _deliver_to_channel(
+    await publish_to_channel(
         OutboundMessage(channel, chat_id, "caption", media=["attachment.txt"], metadata=metadata),
         bus=bus, session_manager=sessions, record=True,
         session_key=key, session_generation=session.generation,
@@ -56,9 +56,9 @@ async def test_thread_media_is_recorded_in_its_admitted_session(delivery, channe
 
 async def test_first_cross_target_media_creates_its_own_session(delivery):
     sessions, bus, tool = delivery
-    origin = await sessions.state.get("websocket:global")
+    origin = await sessions.state.get("websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb")
     with request_context(RequestContext(
-        "websocket", "global", session_key=origin.key, session_generation=origin.generation,
+        "websocket", "cirno", session_key=origin.key, session_generation=origin.generation,
     )):
         result = await tool.execute(
             content="caption", channel="telegram", chat_id="fresh",
@@ -79,7 +79,7 @@ async def test_old_turn_media_cannot_recreate_or_write_a_replaced_target(deliver
     session = await sessions.state.get("slack:C123:111.222")
     await getattr(sessions.state, operation)(session.key)
     with pytest.raises(SessionConflictError):
-        await _deliver_to_channel(
+        await publish_to_channel(
             OutboundMessage("slack", "C123", "late caption", media=["attachment.txt"]),
             bus=bus, session_manager=sessions, record=True,
             session_key=session.key, session_generation=session.generation,
@@ -113,25 +113,23 @@ async def webui_delivery(delivery, tmp_path, monkeypatch):
     sessions, bus, tool = delivery
     data = tmp_path / "instance"
     data.mkdir()
-    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: data)
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", data / "config.json")
     config = WebSocketConfig.model_validate({
         "enabled": True, "allowFrom": ["*"], "host": "127.0.0.1", "port": 0,
     })
-    gateway = build_gateway_services(
+    gateway = build_server_services(
         config=config, bus=bus, session_manager=sessions, static_dist_path=None,
         workspace_path=sessions.workspace, default_restrict_to_workspace=True,
-        runtime_model_name=None, runtime_surface="browser", runtime_capabilities_overrides=None,
+        runtime_model_name=None,
         config_path=data / "config.json",
     )
     return sessions, bus, tool, WebSocketChannel(config, bus, gateway=gateway)
 
 
-
-
 async def test_cross_channel_text_is_saved_in_webui_history(webui_delivery):
     sessions, bus, tool, channel = webui_delivery
     alias = await sessions.state.get_header("websocket:chat")
-    await _deliver_to_channel(
+    await publish_to_channel(
         OutboundMessage("websocket", "chat", "notice"), bus=bus,
         session_manager=sessions, record=True,
         session_key=alias.key, session_generation=alias.generation,
@@ -178,7 +176,7 @@ async def test_direct_webui_send_does_not_create_a_missing_destination(webui_del
 async def test_temporary_webui_media_stays_nonpersistent(webui_delivery):
     sessions, bus, tool, channel = webui_delivery
     target = await sessions.state.register_transient("websocket:temporary")
-    await _deliver_to_channel(
+    await publish_to_channel(
         OutboundMessage("websocket", "temporary", "caption", media=["attachment.txt"],
                         metadata={HISTORY_GENERATION_METADATA_KEY: target.generation}),
         bus=bus, session_manager=sessions, record=True,

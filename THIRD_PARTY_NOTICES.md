@@ -1,13 +1,28 @@
 # Third-Party Notices
 
-Cirno is derived from Nanobot; upstream copyright and license terms are retained in `LICENSE`. The notices below cover redistributed browser components in the Cirno Python distribution (`cirno-ai`). Browser source lives in `sources/cirno-web/`; release wheels embed compiled assets under `cirno/web/dist/`. Additional bundled notices are in `sources/cirno-web/public/licenses/` and `public/brand/provider-icons-NOTICE.txt`. Cirno does not distribute a native TUI executable.
+Cirno is derived from Nanobot; upstream copyright and license terms are retained in `LICENSE`. The notices below cover redistributed browser components in the Cirno server distribution (`cirno-server`, installed by `cirno-ai`). Browser source lives in `sources/cirno-web/`; release wheels embed compiled assets under `cirno_server/web/dist/`. Additional bundled notices are in `sources/cirno-web/public/licenses/` and `public/brand/provider-icons-NOTICE.txt`. Cirno does not distribute a native TUI executable.
+
+---
+
+## HeroUI — browser components and styles (Apache-2.0)
+
+- **Source**: https://github.com/heroui-inc/heroui
+- **Packages**: `@heroui/react`, `@heroui/styles`
+- **Copyright**: 2025 NextUI Inc.
+- **License**: `sources/cirno-web/public/licenses/HeroUI-LICENSE.txt`, distributed at `/licenses/HeroUI-LICENSE.txt`.
+
+## React Aria — accessible browser interactions (Apache-2.0)
+
+- **Source**: https://github.com/adobe/react-spectrum
+- **Packages**: React Aria, React Aria Components and React Stately
+- **License**: `sources/cirno-web/public/licenses/React-Aria-LICENSE.txt`, distributed at `/licenses/React-Aria-LICENSE.txt`.
 
 ---
 
 ## Tabler Icons — interface icons (MIT)
 
 - **Source**: https://github.com/tabler/tabler-icons
-- **Bundled**: `cirno/web/dist/assets/index-*.js` (inline `arrow-fork` SVG)
+- **Bundled**: `cirno_server/web/dist/assets/index-*.js` (inline `arrow-fork` SVG)
 
 ```
 MIT License
@@ -38,7 +53,7 @@ SOFTWARE.
 ## KaTeX — math rendering (MIT)
 
 - **Source**: https://github.com/KaTeX/KaTeX
-- **Bundled**: `cirno/web/dist/assets/index-*.{js,css}`
+- **Bundled**: `cirno_server/web/dist/assets/index-*.{js,css}`
 
 ```
 The MIT License (MIT)
@@ -69,7 +84,7 @@ SOFTWARE.
 ## KaTeX Fonts — math typography (SIL OFL 1.1)
 
 - **Source**: https://github.com/KaTeX/KaTeX/tree/main/src/fonts
-- **Bundled**: `cirno/web/dist/assets/KaTeX_*.{woff2,woff,ttf}`
+- **Bundled**: `cirno_server/web/dist/assets/KaTeX_*.{woff2,woff,ttf}`
 
 The fonts are redistributed unmodified.
 
@@ -180,7 +195,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 - **Source**: https://github.com/jakubkrehel/loading/tree/48ff9a1cd5f0446901ff1a8a3d5d5f906d3e36ff
 - **Adapted**: the diagonal Blocks sweep in `sources/cirno-web/src/components/thread/ThreadHistoryStatus.tsx` and `sources/cirno-web/src/globals.css`, and the circular Ring in `sources/cirno-web/src/components/ui/loading-ring.tsx` and `sources/cirno-web/src/globals.css`.
-- **Bundled**: `cirno/web/dist/assets/index-*.{js,css}`
+- **Bundled**: `cirno_server/web/dist/assets/index-*.{js,css}`
 
 ```
 MIT License
@@ -213,7 +228,7 @@ SOFTWARE.
 
 - **Source**: https://github.com/motiondivision/motion
 - **Components**: `motion`, `framer-motion`, and `motion-dom` 14.4.0; `motion-utils` 14.1.1.
-- **Bundled**: `cirno/web/dist/assets/ThreadShell-*.js`
+- **Bundled**: `cirno_server/web/dist/assets/ThreadShell-*.js`
 
 ```
 The MIT License (MIT)
@@ -250,3 +265,63 @@ SOFTWARE.
 - **License**: MIT, Copyright (c) 2022 staoxiao. The complete upstream license accompanies the model files in the image.
 
 The full container also installs third-party CLI packages through Homebrew, npm, Go and uv. Their license files and package metadata remain in their installed distributions.
+
+---
+
+## xterm.js — interactive terminal (MIT)
+
+- **Source**: https://github.com/xtermjs/xterm.js
+- **Bundled**: `cirno_server/web/dist/assets/TerminalTab-*.{js,css}`
+
+```
+Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
+Copyright (c) 2012-2013, Christopher Jeffrey (https://github.com/chjj/)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+---
+
+## xterm.js Fit Addon — terminal sizing (MIT)
+
+- **Source**: https://github.com/xtermjs/xterm.js
+- **Bundled**: `cirno_server/web/dist/assets/TerminalTab-*.{js,css}`
+
+```
+Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```

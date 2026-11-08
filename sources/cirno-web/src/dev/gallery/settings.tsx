@@ -1,46 +1,53 @@
 import { useState } from "react";
 
-import { AdvancedSettings, networkSafetyFormFromPayload } from "@/components/settings/capabilities/SecuritySettings";
-import { WebSettings, webSearchDraftState, webSearchFormFromPayload } from "@/components/settings/capabilities/WebSettings";
-import { ChannelCatalogRow } from "@/components/settings/channels/ChannelCatalogRow";
-import { ChannelFieldGroups, channelRequirementErrors } from "@/components/settings/channels/ChannelCredentialFields";
-import { ChannelHelpMenu } from "@/components/settings/channels/ChannelHelpMenu";
-import { ChannelLogo, ChannelRuntimeError, ChannelStatusBadge } from "@/components/settings/channels/ChannelIdentity";
-import { ChannelProviderPresets, ChannelSetupActions } from "@/components/settings/channels/ChannelSetupParts";
-import { ChannelValidationProgress } from "@/components/settings/channels/ChannelValidationProgress";
+import { AdvancedSettings, networkSafetyFormFromPayload } from "@/features/settings/capabilities/SecuritySettings";
+import { WebSettings } from "@/features/settings/web/WebSettings";
+import { webSearchDraftState, webSearchFormFromPayload } from "@/features/settings/web/model/form";
+import { ChannelCard } from "@/features/channels/ui/ChannelCard";
+import {channelRequirementErrors} from "@/features/channels/model/fieldValidation";
+import {ChannelFieldGroups} from "@/features/channels/ui/fields/ChannelFieldGroups";
+import { ChannelHelp } from "@/features/channels/ui/ChannelHelp";
+import {ChannelLogo} from "@/features/channels/ui/ChannelLogo";
+import {ChannelRuntimeError} from "@/features/channels/ui/ChannelRuntimeError";
+import {ChannelStatusBadge} from "@/features/channels/ui/ChannelStatusBadge";
+import { ChannelProviderPresets, ChannelSetupActions } from "@/features/channels/ui/setup/ChannelSetupHelpers";
+import { ChannelValidationResult } from "@/features/channels/ui/ChannelValidationResult";
 import type { ChannelConfigField, ChannelProviderPreset } from "@/channel-plugins/catalog";
-import type { SettingsSectionKey } from "@/components/settings/contracts";
-import { ModelAPIControl } from "@/components/settings/models/ModelAPIControl";
-import { ProviderAPIControl } from "@/components/settings/models/ProviderAPIControl";
-import { ProviderParameterFields, type RequestParameterDraft } from "@/components/settings/models/ProviderParameterFields";
-import { ProviderSearchList } from "@/components/settings/models/ProviderSearchList";
-import { ReasoningEffortPicker } from "@/components/settings/models/ReasoningEffortPicker";
-import { OverviewSettings } from "@/components/settings/overview/OverviewSettings";
-import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
-import { CatalogSkeleton } from "@/components/settings/shared/CatalogSkeleton";
-import { ModelIdPicker, ProviderPicker, ProviderPickerIcon } from "@/components/settings/shared/ModelControls";
-import { ProviderIcon } from "@/components/settings/shared/ProviderIcon";
-import { RemoveActionButton } from "@/components/settings/shared/RemoveActionButton";
-import { SettingsGroup, SettingsRow } from "@/components/settings/shared/SettingsControls";
-import { SettingsHint } from "@/components/settings/shared/SettingsHint";
-import { SettingsTextEditor } from "@/components/settings/shared/SettingsTextEditor";
-import { SkeletonStatus } from "@/components/settings/shared/SkeletonStatus";
-import { TimezonePicker } from "@/components/settings/shared/TimezonePicker";
-import { AutomationCalendar } from "@/components/settings/system/AutomationCalendar";
-import { AutomationRunDialogView } from "@/components/settings/system/AutomationRunDialogView";
-import { AutomationRunAtPicker } from "@/components/settings/system/AutomationRunAtPicker";
-import { TokenUsageCard } from "@/components/settings/TokenUsageCard";
+import type { SettingsSectionKey } from "@/features/settings/contracts";
+import { ModelAPIControl } from "@/features/settings/models/ModelAPIControl";
+import { ProviderAPIControl } from "@/features/settings/providers/ProviderAPIControl";
+import { ProviderParameterFields, type RequestParameterDraft } from "@/features/settings/providers/ProviderParameterFields";
+import { ProviderSearchList } from "@/features/settings/providers/ProviderSearchList";
+import { ReasoningEffortPicker } from "@/features/settings/models/ReasoningEffortPicker";
+import { OverviewSettings } from "@/features/settings/overview/OverviewSettings";
+import { SettingsNavigation } from "@/features/settings/ui/SettingsNavigation";
+import { CatalogSkeleton } from "@/features/settings/shared/CatalogSkeleton";
+import { Button as HeroButton, Label, ListBox, Select } from "@heroui/react";
+import { ModelCatalogField } from "@/features/settings/models/ui/ModelCatalogField";
+import { ProviderIcon } from "@/features/settings/shared/ProviderIcon";
+import { RemoveActionButton } from "@/features/settings/shared/RemoveActionButton";
+import { SettingsGroup, SettingsRow } from "@/features/settings/shared/SettingsControls";
+import { SettingsHint } from "@/features/settings/shared/SettingsHint";
+import { SettingsTextEditor } from "@/features/settings/shared/SettingsTextEditor";
+import { SkeletonStatus } from "@/ui/feedback/SkeletonStatus";
+import { AutomationCalendar } from "@/features/automations/calendar/AutomationCalendar";
+import { AutomationRunDialogView } from "@/features/automations/runs/AutomationRunDialogView";
+import { RunAtPicker } from "@/features/automations/ui/RunAtPicker";
+import { TokenUsageCard } from "@/features/settings/TokenUsageCard";
 import { Button } from "@/components/ui/button";
-import type { ChannelValidationPayload, ModelAPIConfig, CirnoFeatureInfo, SessionAutomationJob, SettingsPayload } from "@/lib/types";
+import type { ChannelValidationPayload, CirnoFeatureInfo } from "@/lib/contracts/channels";
+import type { ModelAPIConfig } from "@/lib/contracts/models";
+import type { SessionAutomationJob } from "@/lib/contracts/automations";
+import type { SettingsPayload } from "@/lib/contracts/settings";
 import { Sample, StatePicker, type ComponentExample } from "./example";
 import { useGalleryTranslation } from "./i18n";
 
 const providers: SettingsPayload["providers"] = [
-  { name: "openai", label: "OpenAI", configured: true, auth_type: "api_key", model_catalog: "builtin", model_api_configurable: true,
+  { id: "openai", name: "OpenAI", configured: true, auth_type: "api_key", model_catalog: "builtin", model_api_configurable: true,
     request_apis: ["responses", "chat_completions"], provider_api_configurable: true },
-  { name: "anthropic", label: "Anthropic", configured: true, auth_type: "api_key", model_catalog: "builtin", request_apis: ["anthropic_messages"] },
-  { name: "openai_codex", label: "OpenAI Codex", configured: true, auth_type: "oauth", model_catalog: "builtin" },
-  { name: "ollama", label: "Ollama", configured: true, auth_type: "api_key", model_catalog: "local" },
+  { id: "anthropic", name: "Anthropic", configured: true, auth_type: "api_key", model_catalog: "builtin", request_apis: ["anthropic_messages"] },
+  { id: "openai_codex", name: "OpenAI Codex", configured: true, auth_type: "oauth", model_catalog: "builtin" },
+  { id: "ollama", name: "Ollama", configured: true, auth_type: "api_key", model_catalog: "local" },
 ];
 
 export const settings: SettingsPayload = {
@@ -80,17 +87,17 @@ function ModelPickerPreview() {
   const [model, setModel] = useState("gpt-5.4");
   const [effort, setEffort] = useState("medium");
   const [action, setAction] = useState<{ kind: "add" } | { kind: "configure"; provider: string } | null>(null);
-  const models = provider === "anthropic" ? ["claude-sonnet-4", "claude-opus-4"] : ["gpt-5.4", "gpt-5-mini", "gpt-4.1"];
   return <div className="settings-grid space-y-4">
     <SettingsGroup>
-      <SettingsRow title={t("settings.rows.provider", { ns: "common" })}><ProviderPicker providers={providers.slice(0, 2)} value={provider} emptyLabel={t("controls.modelPickers.chooseProvider")}
-        onChange={(next) => { setProvider(next); setModel(next === "anthropic" ? "claude-sonnet-4" : "gpt-5.4"); }}
-        onAddProvider={() => setAction({ kind: "add" })}
-        onConfigureProvider={(next) => setAction({ kind: "configure", provider: next })} /></SettingsRow>
-      <SettingsRow title={t("settings.rows.model", { ns: "common" })}><ModelIdPicker token="" settings={settings} provider={provider} models={models}
-        value={model} showProviderLogos={false} onChange={setModel} /></SettingsRow>
-      <SettingsRow title={t("settings.models.reasoningEffort", { ns: "common" })}><ReasoningEffortPicker token="" provider={undefined} model={model}
-        savedValues={["low", "medium", "high"]} value={effort} onChange={setEffort} /></SettingsRow>
+      <Select value={provider} onChange={key => { if (key !== null) { setProvider(String(key)); setModel(""); } }}>
+        <Label>{t("settings.rows.provider", { ns: "common" })}</Label><Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+        <Select.Popover><ListBox items={providers.slice(0, 2)}>{row => <ListBox.Item id={row.id} textValue={row.name}>{row.name}<ListBox.ItemIndicator /></ListBox.Item>}</ListBox></Select.Popover>
+      </Select>
+      <div className="provider-actions"><HeroButton variant="secondary" onPress={() => setAction({ kind: "add" })}>{t("settings.providers.addProvider", { ns: "common" })}</HeroButton>
+        <HeroButton variant="ghost" onPress={() => setAction({ kind: "configure", provider })}>{t("settings.configure", { ns: "common" })}</HeroButton></div>
+      <ModelCatalogField token="" provider={providers.find(row => row.id === provider)} value={model} onChange={setModel} />
+      <ReasoningEffortPicker token="" provider={undefined} model={model}
+        savedValues={["low", "medium", "high"]} value={effort} onChange={setEffort} />
     </SettingsGroup>
     <p role="status" className="text-xs text-muted-foreground">{provider} / {model} / {effort || t("settings.values.default", { ns: "common" })}{action ? ` · ${action.kind === "add" ? t("settings.providers.addProvider", { ns: "common" }) : t("controls.modelPickers.configure", { provider: action.provider })}` : ""}</p>
   </div>;
@@ -100,21 +107,11 @@ function ProviderIconsPreview() {
   const { t } = useGalleryTranslation();
   const [size, setSize] = useState<"regular" | "compact" | "fill">("regular");
   return <><StatePicker label={t("controls.providerIcons.size")} value={size} options={["regular", "compact", "fill"]} onChange={setSize} />
-    <div className="flex flex-wrap gap-8">{providers.map((provider) => <Sample key={provider.name} label={provider.label}>
+    <div className="flex flex-wrap gap-8">{providers.map((provider) => <Sample key={provider.id} label={provider.name}>
       <div className="flex items-center gap-3"><span className={size === "fill" ? "block h-12 w-12" : ""}>
-        <ProviderIcon provider={provider.name} compact={size === "compact"} fill={size === "fill"} showBrandLogos={false} />
-      </span><ProviderPickerIcon provider={provider.name} showBrandLogos={false} />
-        <ProviderPickerIcon provider={provider.name} showBrandLogos={false} unconfigured /></div>
+        <ProviderIcon provider={provider.id} compact={size === "compact"} fill={size === "fill"} showBrandLogos={false} />
+      </span></div>
     </Sample>)}</div></>;
-}
-
-function TimezonePreview() {
-  const { t, i18n } = useGalleryTranslation();
-  const [value, setValue] = useState("Asia/Shanghai");
-  return <div className="max-w-sm space-y-4"><TimezonePicker value={value} onChange={setValue} aria-label={t("settings.timezone.select", { ns: "common" })} />
-    <p role="status" className="text-sm text-muted-foreground">{new Intl.DateTimeFormat(i18n.language, {
-      timeZone: value, dateStyle: "medium", timeStyle: "short",
-    }).format(Date.UTC(2026, 0, 1, 12))} · {value}</p></div>;
 }
 
 function TextEditorPreview() {
@@ -126,7 +123,7 @@ function TextEditorPreview() {
       <SettingsTextEditor title={t("controls.textEditor.edit")} description={t("controls.textEditor.help")} value={value} disabled={mode === "disabled"}
         onSave={(next) => { if (!next.trim()) throw new Error(t("controls.textEditor.required")); setValue(next); }} />
     </SettingsRow></SettingsGroup>
-    <pre role="status" className="mt-4 whitespace-pre-wrap rounded-control bg-muted p-4 text-sm">{value}</pre></>;
+    <pre role="status" className="mt-4 whitespace-pre-wrap rounded-control bg-surface-secondary p-4 text-sm">{value}</pre></>;
 }
 
 function RemovePresetPreview() {
@@ -150,7 +147,7 @@ function LoadingPreview() {
   return <><StatePicker label={t("controls.loading.layout")} value={layout} options={["apps", "channels", "skills"]} onChange={setLayout} />
     <Sample label="CatalogSkeleton"><CatalogSkeleton label={t("controls.loading.catalog")} layout={layout} /></Sample>
     <div className="mt-6"><Sample label="SkeletonStatus"><SkeletonStatus label={t("settings.status.loading", { ns: "common" })} className="space-y-3">
-      <div className="h-4 w-1/3 rounded bg-muted" /><div className="h-9 rounded-control bg-muted" />
+      <div className="h-4 w-1/3 rounded bg-surface-secondary" /><div className="h-9 rounded-control bg-surface-secondary" />
     </SkeletonStatus></Sample></div></>;
 }
 
@@ -160,7 +157,7 @@ function SidebarPreview() {
   const [pending, setPending] = useState(true);
   const [action, setAction] = useState<"back" | "logout" | "restart" | null>(null);
   return <div className="flex min-h-96 flex-col gap-6 lg:flex-row">
-    <SettingsSidebar activeSection={section} onSelectSection={setSection} restartPending={pending}
+    <SettingsNavigation activeSection={section} onSelectSection={setSection} restartPending={pending}
       onBackToChat={() => setAction("back")}
       onLogout={() => setAction("logout")}
       onRestart={() => { setPending(false); setAction("restart"); }} />
@@ -173,10 +170,10 @@ function SidebarPreview() {
 function ProviderSearchPreview() {
   const { t } = useGalleryTranslation();
   const [query, setQuery] = useState("");
-  const [result, setResult] = useState<{ kind: "selected"; provider: string } | { kind: "custom" | "closed" } | null>(null);
+  const [result, setResult] = useState<{ kind: "selected"; provider: string } | { kind: "custom" } | null>(null);
   return <><div className="flex h-[400px] flex-col overflow-hidden rounded-panel border pt-4">
     <ProviderSearchList providers={providers} showBrandLogos={false} query={query} onQueryChange={setQuery}
-      onSelect={(provider) => setResult({ kind: "selected", provider })} onCustom={() => setResult({ kind: "custom" })} onClose={() => { setQuery(""); setResult({ kind: "closed" }); }} />
+      onSelect={(provider) => setResult({ kind: "selected", provider })} onCustom={() => setResult({ kind: "custom" })} />
   </div><p role="status" className="mt-4 text-sm text-muted-foreground">{result?.kind === "selected" ? t("controls.common.selected", { value: result.provider }) : t(result ? `controls.providerSearch.${result.kind}` : "controls.providerSearch.hint")}</p></>;
 }
 
@@ -184,7 +181,7 @@ function RequestParametersPreview() {
   const [form, setForm] = useState<RequestParameterDraft>({ extraHeaders: '{"X-Project":"gallery"}', extraQuery: "{}", extraBody: '{"service_tier":"auto"}' });
   return <div className="space-y-4"><ProviderParameterFields fields={["extra_headers", "extra_query", "extra_body"]} form={form}
     onChange={(next) => setForm((current) => ({ ...current, ...next }))} />
-    <pre role="status" className="overflow-auto rounded-control bg-muted p-4 text-xs">{JSON.stringify(form, null, 2)}</pre></div>;
+    <pre role="status" className="overflow-auto rounded-control bg-surface-secondary p-4 text-xs">{JSON.stringify(form, null, 2)}</pre></div>;
 }
 
 function RequestAPIPreview() {
@@ -194,7 +191,7 @@ function RequestAPIPreview() {
   return <div className="grid gap-8 md:grid-cols-2">
     <Sample label={t("controls.requestAPI.providerAPI")}><ProviderAPIControl value={providerAPI} onChange={setProviderAPI} /></Sample>
     <Sample label={t("controls.requestAPI.modelOverride")}><SettingsGroup><ModelAPIControl provider={providers[0]} automaticAPI="responses" value={modelAPI} onChange={setModelAPI} /></SettingsGroup></Sample>
-    <pre role="status" className="overflow-auto rounded-control bg-muted p-4 text-xs md:col-span-2">{JSON.stringify({ providerAPI, modelAPI }, null, 2)}</pre>
+    <pre role="status" className="overflow-auto rounded-control bg-surface-secondary p-4 text-xs md:col-span-2">{JSON.stringify({ providerAPI, modelAPI }, null, 2)}</pre>
   </div>;
 }
 
@@ -257,7 +254,7 @@ function WebPreview() {
 function SafetyPreview() {
   const { form, setForm, dirty, save } = usePreviewForm(networkSafetyFormFromPayload(settings));
   return <><AdvancedSettings form={form} dirty={dirty} saving={false} requiresRestartPending={false}
-    isNativeHostSurface={false} onChangeForm={setForm} onSave={save} /><FormStatus dirty={dirty} /></>;
+    onChangeForm={setForm} onSave={save} /><FormStatus dirty={dirty} /></>;
 }
 
 const channel: CirnoFeatureInfo = {
@@ -273,11 +270,11 @@ function ChannelCatalogPreview() {
   const feature = { ...channel, display_name: t("controls.channelCatalog.exampleChannel"), enabled: mode === "running" || mode === "starting", installed: mode !== "uninstalled",
     runtime_status: mode === "uninstalled" ? "stopped" : mode, runtime_error: mode === "failed" ? t("controls.channelCatalog.error") : undefined };
   return <><StatePicker label={t("controls.channelCatalog.state")} value={mode} options={["stopped", "running", "starting", "failed", "uninstalled"]} onChange={setMode} />
-    <div className="settings-grid"><SettingsGroup><ChannelCatalogRow feature={feature} showBrandLogos={false} actionKey={null}
+    <div className="settings-grid"><SettingsGroup><ChannelCard feature={feature} showBrandLogos={false} actionKey={null}
       onSelect={() => setSelected(true)} onAction={(action, _name, options) => setMode(options?.installOnly ? "stopped" : action === "enable" ? "running" : "stopped")} /></SettingsGroup></div>
     <div className="mt-4 flex items-center gap-3"><ChannelLogo feature={feature} showBrandLogos={false} />
       <ChannelStatusBadge status={feature.runtime_status}>{t(`controls.channelCatalog.${feature.runtime_status}`)}</ChannelStatusBadge>
-      <ChannelHelpMenu feature={feature} /></div>
+      <ChannelHelp feature={feature} /></div>
     <ChannelRuntimeError message={feature.runtime_error} />
     <p role="status" className="mt-4 text-xs text-muted-foreground">{t(selected ? "controls.channelCatalog.selected" : "controls.channelCatalog.hint")}</p></>;
 }
@@ -307,7 +304,7 @@ function CredentialsPreview() {
     <div className="flex flex-wrap items-center gap-3"><Button variant="outline" onClick={() => {
       const next = channelRequirementErrors(channelFields, [{ alternatives: [["bot_token"]] }], values, new Set(), new Set(), "required");
       setErrorFields(Object.keys(next)); setNotice({ kind: Object.keys(next).length ? "incomplete" : "saved" });
-    }}>{t("controls.credentials.checkSave")}</Button><ChannelSetupActions feature={{ ...channel, display_name: t("controls.channelCatalog.exampleChannel") }} setup={{ actions: [{ id: "copy", label: t("controls.credentials.command"), copyText: "cirno gateway" }] }} onNotice={(message) => setNotice(message ? { kind: "helper", message } : null)} /></div>
+    }}>{t("controls.credentials.checkSave")}</Button><ChannelSetupActions feature={{ ...channel, display_name: t("controls.channelCatalog.exampleChannel") }} setup={{ actions: [{ id: "copy", label: t("controls.credentials.command"), copyText: "cirno" }] }} onNotice={(message) => setNotice(message ? { kind: "helper", message } : null)} /></div>
     <p role="status" className="text-xs text-muted-foreground">{notice?.kind === "helper" ? notice.message : notice?.kind === "applied" ? t("controls.credentials.applied", { name: t(`controls.credentials.${notice.preset}`) }) : t(notice ? `controls.credentials.${notice.kind}` : "controls.credentials.hint")}</p>
   </div>;
 }
@@ -322,12 +319,12 @@ function ChannelValidationPreview() {
     missing_fields: [], can_enable: mode === "connected", requires_restart: false,
   };
   return <><StatePicker label={t("controls.channelValidation.result")} value={mode} options={["checking", "connected", "invalid"]} onChange={setMode} />
-    <ChannelValidationProgress validation={validation} validating={mode === "checking"} feature={{ ...channel, display_name: t("controls.channelCatalog.exampleChannel") }} /></>;
+    <ChannelValidationResult validation={validation} validating={mode === "checking"} feature={{ ...channel, display_name: t("controls.channelCatalog.exampleChannel") }} /></>;
 }
 
 function RunAtPreview() {
   const [value, setValue] = useState("2026-10-15T09:30");
-  return <div className="max-w-md space-y-4"><AutomationRunAtPicker value={value} onChange={setValue} />
+  return <div className="max-w-md space-y-4"><RunAtPicker value={value} onChange={setValue} />
     <p role="status" className="text-sm text-muted-foreground">{value}</p></div>;
 }
 
@@ -353,37 +350,34 @@ function AutomationCalendarPreview() {
     }} /><p role="status" className="mt-4 text-xs text-muted-foreground">{selected ? t("controls.automationCalendar.selected", { name: selected }) : t("controls.automationCalendar.hint")}</p></>;
 }
 
-const components = "webui/src/components/settings/";
+const components = "sources/cirno-web/src/features/settings/";
 export const settingsExamples: ComponentExample[] = [
-  { title: "controls.modelPickers.title", files: ["shared/ModelControls", "models/ReasoningEffortPicker"], Preview: ModelPickerPreview,
+  { title: "controls.modelPickers.title", files: ["models/ui/ModelCatalogField", "models/ReasoningEffortPicker"], Preview: ModelPickerPreview,
     description: "controls.modelPickers.description",
     options: "controls.modelPickers.options",
-    code: '<ProviderPicker providers={providers} value={provider} onChange={setProvider} emptyLabel="选择服务商" />\n<ModelIdPicker token="" settings={settings} provider={provider} models={modelIds} value={model} showProviderLogos={false} onChange={setModel} />' },
+    code: '<ModelCatalogField token={token} provider={provider} value={model} onChange={setModel} />' },
   { title: "controls.providerIcons.title", files: ["shared/ProviderIcon"], Preview: ProviderIconsPreview,
     description: "controls.providerIcons.description", options: "controls.providerIcons.options",
-    code: '<ProviderIcon provider="openai" showBrandLogos={false} compact />\n<ProviderPickerIcon provider="openai" showBrandLogos={false} unconfigured />' },
-  { title: "controls.timezone.title", files: ["shared/TimezonePicker"], Preview: TimezonePreview,
-    description: "controls.timezone.description", options: "controls.timezone.options",
-    code: '<TimezonePicker value={timezone} onChange={setTimezone} aria-label="选择时区" />' },
+    code: '<ProviderIcon provider="openai" showBrandLogos={false} compact />' },
   { title: "controls.textEditor.title", files: ["shared/SettingsTextEditor", "shared/SettingsHint"], Preview: TextEditorPreview,
     description: "controls.textEditor.description", options: "controls.textEditor.options",
     code: '<SettingsHint description="补充说明">标题</SettingsHint>\n<SettingsTextEditor title="编辑说明" value={value} onSave={setValue} />' },
   { title: "controls.removePreset.title", files: ["shared/RemoveActionButton"], Preview: RemovePresetPreview,
     description: "controls.removePreset.description", options: "controls.removePreset.options",
     code: '<RemoveActionButton disabled={referenced} onClick={deletePreset}>删除</RemoveActionButton>' },
-  { title: "controls.loading.title", files: ["shared/CatalogSkeleton", "shared/SkeletonStatus"], Preview: LoadingPreview,
+  { title: "controls.loading.title", files: ["shared/CatalogSkeleton", "sources/cirno-web/src/ui/feedback/SkeletonStatus.tsx"], Preview: LoadingPreview,
     description: "controls.loading.description", options: "controls.loading.options",
     code: '<CatalogSkeleton label="正在加载目录" layout="channels" />\n<SkeletonStatus label="正在加载设置" className="space-y-3">{skeletons}</SkeletonStatus>' },
-  { title: "controls.sidebar.title", files: ["SettingsSidebar"], Preview: SidebarPreview,
+  { title: "controls.sidebar.title", files: ["ui/SettingsNavigation"], Preview: SidebarPreview,
     description: "controls.sidebar.description", options: "controls.sidebar.options",
-    code: '<SettingsSidebar activeSection={section} onSelectSection={setSection} onBackToChat={back} onRestart={restart} restartPending />' },
-  { title: "controls.providerSearch.title", files: ["models/ProviderSearchList"], Preview: ProviderSearchPreview,
+    code: '<SettingsNavigation activeSection={section} onSelectSection={setSection} onBackToChat={back} onRestart={restart} restartPending />' },
+  { title: "controls.providerSearch.title", files: ["providers/ProviderSearchList"], Preview: ProviderSearchPreview,
     description: "controls.providerSearch.description", options: "controls.providerSearch.options",
     code: '<ProviderSearchList providers={providers} query={query} onQueryChange={setQuery} showBrandLogos={false} onSelect={select} onCustom={custom} onClose={close} />' },
-  { title: "controls.requestParameters.title", files: ["models/ProviderParameterFields"], Preview: RequestParametersPreview,
+  { title: "controls.requestParameters.title", files: ["providers/ProviderParameterFields"], Preview: RequestParametersPreview,
     description: "controls.requestParameters.description", options: "controls.requestParameters.options",
     code: '<ProviderParameterFields fields={["extra_headers", "extra_query", "extra_body"]} form={draft} onChange={updateDraft} />' },
-  { title: "controls.requestAPI.title", files: ["models/ProviderAPIControl", "models/ModelAPIControl"], Preview: RequestAPIPreview,
+  { title: "controls.requestAPI.title", files: ["providers/ProviderAPIControl", "models/ModelAPIControl"], Preview: RequestAPIPreview,
     description: "controls.requestAPI.description", options: "controls.requestAPI.options",
     code: '<ProviderAPIControl value={api} onChange={setAPI} />\n<ModelAPIControl provider={provider} automaticAPI="responses" value={modelAPI} onChange={setModelAPI} />' },
   { title: "controls.usage.title", files: ["TokenUsageCard", "TokenUsageDetails", "TokenUsageModelTrend"], Preview: UsagePreview,
@@ -392,25 +386,25 @@ export const settingsExamples: ComponentExample[] = [
   { title: "controls.overview.title", files: ["overview/OverviewSettings"], Preview: OverviewPreview,
     description: "controls.overview.description", options: "controls.overview.options",
     code: '<OverviewSettings settings={settings} showBrandLogos={false} onSelectSection={setSection} />' },
-  { title: "controls.web.title", files: ["capabilities/WebSettings"], Preview: WebPreview,
+  { title: "controls.web.title", files: ["web/WebSettings"], Preview: WebPreview,
     description: "controls.web.description", options: "controls.web.options",
     code: '<WebSettings settings={settings} form={form} onChangeForm={setForm} onSave={save} {...actions} />' },
   { title: "controls.safety.title", files: ["capabilities/SecuritySettings"], Preview: SafetyPreview,
     description: "controls.safety.description", options: "controls.safety.options",
-    code: '<AdvancedSettings form={form} dirty={dirty} saving={false} requiresRestartPending={false} isNativeHostSurface={false} onChangeForm={setForm} onSave={save} />' },
-  { title: "controls.channelCatalog.title", files: ["channels/ChannelCatalogRow", "channels/ChannelIdentity", "channels/ChannelHelpMenu"], Preview: ChannelCatalogPreview,
+    code: '<AdvancedSettings form={form} dirty={dirty} saving={false} requiresRestartPending={false} onChangeForm={setForm} onSave={save} />' },
+  { title: "controls.channelCatalog.title", files: ["channels/ChannelCard", "sources/cirno-web/src/features/channels/model/presentation.ts", "channels/ChannelHelp"], Preview: ChannelCatalogPreview,
     description: "controls.channelCatalog.description", options: "controls.channelCatalog.options",
-    code: '<ChannelCatalogRow feature={feature} showBrandLogos={false} actionKey={null} onSelect={select} onAction={act} />' },
-  { title: "controls.credentials.title", files: ["channels/CredentialForm", "channels/ChannelCredentialFields", "channels/ChannelSetupParts"], Preview: CredentialsPreview,
+    code: '<ChannelCard feature={feature} showBrandLogos={false} actionKey={null} onSelect={select} onAction={act} />' },
+  { title: "controls.credentials.title", files: ["sources/cirno-web/src/features/channels/ui/fields/ChannelFields.tsx", "sources/cirno-web/src/features/channels/ui/setup/ChannelSetupHelpers.tsx"], Preview: CredentialsPreview,
     description: "controls.credentials.description", options: "controls.credentials.options",
     code: '<ChannelFieldGroups fields={fields} requirements={requirements} values={values} visibleSecrets={visible} onChange={change} onToggleSecret={toggle} />' },
-  { title: "controls.channelValidation.title", files: ["channels/ChannelValidationProgress"], Preview: ChannelValidationPreview,
+  { title: "controls.channelValidation.title", files: ["sources/cirno-web/src/features/channels/ui/ChannelValidationResult.tsx"], Preview: ChannelValidationPreview,
     description: "controls.channelValidation.description", options: "controls.channelValidation.options",
-    code: '<ChannelValidationProgress feature={feature} validation={validation} validating={checking} />' },
-  { title: "controls.runAt.title", files: ["system/AutomationRunAtPicker"], Preview: RunAtPreview,
+    code: '<ChannelValidationResult feature={feature} validation={validation} validating={checking} />' },
+  { title: "controls.runAt.title", files: ["sources/cirno-web/src/features/automations/ui/RunAtPicker.tsx"], Preview: RunAtPreview,
     description: "controls.runAt.description", options: "controls.runAt.options",
-    code: '<AutomationRunAtPicker value={runAt} onChange={setRunAt} />' },
-  { title: "controls.automationCalendar.title", files: ["system/AutomationCalendar"], Preview: AutomationCalendarPreview,
+    code: '<RunAtPicker value={runAt} onChange={setRunAt} />' },
+  { title: "controls.automationCalendar.title", files: ["sources/cirno-web/src/features/automations/calendar/AutomationCalendar.tsx"], Preview: AutomationCalendarPreview,
     description: "controls.automationCalendar.description", options: "controls.automationCalendar.options",
     code: '<AutomationCalendar jobs={jobs} month={month} locale="zh-CN" copy={copy} onInspect={inspect} renderRunDialog={renderRunDialog} />' },
-].map((example) => ({ ...example, files: example.files.map((file) => `${components}${file}.tsx`) }));
+].map((example) => ({ ...example, files: example.files.map((file) => file.startsWith("sources/") ? file : `${components}${file}.tsx`) }));

@@ -1,10 +1,4 @@
 {
-  "rename": {
-    "title": "RenameDialog · 分组与项目改名",
-    "description": "预览分组和项目改名；话题在列表行内改名。",
-    "options": "调用方提供 dialogTitle、description 和 placeholder。title 设置初值，onConfirm 接收去除两端空白的标题。空标题无法保存。",
-    "hint": "保存后更新上方标题。"
-  },
   "delete": {
     "title": "DeleteConfirm · 删除确认",
     "description": "比较单个、批量和带自动任务的删除确认。",
@@ -60,17 +54,6 @@
     "options": "path 为引用文本；metadata 提供完整路径与可选相对路径。画廊直接提供元数据，无需加载文件。",
     "scope": "文件范围",
     "hint": "右键打开复制菜单，也可聚焦文件后按 Shift+F10。"
-  },
-  "workbench": {
-    "title": "PaneWorkbench · 多窗格",
-    "description": "切换布局、激活或添加窗格并调整尺寸。",
-    "options": "panes、activePaneKey、layout 与 splitRatios 由调用方控制。renderPane 提供内容；回调写回本地预览状态。窄屏自动显示当前窗格。",
-    "layout": "窗格布局",
-    "limit": "最多四个窗格",
-    "notes": "{{title}}笔记",
-    "active": "当前窗格",
-    "activate": "选择此窗格以激活",
-    "hint": "当前：{{title}}。拖动底部手柄移动窗格，拖动边界调整尺寸。"
   },
   "hostConnection": {
     "title": "HostConnectionStatus · 连接状态",
@@ -170,7 +153,7 @@
     "retries": "重试次数：{{amount}}"
   },
   "recovery": {
-    "title": "RecoveryNotice · 任务恢复",
+    "title": "ThreadComposer · 任务恢复",
     "description": "比较任务恢复状态，试用继续与关闭。",
     "options": "state 为恢复快照；onContinue 与 onDismiss 返回 Promise。示例回调只更新当前预览。",
     "state": "恢复状态",
@@ -296,22 +279,13 @@
     "selected": "预览中的主机：{{name}}"
   },
   "chats": {
-    "title": "ChatList · 会话列表",
+    "title": "ConversationsTab · 会话列表",
     "description": "选择会话并试用置顶、归档和删除。",
     "options": "sessions、activeKey 和置顶或归档的 key 由调用方提供；操作回调更新示例列表。",
     "state": "会话列表状态",
     "renamed": "已重命名：{{name}}",
     "selected": "选择的会话：{{name}}",
     "none": "无"
-  },
-  "sidebarResize": {
-    "title": "SidebarResizeHandle · 侧栏尺寸",
-    "description": "用鼠标或键盘调整、收起和展开侧栏。",
-    "options": "width 与 open 为受控状态；onResize 更新尺寸与展开状态；onDraggingChange 通知拖动状态。",
-    "content": "侧栏内容",
-    "hint": "拖动分隔条，或聚焦后使用方向键、Home、End 和 Enter。",
-    "collapsed": "已收起",
-    "dragging": "正在拖动"
   },
   "language": {
     "title": "LanguageSwitcher · 界面语言",
@@ -343,7 +317,7 @@
   "channel": {
     "title": "{{channel}} · 频道配置",
     "description": "查看真实频道配置表单与状态。",
-    "options": "使用频道注册定义、Python 设置契约快照和生产 ChannelSetupSurfaceView。输入、凭据显示、预设、检查与开关只更新当前预览。",
+    "options": "使用频道注册定义、Python 设置契约快照和生产 ChannelSetupView。输入、凭据显示、预设、检查与开关只更新当前预览。",
     "state": "频道配置状态",
     "credentialsError": "示例凭据被拒绝。请更新预览中的值后重试。",
     "validation": "预览配置"
@@ -376,42 +350,6 @@
     "title": "WhatsAppConnectFlowView · WhatsApp 设备关联",
     "description": "比较关联、成功、过期和错误界面。",
     "options": "视图沿用自动开始和极简布局的显示规则；调用方控制状态和重试。真实自动开始、强制重试和轮询由连接功能入口负责。"
-  },
-  "linearPanel": {
-    "title": "LinearPanelView · Linear 配置",
-    "description": "查看应用设置、工作区、成员和浏览器授权。",
-    "options": "state 与 workspaces 提供快照；工作区、保存与 MCP 操作由回调接入。三个插槽组合生产使用的成员、授权和重置视图。",
-    "state": "Linear 配置状态",
-    "runtimeError": "未能启动 Linear webhook。",
-    "saveError": "无法保存设置，已保留草稿。",
-    "inspectionError": "未能检查已连接的工作区。",
-    "refreshed": "已刷新示例工作区。",
-    "removed": "已移除示例工作区：{{name}}",
-    "mcp": "已选择 Linear MCP 配置入口。"
-  },
-  "linearMembers": {
-    "title": "LinearMemberAccessView · 成员访问",
-    "description": "搜索成员、修改权限并比较保存状态。",
-    "options": "snapshot 为已确认的成员状态。onLoad 与 onSetAllowed 交给频道入口；权限校验仍由网关负责。",
-    "state": "成员状态",
-    "loadError": "成员目录暂不可用。",
-    "saveError": "尚未确认访问权限。"
-  },
-  "linearConnect": {
-    "title": "LinearConnectFlowView · Linear 授权",
-    "description": "试用浏览器授权入口和各授权阶段。",
-    "options": "复用 ChannelQrConnectFlowView。Linear 提供浏览器授权展示、标签与焦点处理；会话创建及轮询留在运行时入口。",
-    "state": "授权阶段",
-    "error": "未能完成授权。",
-    "hint": "授权链接与工作区为示例数据；开始、取消只更新预览阶段。"
-  },
-  "linearReset": {
-    "title": "LinearResetConnectionView · 重置连接",
-    "description": "查看清除范围、忙碌和部分完成状态。",
-    "options": "onReset 执行完整撤销与清理事务；视图管理确认、错误、关闭限制与焦点恢复。",
-    "state": "重置结果",
-    "error": "未能停止频道，已保留应用设置。",
-    "completed": "预览工作区及应用设置已清除。"
   },
   "weixinPanel": {
     "title": "WeixinPanelView · 微信设置",

@@ -1,0 +1,27 @@
+.nodes-settings,.node-jobs { display:flex; flex-direction:column; min-width:0; gap:1.25rem; }
+.nodes-settings header,.node-jobs header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+.nodes-settings .node-toolbar { justify-content:flex-end; }
+.nodes-settings h2 { font-size:1rem; font-weight:600; }
+.node-help,.node-jobs>p { color:var(--muted); font-size:.875rem; line-height:1.6; }
+.node-list ul { list-style:none; margin:0; padding:0; }
+.node-list li { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; padding:.875rem; border-bottom:1px solid var(--border); }
+.node-list li:last-child { border-bottom:0; }
+.node-identity { display:flex; flex:1; min-width:8rem; flex-direction:column; gap:.25rem; overflow:hidden; }
+.node-identity strong { font-size:.875rem; font-weight:500; }
+.node-identity span,.node-job-state { font-size:.75rem; color:var(--muted); }
+.node-identity>* { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.node-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.25rem; }
+.node-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; }
+.node-editor-dialog form,.node-command-dialog form { display:flex; flex:1; min-height:0; flex-direction:column; }
+.node-editor-dialog .modal__body,.node-command-dialog .modal__body { display:flex; flex-direction:column; gap:1.25rem; overflow:auto; }
+.node-editor-dialog .modal__body { gap:.75rem; }
+.node-editor-dialog .select { width:100%; }
+.node-validation { min-height:1rem; }
+.node-port-validation { min-height:1.5rem; }
+.node-dialog-footer { flex-direction:column; align-items:stretch; }
+.node-dialog-buttons { display:flex; justify-content:flex-end; gap:.5rem; }
+.node-dialog-footer .alert { width:100%; overflow-wrap:anywhere; }
+.node-output,.node-job-command { white-space:pre-wrap; overflow-wrap:anywhere; font-family:ui-monospace,SFMono-Regular,monospace; font-size:.75rem; line-height:1.6; }
+.node-output { max-height:24rem; overflow:auto; padding:.75rem; border-radius:var(--radius); background:var(--surface-secondary); }
+.node-output pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+@container cirno-tab (max-width:600px) { .node-form-grid { grid-template-columns:minmax(0,1fr); } }
