@@ -41,7 +41,7 @@ import {
   BootState,
   bootstrapCapabilities,
   loadThreadShell,
-  ModelSetup,
+  SetupFlow,
   readShellRoute,
 } from "./navigation";
 import { Shell } from "./Shell";
@@ -271,7 +271,7 @@ function ApplicationBootstrap() {
     >
       {state.onboardingRequired ? (
         <Suspense fallback={<StartupShell />}>
-          <ModelSetup
+          <SetupFlow
             onModelNameChange={handleModelNameChange}
             onComplete={() =>
               setState((current) =>

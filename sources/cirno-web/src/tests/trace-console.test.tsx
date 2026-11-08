@@ -83,3 +83,27 @@ it("shows a non-Error recording failure and permits an explicit retry", async ()
   await waitFor(() => expect(result.current.page?.events).toHaveLength(1));
   expect(result.current.error).toBe("");
 });
+
+it("retains a settled empty page and enabled controls during a delayed recording poll", async () => {
+  const poll = pending<TracePage>();
+  let hold = false;
+  const interval = vi.spyOn(window, "setInterval");
+  const empty = { ...page(), events: [], count: 0 };
+  const request = vi.fn((_name: string, payload: { action: string }) => {
+    if (payload.action === "trace.create") return Promise.resolve(info());
+    return hold ? poll.promise : Promise.resolve(empty);
+  });
+  const client = { requestMutation: request } as unknown as CirnoClient;
+  const ready = vi.fn();
+  const { result, unmount } = renderHook(() => useTrace(client, "recording", true, ready));
+  await waitFor(() => expect(result.current.page?.events).toEqual([]));
+  const callback = interval.mock.calls.find(([, delay]) => delay === 2000)![0] as () => void;
+  hold = true;
+  act(() => callback());
+  expect(result.current.page).toEqual(empty);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.busy).toBe(false);
+  await act(async () => { poll.resolve(empty); });
+  unmount();
+  interval.mockRestore();
+});

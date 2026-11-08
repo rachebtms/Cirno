@@ -72,6 +72,7 @@ class ModelTurnExecutor:
         tools: ToolRegistry | None = None,
         request_context: RequestContext | None = None,
         provider_state: ProviderConversationState | None = None,
+        require_visible_reply: bool = False,
     ) -> AgentRunResult:
         """Run the agent iteration loop.
 
@@ -241,6 +242,7 @@ class ModelTurnExecutor:
                     # never create durable spill files, even before discard/cancellation.
                     workspace=None if ephemeral else effective_scope.project_path,
                     session_key=session.key if session else None,
+                    require_visible_reply=require_visible_reply,
                     provider_retry_mode=self.agent.provider_retry_mode,
                     checkpoint_callback=_checkpoint,
                     consolidate_history=partial(

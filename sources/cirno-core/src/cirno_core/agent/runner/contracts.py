@@ -62,6 +62,7 @@ class AgentRunSpec:
     terminal_injection_callback: InjectionCallback | None = None
     continuation_callback: ContinuationCallback | None = None
     finalize_on_max_iterations: bool = True
+    require_visible_reply: bool = False
     provider_state: ProviderConversationState | None = None
     llm_usage_source: LLMUsageSource | None = None
     events: EventSink = NO_EVENTS

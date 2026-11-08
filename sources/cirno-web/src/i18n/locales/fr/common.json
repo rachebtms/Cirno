@@ -2752,7 +2752,11 @@
       "paused": "En pause",
       "waiting": "Enregistrement des nouveaux événements, sans importer l’historique.",
       "capacity": "Limite de stockage atteinte. Effacez pour continuer.",
-      "storage_error": "Enregistrement arrêté : erreur du stockage temporaire."
+      "storage_error": "Enregistrement arrêté : erreur du stockage temporaire.",
+      "export": "Télécharger l’enregistrement ZIP",
+      "copy": "Copier les détails affichés",
+      "copied": "Copié",
+      "copyFailed": "Échec de la copie. Sélectionnez le texte et copiez-le manuellement."
     },
     "moveOtherGroup": "Move to other tab group",
     "emptyGroup": "Open a page from the Launcher or drag a tab here.",
@@ -2985,7 +2989,8 @@
       "dropped": "Abandonné",
       "progress": "En cours",
       "waiting": "En attente",
-      "unavailable": "Indisponible"
+      "unavailable": "Indisponible",
+      "cancelled": "Retirée"
     },
     "browser": {
       "operations": "Une action nécessite votre attention.",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "The Router conversation is unavailable. Try again later."
     },
     "routerHandle": "Router @name",
-    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings.",
+    "themeTitle": "Choisissez votre thème",
+    "back": "Retour",
+    "continue": "Continuer"
   },
   "themes": {
     "title": "Thèmes de couleurs",

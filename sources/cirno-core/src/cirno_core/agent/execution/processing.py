@@ -30,6 +30,7 @@ from cirno_core.session.goal_state import (
     parse_goal_state,
 )
 from cirno_core.session.model import Session
+from cirno_core.bus.input_origin import input_origin
 from cirno_core.session.roles import conversation_role
 from cirno_core.utils.llm_runtime import LLMRuntime
 from cirno_core.utils.progress_events import output_events
@@ -307,6 +308,11 @@ class TurnProcessor:
                 tools=ctx.tools,
                 request_context=ctx.request_context,
                 provider_state=ctx.provider_state,
+                require_visible_reply=(
+                    conversation_role(ctx.msg.session_key).tool_replies
+                    and ((ctx.msg.is_user_input and input_origin(ctx.msg) is None)
+                         or ctx.msg.metadata.get("_awakening") is True)
+                ),
                 events=ctx.events,
             )
         ctx.final_content = result.final_content

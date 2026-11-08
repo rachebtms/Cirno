@@ -2752,7 +2752,11 @@
       "paused": "일시 정지",
       "waiting": "새 이벤트를 기록합니다. 이전 대화 기록은 가져오지 않습니다.",
       "capacity": "저장 한도에 도달했습니다. 지운 후 계속하세요.",
-      "storage_error": "임시 저장소 오류로 기록이 중지되었습니다."
+      "storage_error": "임시 저장소 오류로 기록이 중지되었습니다.",
+      "export": "기록 ZIP 다운로드",
+      "copy": "표시된 세부 정보 복사",
+      "copied": "복사됨",
+      "copyFailed": "복사하지 못했습니다. 텍스트를 선택하여 직접 복사하세요."
     },
     "moveOtherGroup": "Move to other tab group",
     "emptyGroup": "Open a page from the Launcher or drag a tab here.",
@@ -2985,7 +2989,8 @@
       "dropped": "철회됨",
       "progress": "진행 중",
       "waiting": "기다리는 중",
-      "unavailable": "사용 불가"
+      "unavailable": "사용 불가",
+      "cancelled": "철회됨"
     },
     "browser": {
       "operations": "처리해야 할 작업이 있습니다.",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "The Router conversation is unavailable. Try again later."
     },
     "routerHandle": "Router @name",
-    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings.",
+    "themeTitle": "마음에 드는 테마 선택",
+    "back": "뒤로",
+    "continue": "계속"
   },
   "themes": {
     "title": "색상 테마",

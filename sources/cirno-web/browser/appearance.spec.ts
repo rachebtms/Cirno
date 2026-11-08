@@ -248,3 +248,19 @@ test("unfinished numeric input reports an error instead of acting like a cleared
   await expect(input).toHaveValue("22");
   await expect(input).not.toHaveAttribute("aria-invalid", "true");
 });
+
+
+for (const width of [390, 1440]) test(`short appearance controls share their label row at ${width}px`, async ({ page }, info) => {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.goto("/browser/fixture.html?case=appearance&lang=en");
+  for (const title of ["Language", "Brand logos"]) {
+    const row = page.locator(".settings-row").filter({ has: page.getByText(title, { exact: true }) }).first();
+    await expect(row).toHaveCount(1);
+    await row.scrollIntoViewIfNeeded();
+    const bounds = await row.evaluate(element => [...element.children].map(child => { const r = child.getBoundingClientRect(); return { x: r.x, y: r.y, height: r.height }; }));
+    expect(bounds).toHaveLength(2);
+    expect(Math.abs(bounds[0].y + bounds[0].height / 2 - bounds[1].y - bounds[1].height / 2)).toBeLessThan(3);
+    expect(bounds[1].x).toBeGreaterThan(bounds[0].x);
+  }
+  await page.screenshot({ path: info.outputPath("inline-settings.png"), animations: "disabled" });
+});

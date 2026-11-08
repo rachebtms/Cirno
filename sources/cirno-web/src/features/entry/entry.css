@@ -18,15 +18,26 @@
 .model-setup-header, .model-setup-footer { flex-shrink:0; padding:1.25rem; border-color:var(--border); }
 .model-setup-header { border-bottom-width:1px; }
 .model-setup-footer { border-top-width:1px; }
-.model-setup-heading { max-width:56rem; margin:auto; }
+.model-setup-heading { max-width:44rem; margin:auto; }
 .model-setup-heading > div { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }
 .model-setup-step { display:flex; align-items:center; gap:.5rem; font-size:.75rem; color:var(--muted); }
 .model-setup-heading h1 { font-weight:600; font-size:1.25rem; }
 .model-setup-heading > p { color:var(--muted); font-size:.875rem; line-height:1.6; margin-top:.5rem; }
 .model-setup-content { display:flex; flex:1; flex-direction:column; min-height:0; }
-.model-setup-nav { padding:.75rem 1.25rem 0; max-width:56rem; width:100%; margin:auto; }
+.model-setup-nav { padding:1rem 2rem 0; max-width:48rem; width:100%; margin:0 auto; flex-shrink:0; }
+.model-setup-nav > .tabs__list-container { width:fit-content; max-width:100%; }
+.model-setup-nav .tabs__list { width:fit-content; min-width:0; flex:none; }
+.model-setup-nav .tabs__tab { width:auto; flex:none; min-width:7rem; }
 .model-setup-panel { display:flex; flex:1; min-height:0; }
-.model-setup-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.75rem; max-width:56rem; margin:auto; }
+.setup-theme-content { overflow-y:auto; flex:1; min-height:0; }
+.setup-theme-content > div { max-width:48rem; margin:auto; padding:2rem; display:grid; gap:2rem; }
+.model-setup-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.75rem; max-width:44rem; margin:auto; }
 .model-setup-actions [role="alert"] { flex-basis:100%; }
 .entry-loading { display:grid; flex:1; place-items:center; min-height:10rem; }
-@media(max-width:480px) { .entry-header { padding:1rem; } .entry-body { padding:1.5rem 1.25rem 3rem; } .model-setup-header, .model-setup-footer { padding:1rem; } }
+@media(max-width:480px) {
+  .entry-header { padding:1rem; }
+  .entry-body { padding:1.5rem 1.25rem 3rem; }
+  .model-setup-header, .model-setup-footer { padding:1.25rem; }
+  .model-setup-nav { padding-inline:1.25rem; }
+  .setup-theme-content > div { padding:1.25rem; }
+}

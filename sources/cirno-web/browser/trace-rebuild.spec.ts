@@ -36,3 +36,41 @@ for (const width of [390, 1440]) for (const theme of ["light", "dark"]) test(`re
   await expect(page.getByRole("heading", { name: "Recording closed", exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+
+test("an empty recording stays stable across background polls", async ({ page }) => {
+  await page.goto("/browser/fixture.html?case=trace-rebuild&emptyPolling&lang=en&theme=dark");
+  const empty = page.getByText("Recording new events. Earlier conversation history is not captured.", { exact: true });
+  await expect(empty).toBeVisible();
+  await page.evaluate(() => {
+    const status = document.querySelector(".trace-empty")!;
+    status.setAttribute("data-stable-status", "true");
+    const values: string[] = [];
+    Object.assign(window, { traceStatusChanges: values });
+    new MutationObserver(() => values.push(status.textContent ?? "")).observe(status, { childList: true, characterData: true, subtree: true });
+  });
+  await expect.poll(async () => {
+    const raw = await page.getByLabel("Trace actions", { exact: true }).textContent();
+    return JSON.parse(raw ?? "[]").filter((item: { action: string }) => item.action === "trace.events").length;
+  }, { timeout: 10000 }).toBeGreaterThanOrEqual(3);
+  await expect(page.locator('[data-stable-status="true"]')).toHaveText("Recording new events. Earlier conversation history is not captured.");
+  expect(await page.evaluate(() => Reflect.get(window, "traceStatusChanges"))).toEqual([]);
+  await expect(page.getByRole("button", { name: "Pause recording", exact: true })).toBeEnabled();
+});
+
+
+test("downloads a recording and copies the selected inspector section", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/browser/fixture.html?case=trace-rebuild&lang=en&theme=dark");
+  await expect(page.getByRole("button", { name: "Download recording ZIP", exact: true })).toBeEnabled();
+  const transfer = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download recording ZIP", exact: true }).click();
+  expect((await transfer).suggestedFilename()).toBe("cirno-trace-fixture-recording.zip");
+  await page.getByRole("row").filter({ hasText: "Model request" }).first().click();
+  await expect(page.getByRole("button", { name: "Copy displayed details", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Copy displayed details", exact: true }).click();
+  expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))[0].role).toBe("system");
+  await page.getByRole("tab", { name: "Tools", exact: true }).click();
+  await page.getByRole("button", { name: "Copy displayed details", exact: true }).click();
+  expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual([{ name: "nodes.execute" }]);
+});

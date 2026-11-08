@@ -142,6 +142,10 @@ class ContextBuilder:
 
         if not is_internal_session(session_key or ""):
             parts.append(render_template(role.prompt_template))
+        if role.name == "router":
+            from cirno_core.profiles.awakening import awakening_prompt
+            if awakening := awakening_prompt():
+                parts.append(awakening)
 
         return "\n\n---\n\n".join(parts)
 

@@ -132,6 +132,8 @@ class WebSocketChannel(BaseChannel):
         self.gateway = gateway
         self._uploads = gateway.uploads
         from cirno_server.backup.http import BackupHTTP
+        from cirno_server.webui.trace_http import TraceHTTP
+        self._trace_http = TraceHTTP(self._uploads)
         self._backups = BackupHTTP(gateway.settings.config.path, self._uploads, bus, gateway.session_manager, maintenance=gateway.maintenance)
         from cirno_server.webui.media.http import MediaHTTP
         self._media_http = MediaHTTP(gateway.media, gateway.workspaces.existing_scope_for_session_key)
@@ -436,6 +438,8 @@ class WebSocketChannel(BaseChannel):
                 if request.path.startswith("/v0/backups/"):
                     return await self._backups.handle(request)
                 with self.bus.admission.activity():
+                    if request.path.startswith("/v0/traces/"):
+                        return await self._trace_http.handle(request)
                     if request.path.startswith("/v0/media/"):
                         return await self._media_http.handle(request)
                     if request.path.startswith("/v0/auth/"):

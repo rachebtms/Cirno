@@ -2752,7 +2752,11 @@
       "paused": "Đã tạm dừng",
       "waiting": "Ghi sự kiện mới, không nhập lịch sử trò chuyện trước đó.",
       "capacity": "Đã đạt giới hạn lưu trữ. Xóa để tiếp tục.",
-      "storage_error": "Đã dừng ghi do lỗi bộ nhớ tạm."
+      "storage_error": "Đã dừng ghi do lỗi bộ nhớ tạm.",
+      "export": "Tải bản ghi ZIP",
+      "copy": "Sao chép chi tiết hiển thị",
+      "copied": "Đã sao chép",
+      "copyFailed": "Không thể sao chép. Hãy chọn văn bản và sao chép thủ công."
     },
     "moveOtherGroup": "Move to other tab group",
     "emptyGroup": "Open a page from the Launcher or drag a tab here.",
@@ -2985,7 +2989,8 @@
       "dropped": "Đã bỏ",
       "progress": "Đang thực hiện",
       "waiting": "Đang đợi",
-      "unavailable": "Không khả dụng"
+      "unavailable": "Không khả dụng",
+      "cancelled": "Đã rút lại"
     },
     "browser": {
       "operations": "Có thao tác cần bạn xử lý.",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "The Router conversation is unavailable. Try again later."
     },
     "routerHandle": "Router @name",
-    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings.",
+    "themeTitle": "Chọn giao diện yêu thích",
+    "back": "Quay lại",
+    "continue": "Tiếp tục"
   },
   "themes": {
     "title": "Chủ đề màu",

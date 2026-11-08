@@ -13,7 +13,7 @@ python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/
 cirno --port 8000
 ```
 
-The initial local launch creates the default configuration automatically. Open `http://localhost:8000`, register the instance owner, and configure a provider and model. First-time setup takes place in the browser. New instances have no selected model: connect a provider, create a model preset, and select it before chatting. Incomplete setup returns a configuration message without contacting a model service or retrying. Web search defaults to DuckDuckGo and does not require a search API key. Existing instances retain their previous authentication settings. For a server deployment, see [Docker](docker.md).
+The initial local launch creates the default configuration automatically. Open `http://localhost:8000`, register the instance owner, choose a theme and light/dark mode, and configure a provider and model. Theme choices synchronize with Settings and other devices. First-time setup takes place in the browser. Starting the first chat wakes the Router for a short introduction; it asks about its identity, your preferred form of address and whatever background you wish to share. You can skip model setup and introduce yourself later. New instances have no selected model: connect a provider, create a model preset, and select it before chatting. Incomplete setup returns a configuration message without contacting a model service or retrying. Web search defaults to DuckDuckGo and does not require a search API key. Existing instances retain their previous authentication settings. For a server deployment, see [Docker](docker.md).
 
 ## Model providers
 
@@ -168,3 +168,5 @@ Change the name under Settings → Account. Names are unique across conversation
 renaming preserves the immutable conversation ID, history, memory sources and
 running task links. Historical prose remains unchanged. Login and password changes
 preserve the current name.
+
+Trace’s download action saves a snapshot of the whole recording as ZIP, including events outside the current page and filters, API input messages, tool definitions and responses. Recording continues during export. The archive contains a manifest, event/request JSONL indexes and content-addressed JSON blobs, so repeated long-context prefixes are stored once. The inspector’s copy action copies the JSON currently displayed in its selected tab; load more messages first when copying a paged message list. Clearing or closing a recording does not delete a downloaded archive.

@@ -1,3 +1,4 @@
+import { headerControlClassName } from "@/components/thread/header-control";
 import {
   PromptNavigationIcon,
 } from "@/components/icons/product-icons";
@@ -80,8 +81,7 @@ export function PromptNavigator({
         variant="ghost"
         size="icon"
         className={cn(
-          "h-8 w-8 rounded-control text-muted-foreground/80",
-          "hover:text-foreground",
+          headerControlClassName,
         )}
         aria-label={t("thread.promptNavigator.open")}
         onClick={() => { setListTop(0); setOpen(true); }}

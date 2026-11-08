@@ -23,6 +23,7 @@
     "send_session_message": "conversations.send",
     "report_work": "conversations.report",
     "ask_user": "user.ask",
+    "cancel_ask": "user.cancel_ask",
     "message": "user.message",
     "run_cli_app": "apps.run",
     "run_code": "ptc.run",

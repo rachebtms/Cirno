@@ -23,7 +23,7 @@ description: Inspect or troubleshoot the agent's runtime state, adjust runtime s
 </rule>
 
 <rule>
-**Use the right storage.** Scratchpad notes are temporary and shared by runtime sessions. Store durable or scoped preferences in memory instead.
+**Use the right storage.** Scratchpad notes are temporary and shared by runtime sessions. Store research and task knowledge in scoped memory. Personal identity and user preferences belong in Home profiles (see the storage table below).
 </rule>
 
 ## When to set
@@ -68,7 +68,8 @@ description: Inspect or troubleshoot the agent's runtime state, adjust runtime s
 | Need | Use | Persists? |
 |------|-----|-----------|
 | Temporary runtime notes | `runtime__set(key="...", value=...)` | Across turns, not restarts |
-| Long-term facts | Memory skill (`MEMORY.md`, `USER.md`) | Yes |
+| Personal identity and user preferences | Home `SOUL.md` / `WORKER.md` and `USER.md`, edited with file tools | Yes |
+| Research facts and task knowledge | `memory.*` tools with the appropriate scope | Yes |
 | Permanent config change | Settings interface | Yes |
 
 Store durable facts in memory and temporary runtime notes through `runtime__set`.

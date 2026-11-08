@@ -2,6 +2,7 @@
 import json
 
 import pytest
+from cirno_core import __version__
 from cirno_server.cli.commands import app
 from typer.testing import CliRunner
 
@@ -25,7 +26,7 @@ def test_service_overrides_do_not_rewrite_existing_configuration(tmp_path, monke
     launches = []
     monkeypatch.setattr("cirno_server.cli.commands.run_server", lambda config, **options: launches.append((config, options)))
     path = tmp_path / "config.json"
-    path.write_text(json.dumps({"lastRunVersion": "0.2.0", "agents": {"defaults": {"workspace": str(tmp_path / "workspace")}}}))
+    path.write_text(json.dumps({"lastRunVersion": __version__, "agents": {"defaults": {"workspace": str(tmp_path / "workspace")}}}))
     before = path.read_bytes()
     result = CliRunner().invoke(app, ["--config", str(path), "--host", "127.0.0.1", "--port", "8873", "--health-port", "18793"])
     assert result.exit_code == 0, result.output
@@ -44,4 +45,4 @@ def test_help_and_version_do_not_start_service(monkeypatch):
     monkeypatch.setattr("cirno_server.cli.commands.run_server", lambda *a, **kw: pytest.fail("started"))
     runner = CliRunner()
     assert "Run Cirno and its Web UI" in runner.invoke(app, ["--help"]).output
-    assert "0.2.0" in runner.invoke(app, ["--version"]).output
+    assert __version__ in runner.invoke(app, ["--version"]).output

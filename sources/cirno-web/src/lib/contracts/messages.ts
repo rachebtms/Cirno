@@ -161,6 +161,7 @@ export interface UserQuestion {
 
 export interface UIMessage {
   userQuestion?: UserQuestion;
+  questionCancellation?: { id: string; reason: string };
   id: string;
   role: Role;
   content: string;

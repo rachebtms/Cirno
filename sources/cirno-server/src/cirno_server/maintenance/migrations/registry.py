@@ -12,6 +12,7 @@ from cirno_core.config.loader import load_config
 from cirno_server.maintenance.migrations.notices import publish_completed
 from cirno_server.maintenance.migrations.plan import MigrationPlan
 from cirno_server.maintenance.migrations.v016 import Import016
+from cirno_server.maintenance.migrations.v020 import Upgrade020
 from filelock import FileLock
 from loguru import logger
 
@@ -23,7 +24,7 @@ class Migration(Protocol):
     def prepare(self, config_path: Path, data: dict, root: Path) -> MigrationPlan: ...
 
 
-MIGRATIONS: dict[str, Migration] = {step.source_version: step for step in (Import016(),)}
+MIGRATIONS: dict[str, Migration] = {step.source_version: step for step in (Import016(), Upgrade020())}
 
 
 def resume_migrations(config_path: Path) -> bool:

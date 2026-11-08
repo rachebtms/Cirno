@@ -1,10 +1,16 @@
 # Instance upgrades
 
-Cirno 0.2.0 imports instances from the published 0.1.6 layout at startup. Stop the
+Cirno 0.2.1 upgrades instances from 0.2.0 and imports the published 0.1.6 layout at startup. Stop the
 old service and keep the same instance volume and external workspace mounts.
 The configuration records the last version as `lastRunVersion`; unversioned
 configuration is treated as 0.1.6. Later migrations belong to the startup
 migration registry, rather than the Agent's runtime storage code.
+
+The 0.2.0 → 0.2.1 step updates only the configuration version. Conversations,
+profiles, credentials and settings keep their existing data. Its configuration
+original and resumable journal stay under `state/migrations/0.2.0-to-0.2.1/`.
+Instances on 0.1.6 run both registered steps in order. First-use introductions
+apply to newly registered instances; upgrades do not reset existing profiles.
 
 ## What changes
 

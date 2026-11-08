@@ -1,3 +1,4 @@
+import { headerControlClassName } from "@/components/thread/header-control";
 import { conversationRole } from "@/lib/conversation-role";
 import { QuestionReplyProvider, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -403,7 +404,7 @@ export function ThreadShell({
       current === rememberedViewportTurnId ? null : current,
     );
   }, [chatId, messagesReady, rememberedViewportTurnId, turnActive]);
-  const showHeroComposer = displayMessages.length === 0 && !initialHistoryLoading;
+  const showHeroComposer = displayMessages.length === 0 && !initialHistoryLoading && !historyError;
   const composerVariant = showHeroComposer ? emptyComposerVariant : "thread";
   // Only unpersisted drafts can choose a project; history pages do not own this state.
   const projectLocked = !!session && session.projectLocked !== false;
@@ -780,7 +781,7 @@ export function ThreadShell({
     </div>
   );
 
-  const emptyState = initialHistoryLoading ? (
+  const emptyState = historyError ? null : initialHistoryLoading ? (
     <ThreadLoadingSkeleton />
   ) : (
     <div className="flex w-full flex-col items-center text-center animate-in fade-in-0 slide-in-from-bottom-2 [animation-duration:220ms] motion-reduce:animate-none">
@@ -810,7 +811,7 @@ export function ThreadShell({
       hideSidebarToggle={hideSidebarToggle}
       hideThemeButton={hideThemeButton}
       hideTitle={hideHeaderTitle}
-      actions={<>{headerActions}{workspaceOpen && previewSessionKey && !temporary && <HoverHint content={t("workspace.trace")}><Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("workspace.trace")} onClick={() => workspaceOpen("trace", { sessionKey: previewSessionKey, scope: workspaceScope })}><Route className="h-4 w-4" /></Button></HoverHint>}{session && conversationRole(session.key).toolReplies && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground" aria-label={t("files.title")}
+      actions={<>{headerActions}{workspaceOpen && previewSessionKey && !temporary && <HoverHint content={t("workspace.trace")}><Button type="button" variant="ghost" size="icon" className={headerControlClassName} aria-label={t("workspace.trace")} onClick={() => workspaceOpen("trace", { sessionKey: previewSessionKey, scope: workspaceScope })}><Route className="h-4 w-4" /></Button></HoverHint>}{session && conversationRole(session.key).toolReplies && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className={headerControlClassName} aria-label={t("files.title")}
         onClick={preview.openFiles}><FolderOpen className="h-4 w-4" /></Button></HoverHint></>}
       minimal={!session && !loading}
       promptNavigatorAction={promptNavigatorAction}
@@ -853,6 +854,10 @@ export function ThreadShell({
               </div>
             ) : null}
             {headerPortalTarget === undefined ? threadHeader : null}
+            {historyError && <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <span className="min-w-0 break-words">{historyError}</span>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={refreshHistory}>{t("thread.history.retryLabel")}</Button>
+            </div>}
             <FilePreviewAvailabilityProvider
               resolve={previewSessionKey ? resolveFilePreviewAvailability : undefined}
             >

@@ -163,18 +163,18 @@
     .settings-grid.settings-feature-page { --settings-margin: 1rem; }
   }
   @container (min-width: 640px) {
-    .settings-grid .settings-row, .settings-grid .settings-footer {
+    .settings-row, .settings-footer {
       --settings-columns: 12;
       --settings-gutter: 24px;
     }
-    .settings-grid .settings-control { justify-content: flex-end; }
-    .settings-grid .settings-row > :first-child,
-    .settings-grid .settings-footer > :first-child { grid-column: 1 / 8; }
-    .settings-grid .settings-row > :nth-child(2),
-    .settings-grid .settings-footer > :nth-child(2) { grid-column: 8 / -1; }
-    .settings-grid .settings-footer-auto > :first-child { grid-column: 1 / -1; }
-    .settings-grid .settings-row:has(:is(.segmented-control, .settings-version-actions)) > :first-child { grid-column: 1 / 7; }
-    .settings-grid .settings-row:has(:is(.segmented-control, .settings-version-actions)) > :nth-child(2) { grid-column: 7 / -1; }
+    .settings-control { justify-content: flex-end; }
+    .settings-row > :first-child,
+    .settings-footer > :first-child { grid-column: 1 / 8; }
+    .settings-row > :nth-child(2),
+    .settings-footer > :nth-child(2) { grid-column: 8 / -1; }
+    .settings-footer-auto > :first-child { grid-column: 1 / -1; }
+    .settings-row:has(:is(.segmented-control, .settings-version-actions)) > :first-child { grid-column: 1 / 7; }
+    .settings-row:has(:is(.segmented-control, .settings-version-actions)) > :nth-child(2) { grid-column: 7 / -1; }
   }
   @container cirno-tab (min-width: 768px) {
     .settings-grid { --settings-inset: 24px; }

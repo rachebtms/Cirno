@@ -2752,7 +2752,11 @@
       "paused": "Dijeda",
       "waiting": "Merekam peristiwa baru tanpa mengimpor riwayat lama.",
       "capacity": "Batas penyimpanan tercapai. Hapus untuk melanjutkan.",
-      "storage_error": "Perekaman berhenti karena kesalahan penyimpanan sementara."
+      "storage_error": "Perekaman berhenti karena kesalahan penyimpanan sementara.",
+      "export": "Unduh rekaman ZIP",
+      "copy": "Salin detail yang ditampilkan",
+      "copied": "Disalin",
+      "copyFailed": "Gagal menyalin. Pilih teks dan salin secara manual."
     },
     "moveOtherGroup": "Move to other tab group",
     "emptyGroup": "Open a page from the Launcher or drag a tab here.",
@@ -2985,7 +2989,8 @@
       "dropped": "Dibatalkan",
       "progress": "Berlangsung",
       "waiting": "Menunggu",
-      "unavailable": "Tidak tersedia"
+      "unavailable": "Tidak tersedia",
+      "cancelled": "Ditarik"
     },
     "browser": {
       "operations": "Ada tindakan yang memerlukan perhatian Anda.",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "The Router conversation is unavailable. Try again later."
     },
     "routerHandle": "Router @name",
-    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings.",
+    "themeTitle": "Pilih tema favorit Anda",
+    "back": "Kembali",
+    "continue": "Lanjutkan"
   },
   "themes": {
     "title": "Tema warna",

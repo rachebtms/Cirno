@@ -1,4 +1,4 @@
-import { parseUserQuestion } from "@/lib/user-question";
+import { parseQuestionCancellation, parseUserQuestion } from "@/lib/user-question";
 import { toMediaAttachment } from "@/lib/media";
 import type { ThreadProjectionEvent } from "@/lib/contracts/events";
 import type { UIMessage } from "@/lib/contracts/messages";
@@ -231,6 +231,16 @@ export function projectThreadEvent(
       return state;
     }
 
+    const questionCancellation = parseQuestionCancellation(event.agent_ui);
+    if (questionCancellation) {
+      const id = `question-cancelled-${questionCancellation.id}`;
+      if (!state.messages.some(message => message.id === id)) {
+        state.messages = [...state.messages, { id, role: "assistant", content: "", questionCancellation,
+          createdAt: projectionCreatedAt(event, options) }];
+        options.effects?.bodyWrites.add(id);
+      }
+      return state;
+    }
     const media = event.media_urls?.map((item) => toMediaAttachment(item))
       ?? event.media?.map((url) => toMediaAttachment({ url }));
     const latencyMs = typeof event.latency_ms === "number" && event.latency_ms >= 0

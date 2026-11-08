@@ -2,8 +2,11 @@ import { useCallback, useRef, useState } from "react";
 import type { SettingsExitGuard, SettingsSectionKey } from "@/features/settings/contracts";
 import type { SettingsPayload } from "@/lib/contracts/settings";
 import { accountRequest } from "@/lib/account";
+import { ROUTER_SESSION_KEY } from "@/lib/conversation-role";
+import { useTranslation } from "react-i18next";
 
 export function useModelSetup(onComplete: () => void) {
+  const { i18n } = useTranslation();
   const [configured, setConfigured] = useState(false);
   const [section, setSection] = useState<SettingsSectionKey>("providers");
   const [saving, setSaving] = useState(false);
@@ -19,14 +22,18 @@ export function useModelSetup(onComplete: () => void) {
     setConfigured(settings.model_presets.some(preset => settings.model_call_order.includes(preset.id)
       && settings.providers.some(provider => provider.id === (preset.resolved_provider ?? preset.provider) && provider.configured)));
   }, []);
-  async function finish() {
+  async function finish(wake: boolean) {
     if (pending.current) return;
     pending.current = true; setSaving(true); setError(null);
-    try { await accountRequest("complete"); onComplete(); }
+    try {
+      await accountRequest("complete", { wake, language: i18n.resolvedLanguage ?? i18n.language });
+      window.location.hash = `/chat/${encodeURIComponent(ROUTER_SESSION_KEY)}`;
+      onComplete();
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { pending.current = false; setSaving(false); }
   }
-  return { section, setSection, saving, error, configured, registerGuard, settingsChanged,
+  return { section, setSection, saving, error, configured, registerGuard, settingsChanged, afterEdits,
     selectSection: (section: SettingsSectionKey) => afterEdits(() => setSection(section)),
-    complete: () => afterEdits(() => { void finish(); }) };
+    complete: (wake: boolean) => afterEdits(() => { void finish(wake); }) };
 }

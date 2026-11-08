@@ -7,6 +7,13 @@ for (const width of [390, 1440]) for (const theme of ["light", "dark"]) {
     await page.goto(`/browser/fixture.html?case=web-settings-rebuild&lang=en&theme=${theme}`);
     await page.getByRole("region", { name: "Web access", exact: true }).getByRole("button", { name: "Configure", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Web access", exact: true });
+    const providerTrigger = dialog.getByRole("button", { name: /DuckDuckGo/ });
+    const spacing = await providerTrigger.evaluate(element => {
+      const logo = element.querySelector("img, svg")!.getBoundingClientRect();
+      const value = element.querySelector(".select__value")!.getBoundingClientRect();
+      return value.left - logo.right;
+    });
+    expect(spacing).toBeGreaterThanOrEqual(7);
     await dialog.getByRole("button", { name: /DuckDuckGo/ }).click();
     await page.getByRole("option", { name: "Brave Search", exact: true }).click();
     await expect(dialog.getByRole("alert")).toContainText("Add the required credential");

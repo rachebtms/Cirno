@@ -58,6 +58,7 @@ class WebuiTurnRoutePolicy:
             )
             or internal_user_input
             or msg.metadata.get("_heartbeat") is True
+            or msg.metadata.get("_awakening") is True
             or msg.metadata.get("_internal_continuation") is True
         ) and route.channel == "websocket":
             visible = session_key == ROUTER_SESSION_KEY

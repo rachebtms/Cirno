@@ -48,8 +48,9 @@ def test_migration_archives_old_access_and_preserves_other_pending_actions(relea
     [archived] = (root / "originals").rglob("inbox.sqlite3")
     with closing(sqlite3.connect(archived)) as db:
         assert db.execute("SELECT kind,status,body FROM notices WHERE id='pairing:alice'").fetchone() == ("pairing", "pending", "Old access request")
+    notice_ids = {row["id"] for row in inbox.list()["items"]}
     assert not migrate_instance(config)
-    assert len(inbox.list()["items"]) == 4
+    assert {row["id"] for row in inbox.list()["items"]} == notice_ids
 
 
 def test_preparation_failure_keeps_original_inbox_and_pairing_store(released, monkeypatch):

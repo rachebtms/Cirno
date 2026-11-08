@@ -24,3 +24,11 @@ export function questionReplyPreview(text: string): string {
   const parsed = parseQuotedUserMessage(text);
   return parsed.questionId ? parsed.content || parsed.quotedContext || "" : text;
 }
+
+export function parseQuestionCancellation(blob: unknown): { id: string; reason: string } | undefined {
+  if (!blob || typeof blob !== "object" || !("kind" in blob) || blob.kind !== "user_question_cancelled" || !("data" in blob)) return;
+  const data = blob.data;
+  if (!data || typeof data !== "object" || !("id" in data) || typeof data.id !== "string" || !/^[a-f0-9]{32}$/.test(data.id)
+    || !("reason" in data) || typeof data.reason !== "string" || data.reason.length > 1000) return;
+  return { id: data.id, reason: data.reason };
+}

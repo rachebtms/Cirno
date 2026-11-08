@@ -50,11 +50,22 @@ class NotificationInbox:
         now = int(time.time() * 1000)
         encoded = json.dumps(data or {}, ensure_ascii=False)
         with self.connect() as db:
+            if kind == "question" and status == "cancelled":
+                db.execute("""UPDATE notices SET status='cancelled',read_at=?,
+                    data=json_set(data,'$.cancellation_reason',?)
+                    WHERE id=? AND session_key=? AND kind='question' AND status='pending'
+                    AND (json_extract(data,'$.session_generation') IS NULL
+                         OR json_extract(data,'$.session_generation')=?)""",
+                    (now, (data or {}).get("reason", ""), identifier, session_key,
+                     (data or {}).get("session_generation")))
+                return
             changed = db.execute("""INSERT INTO notices(id,category,kind,status,session_key,body,data,created_at)
                 VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
                 status=excluded.status, body=excluded.body, data=excluded.data,
                 read_at=CASE WHEN notices.status<>excluded.status THEN NULL ELSE notices.read_at END
-                WHERE notices.status<>excluded.status OR notices.body<>excluded.body OR notices.data<>excluded.data""",
+                WHERE (notices.status<>excluded.status OR notices.body<>excluded.body OR notices.data<>excluded.data)
+                AND NOT(notices.kind='question' AND notices.status IN ('answered','cancelled')
+                        AND excluded.status='pending')""",
                 (identifier, category, kind, status, session_key, body[:8000], encoded, now)).rowcount
             if changed:
                 from uuid import uuid4
@@ -135,7 +146,7 @@ class NotificationInbox:
         if match is None:
             return
         with self.connect() as db:
-            db.execute("UPDATE notices SET status='answered',read_at=? WHERE id=? AND session_key=?",
+            db.execute("UPDATE notices SET status='answered',read_at=? WHERE id=? AND session_key=? AND status='pending'",
                        (int(time.time() * 1000), "question:" + match[1], session_key))
 
     def capture(self, message):
@@ -155,6 +166,10 @@ class NotificationInbox:
             return
         ui = message.metadata.get(OUTBOUND_META_AGENT_UI) or {}
         event = message.event
+        if ui.get("kind") == "user_question_cancelled":
+            return dict(identifier="question:" + ui["data"]["id"], category="operations", kind="question",
+                        status="cancelled", session_key=key,
+                        data={**ui["data"], "session_generation": message.metadata.get("_session_generation")})
         if ui.get("kind") == "user_question":
             question = ui["data"]
             return dict(identifier="question:" + question["id"], category="operations", kind="question", status="pending",

@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 
 import pytest
+from cirno_core import __version__
 from cirno_core.config.loader import load_config
 from cirno_core.session.manager import SessionManager
 from cirno_server.maintenance.migrations.registry import migrate_instance
@@ -27,7 +28,7 @@ def test_released_instance_imports_history_settings_and_automation_state(release
         (root / "runs").mkdir()
         (root / "runs" / "completed.json").write_text('{"status":"ok"}')
     assert migrate_instance(path)
-    assert read_json(path)["lastRunVersion"] == "0.2.0"
+    assert read_json(path)["lastRunVersion"] == __version__
     assert load_config(path).model_presets["research"].display_name == "research"
     store = instance / "state/sessions/instance"
     sessions = SessionManager(workspace, sessions_root=store.parent)
@@ -135,9 +136,9 @@ def test_unconfigured_trigger_queues_are_moved_and_completion_is_notified_once(r
     assert (instance / "state/triggers/inbox").is_dir()
     assert not migrate_instance(path)
     rows = NotificationInbox(instance / "state").list(category="system")["items"]
-    assert len(rows) == 1
-    assert rows[0]["kind"] == "migration"
-    assert rows[0]["data"]["from"] == "0.1.6"
+    assert len(rows) == 2
+    assert all(row["kind"] == "migration" for row in rows)
+    assert {row["data"]["from"] for row in rows} == {"0.1.6", "0.2.0"}
 
 
 @pytest.mark.parametrize(("previous", "updated"), [("/", "/v0/ws"), ("/socket", "/v0/socket"), ("/api/socket", "/v0/socket"), ("/v0/custom", "/v0/custom")])

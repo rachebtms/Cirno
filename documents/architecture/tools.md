@@ -38,7 +38,9 @@ reintroducing tools excluded from the conversation.
 
 The Router receives all ordinary execution tools plus coordination controls and
 `user.message`. It can run brief resource checks directly and delegates medium
-and large tasks. Access and approval policies apply equally to both roles.
+and large tasks. Paper reading, literature reviews, development and experiments
+start in a Worker; brief CPU/GPU checks can run directly in the Router.
+Access and approval policies apply equally to both roles.
 
 The Python file-search backend shares directory scanning, filters and paging
 between path discovery and content search. Unreadable directories and failed

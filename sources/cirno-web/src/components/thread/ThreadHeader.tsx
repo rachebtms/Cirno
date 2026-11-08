@@ -1,3 +1,4 @@
+import { headerControlClassName } from "@/components/thread/header-control";
 import {
   TemporaryChatIcon,
 } from "@/components/icons/product-icons";
@@ -93,7 +94,7 @@ export function ThreadHeader({
             aria-label={t("thread.header.toggleSidebar")}
             onClick={onToggleSidebar}
             className={cn(
-              "h-7 w-7 rounded-control text-muted-foreground hover:text-foreground",
+              headerControlClassName,
               hideDesktopSidebarToggle && "@min-[1024px]/cirno-tab:hidden",
             )}
           >
@@ -126,7 +127,7 @@ export function ThreadHeader({
               aria-label={t("ptc.title")} aria-pressed={ptcModeEnabled}
               disabled={temporaryChatDisabled}
               onClick={onPtcModeEnabledChange ? () => onPtcModeEnabledChange(!ptcModeEnabled) : undefined}
-              className={cn("rounded-control text-muted-foreground hover:text-foreground",
+              className={cn(headerControlClassName,
                 ptcModeEnabled && "bg-default text-foreground")}
             ><Code2 aria-hidden className="h-3.5 w-3.5" /></Button>
           </TooltipTrigger><TooltipContent side="bottom" align="end" className="max-w-72">
@@ -147,7 +148,7 @@ export function ThreadHeader({
                   aria-pressed={temporaryChatEnabled}
                   onClick={() => onTemporaryChatEnabledChange(!temporaryChatEnabled)}
                   className={cn(
-                    "h-8 w-8 shrink-0 rounded-control text-muted-foreground hover:text-foreground",
+                    headerControlClassName,
                   )}
                 >
                   <TemporaryChatIcon
@@ -185,7 +186,7 @@ export function ThreadHeader({
           aria-label={t("thread.header.refresh")}
           title={t("thread.header.refresh")}
           onClick={() => window.location.reload()}
-          className="h-7 w-7 rounded-control text-muted-foreground hover:text-foreground">
+          className={headerControlClassName}>
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
         {!hideThemeButton ? (
@@ -218,7 +219,7 @@ function ThemeButton({
       aria-label={label}
       onClick={onToggleTheme}
       className={cn(
-        "h-8 w-8 rounded-control text-muted-foreground/85 hover:text-foreground",
+        headerControlClassName,
         className,
       )}
     >

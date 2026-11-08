@@ -17,13 +17,16 @@ export function TraceFixture() {
   const ready = useCallback((close: () => Promise<void>) => { closing.current = close; }, []);
   const client = useMemo(() => {
     let info: RecordingInfo = { id: "fixture-recording", epoch: "first", running: true, reason: null, count: initialEvents.length, created_ms: 1794000000000 };
-    let events = initialEvents;
-    return { requestMutation: async (_name: string, payload: { action: string; values: Record<string, unknown> }) => {
+    const delayedEmpty = new URLSearchParams(location.search).has("emptyPolling");
+    let events = delayedEmpty ? [] : initialEvents;
+    let reads = 0;
+    return { exportTraceRecording: async () => new Blob([new Uint8Array([80, 75, 5, 6, ...Array(18).fill(0)])], { type: "application/zip" }), requestMutation: async (_name: string, payload: { action: string; values: Record<string, unknown> }) => {
       setActions(old => [...old, payload]);
       const { action, values } = payload;
       if (action === "trace.close") { setClosed(true); return { ok: true }; }
       if (action === "trace.clear") { events = []; info = { ...info, epoch: "cleared", count: 0 }; }
       if (action === "trace.start" || action === "trace.pause") info = { ...info, running: action === "trace.start" };
+      if (action === "trace.events" && delayedEmpty && ++reads > 1) await new Promise(resolve => setTimeout(resolve, 350));
       if (action === "trace.events") return { ...info, events: events.filter(event => (!values.kind || values.kind === "tool" && event.kind === "tool_activity" || event.kind === values.kind)
         && (!values.session_key || event.session_key === values.session_key)), before: null, sources: ["websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", "websocket:worker"] };
       if (action === "trace.detail") return { event: { name: "nodes.execute", command: "nvidia-smi", node: "research-gpu" },

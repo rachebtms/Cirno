@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from cirno_core import __version__
 from cirno_server.maintenance.migrations.plan import MigrationPlan
 from cirno_server.maintenance.migrations.registry import migrate_instance
 from cirno_server.maintenance.startup import finish_pending_maintenance
@@ -31,6 +32,8 @@ def test_config_rename_interruption_recovers_without_new_owner_setup(released, r
     assert json.loads(path.read_text())["lastRunVersion"] == "0.2.0"
     assert (instance / "state/sessions/instance/sessions.sqlite3").exists()
     assert not (workspace / ".cirno").exists()
+    assert migrate_instance(path)
+    assert json.loads(path.read_text())["lastRunVersion"] == __version__
     assert not migrate_instance(path)
 
 

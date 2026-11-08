@@ -139,3 +139,31 @@ it("reopens a question when editing history removes a previously confirmed answe
   view.rerender(ui([questionMessage(question)]));
   expect(screen.getByRole("button", { name: "CSV" })).toBeVisible();
 });
+
+it("withdraws a pending question during work and on replay without adding a duplicate chat bubble", () => {
+  const events = [
+    { event: "message" as const, chat_id: "a", turn_id: "t", text: question.question,
+      agent_ui: { kind: "user_question", data: question } },
+    { event: "message" as const, chat_id: "a", turn_id: "t", text: second.question,
+      agent_ui: { kind: "user_question", data: second } },
+    { event: "message" as const, chat_id: "a", turn_id: "t", text: "Question withdrawn",
+      agent_ui: { kind: "user_question_cancelled", data: { id: question.id, reason: "No longer needed" } } },
+  ];
+  const ui = (messages: UIMessage[]) => <QuestionReplyProvider messages={messages} send={vi.fn()}>
+    <UserQuestionQueue><textarea aria-label="Message" /></UserQuestionQueue>
+    <ThreadMessages messages={messages} />
+  </QuestionReplyProvider>;
+  const pending = projectThreadEvents(events.slice(0, 2));
+  const view = render(ui(pending));
+  expect(screen.getByText(question.question)).toBeVisible();
+  const resolved = projectThreadEvents(events);
+  view.rerender(ui(resolved));
+  expect(screen.queryByText(question.question)).toBeNull();
+  expect(screen.getByText(second.question)).toBeVisible();
+  expect(screen.queryByText("Question withdrawn")).toBeNull();
+  expect(screen.getByRole("status")).toHaveTextContent("1 question remaining");
+  view.unmount();
+  render(ui(projectThreadEvents([...events, events[2]])));
+  expect(screen.queryByText(question.question)).toBeNull();
+  expect(screen.getByText(second.question)).toBeVisible();
+});

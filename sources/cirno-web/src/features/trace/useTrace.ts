@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { downloadRecording } from "./export";
 import type { CirnoClient } from "@/lib/cirno-client";
 import type { RecordingInfo, TraceDetail, TraceEvent, TracePage } from "./contracts";
 
@@ -16,6 +17,8 @@ export function useTrace(client: CirnoClient, recordingId: string, active: boole
   const [detail, setDetail] = useState<TraceDetail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [detailBusy, setDetailBusy] = useState(false);
   const [revision, refresh] = useState(0);
   const listEpoch = useRef(0), detailEpoch = useRef(0), inFlight = useRef<number | null>(null);
@@ -48,13 +51,13 @@ export function useTrace(client: CirnoClient, recordingId: string, active: boole
   const ready = info !== null;
   const load = useCallback(async () => {
     if (!ready || closing.current || inFlight.current === listEpoch.current) return;
-    const stamp = ++listEpoch.current; inFlight.current = stamp; setBusy(true);
+    const stamp = ++listEpoch.current; inFlight.current = stamp; setFetching(true);
     try {
       const body = await action<TracePage>("events", { before: cursor, kind: kind === "all" ? null : kind, session_key: source || null });
       if (stamp !== listEpoch.current) return;
       setPage(body); setInfo(body); setError("");
     } catch (reason) { if (stamp === listEpoch.current) setError(errorText(reason)); }
-    finally { if (stamp === listEpoch.current) setBusy(false); if (inFlight.current === stamp) inFlight.current = null; }
+    finally { if (stamp === listEpoch.current) setFetching(false); if (inFlight.current === stamp) inFlight.current = null; }
   }, [ready, action, cursor, kind, source, revision]);
   useEffect(() => { void load(); return () => { listEpoch.current++; }; }, [load]);
   useEffect(() => {
@@ -106,7 +109,14 @@ export function useTrace(client: CirnoClient, recordingId: string, active: boole
     } catch (reason) { setError(errorText(reason)); }
     finally { setBusy(false); }
   };
-  return { page, info, selected, setSelected, detail, error, busy, detailBusy, kind, source,
+  const exportRecording = async () => {
+    if (!info || exporting || closing.current) return;
+    setExporting(true);
+    try { await downloadRecording(client, recordingId, info.epoch); setError(""); }
+    catch (reason) { setError(errorText(reason)); }
+    finally { setExporting(false); }
+  };
+  return { exporting, exportRecording, page, info, selected, setSelected, detail, error, busy, loading: page === null && fetching, detailBusy, kind, source,
     setKind: (value: string) => { setCursors([null]); setKind(value); },
     setSource: (value: string) => { setCursors([null]); setSource(value); },
     refresh: () => void reconnect(), control,

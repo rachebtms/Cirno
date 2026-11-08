@@ -21,9 +21,9 @@ export function TraceTab({ client, recordingId, active, onCloseReady }: {
     {trace.error && <div role="alert" className="trace-error">{trace.error}</div>}
     {trace.info?.reason && <div role="status" className="trace-error">{t(`workspace.debug.${trace.info.reason}`)}</div>}
     <div className={`trace-content ${trace.selected ? "trace-has-selection" : ""}`}>
-      <div className="trace-event-scroll" aria-busy={trace.busy}>
+      <div className="trace-event-scroll" aria-busy={trace.loading}>
         <TraceTable events={events} selected={trace.selected?.id} select={trace.setSelected} />
-        {!events.length && <p role="status" className="trace-empty">{t(!trace.info && !trace.error || trace.busy ? "settings.status.loading" : trace.info?.running ? "workspace.debug.waiting" : "workspace.debug.noEvents")}</p>}
+        {!events.length && <p role="status" className="trace-empty">{t(!trace.info && !trace.error || trace.loading ? "workspace.loading" : trace.info?.running ? "workspace.debug.waiting" : "workspace.debug.noEvents")}</p>}
       </div>
       {trace.selected && <TraceInspector key={trace.selected.id} event={trace.selected} detail={trace.detail} busy={trace.detailBusy} close={() => trace.setSelected(null)} more={trace.moreDetail} />}
     </div>

@@ -1,5 +1,5 @@
 {
-  "lastRunVersion": "0.2.0",
+  "lastRunVersion": "0.2.1",
   "agents": {
     "defaults": {
       "provider": "local-api",

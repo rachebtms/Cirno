@@ -297,3 +297,80 @@ async def test_owner_can_rename_router_without_changing_id_and_collision_is_visi
                 assert (await SessionHandleResolver(sessions).aresolve(old["router_id"])).session_key == ROUTER_SESSION_KEY
     finally:
         await sessions.state.aclose()
+
+
+@pytest.mark.asyncio
+async def test_first_wake_is_durable_system_input_and_complete_retries_do_not_duplicate(tmp_path):
+    from cirno_core.config.home import get_home_path, set_instance_path
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+    set_instance_path(tmp_path)
+    sessions = SessionManager(tmp_path / "workspace", sessions_root=tmp_path / "state/sessions")
+    try:
+        async with listener(tmp_path, sessions) as url:
+            async with httpx.AsyncClient(base_url=url) as browser:
+                assert (await browser.post("/v0/auth/register", json={"username": "owner", "password": PASSWORD})).status_code == 201
+                bootstrap = get_home_path() / "BOOTSTRAP.md"
+                assert bootstrap.read_text()
+                for _ in range(2):
+                    result = await browser.post("/v0/auth/complete", json={"wake": True, "language": "zh-CN"})
+                    assert result.status_code == 200, result.text
+                header = await sessions.state.read_metadata(ROUTER_SESSION_KEY)
+                records = header["metadata"]["pending_user_followups"]
+                assert len(records) == 1
+                assert records[0]["input_role"] == "system"
+                assert records[0]["sender_id"] == "system:awakening"
+                assert "zh-CN" in records[0]["content"]
+                assert header["metadata"]["awakening_started"] is True
+                bootstrap.write_text("")
+                assert (await browser.post("/v0/auth/login", json={"username": "owner", "password": PASSWORD})).status_code == 200
+                assert bootstrap.read_text() == ""
+    finally:
+        await sessions.state.aclose()
+        set_instance_path(None)
+
+
+async def test_first_awakening_executes_and_delivers_to_its_router_not_cli(tmp_path):
+    from unittest.mock import AsyncMock, MagicMock
+    from cirno_core.agent.loop import AgentLoop
+    from cirno_core.agent.turn_delivery import TurnDeliveryFactory
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.config.home import set_instance_path
+    from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.generation import GenerationSettings
+    from cirno_core.providers.tool_calls import ToolCallRequest
+    from cirno_core.session.keys import ROUTER_CHAT_ID, ROUTER_SESSION_KEY
+    from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
+    from cirno_server.webui.auth.router_identity import RouterIdentity
+
+    set_instance_path(tmp_path)
+    bus = MessageBus()
+    provider = MagicMock(aclose=AsyncMock())
+    provider.get_default_model.return_value = "test-model"
+    provider.generation = GenerationSettings()
+    provider.estimate_prompt_tokens.return_value = (100, "test")
+    provider.chat_stream_with_retry = AsyncMock(side_effect=[
+        LLMResponse(content=None, tool_calls=[ToolCallRequest(id="welcome", name="user__message", arguments={"content": "Hello! What should I call you?"})]),
+        LLMResponse(content=""),
+    ])
+    loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path / "workspace")
+    loop.turn_delivery_factory = TurnDeliveryFactory(bus, route_policy=WebuiTurnRoutePolicy(loop.sessions))
+    try:
+        identity = RouterIdentity(loop.sessions, bus)
+        await identity.initialize("cirno", registration=True)
+        assert await identity.wake("en")
+        incoming = await bus.consume_inbound()
+        await loop.processing.process(incoming)
+        visible = []
+        while bus.outbound_size:
+            row = await bus.consume_outbound()
+            if row.metadata.get("_record_channel_delivery"):
+                visible.append(row)
+        assert len(visible) == 1
+        assert visible[0].channel == "websocket" and visible[0].chat_id == ROUTER_CHAT_ID
+        assert visible[0].content == "Hello! What should I call you?"
+        assert not await loop.sessions.state.read_header("cli:" + ROUTER_CHAT_ID)
+        assert incoming.session_key == ROUTER_SESSION_KEY
+    finally:
+        await loop.aclose()
+        set_instance_path(None)

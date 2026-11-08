@@ -1,6 +1,6 @@
 # Tabbed workspace
 
-Cirno 0.2.0 uses one workspace for conversations and owner-operated tools. The Launcher stays visible on the left on desktop and along the bottom on narrow screens. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
+Cirno 0.2.1 uses one workspace for conversations and owner-operated tools. The Launcher stays visible on the left on desktop and along the bottom on narrow screens. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
 
 ## Tabs
 

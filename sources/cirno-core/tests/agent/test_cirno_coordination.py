@@ -189,7 +189,12 @@ async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_
     provider.get_default_model.return_value = "test-model"
     provider.generation = GenerationSettings()
     provider.estimate_prompt_tokens.return_value = (100, "test")
-    provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content="Nothing to report"))
+    from cirno_core.providers.tool_calls import ToolCallRequest
+    direct_router = not background and session_key == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
+    provider.chat_stream_with_retry = AsyncMock(side_effect=[
+        LLMResponse(content=None, tool_calls=[ToolCallRequest(id="reply", name="user__message", arguments={"content": "Hello"})]),
+        LLMResponse(content=""),
+    ] if direct_router else None, return_value=LLMResponse(content="Nothing to report"))
     loop = AgentLoop(bus=bus, provider=provider, workspace=home / "workspace", model="test-model")
     try:
         await ensure_router_session(loop.sessions)
@@ -213,7 +218,7 @@ async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_
         else:
             assert "# Personal Router Conversation" not in system
         # A silent background check must finish without a forced tool retry.
-        assert provider.chat_stream_with_retry.await_count == 1
+        assert provider.chat_stream_with_retry.await_count == (2 if direct_router else 1)
         while bus.outbound_size:
             row = await bus.consume_outbound()
             assert not (row.content == "Nothing to report" and row.metadata.get("_record_channel_delivery"))

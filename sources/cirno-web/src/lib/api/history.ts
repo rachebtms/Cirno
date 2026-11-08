@@ -1,4 +1,5 @@
 import { isRecord, isRecordArray } from "../record";
+import { isProjectionProvenance } from "./provenance";
 /** History operations for the versioned Cirno API. */
 
 import type {
@@ -176,10 +177,7 @@ export function parseThreadProjectionEvent(
         break;
       if (
         value.provenance !== undefined &&
-        (!isRecord(value.provenance) ||
-          !isRecord(value.provenance.session_message) ||
-          !hasStringField(value.provenance.session_message, "message_id") ||
-          !isRecord(value.provenance.session_message.session))
+        !isProjectionProvenance(value.provenance)
       )
         break;
       return value as unknown as ThreadProjectionEvent;

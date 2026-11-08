@@ -103,7 +103,17 @@ class BrowserAuth:
             if action == "complete" and not await asyncio.to_thread(self.authenticated, request.headers):
                 raise AccountError("unauthorized", 401)
             if action == "complete":
-                await asyncio.to_thread(self.store.complete_onboarding)
+                if "wake" in body and not isinstance(body["wake"], bool):
+                    raise AccountError("invalid_request")
+                language = body.get("language", "en")
+                if not isinstance(language, str) or not 1 <= len(language) <= 32 or not all(c.isalnum() or c == "-" for c in language):
+                    raise AccountError("invalid_request")
+                async with self._lock:
+                    if body.get("wake") is True:
+                        if self.router is None:
+                            raise AccountError("router_unavailable", 503)
+                        await self.router.wake(language)
+                    await asyncio.to_thread(self.store.complete_onboarding)
             else:
                 await asyncio.to_thread(self.store.logout, self.cookie(request.headers))
             response = web.json_response({"ok": True})

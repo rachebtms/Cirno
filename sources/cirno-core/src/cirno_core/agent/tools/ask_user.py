@@ -25,6 +25,8 @@ def _question_fields():
     description="Provide questions for a batch, or question/options/assumption for one question; do not combine both forms.",
 ))
 class AskUserTool(MessageTool):
+    router_only = False
+
     @property
     def name(self) -> str:
         return "ask_user"
@@ -38,7 +40,7 @@ class AskUserTool(MessageTool):
             "one at a time from the composer; questions from subsequent calls join the queue. "
             "Returns immediately without waiting. Continue useful independent work or follow the "
             "stated assumption; each later reply is quoted guidance injected into the running task, "
-            "or starts a follow-up if it has finished. Do not poll or stop merely because a question "
+            "or starts a follow-up if it has finished. Use user__cancel_ask with a returned question ID to withdraw an obsolete question. Do not poll or stop merely because a question "
             "is unanswered. Silence is never approval for a required authorization. Use the user's language."
         )
 

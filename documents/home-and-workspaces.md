@@ -59,3 +59,9 @@ reports the failure. Deleting a Home Skill preserves its retained versions.
 Upgrading from 0.1.6 preserves the instance directory and account. It converts conversation and automation storage once; replacing the container image does not require re-registration. Older layouts should first be upgraded to 0.1.6.
 
 Back up the entire instance root with the service stopped. Copying only Agent Home does not preserve accounts, conversations or task queues. Copying only Markdown does not preserve memory scopes, revisions, links or Dream processing state. Workspaces outside the instance root require their own backups. See [memory storage](architecture/memory.md) for authoritative and rebuildable databases.
+
+## First introduction and profile changes
+
+New owner registration creates `home/BOOTSTRAP.md` for the Router’s first introduction. Agreed assistant identity and personality go to `SOUL.md`; user names, preferred forms of address, background and lasting communication preferences go to `USER.md`. Explicit changes are applied during the conversation through file tools, rather than waiting for Dream or only saving a memory record. Workers use `WORKER.md` for their own personality and share `USER.md`. Existing profile content is preserved when adding details.
+
+When the introduction is finished or skipped, the Router empties `BOOTSTRAP.md`. Login, restart and clearing conversation history do not recreate it. These files remain editable in Settings → Personality and are included in instance backups. The first wake is a durable system input, visibly identified as First awakening; it is not a fabricated user message.

@@ -210,10 +210,11 @@ describe("App account", () => {
     fireEvent.change(password, { target: { value: "wrong-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(await screen.findByText("Incorrect password")).toBeVisible();
+    const retryPassword = screen.getByLabelText("WebUI password");
+    await waitFor(() => expect(retryPassword).toHaveFocus());
     vi.useFakeTimers();
     act(() => vi.advanceTimersByTime(30_000));
     expect(screen.getByText("Incorrect password")).toBeVisible();
-    const retryPassword = screen.getByLabelText("WebUI password");
     expect(retryPassword).toHaveFocus();
     fireEvent.change(retryPassword, { target: { value: "retry-password" } });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

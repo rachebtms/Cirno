@@ -235,7 +235,7 @@ export function ReadOnlyRow({
   description?: string;
 }) {
   return (
-    <SettingsRow title={title} description={description}>
+    <SettingsRow inline title={title} description={description}>
       <span className="block max-w-full truncate text-left text-ui text-muted-foreground @min-[640px]/cirno-tab:max-w-[320px] @min-[640px]/cirno-tab:text-right">
         {value}
       </span>

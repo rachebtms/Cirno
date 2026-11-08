@@ -38,7 +38,7 @@ class BinaryHTTPBridge:
                 # HTTP parsing to RequestHandler on the same transport.
                 connection = cast(_BridgeConnection, request.transport.get_protocol())
                 connection.request_started(
-                    long_transfer=request.path.startswith(("/v0/backups/", "/v0/media/"))
+                    long_transfer=request.path.startswith(("/v0/backups/", "/v0/media/", "/v0/traces/"))
                 )
             return await handler(request)
 

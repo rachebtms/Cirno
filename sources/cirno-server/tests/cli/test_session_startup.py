@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from cirno_core import __version__
 from cirno_server.cli.commands import app
 from typer.testing import CliRunner
 
@@ -65,7 +66,7 @@ def test_startup_rejects_sessions_equal_to_workspace(tmp_path: Path) -> None:
 def test_workspace_override_can_resolve_conflict_without_saving(tmp_path: Path, monkeypatch) -> None:
     config_path = tmp_path / "config.json"
     config_path.write_text(
-        json.dumps({"lastRunVersion": "0.2.0", "agents": {"defaults": {"workspace": str(tmp_path)}}}),
+        json.dumps({"lastRunVersion": __version__, "agents": {"defaults": {"workspace": str(tmp_path)}}}),
         encoding="utf-8",
     )
     before = config_path.read_bytes()

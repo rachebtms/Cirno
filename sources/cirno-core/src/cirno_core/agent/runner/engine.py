@@ -26,6 +26,7 @@ from cirno_core.agent.runner.inputs import (
     try_drain_injections,
 )
 from cirno_core.agent.runner.model import ModelRequests
+from cirno_core.agent.runner.reply_contract import ToolReplyContract
 from cirno_core.agent.runner.recovery import (
     max_iterations_fallback,
 )
@@ -182,6 +183,7 @@ class AgentRunner:
         pending_length_segment: tuple[AgentHookContext, str] | None = None
         had_injections = False
         injection_cycles = 0
+        reply_contract = ToolReplyContract(spec.require_visible_reply)
         pending_stream_content: str | None = None
         conversation_state = ProviderConversationStateController(
             provider=spec.runtime.provider,
@@ -446,6 +448,18 @@ class AgentRunner:
                     restore_outer_whitespace(clean or "", original_content),
                 )
                 context.streamed_content = True
+
+            if response.finish_reason not in {"error", "length"} and not is_blank_text(clean):
+                reminder = reply_contract.reminder(delivered=delivered_reply, segment=injection_cycles, remaining=iteration + 1 < spec.max_iterations)
+                if reminder is not None:
+                    messages.append(conversation_state.project_response_message(
+                        build_assistant_message(clean, reasoning_content=response.reasoning_content, thinking_blocks=response.thinking_blocks), response,
+                    ))
+                    messages.append(reminder)
+                    if hook.wants_streaming():
+                        await hook.on_stream_end(context, resuming=True)
+                    await hook.after_iteration(context)
+                    continue
 
             assistant_message: dict[str, Any] | None = None
             if response.finish_reason != "error" and (not is_blank_text(clean) or reasoning_text):

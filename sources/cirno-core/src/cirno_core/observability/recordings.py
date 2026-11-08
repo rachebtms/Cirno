@@ -124,6 +124,21 @@ class TraceRecordings:
                         self._failed(recording, error)
             self._refresh_active()
 
+    def export(self, identifier: str, epoch: str, destination) -> None:
+        import tempfile
+        from pathlib import Path
+        from cirno_core.observability.recording_export import snapshot_recording, write_recording_zip
+
+        with tempfile.TemporaryDirectory(prefix="cirno-trace-export-") as folder:
+            snapshot = Path(folder) / "snapshot.sqlite3"
+            with self._lock:
+                recording = self._recordings[identifier]
+                if epoch != recording.epoch:
+                    raise ValueError("Recording was cleared; export the current recording again")
+                info = snapshot_recording(recording, snapshot)
+            # Compression does not block live capture, pause, clear or tab closure.
+            write_recording_zip(snapshot, info, destination)
+
     def close_all(self) -> None:
         with self._lock:
             for recording in self._recordings.values():

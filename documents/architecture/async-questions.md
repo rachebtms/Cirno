@@ -18,6 +18,12 @@ Replies carry the original question and a hidden correlation marker through the 
 - After execution, it becomes follow-up input to that conversation.
 - A failed send retains the answer for retry and does not mark it answered.
 
-Question payloads use `_agent_ui` in the stored assistant activity stream. Browser history projection hides their inline cards and builds the composer queue from questions and accepted user replies. Refreshes and other connected clients can recover the accepted answer state. Unsent drafts do not survive a page reload. The feature uses conversation storage rather than a separate question database or waiting worker.
+Question payloads use `_agent_ui` in the stored assistant activity stream. Browser history projection hides their inline cards and builds the composer queue from questions and accepted user replies. Refreshes and other connected clients can recover the accepted answer state. Accepted answers mark the corresponding Inbox item answered and read. Unsent drafts do not survive a page reload. The feature uses conversation storage rather than a separate question database or waiting worker.
 
 Router and Worker conversations can both ask questions. A question does not count as delivery of a final reply. Telegram displays question text and accepts ordinary quoted chat replies. Use the authenticated Web UI to answer a linked Inbox question and update its queue state. The sequential question composer and queue controls are Web-only.
+
+## Withdrawing obsolete questions
+
+Router and Workers can call `user__cancel_ask(question_id=..., reason=...)` (PTC: `await tools.user.cancel_ask(...)`) with an ID returned by `user.ask`. Withdrawal uses the same durable channel as the original question and returns `cancellation_queued`; it does not wait for a browser. It removes that question from the composer queue, marks its pending Inbox item withdrawn and read, and retains its history and optional reason. Delivery replay cannot reopen an answered or withdrawn Inbox item. Answer and withdrawal transitions preserve whichever terminal state was recorded first.
+
+Withdrawal is scoped to the current conversation and history generation. An unknown ID has no effect; answered records remain answered. It is appropriate when a question has become irrelevant, not as a substitute for required permission. Cancellation events are replayed with conversation history so refreshing or reconnecting does not bring the question back.

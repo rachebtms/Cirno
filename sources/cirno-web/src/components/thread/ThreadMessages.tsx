@@ -51,7 +51,7 @@ interface ThreadMessagesProps {
 export type DisplayUnit = TurnUnit;
 
 export function buildDisplayUnits(messages: UIMessage[], preserveReplyBoundaries = false): DisplayUnit[] {
-  return projectActivityTimeline(messages, { preserveReplyBoundaries }).filter(unit => unit.type !== "message" || !unit.message.userQuestion);
+  return projectActivityTimeline(messages.filter(message => !message.questionCancellation), { preserveReplyBoundaries }).filter(unit => unit.type !== "message" || !unit.message.userQuestion);
 }
 
 export function assistantForkFlags(units: DisplayUnit[]): boolean[] {

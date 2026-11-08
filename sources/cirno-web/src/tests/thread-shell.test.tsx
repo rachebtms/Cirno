@@ -498,6 +498,26 @@ describe("ThreadShell", () => {
     );
   });
 
+  it("shows history-load failures instead of an empty welcome and retries the same conversation", async () => {
+    const client = makeClient();
+    let failed = true;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/webui-thread/prompts")) return httpJson({ prompts: [], total: 0 });
+      if (url.includes("/webui-thread")) return failed
+        ? httpJson({ schemaVersion: 3, projection: "events", events: [{ event: "user_message", chat_id: "history-failure", text: "broken", starts_turn: true, provenance: { input_origin: { kind: "unknown" } } }] })
+        : httpJson(transcriptFromSimpleMessages([{ role: "assistant", content: "Recovered conversation history" }]));
+      return new Response(null, { status: 404 });
+    }));
+    render(wrap(client, <ThreadShell session={session("history-failure")} title="History failure" onToggleSidebar={() => {}} />));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid WebUI thread projection event: user_message");
+    expect(screen.queryByText(HERO_GREETING_PATTERN)).toBeNull();
+    failed = false;
+    fireEvent.click(screen.getByRole("button", { name: "Loading failed. Retry" }));
+    await screen.findByText("Recovered conversation history");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("publishes received and live body text to local search without search-driven reads", async () => {
     const client = makeClient();
     const cache = new ThreadMessageCache(() => false);

@@ -623,6 +623,8 @@ class TestEphemeralDirect:
         provider.get_default_model.return_value = "test-model"
         provider.supports_tools = True
         provider.generation = MagicMock(max_tokens=4096)
+        # This case verifies batch isolation, not the size of the built-in tool catalog.
+        provider.estimate_prompt_tokens.return_value = (100, "test")
 
         async def chat_stream_with_retry(**kwargs):
             captured["messages"] = kwargs["messages"]
@@ -691,7 +693,7 @@ class TestEphemeralDirect:
             bus=MessageBus(),
             provider=provider,
             workspace=tmp_path,
-            context_window_tokens=32_000,
+            context_window_tokens=128_000,
         )
         session_key = "dream:single-memory-copy"
 

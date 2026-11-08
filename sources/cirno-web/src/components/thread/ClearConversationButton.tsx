@@ -1,3 +1,4 @@
+import { headerControlClassName } from "@/components/thread/header-control";
 import { useState } from "react";
 import { Eraser } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -23,7 +24,7 @@ export function ClearConversationButton({ client, chatId, onCleared }: {
   }
   return <>
     <HoverHint content={t("thread.clear.title")}><Button type="button" variant="ghost" size="icon"
-      className="text-muted-foreground/85 hover:text-foreground" aria-label={t("thread.clear.title")}
+      className={headerControlClassName} aria-label={t("thread.clear.title")}
       onClick={() => { setError(""); setOpen(true); }}><Eraser className="h-4 w-4" /></Button></HoverHint>
     <AlertDialog open={open} onOpenChange={(value) => { if (!busy) setOpen(value); }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("thread.clear.title")}</AlertDialogTitle>

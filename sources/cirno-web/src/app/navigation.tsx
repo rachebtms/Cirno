@@ -71,9 +71,9 @@ export const InboxPage = lazy(() =>
   })),
 );
 
-export const ModelSetup = lazy(() =>
-  import("@/features/entry/ModelSetup").then((module) => ({
-    default: module.ModelSetup,
+export const SetupFlow = lazy(() =>
+  import("@/features/entry/SetupFlow").then((module) => ({
+    default: module.SetupFlow,
   })),
 );
 

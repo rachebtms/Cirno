@@ -2752,7 +2752,11 @@
       "paused": "已暂停",
       "waiting": "正在录制新事件，不会导入之前的聊天记录。",
       "capacity": "录制已达到存储上限并暂停，请清空后继续。",
-      "storage_error": "录制的临时存储发生错误，已停止录制。"
+      "storage_error": "录制的临时存储发生错误，已停止录制。",
+      "export": "下载录制 ZIP",
+      "copy": "复制当前详情",
+      "copied": "已复制",
+      "copyFailed": "复制失败，请选中文本手动复制。"
     },
     "moveOtherGroup": "移至另一标签组",
     "emptyGroup": "从启动栏打开页面，或将标签拖到这里。",
@@ -2985,7 +2989,8 @@
       "dropped": "已放弃",
       "progress": "进行中",
       "waiting": "等待中",
-      "unavailable": "已失效"
+      "unavailable": "已失效",
+      "cancelled": "已撤回"
     },
     "browser": {
       "operations": "有操作需要你处理。",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "Router 会话暂不可用，请稍后重试。"
     },
     "routerHandle": "Router 的 @名称",
-    "routerHandleHint": "3–32 位，以字母开头，可用小写字母、数字和下划线。之后可在设置中修改。"
+    "routerHandleHint": "3–32 位，以字母开头，可用小写字母、数字和下划线。之后可在设置中修改。",
+    "themeTitle": "选一个喜欢的主题",
+    "back": "返回",
+    "continue": "继续"
   },
   "themes": {
     "title": "配色主题",

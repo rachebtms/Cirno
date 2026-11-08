@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from cirno_core import __version__
 
 from cirno_server.channels.websocket.config import WebSocketConfig
 from cirno_core.config.loader import load_config, resolve_config_env_vars
@@ -26,7 +27,7 @@ def test_first_boot_generates_valid_container_config(tmp_path):
     assert result.returncode == 0, result.stderr
     config = resolve_config_env_vars(load_config(path))
     ws = WebSocketConfig.model_validate(config.channels.model_dump()["websocket"])
-    assert config.last_run_version == "0.2.0"
+    assert config.last_run_version == __version__
     assert config.server.health_host == ws.host == "0.0.0.0"
     assert ws.enabled and ws.websocket_requires_token
     assert ws.browser_setup

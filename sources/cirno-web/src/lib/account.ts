@@ -7,7 +7,7 @@ export class AccountRequestError extends Error {
   }
 }
 
-export async function accountRequest<T = void>(action: "register" | "login" | "logout" | "complete" | "change-password" | "change-router-name", values: Record<string, string> = {}): Promise<T> {
+export async function accountRequest<T = void>(action: "register" | "login" | "logout" | "complete" | "change-password" | "change-router-name", values: Record<string, unknown> = {}): Promise<T> {
   const response = await fetchWithTimeout(`/v0/auth/${action}`, {
     method: "POST",
     credentials: "same-origin",

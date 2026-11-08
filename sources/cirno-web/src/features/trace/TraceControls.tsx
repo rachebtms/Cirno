@@ -1,6 +1,6 @@
 import { useSourceLabel } from "@/features/conversations/catalog/useSourceLabel";
 import { Button, ListBox, SearchField, Select } from "@heroui/react";
-import { ArrowDown, ArrowUp, Ban, ChevronsUp, Circle, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, ChevronsUp, Circle, Download, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { EVENT_GROUPS } from "./contracts";
@@ -25,6 +25,8 @@ export function TraceToolbar({ trace, query, onQuery }: { trace: TraceState; que
       <TraceAction recording={running} label={t(running ? "workspace.debug.pause" : "workspace.debug.start")} disabled={trace.busy || !trace.info}
         onPress={() => void trace.control(running ? "pause" : "start")}><Circle size={14} fill={running ? "currentColor" : "none"} /></TraceAction>
       <TraceAction label={t("workspace.debug.clear")} disabled={trace.busy || !trace.info} onPress={() => void trace.control("clear")}><Ban size={14} /></TraceAction>
+      <TraceAction label={t("workspace.debug.export")} disabled={trace.exporting || trace.busy || !trace.info}
+        onPress={() => void trace.exportRecording()}><Download size={14} /></TraceAction>
       <TraceAction label={t("workspace.debug.refresh")} disabled={trace.busy} onPress={trace.refresh}><RefreshCw size={14} /></TraceAction>
     </div>
     <Select aria-label={t("workspace.debug.type")} value={trace.kind} onChange={key => { if (key !== null) trace.setKind(String(key)); }}>

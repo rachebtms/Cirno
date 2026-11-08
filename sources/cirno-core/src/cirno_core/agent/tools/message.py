@@ -79,6 +79,8 @@ def reset_message_delivery_segment() -> None:
 class MessageTool(Tool):
     """Tool to send messages to users on chat channels."""
 
+    router_only = True
+
     def __init__(
         self,
         send_callback: Callable[[OutboundMessage], Awaitable[None]] | None = None,
@@ -222,7 +224,7 @@ class MessageTool(Tool):
         # to the wrong chat entirely.
         same_target = channel == default_channel and chat_id == default_chat_id
         if (request_ctx is not None and request_ctx.session_key != ROUTER_SESSION_KEY
-                and self.name != "ask_user"):
+                and self.router_only):
             return ToolResult.error(
                 "message is available only in the Router conversation. "
                 "Write a normal assistant reply in regular conversations. "

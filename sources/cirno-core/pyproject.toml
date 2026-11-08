@@ -1,14 +1,14 @@
 [project]
 name = "cirno-core"
-version = "0.2.0"
+version = "0.2.1"
 description = "Cirno execution engine, tools, providers and memory coordination"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 dependencies = [
-    "cirno-memory==0.2.0",
-    "cirno-usage==0.2.0",
-    "cirno-vault==0.2.0",
+    "cirno-memory==0.2.1",
+    "cirno-usage==0.2.1",
+    "cirno-vault==0.2.1",
     "anthropic>=0.100.0,<1.0.0",
     "pydantic>=2.12.0,<3.0.0",
     "pydantic-settings>=2.12.0,<3.0.0",
@@ -46,7 +46,7 @@ dependencies = [
 
 [project.optional-dependencies]
 memory-embedding = [
-    "cirno-memory[embedding]==0.2.0",
+    "cirno-memory[embedding]==0.2.1",
 ]
 azure = [
     "azure-identity>=1.19.0,<2.0.0",

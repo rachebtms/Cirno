@@ -1,3 +1,4 @@
+import { SetupFlow } from "@/features/entry/SetupFlow";
 import { Button } from "@heroui/react";
 import { releaseAuthorization } from "@/features/settings/providers/oauth/releaseAuthorization";
 import { ModelSetup } from "@/features/entry/ModelSetup";
@@ -87,6 +88,6 @@ export function ProviderModelFixture() {
   return <main style={{ height: "100dvh", display: "flex" }}><ClientProvider client={fixture.client} token="fixture-provider-model">
     <output aria-label="Model saves" className="sr-only">{modelWrites}</output>
     <output aria-label="Model updates" className="sr-only">{JSON.stringify(modelUpdates)}</output>
-    {new URLSearchParams(location.search).has("setup") ? <ModelSetup onComplete={() => setComplete(true)} onModelNameChange={() => {}} /> : <SettingsView initialSettings={fixture.settings} initialSection="models" themePreference={preference} onChangeTheme={setTheme} onBackToChat={() => {}} onModelNameChange={() => {}} />}
+    {new URLSearchParams(location.search).has("setupFlow") ? <SetupFlow onComplete={() => setComplete(true)} onModelNameChange={() => {}} /> : new URLSearchParams(location.search).has("setup") ? <ModelSetup onComplete={() => setComplete(true)} onModelNameChange={() => {}} /> : <SettingsView initialSettings={fixture.settings} initialSection="models" themePreference={preference} onChangeTheme={setTheme} onBackToChat={() => {}} onModelNameChange={() => {}} />}
   </ClientProvider></main>;
 }

@@ -1,6 +1,6 @@
+import { ThemeModePicker } from "@/features/preferences/ThemeModePicker";
 import { ThemeSettings } from "@/features/preferences/ThemeSettings";
-import { useId, type Dispatch, type SetStateAction } from "react";
-import { Check, Monitor, Moon, Sun } from "lucide-react";
+import { type Dispatch, type SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -21,38 +21,11 @@ export function AppearanceSettingsView({ themePreference, onChangeTheme, display
   onChangePreferences: Dispatch<SetStateAction<DisplayPreferences>>;
 }) {
   const { t } = useTranslation();
-  const themeId = useId();
-  const themes = [
-    { value: "system", label: t("settings.appearance.system"), icon: Monitor },
-    { value: "light", label: t("settings.values.light"), icon: Sun },
-    { value: "dark", label: t("settings.values.dark"), icon: Moon },
-  ] as const;
   const editHelp = { summary: "summaryHelp", diff: "diffHelp", collapsed_diff: "collapsedHelp" } as const;
 
   return <div className="settings-stack appearance-page">
     {(section === "all" || section === "appearance") && <ThemeSettings />}
-    {(section === "all" || section === "appearance") && <section>
-      <SettingsSectionTitle>{t("settings.rows.theme")}</SettingsSectionTitle>
-      <fieldset>
-        <legend className="sr-only">{t("settings.rows.theme")}</legend>
-        <div className="appearance-theme-grid">
-          {themes.map(({ value, label, icon: Icon }) => <label key={value} className="appearance-theme-option">
-            <input className="appearance-theme-input" type="radio" name={themeId} value={value}
-              checked={themePreference === value} onChange={() => onChangeTheme(value)} />
-            <span className="appearance-theme-card">
-              <span className="appearance-theme-miniature" data-mode={value} aria-hidden>
-                <span className="appearance-mini-sidebar"><span /><span /><span /></span>
-                <span className="appearance-mini-main"><span /><span /><span /><span /></span>
-              </span>
-              <span className="appearance-theme-label text-ui-label">
-                <span className="flex min-w-0 items-center gap-1.5"><Icon className="h-3.5 w-3.5 shrink-0" aria-hidden /><span>{label}</span></span>
-                <Check className="appearance-theme-check h-3.5 w-3.5 shrink-0" aria-hidden />
-              </span>
-            </span>
-          </label>)}
-        </div>
-      </fieldset>
-    </section>}
+    {(section === "all" || section === "appearance") && <ThemeModePicker preference={themePreference} onChange={onChangeTheme} />}
 
     {(section === "all" || section === "reading") && <section>
       <SettingsSectionTitle>{t("settings.appearance.reading")}</SettingsSectionTitle>

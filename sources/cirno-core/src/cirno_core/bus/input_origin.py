@@ -53,6 +53,8 @@ def input_origin(message: InboundMessage) -> InputOrigin | None:
         origin = {"kind": "continuation", "label": "Automatic continuation"}
     elif message.channel == "system" and message.sender_id == "subagent":
         origin = {"kind": "subagent", "label": "Subagent", "id": str(metadata.get("subagent_task_id") or "")}
+    elif message.sender_id == "system:awakening" and metadata.get("_awakening") is True:
+        origin = {"kind": "system", "label": "First awakening"}
     elif message.channel == "system" or message.input_role == "system":
         origin = {"kind": "system", "label": "System event"}
     else:

@@ -2752,7 +2752,11 @@
       "paused": "一時停止",
       "waiting": "新しいイベントを記録します。過去の会話は取り込みません。",
       "capacity": "保存上限で停止しました。消去して続行してください。",
-      "storage_error": "一時ストレージのエラーで記録を停止しました。"
+      "storage_error": "一時ストレージのエラーで記録を停止しました。",
+      "export": "記録をZIPでダウンロード",
+      "copy": "表示中の詳細をコピー",
+      "copied": "コピーしました",
+      "copyFailed": "コピーできませんでした。テキストを選択して手動でコピーしてください。"
     },
     "moveOtherGroup": "Move to other tab group",
     "emptyGroup": "Open a page from the Launcher or drag a tab here.",
@@ -2985,7 +2989,8 @@
       "dropped": "取り下げ",
       "progress": "進行中",
       "waiting": "待機中",
-      "unavailable": "利用不可"
+      "unavailable": "利用不可",
+      "cancelled": "取り下げ済み"
     },
     "browser": {
       "operations": "対応が必要な操作があります。",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "The Router conversation is unavailable. Try again later."
     },
     "routerHandle": "Router @name",
-    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings.",
+    "themeTitle": "お気に入りのテーマを選ぶ",
+    "back": "戻る",
+    "continue": "続ける"
   },
   "themes": {
     "title": "配色テーマ",

@@ -2752,7 +2752,11 @@
       "paused": "Paused",
       "waiting": "Recording new events. Earlier conversation history is not captured.",
       "capacity": "Recording paused at its storage limit. Clear it to continue.",
-      "storage_error": "Recording stopped because its temporary storage failed."
+      "storage_error": "Recording stopped because its temporary storage failed.",
+      "export": "Download recording ZIP",
+      "copy": "Copy displayed details",
+      "copied": "Copied",
+      "copyFailed": "Copy failed. Select the text and copy it manually."
     },
     "moveOtherGroup": "Move to other tab group",
     "emptyGroup": "Open a page from the Launcher or drag a tab here.",
@@ -2985,7 +2989,8 @@
       "dropped": "Dropped",
       "progress": "In progress",
       "waiting": "Waiting",
-      "unavailable": "Unavailable"
+      "unavailable": "Unavailable",
+      "cancelled": "Withdrawn"
     },
     "browser": {
       "operations": "An action needs your attention.",
@@ -3029,7 +3034,10 @@
       "router_unavailable": "The Router conversation is unavailable. Try again later."
     },
     "routerHandle": "Router @name",
-    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings."
+    "routerHandleHint": "Use 3–32 lowercase letters, digits or underscores, starting with a letter. You can change this later in settings.",
+    "themeTitle": "Make yourself at home",
+    "back": "Back",
+    "continue": "Continue"
   },
   "themes": {
     "title": "Color themes",

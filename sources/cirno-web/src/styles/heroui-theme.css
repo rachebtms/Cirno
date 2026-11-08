@@ -49,3 +49,6 @@
     height: 2rem;
   }
 }
+
+/* Icon-bearing selects share the same spacing as other labelled controls. */
+.select__trigger { column-gap: .5rem; align-items: center; }

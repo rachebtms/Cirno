@@ -1,3 +1,4 @@
+import { headerControlClassName } from "@/components/thread/header-control";
 import "@/features/automations/automations.css";
 import { Button, Modal } from "@heroui/react";
 import { CalendarClock } from "lucide-react";
@@ -215,6 +216,7 @@ export function SessionAutomationsDialog({
     >
       <Button
         variant="ghost"
+        className={headerControlClassName}
         isIconOnly
         size="sm"
         aria-label={t("thread.header.sessionInfo")}

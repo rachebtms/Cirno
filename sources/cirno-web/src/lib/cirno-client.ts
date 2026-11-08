@@ -522,6 +522,21 @@ export class CirnoClient {
     return result;
   }
 
+  async exportTraceRecording(recordingId: string, epoch: string): Promise<Blob> {
+    if (!this.upload || this.socket?.readyState !== WS_OPEN) throw new Error("Reconnect to Cirno before exporting a recording.");
+    const url = new URL("/v0/traces/export", typeof window !== "undefined" ? window.location.href : this.currentUrl);
+    const response = await fetch(url, {
+      method: "POST", headers: { Authorization: `Bearer ${this.upload.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ recording_id: recordingId, epoch }),
+    });
+    if (!response.ok) {
+      const body = response.headers.get("Content-Type")?.includes("application/json")
+        ? (await response.json() as { error?: string }).error : await response.text();
+      throw new Error(body || `Recording export failed (${response.status})`);
+    }
+    return response.blob();
+  }
+
   async sendAttachments(
     chatId: string, content: string, media: OutboundMedia[],
     options?: Parameters<CirnoClient["sendMessage"]>[3],

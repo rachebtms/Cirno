@@ -4,7 +4,7 @@ export function ToggleButton({ checked, disabled, onChange, ariaLabel, label, "a
   checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void;
   ariaLabel?: string; label: string;
 } & Pick<ComponentProps<"button">, "id" | "aria-describedby" | "aria-invalid">) {
-  return <Switch {...accessibility} aria-label={ariaLabel ?? label} isSelected={checked} isDisabled={disabled} onChange={onChange} size="sm"
+  return <Switch data-settings-inline-action {...accessibility} aria-label={ariaLabel ?? label} isSelected={checked} isDisabled={disabled} onChange={onChange} size="sm"
     validationBehavior="aria" isInvalid={Boolean(invalid && invalid !== "false")}>
     <Switch.Content>
       <Switch.Control><Switch.Thumb /></Switch.Control>

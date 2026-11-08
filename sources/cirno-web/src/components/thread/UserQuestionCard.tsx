@@ -14,7 +14,11 @@ export function QuestionReplyProvider({ messages, send, children }: {
   messages: UIMessage[]; send: ReplyContext["send"]; children: ReactNode;
 }) {
   const [accepted, setAccepted] = useState(new Map<string, string>());
-  const questions = useMemo(() => [...new Map(messages.filter(message => message.userQuestion).map(message => [message.userQuestion!.id, message.userQuestion!])).values()], [messages]);
+  const questions = useMemo(() => {
+    const cancelled = new Set(messages.flatMap(message => message.questionCancellation ? [message.questionCancellation.id] : []));
+    return [...new Map(messages.filter(message => message.userQuestion && !cancelled.has(message.userQuestion.id))
+      .map(message => [message.userQuestion!.id, message.userQuestion!])).values()];
+  }, [messages]);
   const historyAnswers = useMemo(() => {
     const result = new Map<string, AnswerState>();
     for (const message of messages) {

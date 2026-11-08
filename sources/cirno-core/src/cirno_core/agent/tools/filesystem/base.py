@@ -79,12 +79,12 @@ class FileTool(Tool):
                 agent_home / "memory",
             ],
             extra_read_allowed_files=[
-                agent_home / name for name in ("SOUL.md", "WORKER.md", "USER.md", "AGENTS.md", "HEARTBEAT.md")
+                agent_home / name for name in ("SOUL.md", "WORKER.md", "USER.md", "AGENTS.md", "HEARTBEAT.md", "BOOTSTRAP.md")
             ],
             extra_write_allowed_dirs=[agent_home / "skills"],
             extra_write_allowed_files=[
                 agent_home / name
-                for name in ("SOUL.md", "WORKER.md", "USER.md", "AGENTS.md", "HEARTBEAT.md", "memory/MEMORY.md")
+                for name in ("SOUL.md", "WORKER.md", "USER.md", "AGENTS.md", "HEARTBEAT.md", "BOOTSTRAP.md", "memory/MEMORY.md")
             ],
             file_states=ctx.file_state_store,
             restrict_to_workspace=ctx.config.restrict_to_workspace,

@@ -10,7 +10,7 @@ export function AccountEntry({ mode, onSuccess }: { mode: "register" | "login"; 
   const state = useAccountEntry(mode, onSuccess);
   return <EntryLayout title={t(state.register ? "setup.registerTitle" : "setup.loginTitle")}
     description={t(state.register ? "setup.registerDescription" : "setup.loginDescription")}
-    step={state.register ? t("setup.step", { current: 1, total: 2 }) : undefined}
+    step={state.register ? t("setup.step", { current: 1, total: 3 }) : undefined}
     footer={state.register ? t("setup.instanceOwner") : undefined}>
     <Form className="entry-fields" validationBehavior="aria" onSubmit={event => { event.preventDefault(); void state.submit(); }}>
       <TextField autoFocus name="username" value={state.username} onChange={state.setUsername} isRequired maxLength={64} isDisabled={state.busy} isInvalid={state.error?.code === "invalid_username"}>

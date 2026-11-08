@@ -26,6 +26,37 @@ class RouterIdentity:
 
     async def initialize(self, handle: str, *, registration: bool = False) -> None:
         await ensure_router_session(self.sessions, handle=handle, initialize=registration)
+        if registration:
+            import asyncio
+            from cirno_core.profiles.awakening import initialize_awakening
+            await asyncio.to_thread(initialize_awakening)
+
+    async def wake(self, language: str) -> bool:
+        """Journal the owner's one-time wake request before scheduling execution."""
+        import asyncio
+        from cirno_core.bus.events import InboundMessage
+        from cirno_core.profiles.awakening import awakening_prompt
+        from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
+
+        if not await asyncio.to_thread(awakening_prompt):
+            return False
+        header = await self.sessions.state.read_header(ROUTER_SESSION_KEY)
+        if header is None:
+            raise RuntimeError("Router conversation has not been initialized")
+        if header.metadata.get("awakening_started"):
+            return False
+        self.bus.admission.check()
+        message = InboundMessage(
+            channel="websocket", sender_id="system:awakening", chat_id=ROUTER_CHAT_ID,
+            input_role="system", require_existing_session=True,
+            session_key_override=ROUTER_SESSION_KEY, session_generation=header.generation,
+            content=f"The owner chose to wake their assistant after setup. Begin the first introduction in language {language}. Follow Home BOOTSTRAP.md; do not invent user preferences.",
+            metadata={PENDING_FOLLOWUP_ID_KEY: "first-awakening", "_awakening": True},
+        )
+        await self.sessions.state.queue_followup(ROUTER_SESSION_KEY, message)
+        await self.sessions.state.update_metadata(ROUTER_SESSION_KEY, {"awakening_started": True})
+        await self.bus.publish_inbound(message)
+        return True
 
     async def read(self) -> dict[str, str]:
         handle = await SessionHandleResolver(self.sessions).ahandle_for_session(ROUTER_SESSION_KEY)
