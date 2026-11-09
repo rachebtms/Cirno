@@ -203,6 +203,7 @@ class AgentRunner:
             max_tokens=spec.runtime.generation.max_tokens,
             active_compact_percent=spec.runtime.active_compact_percent,
             checkpoint_reminder_percent=spec.runtime.checkpoint_reminder_percent,
+            output_reserve_percent=spec.runtime.output_reserve_percent,
         )
         request_state = ModelRequestState(
             config=governance_config,

@@ -108,11 +108,21 @@ Create projects in the Conversations tab. A project has an independent ID, name,
 
 The `@name` beside a conversation is a display alias. Tools accept its stable ID or current alias; saved references use the ID. The Router is the dedicated coordination conversation; ordinary conversations retain execution tools and streamed replies. Both can create delegated conversations, send coordination messages and inspect other conversations through their tools. Only the Router receives `user.message` for visible reply delivery. See [Goals and coordination](goals-and-dream.md).
 
+## Router heartbeat pause
+
+The Router conversation header includes **Pause heartbeat** / **Resume heartbeat**. Pause takes effect without a service restart and persists across restarts and browser sessions. It prevents new scheduled heartbeats and retires queued heartbeat inputs before model execution. A turn already running can finish. Owner messages, worker reports and separate automations keep their normal behavior. The global Heartbeat switch and interval remain in Settings; disabling that switch also disables the header control.
+
+## Command duration
+
+Settings → Shell execution separates the default command duration from **Maximum requested command duration**. Zero in the default means no time limit for commands without an explicit duration. Zero in the maximum removes the ceiling on requested durations, and allows an explicit zero for no time limit. A positive maximum still restricts explicit model requests to 1 through that maximum. These values survive automatic saves and reloads.
+
 ## Nodes
 
-Settings → Nodes manages SSH connections, host fingerprints, direct commands and persistent jobs. Supply host, port, SSH username, remote working directory and either key or password authentication. A key path refers to a file on the server. A blank password while editing preserves the saved password. Credentials are stored in the private `state/instance.sqlite3` database and omitted from connection listings. Saved host keys or the server’s `known_hosts` verify the server; compare scanned fingerprints before saving them.
+Settings → Nodes manages SSH connections, host fingerprints, direct commands and persistent jobs. Supply host, port, SSH username, remote working directory and either key or password authentication. A key path refers to a file on the server. A blank password while editing preserves the saved password. SSH credentials are encrypted in the credential vault and omitted from connection listings; Node enrollment and job tracking use instance state. Saved host keys or the server’s `known_hosts` verify the server; compare scanned fingerprints before saving them.
 
-Execute command runs a command and returns output without creating a job. The `nodes` tool namespace also lists connections, transfers files and starts, inspects or stops persistent jobs. Job output, PID and exit status stay on the remote host; tracking records stay in `state/instance.sqlite3`. No remote Cirno daemon or client is installed. Persistent jobs require a POSIX shell, OpenSSH and `setsid`. An uncertain submission exposes its job ID for inspection before resubmitting.
+SSH connection details and Agent visibility live in **Credentials**. Enrollment in **Nodes** is optional. The shared SSH startup form stores the remote working directory, an optional initialization script path and environment variables such as `CUDA_VISIBLE_DEVICES=2`. Variables are exported, the shell changes directory, and the initialization script is sourced in that same Bash shell before the command. `~/` resolves on the remote host. A failing directory or initialization step stops execution and reports its error. Direct commands, new interactive Terminals and submitted jobs share this setup; inspecting/stopping jobs does not rerun the initialization script. Updating settings does not retroactively change an already-open Terminal.
+
+Execute command runs a command and returns output without creating a job. The `nodes` tool namespace also lists connections, transfers files and starts, inspects or stops persistent jobs. Job output, PID and exit status stay on the remote host; tracking records stay in `state/instance.sqlite3`. No remote Cirno daemon or client is installed. Remote execution requires Bash and OpenSSH; persistent jobs also require `setsid`. An uncertain submission exposes its job ID for inspection before resubmitting.
 
 ## Service lifecycle
 
@@ -132,7 +142,10 @@ AI review keeps Default restrictions and reviews blocked operations independentl
 
 Message action buttons and local timestamps remain visible below each message on desktop and mobile. Copy is directly available; edit is available on idle human messages and branch on completed assistant answers. Completed activity keeps a direct **Worked…** disclosure above the answer, without an action menu. Context changes do not undo previous file edits, commands or external actions; tool history triggers a warning. Editing replaces the original message bubble with a multiline input and Cancel / Save and send controls, retaining its attachments. Enter adds a line; Ctrl/Cmd+Enter sends and Escape cancels. The revised request replaces later conversation context. A failed save keeps the draft and shows the error in place. Switching conversations closes the editor. `/clear` resets only the fixed Router context through its dedicated control.
 
-## Mobile reconnection and refresh
+## Mobile keyboard, reconnection and refresh
+
+The application fits the visual viewport on touch devices when the on-screen keyboard opens. Login and registration forms scroll within the available height; chat composers move above the keyboard while retaining their draft and focus. Touch text fields use at least 16px text to avoid focus-triggered zoom. Manual pinch zoom remains available.
+
 
 Returning to the foreground checks the WebSocket connection and reloads the server's conversation state, including reasoning and tool activity missed while the browser was suspended. A stale connection reconnects through the normal authenticated path. The top-right refresh button reloads the page in desktop browsers and installed mobile Web apps, including iPhone Home Screen apps. Reloading the page does not stop the server's task or send the previous prompt again.
 

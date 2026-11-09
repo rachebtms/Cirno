@@ -351,12 +351,13 @@ async def test_interrupted_node_submission_records_unknown_outcome(setup, monkey
 
     home, _, _ = setup
     nodes = Nodes(InstanceData(home / "state"))
+    saved = nodes.credentials.save(label="Test Node", kind="ssh", ssh={"host": "localhost", "username": "test"}, node_enabled=True)
     execute = AsyncMock(return_value="SSH login banner\n42")
     if failure == "cancelled":
         execute.side_effect = asyncio.CancelledError()
     monkeypatch.setattr(nodes, "execute", execute)
     with pytest.raises(asyncio.CancelledError if failure == "cancelled" else RuntimeError):
-        await nodes.start_job("test-node", "run-task")
+        await nodes.start_job(saved["id"], "run-task")
     jobs = nodes.data.list("node_jobs")
     assert len(jobs) == 1
     assert jobs[0]["state"] == "submission_unknown"
@@ -425,3 +426,52 @@ async def test_goal_continuation_enables_webui_execution_stream(setup):
     assert delivery.route.metadata["webui"] is True
     assert delivery.route.metadata["_wants_stream"] is True
     assert delivery.route.turn_id
+
+async def test_router_heartbeat_pause_survives_restart_and_discards_only_heartbeat(setup):
+    from cirno_core.runtime.heartbeat import discard_paused_heartbeat, heartbeat_paused
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+    from cirno_core.bus.events import InboundMessage
+
+    home, sessions, bus = setup
+    assert await enqueue_heartbeat(sessions, bus, "Check active work")
+    queued = await bus.consume_inbound()
+    result = await instance_action({"action": "router.heartbeat.update", "values": {"paused": True}}, sessions=sessions, bus=bus)
+    assert result["paused"] is True
+    assert await heartbeat_paused(sessions)
+    assert not await enqueue_heartbeat(sessions, bus, "Must not wake")
+    assert await discard_paused_heartbeat(sessions, queued)
+    assert not pending_followups(await sessions.state.read(ROUTER_SESSION_KEY))
+    assert not await discard_paused_heartbeat(sessions, InboundMessage(channel="websocket", sender_id="owner", chat_id="work", content="Hello"))
+    await sessions.state.aclose()
+    restarted = SessionManager(home / "workspace", sessions_root=home / "sessions")
+    try:
+        assert await heartbeat_paused(restarted)
+        assert not await enqueue_heartbeat(restarted, bus, "Still paused after restart")
+        await instance_action({"action": "router.heartbeat.update", "values": {"paused": False}}, sessions=restarted, bus=bus)
+        assert await enqueue_heartbeat(restarted, bus, "Check active work")
+    finally:
+        await restarted.state.aclose()
+
+
+async def test_router_heartbeat_pause_requires_boolean(setup):
+    _, sessions, bus = setup
+    with pytest.raises(ValueError, match="paused must be a boolean"):
+        await instance_action({"action": "router.heartbeat.update", "values": {"paused": "false"}}, sessions=sessions, bus=bus)
+
+
+async def test_paused_scheduler_does_not_enqueue_even_with_active_periodic_tasks(setup):
+    from types import SimpleNamespace
+    from cirno_core.cron.service import CronService
+    from cirno_server.scheduling.agent_jobs import ScheduledAgentJobs
+    from cirno_core.config.home import get_home_path
+
+    home, sessions, bus = setup
+    get_home_path().mkdir(parents=True, exist_ok=True)
+    (get_home_path() / "HEARTBEAT.md").write_text("## Active tasks\nCheck ongoing research\n")
+    await instance_action({"action": "router.heartbeat.update", "values": {"paused": True}}, sessions=sessions, bus=bus)
+    jobs = ScheduledAgentJobs(SimpleNamespace(sessions=sessions, bus=bus), CronService(home / "cron.json"), prepare=AsyncMock(), report=lambda _: None)
+    await jobs.heartbeat()
+    assert bus.inbound_size == 0
+    await instance_action({"action": "router.heartbeat.update", "values": {"paused": False}}, sessions=sessions, bus=bus)
+    await jobs.heartbeat()
+    assert bus.inbound_size == 1

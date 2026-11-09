@@ -13,6 +13,7 @@ export type SettingsApplyStatus = "idle" | "pending";
 export type RuntimeConfigValue = string | number | boolean | string[] | null;
 
 export interface SettingsPayload {
+  model_capability_testing_supported?: boolean;
   runtime_config?: Record<string, RuntimeConfigValue>;
   apply_state?: {
     status: SettingsApplyStatus;
@@ -31,6 +32,8 @@ export interface SettingsPayload {
     temperature: number;
     reasoning_effort: string | null;
     reasoning_history?: "auto" | "preserve" | "omit";
+    image_input?: boolean | null;
+    video_input?: boolean | null;
     api?: ModelAPIConfig | null;
     timezone: string;
     tool_status_summary_max_chars: number;
@@ -50,6 +53,8 @@ export interface SettingsPayload {
     temperature: number;
     reasoning_effort: string | null;
     reasoning_history?: "auto" | "preserve" | "omit";
+    image_input?: boolean | null;
+    video_input?: boolean | null;
     reasoning_effort_values?: string[];
     api?: ModelAPIConfig | null;
     extra_headers?: Record<string, string> | null;

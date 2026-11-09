@@ -1,6 +1,7 @@
 {
   "names": {
     "read_file": "files.read",
+    "view_image": "files.view_image",
     "write_file": "files.write",
     "edit_file": "files.edit",
     "list_dir": "files.list",

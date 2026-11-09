@@ -1,3 +1,4 @@
+import { sshSessionDraft, sshSessionValues, type SSHSessionValues } from "@/components/ssh/session";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CirnoClient } from "@/lib/cirno-client";
 import type { CredentialInfo } from "@/features/credentials/model/contracts";
@@ -11,6 +12,7 @@ export function useNodes(client: CirnoClient) {
   const [command, setCommand] = useState(""), [output, setOutput] = useState<string | null>(null);
   const [notice, setNotice] = useState(""), [error, setError] = useState(""), [listError, setListError] = useState("");
   const [operation, setOperation] = useState<string | null>(null), [loading, setLoading] = useState(true);
+  const [credentialReady, setCredentialReady] = useState(false);
   const generation = useRef(0), listing = useRef(0), locked = useRef(false);
   const request = useCallback(<T,>(action: string, values: object = {}) => client.requestMutation<T>(
     "instance.action", { action, values }, action === "nodes.execute" ? 130_000 : 30_000), [client]);
@@ -43,9 +45,23 @@ export function useNodes(client: CirnoClient) {
     } catch (reason) { if (ticket === generation.current) setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { locked.current = false; setOperation(null); }
   }
-  const edit = (node?: NodeRecord) => { setDraft(nodeDraft(node)); setError(""); setNotice(""); };
+  const edit = (node?: NodeRecord) => { setCredentialReady(!!node); setDraft(nodeDraft(node)); setError(""); setNotice(""); };
   const startCommand = (node: NodeRecord) => { setTarget(node); setCommand(""); setOutput(null); setError(""); setNotice(""); };
-  const save = () => perform("nodes.save", { ...draft! }, () => setDraft(null), true);
+  const save = () => {
+    if (!credentialReady) return;
+    try { return perform("nodes.save", { ...draft!, ...sshSessionValues(draft!) }, () => setDraft(null), true); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  };
+  const selectCredential = async (id: string) => {
+    const ticket = generation.current;
+    setCredentialReady(false);
+    setDraft(old => old && ({ ...old, credential_id: id })); setOperation("credentials.describe"); setError("");
+    try {
+      const body = await client.requestMutation<{ ssh: SSHSessionValues }>("workbench.action", { action: "credentials.describe", values: { id } });
+      if (ticket === generation.current) { setDraft(old => old?.credential_id === id ? { ...old, ...sshSessionDraft(body.ssh) } : old); setCredentialReady(true); }
+    } catch (reason) { if (ticket === generation.current) setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (ticket === generation.current) setOperation(null); }
+  };
   const test = (node: NodeRecord) => perform<{ output: string }>("nodes.test", { id: node.id }, body => setNotice(body.output));
   const execute = () => {
     setOutput(null);
@@ -58,6 +74,6 @@ export function useNodes(client: CirnoClient) {
   const readJob = (job: NodeJob) => perform("nodes.job", { id: job.id }, () => {}, true);
   const stopJob = (job: NodeJob) => perform("nodes.stop", { id: job.id }, () => {}, true);
   return { nodes, credentials, jobs, loading, listError, error, notice, operation, busy: operation !== null,
-    draft, setDraft, target, setTarget, command, setCommand, output, refresh, edit, startCommand, save, test, execute, remove, readJob, stopJob };
+    draft, setDraft, credentialReady, target, setTarget, command, setCommand, output, refresh, edit, startCommand, selectCredential, save, test, execute, remove, readJob, stopJob };
 }
 export type NodesController = ReturnType<typeof useNodes>;

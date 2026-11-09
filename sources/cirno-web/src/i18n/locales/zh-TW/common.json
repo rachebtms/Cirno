@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "可要求的最長命令時限（秒）",
-          "help": "模型可為單一命令要求的最長時限。預設命令時限另行設定；預設值 0 表示不限時間。"
+          "help": "模型可要求的單次命令最長時限。0 表示取消此上限；預設命令時限另行設定。"
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "壓縮輸出預算（Token）",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "每則訊息檔案總大小（MiB）",
           "help": "每則訊息上傳的圖片和文件總大小，不含影片；本機檔案參照不計入。重新啟動服務並重新整理網頁後生效。"
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "輸出預留空間（%）",
+          "help": "為下一次回覆預留的上下文比例，最多預留至模型輸出上限，預設 5%。每次請求的輸出上限隨剩餘空間調整，不會按最大輸出設定提前壓縮。"
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "保留",
         "omit": "不回傳"
       },
-      "catalogErrorDetails": "錯誤詳情"
+      "catalogErrorDetails": "錯誤詳情",
+      "capabilities": {
+        "title": "視覺輸入能力",
+        "help": "新增模型時會自動使用小圖片和短影片樣本測試，會呼叫 API。也可手動選擇。未確認不等於不支援；原生影片取決於所選 API。",
+        "image": "圖片",
+        "video": "影片（原生輸入）",
+        "auto": "自動 / 未確認",
+        "true": "支援",
+        "false": "不支援",
+        "test": "測試能力"
+      }
     },
     "timezone": {
       "select": "選擇時區",
@@ -2279,6 +2293,11 @@
       "text": "修改後的訊息",
       "description": "替換此訊息及其後的對話上下文，然後執行修改後的請求。原有附件會保留。",
       "submit": "儲存並傳送"
+    },
+    "heartbeat": {
+      "pause": "暫停心跳",
+      "resume": "恢復心跳",
+      "disabled": "心跳已在設定中停用"
     }
   },
   "message": {
@@ -2850,7 +2869,14 @@
     "deleteProject": "刪除專案",
     "projectName": "專案名稱",
     "fingerprintNotice": "請向伺服器管理员核对指紋，確認後儲存：",
-    "removeNode": "從 Nodes 移除"
+    "removeNode": "從 Nodes 移除",
+    "nodeInitScript": "環境初始化指令碼",
+    "nodeInitScriptHint": "遠端指令碼路徑；切換目錄、設定環境變數後在 Bash 中載入，適用於命令、新終端和背景工作。",
+    "nodeEnvironment": "環境變數",
+    "addVariable": "新增變數",
+    "variableName": "變數名稱",
+    "variableValue": "值",
+    "removeVariable": "移除變數"
   },
   "memoryLibrary": {
     "search": "搜尋記憶",

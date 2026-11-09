@@ -2,6 +2,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from cirno_core.credentials.ssh_session import SSHSessionSettings
 
 
 class SSHConnection(BaseModel):
@@ -15,9 +16,8 @@ class SSHConnection(BaseModel):
     host_key: str = ""
 
 
-class SSHCredential(SSHConnection):
+class SSHCredential(SSHConnection, SSHSessionSettings):
     node_enabled: bool = False
-    working_directory: str = Field(default=".", min_length=1)
 
     @model_validator(mode="after")
     def authentication(self):

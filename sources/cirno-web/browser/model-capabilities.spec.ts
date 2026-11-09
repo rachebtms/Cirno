@@ -1,0 +1,22 @@
+import { expect, test } from "@playwright/test";
+for (const width of [390, 1440]) test(`model capabilities allow testing and manual override at ${width}px`, async ({ page }, info) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/browser/fixture.html?case=provider-model-rebuild&lang=en&theme=dark&mediaCapabilities");
+  await page.getByRole("button", { name: "New preset", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New preset", exact: true });
+  await dialog.getByRole("textbox", { name: /^Preset name/ }).fill("Vision checked");
+  await dialog.getByRole("combobox", { name: "Model", exact: true }).fill("analysis-model");
+  await page.getByRole("option", { name: "analysis-model", exact: true }).click();
+  await dialog.getByRole("button", { name: "Test capabilities", exact: true }).click();
+  await expect(dialog.getByText("Visual sample recognized", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Images/ })).toContainText("Supported");
+  await expect(dialog.getByRole("button", { name: /Video \(native input\)/ })).toContainText("unverified");
+  await dialog.getByRole("button", { name: /Video \(native input\)/ }).click();
+  await page.getByRole("option", { name: "Unsupported", exact: true }).click();
+  await page.screenshot({ path: info.outputPath("model-capabilities.png"), animations: "disabled" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: /Video \(native input\)/ })).toContainText("Unsupported");
+  expect(errors).toEqual([]);
+});

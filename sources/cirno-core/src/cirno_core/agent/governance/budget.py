@@ -9,7 +9,7 @@ from cirno_core.agent.governance.contracts import (
     ContextWindowExceededError,
 )
 from cirno_core.agent.tools.naming import implementation_name
-from cirno_core.providers.base import CONTEXT_SAFETY_BUFFER
+from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.utils.token_estimation import estimate_prompt_tokens_chain
 from cirno_usage.types import LLMUsage
 
@@ -24,10 +24,7 @@ def request_extends_measured(
     )
 
 
-def input_budget(config: ContextGovernanceConfig) -> int:
-    if not config.context_window_tokens:
-        return 0
-
+def context_budget(config: ContextGovernanceConfig) -> ContextBudget:
     provider_max_tokens = getattr(
         getattr(config.provider, "generation", None),
         "max_tokens",
@@ -38,11 +35,14 @@ def input_budget(config: ContextGovernanceConfig) -> int:
         if isinstance(config.max_tokens, int)
         else (provider_max_tokens if isinstance(provider_max_tokens, int) else 4096)
     )
-    budget = min(
-        config.context_window_tokens - max_output - CONTEXT_SAFETY_BUFFER,
-        int(config.context_window_tokens * config.active_compact_percent / 100),
+    return ContextBudget(
+        config.context_window_tokens, max_output,
+        config.output_reserve_percent, config.active_compact_percent,
     )
-    return budget if budget > 0 else 0
+
+
+def input_budget(config: ContextGovernanceConfig) -> int:
+    return context_budget(config).input_limit
 
 
 def ensure_request_fits(
@@ -71,7 +71,7 @@ def ensure_request_fits(
     )
 
 
-def request_pressure(
+def request_measurement(
     config: ContextGovernanceConfig,
     messages: list[dict[str, Any]],
     usage: LLMUsage | None,
@@ -80,12 +80,8 @@ def request_pressure(
     usage_prefixes_messages: bool,
     tool_definitions: list[dict[str, Any]] | None,
     request_context_tokens: int | None = None,
-    minimum_percent: int = 100,
-) -> tuple[int, str] | None:
-    """Return the authoritative measurement when a request is pressured."""
-    if not config.context_window_tokens:
-        return None
-    budget = input_budget(config)
+) -> tuple[int, str]:
+    """Measure the complete input, including resumed state and unsent deltas."""
     if request_context_tokens is not None:
         measured = request_context_tokens
         source = "resumed provider state plus pending messages"
@@ -108,9 +104,29 @@ def request_pressure(
         ):
             measured = usage.context_tokens
             source = "prior provider usage plus pending messages"
-    if budget > 0 and measured < budget * minimum_percent / 100:
-        return None
     return measured, source
+
+
+def request_pressure(
+    config: ContextGovernanceConfig,
+    messages: list[dict[str, Any]],
+    usage: LLMUsage | None,
+    *,
+    usage_matches_messages: bool,
+    usage_prefixes_messages: bool,
+    tool_definitions: list[dict[str, Any]] | None,
+    request_context_tokens: int | None = None,
+    minimum_percent: int = 100,
+) -> tuple[int, str] | None:
+    if not config.context_window_tokens:
+        return None
+    measured = request_measurement(
+        config, messages, usage, usage_matches_messages=usage_matches_messages,
+        usage_prefixes_messages=usage_prefixes_messages, tool_definitions=tool_definitions,
+        request_context_tokens=request_context_tokens,
+    )
+    limit = input_budget(config)
+    return measured if limit <= 0 or measured[0] >= limit * minimum_percent / 100 else None
 
 
 def fit_pending_file_reads(

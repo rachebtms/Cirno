@@ -1,3 +1,4 @@
+import { SSHSessionFields } from "@/components/ssh/SSHSessionFields";
 import { Button, Description, FieldError, Input, Label, ListBox, Select, Switch, TextArea, TextField } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { CredentialDraft, CredentialPatch, SSHFields } from "../model/contracts";
@@ -36,8 +37,6 @@ export function SSHCredentialFields({ draft, disabled, update, scan, fingerprint
     <Switch isSelected={draft.nodeEnabled} isDisabled={disabled} onChange={nodeEnabled => update({ nodeEnabled })}>
       <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control><Label>{t("workspace.sshNodeAccess")}</Label></Switch.Content><Description>{t("workspace.sshNodeAccessHint")}</Description>
     </Switch>
-    {draft.nodeEnabled && <TextField isRequired isDisabled={disabled} value={draft.workingDirectory} onChange={workingDirectory => update({ workingDirectory })}>
-      <Label>{t("features.remoteDirectory")}</Label><Input autoComplete="off" /><div className="credential-validation"><FieldError /></div>
-    </TextField>}
+    {draft.nodeEnabled && <SSHSessionFields value={draft.session} onChange={session => update({ session })} disabled={disabled} />}
   </>;
 }

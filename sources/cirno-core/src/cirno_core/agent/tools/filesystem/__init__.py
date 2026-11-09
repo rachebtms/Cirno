@@ -5,4 +5,6 @@ from cirno_core.agent.tools.filesystem.listing import ListDirTool
 from cirno_core.agent.tools.filesystem.read import ReadFileTool
 from cirno_core.agent.tools.filesystem.write import WriteFileTool
 
-__all__ = ["EditFileTool", "ListDirTool", "ReadFileTool", "WriteFileTool"]
+__all__ = ["EditFileTool", "ListDirTool", "ReadFileTool", "WriteFileTool", "ViewImageTool"]
+
+from cirno_core.agent.tools.filesystem.view_image import ViewImageTool

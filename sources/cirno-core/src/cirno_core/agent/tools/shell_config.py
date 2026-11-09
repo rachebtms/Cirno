@@ -14,7 +14,7 @@ class ExecToolConfig(Base):
         default=3600, ge=0,
         validation_alias=AliasChoices("maxRuntime", "max_runtime"),
     )
-    max_runtime_limit: int = Field(default=86400, gt=0)
+    max_runtime_limit: int = Field(default=86400, ge=0)
     idle_timeout: int = Field(default=300, ge=0)
     idle_action: Literal["report", "terminate"] = "report"
     path_prepend: str = ""

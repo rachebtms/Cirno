@@ -16,7 +16,8 @@ from uuid import uuid4
 import httpx
 from cirno_core import __version__
 from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent
-from cirno_core.providers.base import CONTEXT_SAFETY_BUFFER, LLMProvider
+from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.providers.catalog.contracts import ProviderModelSpec
 from cirno_core.providers.contracts import (
     LLMResponse,
@@ -192,7 +193,8 @@ class OpenAICodexProvider(LLMProvider):
             if provider_context is not None and provider_context.context_window_tokens is not None:
                 input_budget = min(
                     input_budget,
-                    provider_context.context_window_tokens - max_tokens - CONTEXT_SAFETY_BUFFER,
+                    ContextBudget(provider_context.context_window_tokens, max_tokens,
+                                  provider_context.output_reserve_percent).input_limit,
                 )
         try:
             token = await asyncio.to_thread(get_codex_token, proxy=self.proxy, storage=token_storage("openai_codex", OPENAI_CODEX_PROVIDER.token_filename))
@@ -247,7 +249,10 @@ class OpenAICodexProvider(LLMProvider):
                     context_window_tokens=(
                         provider_context.context_window_tokens if provider_context else None
                     ),
-                    max_output_tokens=max_tokens, input_budget=input_budget,
+                    max_output_tokens=ContextBudget(
+                        provider_context.context_window_tokens if provider_context else None,
+                        max_tokens, provider_context.output_reserve_percent if provider_context else 5,
+                    ).reserve_tokens, input_budget=input_budget,
                     send=send_compaction,
                 )
 

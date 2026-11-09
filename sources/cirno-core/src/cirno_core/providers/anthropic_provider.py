@@ -656,10 +656,12 @@ class AnthropicProvider(LLMProvider):
             kwargs["thinking"] = {"type": "adaptive"}
             kwargs["output_config"] = {"effort": reasoning_effort_lower}
         elif thinking_enabled:
+            if max_tokens <= 1024:
+                raise ValueError("Extended thinking requires more than 1024 output tokens")
             budget_map = {"low": 1024, "medium": 4096, "high": max(8192, max_tokens)}
-            budget = budget_map.get(reasoning_effort_lower, 4096)
+            answer_reserve = min(4096, max_tokens // 2, max_tokens - 1024)
+            budget = min(budget_map.get(reasoning_effort_lower, 4096), max_tokens - answer_reserve)
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
-            kwargs["max_tokens"] = max(max_tokens, budget + 4096)
             if not omit_temperature:
                 kwargs["temperature"] = 1.0
         elif not omit_temperature:

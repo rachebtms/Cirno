@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -17,7 +18,8 @@ from cirno_core.memory.working_state import (
     summary_has_handoff,
     working_notes,
 )
-from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
+from cirno_core.providers.contracts import LLMResponse, ProviderCallContext, ProviderConversationState
+from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.providers.reasoning_history import history_policy
 from cirno_core.session.model import Session
@@ -234,13 +236,25 @@ class MemoryArchiver:
         response: LLMResponse | None = None
         for attempt in range(2):
             try:
+                measured = state_controller.estimate_request_context_tokens(state_messages, tool_definitions=call_tools) if state_controller is not None else None
+                if measured is None:
+                    measured, _ = await asyncio.to_thread(
+                        estimate_prompt_tokens_chain, runtime.provider, runtime.model,
+                        [*history, *request_messages] if state_controller is not None else request_messages,
+                        call_tools,
+                    )
+                max_output = ContextBudget(runtime.context_window_tokens, runtime.generation.max_tokens).output_limit(measured)
+                provider_context = replace(
+                    provider_context or ProviderCallContext(),
+                    context_window_tokens=runtime.context_window_tokens, input_tokens=measured,
+                )
                 with llm_usage_source("dream"):
                     response = await runtime.provider.chat_stream_with_retry(
                         model=runtime.model,
                         messages=request_messages,
                         tools=call_tools,
                         temperature=runtime.generation.temperature,
-                        max_tokens=runtime.generation.max_tokens,
+                        max_tokens=max_output,
                         reasoning_effort=runtime.generation.reasoning_effort,
                         provider_context=provider_context,
                     )

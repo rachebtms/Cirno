@@ -129,6 +129,8 @@ class ProviderCallContext:
     response_is_fallback: bool = False
     # A pre-request compactor must fit this budget before sending the pending input.
     compaction_input_budget: int | None = None
+    input_tokens: int | None = None
+    output_reserve_percent: int = 5
 
 
 @dataclass

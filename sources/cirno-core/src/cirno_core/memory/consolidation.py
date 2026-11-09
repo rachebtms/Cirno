@@ -20,6 +20,7 @@ from cirno_core.memory.working_state import (
     EvidenceCheckpoint,
 )
 from cirno_core.providers.contracts import ProviderConversationState
+from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.session.model import Session
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.summary import is_summary_checkpoint, session_summary_from_metadata
@@ -80,8 +81,8 @@ class Consolidator:
         if not source_messages:
             return None
 
-        max_output_tokens = max(0, runtime.generation.max_tokens)
-        input_token_budget = runtime.context_window_tokens - max_output_tokens
+        max_output_tokens = min(runtime.generation.max_tokens, runtime.compaction_max_tokens)
+        input_token_budget = self._input_token_budget(runtime)
         checkpoint_tokens = min(
             max_output_tokens,
             max(1, (input_token_budget - self._SAFETY_BUFFER) // 2),
@@ -170,7 +171,10 @@ class Consolidator:
 
     def _input_token_budget(self, runtime: LLMRuntime) -> int:
         """Available input token budget for consolidation LLM."""
-        return runtime.context_window_tokens - runtime.generation.max_tokens - self._SAFETY_BUFFER
+        return ContextBudget(
+            runtime.context_window_tokens, runtime.generation.max_tokens,
+            runtime.output_reserve_percent, runtime.active_compact_percent,
+        ).input_limit
 
     async def archive_session(
         self,

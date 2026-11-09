@@ -24,6 +24,8 @@ export function modelPresetUpdate(
     temperature: form.temperature,
     reasoningEffort: form.reasoningEffort || null,
     reasoningHistory: form.reasoningHistory ?? "auto",
+    imageInput: form.imageInput ?? null,
+    videoInput: form.videoInput ?? null,
     api: form.api,
     ...(requestOverrides
       ? {
@@ -44,6 +46,8 @@ export function modelPresetUpdate(
     temperature: preset.temperature,
     reasoningEffort: preset.reasoning_effort ?? null,
     reasoningHistory: preset.reasoning_history ?? "auto",
+    imageInput: preset.image_input ?? null,
+    videoInput: preset.video_input ?? null,
     api: preset.api,
     extraHeaders: providerJsonValue(preset.extra_headers),
     extraQuery: providerJsonValue(preset.extra_query),

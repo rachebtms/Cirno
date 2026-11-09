@@ -61,8 +61,10 @@ class ScheduledAgentJobs:
 
     async def heartbeat(self) -> None:
         from cirno_core.config.home import get_home_path
-        from cirno_core.runtime.heartbeat import enqueue_heartbeat
+        from cirno_core.runtime.heartbeat import enqueue_heartbeat, heartbeat_paused
 
+        if await heartbeat_paused(self.agent.sessions):
+            return
         heartbeat_file = get_home_path() / "HEARTBEAT.md"
         try:
             content = await asyncio.to_thread(heartbeat_file.read_text, encoding="utf-8")

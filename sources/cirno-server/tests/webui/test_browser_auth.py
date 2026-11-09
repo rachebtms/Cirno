@@ -371,6 +371,17 @@ async def test_first_awakening_executes_and_delivers_to_its_router_not_cli(tmp_p
         assert visible[0].content == "Hello! What should I call you?"
         assert not await loop.sessions.state.read_header("cli:" + ROUTER_CHAT_ID)
         assert incoming.session_key == ROUTER_SESSION_KEY
+        from cirno_core.session.recovery.pending import pending_followups
+        from cirno_core.session.manager import SessionManager
+        saved = await loop.sessions.state.read(ROUTER_SESSION_KEY)
+        assert not pending_followups(saved), "A delivered awakening must not replay after restart"
+        assert not any(row.get("role") == "user" and "The owner chose to wake" in str(row.get("content")) for row in saved.messages)
+        reopened = SessionManager(tmp_path / "workspace", sessions_root=loop.sessions.location.sessions_dir.parent)
+        try:
+            assert not await RouterIdentity(reopened, bus).wake("en")
+            assert not pending_followups(await reopened.state.read(ROUTER_SESSION_KEY))
+        finally:
+            await reopened.state.aclose()
     finally:
         await loop.aclose()
         set_instance_path(None)

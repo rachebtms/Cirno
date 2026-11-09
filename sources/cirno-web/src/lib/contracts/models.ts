@@ -98,6 +98,8 @@ export interface ModelConfigurationCreate {
   temperature?: number;
   reasoningEffort?: string | null;
   reasoningHistory?: "auto" | "preserve" | "omit";
+  imageInput?: boolean | null;
+  videoInput?: boolean | null;
   api?: ModelAPIConfig | null;
   extraHeaders?: string;
   extraQuery?: string;
@@ -116,6 +118,8 @@ export interface ModelConfigurationUpdate {
   temperature?: number;
   reasoningEffort?: string | null;
   reasoningHistory?: "auto" | "preserve" | "omit";
+  imageInput?: boolean | null;
+  videoInput?: boolean | null;
   api?: ModelAPIConfig | null;
   extraHeaders?: string;
   extraQuery?: string;

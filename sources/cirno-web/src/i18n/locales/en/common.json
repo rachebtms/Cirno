@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "Maximum requested command duration (seconds)",
-          "help": "Largest time limit the model may request for one command. The default command duration is configured separately; 0 there means no time limit."
+          "help": "Largest duration the model may request for one command. 0 removes this ceiling. The default command duration remains separate."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "Checkpoint output budget (tokens)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "Files per message (MiB)",
           "help": "Combined uploaded image and document size per message, excluding video. Local file references are excluded. Restart and refresh the browser to apply."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "Minimum output space (%)",
+          "help": "Reserve this share of the context window for the next response, capped by its configured output limit. Default 5%. The actual output limit shrinks with the remaining space; the maximum output setting does not reserve its full value."
         }
       },
       "groups": {
@@ -735,7 +739,17 @@
         "preserve": "Preserve",
         "omit": "Omit"
       },
-      "catalogErrorDetails": "Error details"
+      "catalogErrorDetails": "Error details",
+      "capabilities": {
+        "title": "Visual inputs",
+        "help": "New models are tested automatically using small image and video samples. This makes API calls. You can also choose capabilities manually. Unknown means unverified; native video depends on the selected API.",
+        "image": "Images",
+        "video": "Video (native input)",
+        "auto": "Automatic / unverified",
+        "true": "Supported",
+        "false": "Unsupported",
+        "test": "Test capabilities"
+      }
     },
     "notifications": {
       "scope": "Delivery and sound",
@@ -2279,6 +2293,11 @@
       "text": "Edited message",
       "description": "Replace this message and the later conversation context, then run the revised request. Existing attachments are retained.",
       "submit": "Save and send"
+    },
+    "heartbeat": {
+      "pause": "Pause heartbeat",
+      "resume": "Resume heartbeat",
+      "disabled": "Heartbeat is disabled in Settings"
     }
   },
   "message": {
@@ -2850,7 +2869,14 @@
     "runCommand": "Run",
     "close": "Close",
     "commandCompleted": "Command completed.",
-    "removeNode": "Remove from Nodes"
+    "removeNode": "Remove from Nodes",
+    "nodeInitScript": "Initialization script",
+    "nodeInitScriptHint": "Remote script path, loaded in Bash after changing directory and exporting the configured variables. Applies to commands, new terminals and background jobs.",
+    "nodeEnvironment": "Environment variables",
+    "addVariable": "Add variable",
+    "variableName": "Name",
+    "variableValue": "Value",
+    "removeVariable": "Remove variable"
   },
   "memoryLibrary": {
     "search": "Search memories",

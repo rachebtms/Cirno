@@ -1,3 +1,4 @@
+import { probeModelCapabilities } from "../probeModelCapabilities";
 import { createModelConfiguration, updateModelCallOrder } from "@/lib/api";
 import { agentDraftFromPayload, selectedModelId } from "../modelDraft";
 import { normalizeContextWindowTokens } from "../modelValues";
@@ -52,7 +53,10 @@ export function usePresetCreation(
     setModelPresetNameError(null);
     setModelConfigurationSaving(true);
     try {
+      const capabilities = settings.model_capability_testing_supported ? await probeModelCapabilities(client, form) : {};
       const payload = await createModelConfiguration(client, {
+        imageInput: form.imageInput ?? capabilities.image?.supported ?? null,
+        videoInput: form.videoInput ?? capabilities.video?.supported ?? null,
         name,
         provider,
         model,
@@ -122,6 +126,8 @@ export function usePresetCreation(
       provider,
       model: "",
       api: null,
+      imageInput: null,
+      videoInput: null,
       extraHeaders: "",
       extraQuery: "",
       extraBody: "",

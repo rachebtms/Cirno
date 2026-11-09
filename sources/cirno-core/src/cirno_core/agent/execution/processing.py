@@ -68,6 +68,9 @@ class TurnProcessor:
         session: Session | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
+        from cirno_core.runtime.heartbeat import discard_paused_heartbeat
+        if await discard_paused_heartbeat(self.agent.sessions, msg):
+            return None
         kind = TurnKind.USER if msg.is_user_input else TurnKind.SYSTEM
         if kind is TurnKind.SYSTEM:
             destination = msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)

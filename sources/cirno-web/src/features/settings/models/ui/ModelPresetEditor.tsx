@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ModelCapabilityFields } from "./ModelCapabilityFields";
 import { Accordion, Alert, Button, Description, Form, Modal } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { ModelsSettingsProps } from "../model/contracts";
@@ -16,7 +18,8 @@ export function ModelPresetEditor({
 }) {
   const { t } = useTranslation();
   const { form, setForm, creating, editCompletion: edits } = options;
-  const busy = options.saving || options.creatingSaving;
+  const [probing, setProbing] = useState(false);
+  const busy = options.saving || options.creatingSaving || probing;
   async function close() {
     if (busy) return;
     if (!creating && edits.needsCompletion() && !(await edits.commit())) return;
@@ -62,6 +65,7 @@ export function ModelPresetEditor({
             >
               <Modal.Body>
                 <PresetConnectionFields model={model} options={options} />
+                {options.settings.model_capability_testing_supported && <ModelCapabilityFields key={`${options.editingPresetId}:${form.provider}:${form.model}`} presetId={creating ? undefined : options.editingPresetId} form={form} setForm={setForm} disabled={busy} onBusyChange={setProbing} />}
                 <Accordion
                   expandedKeys={model.advancedOpen ? ["advanced"] : []}
                   onExpandedChange={(keys) => {

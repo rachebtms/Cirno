@@ -1,3 +1,4 @@
+import { sshSessionDraft, sshSessionValues } from "@/components/ssh/session";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CirnoClient } from "@/lib/cirno-client";
 import { emptySSH, type CredentialDraft, type CredentialInfo, type CredentialPatch, type SSHResponse } from "./contracts";
@@ -38,7 +39,7 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
   const begin = (record?: CredentialInfo) => {
     epoch.current++; setError(""); setDeleting(null); setFingerprints(""); setDescribing(false);
     setDraft({ id: record?.id, label: record?.label ?? "", kind: record?.kind ?? "text", username: "", value: "", modified: false, agentVisible: record?.agent_visible ?? false,
-      ssh: emptySSH(), sshLoaded: !record || record.kind !== "ssh", nodeEnabled: record?.node_enabled ?? false, workingDirectory: "." });
+      ssh: emptySSH(), sshLoaded: !record || record.kind !== "ssh", nodeEnabled: record?.node_enabled ?? false, session: sshSessionDraft() });
     if (record?.kind === "ssh") void loadSSH(record.id);
   };
   const update = (patch: CredentialPatch) =>
@@ -56,9 +57,9 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
     setDescribing(true); setError("");
     try {
       const body = await request<{ ssh: SSHResponse }>("describe", { id });
-      const { node_enabled, working_directory, ...connection } = body.ssh;
+      const { node_enabled, working_directory, init_script, environment, ...connection } = body.ssh;
       if (epoch.current === revision) setDraft(old => old && ({ ...old, ssh: { ...connection, password: "", port: String(connection.port) },
-        sshLoaded: true, nodeEnabled: node_enabled, workingDirectory: working_directory }));
+        sshLoaded: true, nodeEnabled: node_enabled, session: sshSessionDraft({ working_directory, init_script, environment }) }));
     } catch (reason) { if (epoch.current === revision) fail(reason); }
     finally { if (epoch.current === revision) setDescribing(false); }
   }
@@ -79,8 +80,8 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
     const { id, label, kind, value, username } = draft!;
     if (kind === "ssh") {
       const { host, port, username, auth_method, password, identity_file, host_key } = draft!.ssh;
-      await request("save", { id, label, kind, ssh: { host, port: Number(port), username, auth_method, password, identity_file, host_key },
-        node_enabled: draft!.nodeEnabled, working_directory: draft!.workingDirectory, agent_visible: draft!.agentVisible });
+      await request("save", { id, label, kind, ssh: { host, port: Number(port), username, auth_method, password, identity_file, host_key, init_script: draft!.session.init_script, environment: sshSessionValues(draft!.session).environment },
+        node_enabled: draft!.nodeEnabled, working_directory: draft!.session.working_directory, agent_visible: draft!.agentVisible });
     } else await request("save", { id, label, kind, value, username: kind === "password" ? username : "", agent_visible: draft!.agentVisible });
     if (epoch.current !== revision) return;
     clear();

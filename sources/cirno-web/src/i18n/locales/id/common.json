@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "Durasi maksimum yang diminta (detik)",
-          "help": "Batas terbesar yang dapat diminta model untuk satu perintah. Durasi bawaan diatur terpisah; 0 di sana berarti tanpa batas."
+          "help": "Durasi maksimum yang dapat diminta model per perintah. 0 menghapus batas ini; durasi bawaan diatur terpisah."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "Anggaran output pemadatan (token)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "Total per pesan (MiB)",
           "help": "Jumlah gambar dan dokumen yang diunggah, tanpa video atau referensi berkas lokal. Mulai ulang dan muat ulang halaman untuk menerapkan."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "Ruang cadangan keluaran (%)",
+          "help": "Persentase konteks untuk jawaban berikutnya, dibatasi maksimum keluaran. Bawaan 5%. Batas keluaran aktual mengikuti ruang tersisa."
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "Pertahankan",
         "omit": "Jangan kirim"
       },
-      "catalogErrorDetails": "Detail kesalahan"
+      "catalogErrorDetails": "Detail kesalahan",
+      "capabilities": {
+        "title": "Input visual",
+        "help": "Model baru diuji otomatis dengan gambar dan video kecil melalui panggilan API. Anda juga dapat memilih manual. Belum terverifikasi bukan berarti tidak didukung; video asli bergantung pada API.",
+        "image": "Gambar",
+        "video": "Video (input asli)",
+        "auto": "Otomatis / belum terverifikasi",
+        "true": "Didukung",
+        "false": "Tidak didukung",
+        "test": "Uji kemampuan"
+      }
     },
     "timezone": {
       "select": "Pilih zona waktu",
@@ -2279,6 +2293,11 @@
       "text": "Pesan yang diedit",
       "description": "Ganti pesan ini dan konteks percakapan setelahnya, lalu jalankan permintaan yang diperbarui. Lampiran dipertahankan.",
       "submit": "Simpan dan kirim"
+    },
+    "heartbeat": {
+      "pause": "Jeda heartbeat",
+      "resume": "Lanjutkan heartbeat",
+      "disabled": "Heartbeat dinonaktifkan di Pengaturan"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "Jalankan",
     "close": "Tutup",
     "commandCompleted": "Perintah selesai.",
-    "removeNode": "Hapus dari Nodes"
+    "removeNode": "Hapus dari Nodes",
+    "nodeInitScript": "Skrip inisialisasi",
+    "nodeInitScriptHint": "Jalur skrip jarak jauh yang dimuat di Bash setelah variabel dan direktori diatur. Berlaku untuk perintah, terminal baru, dan pekerjaan latar belakang.",
+    "nodeEnvironment": "Variabel lingkungan",
+    "addVariable": "Tambah variabel",
+    "variableName": "Nama",
+    "variableValue": "Nilai",
+    "removeVariable": "Hapus variabel"
   },
   "inbox": {
     "title": "Kotak masuk",

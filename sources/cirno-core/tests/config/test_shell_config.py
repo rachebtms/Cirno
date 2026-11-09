@@ -52,7 +52,6 @@ def test_exec_runtime_does_not_raise_default_model_limit(name: str, runtime: int
     {"idleTimeout": -1},
     {"maxRuntime": 1.5},
     {"idleTimeout": 1.5},
-    {"maxRuntimeLimit": 0},
     {"maxRuntimeLimit": -1},
     {"idleAction": "ignore"},
 ])
@@ -157,3 +156,17 @@ async def test_my_exec_config_reports_configured_timing(tmp_path) -> None:
     for key, value in expected.items():
         result = await tool.execute(action="check", key=f"exec_config.{key}")
         assert result == f"exec_config.{key}: {value!r}"
+
+
+def test_zero_model_runtime_ceiling_allows_unlimited_and_long_requests():
+    from cirno_core.agent.tools.shell.preparation import CommandPreparation
+    from cirno_core.agent.tools.shell_config import ExecToolConfig
+    preparation = CommandPreparation(ExecToolConfig(max_runtime_limit=0))
+    assert preparation.resolve_timeout(0) is None
+    assert preparation.resolve_timeout(172800) == 172800
+    with pytest.raises(ValueError):
+        preparation.resolve_timeout(-1)
+    with pytest.raises(ValueError):
+        preparation.resolve_timeout(True)
+    with pytest.raises(ValueError):
+        CommandPreparation(ExecToolConfig(max_runtime_limit=60)).resolve_timeout(0)

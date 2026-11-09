@@ -74,6 +74,8 @@ export function modelGenerationSettingsPayload(
     | "temperature"
     | "reasoningEffort"
     | "reasoningHistory"
+    | "imageInput"
+    | "videoInput"
     | "api"
     | "extraHeaders"
     | "extraQuery"
@@ -87,6 +89,8 @@ export function modelGenerationSettingsPayload(
   if (configuration.contextWindowTokens !== undefined) {
     payload.context_window_tokens = configuration.contextWindowTokens;
   }
+  if (configuration.imageInput !== undefined) payload.image_input = configuration.imageInput;
+  if (configuration.videoInput !== undefined) payload.video_input = configuration.videoInput;
   if (configuration.reasoningHistory !== undefined)
     payload.reasoning_history = configuration.reasoningHistory;
   if (configuration.idleCompactPercent !== undefined)

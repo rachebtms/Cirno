@@ -29,7 +29,7 @@ export function MobileChatLayoutFixture({ parameters }: { parameters: URLSearchP
     : initialScope);
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
   return (
-    <main className="thread-workspace relative flex min-w-0 flex-col overflow-hidden bg-background" style={{ height: "100dvh" }}>
+    <main className="thread-workspace relative flex min-w-0 flex-col overflow-hidden bg-background" style={{ height: "100%" }}>
       <ThreadHeader title="Mobile layout preview" hideTitle theme={dark ? "dark" : "light"}
         onToggleSidebar={() => {}} onToggleTheme={() => setDark(value => !value)}
         sessionInfoAction={<Button variant="ghost" size="icon" aria-label="Session details"><CalendarClock className="h-3.5 w-3.5" /></Button>}

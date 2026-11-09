@@ -57,6 +57,9 @@ class SessionDispatcher:
 
     async def receive(self, msg: InboundMessage) -> None:
         """Route one input through command and session admission."""
+        from cirno_core.runtime.heartbeat import discard_paused_heartbeat
+        if await discard_paused_heartbeat(self.agent.sessions, msg):
+            return
         self.agent._last_memory_activity = time.monotonic()
         if self.agent._idle_memory_task and not self.agent._idle_memory_task.done():
             self.agent._idle_memory_task.cancel()

@@ -101,6 +101,23 @@ describe("Runtime configuration", () => {
     expect(input).toHaveValue(86401); expect(input).toHaveAttribute("aria-invalid", "true");
     fireEvent.change(input, { target: { value: "17" } }); await expectSave({ "tools.exec.max_runtime": 17 });
   });
+  it("keeps Save actions hidden throughout ordinary automatic saving", async () => {
+    let finish!: (value: SettingsPayload) => void;
+    mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));
+    render(<Harness page="shell" />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" }), { target: { value: "17" } });
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    await expectSave({ "tools.exec.max_runtime": 17 });
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    await act(async () => finish({ ...payload(), runtime_config: { ...payload().runtime_config, "tools.exec.max_runtime": 17 } }));
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+  it("accepts zero for the maximum and long default durations with no ceiling", async () => {
+    const initial = payload(); initial.advanced.exec_max_runtime_limit = 0;
+    render(<Harness page="shell" initial={initial} />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" }), { target: { value: "172800" } });
+    await expectSave({ "tools.exec.max_runtime": 172800 });
+  });
   it("does not clear newer input when an earlier request finishes", async () => {
     let finish!: (value: SettingsPayload) => void;
     mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));

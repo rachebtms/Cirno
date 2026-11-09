@@ -25,6 +25,7 @@ export function SettingsRebuildFixture({ embedded = false }: { embedded?: boolea
       "agents.defaults.active_compact_percent": 80, "agents.defaults.idle_compact_percent": 35,
       "agents.defaults.idle_compact_keep_percent": 10, "agents.defaults.idle_compact_after_minutes": 15,
       "agents.defaults.idle_compact_check_interval_seconds": 60, "agents.defaults.memory.checkpoint_tokens": 2000,
+      "agents.defaults.compaction.output_reserve_percent": 5,
       "agents.defaults.memory.release_archived_runtime": true, "agents.defaults.compaction.max_tokens": 4096,
       "agents.defaults.compaction.reasoning_effort": "low", "agents.defaults.compaction.checkpoint_reminder_percent": 60,
       "agents.defaults.workspace": "/workspace", "agents.defaults.max_tool_iterations": 200,

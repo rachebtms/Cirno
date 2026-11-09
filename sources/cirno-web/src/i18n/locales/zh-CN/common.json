@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "可请求的最长命令时限（秒）",
-          "help": "模型为单个命令指定时限时的最大值。默认命令时限单独设置；默认值为 0 表示不限制运行时间。"
+          "help": "模型可请求的单次命令最长时限。0 表示取消此上限；默认命令时限另行设置。"
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "压缩输出预算（Token）",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "每条消息文件总大小（MiB）",
           "help": "每条消息上传的图片和文档总大小，不含视频；本地文件引用不计入。重启服务并刷新网页后生效。"
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "输出预留空间（%）",
+          "help": "为下一次回复预留的上下文比例，最多预留到模型输出上限，默认 5%。每次请求的输出上限随剩余空间调整，不会按配置的最大输出长度提前压缩。"
         }
       },
       "groups": {
@@ -735,7 +739,17 @@
         "preserve": "保留",
         "omit": "不回传"
       },
-      "catalogErrorDetails": "错误详情"
+      "catalogErrorDetails": "错误详情",
+      "capabilities": {
+        "title": "视觉输入能力",
+        "help": "添加模型时会自动使用小图片和短视频样本测试，会调用 API。也可手动选择。未确认不等于不支持；原生视频取决于所选 API。",
+        "image": "图片",
+        "video": "视频（原生输入）",
+        "auto": "自动 / 未确认",
+        "true": "支持",
+        "false": "不支持",
+        "test": "测试能力"
+      }
     },
     "notifications": {
       "scope": "提醒与声音",
@@ -2279,6 +2293,11 @@
       "text": "修改后的消息",
       "description": "替换此消息及其后的会话上下文，然后执行修改后的请求。原有附件会保留。",
       "submit": "保存并发送"
+    },
+    "heartbeat": {
+      "pause": "暂停心跳",
+      "resume": "恢复心跳",
+      "disabled": "心跳已在设置中禁用"
     }
   },
   "message": {
@@ -2850,7 +2869,14 @@
     "runCommand": "运行",
     "close": "关闭",
     "commandCompleted": "命令已完成。",
-    "removeNode": "从 Nodes 移除"
+    "removeNode": "从 Nodes 移除",
+    "nodeInitScript": "环境初始化脚本",
+    "nodeInitScriptHint": "远程脚本路径；切换目录、设置环境变量后在 Bash 中加载，适用于命令、新终端和后台任务。",
+    "nodeEnvironment": "环境变量",
+    "addVariable": "添加变量",
+    "variableName": "变量名",
+    "variableValue": "变量值",
+    "removeVariable": "移除变量"
   },
   "memoryLibrary": {
     "search": "搜索记忆",

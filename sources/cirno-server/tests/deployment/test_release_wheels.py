@@ -65,6 +65,12 @@ def test_release_wheels_start_with_owned_resources(tmp_path: Path):
         "import cirno, cirno_core, cirno_server",
         "from cirno_server.webui.build import default_webui_dist_dir",
         "from cirno_core.agent.tools.mcp.provider import MCPProvider",
+        "from importlib.resources import files",
+        "from itertools import permutations",
+        "from cirno_core.agent.tools.filesystem.view_image import ViewImageTool",
+        "for colors in permutations(('red', 'green', 'blue')):",
+        "    clip = files('cirno_core.providers').joinpath('probe_media', '-'.join(colors) + '.mp4').read_bytes()",
+        "    assert b'ftyp' in clip[:32]",
         "print(json.dumps({'packages': [m.__file__ for m in (cirno, cirno_core, cirno_server, cirno_memory, cirno_usage, cirno_vault)], 'assets': str(default_webui_dist_dir())}))",
     ])], cwd=tmp_path, env=env, check=True, capture_output=True, text=True, timeout=15)
     paths = json.loads(probe.stdout)

@@ -18,6 +18,8 @@ from cirno_core.providers.contracts import (
     RetryStatusCallback,
 )
 from cirno_core.providers.generation import GenerationSettings
+from cirno_core.providers.media_capabilities import MediaCapabilities
+from cirno_core.providers.context_budget import CONTEXT_SAFETY_BUFFER as CONTEXT_SAFETY_BUFFER
 from cirno_core.providers.requests import ProviderRequestExecutor
 from cirno_core.providers.retry import (
     ProviderRetryExecutor,
@@ -27,9 +29,6 @@ from cirno_core.providers.retry import (
 from cirno_core.providers.timeouts import ProviderTimeouts
 from cirno_core.providers.usage_recorder import ProviderUsageRecorder
 
-CONTEXT_SAFETY_BUFFER = 1024
-
-
 class LLMProvider(ABC):
     """Base class for LLM providers."""
 
@@ -38,6 +37,8 @@ class LLMProvider(ABC):
     retry_policy = ProviderRetryPolicy()
 
     _SENTINEL = object()
+
+    media_capabilities = MediaCapabilities()
 
     def __init__(
         self,

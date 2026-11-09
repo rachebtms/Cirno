@@ -335,7 +335,8 @@ class ServerHTTPHandler:
 
             try:
                 result = await instance_action(
-                    _mutation_payload(request) or {}, sessions=self.session_manager, bus=self.bus
+                    _mutation_payload(request) or {}, sessions=self.session_manager, bus=self.bus,
+                    config_path=self.settings_routes.settings.config.path,
                 )
             except (ValueError, KeyError, RuntimeError, OSError) as exc:
                 return _http_error(400, str(exc))

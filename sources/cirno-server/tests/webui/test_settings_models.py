@@ -157,6 +157,7 @@ def test_model_domain_owns_dto_and_config_updates() -> None:
         "model_presets",
         "model_call_order",
         "model_call_order_editable",
+        "model_capability_testing_supported",
         "model_api_resolution_supported",
         "provider_api_configuration_supported",
         "model_request_overrides_supported",
@@ -377,3 +378,18 @@ def test_model_reasoning_replay_is_persisted_and_required_for_deepseek_tools():
     with pytest.raises(WebUISettingsError, match='require reasoning history'):
         update_model_configuration(config, {"id": ['research'], 'reasoning_history': ['omit']}, oauth_status=_oauth_status)
     assert config.model_presets['research'].reasoning_history == 'preserve'
+
+
+def test_model_visual_capabilities_roundtrip_and_manual_override():
+    config = Config()
+    config.providers.openai.api_key = "fixture"
+    identity = create_model_configuration(config, {"name": ["Vision"], "model": ["gpt-4o"], "provider": ["openai"], "image_input": ["true"], "video_input": ["false"]}, oauth_status=_oauth_status)
+    assert config.model_presets[identity].image_input is True
+    assert config.model_presets[identity].video_input is False
+    assert update_model_configuration(config, {"id": [identity], "image_input": ["false"], "video_input": ["null"]}, oauth_status=_oauth_status)
+    payload = model_settings_payload(config, oauth_status=_oauth_status)
+    row = next(row for row in payload["model_presets"] if row["id"] == identity)
+    assert row["image_input"] is False and row["video_input"] is None
+    assert payload["model_capability_testing_supported"] is True
+    with pytest.raises(WebUISettingsError, match="image_input"):
+        update_model_configuration(config, {"id": [identity], "image_input": ['"true"']}, oauth_status=_oauth_status)

@@ -143,6 +143,8 @@ export function PresetConnectionFields({
             model: id,
             contextWindowTokens: initialize ? context : previous.contextWindowTokens,
             api: id === previous.model ? previous.api : null,
+            imageInput: id === previous.model ? previous.imageInput : null,
+            videoInput: id === previous.model ? previous.videoInput : null,
             presetName: name,
           }));
         }}

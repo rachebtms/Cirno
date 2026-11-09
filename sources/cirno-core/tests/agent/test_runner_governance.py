@@ -876,7 +876,7 @@ async def test_runner_governs_messages_added_by_before_iteration_hook(monkeypatc
 
 @pytest.mark.parametrize(
     ("input_tokens", "expected_pressure"),
-    [(500, True), (100, False)],
+    [(518, True), (100, False)],
 )
 async def test_matching_reported_provider_usage_avoids_local_estimate(
     monkeypatch,
@@ -1419,7 +1419,7 @@ async def test_runner_refuses_oversized_resumed_state_without_compactor(monkeypa
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("context_window_tokens", "expected_budget"),
-    [(1_624, 500), (1_000, 0)],
+    [(1_624, 518), (1_000, 0)],
 )
 async def test_runner_refuses_oversized_request_without_compactor(
     monkeypatch,

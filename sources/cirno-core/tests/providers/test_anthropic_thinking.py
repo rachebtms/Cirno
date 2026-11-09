@@ -52,8 +52,8 @@ def test_adaptive_no_budget_tokens() -> None:
 def test_high_uses_enabled_with_budget() -> None:
     kw = _build(_make_provider(), "high", max_tokens=4096)
     assert kw["thinking"]["type"] == "enabled"
-    assert kw["thinking"]["budget_tokens"] == max(8192, 4096)
-    assert kw["max_tokens"] >= kw["thinking"]["budget_tokens"] + 4096
+    assert kw["thinking"]["budget_tokens"] == 2048
+    assert kw["max_tokens"] == 4096
 
 
 def test_low_uses_small_budget() -> None:
@@ -145,7 +145,7 @@ def test_sonnet_5_omits_temperature_none() -> None:
 def test_mythos_preview_omits_temperature_but_keeps_manual_budget() -> None:
     kw = _build(_make_provider("claude-mythos-preview"), "high", max_tokens=4096)
     assert "temperature" not in kw
-    assert kw["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+    assert kw["thinking"] == {"type": "enabled", "budget_tokens": 2048}
     assert "output_config" not in kw
 
 
@@ -187,7 +187,7 @@ def test_dated_opus_5_model_uses_family_capabilities() -> None:
 def test_dated_opus_4_model_does_not_treat_date_as_minor_version() -> None:
     kw = _build(_make_provider("claude-opus-4-20250514"), "high")
     assert kw["temperature"] == 1.0
-    assert kw["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+    assert kw["thinking"] == {"type": "enabled", "budget_tokens": 2048}
     assert "output_config" not in kw
 
 

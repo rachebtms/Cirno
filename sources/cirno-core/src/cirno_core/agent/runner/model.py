@@ -11,7 +11,7 @@ from cirno_core.agent.governance import (
     ContextGovernor,
     ModelRequestState,
 )
-from cirno_core.agent.governance.budget import input_budget
+from cirno_core.agent.governance.budget import context_budget, input_budget
 from cirno_core.agent.hook import AgentHook, AgentHookContext
 from cirno_core.agent.runner.contracts import AgentRunSpec
 from cirno_core.agent.runner.recovery import (
@@ -71,13 +71,16 @@ class ModelRequests:
             transcript=transcript,
         )
         generation = spec.runtime.generation
+        max_output = generation.max_tokens
+        if provider_context is None or provider_context.compaction_input_budget is None:
+            max_output = context_budget(request_state.config).output_limit(request_state.input_tokens)
         return messages, {
             "messages": messages,
             "tools": tools,
             "model": spec.runtime.model,
             "retry_mode": spec.provider_retry_mode,
             "temperature": generation.temperature,
-            "max_tokens": generation.max_tokens,
+            "max_tokens": max_output,
             "reasoning_effort": generation.reasoning_effort,
             "provider_context": replace(
                 provider_context or ProviderCallContext(),

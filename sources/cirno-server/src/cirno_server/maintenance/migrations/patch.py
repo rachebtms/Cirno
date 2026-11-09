@@ -1,6 +1,7 @@
-"""Advance the 0.2.0 configuration without replacing owner state or profiles."""
+"""Advance a patch configuration version without replacing owner state or profiles."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from cirno_core.config.schema import Config
@@ -8,9 +9,10 @@ from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_server.maintenance.migrations.plan import MigrationPlan
 
 
-class Upgrade020:
-    source_version = "0.2.0"
-    target_version = "0.2.1"
+@dataclass(frozen=True)
+class ConfigVersionUpgrade:
+    source_version: str
+    target_version: str
 
     def prepare(self, config_path: Path, data: dict, root: Path) -> MigrationPlan:
         data.pop("last_run_version", None)

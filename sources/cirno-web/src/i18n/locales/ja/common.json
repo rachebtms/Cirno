@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "要求可能なコマンド最長時間（秒）",
-          "help": "モデルが単一コマンドに指定できる最長時間です。既定の実行時間は別設定で、既定値 0 は時間無制限です。"
+          "help": "モデルが指定できるコマンド実行時間の上限です。0で上限なし。既定の実行時間は別に設定します。"
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "圧縮の出力予算（トークン）",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "メッセージ内の合計サイズ（MiB）",
           "help": "動画を除く画像・文書の合計です。ローカルファイル参照は含みません。再起動とページ更新後に適用されます。"
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "出力用の予約領域（%）",
+          "help": "次の応答に予約するコンテキストの割合です。出力上限を超えず、既定は5%です。実際の出力上限は残り領域に合わせて調整されます。"
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "保持",
         "omit": "送信しない"
       },
-      "catalogErrorDetails": "エラーの詳細"
+      "catalogErrorDetails": "エラーの詳細",
+      "capabilities": {
+        "title": "視覚入力",
+        "help": "新規モデルでは小さな画像と動画で自動テストします（API を呼び出します）。手動選択も可能です。未確認は非対応を意味しません。動画は選択した API に依存します。",
+        "image": "画像",
+        "video": "動画（ネイティブ入力）",
+        "auto": "自動 / 未確認",
+        "true": "対応",
+        "false": "非対応",
+        "test": "能力をテスト"
+      }
     },
     "timezone": {
       "select": "タイムゾーンを選択",
@@ -2279,6 +2293,11 @@
       "text": "編集後のメッセージ",
       "description": "このメッセージ以降の会話コンテキストを置き換え、修正した依頼を実行します。添付ファイルは保持します。",
       "submit": "保存して送信"
+    },
+    "heartbeat": {
+      "pause": "ハートビートを一時停止",
+      "resume": "ハートビートを再開",
+      "disabled": "設定でハートビートが無効になっています"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "実行",
     "close": "閉じる",
     "commandCompleted": "コマンドが完了しました。",
-    "removeNode": "Nodes から削除"
+    "removeNode": "Nodes から削除",
+    "nodeInitScript": "初期化スクリプト",
+    "nodeInitScriptHint": "リモートのスクリプトパス。環境変数と作業ディレクトリを設定後、Bashで読み込みます。コマンド、新規ターミナル、バックグラウンド処理に適用されます。",
+    "nodeEnvironment": "環境変数",
+    "addVariable": "変数を追加",
+    "variableName": "名前",
+    "variableValue": "値",
+    "removeVariable": "変数を削除"
   },
   "inbox": {
     "title": "通知ボックス",

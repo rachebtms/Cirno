@@ -431,7 +431,7 @@ async def test_presets_route_same_gateway_independently(bind_transport, stream):
     assert "include" not in body
     messages_body = json.loads(requests[2].content)
     assert messages_body["model"] == "claude-sonnet-4-6"
-    assert messages_body["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+    assert messages_body["thinking"] == {"type": "enabled", "budget_tokens": 2048}
     assert messages_body["tools"][0]["name"] == "lookup"
     assert messages_body["tools"][0]["input_schema"] == tools[0]["function"]["parameters"]
 

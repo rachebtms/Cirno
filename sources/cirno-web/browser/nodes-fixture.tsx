@@ -50,6 +50,7 @@ export function NodesFixture() {
         if (failSave) { failSave = false; throw new Error("Fixture Node save failed"); }
         const connection = connections.get(id || String(values.credential_id))!;
         connection.node_enabled = true; connection.working_directory = String(values.working_directory);
+        connection.init_script = String(values.init_script ?? ""); connection.environment = values.environment as Record<string, string>;
         return { nodes: nodes() };
       }
       if (action === "nodes.execute") return { output: values.command === "true" ? "" : "Linux research-node\nCPU load: 0.04\n" };

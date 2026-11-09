@@ -13,15 +13,16 @@ from pydantic import Field
 
 from cirno_core.credentials.service import Credentials
 from cirno_core.credentials.ssh import SSHConnection
+from cirno_core.credentials.ssh_session import SSHSessionSettings
+from cirno_core.nodes.shell import remote_shell
 from cirno_core.storage.instance import InstanceData
 from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_core.utils.subprocess import kill_and_drain
 
 
-class Node(SSHConnection):
+class Node(SSHConnection, SSHSessionSettings):
     id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     name: str = Field(min_length=1, max_length=120)
-    working_directory: str = "."
 
 
 class Nodes:
@@ -76,12 +77,13 @@ class Nodes:
                 "has_password": bool(record.get("password"))}
 
     def save_node(self, values: dict) -> dict:
-        if set(values) - {"id", "credential_id", "working_directory"}:
+        if set(values) - {"id", "credential_id", "working_directory", "init_script", "environment"}:
             raise ValueError("Manage SSH connection details in Credentials")
         if values.get("id") and values.get("credential_id") and values["id"] != values["credential_id"]:
             raise ValueError("A Node must keep its SSH credential identity")
         identifier = values.get("id") or values["credential_id"]
-        self.credentials.enroll(identifier, enabled=True, working_directory=values.get("working_directory"))
+        self.credentials.enroll(identifier, enabled=True, working_directory=values.get("working_directory"),
+                                init_script=values.get("init_script"), environment=values.get("environment"))
         return next(node for node in self.list_nodes() if node["id"] == identifier)
 
     def remove_node(self, identifier: str) -> None:
@@ -177,15 +179,15 @@ class Nodes:
         return Node(id=node_id, name=record["label"],
                     **ssh.model_dump(exclude={"node_enabled"}))
 
-    async def execute(self, node_id: str, command: str, *, timeout=120, include_stderr=True) -> str:
+    async def execute(self, node_id: str, command: str, *, timeout=120, include_stderr=True, initialize=True) -> str:
         node = await asyncio.to_thread(self.node, node_id)
-        script = f"cd {shlex.quote(node.working_directory)} && {command}"
+        script = remote_shell(node, command) if initialize else "sh -lc " + shlex.quote(command)
         return await self._run(
             [
                 *(await asyncio.to_thread(self.arguments, node)),
                 "--",
                 f"{node.username}@{node.host}",
-                "sh -lc " + shlex.quote(script),
+                script,
             ],
             timeout,
             password=node.password if node.auth_method == "password" else None,
@@ -207,6 +209,7 @@ class Nodes:
         return "File transferred."
 
     async def start_job(self, node_id: str, command: str) -> dict:
+        node = await asyncio.to_thread(self.node, node_id)
         job = self.data.save(
             "node_jobs",
             {
@@ -220,8 +223,7 @@ class Nodes:
         directory = f'"$HOME/.cirno/jobs/{job_id}"'
         # mkdir is the submission boundary; a retry cannot silently duplicate this job.
         wrapper = (
-            "sh -c "
-            + shlex.quote(command)
+            remote_shell(node, command)
             + '; result=$?; printf "%s" "$result" > '
             + directory
             + "/exit"
@@ -235,7 +237,7 @@ class Nodes:
         )
 
         try:
-            pid = int((await self.execute(node_id, script, include_stderr=False)).strip())
+            pid = int((await self.execute(node_id, script, include_stderr=False, initialize=False)).strip())
             if pid <= 0:
                 raise ValueError("SSH returned an invalid job PID")
         except (Exception, asyncio.CancelledError) as exc:
@@ -261,6 +263,7 @@ class Nodes:
             stop_script + f'if [ -f {directory}/exit ]; then printf "EXIT:"; cat {directory}/exit; '
             f'elif [ -f {directory}/pid ] && kill -0 "$(cat {directory}/pid)" 2>/dev/null; then printf RUNNING; '
             f'elif [ -f {directory}/stop-requested ]; then printf STOPPED; else printf UNKNOWN; fi; printf "\\n"; tail -c 60000 {directory}/output.log',
+            initialize=False,
         )
         status, _, output = result.partition("\n")
         state = (

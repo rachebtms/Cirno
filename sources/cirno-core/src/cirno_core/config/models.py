@@ -47,6 +47,7 @@ class CompactionConfig(Base):
     max_tokens: int = Field(default=8192, ge=512, le=32768)
     reasoning_effort: Literal["inherit", "low", "none"] = "low"
     checkpoint_reminder_percent: int = Field(default=85, ge=1, le=100)
+    output_reserve_percent: int = Field(default=5, ge=1, le=50)
 
 
 class RequestOverrides(Base):
@@ -77,6 +78,8 @@ class ModelPresetConfig(RequestOverrides):
     """A model configuration referenced by its immutable dictionary key."""
 
     display_name: str | None = None
+    image_input: bool | None = None
+    video_input: bool | None = None
 
     model: str
     provider: str = "auto"

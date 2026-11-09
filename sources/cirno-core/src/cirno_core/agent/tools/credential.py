@@ -28,6 +28,8 @@ from cirno_core.credentials.service import Credentials
             "host": StringSchema(), "port": IntegerSchema(minimum=1, maximum=65535),
             "username": StringSchema(), "auth_method": StringSchema(enum=("key", "password")),
             "password": StringSchema(), "identity_file": StringSchema(), "host_key": StringSchema(),
+            "init_script": StringSchema("Remote Bash initialization script path."),
+            "environment": ObjectSchema(additional_properties={"type": "string"}, description="Remote environment variables."),
         }, additional_properties=False, description="SSH connection to encrypt. Only the owner can enable it as an SSH Node."),
         required=["action"],
     )

@@ -68,6 +68,7 @@ class ContextGovernanceConfig:
     max_tokens: int | None = None
     active_compact_percent: int = 100
     checkpoint_reminder_percent: int = 85
+    output_reserve_percent: int = 5
 
 
 @dataclass(slots=True)
@@ -82,5 +83,6 @@ class ModelRequestState:
     tool_definitions: list[dict[str, Any]] | None = None
     provider_compaction_applied: bool = False
     checkpoint_needed: bool = False
+    input_tokens: int = 0
     compacted_tool_results: set[str] = field(default_factory=set)
     events: EventSink = NO_EVENTS

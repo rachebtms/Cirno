@@ -172,6 +172,7 @@ class TurnPreparation:
             current_provider_message = self.agent.context.build_current_message(
                 ctx.msg.content,
                 media=ctx.msg.media if ctx.kind is TurnKind.USER and ctx.msg.media else None,
+                current_role=ctx.msg.input_role or "user",
                 runtime_context_blocks=ctx.runtime_context_blocks,
             )
             task_id = ctx.msg.metadata.get("subagent_task_id") if is_subagent else None

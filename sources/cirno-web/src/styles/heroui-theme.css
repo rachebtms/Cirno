@@ -52,3 +52,9 @@
 
 /* Icon-bearing selects share the same spacing as other labelled controls. */
 .select__trigger { column-gap: .5rem; align-items: center; }
+
+/* Keep touch text entry at a readable size without Safari's focus zoom.
+   Manual pinch zoom remains available. */
+@media (any-pointer: coarse) {
+  input, textarea, [contenteditable="true"] { font-size: max(16px, 1em); scroll-margin-block: 1rem; }
+}

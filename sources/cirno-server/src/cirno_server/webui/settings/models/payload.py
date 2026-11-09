@@ -169,6 +169,8 @@ def model_settings_payload(
                 "temperature": preset.temperature,
                 "reasoning_effort": preset.reasoning_effort,
                 "reasoning_history": preset.reasoning_history,
+                "image_input": preset.image_input,
+                "video_input": preset.video_input,
                 "api": preset.api.model_dump(mode="json") if preset.api is not None else None,
                 **{
                     field: request_settings.redact_request_secrets(getattr(preset, field))
@@ -183,6 +185,7 @@ def model_settings_payload(
 
     model_call_order, model_call_order_editable = _model_call_order_state(config)
     return {
+        "model_capability_testing_supported": True,
         "model_api_resolution_supported": True,
         "provider_api_configuration_supported": True,
         "agent": {

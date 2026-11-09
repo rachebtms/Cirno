@@ -53,6 +53,10 @@ class CommandPreparation:
         if timeout is not None:
             if isinstance(timeout, bool) or not isinstance(timeout, int):
                 raise ValueError("max_runtime must be an integer number of seconds")
+            if self.config.max_runtime_limit == 0:
+                if timeout < 0:
+                    raise ValueError("max_runtime must be nonnegative; 0 means no time limit")
+                return timeout or None
             if not 1 <= timeout <= self.config.max_runtime_limit:
                 raise ValueError(
                     f"max_runtime must be between 1 and {self.config.max_runtime_limit} seconds"

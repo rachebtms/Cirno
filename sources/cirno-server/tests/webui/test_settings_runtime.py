@@ -286,3 +286,16 @@ def test_embedding_settings_mask_preserve_rotate_and_clear_api_key():
     assert config.agents.defaults.memory.embedding_api_key == 'replacement-value'
     assert update_runtime_config(config, {key: ''})
     assert runtime_config_payload(config)[key] == ''
+
+
+def test_unlimited_requested_command_duration_persists_and_accepts_long_default(tmp_path):
+    path = tmp_path / "config.json"
+    save_config(Config(), path)
+    payload = update_runtime_config_settings({"tools.exec.max_runtime_limit": 0, "tools.exec.max_runtime": 172800}, config_path=path)
+    assert payload["runtime_config"]["tools.exec.max_runtime_limit"] == 0
+    reloaded = load_config(path)
+    assert reloaded.tools.exec.max_runtime_limit == 0
+    assert reloaded.tools.exec.max_runtime == 172800
+    with pytest.raises(WebUISettingsError):
+        update_runtime_config_settings({"tools.exec.max_runtime_limit": 60}, config_path=path)
+    assert load_config(path).tools.exec.max_runtime_limit == 0

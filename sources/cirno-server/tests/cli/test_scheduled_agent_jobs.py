@@ -13,7 +13,9 @@ from cirno_server.scheduling import agent_jobs
 
 @pytest.fixture
 def jobs(monkeypatch):
-    agent = SimpleNamespace(sessions=MagicMock(), bus=MessageBus())
+    sessions = MagicMock()
+    sessions.state.read_metadata = AsyncMock(return_value=None)
+    agent = SimpleNamespace(sessions=sessions, bus=MessageBus())
     owner = agent_jobs.ScheduledAgentJobs(
         agent, MagicMock(), prepare=AsyncMock(), report=MagicMock()
     )

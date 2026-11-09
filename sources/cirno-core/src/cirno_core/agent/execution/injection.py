@@ -72,7 +72,7 @@ class PendingInputInjector:
             image_paths=image_paths,
         )
         row: dict[str, Any] = {
-            "role": "user",
+            "role": pending_msg.input_role or "user",
             "content": user_content,
             "_meta": self.agent.inputs.history_extra(pending_msg),
         }
@@ -154,16 +154,19 @@ class PendingInputInjector:
             except asyncio.QueueEmpty:
                 break
 
+        from cirno_core.runtime.heartbeat import discard_paused_heartbeat
+
         consumed = 0
         try:
             converted: list[dict[str, Any]] = []
+            pending_messages = [msg for msg in pending_messages if not await discard_paused_heartbeat(self.agent.sessions, msg)]
             for pending_msg in pending_messages:
                 # Independent turns are FIFO barriers. Their worker path
                 # owns completion, command dispatch, and control metadata.
                 if not self.agent.dispatch.can_inject(pending_msg):
                     break
                 converted.append(await self.to_user_message(pending_msg))
-            self.goal_inputs.consume_inputs(pending_messages[: len(converted)])
+            self.goal_inputs.consume_inputs(pending_messages[:len(converted)])
             consumed = len(converted)
             return converted
         finally:

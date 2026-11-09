@@ -29,6 +29,7 @@ export function RuntimeConfiguration({ page, settings, state, onRestart, isResta
       const fields = group.fields.filter(state.visible);
       const dirty = fields.some(state.dirty);
       const saving = state.saving === group.id;
+      const showActions = dirty && (fields.some(field => field.manual && state.dirty(field)) || !!state.errors[group.id]);
       const title = group.id === "memory" && page !== "memory" ? t(`settings.nav.${page}`) : tr(`groups.${group.id}.title`);
       return <section key={group.id} aria-label={title} className="configuration-section">
         {title !== t(`settings.nav.${page}`) && <h2>{title}</h2>}
@@ -44,7 +45,7 @@ export function RuntimeConfiguration({ page, settings, state, onRestart, isResta
           </fieldset>
           <footer className="configuration-save">
             <span role="status">{saving ? <Spinner size="sm" /> : !dirty && state.saved[group.id] ? tr("saved") : null}</span>
-            {dirty && <><Button type="button" variant="tertiary" size="sm" onPress={() => state.discard(group.id)} isDisabled={saving || isRestarting}>{t("common.cancel")}</Button>
+            {showActions && <><Button type="button" variant="tertiary" size="sm" onPress={() => state.discard(group.id)} isDisabled={saving || isRestarting}>{t("common.cancel")}</Button>
               <Button type="submit" size="sm" isPending={saving} isDisabled={isRestarting}>{tr("save")}</Button></>}
           </footer>
           {state.errors[group.id] && <Alert status="danger" role="alert"><Alert.Content>{state.errors[group.id]}</Alert.Content></Alert>}

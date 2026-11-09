@@ -43,7 +43,7 @@ def runtime(mock_provider):
     return LLMRuntime.capture(
         mock_provider,
         "test-model",
-        context_window_tokens=1000,
+        context_window_tokens=128_000,
     )
 
 
@@ -1349,8 +1349,8 @@ class TestCompactIdleSession:
         assert mock_provider.chat_stream_with_retry.await_count == 2
         first_call, recovery_call = mock_provider.chat_stream_with_retry.await_args_list
         assert first_call.kwargs["tools"] == recovery_call.kwargs["tools"] == tools
-        assert first_call.kwargs["provider_context"] is None
-        assert recovery_call.kwargs["provider_context"] is None
+        assert first_call.kwargs["provider_context"].context_window_tokens == 128_000
+        assert recovery_call.kwargs["provider_context"].context_window_tokens == 128_000
         assert "tool_choice" not in first_call.kwargs
         assert "tool_choice" not in recovery_call.kwargs
         recovery_messages = recovery_call.kwargs["messages"]

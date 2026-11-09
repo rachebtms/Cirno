@@ -187,6 +187,7 @@ class RequestCompactor:
                 tool_definitions,
             )
             # Commit only after the complete request fits, on the owning loop.
+            state.input_tokens = context_tokens
             # Source files remain available for a narrower read. Previously
             # accepted results and all tool call/result pairs remain unchanged.
             for message in compaction.raw_messages[compaction.raw_accepted_boundary :]:

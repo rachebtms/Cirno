@@ -74,7 +74,7 @@ class Terminals:
         if len(self.sessions) >= 12:
             raise ValueError("Close a terminal before opening another (12 terminal limit)")
         import pty
-        import shlex
+        from cirno_core.nodes.shell import remote_shell
 
         args = [os.environ.get("SHELL") or "/bin/sh", "-l"]
         env = {**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor"}
@@ -86,7 +86,7 @@ class Terminals:
                 *(await asyncio.to_thread(nodes.arguments, node)),
                 "-tt",
                 f"{node.username}@{node.host}",
-                f'cd {shlex.quote(node.working_directory)} && exec "${{SHELL:-/bin/sh}}" -l',
+                remote_shell(node, interactive=True),
             ]
             env.update(
                 await asyncio.to_thread(nodes.environment, node.password if node.auth_method == "password" else None) or {}

@@ -7,7 +7,7 @@ import type { ConfigurationFieldProps } from "./contracts";
 export function DurationField({ field, state, settings, disabled }: ConfigurationFieldProps) {
   const { t, i18n } = useTranslation();
   const value = String(state.value(field.path));
-  const maximum = settings.advanced.exec_max_runtime_limit;
+  const maximum = settings.advanced.exec_max_runtime_limit || undefined;
   const presets = [...new Set([900, 1800, 3600, 21600, 43200, 86400, ...(maximum === undefined ? [] : [maximum])])]
     .filter(seconds => maximum === undefined || seconds <= maximum);
   const [custom, setCustom] = useState(false);

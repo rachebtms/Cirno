@@ -98,10 +98,9 @@ class TurnPersistence:
             summary_checkpoint=None if ctx.ephemeral else ctx.summary_checkpoint,
             input_persisted_early=ctx.input_persisted_early,
         )
-        if ctx.msg.metadata.get("_heartbeat") or ctx.msg.metadata.get("_session_message"):
-            followup_id = ctx.msg.metadata.get(PENDING_FOLLOWUP_ID_KEY)
-            if isinstance(followup_id, str) and followup_id:
-                session.consumed_followup_ids |= {followup_id}
+        followup_id = ctx.msg.metadata.get(PENDING_FOLLOWUP_ID_KEY)
+        if isinstance(followup_id, str) and followup_id:
+            session.consumed_followup_ids |= {followup_id}
         if (
             not ctx.ephemeral
             and ctx.provider_compaction_applied
@@ -227,7 +226,7 @@ class TurnPersistence:
                             {"type": "text", "text": "[tool result omitted during persistence]"}
                         ]
                     entry["content"] = filtered
-            elif role == "user":
+            elif role in {"user", "system"}:
                 if isinstance(content, list):
                     filtered = self.sanitize_blocks(
                         cast(list[object], content),
@@ -246,7 +245,7 @@ class TurnPersistence:
                             entry[key] = value
             entry.setdefault("timestamp", datetime.now().isoformat())
             session.messages.append(entry)
-            if role == "user" and isinstance(followup_id, str) and followup_id:
+            if role in {"user", "system"} and isinstance(followup_id, str) and followup_id:
                 saved_followup_ids.add(followup_id)
             if role == "assistant":
                 last_assistant_idx = len(session.messages) - 1

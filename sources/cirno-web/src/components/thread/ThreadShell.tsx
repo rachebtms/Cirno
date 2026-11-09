@@ -1,3 +1,4 @@
+import { RouterHeartbeatButton } from "./RouterHeartbeatButton";
 import { headerControlClassName } from "@/components/thread/header-control";
 import { conversationRole } from "@/lib/conversation-role";
 import { QuestionReplyProvider, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
@@ -811,7 +812,7 @@ export function ThreadShell({
       hideSidebarToggle={hideSidebarToggle}
       hideThemeButton={hideThemeButton}
       hideTitle={hideHeaderTitle}
-      actions={<>{headerActions}{workspaceOpen && previewSessionKey && !temporary && <HoverHint content={t("workspace.trace")}><Button type="button" variant="ghost" size="icon" className={headerControlClassName} aria-label={t("workspace.trace")} onClick={() => workspaceOpen("trace", { sessionKey: previewSessionKey, scope: workspaceScope })}><Route className="h-4 w-4" /></Button></HoverHint>}{session && conversationRole(session.key).toolReplies && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className={headerControlClassName} aria-label={t("files.title")}
+      actions={<>{session && conversationRole(session.key).name === "router" && <RouterHeartbeatButton client={client} />}{headerActions}{workspaceOpen && previewSessionKey && !temporary && <HoverHint content={t("workspace.trace")}><Button type="button" variant="ghost" size="icon" className={headerControlClassName} aria-label={t("workspace.trace")} onClick={() => workspaceOpen("trace", { sessionKey: previewSessionKey, scope: workspaceScope })}><Route className="h-4 w-4" /></Button></HoverHint>}{session && conversationRole(session.key).toolReplies && <ClearConversationButton client={client} chatId={session.chatId} onCleared={resetHistory} />}<HoverHint content={t("files.title")}><Button type="button" variant="ghost" size="icon" className={headerControlClassName} aria-label={t("files.title")}
         onClick={preview.openFiles}><FolderOpen className="h-4 w-4" /></Button></HoverHint></>}
       minimal={!session && !loading}
       promptNavigatorAction={promptNavigatorAction}

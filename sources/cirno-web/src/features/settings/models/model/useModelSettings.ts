@@ -88,6 +88,8 @@ export function useModelSettings({
       provider,
       model: provider === prev.provider ? prev.model : "",
       api: provider === prev.provider ? prev.api : null,
+      imageInput: provider === prev.provider ? prev.imageInput : null,
+      videoInput: provider === prev.provider ? prev.videoInput : null,
       extraHeaders: provider === prev.provider ? prev.extraHeaders : "",
       extraQuery: provider === prev.provider ? prev.extraQuery : "",
       extraBody: provider === prev.provider ? prev.extraBody : "",

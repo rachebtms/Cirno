@@ -9,7 +9,7 @@ from typing import Any
 from cirno_core.agent.governance.budget import (
     input_budget,
     request_extends_measured,
-    request_pressure,
+    request_measurement,
 )
 from cirno_core.agent.governance.compaction import RequestCompactor
 from cirno_core.agent.governance.contracts import ModelRequestState
@@ -83,8 +83,8 @@ class ContextGovernor:
             and tool_definitions == state.tool_definitions
             and request_extends_measured(state.messages, prepared)
         )
-        pressure = await self.preparation.run(
-            request_pressure,
+        measurement = await self.preparation.run(
+            request_measurement,
             state.config,
             prepared,
             state.usage,
@@ -92,13 +92,14 @@ class ContextGovernor:
             usage_prefixes_messages=usage_prefixes_messages,
             tool_definitions=tool_definitions,
             request_context_tokens=request_context_tokens,
-            minimum_percent=state.config.checkpoint_reminder_percent,
         )
+        state.input_tokens = measurement[0]
+        limit = input_budget(state.config)
         state.checkpoint_needed = (
-            pressure is not None and pressure[0] < input_budget(state.config) - 512
+            limit > 0
+            and limit * state.config.checkpoint_reminder_percent / 100 <= measurement[0] < limit - 512
         )
-        if pressure is not None and pressure[0] < input_budget(state.config):
-            pressure = None
+        pressure = measurement if state.config.context_window_tokens and (limit <= 0 or measurement[0] >= limit) else None
         provider_context = (
             state.conversation.prepare_request(
                 transcript,
@@ -141,11 +142,12 @@ class ContextGovernor:
                 provider_context = state.conversation.independent_request_context(
                     context_window_tokens=state.config.context_window_tokens,
                 )
-        if state.events.publish is not None:
-            provider_context = replace(
-                provider_context or ProviderCallContext(),
-                events=state.events,
-            )
+        provider_context = replace(
+            provider_context or ProviderCallContext(),
+            events=state.events,
+            input_tokens=state.input_tokens,
+            output_reserve_percent=state.config.output_reserve_percent,
+        )
         state.messages, state.tool_definitions = await self.preparation.run(
             request_snapshot,
             prepared,

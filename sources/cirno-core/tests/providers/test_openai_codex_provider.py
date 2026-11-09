@@ -957,7 +957,7 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
                 "content": [{"type": "output_text", "text": "old answer"}],
             },
         ],
-        usage=LLMUsage.reported(input_tokens=90, output_tokens=5),
+        usage=LLMUsage.reported(input_tokens=90_000, output_tokens=5_000),
     )
     bodies: list[dict[str, Any]] = []
     timeline: list[str] = []
@@ -1020,13 +1020,13 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
             {"role": "system", "content": "system"},
             {"role": "user", "content": "new question"},
         ],
-        max_tokens=5,
+        max_tokens=5_000,
         on_content_delta=answer_delta,
         provider_context=ProviderCallContext(
             conversation_state=state.with_pending_messages([
                 {"role": "user", "content": "new question"},
             ]),
-            context_window_tokens=100,
+            context_window_tokens=100_000,
             events=EventSink(observe),
         ),
     )

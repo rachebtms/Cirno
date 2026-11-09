@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "요청 가능한 명령 최대 시간 (초)",
-          "help": "모델이 단일 명령에 요청할 수 있는 최대 시간입니다. 기본 명령 시간은 별도로 설정하며 기본값 0은 무제한입니다."
+          "help": "모델이 요청할 수 있는 명령 실행 시간의 상한입니다. 0은 상한 없음이며 기본 실행 시간은 별도로 설정합니다."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "압축 출력 예산(토큰)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "메시지당 총 파일 크기 (MiB)",
           "help": "동영상을 제외한 이미지와 문서의 합계입니다. 로컬 파일 참조는 제외됩니다. 재시작 및 새로 고침 후 적용됩니다."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "출력 예약 공간 (%)",
+          "help": "다음 응답을 위해 남겨 둘 컨텍스트 비율입니다. 출력 한도 이내에서 기본 5%를 예약하며 실제 출력 한도는 남은 공간에 맞게 조정됩니다."
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "보존",
         "omit": "전송하지 않음"
       },
-      "catalogErrorDetails": "오류 세부 정보"
+      "catalogErrorDetails": "오류 세부 정보",
+      "capabilities": {
+        "title": "시각 입력",
+        "help": "새 모델은 작은 이미지와 동영상으로 자동 테스트합니다(API 호출). 직접 선택할 수도 있습니다. 미확인은 미지원과 다릅니다. 동영상은 선택한 API에 따라 다릅니다.",
+        "image": "이미지",
+        "video": "동영상(기본 입력)",
+        "auto": "자동 / 미확인",
+        "true": "지원",
+        "false": "미지원",
+        "test": "기능 테스트"
+      }
     },
     "timezone": {
       "select": "시간대 선택",
@@ -2279,6 +2293,11 @@
       "text": "수정된 메시지",
       "description": "이 메시지와 이후 대화 문맥을 교체한 뒤 수정된 요청을 실행합니다. 기존 첨부 파일은 유지됩니다.",
       "submit": "저장하고 보내기"
+    },
+    "heartbeat": {
+      "pause": "하트비트 일시 중지",
+      "resume": "하트비트 재개",
+      "disabled": "설정에서 하트비트가 비활성화되어 있습니다"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "실행",
     "close": "닫기",
     "commandCompleted": "명령이 완료되었습니다.",
-    "removeNode": "Nodes에서 제거"
+    "removeNode": "Nodes에서 제거",
+    "nodeInitScript": "초기화 스크립트",
+    "nodeInitScriptHint": "환경 변수와 작업 디렉터리를 설정한 후 Bash에서 불러올 원격 스크립트 경로입니다. 명령, 새 터미널 및 백그라운드 작업에 적용됩니다.",
+    "nodeEnvironment": "환경 변수",
+    "addVariable": "변수 추가",
+    "variableName": "이름",
+    "variableValue": "값",
+    "removeVariable": "변수 삭제"
   },
   "inbox": {
     "title": "알림함",

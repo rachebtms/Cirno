@@ -110,3 +110,5 @@ Patches validate the whole batch before writing. If a later commit fails, alread
 attempted files are restored; any restoration failure names the affected files.
 
 Credential tools operate only on Agent-visible records. Agent writes mark a record visible; owner writes default to private. SSH enrollment belongs to the owner, and Node tools require both enrollment and visibility. Settings, credential tools, direct Node commands and terminals share the credential service instead of storing separate authentication copies.
+
+The `files.view_image` operation uses the shared `files.read` implementation for path authorization, bounded reads and visual content blocks. Model configurations record image/video input declarations separately from request API routing. Setup probes use the chosen endpoint with no fallback chain, so another model cannot produce a misleading capability result.

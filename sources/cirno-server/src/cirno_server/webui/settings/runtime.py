@@ -54,6 +54,7 @@ RUNTIME_CONFIG_PATHS = (
     'agents.defaults.idle_compact_check_interval_seconds',
     'agents.defaults.idle_compact_percent',
     'agents.defaults.active_compact_percent',
+    'agents.defaults.compaction.output_reserve_percent',
     'agents.defaults.compaction.max_tokens',
     'agents.defaults.compaction.reasoning_effort',
     'agents.defaults.compaction.checkpoint_reminder_percent',
@@ -183,7 +184,7 @@ def update_runtime_config(
         raise WebUISettingsError("server.health_port: must be at most 65535")
     if {"tools.exec.max_runtime", "tools.exec.max_runtime_limit"} & values.keys():
         limit = validated.tools.exec.max_runtime_limit
-        if validated.tools.exec.max_runtime > limit:
+        if limit > 0 and validated.tools.exec.max_runtime > limit:
             raise WebUISettingsError(
                 f"tools.exec.max_runtime: enter 1–{limit} seconds, or 0 for no time limit"
             )

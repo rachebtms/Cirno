@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "Duração máxima solicitada (segundos)",
-          "help": "Maior limite que o modelo pode pedir para um comando. A duração padrão é separada; nela 0 significa sem limite."
+          "help": "Duração máxima que o modelo pode solicitar por comando. 0 remove esse limite; a duração padrão é configurada separadamente."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "Orçamento de saída da compactação (tokens)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "Total por mensagem (MiB)",
           "help": "Soma das imagens e documentos enviados, sem vídeos ou referências a arquivos locais. Reinicie e atualize a página para aplicar."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "Espaço reservado para saída (%)",
+          "help": "Percentual do contexto reservado para a próxima resposta, até o limite de saída. Padrão: 5%. O limite real acompanha o espaço restante."
         }
       },
       "groups": {
@@ -735,7 +739,17 @@
         "preserve": "Preservar",
         "omit": "Omitir"
       },
-      "catalogErrorDetails": "Detalhes do erro"
+      "catalogErrorDetails": "Detalhes do erro",
+      "capabilities": {
+        "title": "Entradas visuais",
+        "help": "Novos modelos são testados com pequenas imagens e vídeos por chamadas API. Também é possível selecionar manualmente. Não verificado não significa incompatível; vídeo nativo depende da API.",
+        "image": "Imagens",
+        "video": "Vídeo (entrada nativa)",
+        "auto": "Automático / não verificado",
+        "true": "Compatível",
+        "false": "Incompatível",
+        "test": "Testar capacidades"
+      }
     },
     "notifications": {
       "scope": "Alertas e sons",
@@ -2279,6 +2293,11 @@
       "text": "Mensagem editada",
       "description": "Substitui esta mensagem e o contexto posterior e executa a solicitação revisada. Os anexos são mantidos.",
       "submit": "Salvar e enviar"
+    },
+    "heartbeat": {
+      "pause": "Pausar heartbeat",
+      "resume": "Retomar heartbeat",
+      "disabled": "Heartbeat desativado nas configurações"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "Executar",
     "close": "Fechar",
     "commandCompleted": "Comando concluído.",
-    "removeNode": "Remover dos Nodes"
+    "removeNode": "Remover dos Nodes",
+    "nodeInitScript": "Script de inicialização",
+    "nodeInitScriptHint": "Caminho remoto carregado no Bash após definir variáveis e diretório. Aplica-se a comandos, novos terminais e tarefas em segundo plano.",
+    "nodeEnvironment": "Variáveis de ambiente",
+    "addVariable": "Adicionar variável",
+    "variableName": "Nome",
+    "variableValue": "Valor",
+    "removeVariable": "Remover variável"
   },
   "inbox": {
     "title": "Caixa de entrada",

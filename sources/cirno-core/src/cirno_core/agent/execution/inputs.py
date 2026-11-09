@@ -93,7 +93,7 @@ class TurnInputs:
             )
             if runtime_context_meta is not None:
                 extra[RUNTIME_CONTEXT_HISTORY_META] = runtime_context_meta
-            session.add_message("user", text, **extra)
+            session.add_message(msg.input_role or "user", text, **extra)
             self.agent.persistence.mark_pending(session)
             followup_id = msg.metadata.get(PENDING_FOLLOWUP_ID_KEY)
             if isinstance(followup_id, str) and followup_id:
@@ -108,6 +108,7 @@ class TurnInputs:
         return TranscriptInput(
             history=ctx.history,
             current_message=ctx.msg.content,
+            current_role=ctx.msg.input_role or "user",
             media=ctx.msg.media if ctx.kind is TurnKind.USER and ctx.msg.media else None,
             session_summary=ctx.pending_summary,
             runtime_context_blocks=ctx.runtime_context_blocks,

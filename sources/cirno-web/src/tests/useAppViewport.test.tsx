@@ -50,6 +50,13 @@ describe("app visual viewport", () => {
     expect(document.documentElement.style.getPropertyValue("--app-viewport-top")).toBe("0px");
   });
 
+  it("fits keyboard changes despite WebKit scale rounding", () => {
+    render(<AppSurface />, { container: root });
+    resize(396, 70, 1.0000001);
+    expect(document.documentElement.style.getPropertyValue("--app-viewport-height")).toBe("396px");
+    expect(document.documentElement.style.getPropertyValue("--app-viewport-top")).toBe("70px");
+  });
+
   it("does not reflow or chase the viewport during pinch zoom, then resumes on reset", () => {
     render(<AppSurface />, { container: root });
     resize(373, 120, 2);

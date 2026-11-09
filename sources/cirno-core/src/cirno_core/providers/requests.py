@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
 from cirno_core.providers.errors import is_billing_error, response_from_exception
+from cirno_core.providers.request_budget import bound_request_output
+from cirno_core.providers.media_capabilities import media_input_error
 from cirno_core.providers.messages import (
     contains_image_content,
     strip_image_content,
@@ -28,7 +30,11 @@ class ProviderRequestExecutor:
         """Call chat() and convert unexpected exceptions to error responses."""
         started_at_ms = time.time_ns() // 1_000_000
         started_at_ns = time.monotonic_ns()
+        unsupported = media_input_error(self.provider, kwargs["messages"])
+        if unsupported is not None:
+            return unsupported
         try:
+            kwargs = bound_request_output(self.provider, kwargs)
             provider_context = kwargs.pop("provider_context", None)
             if isinstance(provider_context, ProviderCallContext):
                 response = await self.provider.chat_with_context(
@@ -111,7 +117,11 @@ class ProviderRequestExecutor:
                 )
             return response
 
+        unsupported = media_input_error(self.provider, kwargs["messages"])
+        if unsupported is not None:
+            return unsupported
         try:
+            kwargs = bound_request_output(self.provider, kwargs)
             provider_context = kwargs.pop("provider_context", None)
             if isinstance(provider_context, ProviderCallContext):
                 response = await self.provider.chat_stream_with_context(
@@ -153,7 +163,7 @@ async def retry_without_images(
     """Try image compatibility repair once, outside transient retries."""
     # Removing the user's images cannot repair account access.
     if (
-        (response.error_kind or "").lower() in {"authentication", "oauth_auth_required"}
+        (response.error_kind or "").lower() in {"authentication", "oauth_auth_required", "unsupported_media"}
         or response.error_status_code in {401, 403}
         or is_billing_error(response)
     ):

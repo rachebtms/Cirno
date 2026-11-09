@@ -33,6 +33,7 @@ if (section === "memory-search") Object.assign(initial.runtime_config!, {
   "agents.defaults.memory.embedding_api_chunk_chars": 768,
 });
 Object.assign(initial.runtime_config!, {
+  "agents.defaults.compaction.output_reserve_percent": 5,
   "agents.defaults.compaction.max_tokens": 8192,
   "agents.defaults.compaction.reasoning_effort": "low",
   "agents.defaults.compaction.checkpoint_reminder_percent": 85,

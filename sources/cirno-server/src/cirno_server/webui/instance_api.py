@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from cirno_core.config.home import get_home_path
 from cirno_core.nodes.service import Nodes
@@ -12,11 +13,14 @@ from cirno_core.storage.instance import InstanceData
 
 
 async def instance_action(
-    payload: dict, *, sessions, bus
+    payload: dict, *, sessions, bus, config_path: Path | None = None
 ) -> dict:
     data = InstanceData()
     action = payload.get("action", "")
     values = payload.get("values") or {}
+    if action == "models.probe":
+        from cirno_server.webui.model_capabilities import probe_model_capabilities
+        return await probe_model_capabilities(values, config_path=config_path)
     if action.startswith("telegram."):
         from cirno_server.webui.telegram_api import telegram_action
         return await telegram_action(action, values)
@@ -62,6 +66,9 @@ async def instance_action(
             "projects": await asyncio.to_thread(data.list, "projects"),
             "router_session_key": key,
         }
+    if action in {"router.heartbeat", "router.heartbeat.update"}:
+        from cirno_server.webui.router_heartbeat import router_heartbeat_action
+        return await router_heartbeat_action(action, values, sessions=sessions, bus=bus, config_path=config_path)
     if action.startswith("projects."):
         return await sessions.projects.action(action.removeprefix("projects."), values, bus=bus)
     if action == "nodes.list":

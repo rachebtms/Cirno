@@ -329,7 +329,7 @@ async def test_fallback_cannot_discard_required_compaction(transport, mode):
 def test_active_compaction_threshold_reserves_output_and_safety(percent):
     from cirno_core.providers.base import CONTEXT_SAFETY_BUFFER
     from types import SimpleNamespace
-    config = SimpleNamespace(context_window_tokens=200000, max_tokens=8192, provider=None, active_compact_percent=percent)
+    config = SimpleNamespace(context_window_tokens=200000, max_tokens=8192, provider=None, active_compact_percent=percent, output_reserve_percent=5)
     budget = min(200000 * percent // 100, 200000 - 8192 - CONTEXT_SAFETY_BUFFER)
     assert input_budget(config) == budget
     assert budget < 200000

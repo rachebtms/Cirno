@@ -1,3 +1,4 @@
+import { KeyboardViewportFixture } from "./keyboard-viewport-fixture";
 import { PreviewLifetimeFixture } from "./preview-lifetime-fixture";
 import { DraftPersistenceFixture, installDraftPersistenceFailure } from "./draft-persistence-fixture";
 import { MessageDeliveryFixture } from "./message-delivery-fixture";
@@ -279,7 +280,7 @@ installPreviewPreferences({
 });
 await initializeI18n();
 await setAppLanguage(normalizeLocale(parameters.get("lang") ?? readOwnerPreferences().language));
-createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurface className="h-dvh w-full"><OperationNotices /><TooltipProvider>
+createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurface className="h-full w-full"><OperationNotices /><TooltipProvider>
   {parameters.get("case") === "preview-lifetime" ? <PreviewLifetimeFixture />
     : parameters.get("case") === "channel-instances"
     ? <ChannelInstancesFixture />
@@ -303,6 +304,8 @@ createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurfa
     ? <NodesFixture />
     : parameters.get("case") === "trace-rebuild"
     ? <TraceFixture />
+    : parameters.get("case") === "keyboard-viewport"
+    ? <ClientProvider client={railClient} token="fixture"><KeyboardViewportFixture parameters={parameters} /></ClientProvider>
     : parameters.get("case") === "entry"
     ? <EntryFixture />
     : parameters.get("case") === "web-settings-rebuild"

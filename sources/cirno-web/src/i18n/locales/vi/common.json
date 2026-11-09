@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "Thời hạn lệnh tối đa được yêu cầu (giây)",
-          "help": "Thời hạn lớn nhất mô hình có thể yêu cầu cho một lệnh. Thời hạn mặc định được đặt riêng; 0 ở đó là không giới hạn."
+          "help": "Thời gian tối đa mô hình có thể yêu cầu cho mỗi lệnh. 0 bỏ giới hạn này; thời gian mặc định được đặt riêng."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "Ngân sách đầu ra nén (token)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "Tổng mỗi tin nhắn (MiB)",
           "help": "Tổng ảnh và tài liệu tải lên, không gồm video và tham chiếu tệp cục bộ. Khởi động lại và tải lại trang để áp dụng."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "Không gian dành cho đầu ra (%)",
+          "help": "Tỷ lệ ngữ cảnh dành cho câu trả lời kế tiếp, không vượt giới hạn đầu ra. Mặc định 5%. Giới hạn thực tế điều chỉnh theo phần còn lại."
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "Giữ lại",
         "omit": "Không gửi"
       },
-      "catalogErrorDetails": "Chi tiết lỗi"
+      "catalogErrorDetails": "Chi tiết lỗi",
+      "capabilities": {
+        "title": "Đầu vào hình ảnh",
+        "help": "Mô hình mới được thử tự động bằng ảnh và video nhỏ qua API. Bạn cũng có thể chọn thủ công. Chưa xác minh không có nghĩa là không hỗ trợ; video gốc tùy thuộc API.",
+        "image": "Ảnh",
+        "video": "Video (đầu vào gốc)",
+        "auto": "Tự động / chưa xác minh",
+        "true": "Hỗ trợ",
+        "false": "Không hỗ trợ",
+        "test": "Kiểm tra khả năng"
+      }
     },
     "timezone": {
       "select": "Chọn múi giờ",
@@ -2279,6 +2293,11 @@
       "text": "Tin nhắn đã sửa",
       "description": "Thay thế tin nhắn này và ngữ cảnh sau đó rồi thực hiện yêu cầu đã sửa. Tệp đính kèm được giữ lại.",
       "submit": "Lưu và gửi"
+    },
+    "heartbeat": {
+      "pause": "Tạm dừng nhịp tim",
+      "resume": "Tiếp tục nhịp tim",
+      "disabled": "Nhịp tim đã bị tắt trong Cài đặt"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "Chạy",
     "close": "Đóng",
     "commandCompleted": "Lệnh đã hoàn tất.",
-    "removeNode": "Xóa khỏi Nodes"
+    "removeNode": "Xóa khỏi Nodes",
+    "nodeInitScript": "Tập lệnh khởi tạo",
+    "nodeInitScriptHint": "Đường dẫn từ xa được nạp trong Bash sau khi đặt biến và thư mục. Áp dụng cho lệnh, cửa sổ đầu cuối mới và tác vụ nền.",
+    "nodeEnvironment": "Biến môi trường",
+    "addVariable": "Thêm biến",
+    "variableName": "Tên",
+    "variableValue": "Giá trị",
+    "removeVariable": "Xóa biến"
   },
   "inbox": {
     "title": "Hộp thông báo",

@@ -14,6 +14,8 @@ export interface AgentSettingsDraft {
   temperature: number;
   reasoningEffort: string;
   reasoningHistory?: "auto" | "preserve" | "omit";
+  imageInput?: boolean | null;
+  videoInput?: boolean | null;
   api: ModelAPIConfig | null;
   extraHeaders: string;
   extraQuery: string;
@@ -89,6 +91,8 @@ export function agentDraftFromPayload(
     temperature: activePreset?.temperature ?? payload.agent.temperature,
     reasoningEffort: activePreset?.reasoning_effort ?? "",
     reasoningHistory: activePreset?.reasoning_history ?? "auto",
+    imageInput: activePreset?.image_input ?? null,
+    videoInput: activePreset?.video_input ?? null,
     api: activePreset ? activePreset.api ?? null : payload.agent.api ?? null,
     extraHeaders: providerJsonValue(activePreset?.extra_headers),
     extraQuery: providerJsonValue(activePreset?.extra_query),

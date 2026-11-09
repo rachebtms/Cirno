@@ -5,6 +5,7 @@
   "agents.defaults.approval.timeout_seconds",
   "agents.defaults.compaction.checkpoint_reminder_percent",
   "agents.defaults.compaction.max_tokens",
+  "agents.defaults.compaction.output_reserve_percent",
   "agents.defaults.compaction.reasoning_effort",
   "agents.defaults.dream.batch_chars",
   "agents.defaults.dream.batch_entries",
@@ -57,6 +58,9 @@
   "server.health_host",
   "server.health_port",
   "server.restart_mode",
+  "server.uploads.max_file_mb",
+  "server.uploads.max_total_mb",
+  "server.uploads.max_video_mb",
   "tools.cli_apps.catalog_ttl_seconds",
   "tools.cli_apps.enable",
   "tools.cli_apps.install_timeout",
@@ -82,8 +86,5 @@
   "tools.ssrf_whitelist",
   "tools.web.enable",
   "tools.web.use_proxy",
-  "tools.web.user_agent",
-  "server.uploads.max_file_mb",
-  "server.uploads.max_video_mb",
-  "server.uploads.max_total_mb"
+  "tools.web.user_agent"
 ]

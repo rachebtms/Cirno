@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "Duración máxima solicitada (segundos)",
-          "help": "Mayor límite que el modelo puede solicitar para un comando. La duración predeterminada se configura por separado; allí 0 significa sin límite."
+          "help": "Duración máxima que el modelo puede solicitar por comando. 0 elimina este límite; la duración predeterminada se configura por separado."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "Presupuesto de salida al compactar (tokens)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "Total por mensaje (MiB)",
           "help": "Suma de imágenes y documentos subidos, sin vídeos ni referencias a archivos locales. Reinicia y actualiza la página para aplicar."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "Espacio reservado para salida (%)",
+          "help": "Porcentaje del contexto reservado para la siguiente respuesta, hasta el límite de salida. Predeterminado: 5%. El límite real se ajusta al espacio restante."
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "Conservar",
         "omit": "Omitir"
       },
-      "catalogErrorDetails": "Detalles del error"
+      "catalogErrorDetails": "Detalles del error",
+      "capabilities": {
+        "title": "Entradas visuales",
+        "help": "Los modelos nuevos se prueban con pequeñas imágenes y vídeos, mediante llamadas API. También puedes elegir manualmente. Sin verificar no significa incompatible; el vídeo nativo depende de la API.",
+        "image": "Imágenes",
+        "video": "Vídeo (entrada nativa)",
+        "auto": "Automático / sin verificar",
+        "true": "Compatible",
+        "false": "Incompatible",
+        "test": "Probar capacidades"
+      }
     },
     "timezone": {
       "select": "Seleccionar zona horaria",
@@ -2279,6 +2293,11 @@
       "text": "Mensaje editado",
       "description": "Reemplaza este mensaje y el contexto posterior, y ejecuta la solicitud revisada. Se conservan los adjuntos.",
       "submit": "Guardar y enviar"
+    },
+    "heartbeat": {
+      "pause": "Pausar latido",
+      "resume": "Reanudar latido",
+      "disabled": "El latido está desactivado en Ajustes"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "Ejecutar",
     "close": "Cerrar",
     "commandCompleted": "Comando completado.",
-    "removeNode": "Quitar de Nodes"
+    "removeNode": "Quitar de Nodes",
+    "nodeInitScript": "Script de inicialización",
+    "nodeInitScriptHint": "Ruta remota que Bash carga tras configurar variables y directorio. Se aplica a comandos, nuevas terminales y trabajos en segundo plano.",
+    "nodeEnvironment": "Variables de entorno",
+    "addVariable": "Añadir variable",
+    "variableName": "Nombre",
+    "variableValue": "Valor",
+    "removeVariable": "Eliminar variable"
   },
   "inbox": {
     "title": "Bandeja de entrada",

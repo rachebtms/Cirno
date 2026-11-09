@@ -414,7 +414,7 @@
         },
         "tools_exec_max_runtime_limit": {
           "label": "Durée maximale demandée (secondes)",
-          "help": "Limite maximale que le modèle peut demander pour une commande. La durée par défaut se règle séparément ; 0 y signifie sans limite."
+          "help": "Durée maximale qu’un modèle peut demander par commande. 0 supprime ce plafond ; la durée par défaut se règle séparément."
         },
         "agents_defaults_compaction_max_tokens": {
           "label": "Budget de sortie de condensation (jetons)",
@@ -459,6 +459,10 @@
         "server_uploads_max_total_mb": {
           "label": "Total par message (MiB)",
           "help": "Taille cumulée des images et documents envoyés, hors vidéos et références locales. Redémarrez et actualisez la page pour appliquer."
+        },
+        "agents_defaults_compaction_output_reserve_percent": {
+          "label": "Espace réservé à la sortie (%)",
+          "help": "Part du contexte réservée à la prochaine réponse, sans dépasser le plafond de sortie. Valeur par défaut : 5 %. Le plafond réel suit l’espace restant."
         }
       },
       "groups": {
@@ -1053,7 +1057,17 @@
         "preserve": "Conserver",
         "omit": "Omettre"
       },
-      "catalogErrorDetails": "Détails de l’erreur"
+      "catalogErrorDetails": "Détails de l’erreur",
+      "capabilities": {
+        "title": "Entrées visuelles",
+        "help": "Les nouveaux modèles sont testés avec de petites images et vidéos via des appels API. Vous pouvez choisir manuellement. Non vérifié ne signifie pas incompatible ; la vidéo native dépend de l’API.",
+        "image": "Images",
+        "video": "Vidéo (entrée native)",
+        "auto": "Automatique / non vérifié",
+        "true": "Pris en charge",
+        "false": "Non pris en charge",
+        "test": "Tester les capacités"
+      }
     },
     "timezone": {
       "select": "Choisir un fuseau horaire",
@@ -2279,6 +2293,11 @@
       "text": "Message modifié",
       "description": "Remplace ce message et le contexte qui le suit, puis exécute la demande modifiée. Les pièces jointes sont conservées.",
       "submit": "Enregistrer et envoyer"
+    },
+    "heartbeat": {
+      "pause": "Suspendre le battement",
+      "resume": "Reprendre le battement",
+      "disabled": "Le battement est désactivé dans les paramètres"
     }
   },
   "message": {
@@ -2935,7 +2954,14 @@
     "runCommand": "Exécuter",
     "close": "Fermer",
     "commandCompleted": "Commande terminée.",
-    "removeNode": "Retirer des Nodes"
+    "removeNode": "Retirer des Nodes",
+    "nodeInitScript": "Script d’initialisation",
+    "nodeInitScriptHint": "Chemin distant chargé dans Bash après les variables et le répertoire. S’applique aux commandes, nouveaux terminaux et tâches en arrière-plan.",
+    "nodeEnvironment": "Variables d’environnement",
+    "addVariable": "Ajouter une variable",
+    "variableName": "Nom",
+    "variableValue": "Valeur",
+    "removeVariable": "Supprimer la variable"
   },
   "inbox": {
     "title": "Boîte de réception",

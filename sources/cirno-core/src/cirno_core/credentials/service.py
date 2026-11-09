@@ -73,7 +73,7 @@ class Credentials:
         previous = self.ssh(id) if metadata and metadata["kind"] == "ssh" else None
         visibility = True if self.actor == "agent" else agent_visible if agent_visible is not None else bool(metadata and metadata["agent_visible"])
         if kind == "ssh":
-            fields = dict(ssh or {})
+            fields = {**(previous.model_dump() if previous else {}), **dict(ssh or {})}
             # A blank password in an owner edit retains the encrypted value.
             if previous and not fields.get("password"):
                 fields["password"] = previous.password
@@ -92,12 +92,14 @@ class Credentials:
                 username = username or stored.get("username", "")
         return self.vault.save(id=id, label=label, kind=kind, value=value, username=username, agent_visible=visibility)
 
-    def enroll(self, identifier: str, *, enabled: bool, working_directory: str | None = None) -> dict:
+    def enroll(self, identifier: str, *, enabled: bool, working_directory: str | None = None,
+               init_script: str | None = None, environment: dict[str, str] | None = None) -> dict:
         if self.actor != "owner":
             raise ValueError("Only the owner can change SSH Node enrollment")
         with self._lease():
             record, connection = self.connection(identifier)
             fields = connection.model_dump(exclude={"node_enabled", "working_directory"})
+            fields.update({key: value for key, value in {"init_script": init_script, "environment": environment}.items() if value is not None})
             return self._save(id=identifier, label=record["label"], kind="ssh", ssh=fields,
                               node_enabled=enabled, working_directory=working_directory)
 

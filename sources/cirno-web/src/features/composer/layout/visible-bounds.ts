@@ -1,3 +1,5 @@
+import { isViewportZoomed } from "@/lib/visual-viewport";
+
 export function visualViewportBounds(): {
   top: number;
   bottom: number;
@@ -20,7 +22,7 @@ export function getVisibleBounds(el: HTMLElement): {
   // its frame in the same coordinates as the composer, not WebKit's pan offset.
   // During pinch zoom the app stops fitting, so use the zoomed viewport again.
   const fittedRoot =
-    window.visualViewport?.scale === 1
+    window.visualViewport && !isViewportZoomed(window.visualViewport)
       ? el.closest("#root.visual-viewport")
       : null;
   const viewport =

@@ -35,6 +35,7 @@ class ProviderSnapshot:
     compaction_max_tokens: int = 8192
     compaction_reasoning_effort: str = "low"
     checkpoint_reminder_percent: int = 85
+    output_reserve_percent: int = 5
 
 
 def _resolve_model_preset(
@@ -163,6 +164,8 @@ def _make_provider_core(
     provider.retry_policy.delays = tuple(min(2 ** attempt, 60) for attempt in range(config.network.provider_max_retries))
     provider.request_timeout_s = config.network.request_timeout_s
     provider.generation = preset.to_generation_settings()
+    from cirno_core.providers.media_capabilities import MediaCapabilities
+    provider.media_capabilities = MediaCapabilities(preset.image_input, preset.video_input)
     provider.reasoning_history = preset.reasoning_history
     return provider
 
@@ -243,6 +246,8 @@ def build_unconfigured_provider_snapshot(config: Config, setup_error: str) -> Pr
     provider.retry_policy.delays = tuple(min(2 ** attempt, 60) for attempt in range(config.network.provider_max_retries))
     provider.request_timeout_s = config.network.request_timeout_s
     provider.generation = preset.to_generation_settings()
+    from cirno_core.providers.media_capabilities import MediaCapabilities
+    provider.media_capabilities = MediaCapabilities(preset.image_input, preset.video_input)
     provider.reasoning_history = preset.reasoning_history
     return ProviderSnapshot(
         provider=provider,
@@ -277,6 +282,7 @@ def _preset_provider_signature(
         preset.reasoning_effort,
         preset.context_window_tokens,
         preset.reasoning_history,
+        preset.image_input, preset.video_input,
         preset.idle_compact_percent,
         preset.idle_compact_keep_percent,
         config.agents.defaults.active_compact_percent,
@@ -338,6 +344,7 @@ def build_provider_snapshot(
         compaction_max_tokens=config.agents.defaults.compaction.max_tokens,
         compaction_reasoning_effort=config.agents.defaults.compaction.reasoning_effort,
         checkpoint_reminder_percent=config.agents.defaults.compaction.checkpoint_reminder_percent,
+        output_reserve_percent=config.agents.defaults.compaction.output_reserve_percent,
     )
 
 

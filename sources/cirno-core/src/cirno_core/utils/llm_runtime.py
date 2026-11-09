@@ -33,6 +33,7 @@ class LLMRuntime:
     compaction_max_tokens: int = 8192
     compaction_reasoning_effort: str = "low"
     checkpoint_reminder_percent: int = 85
+    output_reserve_percent: int = 5
 
     @classmethod
     def capture(
@@ -107,6 +108,7 @@ def runtime_from_provider_snapshot(
             compaction_max_tokens=snapshot.compaction_max_tokens,
             compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
             checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent,
+            output_reserve_percent=snapshot.output_reserve_percent,
         )
     return replace(LLMRuntime.capture(
         snapshot.provider,
@@ -116,4 +118,5 @@ def runtime_from_provider_snapshot(
         snapshot_signature=snapshot.signature,
     ), active_compact_percent=snapshot.active_compact_percent,
        compaction_max_tokens=snapshot.compaction_max_tokens, compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
-       checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent)
+       checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent,
+       output_reserve_percent=snapshot.output_reserve_percent)

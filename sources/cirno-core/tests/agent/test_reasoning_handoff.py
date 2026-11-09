@@ -38,7 +38,7 @@ async def test_failed_summary_preserves_reasoning_only_state_and_recent_tail(tmp
     store = MemoryStore(tmp_path)
     provider = MagicMock(spec=LLMProvider)
     provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse(content='(nothing)'))
-    runtime = LLMRuntime(provider, 'test', GenerationSettings(max_tokens=2048), 32000)
+    runtime = LLMRuntime(provider, 'test', GenerationSettings(max_tokens=2048), 128000)
     archiver = MemoryArchiver(store, lambda **kwargs: [], lambda _: [])
     messages = [{'role': 'user', 'content': 'Investigate calibration'}, {'role': 'assistant', 'content': '', 'reasoning_content': 'discarded intermediate ' * 4000 + '\nLATEST_STATE trial=17; next=trial18; hypothesis unverified'}]
     checkpoint = await archiver.archive(messages, runtime=runtime, session_key='test:a', history=messages, request_tools=[])
@@ -81,7 +81,7 @@ async def test_checkpoint_reminder_is_system_origin_and_not_repeated(monkeypatch
         calls.append(kwargs['messages'])
         return LLMResponse(content='Continue checking', tool_calls=[ToolCallRequest(id='one', name='inspect', arguments={})]) if len(calls) == 1 else LLMResponse(content='Done')
     provider.chat_stream_with_retry = AsyncMock(side_effect=respond)
-    monkeypatch.setattr('cirno_core.agent.governance.budget.estimate_prompt_tokens_chain', lambda *args: (8000, 'fixture'))
+    monkeypatch.setattr('cirno_core.agent.governance.budget.estimate_prompt_tokens_chain', lambda *args: (8500, 'fixture'))
     await AgentRunner().run(make_run_spec(provider, model='test', context_window_tokens=11024, max_tokens=1000, initial_messages=[{'role': 'user', 'content': 'inspect'}], tools=tools, max_iterations=3, max_tool_result_chars=16000))
     reminders = [message for message in calls[-1] if message.get('_hidden_history')]
     assert len(reminders) == 1

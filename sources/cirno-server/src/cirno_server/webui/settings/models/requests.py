@@ -60,6 +60,15 @@ def _preset_with_request_updates(
     candidate = preset.model_copy(
         update={**{key: getattr(validated, key) for key in updates}, **percentage_updates}
     )
+    for key in ("image_input", "video_input"):
+        if key in query:
+            try:
+                value = json.loads(query_first_alias(query, key, key) or "null")
+            except ValueError:
+                raise WebUISettingsError(f"{key} must be true, false or null") from None
+            if value is not None and not isinstance(value, bool):
+                raise WebUISettingsError(f"{key} must be true, false or null")
+            candidate = candidate.model_copy(update={key: value})
     if history is not None:
         candidate = candidate.model_copy(update={"reasoning_history": history})
     if candidate.reasoning_history == "omit":

@@ -17,7 +17,7 @@ export function ProviderModelFixture() {
   const [modelUpdates, setModelUpdates] = useState<Record<string, string>[]>([]);
   const fixture = useMemo(() => {
     const flags = new URLSearchParams(location.search);
-    let snapshot: SettingsPayload = { ...settings, model_api_resolution_supported: flags.has("apiPreviewFailure"),
+    let snapshot: SettingsPayload = { ...settings, model_capability_testing_supported: flags.has("mediaCapabilities"), model_api_resolution_supported: flags.has("apiPreviewFailure"),
       providers: [{ id: "openai", name: "OpenAI", configured: true, api_key_hint: "configured", api_base: "https://api.openai.com/v1", model_catalog: "official",
         advanced_fields: ["extra_headers", "extra_query", "extra_body", "use_proxy"], provider_api_configurable: true, model_api_configurable: true },
         { id: "deepseek", name: "DeepSeek", configured: false },
@@ -48,6 +48,19 @@ export function ProviderModelFixture() {
       return Response.json({ error: `No fixture response for ${url.pathname}` }, { status: 404 });
     };
     const client = { status: "open", onStatus: (handler: (status: string) => void) => { handler("open"); return () => {}; }, requestMutation: async (action: string, args: Record<string, string>) => {
+      if (action === "instance.action" && args.action === "models.probe") return { image: { supported: true, detail: "Visual sample recognized" }, video: { supported: null, detail: "Native video unverified for this API" } };
+      if (action === "settings.model_configuration.create") {
+        snapshot = { ...snapshot, created_model_preset: "new-vision", model_presets: [...snapshot.model_presets, {
+          id: "new-vision", name: args.name, model: args.model, provider: args.provider, active: false, is_default: false,
+          max_tokens: Number(args.max_tokens), context_window_tokens: Number(args.context_window_tokens), temperature: Number(args.temperature), reasoning_effort: null,
+          image_input: args.image_input as unknown as boolean | null, video_input: args.video_input as unknown as boolean | null,
+        }] };
+        return snapshot;
+      }
+      if (action === "settings.model_call_order.update") {
+        snapshot = { ...snapshot, model_call_order: args.order as unknown as string[] };
+        return snapshot;
+      }
       if (action === "settings.provider.oauth_login") return { status: "authorization_required", provider: args.provider,
         flow_id: "fixture-authorization", authorization_url: "https://github.com/login/device", user_code: "FIXT-URE1", completion_input: "device_code", expires_in: 600 };
       if (action === "settings.provider.oauth_complete") {

@@ -40,6 +40,7 @@ class ModelSettingsPayload(TypedDict):
     model_presets: list[dict[str, Any]]
     model_call_order: list[str]
     model_call_order_editable: bool
+    model_capability_testing_supported: bool
     model_api_resolution_supported: bool
     provider_api_configuration_supported: bool
     model_request_overrides_supported: bool

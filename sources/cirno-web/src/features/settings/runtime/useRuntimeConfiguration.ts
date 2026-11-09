@@ -78,7 +78,7 @@ export function useRuntimeConfigSettings(
         }
         values[field.path] = Number(raw);
       } else if (field.kind === "number" || field.kind === "duration") {
-        const maximum = field.kind === "duration" ? settings.advanced.exec_max_runtime_limit : field.max;
+        const maximum = field.kind === "duration" ? settings.advanced.exec_max_runtime_limit || undefined : field.max;
         const parsed = Number(raw);
         if (String(raw).trim() === "" || !Number.isFinite(parsed)
           || !Number.isInteger(parsed)

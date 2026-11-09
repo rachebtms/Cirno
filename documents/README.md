@@ -34,6 +34,7 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.2](releases/0.2.2.md): context budgeting, SSH startup environments, visual input checks and Router heartbeat controls.
 - [0.2.1](releases/0.2.1.md): conversational first setup, Router profile and delegation fixes, question cancellation, Trace export and layout fixes.
 - [0.2.0](releases/0.2.0.md): tabbed workspace, local/SSH terminals, request transparency, encrypted credentials and long-task reliability fixes.
 - [0.1.6](releases/0.1.6.md): reliable delegated reports, retryable backup recovery, browser-session revocation and inline message editing.

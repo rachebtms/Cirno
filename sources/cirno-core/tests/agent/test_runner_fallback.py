@@ -491,7 +491,7 @@ class TestFallbackWhenPrimaryRaises:
         response, exception = await FallbackProvider._call_provider(
             lambda provider, kwargs: provider.chat(**kwargs),
             primary,
-            {},
+            {"messages": []},
         )
 
         assert exception is primary._exc
@@ -511,7 +511,7 @@ class TestFallbackWhenPrimaryRaises:
         response, exception = await FallbackProvider._call_provider(
             lambda provider, kwargs: provider.chat(**kwargs),
             primary,
-            {},
+            {"messages": []},
         )
 
         assert exception is primary._exc
@@ -745,7 +745,7 @@ class TestFallbackOnPrimaryError:
         )
 
         assert result.content == "fallback ok"
-        assert primary.context_calls == [ProviderCallContext()]
+        assert primary.context_calls == [ProviderCallContext(context_window_tokens=200_000)]
         assert fallback.context_calls == [
             ProviderCallContext(context_window_tokens=120_000)
         ]
@@ -790,7 +790,7 @@ class TestFallbackOnPrimaryError:
 
         assert result.content == "fallback ok"
         assert primary.context_calls == [provider_context]
-        assert fallback.context_calls == [ProviderCallContext()]
+        assert fallback.context_calls == [ProviderCallContext(context_window_tokens=65_536)]
         assert fallback.chat_calls[0]["messages"] == messages
 
         controller.observe_response(result, messages)

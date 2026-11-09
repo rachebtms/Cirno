@@ -18,6 +18,8 @@ async def enqueue_heartbeat(sessions: SessionManager, bus: MessageBus, content: 
     key = await ensure_router_session(sessions)
     header = await sessions.state.read_metadata(key)
     assert header is not None, "The Router must exist after session admission"
+    if header["metadata"].get("heartbeat_paused", False):
+        return False
     if any(
         row.get("metadata", {}).get("_heartbeat")
         for row in header["metadata"].get(PENDING_FOLLOWUPS_KEY, [])
@@ -37,6 +39,22 @@ async def enqueue_heartbeat(sessions: SessionManager, bus: MessageBus, content: 
     identifier = await sessions.state.queue_followup(key, message)
     message = replace(message, metadata={**message.metadata, PENDING_FOLLOWUP_ID_KEY: identifier})
     await bus.publish_inbound(message)
+    return True
+
+
+async def heartbeat_paused(sessions: SessionManager) -> bool:
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+    header = await sessions.state.read_metadata(ROUTER_SESSION_KEY, include_runtime=False)
+    return bool(header and header["metadata"].get("heartbeat_paused", False))
+
+
+async def discard_paused_heartbeat(sessions: SessionManager, message: InboundMessage) -> bool:
+    """Retire queued heartbeats without touching user turns or other follow-ups."""
+    if not message.metadata.get("_heartbeat") or not await heartbeat_paused(sessions):
+        return False
+    identifier = message.metadata.get(PENDING_FOLLOWUP_ID_KEY)
+    if isinstance(identifier, str) and identifier:
+        await sessions.state.acknowledge_followups(message.session_key, [identifier])
     return True
 
 

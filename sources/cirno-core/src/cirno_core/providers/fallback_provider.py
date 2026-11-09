@@ -204,8 +204,6 @@ class FallbackProvider(LLMProvider):
             if self._primary_context_window_tokens is not None
             else provider_context.context_window_tokens
         )
-        if not self._primary.supports_native_compaction(model):
-            context_window_tokens = None
         return replace(provider_context, context_window_tokens=context_window_tokens)
 
     def _primary_available(self) -> bool:
@@ -608,15 +606,12 @@ class FallbackProvider(LLMProvider):
                         fallback_model,
                     )
                     continue
-                context_window_tokens = (
-                    fallback.context_window_tokens
-                    if fallback_provider.supports_native_compaction(fallback_model)
-                    else None
-                )
+                context_window_tokens = fallback.context_window_tokens
                 fallback_kwargs["provider_context"] = replace(
                     provider_context,
                     conversation_state=state,
                     context_window_tokens=context_window_tokens,
+                    input_tokens=provider_context.input_tokens if state is not None else None,
                     response_preset=(
                         self._fallback_preset_names[idx] or ""
                         if provider_context.response_preset is not None else None
@@ -698,7 +693,12 @@ class FallbackProvider(LLMProvider):
     ) -> tuple[LLMResponse, Exception | None]:
         """Turn provider exceptions into error responses without swallowing cancellation."""
         try:
-            return await call(provider, kwargs), None
+            from cirno_core.providers.media_capabilities import media_input_error
+            from cirno_core.providers.request_budget import bound_request_output
+            unsupported = media_input_error(provider, kwargs["messages"])
+            if unsupported is not None:
+                return unsupported, None
+            return await call(provider, bound_request_output(provider, kwargs)), None
         except asyncio.CancelledError:
             raise
         except Exception as exc:
