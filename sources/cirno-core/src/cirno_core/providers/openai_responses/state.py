@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any, cast
 
 from cirno_usage.types import LLMUsage
+from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
 from cirno_core.providers.openai_responses.converters import convert_messages
 from loguru import logger
@@ -182,13 +183,15 @@ def responses_compaction_items(result: LLMResponse) -> list[dict[str, Any]]:
 def resolve_compact_threshold(
     context_window_tokens: int | None,
     max_output_tokens: int,
+    *,
+    output_reserve_percent: int = 5,
 ) -> int | None:
-    """Derive Codex-compatible 90% compaction headroom for a model window."""
+    """Cap native 90% compaction by the shared percentage-based input budget."""
     if context_window_tokens is None or context_window_tokens <= 0:
         return None
     ninety_percent = max(1, context_window_tokens * 9 // 10)
-    output_headroom = max(1, context_window_tokens - max(1, max_output_tokens))
-    return min(ninety_percent, output_headroom)
+    budget = ContextBudget(context_window_tokens, max_output_tokens, output_reserve_percent)
+    return max(1, min(ninety_percent, budget.input_limit))
 
 
 def is_compaction_compatibility_error(exc: Exception) -> bool:

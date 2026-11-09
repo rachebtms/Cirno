@@ -21,7 +21,7 @@ from cirno_core.providers.errors import (
     retry_after_text,
 )
 from cirno_core.providers.images import prepare_message_images
-from cirno_core.providers.messages import sanitize_empty_content, tool_cache_marker_indices
+from cirno_core.providers.messages import content_as_blocks, sanitize_empty_content, tool_cache_marker_indices
 from cirno_core.providers.tool_calls import ToolCallRequest, tool_arguments_object_for_replay
 from loguru import logger
 
@@ -246,13 +246,19 @@ class AnthropicProvider(LLMProvider):
             content = msg.get("content")
 
             if role == "system":
-                system = (
+                next_system = (
                     cast(list[dict[str, Any]], content)
                     if isinstance(content, list)
                     else content
                     if isinstance(content, str)
                     else str(content or "")
                 )
+                if not system:
+                    system = next_system
+                elif isinstance(system, str) and isinstance(next_system, str):
+                    system = "\n\n".join(part for part in (system, next_system) if part)
+                else:
+                    system = content_as_blocks(system) + content_as_blocks(next_system)
                 continue
 
             if role == "tool":

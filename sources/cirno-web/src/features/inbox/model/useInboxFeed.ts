@@ -49,9 +49,17 @@ export function useInboxFeed(onSelect: (key: string) => void, returnKey?: string
     location.hash = "/inbox" + (params.size ? `?${params}` : "");
     setCategory(key === "all" ? undefined : key as InboxCategory);
   }
+  async function markRead(ids?: string[], selectedCategory?: InboxCategory) {
+    await inbox.markRead(ids, selectedCategory);
+    // The shared snapshot contains only the latest page, while this view can
+    // retain older pages. Apply the successful write to those rows as well.
+    setPage(current => current && ({ ...current, items: current.items.map(notice =>
+      (!ids || ids.includes(notice.id)) && (!selectedCategory || notice.category === selectedCategory)
+        ? { ...notice, read_at: notice.read_at ?? Date.now() } : notice) }));
+  }
   const open = (notice: InboxNotice) => run(notice.id, async () => {
     const target = await client.requestMutation<{ session_key: string | null }>("instance.action", { action: "inbox.open", values: { id: notice.id } });
-    await inbox.markRead([notice.id]);
+    await markRead([notice.id]);
     if (!target.session_key) throw new Error(t("inbox.conversationUnavailable"));
     onSelect(target.session_key);
   });
@@ -71,8 +79,13 @@ export function useInboxFeed(onSelect: (key: string) => void, returnKey?: string
       return { ...next, items: [...current.items, ...next.items.filter(notice => !existing.has(notice.id))] };
     });
   });
+  const refresh = () => run("refresh", async () => {
+    const requested = category;
+    const [, next] = await Promise.all([inbox.refresh(), inbox.load(requested)]);
+    if (requested === categoryRef.current) setPage(next);
+  });
   return { page, category, busy, error: error ?? inbox.error, unread: inbox.snapshot.unread, selectCategory, open, decide, more,
-    refresh: () => run("refresh", inbox.refresh), markRead: (notice: InboxNotice) => run(notice.id, () => inbox.markRead([notice.id])),
-    markAllRead: () => run("read", () => inbox.markRead(undefined, category)) };
+    refresh, markRead: (notice: InboxNotice) => run(notice.id, () => markRead([notice.id])),
+    markAllRead: () => run("read", () => markRead(undefined, category)) };
 }
 export type InboxFeed = ReturnType<typeof useInboxFeed>;

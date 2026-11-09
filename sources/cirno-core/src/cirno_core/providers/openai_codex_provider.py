@@ -249,10 +249,8 @@ class OpenAICodexProvider(LLMProvider):
                     context_window_tokens=(
                         provider_context.context_window_tokens if provider_context else None
                     ),
-                    max_output_tokens=ContextBudget(
-                        provider_context.context_window_tokens if provider_context else None,
-                        max_tokens, provider_context.output_reserve_percent if provider_context else 5,
-                    ).reserve_tokens, input_budget=input_budget,
+                    max_output_tokens=max_tokens, input_budget=input_budget,
+                    output_reserve_percent=provider_context.output_reserve_percent if provider_context else 5,
                     send=send_compaction,
                 )
 

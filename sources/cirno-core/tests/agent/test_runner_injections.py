@@ -2040,3 +2040,41 @@ async def test_error_path_is_not_stopped_by_an_arbitrary_injection_cap():
 
     assert result.had_injections is True
     assert call_count["n"] == 8
+
+
+@pytest.mark.parametrize("normalized", [True, False])
+async def test_system_followup_reaches_the_next_provider_request(normalized):
+    from cirno_core.agent.runner.engine import AgentRunner
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
+
+    report = {"role": "system", "content": "Worker completed: verified result", PENDING_FOLLOWUP_ID_KEY: "delivery-1"}
+    pending = []
+    captured = []
+
+    async def inject():
+        values, pending[:] = list(pending), []
+        return values
+
+    async def chat(*, messages, **kwargs):
+        captured.append(list(messages))
+        if len(captured) == 1:
+            pending.append(report if normalized else InboundMessage(channel="system", sender_id="worker", chat_id="router",
+                input_role="system", content=report["content"]))
+            return LLMResponse(content="waiting for report")
+        return LLMResponse(content="received report")
+
+    provider = MagicMock()
+    provider.chat_stream_with_retry = chat
+    tools = MagicMock()
+    tools.get_definitions.return_value = []
+    result = await AgentRunner().run(make_run_spec(provider, initial_messages=[{"role": "user", "content": "check work"}],
+        tools=tools, model="test-model", max_iterations=3, max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
+        injection_callback=inject))
+    assert result.had_injections
+    assert result.final_content == "received report"
+    assert len(captured) == 2
+    delivered = [row for row in captured[1] if row.get("content") == report["content"]]
+    assert len(delivered) == 1 and delivered[0]["role"] == "system"
+    if normalized:
+        assert delivered[0][PENDING_FOLLOWUP_ID_KEY] == "delivery-1"

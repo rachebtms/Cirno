@@ -7,6 +7,7 @@ import os
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from filelock import FileLock
 from pydantic import Field
@@ -17,6 +18,7 @@ from cirno_core.credentials.ssh_session import SSHSessionSettings
 from cirno_core.nodes.shell import remote_shell
 from cirno_core.storage.instance import InstanceData
 from cirno_core.utils.atomic_file import atomic_write_text
+from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.subprocess import kill_and_drain
 
 
@@ -198,7 +200,7 @@ class Nodes:
         self, node_id: str, local_path: str, remote_path: str, *, download=False
     ) -> str:
         node = await asyncio.to_thread(self.node, node_id)
-        local = str(Path(local_path).expanduser().resolve())
+        local = await asyncio.to_thread(lambda: str(Path(local_path).expanduser().resolve()))
         host = f"[{node.host}]" if ":" in node.host else node.host
         remote = f"{node.username}@{host}:{remote_path}"
         paths = [remote, local] if download else [local, remote]
@@ -210,15 +212,13 @@ class Nodes:
 
     async def start_job(self, node_id: str, command: str) -> dict:
         node = await asyncio.to_thread(self.node, node_id)
-        job = self.data.save(
-            "node_jobs",
-            {
-                "node_id": node_id,
-                "command": command,
-                "state": "submitting",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+        job = {
+            "id": uuid4().hex,
+            "node_id": node_id,
+            "command": command,
+            "state": "submitting",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
         job_id = job["id"]
         directory = f'"$HOME/.cirno/jobs/{job_id}"'
         # mkdir is the submission boundary; a retry cannot silently duplicate this job.
@@ -237,31 +237,44 @@ class Nodes:
         )
 
         try:
+            await self._save_job(job)
+        except asyncio.CancelledError as exc:
+            await self._save_job({**job, "state": "submission_unknown", "error": str(exc) or type(exc).__name__})
+            raise
+
+        try:
             pid = int((await self.execute(node_id, script, include_stderr=False, initialize=False)).strip())
             if pid <= 0:
                 raise ValueError("SSH returned an invalid job PID")
         except (Exception, asyncio.CancelledError) as exc:
-            self.data.save("node_jobs", {**job, "state": "submission_unknown", "error": str(exc) or type(exc).__name__})
+            await self._save_job({**job, "state": "submission_unknown", "error": str(exc) or type(exc).__name__})
             if isinstance(exc, asyncio.CancelledError):
                 raise
             raise RuntimeError(
                 f"Job {job_id} submission unconfirmed; inspect it before submitting again: {exc}"
             ) from exc
-        return self.data.save("node_jobs", {**job, "pid": pid, "state": "running"})
+        return await self._save_job({**job, "pid": pid, "state": "running"})
+
+    async def _save_job(self, job: dict) -> dict:
+        return await shield_and_drain(asyncio.to_thread(self.data.save, "node_jobs", job))
 
     async def inspect_job(self, job_id: str, *, stop=False) -> dict:
-        job = self.data.get("node_jobs", job_id)
+        job = await asyncio.to_thread(self.data.get, "node_jobs", job_id)
         directory = f'"$HOME/.cirno/jobs/{job_id}"'
+        alive = (
+            f'[ -f {directory}/pid ] && pid=$(cat {directory}/pid) && '
+            f'kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o args= | grep -F {shlex.quote(job_id)} >/dev/null'
+        )
         stop_script = ""
         if stop:
             stop_script = (
-                f"if [ ! -f {directory}/exit ]; then pid=$(cat {directory}/pid); "
-                f'ps -p "$pid" -o args= | grep -F {shlex.quote(job_id)} >/dev/null && kill -TERM -"$pid" && touch {directory}/stop-requested; fi; '
+                f'if [ ! -f {directory}/exit ] && {alive}; then '
+                f'kill -TERM -"$pid" && touch {directory}/stop-requested; fi; '
             )
         result = await self.execute(
             job["node_id"],
             stop_script + f'if [ -f {directory}/exit ]; then printf "EXIT:"; cat {directory}/exit; '
-            f'elif [ -f {directory}/pid ] && kill -0 "$(cat {directory}/pid)" 2>/dev/null; then printf RUNNING; '
+            f'elif {alive}; then printf RUNNING; '
             f'elif [ -f {directory}/stop-requested ]; then printf STOPPED; else printf UNKNOWN; fi; printf "\\n"; tail -c 60000 {directory}/output.log',
             initialize=False,
         )
@@ -277,8 +290,7 @@ class Nodes:
             if status == "STOPPED"
             else "unknown"
         )
-        return self.data.save(
-            "node_jobs",
+        return await self._save_job(
             {
                 **job,
                 "state": state,

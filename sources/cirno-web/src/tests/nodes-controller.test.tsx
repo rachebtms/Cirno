@@ -78,3 +78,30 @@ describe("Node operations", () => {
     expect(view.result.current.nodes).toEqual([node]);
   });
 });
+
+it("waits for the currently selected credential and ignores a late response from an old editor", async () => {
+  const pending = new Map<string, (value: unknown) => void>();
+  const request = server(payload => payload.action === "credentials.describe"
+    ? new Promise(resolve => pending.set(String(payload.values.id), resolve)) : undefined);
+  const view = mount(request);
+  await waitFor(() => expect(view.result.current.loading).toBe(false));
+  act(() => view.result.current.edit());
+  let first!: Promise<void>, second!: Promise<void>;
+  act(() => { first = view.result.current.selectCredential("first"); });
+  act(() => { second = view.result.current.selectCredential("second"); });
+  await act(async () => { pending.get("first")!({ ssh: { working_directory: "/wrong", environment: {} } }); await first; });
+  expect(view.result.current.credentialReady).toBe(false);
+  expect(view.result.current.busy).toBe(true);
+  await act(async () => view.result.current.save());
+  expect(request.mock.calls.some(([, payload]) => payload.action === "nodes.save")).toBe(false);
+  await act(async () => { pending.get("second")!({ ssh: { working_directory: "/right", environment: {} } }); await second; });
+  expect(view.result.current.credentialReady).toBe(true);
+  expect(view.result.current.draft?.working_directory).toBe("/right");
+  let old!: Promise<void>;
+  act(() => { old = view.result.current.selectCredential("old"); });
+  act(() => view.result.current.setDraft(null));
+  act(() => view.result.current.edit(node));
+  await act(async () => { pending.get("old")!({ ssh: { working_directory: "/stale", environment: {} } }); await old; });
+  expect(view.result.current.draft?.working_directory).toBe("/research");
+  expect(view.result.current.busy).toBe(false);
+});

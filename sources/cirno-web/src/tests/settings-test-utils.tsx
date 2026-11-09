@@ -91,11 +91,11 @@ export function settingsPayload(): SettingsPayload {
     },
     requires_restart: false,
     version: {
-      current: "0.2.2",
+      current: "0.2.3",
     },
     docs: {
-      version: "0.2.2",
-      base_url: "https://github.com/rachebtms/Cirno/tree/main/documents/docs/0.2.2",
+      version: "0.2.3",
+      base_url: "https://github.com/rachebtms/Cirno/tree/main/documents/docs/0.2.3",
       chat_apps_url: "https://github.com/rachebtms/Cirno/blob/main/documents/configuration.md",
       latest_url: "https://github.com/rachebtms/Cirno/tree/main/documents",
     },

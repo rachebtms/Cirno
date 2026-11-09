@@ -13,7 +13,7 @@ export function useNodes(client: CirnoClient) {
   const [notice, setNotice] = useState(""), [error, setError] = useState(""), [listError, setListError] = useState("");
   const [operation, setOperation] = useState<string | null>(null), [loading, setLoading] = useState(true);
   const [credentialReady, setCredentialReady] = useState(false);
-  const generation = useRef(0), listing = useRef(0), locked = useRef(false);
+  const generation = useRef(0), listing = useRef(0), selection = useRef(0), locked = useRef(false);
   const request = useCallback(<T,>(action: string, values: object = {}) => client.requestMutation<T>(
     "instance.action", { action, values }, action === "nodes.execute" ? 130_000 : 30_000), [client]);
   const refresh = useCallback(async () => {
@@ -45,7 +45,11 @@ export function useNodes(client: CirnoClient) {
     } catch (reason) { if (ticket === generation.current) setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { locked.current = false; setOperation(null); }
   }
-  const edit = (node?: NodeRecord) => { setCredentialReady(!!node); setDraft(nodeDraft(node)); setError(""); setNotice(""); };
+  const edit = (node?: NodeRecord) => {
+    selection.current++;
+    setOperation(old => old === "credentials.describe" ? null : old);
+    setCredentialReady(!!node); setDraft(nodeDraft(node)); setError(""); setNotice("");
+  };
   const startCommand = (node: NodeRecord) => { setTarget(node); setCommand(""); setOutput(null); setError(""); setNotice(""); };
   const save = () => {
     if (!credentialReady) return;
@@ -54,13 +58,15 @@ export function useNodes(client: CirnoClient) {
   };
   const selectCredential = async (id: string) => {
     const ticket = generation.current;
+    const selected = ++selection.current;
+    const current = () => ticket === generation.current && selected === selection.current;
     setCredentialReady(false);
     setDraft(old => old && ({ ...old, credential_id: id })); setOperation("credentials.describe"); setError("");
     try {
       const body = await client.requestMutation<{ ssh: SSHSessionValues }>("workbench.action", { action: "credentials.describe", values: { id } });
-      if (ticket === generation.current) { setDraft(old => old?.credential_id === id ? { ...old, ...sshSessionDraft(body.ssh) } : old); setCredentialReady(true); }
-    } catch (reason) { if (ticket === generation.current) setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { if (ticket === generation.current) setOperation(null); }
+      if (current()) { setDraft(old => old?.credential_id === id ? { ...old, ...sshSessionDraft(body.ssh) } : old); setCredentialReady(true); }
+    } catch (reason) { if (current()) setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (current()) setOperation(null); }
   };
   const test = (node: NodeRecord) => perform<{ output: string }>("nodes.test", { id: node.id }, body => setNotice(body.output));
   const execute = () => {

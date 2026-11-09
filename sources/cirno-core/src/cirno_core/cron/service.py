@@ -87,6 +87,7 @@ class CronService:
         self._timer_task: asyncio.Task[None] | None = None
         self._running = False
         self._active_executions = 0
+        self._executing_job_ids: set[str] = set()
         self._store_dirty = False
         self.max_sleep_ms = max_sleep_ms
 
@@ -315,6 +316,7 @@ class CronService:
                 job = self.get_job(candidate.id)
                 if (
                     job is None
+                    or job.id in self._executing_job_ids
                     or not job.enabled
                     or not job.state.next_run_at_ms
                     or job.state.next_run_at_ms > _now_ms()
@@ -337,6 +339,19 @@ class CronService:
 
     async def _execute_job(self, job: CronJob) -> None:
         """Execute a single job."""
+        if job.id in self._executing_job_ids:
+            raise ValueError("automation is already running")
+        self._executing_job_ids.add(job.id)
+        try:
+            await self._execute_claimed_job(job)
+        finally:
+            self._executing_job_ids.remove(job.id)
+
+    @property
+    def running_job_ids(self) -> frozenset[str]:
+        return frozenset(self._executing_job_ids)
+
+    async def _execute_claimed_job(self, job: CronJob) -> None:
         schedule = job.schedule
         start_ms = _now_ms()
         logger.info("Cron: executing job '{}' ({})", job.name, job.id)

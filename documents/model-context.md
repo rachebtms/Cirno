@@ -14,6 +14,12 @@ Settings → Context compaction separates the active input threshold, idle trigg
 
 The configured maximum output is a ceiling, not a permanently reserved slice of context. With window `C`, configured maximum output `M`, output headroom `R = min(M, ceil(C × reserve%))` and safety margin `S = 1024`, the active input threshold is `min(C × active%, C − R − S)`. Settings → Context compaction exposes the output headroom percentage (default 5%). Each request uses at most `min(M, C − measured input − S)` output tokens. After compaction that limit is recalculated; the saved model configuration stays unchanged. Normal requests, fallback models and checkpoint generation share this budget policy. Native Codex requests use the same headroom to trigger provider compaction; the Codex endpoint owns its output contract.
 
+Responses server compaction and Codex pre-request compaction retain their native
+90% trigger, capped by that same input budget. Both use the configured output
+headroom percentage rather than reserving the full output ceiling.
+
+When the next request extends the previous measured input, Cirno adds the estimated new messages to the provider's reported input count and compares that result with the full local estimate. Rewritten requests are measured afresh. This keeps appended replies and tool results in the budget even when the local tokenizer underestimates the accepted prefix.
+
 For a 512,000-token window and 256,000-token output ceiling, default active compaction begins at 485,376 input tokens. At 300,000 input tokens the request may generate at most 210,976 tokens. Setting the output ceiling equal to the context window therefore does not collapse the usable input window to zero.
 
 Checkpoint generation has its own output budget and reasoning effort. The budget includes both reasoning and checkpoint text and cannot exceed the conversation model's output budget. The default is at most 8,192 tokens and low effort; the provider may map effort values to its supported choices. Inherit follows the conversation's effort.

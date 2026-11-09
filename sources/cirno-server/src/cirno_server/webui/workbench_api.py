@@ -42,7 +42,7 @@ class WorkbenchAPI:
             if operation == "close":
                 return await self.terminals.close(identifier)
         if action.startswith("credentials."):
-            vault = Credentials()
+            vault = await asyncio.to_thread(Credentials)
             operation = action.removeprefix("credentials.")
             if operation == "list":
                 return await asyncio.to_thread(vault.list)

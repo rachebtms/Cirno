@@ -116,3 +116,23 @@ def test_password_helpers_share_an_executable_without_sharing_values(credentials
     before = helper.stat().st_mtime_ns
     nodes.environment("another-password")
     assert helper.stat().st_mtime_ns == before
+
+
+def test_ssh_directory_survives_nested_edits_and_node_enrollment(credentials):
+    record = credentials.save(label="SSH", kind="ssh", ssh={"host": "gpu.example", "username": "owner", "working_directory": "/first"})
+    assert credentials.ssh(record["id"]).working_directory == "/first"
+    credentials.save(id=record["id"], label="SSH", kind="ssh", ssh={"working_directory": "/updated"})
+    assert credentials.ssh(record["id"]).working_directory == "/updated"
+    credentials.save(id=record["id"], label="Renamed SSH", kind="ssh", ssh={"init_script": "env.sh"})
+    assert credentials.ssh(record["id"]).working_directory == "/updated"
+    Nodes(credentials.data).save_node({"credential_id": record["id"], "working_directory": "/node"})
+    assert credentials.ssh(record["id"]).working_directory == "/node"
+
+
+async def test_agent_can_store_and_update_ssh_startup_directory(monkeypatch, credentials):
+    monkeypatch.setattr("cirno_core.agent.tools.credential.Credentials", lambda **kwargs: Credentials(credentials.data, **kwargs))
+    tool = CredentialTool()
+    assert "working_directory" in tool.parameters["properties"]["ssh"]["properties"]
+    result = json.loads(await tool.execute(action="store", label="SSH", kind="ssh", ssh={"host": "gpu.example", "username": "worker", "working_directory": "/research"}))
+    await tool.execute(action="store", id=result["id"], label="SSH", kind="ssh", ssh={"working_directory": "/results"})
+    assert credentials.ssh(result["id"]).working_directory == "/results"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
+from cirno_core.providers.messages import content_as_blocks
 from cirno_core.providers.tool_calls import tool_arguments_json_for_replay
 
 
@@ -31,7 +32,11 @@ def convert_messages(
         content = msg.get("content")
 
         if role == "system":
-            system_prompt = content if isinstance(content, str) else ""
+            text = "\n\n".join(
+                block["text"] for block in content_as_blocks(content)
+                if isinstance(block.get("text"), str) and block["text"]
+            )
+            system_prompt = "\n\n".join(part for part in (system_prompt, text) if part)
             continue
 
         if role == "user":

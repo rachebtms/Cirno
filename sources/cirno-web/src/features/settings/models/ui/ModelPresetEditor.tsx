@@ -59,91 +59,93 @@ export function ModelPresetEditor({
             <Form
               onSubmit={(event) => {
                 event.preventDefault();
-                options.onSave();
+                if (!busy) options.onSave();
               }}
               className="model-preset-form"
             >
               <Modal.Body>
-                <PresetConnectionFields model={model} options={options} />
-                {options.settings.model_capability_testing_supported && <ModelCapabilityFields key={`${options.editingPresetId}:${form.provider}:${form.model}`} presetId={creating ? undefined : options.editingPresetId} form={form} setForm={setForm} disabled={busy} onBusyChange={setProbing} />}
-                <Accordion
-                  expandedKeys={model.advancedOpen ? ["advanced"] : []}
-                  onExpandedChange={(keys) => {
-                    void model.changeAdvanced(keys.has("advanced"));
-                  }}
-                >
-                  <Accordion.Item id="advanced">
-                    <Accordion.Heading>
-                      <Accordion.Trigger data-edit-action>
-                        {t("settings.models.advancedOptions")}
-                        <Accordion.Indicator />
-                      </Accordion.Trigger>
-                    </Accordion.Heading>
-                    <Accordion.Panel>
-                      <Accordion.Body className="model-preset-fields">
-                        <div aria-busy={model.automaticAPI.loading}>
-                          <ModelAPIControl
-                            provider={apiProvider}
-                            automaticAPI={model.resolvedAutomaticAPI?.api}
-                            value={form.api}
-                            onChange={(api) => setForm((previous) => ({ ...previous, api }))}
-                          />
-                        </div>
-                        {model.automaticAPI.error && (
-                          <div>
-                            <InlineError message={model.automaticAPI.error} />
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              onPress={() => {
-                                void model.automaticAPI.retry();
-                              }}
-                            >
-                              {t("common.retry")}
-                            </Button>
-                          </div>
-                        )}
-                        <ModelAdvancedFields
-                          maxTokens={form.maxTokens}
-                          contextWindowTokens={form.contextWindowTokens}
-                          idleCompactPercent={form.idleCompactPercent}
-                          idleCompactKeepPercent={form.idleCompactKeepPercent}
-                          temperature={form.temperature}
-                          onChange={(patch) => {
-                            if (creating && patch.contextWindowTokens !== undefined)
-                              model.presetContextInitializedRef.current = true;
-                            setForm((previous) => ({ ...previous, ...patch }));
-                          }}
-                        />
-                        {options.settings.model_request_overrides_supported && (
-                          <>
-                            <Description>{t("settings.models.requestOverridesHint")}</Description>
-                            <ProviderParameterFields
-                              inherit
-                              draft={creating}
-                              disabled={options.saving || (!creating && options.dirty)}
-                              onSave={creating ? undefined : options.onSaveRequestSettings}
-                              fields={apiProvider?.advanced_fields ?? []}
-                              form={form}
-                              onChange={(patch) =>
-                                setForm((previous) => ({
-                                  ...previous,
-                                  ...patch,
-                                }))
-                              }
+                <fieldset disabled={probing} className="model-preset-fields min-w-0 border-0 p-0">
+                  <PresetConnectionFields model={model} options={options} />
+                  {options.settings.model_capability_testing_supported && <ModelCapabilityFields key={`${options.editingPresetId}:${form.provider}:${form.model}`} presetId={creating ? undefined : options.editingPresetId} form={form} setForm={setForm} disabled={busy} onBusyChange={setProbing} />}
+                  <Accordion
+                    expandedKeys={model.advancedOpen ? ["advanced"] : []}
+                    onExpandedChange={(keys) => {
+                      void model.changeAdvanced(keys.has("advanced"));
+                    }}
+                  >
+                    <Accordion.Item id="advanced">
+                      <Accordion.Heading>
+                        <Accordion.Trigger data-edit-action>
+                          {t("settings.models.advancedOptions")}
+                          <Accordion.Indicator />
+                        </Accordion.Trigger>
+                      </Accordion.Heading>
+                      <Accordion.Panel>
+                        <Accordion.Body className="model-preset-fields">
+                          <div aria-busy={model.automaticAPI.loading}>
+                            <ModelAPIControl
+                              provider={apiProvider}
+                              automaticAPI={model.resolvedAutomaticAPI?.api}
+                              value={form.api}
+                              onChange={(api) => setForm((previous) => ({ ...previous, api }))}
                             />
-                          </>
-                        )}
-                      </Accordion.Body>
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                </Accordion>
-                {options.error && (
-                  <Alert status="danger" role="alert">
-                    <Alert.Description>{options.error}</Alert.Description>
-                  </Alert>
-                )}
+                          </div>
+                          {model.automaticAPI.error && (
+                            <div>
+                              <InlineError message={model.automaticAPI.error} />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onPress={() => {
+                                  void model.automaticAPI.retry();
+                                }}
+                              >
+                                {t("common.retry")}
+                              </Button>
+                            </div>
+                          )}
+                          <ModelAdvancedFields
+                            maxTokens={form.maxTokens}
+                            contextWindowTokens={form.contextWindowTokens}
+                            idleCompactPercent={form.idleCompactPercent}
+                            idleCompactKeepPercent={form.idleCompactKeepPercent}
+                            temperature={form.temperature}
+                            onChange={(patch) => {
+                              if (creating && patch.contextWindowTokens !== undefined)
+                                model.presetContextInitializedRef.current = true;
+                              setForm((previous) => ({ ...previous, ...patch }));
+                            }}
+                          />
+                          {options.settings.model_request_overrides_supported && (
+                            <>
+                              <Description>{t("settings.models.requestOverridesHint")}</Description>
+                              <ProviderParameterFields
+                                inherit
+                                draft={creating}
+                                disabled={options.saving || (!creating && options.dirty)}
+                                onSave={creating ? undefined : options.onSaveRequestSettings}
+                                fields={apiProvider?.advanced_fields ?? []}
+                                form={form}
+                                onChange={(patch) =>
+                                  setForm((previous) => ({
+                                    ...previous,
+                                    ...patch,
+                                  }))
+                                }
+                              />
+                            </>
+                          )}
+                        </Accordion.Body>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  </Accordion>
+                  {options.error && (
+                    <Alert status="danger" role="alert">
+                      <Alert.Description>{options.error}</Alert.Description>
+                    </Alert>
+                  )}
+                </fieldset>
               </Modal.Body>
               <Modal.Footer>
                 {!creating && model.selectedPreset && (

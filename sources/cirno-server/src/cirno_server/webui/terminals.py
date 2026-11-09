@@ -43,7 +43,7 @@ class Terminals:
         rows: int = 30,
         key: str | None = None,
     ) -> dict:
-        identifier = str(UUID(key)) if key is not None else uuid4().hex
+        identifier = str(UUID(key)) if key is not None else str(uuid4())
         # A browser tab keeps its identity across reloads. Serialize admission so
         # retrying the same connection cannot leave a second, unreachable shell.
         async with self._creation_lock:
@@ -80,7 +80,7 @@ class Terminals:
         env = {**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor"}
         label = "Local"
         if node_id:
-            nodes = Nodes()
+            nodes = await asyncio.to_thread(Nodes)
             node = await asyncio.to_thread(nodes.node, node_id)
             args = [
                 *(await asyncio.to_thread(nodes.arguments, node)),
@@ -93,7 +93,7 @@ class Terminals:
             )
             label = node.name
         cols, rows = max(2, min(500, int(cols))), max(2, min(200, int(rows)))
-        directory = str(Path(cwd).expanduser().resolve(strict=True))
+        directory = await asyncio.to_thread(lambda: str(Path(cwd).expanduser().resolve(strict=True)))
         master, slave = pty.openpty()
         # The helper acquires its own controlling TTY after setsid, then execs
         # the shell. No preexec_fn runs in this multithreaded server.

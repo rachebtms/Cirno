@@ -264,7 +264,7 @@ class ContextBuilder:
             current.get("content"),
         )
         current_meta = current.get("_meta")
-        if current.get("role") == "user" and isinstance(current_meta, dict):
+        if current.get("role") in {"user", "system"} and isinstance(current_meta, dict):
             internal_meta = dict(merged.get("_meta") or {})
             internal_meta.update(cast(dict[str, Any], current_meta))
             merged["_meta"] = internal_meta
@@ -370,15 +370,14 @@ class ContextBuilder:
     ) -> dict[str, Any]:
         """Build only the fresh turn message without merging it into history."""
         content = self.build_user_content(current_message, image_paths=media)
-        blocks: list[RuntimeContextBlock] = []
+        blocks: list[RuntimeContextBlock] = list(runtime_context_blocks or ()) if current_role in {"user", "system"} else []
         if current_role == "user":
-            blocks.extend(runtime_context_blocks or ())
             skill_context = self.skill_context.build_explicit_skill_runtime_context(current_message)
             if skill_context is not None and skill_context not in blocks:
                 blocks.append(skill_context)
         merged, runtime_context_meta = append_runtime_context(content, blocks)
         current: dict[str, Any] = {"role": current_role, "content": merged}
-        if current_role == "user" and runtime_context_meta is not None:
+        if current_role in {"user", "system"} and runtime_context_meta is not None:
             current["_meta"] = {
                 RUNTIME_CONTEXT_MESSAGE_META: runtime_context_meta,
             }

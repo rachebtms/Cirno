@@ -156,7 +156,7 @@ async def test_inbox_actions_use_durable_delivery_and_respect_category_mutes(per
     assert len(recovered) == 1 and recovered[0].content == notification.content
     # A crash after outbox admission but before queue acknowledgement cannot duplicate it.
     retry = replace(notification, delivery_id=None)
-    manager.delivery.durable.record(retry)
+    await manager.delivery.durable.record(retry)
     assert retry.delivery_id == notification.delivery_id
     assert len(manager.delivery.durable.outbox.ready()) == 1
     # Identical records are not re-notified; genuine content/status changes are.

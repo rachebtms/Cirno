@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from functools import partial
 from typing import TYPE_CHECKING
 
 from cirno_core.cron.binding import CronBindingError, binding_revision
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 class AutomationsRoutes:
     def __init__(self, server: ServerHTTPHandler) -> None:
         self.server = server
+        self._run_now_tasks: dict[str, asyncio.Task[bool]] = {}
 
     async def _dispatch_automation_routes(
         self,
@@ -54,9 +56,11 @@ class AutomationsRoutes:
         return None
 
     def _pending_cron_job_ids_for_all(self) -> set[str]:
-        if self.server.cron_service is None or self.server.cron_pending_job_ids is None:
+        if self.server.cron_service is None:
             return set()
-        pending: set[str] = set()
+        pending = set(self._run_now_tasks) | self.server.cron_service.running_job_ids
+        if self.server.cron_pending_job_ids is None:
+            return pending
         for job in self.server.cron_service.list_jobs(include_disabled=True):
             session_key = job.payload.session_key
             if not session_key and job.payload.origin_channel and job.payload.origin_chat_id:
@@ -79,6 +83,12 @@ class AutomationsRoutes:
 
     def _pending_automation_ids_for_session(self, session_key: str) -> set[str]:
         pending: set[str] = set()
+        if self.server.cron_service is not None:
+            active = set(self._run_now_tasks) | self.server.cron_service.running_job_ids
+            pending.update(
+                job.id for job in self.server.cron_service.list_bound_cron_jobs_for_session(session_key)
+                if job.id in active
+            )
         if self.server.cron_pending_job_ids is not None:
             pending.update(self.server.cron_pending_job_ids(session_key))
         if self.server.local_trigger_pending_ids is not None:
@@ -229,8 +239,11 @@ class AutomationsRoutes:
         elif action == "run":
             if not job.enabled:
                 return _http_error(409, "automation is disabled")
+            if job_id in self._pending_cron_job_ids_for_all():
+                return _http_error(409, "automation is already running")
             task = asyncio.create_task(self.server.cron_service.run_job(job_id, force=False))
-            task.add_done_callback(self.server.automations_routes._log_automation_run_result)
+            self._run_now_tasks[job_id] = task
+            task.add_done_callback(partial(self._finish_run_now, job_id))
         elif action == "change-chat":
             values = _automation_values_from_request(request)
             if (
@@ -321,6 +334,8 @@ class AutomationsRoutes:
 
     @staticmethod
     def _log_automation_run_result(task: asyncio.Task[bool]) -> None:
+        if task.cancelled():
+            return
         try:
             ran = task.result()
         except Exception:
@@ -328,3 +343,7 @@ class AutomationsRoutes:
             return
         if not ran:
             logger.warning("WebUI automation run-now task did not execute")
+
+    def _finish_run_now(self, job_id: str, task: asyncio.Task[bool]) -> None:
+        del self._run_now_tasks[job_id]
+        self._log_automation_run_result(task)

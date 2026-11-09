@@ -92,23 +92,28 @@ def test_responses_behavior_is_declared_by_capabilities(provider):
     assert "include" not in body
 
 
-def test_direct_openai_enables_server_compaction(provider):
+@pytest.mark.parametrize(("max_output", "reserve_percent", "threshold"), [
+    (30_000, 5, 90_000),
+    (100_000, 5, 90_000),
+    (100_000, 20, 78_976),
+])
+def test_direct_openai_enables_server_compaction(provider, max_output, reserve_percent, threshold):
     provider._extra_body = {}
 
     body = provider._build_responses_body(
         messages=[{"role": "user", "content": "hello"}],
         tools=None,
         model="gpt-5.6",
-        max_tokens=30_000,
+        max_tokens=max_output,
         temperature=0.1,
         reasoning_effort="high",
         tool_choice=None,
-        provider_context=ProviderCallContext(context_window_tokens=100_000),
+        provider_context=ProviderCallContext(context_window_tokens=100_000, output_reserve_percent=reserve_percent),
     )
 
     assert body["context_management"] == [{
         "type": "compaction",
-        "compact_threshold": 70_000,
+        "compact_threshold": threshold,
     }]
     assert body["include"] == ["reasoning.encrypted_content"]
 

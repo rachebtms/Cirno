@@ -92,6 +92,7 @@ class ContextGovernor:
             usage_prefixes_messages=usage_prefixes_messages,
             tool_definitions=tool_definitions,
             request_context_tokens=request_context_tokens,
+            measured_messages=state.messages,
         )
         state.input_tokens = measurement[0]
         limit = input_budget(state.config)

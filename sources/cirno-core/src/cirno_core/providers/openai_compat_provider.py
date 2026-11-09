@@ -513,6 +513,7 @@ class OpenAICompatProvider(LLMProvider):
                 body,
                 provider_context.context_window_tokens if provider_context else None,
                 max_tokens,
+                output_reserve_percent=provider_context.output_reserve_percent if provider_context else 5,
             )
 
         temperature_supported = supports_temperature(model_name, reasoning_effort)

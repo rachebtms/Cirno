@@ -125,6 +125,21 @@ async def test_browser_tab_reconnect_reuses_its_live_shell(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.name != "posix", reason="POSIX PTY")
+async def test_server_generated_terminal_id_can_reconnect_without_a_second_shell(tmp_path):
+    manager = Terminals()
+    try:
+        first = await manager.create(cwd=str(tmp_path))
+        original = manager.get(first["id"])
+        second = await manager.create(cwd=str(tmp_path), key=first["id"])
+        assert second == first
+        assert len(manager.sessions) == 1
+        assert manager.get(second["id"]) is original
+    finally:
+        await manager.close_all()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "posix", reason="POSIX PTY")
 async def test_closing_a_tab_during_shell_startup_does_not_leave_a_process(tmp_path, monkeypatch):
     from uuid import uuid4
 

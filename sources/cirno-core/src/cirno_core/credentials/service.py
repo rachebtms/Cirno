@@ -78,7 +78,8 @@ class Credentials:
             if previous and not fields.get("password"):
                 fields["password"] = previous.password
             fields["node_enabled"] = node_enabled if node_enabled is not None else bool(previous and previous.node_enabled)
-            fields["working_directory"] = working_directory if working_directory is not None else previous.working_directory if previous else "."
+            if working_directory is not None:
+                fields["working_directory"] = working_directory
             current = SSHCredential.model_validate(fields)
             if previous and previous != current:
                 self._require_no_jobs(id)

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { InboxProvider, type InboxNotice } from "@/features/inbox/model/store";
 import { InboxPage } from "@/features/inbox/InboxPage";
@@ -110,5 +110,47 @@ it("discards an old pagination response after changing notification category", a
       unread: { operations: 1, conversations: 0, system: 0 }, latest_seq: 3, next_before: null }));
     expect(screen.queryByText("Old category page")).not.toBeInTheDocument();
     expect(screen.getByText("Provider timeout")).toBeInTheDocument();
+  } finally { requestMutation.mockImplementation(implementation); }
+});
+
+it.each([false, true])("updates paginated notices after marking read (all: %s)", async all => {
+  const implementation = requestMutation.getMockImplementation()!;
+  const older = notice(0, "system", "compaction", "Older checkpoint");
+  requestMutation.mockImplementation(async (action, payload) => {
+    const values = payload.values as { before?: number };
+    if (payload.action === "inbox.list") {
+      const result = await implementation(action, payload) as Record<string, unknown>;
+      return values.before ? { ...result, items: [older], next_before: null } : { ...result, next_before: 1 };
+    }
+    return implementation(action, payload);
+  });
+  try {
+    view();
+    await screen.findByText("Result available");
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    const card = (await screen.findByText("Older checkpoint")).closest(".inbox-notice")!;
+    fireEvent.click(all ? screen.getByRole("button", { name: "Mark all read" })
+      : within(card as HTMLElement).getByRole("button", { name: "Mark read" }));
+    await waitFor(() => expect(card).toHaveAttribute("data-unread", "false"));
+    expect(within(card as HTMLElement).queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
+  } finally { requestMutation.mockImplementation(implementation); }
+});
+
+it("refreshes the selected category even when its records are outside the shared latest page", async () => {
+  const implementation = requestMutation.getMockImplementation()!;
+  let body = "Older system notice";
+  requestMutation.mockImplementation(async (action, payload) => {
+    const result = await implementation(action, payload) as Record<string, unknown>;
+    return payload.action === "inbox.list" && (payload.values as { category?: string }).category === "system"
+      ? { ...result, items: [notice(0, "system", "compaction", body)] } : result;
+  });
+  try {
+    window.history.replaceState(null, "", "#/inbox?category=system");
+    view();
+    await screen.findByText(body);
+    body = "Updated system notice";
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText(body)).toBeInTheDocument();
+    expect(screen.queryByText("Older system notice")).not.toBeInTheDocument();
   } finally { requestMutation.mockImplementation(implementation); }
 });

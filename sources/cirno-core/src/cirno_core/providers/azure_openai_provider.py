@@ -213,6 +213,7 @@ class AzureOpenAIProvider(LLMProvider):
             self._responses.add_compaction(
                 body, provider_context.context_window_tokens if provider_context else None,
                 max_tokens,
+                output_reserve_percent=provider_context.output_reserve_percent if provider_context else 5,
             )
 
         if self._supports_temperature(deployment, reasoning_effort):

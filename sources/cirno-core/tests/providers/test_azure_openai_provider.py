@@ -266,7 +266,12 @@ def test_build_body_basic():
     )
 
 
-def test_build_body_enables_server_compaction():
+@pytest.mark.parametrize(("max_output", "reserve_percent", "threshold"), [
+    (10_000, 5, 180_000),
+    (200_000, 5, 180_000),
+    (200_000, 20, 158_976),
+])
+def test_build_body_enables_server_compaction(max_output, reserve_percent, threshold):
     provider = AzureOpenAIProvider(
         api_key="k",
         api_base="https://res.openai.azure.com",
@@ -277,16 +282,16 @@ def test_build_body_enables_server_compaction():
         [{"role": "user", "content": "hello"}],
         None,
         None,
-        10_000,
+        max_output,
         0.1,
         "high",
         None,
-        provider_context=ProviderCallContext(context_window_tokens=200_000),
+        provider_context=ProviderCallContext(context_window_tokens=200_000, output_reserve_percent=reserve_percent),
     )
 
     assert body["context_management"] == [{
         "type": "compaction",
-        "compact_threshold": 180_000,
+        "compact_threshold": threshold,
     }]
 
 

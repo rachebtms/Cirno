@@ -37,7 +37,9 @@ describe("CodeBlock", () => {
 
     try {
       render(<CodeBlock code={source} language="typescript" showLineNumbers />);
-      expect((await screen.findByTestId("highlighted-code")).textContent).toBe(source);
+      // The first highlight also loads its lazy renderer; allow a cold module
+      // import to finish when the full suite is running on a busy machine.
+      expect((await screen.findByTestId("highlighted-code", {}, { timeout: 5_000 })).textContent).toBe(source);
       expect(screen.getAllByRole("button")).toHaveLength(1);
       await user.click(screen.getByRole("button", { name: "Copy code" }));
       expect(writeText).toHaveBeenCalledWith(source);

@@ -634,6 +634,14 @@ class MemoryRepository:
         return {"indexed": changed, "missing": missing, "scanned": len(rows), "has_more": len(rows) == limit}
 
     def sync_profiles(self):
+        from filelock import FileLock
+
+        # Memory tools, settings requests and idle maintenance share these
+        # deterministic IDs. Keep their read-before-save sequence atomic.
+        with FileLock(self.root / ".profiles.lock", timeout=10):
+            self._sync_profiles()
+
+    def _sync_profiles(self):
         # Large manually edited profiles are streamed into bounded index records.
         for relative in ("SOUL.md", "USER.md", "memory/MEMORY.md"):
             path = self.home / relative

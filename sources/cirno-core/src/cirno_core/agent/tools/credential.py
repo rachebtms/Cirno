@@ -28,6 +28,7 @@ from cirno_core.credentials.service import Credentials
             "host": StringSchema(), "port": IntegerSchema(minimum=1, maximum=65535),
             "username": StringSchema(), "auth_method": StringSchema(enum=("key", "password")),
             "password": StringSchema(), "identity_file": StringSchema(), "host_key": StringSchema(),
+            "working_directory": StringSchema("Remote startup directory; ~ resolves on the SSH host."),
             "init_script": StringSchema("Remote Bash initialization script path."),
             "environment": ObjectSchema(additional_properties={"type": "string"}, description="Remote environment variables."),
         }, additional_properties=False, description="SSH connection to encrypt. Only the owner can enable it as an SSH Node."),
@@ -49,7 +50,7 @@ class CredentialTool(Tool):
         return None
 
     async def execute(self, action="list", id=None, label="", kind="text", value=None, username="", ssh=None):
-        vault = Credentials(actor="agent")
+        vault = await asyncio.to_thread(Credentials, actor="agent")
         try:
             if action == "list":
                 result = await asyncio.to_thread(vault.list)

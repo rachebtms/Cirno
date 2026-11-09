@@ -143,8 +143,10 @@ class ResponsesBackend:
 
     def add_compaction(
         self, body: dict[str, Any], context_window_tokens: int | None, max_output_tokens: int,
+        *, output_reserve_percent: int = 5,
     ) -> None:
-        threshold = resolve_compact_threshold(context_window_tokens, max_output_tokens)
+        threshold = resolve_compact_threshold(context_window_tokens, max_output_tokens,
+                                              output_reserve_percent=output_reserve_percent)
         if self.native_compaction_available and threshold is not None:
             body["context_management"] = [{"type": "compaction", "compact_threshold": threshold}]
 
@@ -159,9 +161,11 @@ class ResponsesBackend:
         max_output_tokens: int,
         input_budget: int | None,
         send: Callable[[dict[str, Any]], Awaitable[LLMResponse]],
+        output_reserve_percent: int = 5,
     ) -> ProviderConversationState | None:
         """Compact prior history with a trigger while keeping pending tool pairs intact."""
-        threshold = resolve_compact_threshold(context_window_tokens, max_output_tokens)
+        threshold = resolve_compact_threshold(context_window_tokens, max_output_tokens,
+                                              output_reserve_percent=output_reserve_percent)
         if input_budget is None and (
             threshold is None or responses_state_context_tokens(state) < threshold
         ):

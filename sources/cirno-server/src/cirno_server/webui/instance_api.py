@@ -15,7 +15,7 @@ from cirno_core.storage.instance import InstanceData
 async def instance_action(
     payload: dict, *, sessions, bus, config_path: Path | None = None
 ) -> dict:
-    data = InstanceData()
+    data = await asyncio.to_thread(InstanceData)
     action = payload.get("action", "")
     values = payload.get("values") or {}
     if action == "models.probe":

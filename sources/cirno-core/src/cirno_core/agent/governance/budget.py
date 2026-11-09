@@ -80,6 +80,7 @@ def request_measurement(
     usage_prefixes_messages: bool,
     tool_definitions: list[dict[str, Any]] | None,
     request_context_tokens: int | None = None,
+    measured_messages: list[dict[str, Any]] | None = None,
 ) -> tuple[int, str]:
     """Measure the complete input, including resumed state and unsent deltas."""
     if request_context_tokens is not None:
@@ -100,10 +101,17 @@ def request_measurement(
             and usage is not None
             and usage.reported_tokens > 0
             and usage.context_tokens is not None
-            and usage.context_tokens > measured
         ):
-            measured = usage.context_tokens
-            source = "prior provider usage plus pending messages"
+            pending_tokens = 0
+            if measured_messages is not None:
+                prefix_tokens, _ = estimate_prompt_tokens_chain(
+                    config.provider, config.model, measured_messages, tool_definitions,
+                )
+                pending_tokens = max(0, measured - prefix_tokens)
+            calibrated = usage.context_tokens + pending_tokens
+            if calibrated > measured:
+                measured = calibrated
+                source = "prior provider usage plus pending messages"
     return measured, source
 
 

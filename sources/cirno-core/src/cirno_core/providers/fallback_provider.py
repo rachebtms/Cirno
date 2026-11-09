@@ -576,53 +576,53 @@ class FallbackProvider(LLMProvider):
                 await on_fallback_attempt()
             try:
                 fallback_provider = self._provider_factory(fallback)
-                fallback_provider.set_llm_call_observer(self.usage_recorder.observer)
             except Exception as exc:
                 logger.warning(
                     "Failed to create provider for fallback '{}': {}", fallback_model, exc
                 )
                 continue
 
-            fallback_kwargs = {
-                **kwargs,
-                "model": fallback_model,
-                "max_tokens": fallback.max_tokens,
-                "temperature": fallback.temperature,
-            }
-            provider_context = fallback_kwargs.get("provider_context")
-            if isinstance(provider_context, ProviderCallContext):
-                state = provider_context.conversation_state
-                if state is not None and not fallback_provider.can_resume_conversation_state(
-                    state,
-                    fallback_model,
-                ):
-                    state = None
-                if provider_context.compaction_input_budget is not None and (
-                    state is None
-                    or not fallback_provider.supports_pre_request_compaction(fallback_model)
-                ):
-                    logger.warning(
-                        "Skipping fallback '{}': required pre-request compaction cannot resume",
-                        fallback_model,
-                    )
-                    continue
-                context_window_tokens = fallback.context_window_tokens
-                fallback_kwargs["provider_context"] = replace(
-                    provider_context,
-                    conversation_state=state,
-                    context_window_tokens=context_window_tokens,
-                    input_tokens=provider_context.input_tokens if state is not None else None,
-                    response_preset=(
-                        self._fallback_preset_names[idx] or ""
-                        if provider_context.response_preset is not None else None
-                    ),
-                    response_is_fallback=provider_context.response_preset is not None,
-                )
-            if fallback.reasoning_effort is None:
-                fallback_kwargs.pop("reasoning_effort", None)
-            else:
-                fallback_kwargs["reasoning_effort"] = fallback.reasoning_effort
             try:
+                fallback_provider.set_llm_call_observer(self.usage_recorder.observer)
+                fallback_kwargs = {
+                    **kwargs,
+                    "model": fallback_model,
+                    "max_tokens": fallback.max_tokens,
+                    "temperature": fallback.temperature,
+                }
+                provider_context = fallback_kwargs.get("provider_context")
+                if isinstance(provider_context, ProviderCallContext):
+                    state = provider_context.conversation_state
+                    if state is not None and not fallback_provider.can_resume_conversation_state(
+                        state,
+                        fallback_model,
+                    ):
+                        state = None
+                    if provider_context.compaction_input_budget is not None and (
+                        state is None
+                        or not fallback_provider.supports_pre_request_compaction(fallback_model)
+                    ):
+                        logger.warning(
+                            "Skipping fallback '{}': required pre-request compaction cannot resume",
+                            fallback_model,
+                        )
+                        continue
+                    context_window_tokens = fallback.context_window_tokens
+                    fallback_kwargs["provider_context"] = replace(
+                        provider_context,
+                        conversation_state=state,
+                        context_window_tokens=context_window_tokens,
+                        input_tokens=provider_context.input_tokens if state is not None else None,
+                        response_preset=(
+                            self._fallback_preset_names[idx] or ""
+                            if provider_context.response_preset is not None else None
+                        ),
+                        response_is_fallback=provider_context.response_preset is not None,
+                    )
+                if fallback.reasoning_effort is None:
+                    fallback_kwargs.pop("reasoning_effort", None)
+                else:
+                    fallback_kwargs["reasoning_effort"] = fallback.reasoning_effort
                 fallback_response, fallback_exception = await self._call_provider(
                     call, fallback_provider, fallback_kwargs
                 )

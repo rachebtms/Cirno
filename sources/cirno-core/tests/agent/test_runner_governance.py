@@ -1010,9 +1010,32 @@ async def test_reported_usage_floor_triggers_pressure_despite_low_estimate(monke
             ],
             tool_definitions=tools.get_definitions(),
         )
-    estimate.assert_called_once()
+    assert estimate.call_count == 2
     assert exc_info.value.estimated_tokens == 900
     assert exc_info.value.source == "prior provider usage plus pending messages"
+
+
+@pytest.mark.parametrize("prefix_estimate,current_estimate", [(500, 900), (100, 200)])
+async def test_reported_input_adds_new_messages_before_pressure_and_output_budget(monkeypatch, prefix_estimate, current_estimate):
+    provider = MagicMock(spec=LLMProvider)
+    tools = MagicMock()
+    tools.get_definitions.return_value = []
+    previous = [{"role": "user", "content": "previous request"}]
+    spec = make_run_spec(provider, initial_messages=previous, tools=tools, model="local-model",
+                         context_window_tokens=1_624, max_tokens=100, max_iterations=1,
+                         max_tool_result_chars=_MAX_TOOL_RESULT_CHARS)
+    estimate = MagicMock(side_effect=[(current_estimate, "test-counter"), (prefix_estimate, "test-counter")])
+    monkeypatch.setattr("cirno_core.agent.governance.budget.estimate_prompt_tokens_chain", estimate)
+    state = ModelRequestState(config=_governance_config(provider, tools, spec),
+        conversation=ProviderConversationStateController(provider=provider, model=spec.runtime.model, messages=previous),
+        compaction=_compaction_state(spec), usage=LLMUsage.reported(input_tokens=800, output_tokens=10),
+        messages=previous, tool_definitions=[])
+    current = [*previous, {"role": "assistant", "content": "response"}, {"role": "user", "content": "new input"}]
+    with pytest.raises(ContextWindowExceededError) as failure:
+        await ContextGovernor().prepare_request(state, current, tool_definitions=[])
+    assert failure.value.estimated_tokens == 800 + current_estimate - prefix_estimate
+    assert state.input_tokens == failure.value.estimated_tokens
+    assert estimate.call_args_list[1].args[2] == previous
 
 
 async def test_runner_does_not_compact_primary_request_from_fallback_usage(monkeypatch):
@@ -1110,7 +1133,7 @@ async def test_reported_usage_floor_stays_idle_below_budget(monkeypatch):
         ],
         tool_definitions=tools.get_definitions(),
     )
-    estimate.assert_called_once()
+    assert estimate.call_count == 2
     assert messages == [
         {"role": "user", "content": "previous request"},
         {"role": "assistant", "content": "appended response"},

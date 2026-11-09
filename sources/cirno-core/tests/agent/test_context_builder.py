@@ -538,6 +538,16 @@ class TestBuildMessages:
         assert "fresh context" in current["content"]
         assert current["_meta"]["runtime_context"]["sources"] == ["test"]
 
+    def test_system_input_keeps_runtime_provenance_in_transcript_and_compatibility(self, tmp_path):
+        builder = _builder(tmp_path / "home")
+        blocks = [RuntimeContextBlock(source="event", content="received_at: 2026-11-08T17:33:17Z")]
+        transcript = TranscriptInput(history=[], current_message="wake", current_role="system", runtime_context_blocks=blocks)
+        for messages in (builder.build_transcript(transcript), builder.build_messages([], "wake", current_role="system", runtime_context_blocks=blocks)):
+            current = messages[-1]
+            assert current["role"] == "system"
+            assert "received_at: 2026-11-08T17:33:17Z" in current["content"]
+            assert current["_meta"]["runtime_context"]["sources"] == ["event"]
+
     def test_different_role_appended(self, tmp_path):
         builder = _builder(tmp_path / "home")
         history = [{"role": "assistant", "content": "previous response"}]

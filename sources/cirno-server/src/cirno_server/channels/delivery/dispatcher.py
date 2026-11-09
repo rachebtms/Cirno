@@ -52,10 +52,10 @@ class OutboundDispatcher:
 
     async def recover(self) -> None:
         with self.bus.admission.activity():
-            for msg in self.delivery.durable.outbox.ready():
+            for msg in await self.delivery.durable.ready():
                 channel = self.channel(msg.channel)
                 if channel is None:
-                    self.delivery.durable.outbox.finish(msg, "failed", "channel_disabled")
+                    await self.delivery.durable.finish(msg, "failed", "channel_disabled")
                 else:
                     await self.notifications.record(msg)
                     await self.delivery.queue(channel, msg)
@@ -170,7 +170,7 @@ class OutboundDispatcher:
                 else:
                     logger.warning("Unknown channel: {}", msg.channel)
                     if msg.delivery_id is not None:
-                        self.delivery.durable.outbox.finish(msg, "failed", "channel_disabled")
+                        await self.delivery.durable.finish(msg, "failed", "channel_disabled")
 
             except asyncio.TimeoutError:
                 continue

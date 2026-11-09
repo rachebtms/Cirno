@@ -1,6 +1,6 @@
 [project]
 name = "cirno-vault"
-version = "0.2.2"
+version = "0.2.3"
 description = "Encrypted personal credentials and activity redaction"
 requires-python = ">=3.11"
 license = "MIT"

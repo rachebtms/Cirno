@@ -939,8 +939,9 @@ async def test_codex_replayed_tool_turn_omits_server_item_ids(monkeypatch) -> No
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("inline_compaction", [False, True])
-async def test_codex_compacts_state_at_ninety_percent_before_next_request(
-    monkeypatch, inline_compaction,
+@pytest.mark.parametrize(("input_tokens", "reserve_percent"), [(90_000, 5), (75_000, 20)])
+async def test_codex_compacts_state_with_configured_headroom_before_next_request(
+    monkeypatch, inline_compaction, input_tokens, reserve_percent,
 ) -> None:
     _mock_codex_token(monkeypatch)
     provider = OpenAICodexProvider(default_model="openai-codex/gpt-5.6-sol")
@@ -957,7 +958,7 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
                 "content": [{"type": "output_text", "text": "old answer"}],
             },
         ],
-        usage=LLMUsage.reported(input_tokens=90_000, output_tokens=5_000),
+        usage=LLMUsage.reported(input_tokens=input_tokens, output_tokens=5_000),
     )
     bodies: list[dict[str, Any]] = []
     timeline: list[str] = []
@@ -1020,13 +1021,14 @@ async def test_codex_compacts_state_at_ninety_percent_before_next_request(
             {"role": "system", "content": "system"},
             {"role": "user", "content": "new question"},
         ],
-        max_tokens=5_000,
+        max_tokens=100_000,
         on_content_delta=answer_delta,
         provider_context=ProviderCallContext(
             conversation_state=state.with_pending_messages([
                 {"role": "user", "content": "new question"},
             ]),
             context_window_tokens=100_000,
+            output_reserve_percent=reserve_percent,
             events=EventSink(observe),
         ),
     )

@@ -135,13 +135,13 @@ async def drain_injections(
             continue
         if isinstance(item, dict):
             message_item = cast(dict[str, Any], item)
-            if message_item.get("role") == "user" and "content" in message_item:
+            if message_item.get("role") in {"user", "system"} and "content" in message_item:
                 if has_injection_content(message_item.get("content")):
                     injected_messages.append(message_item)
             continue
         content = getattr(item, "content") if hasattr(item, "content") else str(item)
         if has_injection_content(content):
-            injected_messages.append({"role": "user", "content": content})
+            injected_messages.append({"role": getattr(item, "input_role", None) or "user", "content": content})
     return injected_messages
 
 

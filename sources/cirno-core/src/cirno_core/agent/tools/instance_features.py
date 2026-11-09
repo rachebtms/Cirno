@@ -69,7 +69,7 @@ class NodeTool(Tool):
         scope = current_workspace_scope()
         if action != "list" and scope and scope.access_mode != "full":
             return ToolResult.error("SSH operations require AI approval or Full Access. No remote operation was executed.")
-        nodes = Nodes(actor="agent")
+        nodes = await asyncio.to_thread(Nodes, actor="agent")
         try:
             if action == "list":
                 result = await asyncio.to_thread(nodes.catalog)

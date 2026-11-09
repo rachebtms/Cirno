@@ -1,6 +1,6 @@
 [project]
 name = "cirno-ai"
-version = "0.2.2"
+version = "0.2.3"
 description = "A lightweight personal AI assistant framework"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -21,20 +21,20 @@ license-files = [
     "THIRD_PARTY_NOTICES.md",
 ]
 
-dependencies = ["cirno-server==0.2.2"]
+dependencies = ["cirno-server==0.2.3"]
 
 [project.optional-dependencies]
 memory-embedding = [
-    "cirno-core[memory-embedding]==0.2.2",
+    "cirno-core[memory-embedding]==0.2.3",
 ]
 azure = [
-    "cirno-core[azure]==0.2.2",
+    "cirno-core[azure]==0.2.3",
 ]
 bedrock = [
-    "cirno-core[bedrock]==0.2.2",
+    "cirno-core[bedrock]==0.2.3",
 ]
 olostep = [
-    "cirno-core[olostep]==0.2.2",
+    "cirno-core[olostep]==0.2.3",
 ]
 dev = [
     "hatchling",
