@@ -23,6 +23,8 @@ const catalog: WorkspacesPayload = {
 };
 
 export function MobileChatLayoutFixture({ parameters }: { parameters: URLSearchParams }) {
+  const modelLabel = parameters.get("model") ?? "6.1-max";
+  const provider = parameters.get("provider") ?? "openai-codex";
   const [dark, setDark] = useState(parameters.has("dark"));
   const [scope, setScope] = useState<WorkspaceScopePayload>(() => parameters.has("long-project")
     ? { ...initialScope, project_name: "cirno-mobile-layout-preview" }
@@ -38,7 +40,10 @@ export function MobileChatLayoutFixture({ parameters }: { parameters: URLSearchP
       <ThreadViewport messages={messages} isStreaming={parameters.has("pending")} conversationReady conversationKey="websocket:mobile-layout-preview"
         hasMoreBefore={false} showScrollToBottomButton
         composer={<ThreadComposer variant="thread" onSend={() => {}} isStreaming={parameters.has("pending")} activeTurnId={parameters.has("pending") ? "layout-pending" : null} onStop={() => {}}
-          modelLabel="6.1-max" modelProvider="openai-codex"
+          modelLabel={modelLabel} modelProvider={provider}
+          modelPresets={parameters.has("model") ? [{ id: "preview", name: modelLabel, model: "deepseek-flash-free", provider }] : undefined}
+          modelPreset={parameters.has("model") ? "preview" : undefined}
+          onModelPresetChange={parameters.has("model") ? () => {} : undefined}
           contextUsage={parameters.has("no-context") ? null : { contextTokens: 44_000, contextWindowTokens: 200_000 }}
           workspaceScope={scope} workspaceDefaultScope={initialScope} workspaceControls={catalog.controls}
           workspaceProjectLocked={!parameters.has("project")}

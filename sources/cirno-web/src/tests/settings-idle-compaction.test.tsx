@@ -65,14 +65,14 @@ describe("Idle compaction settings", () => {
     expect(input()).toHaveValue("721");
   });
 
-  it("saves when keyboard focus leaves the section after reaching Cancel", async () => {
+  it("saves when keyboard focus leaves the section without introducing Save or Cancel", async () => {
     setup();
     const user = userEvent.setup();
     await user.click(input());
     await user.clear(input());
     await user.type(input(), "37");
-    await user.tab();
-    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(requestMutationMock).not.toHaveBeenCalled();
     await user.click(screen.getByRole("heading", { name: "Context compaction" }));
     await waitFor(() => expectSaved(37));
@@ -124,21 +124,24 @@ describe("Idle compaction settings", () => {
     fireEvent.blur(input());
     expect(await screen.findByText("Could not save settings")).toBeVisible();
     expect(input()).toHaveValue("37");
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(2));
     expectSaved(37);
     await waitFor(() => expect(screen.queryByText("Could not save settings")).not.toBeInTheDocument());
   });
 
-  it.each(["37", "0"])("cancels a focused %s minute draft without committing it on blur", async (next) => {
+  it.each(["37", "0"])("discards a failed %s minute draft without saving it again on blur", async (next) => {
     setup();
+    requestMutationMock.mockRejectedValueOnce(new Error("Could not save settings"));
     const user = userEvent.setup();
     await user.click(input());
     await user.clear(input());
     await user.type(input(), next);
+    fireEvent.blur(input());
+    expect(await screen.findByText("Could not save settings")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(input()).toHaveValue("720");
-    expect(requestMutationMock).not.toHaveBeenCalled();
+    expect(requestMutationMock).toHaveBeenCalledTimes(1);
   });
 
   it("can cancel a failed toggle without losing the stored enabled state", async () => {

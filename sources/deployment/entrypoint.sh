@@ -36,6 +36,15 @@ if [ "${CIRNO_FULL_IMAGE:-}" = "1" ]; then
     else
         /app/.venv/bin/python -m venv "$CIRNO_SHELL_VENV" || exit 1
     fi
+    # Refresh image-provided libraries for new and existing instance volumes.
+    # User-installed packages retain precedence; service dependencies stay separate.
+    "$CIRNO_SHELL_VENV/bin/python" - <<'PY' || exit 1
+import sysconfig
+from pathlib import Path
+
+site = Path(sysconfig.get_path("purelib"))
+(site / "cirno-bundled-tools.pth").write_text("/opt/cirno/python-packages\n", encoding="utf-8")
+PY
     if [ ! -e "$HOME/.config" ] && [ ! -L "$HOME/.config" ]; then
         ln -s "$dir/state/cli/config" "$HOME/.config"
     fi

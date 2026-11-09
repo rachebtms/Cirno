@@ -41,6 +41,7 @@ ENV HOME=/home/cirno \
     HOMEBREW_NO_INSTALL_CLEANUP=1 \
     PATH="/home/linuxbrew/.linuxbrew/opt/python@3.12/libexec/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/opt/cirno/bin:/opt/cirno/node-tools/bin:$PATH"
 COPY sources/deployment/full-image.Brewfile /tmp/full-image.Brewfile
+COPY sources/deployment/full-image-python.txt /tmp/full-image-python.txt
 COPY sources/deployment/install_full_tools.sh /tmp/install_full_tools.sh
 COPY sources/deployment/bundle_embedding.py /tmp/bundle_embedding.py
 USER cirno

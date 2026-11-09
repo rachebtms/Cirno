@@ -121,7 +121,7 @@ export function useRuntimeConfigSettings(
   saveLatest.current = save;
   pendingGroups.current = [...new Set(RUNTIME_CONFIG_FIELDS.filter((field) =>
     visible(field) && dirty(field) && !errors[field.group]
-      && !RUNTIME_CONFIG_FIELDS.some((other) => other.group === field.group && other.manual && dirty(other)),
+      && !RUNTIME_CONFIG_FIELDS.some((other) => other.group === field.group && other.saveOnBlur && dirty(other)),
   ).map((field) => field.group))];
   useEffect(() => {
     if (saving) return;

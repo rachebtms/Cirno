@@ -1,12 +1,12 @@
 # Instance upgrades
 
-Cirno 0.2.4 upgrades instances from 0.2.0, 0.2.1, 0.2.2 and 0.2.3 and imports the published 0.1.6 layout at startup. Stop the
+Cirno 0.2.5 upgrades instances from 0.2.0, 0.2.1, 0.2.2, 0.2.3 and 0.2.4 and imports the published 0.1.6 layout at startup. Stop the
 old service and keep the same instance volume and external workspace mounts.
 The configuration records the last version as `lastRunVersion`; unversioned
 configuration is treated as 0.1.6. Later migrations belong to the startup
 migration registry, rather than the Agent's runtime storage code.
 
-The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3 and 0.2.3 → 0.2.4 steps update only the configuration version. Conversations,
+The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3, 0.2.3 → 0.2.4 and 0.2.4 → 0.2.5 steps update only the configuration version. Conversations,
 profiles, credentials and settings keep their existing data. Configuration
 originals and resumable journals stay under `state/migrations/<source>-to-<target>/`.
 Instances on 0.1.6 run the registered steps in order. First-use introductions

@@ -18,7 +18,17 @@ COMMANDS = (
 )
 
 
+def check_python_packages() -> None:
+    result = subprocess.run(
+        ["python", "-c", "import docx, openpyxl, pptx, pypdf, pdfplumber, reportlab, lxml.etree, debugpy"],
+        capture_output=True, text=True, timeout=45,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    print("OK bundled Python document, PDF, XML and debugging libraries", flush=True)
+
+
 def check_persistence() -> None:
+    check_python_packages()
     result = subprocess.run(["python", "-c", "import cirno_persistence_probe; assert cirno_persistence_probe.value == 'survives-recreation'"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     result = subprocess.run(["tea", "logins", "list"], capture_output=True, text=True, timeout=30)

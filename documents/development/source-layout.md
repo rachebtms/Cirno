@@ -168,6 +168,8 @@ under `src/ui/fields/`.
 
 The thread shell composes separate hooks for model selection, context usage, message editing, installed capability catalogs and file previews. New and existing conversations share one composer configuration.
 
+`useAppViewport` owns the touch app's visual-viewport height and pan offset. Critical first-paint CSS in `index.html` uses the same `--app-viewport-height` variable; an unlayered fixed root height would override the interactive stylesheet's base layer. Keyboard regression checks load that shipping HTML, render the real account entry, and retain its styles when mounting controlled chat data. Model-provider fallback icons own their SVG dimensions and margins instead of inheriting HeroUI Button's generic icon spacing.
+
 `src/features/telegram/` separates personal binding, expiring PIN pairing, notification
 preferences and action links. Status reads are serialized per connection; accepted
 writes invalidate older reads. Background pages suspend pairing checks. The server's
@@ -296,7 +298,7 @@ Browser history and workspace startup restore one canonical tab for each routed 
 
 The composer separates its editor, attachments, queued messages, Goal details and toolbar under `features/composer/view/`. Model selection and provider icons live under `features/model-selection/`. The editor and its decoration layer share typography and block geometry to keep selection, IME composition and scrolling aligned.
 
-Settings navigation and the content frame live under `features/settings/ui/`. `composition/` assembles typed section maps by domain and separates exit/save coordination from operation overlays. Pending completions can only execute the latest navigation intent for their mounted connection. Runtime configuration separates its schema, persistence controller and field renderers; manual and automatic saves use the same controller. Moving focus to Cancel stays within the form; leaving the form commits manual fields. A save response acknowledges its submitted values without clearing edits entered while the request was running. Unexpected completion errors use the native notice queue and retain the draft. Account settings separate credential operations from their form.
+Settings navigation and the content frame live under `features/settings/ui/`. `composition/` assembles typed section maps by domain and separates exit/save coordination from operation overlays. Pending completions can only execute the latest navigation intent for their mounted connection. Runtime configuration separates its schema, persistence controller and field renderers; all fields use the same automatic-save controller. Fields marked `saveOnBlur` commit when focus leaves their group, while other fields save after edits settle. Normal edits and pending saves never expose Save/Cancel actions; failed saves retain their draft and offer Retry/Cancel. A save response acknowledges its submitted values without clearing edits entered while the request was running. Unexpected completion errors use the native notice queue and retain the draft. Account settings separate credential operations from their form.
 
 The web file feature separates directory requests, create-entry forms and document view state. Editor and preview tabs share the document store; tab disposal waits for a pending save and preserves the tab when that save fails.
 

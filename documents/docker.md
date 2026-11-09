@@ -6,7 +6,7 @@ The repository workflow `.github/workflows/container.yml` verifies, builds and p
 
 - Pull requests run frontend and backend checks and build AMD64 and ARM64 images on native runners for startup smoke tests. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.2.4` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.2.5` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
@@ -29,7 +29,7 @@ The example publishes only the Web UI port and persists the instance root. Model
 
 Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. Setup then offers theme selection and model provider/model configuration; model setup can be deferred to Settings. With a model connected, the Router starts a one-time introduction to learn its personality and how to address the owner. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.4`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.5`; otherwise track `latest`. Optional memory embeddings are disabled by default. The default slim image does not bundle an embedding model; the full variant includes matching INT8 weights and a tokenizer, with inference still disabled by default.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
@@ -49,7 +49,7 @@ registrations and custom health checks to the [versioned endpoints](development/
 The browser entry stays at `/`.
 
 1. Stop the service and back up the entire mounted instance directory. Also back up workspaces mounted outside that directory.
-2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.4`, or `ghcr.io/rachebtms/cirno:0.2.4-full` for the full variant. Preserve your volumes, ports, environment and reverse-proxy network configuration.
+2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.5`, or `ghcr.io/rachebtms/cirno:0.2.5-full` for the full variant. Preserve your volumes, ports, environment and reverse-proxy network configuration.
 3. Pull and recreate the service:
 
    ```sh
@@ -60,7 +60,7 @@ The browser entry stays at `/`.
 
    If you use Compose overrides, pass the same `-f` files to each command. With `compose.full.yaml`, set the pinned full-image tag in that override because it takes precedence over the base file.
 
-4. Refresh the browser or installed Web app and check Settings → About for 0.2.4. Sign in with the existing account.
+4. Refresh the browser or installed Web app and check Settings → About for 0.2.5. Sign in with the existing account.
 
 Recreating the container interrupts its current process; do this between active operations. Saved progress remains in the instance volume. Packages and files written only into the old container's writable layer do not survive replacement. The full image supplies the bundled tools and persists user Python packages and supported CLI configuration for subsequent recreations. Do not delete or replace the existing instance volume during an upgrade.
 
@@ -82,6 +82,7 @@ The full image includes:
 | Network and SSH | `curl`, `wget`, `ssh`, `scp`, `sftp`, `rsync`, `rclone` |
 | Terminal and files | `tmux`, `rg`, `fd`, `fzf`, `bat`, `jq`, `yq`, `tree` |
 | Python | `python3`, `pipx`, `uv`, `uvx`, `hf` |
+| Python libraries | `python-docx`, `openpyxl`, `python-pptx`, `pypdf`, `pdfplumber`, `reportlab`, `lxml`, `debugpy` |
 | Node | `node`, `npm`, `npx`, `bun`, `nvm` (shell function) |
 | Agent integrations | `summarize` (Homebrew), `mcporter`, `gog`, `xurl` |
 | Documents and media | `ffmpeg`, `yt-dlp`, `pandoc`, `pdftotext`, `tesseract` |
@@ -91,9 +92,9 @@ Telegram dependencies and the available Python optional feature extras are insta
 
 The full image bundles `Xenova/bge-small-zh-v1.5` at revision `75c43b069aac4d136ba6bc1122f995fedcfd2781`, including `model_quantized.onnx`, `tokenizer.json`, its model card and the upstream MIT license. Downloads are checked against SHA-256 hashes. Blank model and tokenizer paths select these bundled assets, including when replacing a slim container; custom paths take precedence. Embeddings remain disabled until explicitly enabled. The weights live at `/opt/cirno/models/bge-small-zh-v1.5`, outside the mounted instance and workspace, and the selected paths appear under Memory retrieval.
 
-The additional commands consume image disk space; they do not run background daemons at startup. The CI smoke test checks command execution as the non-root user, Telegram dependency availability, and actual CPU inference with the bundled model on both architectures.
+The additional commands consume image disk space; they do not run background daemons at startup. The CI smoke test checks command execution as the non-root user, the bundled Python library imports before and after container recreation, Telegram dependency availability, and actual CPU inference with the bundled model on both architectures.
 
-The normal instance volume also persists CLI configuration under `state/cli/` and user-installed Python, npm, uv, pipx, Go, Bun and nvm tools under `state/tools/`. In the full image, `python`, `python3`, `pip` and `uv pip` use a separate virtual environment at `/home/cirno/.cirno/state/tools/python`; packages installed there survive container recreation. Cirno itself uses `/app/.venv`, so user packages do not replace the service's dependencies. Interpreter links are refreshed at startup while retaining user packages.
+The normal instance volume also persists CLI configuration under `state/cli/` and user-installed Python, npm, uv, pipx, Go, Bun and nvm tools under `state/tools/`. In the full image, `python`, `python3`, `pip` and `uv pip` use a separate virtual environment at `/home/cirno/.cirno/state/tools/python`; packages installed there survive container recreation. Bundled Python libraries live at `/opt/cirno/python-packages` and are linked into this environment at startup, including when upgrading an existing instance volume. User-installed packages take precedence over bundled versions. Cirno itself uses `/app/.venv`, so user packages do not replace the service's dependencies. Interpreter links are refreshed at startup while retaining user packages.
 
 Gitea `tea` login configuration is stored under `state/cli/config/tea/`, GitHub `gh` configuration under `state/cli/config/gh/`, and the npm user configuration under `state/cli/config/npmrc`. XDG configuration, data and caches also point into the instance volume. Keep that volume when recreating the container to retain credentials and user packages. The native full-image smoke tests install a local Python package and a fixture Gitea login, recreate the container with the same volume, and verify both survive.
 
@@ -113,6 +114,6 @@ The entrypoint fixes ownership of the mounted instance root and drops to the Cir
 
 ## Complete backups
 
-The Web UI includes [Backup & restore](backups.md). It archives the instance and selected external folders; historical workspaces and common CLI credential/package directories are suggested automatically. It is included in both v0.2.4 image variants.
+The Web UI includes [Backup & restore](backups.md). It archives the instance and selected external folders; historical workspaces and common CLI credential/package directories are suggested automatically. It is included in both v0.2.5 image variants.
 
 CLI Apps in the full image use the same persistent user Python environment and non-secret directory environment as shell tools. This keeps market-installed Python packages and tools using XDG, npm, uv or pipx paths inside the instance volume. CLI processes do not inherit provider API keys. SSH, Git credential files, `.aws`, `.cargo` and `.local` locations are also linked into instance storage on a fresh full-image container. Existing external locations are offered as optional backup paths.

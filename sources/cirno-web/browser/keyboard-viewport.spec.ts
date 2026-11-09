@@ -15,7 +15,18 @@ for (const surface of ["register", "login", "chat"]) test(`${browserName}: keybo
         viewport.dispatchEvent(new Event("resize"));
       } });
     });
-    await page.goto(`/browser/fixture.html?case=keyboard-viewport&surface=${surface}&mode=${surface}&lang=en&theme=dark`);
+    // Use the shipping entry HTML, including critical CSS. Auth renders the
+    // actual application; chat substitutes only its boot module for local data.
+    if (surface === "chat") {
+      await page.route("**/src/main.tsx", route => route.fulfill({
+        contentType: "application/javascript", body: 'import "/browser/fixture.tsx";',
+      }));
+    } else {
+      await page.route("**/v0/bootstrap", route => route.fulfill({
+        status: 401, json: { error: surface === "register" ? "registration_required" : "login_required" },
+      }));
+    }
+    await page.goto(`/?case=keyboard-viewport&surface=${surface}&mode=${surface}&lang=en&theme=dark`);
     const input = surface === "chat" ? page.locator("textarea").first() : page.locator('input[name="password"]');
     await input.fill("Retained draft 中文");
     await input.focus();
@@ -25,6 +36,12 @@ for (const surface of ["register", "login", "chat"]) test(`${browserName}: keybo
     await expect(input).toBeFocused();
     await expect(input).toHaveValue("Retained draft 中文");
     expect(await input.evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+    if (surface === "register") {
+      const confirm = page.locator('input[name="confirmPassword"]');
+      await confirm.fill("Retained draft 中文");
+      await expect.poll(async () => { const box = await confirm.boundingBox(); return !!box && box.y >= 70 && box.y + box.height <= 460; }).toBe(true);
+      await expect(confirm).toBeFocused();
+    }
     await page.screenshot({ path: test.info().outputPath(`${surface}-keyboard.png`) });
     await page.evaluate(() => (window as unknown as { resizeKeyboard: (height: number) => void }).resizeKeyboard(844));
     await expect.poll(() => page.locator("#root").evaluate(el => el.getBoundingClientRect().height)).toBe(844);

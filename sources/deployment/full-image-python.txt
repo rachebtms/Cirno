@@ -1,0 +1,9 @@
+# Libraries available to Agent Python commands in the full image.
+python-docx
+openpyxl
+python-pptx
+pypdf
+pdfplumber
+reportlab
+lxml
+debugpy

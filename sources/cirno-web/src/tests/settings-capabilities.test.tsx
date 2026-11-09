@@ -130,7 +130,8 @@ describe("Settings capabilities", () => {
     fireEvent.change(proxy, { target: { value: address } });
     expect(proxy).toHaveValue("http://new-proxy.example:7890");
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
-    fireEvent.click(within(screen.getByRole("region", { name: "Shared proxy" })).getByRole("button", { name: "Save changes" }));
+    expect(within(screen.getByRole("region", { name: "Shared proxy" })).queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    fireEvent.blur(proxy);
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.runtime_config.update", { values: { "network.proxy": address } }, 20_000,
     ));

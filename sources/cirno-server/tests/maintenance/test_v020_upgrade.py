@@ -9,7 +9,7 @@ from cirno_core.notifications.inbox import NotificationInbox
 from cirno_server.maintenance.migrations.registry import migrate_instance
 
 
-@pytest.mark.parametrize("source", ["0.2.0", "0.2.1", "0.2.2", "0.2.3"])
+@pytest.mark.parametrize("source", ["0.2.0", "0.2.1", "0.2.2", "0.2.3", "0.2.4"])
 @pytest.mark.parametrize("interrupt", [False, True])
 def test_v020_upgrade_preserves_state_and_is_resumable(tmp_path, monkeypatch, interrupt, source):
     config = {"lastRunVersion": source, "providers": {"custom": {"apiKey": "owner-key"}},
@@ -39,12 +39,12 @@ def test_v020_upgrade_preserves_state_and_is_resumable(tmp_path, monkeypatch, in
     assert migrate_instance(path)
     assert json.loads(path.read_text()) == {**config, "lastRunVersion": __version__}
     assert not migrate_instance(path)
-    target = {"0.2.0": "0.2.1", "0.2.1": "0.2.2", "0.2.2": "0.2.3", "0.2.3": "0.2.4"}[source]
+    target = {"0.2.0": "0.2.1", "0.2.1": "0.2.2", "0.2.2": "0.2.3", "0.2.3": "0.2.4", "0.2.4": "0.2.5"}[source]
     assert (tmp_path / f"state/migrations/{source}-to-{target}/originals/target-0").read_bytes() == original
     for name, text in owned.items():
         assert (tmp_path / name).read_text() == text
     assert not (tmp_path / "home/BOOTSTRAP.md").exists()
     notices = NotificationInbox(tmp_path / "state").list(category="system")["items"]
-    assert len(notices) == {"0.2.0": 4, "0.2.1": 3, "0.2.2": 2, "0.2.3": 1}[source]
+    assert len(notices) == {"0.2.0": 5, "0.2.1": 4, "0.2.2": 3, "0.2.3": 2, "0.2.4": 1}[source]
     assert "profiles and settings retained" in notices[0]["body"]
     assert "Imported" not in notices[0]["body"]

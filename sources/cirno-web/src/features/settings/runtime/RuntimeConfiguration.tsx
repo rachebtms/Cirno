@@ -29,7 +29,7 @@ export function RuntimeConfiguration({ page, settings, state, onRestart, isResta
       const fields = group.fields.filter(state.visible);
       const dirty = fields.some(state.dirty);
       const saving = state.saving === group.id;
-      const showActions = dirty && (fields.some(field => field.manual && state.dirty(field)) || !!state.errors[group.id]);
+      const showActions = dirty && !saving && !!state.errors[group.id];
       const title = group.id === "memory" && page !== "memory" ? t(`settings.nav.${page}`) : tr(`groups.${group.id}.title`);
       return <section key={group.id} aria-label={title} className="configuration-section">
         {title !== t(`settings.nav.${page}`) && <h2>{title}</h2>}
@@ -37,8 +37,10 @@ export function RuntimeConfiguration({ page, settings, state, onRestart, isResta
         <form noValidate onSubmit={event => { event.preventDefault(); void state.save(group.id); }}
           onBlur={event => {
             if (!event.currentTarget.contains(event.relatedTarget) && !state.errors[group.id]
-              && fields.some(field => field.manual && state.dirty(field))) void state.save(group.id);
+              && fields.some(field => field.saveOnBlur && state.dirty(field))) void state.save(group.id);
           }}>
+          {/* Preserve native Enter submission without exposing a manual save action. */}
+          <button type="submit" hidden />
           <fieldset disabled={isRestarting}>
             <legend className="sr-only">{title}</legend>
             {fields.map(field => <ConfigurationField key={field.path} field={field} settings={settings} state={state} disabled={isRestarting} />)}
@@ -46,7 +48,7 @@ export function RuntimeConfiguration({ page, settings, state, onRestart, isResta
           <footer className="configuration-save">
             <span role="status">{saving ? <Spinner size="sm" /> : !dirty && state.saved[group.id] ? tr("saved") : null}</span>
             {showActions && <><Button type="button" variant="tertiary" size="sm" onPress={() => state.discard(group.id)} isDisabled={saving || isRestarting}>{t("common.cancel")}</Button>
-              <Button type="submit" size="sm" isPending={saving} isDisabled={isRestarting}>{tr("save")}</Button></>}
+              <Button type="submit" size="sm" isPending={saving} isDisabled={isRestarting}>{t("common.retry")}</Button></>}
           </footer>
           {state.errors[group.id] && <Alert status="danger" role="alert"><Alert.Content>{state.errors[group.id]}</Alert.Content></Alert>}
         </form>

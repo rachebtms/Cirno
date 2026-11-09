@@ -93,7 +93,7 @@ describe("Runtime configuration", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not save list");
     expect(editor).toHaveValue(" TERM \n\n COLORTERM ");
     const group = screen.getByRole("region", { name: "Shell and sandbox" });
-    await userEvent.setup().click(within(group).getByRole("button", { name: "Save changes" }));
+    await userEvent.setup().click(within(group).getByRole("button", { name: "Retry" }));
     await expectSave({ "tools.exec.allowed_env_keys": ["TERM", "COLORTERM"] });
     await waitFor(() => expect(editor).toHaveValue("TERM\nCOLORTERM"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -146,15 +146,48 @@ describe("Runtime configuration", () => {
     await act(async () => finish({ ...payload(), runtime_config: { ...payload().runtime_config, "tools.exec.max_runtime": 17 } }));
     expect(input).toHaveValue(19); await expectSave({ "tools.exec.max_runtime": 19 });
   });
-  it("requires explicit save for the workspace path and can discard it", async () => {
+  it("automatically saves the workspace on blur without showing Save actions", async () => {
+    let finish!: (value: SettingsPayload) => void;
+    mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));
+    render(<Harness page="execution" />);
+    const input = screen.getByRole("textbox", { name: "Default workspace" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "/research" } });
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(mutation).not.toHaveBeenCalled();
+    fireEvent.blur(input);
+    await expectSave({ "agents.defaults.workspace": "/research" });
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    await act(async () => finish({ ...payload(), runtime_config: { ...payload().runtime_config, "agents.defaults.workspace": "/research" } }));
+    expect(input).toHaveValue("/research");
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+  it("offers retry and discard only after an automatic save fails", async () => {
+    mutation.mockRejectedValueOnce(new Error("Workspace could not be saved"));
     render(<Harness page="execution" />);
     const input = screen.getByRole("textbox", { name: "Default workspace" });
     fireEvent.change(input, { target: { value: "/research" } });
+    fireEvent.blur(input);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Workspace could not be saved");
+    expect(input).toHaveValue("/research");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
     await userEvent.setup().click(screen.getByRole("button", { name: "Cancel" }));
-    expect(input).toHaveValue("/workspace"); expect(mutation).not.toHaveBeenCalled();
-    fireEvent.change(input, { target: { value: "/research" } });
-    await userEvent.setup().click(screen.getByRole("button", { name: "Save changes" }));
-    await expectSave({ "agents.defaults.workspace": "/research" });
+    expect(input).toHaveValue("/workspace");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(mutation).toHaveBeenCalledTimes(1);
+  });
+  it("keeps Save actions hidden while immediately saving idle compaction", async () => {
+    let finish!: (value: SettingsPayload) => void;
+    mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));
+    render(<Harness page="context" />);
+    await userEvent.setup().click(screen.getByRole("switch", { name: "Auto-compact idle sessions" }));
+    await expectSave({ "agents.defaults.idle_compact_after_minutes": 0 });
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    await act(async () => finish({ ...payload(), runtime_config: { ...payload().runtime_config, "agents.defaults.idle_compact_after_minutes": 0 } }));
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
   it("saves proxy credentials as one value while keeping them out of the address field", async () => {
     render(<Harness page="network" />);
@@ -162,7 +195,8 @@ describe("Runtime configuration", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Username" }), { target: { value: "owner" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
     expect(screen.getByRole("textbox", { name: "Shared proxy" })).toHaveValue("http://localhost:8080");
-    await userEvent.setup().click(screen.getByRole("button", { name: "Save changes" }));
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    fireEvent.blur(screen.getByLabelText("Password"));
     await expectSave({ "network.proxy": "http://owner:secret@localhost:8080" });
   });
   it("supports manual timezone search and saves the selected zone", async () => {

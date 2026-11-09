@@ -4,7 +4,7 @@ export interface RuntimeConfigField {
   kind: "toggle" | "password" | "text" | "nullable" | "number" | "duration" | "boolean" | "select" | "list" | "multiline" | "preset" | "idle-compaction";
   options?: string[];
   when?: { path: string; value: string | boolean | string[] };
-  manual?: boolean;
+  saveOnBlur?: boolean;
   min?: number;
   max?: number;
 }
@@ -44,7 +44,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "system-prompts", path: "agents.defaults.system_prompts.shared", kind: "multiline", max: 32000 },
   { group: "system-prompts", path: "agents.defaults.system_prompts.router", kind: "multiline", max: 32000 },
   { group: "system-prompts", path: "agents.defaults.system_prompts.worker", kind: "multiline", max: 32000 },
-  { group: "workspace", path: "agents.defaults.workspace", kind: "text", manual: true },
+  { group: "workspace", path: "agents.defaults.workspace", kind: "text", saveOnBlur: true },
   { group: "compaction-generation", path: "agents.defaults.compaction.max_tokens", kind: "number", min: 512, max: 32768 },
   { group: "compaction-generation", path: "agents.defaults.compaction.reasoning_effort", kind: "select", options: ["inherit", "low", "none"] },
   { group: "compaction-generation", path: "agents.defaults.compaction.checkpoint_reminder_percent", kind: "number", min: 1, max: 100 },
@@ -102,7 +102,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "execution", path: "agents.defaults.max_tool_result_chars", kind: "number", min: 1 },
   { group: "activity", path: "agents.defaults.tool_status_summary_max_chars", kind: "number", min: 20, max: 500 },
   { group: "coordination", path: "tools.max_outgoing_session_messages_per_minute", kind: "number", min: 1 },
-  { group: "memory", path: "agents.defaults.idle_compact_after_minutes", kind: "idle-compaction", manual: true },
+  { group: "memory", path: "agents.defaults.idle_compact_after_minutes", kind: "idle-compaction", saveOnBlur: true },
   { group: "tools", path: "tools.exec.enable", kind: "boolean" },
   { group: "tools", path: "tools.file.enable", kind: "boolean" },
   { group: "web", path: "tools.web.enable", kind: "boolean" },
@@ -117,7 +117,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "shell", path: "tools.exec.allowed_env_keys", kind: "list" },
   { group: "shell", path: "tools.exec.allow_patterns", kind: "list" },
   { group: "shell", path: "tools.exec.deny_patterns", kind: "list" },
-  { group: "proxy", path: "network.proxy", kind: "nullable", manual: true },
+  { group: "proxy", path: "network.proxy", kind: "nullable", saveOnBlur: true },
   { group: "network", path: "tools.web.use_proxy", kind: "boolean" },
   { group: "network", path: "tools.web.user_agent", kind: "nullable" },
   { group: "safety", path: "tools.restrict_to_workspace", kind: "boolean" },
@@ -128,7 +128,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "uploads", path: "server.uploads.max_file_mb", kind: "number", min: 1 },
   { group: "uploads", path: "server.uploads.max_video_mb", kind: "number", min: 1 },
   { group: "uploads", path: "server.uploads.max_total_mb", kind: "number", min: 1 },
-  { group: "server", path: "server.health_host", kind: "text", manual: true },
-  { group: "server", path: "server.health_port", kind: "number", min: 1, max: 65535, manual: true },
+  { group: "server", path: "server.health_host", kind: "text", saveOnBlur: true },
+  { group: "server", path: "server.health_port", kind: "number", min: 1, max: 65535, saveOnBlur: true },
   { group: "server", path: "server.restart_mode", kind: "select", options: ["auto", "exec", "spawn", "exit"] },
 ];

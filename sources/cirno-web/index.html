@@ -28,9 +28,14 @@
     <link rel="manifest" href="/manifest.json" />
     <style>
       html,
-      body,
-      #root {
+      body {
         height: 100%;
+      }
+
+      /* Critical first-paint CSS shares the interactive viewport height.
+         Unlayered styles here outrank the app stylesheet's base layer. */
+      #root {
+        height: var(--app-viewport-height, 100%);
       }
 
       /* App-like feel on touch devices: no double-tap zoom on interactive

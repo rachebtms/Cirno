@@ -27,7 +27,7 @@ class Migration(Protocol):
 MIGRATIONS: dict[str, Migration] = {
     step.source_version: step
     for step in (Import016(), ConfigVersionUpgrade("0.2.0", "0.2.1"), ConfigVersionUpgrade("0.2.1", "0.2.2"),
-                 ConfigVersionUpgrade("0.2.2", "0.2.3"), ConfigVersionUpgrade("0.2.3", "0.2.4"))
+                 ConfigVersionUpgrade("0.2.2", "0.2.3"), ConfigVersionUpgrade("0.2.3", "0.2.4"), ConfigVersionUpgrade("0.2.4", "0.2.5"))
 }
 
 
