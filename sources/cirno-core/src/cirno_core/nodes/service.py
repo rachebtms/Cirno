@@ -263,7 +263,7 @@ class Nodes:
         directory = f'"$HOME/.cirno/jobs/{job_id}"'
         alive = (
             f'[ -f {directory}/pid ] && pid=$(cat {directory}/pid) && '
-            f'kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o args= | grep -F {shlex.quote(job_id)} >/dev/null'
+            f'kill -0 "$pid" 2>/dev/null && ps -ww -p "$pid" -o args= | grep -F {shlex.quote(job_id)} >/dev/null'
         )
         stop_script = ""
         if stop:

@@ -83,14 +83,15 @@ async def test_journal_admission_failure_never_submits_or_creates_an_unknown_rem
 @pytest.mark.skipif(os.name != "posix" or not shutil.which("ps"), reason="Requires POSIX process inspection")
 @pytest.mark.parametrize("stopped", [False, True])
 @pytest.mark.parametrize("matching", [False, True])
-async def test_remote_job_status_checks_process_identity(tmp_path, stopped, matching):
+async def test_remote_job_status_checks_process_identity(tmp_path, stopped, matching, monkeypatch):
+    monkeypatch.setenv("COLUMNS", "80")
     nodes = node_service(tmp_path)
     job = nodes.data.save("node_jobs", {"node_id": "gpu", "state": "running"})
     home = tmp_path / "remote-home"
     directory = home / ".cirno" / "jobs" / job["id"]
     directory.mkdir(parents=True)
     process = (
-        await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(60)", job["id"])
+        await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(60)", "x" * 512, job["id"])
         if matching else None
     )
     # An unrelated live PID must not stand in for the job's original shell.
