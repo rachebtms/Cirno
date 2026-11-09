@@ -273,8 +273,9 @@ class Nodes:
             )
         result = await self.execute(
             job["node_id"],
-            stop_script + f'if [ -f {directory}/exit ]; then printf "EXIT:"; cat {directory}/exit; '
-            f'elif {alive}; then printf RUNNING; '
+            stop_script + f'cirno_job_running=0; if {alive}; then cirno_job_running=1; fi; '
+            f'if [ -f {directory}/exit ]; then printf "EXIT:"; cat {directory}/exit; '
+            'elif [ "$cirno_job_running" = 1 ]; then printf RUNNING; '
             f'elif [ -f {directory}/stop-requested ]; then printf STOPPED; else printf UNKNOWN; fi; printf "\\n"; tail -c 60000 {directory}/output.log',
             initialize=False,
         )

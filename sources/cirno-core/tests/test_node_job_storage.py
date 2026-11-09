@@ -112,3 +112,33 @@ async def test_remote_job_status_checks_process_identity(tmp_path, stopped, matc
         if process:
             process.terminate()
             await process.wait()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX process inspection")
+async def test_exit_published_during_process_inspection_is_reported_as_completed(tmp_path, monkeypatch):
+    nodes = node_service(tmp_path)
+    job = nodes.data.save("node_jobs", {"node_id": "gpu", "state": "running"})
+    home = tmp_path / "remote-home"
+    directory = home / ".cirno" / "jobs" / job["id"]
+    directory.mkdir(parents=True)
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    probe = binary / "ps"
+    # The job finishes after inspection begins, before its PID probe returns.
+    probe.write_text(f"#!/bin/sh\nprintf 0 > {shlex.quote(str(directory / 'exit'))}\nexit 1\n")
+    probe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(binary) + os.pathsep + os.environ["PATH"])
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(60)")
+    (directory / "pid").write_text(str(process.pid))
+    (directory / "output.log").write_text("finished output")
+
+    async def remote(_node, script, **kwargs):
+        return await nodes._run(["sh", "-c", f"HOME={shlex.quote(str(home))}; {script}"])
+
+    nodes.execute = remote
+    try:
+        result = await nodes.inspect_job(job["id"])
+        assert result["state"] == "completed" and result["output"] == "finished output"
+    finally:
+        process.terminate()
+        await process.wait()
