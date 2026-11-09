@@ -24,7 +24,7 @@ export function createPersonalSections(bindings: SettingsComposition): SectionRe
   };
 
   const renderPersonality: SectionRenderer = () => {
-    return <ProfileFiles client={controller.client} section="personality" />;
+    return <div className="settings-stack">{runtimeConfiguration("personality")}<ProfileFiles client={controller.client} section="personality" /></div>;
   };
 
   const renderNotifications: SectionRenderer = () => {

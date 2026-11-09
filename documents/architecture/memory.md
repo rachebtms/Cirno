@@ -22,17 +22,21 @@ Exact values, dates, quotations and prior decisions should be checked against or
 | `knowledge` | Grounded facts, hypotheses, decisions and lessons | On-demand retrieval |
 | `source` | Immutable original messages captured before compaction | Paged reads by source ID, line and character offset |
 
-Records have `user`, `project` or `session` scope. Structured retrieval, reads, evidence, revisions and links enforce scope. Project identity uses a project ID rather than inferring identity from a working directory. Full Access file and shell tools follow their own access rules; memory scopes are not operating-system isolation.
+Records have `user`, `project` or `session` scope. Structured retrieval, reads, evidence, revisions, links, tags, statistics and semantic results enforce the same visibility rules. Project identity uses a project ID rather than inferring identity from a working directory. A record's originating session is provenance: moving that conversation out of a Project does not retain access to the Project's memory. Session-scoped records remain accessible to their own conversation. Full Access file and shell tools follow their own access rules; memory scopes are not operating-system isolation.
 
 Large files, web artifacts and Node job output remain at their original locations. Memory stores their references instead of copying entire workspaces.
+
+Immutable memory bodies are checked against their recorded content hash on reads, including historical revisions and semantic indexing/snippet extraction. A mismatch is reported rather than returning altered content. Scope identity uses the user scope, Project ID or conversation key; Project records from different Workers in the same Project can be revised or linked without changing their originating-session metadata. `WORKER.md` is indexed alongside the shared profiles, and removing a profile removes its active indexed record. Original evidence reads are paged with line and character cursors and a 16,000-character total page limit, including memory-body pointers and very long individual lines. Building the source index also reads bounded fragments, retaining line numbers and overlaps without loading an entire JSONL line.
 
 ## Compaction, checkpoints and Dream
 
 Before compaction, Cirno streams original messages to disk and saves the compaction increment in a durable queue. The executing model saves explicit task checkpoints at milestones and before compaction; automatic summaries do not overwrite them. Task recovery does not depend on a successful Dream run.
 
+Task checkpoints have separate conversation/Project slots. Switching or removing Project membership selects the corresponding slot; switching back restores that Project's checkpoint. Legacy conversation-only checkpoint IDs remain readable and writable when their stored scope matches the current Project or unfiled conversation. Automatic compaction respects the same selection and cannot overwrite an explicit checkpoint in that slot.
+
 Journal append and retention share a file lock across instances. Cursor files are replaced atomically. Invalid journal records or cursor counters stop the affected operation with a file location; retention leaves the original file intact. Restore or correct that file before retrying.
 
-Task checkpoints are attached as model-only evidence to the fresh input and saved with that exact input before the model request. A later checkpoint update does not rewrite the system prompt or earlier messages. Skill and tool declarations use deterministic ordering. Claude cache breakpoints cover the latest cacheable input, including first-turn documents and tool results. Changes to profiles, `MEMORY.md`, available tools or compacted summaries still change the request prefix and can invalidate provider caches.
+Task checkpoints and current `MEMORY.md` content are attached as model-only evidence to the fresh input and saved with that exact input before the model request. Later updates do not rewrite the system prompt or earlier messages. Skill and tool declarations use deterministic ordering. Claude cache breakpoints cover the latest cacheable input, including first-turn documents and tool results. Changes to system instructions, personality profiles, available tools or compacted summaries still change the request prefix and can invalidate provider caches.
 
 Token totals include cached input; they are not a billable-cost estimate. The cache hit rate divides provider-reported cache reads by input tokens from requests that report cache metrics. Missing cache metrics are unknown, not misses. Cache persistence and pricing remain provider-specific.
 

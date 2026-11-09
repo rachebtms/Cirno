@@ -437,6 +437,13 @@ class AgentLoop:
         )
         loop.context.memory_context_tokens = defaults.memory.context_tokens
         loop.context.checkpoint_context_tokens = defaults.memory.checkpoint_tokens
+        loop.context.system_prompts = defaults.system_prompts.model_copy(deep=True)
+        loop.subagents.tools.system_prompts = defaults.system_prompts.model_copy(deep=True)
+        if source_path := config.source_path:
+            from cirno_core.config.loader import load_config
+
+            loop.context.system_prompts_loader = lambda: load_config(source_path).agents.defaults.system_prompts
+            loop.subagents.tools.system_prompts_loader = loop.context.current_system_prompts
         loop.dream_max_iterations = defaults.dream.max_tool_iterations
         loop.release_archived_runtime = defaults.memory.release_archived_runtime
         loop.consolidator.on_compaction_saved = loop.persistence.release_archive

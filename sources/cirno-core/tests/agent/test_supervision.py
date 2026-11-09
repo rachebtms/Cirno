@@ -59,17 +59,19 @@ async def test_controls_are_hidden_from_ordinary_and_ptc_conversations(supervisi
             assert "goals__control" not in regular.model_instructions()
 
 
-async def test_cirno_receives_all_ordinary_capabilities_in_native_and_ptc(supervision):
+async def test_router_receives_ordinary_execution_but_delegates_to_durable_workers(supervision):
     loop, _, _, _, _ = supervision
     ordinary = conversation_tools(loop.tools, "websocket:worker")
     cirno = conversation_tools(loop.tools, ROUTER_SESSION_KEY)
-    assert cirno is loop.tools
     assert {"exec", "write_file", "edit_file", "node"} <= set(ordinary.tool_names)
-    assert set(ordinary.tool_names) <= set(cirno.tool_names)
+    assert set(ordinary.tool_names) - {"subagent"} <= set(cirno.tool_names)
+    assert "subagent" in ordinary.tool_names
+    assert "subagent" not in cirno.tool_names
     assert "message" not in ordinary.tool_names
     assert "message" in cirno.tool_names
     ptc = conversation_tools(loop.tools, ROUTER_SESSION_KEY, ptc_mode=True)
     assert {"exec", "write_file", "edit_file", "node", "message", "project"} <= set(ptc.native.tool_names)
+    assert "subagent" not in ptc.native.tool_names
     instructions = ptc.model_instructions()
     assert "shell.exec" in instructions and "nodes.execute" in instructions
 

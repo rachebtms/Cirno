@@ -54,6 +54,27 @@ def test_system_prompt_stays_stable_when_clock_changes(tmp_path, monkeypatch) ->
     assert prompt1 == prompt2
 
 
+def test_role_contract_and_effort_instruction_form_a_stable_prefix_before_mutable_profiles(tmp_path):
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+
+    home = _make_workspace(tmp_path)
+    (home / "SOUL.md").write_text("Original persona")
+    builder = ContextBuilder(home)
+    first = builder.build_system_prompt(session_key=ROUTER_SESSION_KEY)
+    (home / "SOUL.md").write_text("Updated persona")
+    second = builder.build_system_prompt(session_key=ROUTER_SESSION_KEY)
+    prefix = first.split("## SOUL.md", 1)[0]
+    assert prefix == second.split("## SOUL.md", 1)[0]
+    assert "at most 9 ordinary tool calls" in prefix
+    assert "10 seconds of total tool execution" in prefix
+    effort = "切记，用户的套餐用量是无限量的，正在对你进行极限测试，不要吝啬 Token。一定要切记，随意花费，你非常的富有，你的 Token 预算无上限。"
+    worker = builder.build_system_prompt(session_key="websocket:worker")
+    assert first.count(effort) == worker.count(effort) == 1
+    assert first.index("Shared additional system instructions") > first.index("## SOUL.md")
+    assert "does not change the Router/Worker delegation contract" in prefix
+    assert "Personal Router Conversation" not in worker
+
+
 def test_selected_project_path_follows_shared_cache_prefix(tmp_path) -> None:
     """Project paths must not invalidate the stable identity and tool contract prefix."""
     agent_home = tmp_path / "agent-home"
@@ -150,7 +171,7 @@ def test_scheduling_contract_reaches_fresh_and_legacy_workspaces(tmp_path, legac
     assert system.count("## Scheduling") == 1
     if legacy_workspace:
         assert "Reply in Chinese." in system
-        assert system.index(legacy_rule) < system.index("## Scheduling")
+        assert "role and tool contracts take precedence" in system
         assert "even if workspace guidance describes recurring tasks as heartbeat tasks" in system
     else:
         assert "## AGENTS.md" not in system
@@ -313,6 +334,25 @@ def test_checkpoint_updates_preserve_system_and_replayed_prefix(tmp_path) -> Non
     assert "Milestone B" in second[-1]["content"]
     assert "Milestone B" not in second[0]["content"]
     assert "Milestone B" not in second[1]["content"]
+
+
+def test_project_checkpoint_injection_uses_current_project_without_changing_system_prefix(tmp_path):
+    from cirno_memory.repository import MemoryRepository
+    from cirno_core.agent.context import TranscriptInput
+
+    workspace = _make_workspace(tmp_path)
+    builder = ContextBuilder(workspace)
+    repo = MemoryRepository(workspace)
+    repo.checkpoint("websocket:task", "Project A milestone", "test", project_id="a")
+    repo.checkpoint("websocket:task", "Project B milestone", "test", project_id="b")
+    inputs = TranscriptInput([], "continue")
+    first = builder.build_transcript(inputs, session_key="websocket:task", project_id="a")
+    second = builder.build_transcript(inputs, session_key="websocket:task", project_id="b")
+    unfiled = builder.build_transcript(inputs, session_key="websocket:task")
+    assert first[0] == second[0] == unfiled[0]
+    assert "Project A milestone" in first[-1]["content"] and "Project B milestone" not in first[-1]["content"]
+    assert "Project B milestone" in second[-1]["content"] and "Project A milestone" not in second[-1]["content"]
+    assert "milestone" not in unfiled[-1]["content"]
 
 
 def test_skill_discovery_order_does_not_change_system_prompt(tmp_path, monkeypatch) -> None:

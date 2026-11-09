@@ -2,6 +2,8 @@
 
 The agent's `memory.search` tool and Settings → Memory retrieval use the same search pipeline. BM25 is available by default. Semantic and hybrid modes are optional and index active knowledge and profiles; original evidence and task-state searches remain lexical. Empty queries browse records without starting inference or making an embedding API call.
 
+Original evidence pages contain at most twenty lines and 16,000 characters in total. Long individual lines continue through a character offset rather than loading the entire line into context. Follow the returned line and character cursors to read further; memory-body pointers use the same page budget. Reads retain their resolved source revision, and immutable-body hash mismatches are reported explicitly.
+
 ## Local CPU embeddings
 
 Enable Semantic retrieval and choose Local CPU model. Select an ONNX model and matching tokenizer. The full image supplies matching BGE weights; inference remains disabled until enabled. Local inference runs in a disposable CPU worker, with a configurable RSS limit and timeout. The main service does not keep the model loaded. Long records use overlapping token chunks, indexed incrementally and stored in `vectors.sqlite3`.

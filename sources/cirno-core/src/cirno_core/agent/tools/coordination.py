@@ -42,7 +42,7 @@ class CreateSessionTool(Tool):
 
     @property
     def description(self):
-        return "Create an independent conversation, optionally delegate a Goal, and return its stable ID and current @name. Available to Router and Worker conversations. Use conversations__send and conversations__read to follow up."
+        return "Create a durable Worker conversation and return its stable ID and current @name. Router must use this before substantive medium/large work; supply the original objective and completion criteria in goal. Worker conversations may also delegate authorized subtasks. Use conversations__send and conversations__read to follow up; results arrive through work reports, so do not poll."
 
     def runtime_context_provider(self):
         return self._provide_runtime_context

@@ -36,11 +36,25 @@ reply through normal assistant output. The same selection is used for turns,
 compaction and context accounting. PTC wraps that selection rather than
 reintroducing tools excluded from the conversation.
 
-The Router receives all ordinary execution tools plus coordination controls and
-`user.message`. It can run brief resource checks directly and delegates medium
-and large tasks. Paper reading, literature reviews, development and experiments
-start in a Worker; brief CPU/GPU checks can run directly in the Router.
-Access and approval policies apply equally to both roles.
+The Router receives ordinary execution tools plus coordination controls and
+`user.message`, but excludes transient `subagent` execution. Worker catalogs
+exclude Router-only messaging, cross-conversation controls and Project management.
+Both native and nested PTC execution check the same role policy. Within each run,
+the Router may make at most nine ordinary calls and spend ten cumulative seconds
+executing them; overlapping calls count elapsed time once. Model waiting is not
+charged. PTC computation also has a ten-second deadline, and its nested ordinary
+calls share the run's allowance. Replies and coordination remain available after
+exhaustion so the Router can delegate unfinished work. A timed-out operation may
+have completed effects; its error instructs the model to inspect before retrying.
+
+The Router prompt requires paper analysis, literature reviews, development,
+debugging, experiments and uncertain-size tasks to start in a durable Worker
+before substantive work. Brief CPU/GPU checks can qualify as direct work. Task
+classification is a model responsibility; the runtime enforces the execution
+limit and tool permissions. Workers do not inherit the Router's small-task budget.
+Access and approval policies apply equally to both roles. Unavailable or already
+exhausted work is rejected before asking the owner to approve it; admission is
+checked again after approval without charging native approval waiting time.
 
 The Python file-search backend shares directory scanning, filters and paging
 between path discovery and content search. Unreadable directories and failed

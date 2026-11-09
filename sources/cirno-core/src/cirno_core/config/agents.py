@@ -8,6 +8,7 @@ from cirno_memory.config import MemoryConfig
 from cirno_core.config.base import Base
 from cirno_core.config.home import get_default_workspace
 from cirno_core.config.models import CompactionConfig, FallbackCandidate, ModelAPIConfig
+from cirno_core.config.prompts import SystemPrompts
 from cirno_core.config.timezone import detect_system_timezone
 from cirno_core.cron.types import CronSchedule
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -81,6 +82,7 @@ class AgentDefaults(Base):
     """Default agent configuration."""
 
     workspace: str = Field(default_factory=get_default_workspace)
+    system_prompts: SystemPrompts = Field(default_factory=SystemPrompts)
     model_preset: str | None = None  # Active preset ID — takes precedence over fields below
     model: str = ""
     provider: str = (

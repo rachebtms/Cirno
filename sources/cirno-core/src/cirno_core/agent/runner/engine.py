@@ -37,6 +37,8 @@ from cirno_core.agent.runner.usage import (
 )
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.execution import execute_tool_calls
+from cirno_core.agent.tools.role_policy import RoleToolPolicy
+from cirno_core.session.roles import conversation_role
 from cirno_core.agent.tools.message import (
     current_conversation_has_delivery,
 )
@@ -184,6 +186,7 @@ class AgentRunner:
         had_injections = False
         injection_cycles = 0
         reply_contract = ToolReplyContract(spec.require_visible_reply)
+        role_policy = RoleToolPolicy(conversation_role(spec.session_key)) if spec.session_key else None
         pending_stream_content: str | None = None
         conversation_state = ProviderConversationStateController(
             provider=spec.runtime.provider,
@@ -325,6 +328,7 @@ class AgentRunner:
                     context=context,
                     model_messages=messages_for_model,
                     compacted_tool_results=request_state.compacted_tool_results,
+                    role_policy=role_policy,
                 )
                 tool_events.extend(new_events)
                 tools_used.extend(

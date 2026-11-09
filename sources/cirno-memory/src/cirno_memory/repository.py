@@ -15,6 +15,10 @@ from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from cirno_memory.paging import source_chunks
+from cirno_memory.checkpoints import checkpoint_id
+from cirno_memory.scopes import scope_identity, visible, visibility_filter
+
 LAYERS = {"event", "knowledge", "task", "source", "profile"}
 KINDS = {"observation", "hypothesis", "fact", "lesson", "checkpoint", "source"}
 RELATIONS = {"supports", "conflicts", "supersedes", "related", "derived_from"}
@@ -96,10 +100,13 @@ class MemoryRepository:
             raise ValueError("Memory body is outside Home")
         return path
 
-    @staticmethod
-    def visible(record: dict, session_key: str | None, project_id: str | None) -> bool:
-        return (record["scope"] == "user" or bool(session_key) and record.get("session_key") == session_key
-                or record["scope"] == "project" and bool(project_id) and record.get("project_id") == project_id)
+    visible = staticmethod(visible)
+
+    def body_content(self, record: dict) -> str:
+        content = self._body_path(record).read_text(encoding="utf-8")
+        if _hash(content) != record["content_hash"]:
+            raise ValueError(f"Memory {record['id']} revision {record['revision']} body differs from its saved hash")
+        return content
 
     def read(self, memory_id: str, *, session_key=None, project_id=None, maintenance=False, revision=None) -> dict:
         with self.connect() as db:
@@ -114,7 +121,7 @@ class MemoryRepository:
                 if row is None:
                     raise KeyError("Memory revision not found")
                 record = {**json.loads(row[0]), "path": row[1]}
-            record["content"] = self._body_path(record).read_text(encoding="utf-8")
+            record["content"] = self.body_content(record)
             record["links"] = [dict(r) for r in db.execute(
                 "SELECT source,target,relation,evidence FROM links WHERE source=? OR target=? LIMIT 50", (memory_id, memory_id)
             )]
@@ -156,12 +163,13 @@ class MemoryRepository:
         if based_on == memory_id:
             raise ValueError("Create a separate knowledge record when deriving from this same memory")
         digest = _hash(content)
+        access_session, access_project = session_key, project_id
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             existing = db.execute("SELECT body FROM memories WHERE id=?", (memory_id,)).fetchone()
             old = json.loads(existing[0]) if existing else None
             if old:
-                if not maintenance and not self.visible(old, session_key, project_id):
+                if not maintenance and not self.visible(old, access_session, access_project):
                     raise PermissionError("Memory is outside the current scope")
                 if expected_revision is None or expected_revision != old["revision"]:
                     raise ValueError("Memory changed; read it and provide expected_revision before updating")
@@ -184,14 +192,15 @@ class MemoryRepository:
                     raise KeyError("Evidence memory not found")
                 parent = json.loads(parent[0])
                 parent_observed_at = parent.get("observed_at")
-                if not maintenance and not self.visible(parent, session_key, project_id):
+                if not maintenance and not self.visible(parent, access_session, access_project):
                     raise PermissionError("Evidence is outside the current scope")
-                if old and (old["scope"], old.get("project_id"), old.get("session_key")) != (parent["scope"], parent.get("project_id"), parent.get("session_key")):
+                if old and scope_identity(old) != scope_identity(parent):
                     raise ValueError("An update cannot change an existing memory's evidence scope; create a separate scoped record")
                 if supplied_parent is not None or parent_revision is None:
                     parent_revision = parent["revision"]
                 # Derived knowledge inherits visibility, never silently promotes a project fact to a user fact.
-                scope, project_id, session_key = parent["scope"], parent.get("project_id"), parent.get("session_key")
+                scope, project_id = parent["scope"], parent.get("project_id")
+                session_key = old.get("session_key") if old else parent.get("session_key")
             version = (old["revision"] if old else 0) + 1
             relative = f"memory/entries/{memory_id}.md"
             record = dict(id=memory_id, title=title.strip()[:160] or content.strip().splitlines()[0][:120],
@@ -237,9 +246,8 @@ class MemoryRepository:
         if record["layer"] == "source" and source_path.parent == self.root / "sources" and source_path.stem == record["id"] and source_path.is_file():
             # Index every original byte, not only the short directory preview. Stream per line/chunk.
             with source_path.open(encoding="utf-8") as stream:
-                for number, line in enumerate(stream, 1):
-                    for offset in range(0, len(line), 1400):
-                        self._chunk(db, record, line[max(0, offset - 100):offset + 1400], number, number)
+                for number, chunk in source_chunks(stream):
+                    self._chunk(db, record, chunk, number, number)
             return
         lines = content.splitlines() or [content]
         # Line-aware bounded chunks; very long lines are split without losing source line numbers.
@@ -275,8 +283,9 @@ class MemoryRepository:
             elif purpose == "evidence":
                 clauses.append("m.layer IN ('source','event')")
         if not maintenance:
-            clauses.append("(m.scope='user' OR m.session_key=? OR (m.scope='project' AND m.project_id=?))")
-            args.extend([session_key or "", project_id or ""])
+            visibility, access_args = visibility_filter(session_key, project_id)
+            clauses.append(visibility)
+            args.extend(access_args)
         for column, value in (("scope", scope), ("layer", layer)):
             if value and value != "all":
                 clauses.append(f"m.{column}=?")
@@ -315,7 +324,7 @@ class MemoryRepository:
                 exact = db.execute(f"SELECT m.body FROM memories m WHERE m.id=? AND {condition}", [query, *args]).fetchone()
                 if exact and not any(r["id"] == query for r in results):
                     record = json.loads(exact[0])
-                    selected = [{**record, "snippet": self._body_path(record).read_text(encoding="utf-8")[:1400], "match": "id"}]
+                    selected = [{**record, "snippet": self.body_content(record)[:1400], "match": "id"}]
                     if expand_links:
                         self.expand_links(selected, limit=expand_links, session_key=session_key, project_id=project_id, maintenance=maintenance)
                     return {"memories": selected, "has_more": False, "next_offset": 1, "engine": "bm25", "time_zone": time_zone}
@@ -353,8 +362,8 @@ class MemoryRepository:
     def list_tags(self, *, session_key=None, project_id=None, maintenance=False, prefix="", limit=30, offset=0):
         condition, args = "m.status='active'", []
         if not maintenance:
-            condition += " AND (m.scope='user' OR m.session_key=? OR (m.scope='project' AND m.project_id=?))"
-            args += [session_key or "", project_id or ""]
+            visibility, args = visibility_filter(session_key, project_id)
+            condition += " AND " + visibility
         with self.connect() as db:
             rows = db.execute(f"""SELECT tag.value AS name,count(DISTINCT m.id) AS count
                 FROM memories m,json_each(m.body,'$.tags') tag WHERE {condition}
@@ -368,7 +377,7 @@ class MemoryRepository:
             raise ValueError("Use a supported relation, two different records and an evidence explanation")
         source = self.read(source_id, session_key=session_key, project_id=project_id, maintenance=maintenance)
         target = self.read(target_id, session_key=session_key, project_id=project_id, maintenance=maintenance)
-        if source["scope"] != target["scope"] or source.get("project_id") != target.get("project_id") or (source["scope"] == "session" and source.get("session_key") != target.get("session_key")):
+        if scope_identity(source) != scope_identity(target):
             raise ValueError("Linked memories must have the same visibility scope")
         with self.connect() as db:
             db.execute("INSERT OR REPLACE INTO links VALUES(?,?,?,?)", (source_id, target_id, relation, evidence))
@@ -387,13 +396,13 @@ class MemoryRepository:
             return [json.loads(row[0]) for row in db.execute("SELECT body FROM revisions WHERE memory_id=? ORDER BY revision DESC LIMIT 50", (identity,))]
 
     def checkpoint(self, session_key, content, source, *, project_id=None, expected_revision=None):
-        identity = "task-" + _hash(session_key)[:32]
+        identity = checkpoint_id(self, session_key, project_id)
         return self.save(content, source=source, session_key=session_key, project_id=project_id,
                          scope="project" if project_id else "session", kind="checkpoint", layer="task",
                          title="Task checkpoint", memory_id=identity, expected_revision=expected_revision, enqueue=False)
 
     def task_context(self, session_key, project_id=None, max_chars=6000, *, include_automatic=True):
-        identity = "task-" + _hash(session_key)[:32]
+        identity = checkpoint_id(self, session_key, project_id)
         try:
             record = self.read(identity, session_key=session_key, project_id=project_id)
         except KeyError:
@@ -403,7 +412,7 @@ class MemoryRepository:
         return f"[Saved task checkpoint {identity}, revision {record['revision']}; source: {record['source']}]\n{record['content'][:max_chars]}"
 
     def record_compaction(self, session_key, summary, source, project_id=None):
-        identity = "task-" + _hash(session_key)[:32]
+        identity = checkpoint_id(self, session_key, project_id)
         try:
             previous = self.read(identity, maintenance=True)
         except KeyError:
@@ -469,11 +478,11 @@ class MemoryRepository:
             records, length, owner = [], 0, None
             for row in rows:
                 record = json.loads(row[0])
-                record_owner = (record["scope"], record.get("project_id") if record["scope"] == "project" else record.get("session_key") if record["scope"] == "session" else None)
+                record_owner = scope_identity(record)
                 if owner is not None and record_owner != owner:
                     continue
                 owner = record_owner
-                content = self._body_path(record).read_text(encoding="utf-8")
+                content = self.body_content(record)
                 if records and length + len(content) > max_chars:
                     break
                 # Large records remain readable in full through the memory tool.
@@ -572,8 +581,7 @@ class MemoryRepository:
     def status(self, *, session_key=None, project_id=None, maintenance=True):
         visibility, args = "1", []
         if not maintenance:
-            visibility = "(m.scope='user' OR m.session_key=? OR (m.scope='project' AND m.project_id=?))"
-            args = [session_key or "", project_id or ""]
+            visibility, args = visibility_filter(session_key, project_id)
         active = f"m.status='active' AND {visibility}"
         failed = f"{active} AND (error IS NOT NULL OR attempts>=3)"
         with self.connect() as db:
@@ -604,7 +612,7 @@ class MemoryRepository:
                     with self.connect() as db:
                         db.execute("BEGIN IMMEDIATE")
                         if db.execute("SELECT revision FROM memories WHERE id=?", (record["id"],)).fetchone()[0] == record["revision"]:
-                            self._put_record(db, record, self._body_path(record).read_text(encoding="utf-8"))
+                            self._put_record(db, record, self.body_content(record))
                             changed += 1
                 continue
             # Editable mirror is the public Home file; revisions are immutable evidence.
@@ -643,7 +651,7 @@ class MemoryRepository:
 
     def _sync_profiles(self):
         # Large manually edited profiles are streamed into bounded index records.
-        for relative in ("SOUL.md", "USER.md", "memory/MEMORY.md"):
+        for relative in ("SOUL.md", "WORKER.md", "USER.md", "memory/MEMORY.md"):
             path = self.home / relative
             prefix = "profile-" + _hash(relative)[:16]
             seen = set()

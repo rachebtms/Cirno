@@ -34,6 +34,7 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.4](releases/0.2.4.md): role-specific execution contracts, editable system prompts, cache-aware context and memory scope/integrity fixes.
 - [0.2.3](releases/0.2.3.md): system input delivery and project-wide bug fixes.
 - [0.2.2](releases/0.2.2.md): context budgeting, SSH startup environments, visual input checks and Router heartbeat controls.
 - [0.2.1](releases/0.2.1.md): conversational first setup, Router profile and delegation fixes, question cancellation, Trace export and layout fixes.

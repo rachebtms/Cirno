@@ -160,6 +160,7 @@ class TurnPreparation:
             checkpoint = await self.agent.runner.prepare_prompt(
                 self.agent.context.build_task_context,
                 ctx.session_key,
+                project_id=session.metadata.get("project_id"),
                 include_automatic=not bool(ctx.pending_summary),
             )
             if checkpoint is not None:

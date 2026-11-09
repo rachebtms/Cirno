@@ -1,16 +1,18 @@
 # Instance upgrades
 
-Cirno 0.2.3 upgrades instances from 0.2.0, 0.2.1 and 0.2.2 and imports the published 0.1.6 layout at startup. Stop the
+Cirno 0.2.4 upgrades instances from 0.2.0, 0.2.1, 0.2.2 and 0.2.3 and imports the published 0.1.6 layout at startup. Stop the
 old service and keep the same instance volume and external workspace mounts.
 The configuration records the last version as `lastRunVersion`; unversioned
 configuration is treated as 0.1.6. Later migrations belong to the startup
 migration registry, rather than the Agent's runtime storage code.
 
-The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2 and 0.2.2 → 0.2.3 steps update only the configuration version. Conversations,
+The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3 and 0.2.3 → 0.2.4 steps update only the configuration version. Conversations,
 profiles, credentials and settings keep their existing data. Configuration
 originals and resumable journals stay under `state/migrations/<source>-to-<target>/`.
 Instances on 0.1.6 run the registered steps in order. First-use introductions
 apply to newly registered instances; upgrades do not reset existing profiles.
+
+Version 0.2.4 adds shared, Router and Worker system-prompt settings through configuration defaults. Existing values are retained. Legacy task checkpoints remain readable in their original visibility scope; a new conversation/Project checkpoint slot is created as needed without rewriting old evidence.
 
 ## What changes
 

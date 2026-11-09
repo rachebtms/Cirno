@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "出力用の予約領域（%）",
           "help": "次の応答に予約するコンテキストの割合です。出力上限を超えず、既定は5%です。実際の出力上限は残り領域に合わせて調整されます。"
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "共通の追加システムプロンプト",
+          "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Router の追加システムプロンプト",
+          "help": "Applied only to Router after the shared addition. Automatically saved; applies from the next turn. Framework delegation and tool limits still apply."
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Worker の追加システムプロンプト",
+          "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "ファイルアップロード"
+        },
+        "system-prompts": {
+          "title": "追加システムプロンプト"
         }
       },
       "save": "変更を保存",

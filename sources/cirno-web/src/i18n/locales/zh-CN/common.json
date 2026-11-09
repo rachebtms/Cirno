@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "输出预留空间（%）",
           "help": "为下一次回复预留的上下文比例，最多预留到模型输出上限，默认 5%。每次请求的输出上限随剩余空间调整，不会按配置的最大输出长度提前压缩。"
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "共享追加系统提示词",
+          "help": "Router 和 Worker 共用，在各自追加提示词之前添加。自动保存，从下一轮生效；留空即可停用。"
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Router 追加系统提示词",
+          "help": "仅追加到 Router，在共享追加提示词之后添加。自动保存，从下一轮生效；框架的委派和工具限制仍然有效。"
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Worker 追加系统提示词",
+          "help": "仅追加到 Worker，在共享追加提示词之后添加。自动保存，从下一轮生效；留空则只使用共享追加提示词。"
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "文件上传"
+        },
+        "system-prompts": {
+          "title": "追加系统提示词"
         }
       },
       "save": "保存修改",

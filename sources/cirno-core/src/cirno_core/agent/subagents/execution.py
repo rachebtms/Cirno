@@ -76,7 +76,7 @@ class SubagentExecution:
             cfg.restrict_to_workspace = workspace_scope.restrict_to_workspace
         # Construct from the agent workspace; the bound scope below supplies the project cwd.
         tools = self.tools.build(tools_config=cfg, exec_manager=record.exec_manager)
-        system_prompt = self.tools.prompt(workspace=root)
+        system_prompt = await self.runner.prepare_prompt(self.tools.prompt, workspace=root)
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
             *record.session.get_history(),

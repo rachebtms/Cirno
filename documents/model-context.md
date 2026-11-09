@@ -1,5 +1,15 @@
 # Model context and long-running work
 
+## Harness contracts and prompt caching
+
+The stable system prefix contains framework identity, tool contracts and the selected Router or Worker contract before editable Home and Project profiles. Tool catalogs have deterministic ordering and are selected separately for each role. PTC wraps the same selected catalog. Runtime role checks and the Router's direct-work budget apply to nested calls as well as native calls; prompt additions cannot expand these capabilities.
+
+Settings → Personality appends shared and role-specific system instructions. The runner captures these settings once per turn, so a save during generation does not change that turn's later requests or compaction rebuilds. The next turn reads the saved values. Editing a system prompt intentionally changes the request prefix; ordinary clock, memory and task-state updates enter fresh input snapshots rather than rewriting prior messages. Archived summaries are historical evidence, not new instructions or authorization. Internal maintenance uses a separate contract and treats profile text as reference data.
+
+These choices preserve unchanged prefixes for provider caching. Actual reuse depends on the endpoint; the usage display uses reported cache metrics rather than assuming a cache hit.
+
+Goal execution and continuation retain these role boundaries. A Router Goal does not grant permission to execute medium or large work directly; its runtime guidance requires durable Worker delegation too.
+
 ## Reasoning history
 
 Each model configuration has a **Reasoning history** setting. Automatic follows the known endpoint's plaintext reasoning rules. Preserve keeps plaintext reasoning where the adapter permits it; Omit excludes it from compatible replay. Signed thinking blocks and opaque provider continuation state remain owned by the native adapter and are not converted to ordinary replies.

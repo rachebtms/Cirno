@@ -220,7 +220,7 @@ class DreamMemory:
         extra_read = [
             path for path in (BUILTIN_SKILLS_DIR, BUILTIN_DOCUMENTS_DIR) if path.exists()
         ] + [workspace / "skills-history"]
-        readable_files = [self.store.memory_file, self.store.soul_file, self.store.user_file]
+        readable_files = [self.store.memory_file, self.store.soul_file, self.store.worker_file, self.store.user_file]
         editable_files = readable_files if self._dream_shared_profiles else []
 
         tools.register(

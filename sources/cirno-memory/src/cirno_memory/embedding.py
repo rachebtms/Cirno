@@ -16,6 +16,8 @@ import threading
 import time
 from pathlib import Path
 
+from cirno_memory.scopes import visibility_filter
+
 _LOCK = threading.Lock()
 
 
@@ -103,8 +105,8 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
         access_clauses = ["m.status='active'", "m.layer IN ('knowledge','profile')"]
         args = []
         if not filters.get("maintenance"):
-            access_clauses.append("(m.scope='user' OR m.session_key=? OR (m.scope='project' AND m.project_id=?))")
-            args += [filters.get("session_key") or "", filters.get("project_id") or ""]
+            visibility, args = visibility_filter(filters.get("session_key"), filters.get("project_id"))
+            access_clauses.append(visibility)
         for column in ("scope", "layer"):
             if filters.get(column) and filters[column] != "all":
                 access_clauses.append(f"m.{column}=?")
@@ -146,7 +148,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
                 if not budget:
                     break
                 record = json.loads(row[0])
-                content = repo._body_path(record).read_text(encoding="utf-8")
+                content = repo.body_content(record)
                 start_chunk = row["next_chunk"] if row["content_hash"] == record["content_hash"] else 0
                 while budget:
                     batch = worker.request([content], chunked=True, start_chunk=start_chunk, max_chunks=min(8, budget))
@@ -185,7 +187,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
                     WHERE {where} AND (e.content_hash IS NULL OR e.content_hash!=m.content_hash OR e.completed=0) LIMIT 1""", [fingerprint, *args]).fetchone() is not None
             semantic = []
             for score, record, start, end, chunk_index in sorted(best.values(), key=lambda item: item[0], reverse=True):
-                content = repo._body_path(record).read_text(encoding="utf-8")
+                content = repo.body_content(record)
                 semantic.append(dict(record, score=score, snippet=content[start:end], start_char=start, end_char=end, chunk_index=chunk_index))
             results = semantic
             if mode == "hybrid":

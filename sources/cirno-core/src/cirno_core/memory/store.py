@@ -26,6 +26,7 @@ class MemoryStore:
         self.memory_dir = ensure_dir(home / "memory")
         self.memory_file = self.memory_dir / "MEMORY.md"
         self.soul_file = home / "SOUL.md"
+        self.worker_file = home / "WORKER.md"
         self.user_file = home / "USER.md"
         self.journal = MemoryJournal(home, max_history_entries)
         self.dream = DreamMemory(self)

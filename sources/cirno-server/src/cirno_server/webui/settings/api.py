@@ -320,6 +320,6 @@ def update_runtime_config_settings(
     if changed:
         _save_settings_config(config, config_path)
     return settings_payload(
-        requires_restart=changed,
+        requires_restart=changed and bool(values.keys() - set(runtime.SYSTEM_PROMPT_PATHS)),
         config_path=config_path,
     )

@@ -1,6 +1,6 @@
 # Tabbed workspace
 
-Cirno 0.2.3 uses one workspace for conversations and owner-operated tools. The Launcher stays visible on the left on desktop and along the bottom on narrow screens. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
+Cirno 0.2.4 uses one workspace for conversations and owner-operated tools. The Launcher stays visible on the left on desktop and along the bottom on narrow screens. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
 
 ## Tabs
 
@@ -39,7 +39,7 @@ A working-directory refresh failure keeps the last loaded directories and displa
 
 Appearance, reading, execution display and notification preferences synchronize with the server independently of service configuration loading.
 
-The Router has the ordinary execution tools as well as delegation and supervision tools. Its role prompt favors direct execution for small checks and delegation for larger tasks. Separate `user.message` calls remain separate chat bubbles; ordinary conversations keep their existing prose layout. The Router reads `SOUL.md`, ordinary conversations read `WORKER.md`, and both share memory and owner preferences.
+The Router has ordinary execution tools as well as delegation and supervision tools. A small task must fit fewer than ten ordinary tool calls and ten seconds of cumulative tool execution in one run; model waiting time is excluded. Brief CPU/GPU checks, one-file inspection and a simple lookup can qualify. Paper analysis, research, development, debugging, experiments and tasks of uncertain size must start in a durable Worker before substantive work. The runtime enforces the direct-work budget across native and PTC calls; coordination and user replies remain available after it is exhausted. The Router cannot launch private transient subagents to bypass Workers. Separate `user.message` calls remain separate chat bubbles; ordinary conversations keep their existing prose layout. The Router reads `SOUL.md`, ordinary conversations read `WORKER.md`, and both share memory and owner preferences.
 
 ## Event and request inspection
 

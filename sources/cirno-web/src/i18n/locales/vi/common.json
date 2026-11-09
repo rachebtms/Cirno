@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "Không gian dành cho đầu ra (%)",
           "help": "Tỷ lệ ngữ cảnh dành cho câu trả lời kế tiếp, không vượt giới hạn đầu ra. Mặc định 5%. Giới hạn thực tế điều chỉnh theo phần còn lại."
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "Lời nhắc bổ sung dùng chung",
+          "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Lời nhắc bổ sung cho Router",
+          "help": "Applied only to Router after the shared addition. Automatically saved; applies from the next turn. Framework delegation and tool limits still apply."
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Lời nhắc bổ sung cho Worker",
+          "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "Tải tệp lên"
+        },
+        "system-prompts": {
+          "title": "Lời nhắc hệ thống bổ sung"
         }
       },
       "save": "Lưu thay đổi",

@@ -119,6 +119,7 @@ async def test_goal_context_and_mutations_only_read_session_metadata(tmp_path, m
         assert "Goal recorded" in await _execute(create, ctx, objective="Preserve history")
         context = await create.runtime_context_provider()(ordinary)
         assert context is not None and "Preserve history" in context.content
+        assert "An active Goal does not authorize the Router" in context.content
         assert "marked complete" in await _execute(update, ordinary, action="complete")
         assert await create.runtime_context_provider()(ordinary) is None
 

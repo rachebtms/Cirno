@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "Espace réservé à la sortie (%)",
           "help": "Part du contexte réservée à la prochaine réponse, sans dépasser le plafond de sortie. Valeur par défaut : 5 %. Le plafond réel suit l’espace restant."
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "Instructions supplémentaires communes",
+          "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Instructions supplémentaires de Router",
+          "help": "Applied only to Router after the shared addition. Automatically saved; applies from the next turn. Framework delegation and tool limits still apply."
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Instructions supplémentaires de Worker",
+          "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "Envoi de fichiers"
+        },
+        "system-prompts": {
+          "title": "Instructions système supplémentaires"
         }
       },
       "save": "Enregistrer les modifications",

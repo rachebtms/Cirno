@@ -38,6 +38,24 @@ function expectSave(values: Record<string, unknown>) {
 }
 
 describe("Runtime configuration", () => {
+  it.each([
+    ["shared", "Shared additional system prompt"],
+    ["router", "Router additional system prompt"],
+    ["worker", "Worker additional system prompt"],
+  ])("automatically saves and clears the %s system addition without changing other roles", async (role, label) => {
+    const path = `agents.defaults.system_prompts.${role}`;
+    const initial = payload() as SettingsPayload;
+    initial.runtime_config = { ...initial.runtime_config, [path]: "Existing instructions" };
+    render(<Harness page="personality" initial={initial} />);
+    expect(screen.getAllByRole("textbox")).toHaveLength(3);
+    const editor = screen.getByRole("textbox", { name: label });
+    fireEvent.change(editor, { target: { value: "New instructions\nKeep this line" } });
+    await expectSave({ [path]: "New instructions\nKeep this line" });
+    await waitFor(() => expect(editor).toHaveValue("New instructions\nKeep this line"));
+    fireEvent.change(editor, { target: { value: "" } });
+    await expectSave({ [path]: "" });
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
   it("covers the server wire catalogue exactly once", () => {
     const paths = RUNTIME_CONFIG_FIELDS.map(field => field.path);
     expect(new Set(paths).size).toBe(paths.length);

@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "Minimum output space (%)",
           "help": "Reserve this share of the context window for the next response, capped by its configured output limit. Default 5%. The actual output limit shrinks with the remaining space; the maximum output setting does not reserve its full value."
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "Shared additional system prompt",
+          "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Router additional system prompt",
+          "help": "Applied only to Router after the shared addition. Automatically saved; applies from the next turn. Framework delegation and tool limits still apply."
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Worker additional system prompt",
+          "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "File uploads"
+        },
+        "system-prompts": {
+          "title": "Additional system prompts"
         }
       },
       "save": "Save changes",

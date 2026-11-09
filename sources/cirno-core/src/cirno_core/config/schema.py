@@ -99,6 +99,11 @@ class Config(BaseSettings):
         self._source_path = path.expanduser().resolve(strict=False)
 
     @property
+    def source_path(self) -> Path | None:
+        """The instance configuration file, including a custom filename."""
+        return self._source_path
+
+    @property
     def runtime_data_dir(self) -> Path | None:
         """Return the active instance data directory when loaded from a config path."""
         return self._source_path.parent / "state" if self._source_path is not None else None

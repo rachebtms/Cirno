@@ -78,10 +78,10 @@ def test_settings_payload_propagates_preset_resolution_failure(
 
 
 def test_docs_version_uses_released_versions_and_falls_back_for_dev() -> None:
-    assert docs_version("0.2.3") == "0.2.3"
-    assert docs_version("0.2.3.post1") == "0.2.3.post1"
-    assert docs_version("0.2.3.dev0") == "latest"
-    assert docs_version("0.2.3+editable") == "latest"
+    assert docs_version("0.2.4") == "0.2.4"
+    assert docs_version("0.2.4.post1") == "0.2.4.post1"
+    assert docs_version("0.2.4.dev0") == "latest"
+    assert docs_version("0.2.4+editable") == "latest"
 
 
 @pytest.mark.parametrize("model", ["kimi-k3", "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed"])
@@ -110,12 +110,12 @@ def test_settings_payload_includes_versioned_docs(
     config_path = tmp_path / "config.json"
     save_config(Config(), config_path)
     monkeypatch.setattr("cirno_core.config.loader._current_config_path", config_path)
-    monkeypatch.setattr("cirno_server.webui.settings.api.__version__", "0.2.3")
+    monkeypatch.setattr("cirno_server.webui.settings.api.__version__", "0.2.4")
 
     payload = settings_payload()
 
     assert payload["docs"] == {
-        "version": "0.2.3",
+        "version": "0.2.4",
         "base_url": "https://github.com/rachebtms/Cirno/tree/main/documents",
         "chat_apps_url": "https://github.com/rachebtms/Cirno/tree/main/documents/configuration.md",
         "latest_url": "https://github.com/rachebtms/Cirno/tree/main/documents",

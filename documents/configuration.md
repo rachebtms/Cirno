@@ -114,6 +114,20 @@ when Home `BOOTSTRAP.md` is empty, startup retires leftover introduction request
 from older releases. Existing conversation history and other queued messages stay
 in place.
 
+## Additional system prompts
+
+Settings → Personality provides three automatically saved text fields:
+
+- **Shared additional system prompt** applies to both Router and Worker.
+- **Router additional system prompt** applies only to the Router.
+- **Worker additional system prompt** applies to ordinary Workers and their transient subagents.
+
+Each field accepts up to 32,000 characters. Clear a field to remove its addition. The shared field initially contains the owner's unlimited-token effort instruction; the two role-specific fields start empty. This instruction requests thorough work and does not alter provider billing or model limits.
+
+Changes apply to the next turn without restarting. A running turn keeps its captured prompt, including during compaction. Shared additions precede the role-specific addition, after the built-in instructions and profile context. They customize behavior within the Harness contracts: role permissions, Router delegation and execution budgets remain enforced. Internal Dream and heartbeat decision requests do not receive these conversation additions.
+
+The corresponding configuration keys are `agents.defaults.system_prompts.shared`, `agents.defaults.system_prompts.router` and `agents.defaults.system_prompts.worker`. The same settings page also edits `SOUL.md`, `WORKER.md` and `USER.md`; those profile files remain separate from these additions.
+
 ## Router heartbeat pause
 
 The Router conversation header includes **Pause heartbeat** / **Resume heartbeat**. Pause takes effect without a service restart and persists across restarts and browser sessions. It prevents new scheduled heartbeats and retires queued heartbeat inputs before model execution. A turn already running can finish. Owner messages, worker reports and separate automations keep their normal behavior. The global Heartbeat switch and interval remain in Settings; disabling that switch also disables the header control.

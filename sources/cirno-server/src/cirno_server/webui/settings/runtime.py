@@ -16,7 +16,14 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 # Only these leaves may be read or patched through this surface. Model/provider,
 # and channel configuration keep dedicated mutation contracts. The embedding API
 # key is masked on this surface and restored only through the shared secret helpers.
+SYSTEM_PROMPT_PATHS = (
+    "agents.defaults.system_prompts.shared",
+    "agents.defaults.system_prompts.router",
+    "agents.defaults.system_prompts.worker",
+)
+
 RUNTIME_CONFIG_PATHS = (
+    *SYSTEM_PROMPT_PATHS,
     "agents.defaults.workspace",
     "agents.defaults.approval.enabled",
     "agents.defaults.approval.model_override",

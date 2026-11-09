@@ -128,6 +128,8 @@ class ModelTurnExecutor:
             include_memory=session.policy.persist if session is not None else True,
             include_task_context=False,
             include_memory_context=False,
+            system_prompts=await self.agent.runner.prepare_prompt(self.agent.context.current_system_prompts),
+            project_id=session.metadata.get("project_id") if session else None,
         )
         if request_context is None:
             request_ctx = dataclasses.replace(

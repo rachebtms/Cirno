@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "Ruang cadangan keluaran (%)",
           "help": "Persentase konteks untuk jawaban berikutnya, dibatasi maksimum keluaran. Bawaan 5%. Batas keluaran aktual mengikuti ruang tersisa."
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "Prompt sistem tambahan bersama",
+          "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Prompt sistem tambahan Router",
+          "help": "Applied only to Router after the shared addition. Automatically saved; applies from the next turn. Framework delegation and tool limits still apply."
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Prompt sistem tambahan Worker",
+          "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "Unggah berkas"
+        },
+        "system-prompts": {
+          "title": "Prompt sistem tambahan"
         }
       },
       "save": "Simpan perubahan",

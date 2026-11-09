@@ -15,6 +15,7 @@ from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.file_state import file_read_context
 from cirno_core.agent.tools.naming import implementation_name
 from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result, with_tool_error_hint
+from cirno_core.agent.tools.role_policy import RoleToolPolicy
 from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.runtime import (
     repeated_external_lookup_error,
@@ -59,6 +60,7 @@ async def execute_tool_calls(
     context: AgentHookContext,
     model_messages: list[dict[str, Any]] | None = None,
     compacted_tool_results: set[str] | None = None,
+    role_policy: RoleToolPolicy | None = None,
 ) -> tuple[list[Any], list[dict[str, str]]]:
     """Execute one model response's tool calls in stable result order."""
     @cache
@@ -84,6 +86,7 @@ async def execute_tool_calls(
                     hook,
                     context,
                     read_results,
+                    role_policy,
                 )
                 for tool_call in batch
             ))
@@ -98,6 +101,7 @@ async def execute_tool_calls(
                     hook,
                     context,
                     read_results,
+                    role_policy,
                 )
                 tool_results.append(result)
 
@@ -114,6 +118,7 @@ async def _execute_tool_call(
     hook: AgentHook,
     context: AgentHookContext,
     read_results: Callable[[], dict[str, str]],
+    role_policy: RoleToolPolicy | None = None,
 ) -> tuple[Any, dict[str, str]]:
     lookup_error = repeated_external_lookup_error(
         tool_call.name,
@@ -160,7 +165,12 @@ async def _execute_tool_call(
     from cirno_core.agent.tools.context import current_request_context
     from cirno_core.agent.approval.service import operation_access
     try:
-        async with operation_access(tool, params, current_request_context()) as params:
+        if role_policy:
+            role_policy.remaining(tool_call.name)
+        async with (
+            operation_access(tool, params, current_request_context()) as params,
+            role_policy.admit(tool_call.name) if role_policy else nullcontext(),
+        ):
             await hook.before_execute_tool(context, tool_call, tool, params)
             with (
                 file_read_context(tool_call.id, read_results)
@@ -178,6 +188,7 @@ async def _execute_tool_call(
                             value, event = await _execute_tool_call(
                                 tools.native, nested, external_lookup_counts, workspace_violation_counts,
                                 hook, nested_context, read_results,
+                                role_policy,
                             )
                             nested_context.tool_results = [value]
                             nested_context.tool_events = [event]

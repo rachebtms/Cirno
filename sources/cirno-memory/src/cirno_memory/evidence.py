@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from io import StringIO
 from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
+
+from cirno_memory.paging import source_page
 
 if TYPE_CHECKING:
     from cirno_memory.repository import MemoryRepository
@@ -66,10 +69,15 @@ def read_evidence(
     """Resolve a pinned evidence record and stream a bounded source page."""
     record = repo.read(identity, revision=revision, **access)
     metadata = {"memory_id": identity, "revision": record["revision"], "source": record["source"]}
+
+    def text_page(content: str) -> dict[str, Any]:
+        page = source_page(StringIO(content), start_line=start_line, limit=limit, char_offset=char_offset)
+        return {**page, "content": "".join(row["text"] for row in page["lines"])}
+
     reference = str(record["source"]).split("#", 1)[0]
     if record["source"].startswith("memory:"):
         original = repo.read(record["source"][7:], revision=record.get("based_on_revision"), **access)
-        return {**metadata, "content": original["content"],
+        return {**metadata, **text_page(original["content"]),
                 "source_refs": [{"memory_id": original["id"], "revision": original["revision"],
                                  "source": original["source"]}, *original["source_refs"]]}
     evidence_ref = next((ref for ref in record.get("source_refs", []) if ref.get("memory_id")), None)
@@ -79,7 +87,7 @@ def read_evidence(
             return read_evidence(repo, evidence["id"], revision=evidence["revision"],
                                  start_line=start_line, limit=limit, char_offset=char_offset, **access)
     if record["source"].startswith("memory/history.jsonl#cursor-"):
-        return {**metadata, "source": record["path"], "content": record["content"],
+        return {**metadata, "source": record["path"], **text_page(record["content"]),
                 "source_refs": record["source_refs"],
                 "note": "This is a compacted event, not independent verification; follow original source references for exact claims."}
     if record["layer"] != "source":
@@ -93,19 +101,5 @@ def read_evidence(
     if path.parent != repo.root / "sources" or path.stem != record["id"] or not path.is_file():
         return {**metadata, "source_refs": record["source_refs"],
                 "note": "Use the file/web/Node tool to inspect this external source under its own access rules."}
-    selected = []
-    has_more = False
     with path.open(encoding="utf-8") as stream:
-        for number, line in enumerate(stream, 1):
-            if number >= max(1, start_line):
-                part = line[max(0, char_offset):max(0, char_offset) + 16000]
-                selected.append({"line": number, "text": part, "char_offset": max(0, char_offset),
-                                 "next_char_offset": char_offset + len(part) if char_offset + len(part) < len(line) else None})
-                if selected[-1]["next_char_offset"] is not None:
-                    break
-                char_offset = 0
-            if len(selected) >= max(1, min(limit, 20)):
-                has_more = next(stream, None) is not None
-                break
-    return {**metadata, "lines": selected,
-            "next_line": selected[-1]["line"] + 1 if selected and has_more else None}
+        return {**metadata, **source_page(stream, start_line=start_line, limit=limit, char_offset=char_offset)}

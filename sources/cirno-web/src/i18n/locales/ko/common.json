@@ -463,6 +463,18 @@
         "agents_defaults_compaction_output_reserve_percent": {
           "label": "출력 예약 공간 (%)",
           "help": "다음 응답을 위해 남겨 둘 컨텍스트 비율입니다. 출력 한도 이내에서 기본 5%를 예약하며 실제 출력 한도는 남은 공간에 맞게 조정됩니다."
+        },
+        "agents_defaults_system_prompts_shared": {
+          "label": "공유 추가 시스템 프롬프트",
+          "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
+        },
+        "agents_defaults_system_prompts_router": {
+          "label": "Router 추가 시스템 프롬프트",
+          "help": "Applied only to Router after the shared addition. Automatically saved; applies from the next turn. Framework delegation and tool limits still apply."
+        },
+        "agents_defaults_system_prompts_worker": {
+          "label": "Worker 추가 시스템 프롬프트",
+          "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
         }
       },
       "groups": {
@@ -570,6 +582,9 @@
         },
         "uploads": {
           "title": "파일 업로드"
+        },
+        "system-prompts": {
+          "title": "추가 시스템 프롬프트"
         }
       },
       "save": "변경 사항 저장",

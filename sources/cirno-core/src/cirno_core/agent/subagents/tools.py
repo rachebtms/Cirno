@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from cirno_core.agent.tools.context import ToolContext
 from cirno_core.agent.tools.file_state import FileStates
 from cirno_core.agent.tools.loader import ToolLoader
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.config.network import NetworkConfig
+from cirno_core.config.prompts import SystemPrompts
 from cirno_core.config.tools import ToolsConfig
 from cirno_core.processes.sessions import ExecSessionManager
 from cirno_core.security.workspace_access import workspace_sandbox_status
@@ -29,6 +31,8 @@ class SubagentTools:
         self.network = network
         self.restrict_to_workspace = restrict_to_workspace
         self.disabled_skills = disabled_skills
+        self.system_prompts = SystemPrompts()
+        self.system_prompts_loader: Callable[[], SystemPrompts] | None = None
 
     def configuration(self) -> ToolsConfig:
         """Build a ToolsConfig scoped for subagent use."""
@@ -87,4 +91,5 @@ class SubagentTools:
             agent_workspace=str(agent_home),
             history_log=history_log,
             skills_summary=skills_summary or "",
+            system_prompt_additions=(self.system_prompts_loader() if self.system_prompts_loader else self.system_prompts).for_role("worker"),
         )

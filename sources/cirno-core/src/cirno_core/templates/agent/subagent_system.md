@@ -9,6 +9,10 @@ Stay focused on the assigned task. Your final response will be reported back to 
 {% if agent_workspace != workspace %}
 Cirno's agent Home: {{ agent_workspace }}
 {% endif %}
+{% if system_prompt_additions %}
+
+{{ system_prompt_additions }}
+{% endif %}
 History log: {{ history_log }}
 {% if skills_summary %}
 

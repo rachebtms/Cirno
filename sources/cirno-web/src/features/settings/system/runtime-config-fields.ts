@@ -9,9 +9,10 @@ export interface RuntimeConfigField {
   max?: number;
 }
 
-export type RuntimeConfigPage = "approval" | "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
+export type RuntimeConfigPage = "personality" | "approval" | "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "context" | "dream" | "memory-search" | "execution" | "shell" | "web-network";
 
 export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabledBy?: string }[] = [
+  { id: "system-prompts", page: "personality" },
   { id: "identity", page: "regional" },
   { id: "heartbeat", page: "heartbeat" },
   { id: "requests", page: "network" },
@@ -40,6 +41,9 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
 ];
 
 export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
+  { group: "system-prompts", path: "agents.defaults.system_prompts.shared", kind: "multiline", max: 32000 },
+  { group: "system-prompts", path: "agents.defaults.system_prompts.router", kind: "multiline", max: 32000 },
+  { group: "system-prompts", path: "agents.defaults.system_prompts.worker", kind: "multiline", max: 32000 },
   { group: "workspace", path: "agents.defaults.workspace", kind: "text", manual: true },
   { group: "compaction-generation", path: "agents.defaults.compaction.max_tokens", kind: "number", min: 512, max: 32768 },
   { group: "compaction-generation", path: "agents.defaults.compaction.reasoning_effort", kind: "select", options: ["inherit", "low", "none"] },
