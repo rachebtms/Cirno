@@ -21,6 +21,7 @@ implementations.
 From the repository root:
 
 ```sh
+npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run typecheck
 npm --prefix sources/cirno-web run lint
 npm --prefix sources/cirno-web test
