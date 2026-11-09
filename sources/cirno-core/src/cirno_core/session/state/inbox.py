@@ -14,6 +14,28 @@ from .operations import SessionOperations
 from .repository import SessionRepository
 
 
+def _receipt_identity(message: InboundMessage, key: str) -> tuple[str, str] | None:
+    import hashlib
+    import json
+
+    from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
+    from cirno_core.session.session_messages import session_message_envelope
+
+    envelope = session_message_envelope(message.metadata)
+    if envelope is not None:
+        identifier = "session:" + envelope["message_id"]
+        values = [envelope["source_session_key"], key, message.content, message.media,
+                  envelope["expect_reply"], message.metadata.get("_work_report")]
+    else:
+        journal_id = message.metadata.get(PENDING_FOLLOWUP_ID_KEY)
+        if message.input_role != "system" or not isinstance(journal_id, str) or not journal_id:
+            return None
+        identifier = "system:" + journal_id
+        values = [message.channel, message.sender_id, message.input_role, key, message.content, message.media]
+    digest = hashlib.sha256(json.dumps(values, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    return identifier, digest
+
+
 @dataclass
 class SessionInbox:
     repository: SessionRepository
@@ -56,39 +78,18 @@ class SessionInbox:
                 from cirno_core.session.session_messages import session_message_envelope
 
                 envelope = session_message_envelope(payload.metadata)
-                receipt_id = None
-                digest = None
-                if envelope is not None:
-                    import hashlib
-                    import json
-
+                identity = _receipt_identity(payload, key)
+                receipt_id, digest = identity if identity is not None else (None, None)
+                if identity is not None:
                     if not session.policy.persist:
-                        raise SessionConflictError("coordination requires a persistent session")
-                    receipt_id = "session:" + envelope["message_id"]
-                    digest = hashlib.sha256(
-                        json.dumps(
-                            [
-                                envelope["source_session_key"],
-                                key,
-                                payload.content,
-                                payload.media,
-                                envelope["expect_reply"],
-                                payload.metadata.get("_work_report"),
-                            ],
-                            ensure_ascii=False,
-                            sort_keys=True,
-                        ).encode()
-                    ).hexdigest()
-                    receipt = self.repository.store.inbox_receipt(
-                        key, session.generation, receipt_id
-                    )
+                        raise SessionConflictError("receipted input requires a persistent session")
+                    receipt = self.repository.store.inbox_receipt(key, session.generation, receipt_id)
                     if receipt is not None:
                         if receipt["digest"] != digest:
-                            raise SessionConflictError(
-                                "coordination message ID was reused with different content"
-                            )
+                            raise SessionConflictError("Input event ID was reused with different content")
                         if receipt["read"]:
                             return session, None, True
+                if envelope is not None:
                     # A pending record from an older release already has a journal ID.
                     # Keep it so recovery and consumption acknowledge the same input.
                     existing = next(

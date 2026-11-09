@@ -108,6 +108,12 @@ Create projects in the Conversations tab. A project has an independent ID, name,
 
 The `@name` beside a conversation is a display alias. Tools accept its stable ID or current alias; saved references use the ID. The Router is the dedicated coordination conversation; ordinary conversations retain execution tools and streamed replies. Both can create delegated conversations, send coordination messages and inspect other conversations through their tools. Only the Router receives `user.message` for visible reply delivery. See [Goals and coordination](goals-and-dream.md).
 
+First-use introduction requests keep one delivery identity across retries and
+restart recovery. Already consumed requests do not start another introduction;
+when Home `BOOTSTRAP.md` is empty, startup retires leftover introduction requests
+from older releases. Existing conversation history and other queued messages stay
+in place.
+
 ## Router heartbeat pause
 
 The Router conversation header includes **Pause heartbeat** / **Resume heartbeat**. Pause takes effect without a service restart and persists across restarts and browser sessions. It prevents new scheduled heartbeats and retires queued heartbeat inputs before model execution. A turn already running can finish. Owner messages, worker reports and separate automations keep their normal behavior. The global Heartbeat switch and interval remain in Settings; disabling that switch also disables the header control.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from collections.abc import Mapping
 from typing import Any, cast
@@ -104,5 +105,16 @@ class RecoveryDelivery:
 
     async def requeue_pending_followups(self, session: Session) -> None:
         """Return durable live-turn follow-ups to the bus after a restart."""
+        from cirno_core.profiles.awakening import awakening_prompt
+        from cirno_core.session.keys import ROUTER_SESSION_KEY
+
         for message in pending_followups(session):
+            if (session.key == ROUTER_SESSION_KEY and message.sender_id == "system:awakening"
+                and message.metadata.get("_awakening") is True
+                and not await asyncio.to_thread(awakening_prompt)):
+                # Older releases retained this journal after completing introductions.
+                identifier = await self.sessions.state.queue_followup(session.key, message)
+                if identifier is not None:
+                    await self.sessions.state.acknowledge_followups(session.key, [identifier])
+                continue
             await self.bus.publish_inbound(message)

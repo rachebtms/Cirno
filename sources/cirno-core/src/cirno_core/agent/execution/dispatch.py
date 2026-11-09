@@ -145,11 +145,14 @@ class SessionDispatcher:
         """Admit session work while the caller owns its intake lock."""
         self.agent.bus.admission.check()
         session_key = self.session_key(msg)
-        if msg.metadata.get("_session_message"):
+        receipted_input = bool(msg.metadata.get("_session_message")) or (
+            msg.input_role == "system" and bool(msg.metadata.get(PENDING_FOLLOWUP_ID_KEY))
+        )
+        if receipted_input:
             identifier = await self.agent.sessions.state.queue_followup(session_key, msg)
             if identifier is None:
                 return
-            accepted = self.agent._coordination_input_ids.setdefault(session_key, set())
+            accepted = self.agent._journaled_input_ids.setdefault(session_key, set())
             if identifier in accepted:
                 return
             msg = dataclasses.replace(
@@ -161,7 +164,7 @@ class SessionDispatcher:
                 for record in (current or {}).get("metadata", {}).get("pending_user_followups", [])
             )
             goal = parse_goal_state(goal_state_raw((current or {}).get("metadata"))) or {}
-            if goal.get("status") == "waiting":
+            if msg.metadata.get("_session_message") and goal.get("status") == "waiting":
                 resumed = {**goal, "status": "active"}
                 resumed.pop("wake_at", None)
                 await self.agent.sessions.state.update_metadata(
@@ -180,10 +183,10 @@ class SessionDispatcher:
             ):
                 return
 
-        if session_key in self.agent._pending_queues and not msg.metadata.get("_session_message"):
+        if session_key in self.agent._pending_queues and not receipted_input:
             msg = await self.journal(session_key, msg)
-        if msg.metadata.get("_session_message"):
-            self.agent._coordination_input_ids.setdefault(session_key, set()).add(
+        if receipted_input:
+            self.agent._journaled_input_ids.setdefault(session_key, set()).add(
                 msg.metadata[PENDING_FOLLOWUP_ID_KEY]
             )
             if msg.is_user_input:
@@ -238,7 +241,7 @@ class SessionDispatcher:
             owns_queue = self.agent._pending_queues.get(session_key) is pending
             if owns_queue:
                 self.agent._pending_queues.pop(session_key, None)
-                self.agent._coordination_input_ids.pop(session_key, None)
+                self.agent._journaled_input_ids.pop(session_key, None)
 
     async def cancel_pending(
         self,

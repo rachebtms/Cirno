@@ -53,7 +53,8 @@ class RouterIdentity:
             content=f"The owner chose to wake their assistant after setup. Begin the first introduction in language {language}. Follow Home BOOTSTRAP.md; do not invent user preferences.",
             metadata={PENDING_FOLLOWUP_ID_KEY: "first-awakening", "_awakening": True},
         )
-        await self.sessions.state.queue_followup(ROUTER_SESSION_KEY, message)
+        if await self.sessions.state.queue_followup(ROUTER_SESSION_KEY, message) is None:
+            return False
         await self.sessions.state.update_metadata(ROUTER_SESSION_KEY, {"awakening_started": True})
         await self.bus.publish_inbound(message)
         return True
