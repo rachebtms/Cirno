@@ -47,7 +47,11 @@ export function createMemoryService(client: WebUIMutationTransport) {
     history: (id: string) => call<{ revisions: MemoryRecord[] }>("memory.history", { id }),
     source: (cursor: EvidenceReference) => call<EvidencePage>("memory.source", { ...cursor }),
     reindex: () => call<{ scanned: number; has_more: boolean }>("memory.reindex"),
-    retry: () => call<{ retried: number }>("memory.retry"),
+    retry: () => call<{
+      retried: number;
+      has_more?: boolean;
+      failures?: { source: string; error: string }[];
+    }>("memory.retry"),
   };
 }
 export type MemoryService = ReturnType<typeof createMemoryService>;

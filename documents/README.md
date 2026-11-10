@@ -34,6 +34,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.7](releases/0.2.7.md): consolidation retry and journal recovery fixes, revision-safe memory links, retrieval deadlines and a smaller full-image toolset.
+
 - [0.2.6](releases/0.2.6.md): unified context consolidation and Skill learning, memory cloud search, credential privacy, bounded embedding retrieval and long-task recovery fixes.
 
 - [0.2.5](releases/0.2.5.md): mobile keyboard visibility, automatic settings saving, model icon alignment and bundled full-image Python libraries.

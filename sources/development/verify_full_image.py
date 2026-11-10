@@ -12,18 +12,18 @@ import tempfile
 import zipfile
 
 COMMANDS = (
-    "git", "git-lfs", "gh", "tea", "go", "curl", "wget", "ssh", "scp", "sftp", "rsync", "rclone",
-    "tmux", "rg", "fd", "fzf", "bat", "jq", "yq", "tree", "python3", "pipx", "uv", "uvx", "hf",
-    "node", "npm", "npx", "bun", "summarize", "mcporter", "gog", "xurl", "ffmpeg", "yt-dlp",
+    "git", "git-lfs", "gh", "tea", "curl", "wget", "ssh", "scp", "sftp", "rsync", "rclone",
+    "tmux", "rg", "fd", "fzf", "bat", "jq", "yq", "tree", "python3", "uv", "uvx",
+    "node", "npm", "npx", "summarize", "mcporter", "gog", "xurl", "ffmpeg", "yt-dlp",
     "pandoc", "pdftotext", "tesseract", "sqlite3", "brew",
-    "soffice", "latex", "dvisvgm", "manim", "chromium", "playwright", "fc-list",
+    "soffice", "latex", "pdflatex", "bibtex", "latexmk", "chromium", "playwright", "fc-list",
 )
 
 
 def check_python_packages() -> None:
     from cirno_core.processes.environment import ExecutionEnvironment
 
-    imports = "import docx, openpyxl, pptx, pypdf, pdfplumber, reportlab, lxml.etree, debugpy, numpy, PIL, matplotlib, pymupdf, fitz, manim, playwright"
+    imports = "import docx, openpyxl, pptx, pypdf, pdfplumber, reportlab, lxml.etree, debugpy, numpy, PIL, matplotlib, pymupdf, fitz, playwright"
     command = shlex.join(["python", "-c", imports])
     for args in (["python", "-c", imports], ["python3", "-c", imports],
                  ["bash", "-c", command], ["bash", "-lc", command]):
@@ -69,19 +69,21 @@ def main() -> None:
     assert os.getuid() == 1000, "Full image tools must work as the non-root Cirno user"
     for name in COMMANDS:
         assert shutil.which(name), f"Missing command: {name}"
+    for name in ("go", "pipx", "bun", "hf", "manim"):
+        assert shutil.which(name) is None, f"Unbundled command remains in the default image: {name}"
     commands = [
         ["git", "--version"], ["git-lfs", "version"], ["gh", "--version"], ["tea", "--version"],
-        ["go", "version"], ["curl", "--version"], ["wget", "--version"], ["ssh", "-V"],
+        ["curl", "--version"], ["wget", "--version"], ["ssh", "-V"],
         ["rsync", "--version"], ["rclone", "version"], ["tmux", "-V"], ["rg", "--version"],
         ["fd", "--version"], ["fzf", "--version"], ["bat", "--version"], ["jq", "--version"],
-        ["yq", "--version"], ["tree", "--version"], ["python3", "--version"], ["pipx", "--version"],
-        ["uv", "--version"], ["uvx", "--version"], ["hf", "--help"], ["node", "--version"],
-        ["npm", "--version"], ["npx", "--version"], ["bun", "--version"], ["summarize", "--version"],
+        ["yq", "--version"], ["tree", "--version"], ["python3", "--version"],
+        ["uv", "--version"], ["uvx", "--version"], ["node", "--version"],
+        ["npm", "--version"], ["npx", "--version"], ["summarize", "--version"],
         ["mcporter", "--version"], ["gog", "--version"], ["xurl", "--help"], ["ffmpeg", "-version"],
         ["yt-dlp", "--version"], ["pandoc", "--version"], ["pdftotext", "-v"], ["tesseract", "--version"],
         ["sqlite3", "--version"], ["brew", "--version"], ["bash", "-c", "nvm --version"],
-        ["soffice", "--version"], ["latex", "--version"], ["dvisvgm", "--version"],
-        ["manim", "--version"], ["chromium", "--version"], ["playwright", "--version"],
+        ["soffice", "--version"], ["latex", "--version"], ["latexmk", "-v"],
+        ["chromium", "--version"], ["playwright", "--version"],
     ]
     for command in commands:
         result = subprocess.run(command, capture_output=True, text=True, timeout=45)

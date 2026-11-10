@@ -1,6 +1,6 @@
 [project]
 name = "cirno-usage"
-version = "0.2.6"
+version = "0.2.7"
 description = "Content-free LLM usage records and SQLite accounting"
 requires-python = ">=3.11"
 license = "MIT"

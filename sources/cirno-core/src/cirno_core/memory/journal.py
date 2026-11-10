@@ -97,13 +97,22 @@ class MemoryJournal:
         archive_id: str | None = None,
     ) -> int:
         """Persist already sanitized, bounded content without rewriting chunk edges."""
+        from cirno_memory.repository import MemoryRepository
+        from cirno_core.memory.journal_checkpoints import checkpoint_entry, index_checkpoint
+
+        repository = MemoryRepository(self.workspace)
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         # Cursor allocation and the append must be atomic: concurrent writers
         # could otherwise read the same current cursor and emit duplicates.
         with self._append_lock:
-            existing = next((entry for entry, _ in self.iter_valid_entries()
-                             if entry.get("archive_id") == archive_id
-                             and entry.get("session_key") == session_key), None) if archive_id else None
+            existing = None
+            if archive_id:
+                existing = checkpoint_entry(repository, session_key, archive_id, content) or next(
+                    (entry for entry, _ in self.iter_valid_entries()
+                     if entry.get("archive_id") == archive_id
+                     and entry.get("session_key") == session_key),
+                    None,
+                )
             if existing is not None:
                 if existing["content"] != content:
                     raise ValueError("Archived checkpoint already exists with different content")
@@ -121,9 +130,11 @@ class MemoryJournal:
                 with open(self.history_file, "a", encoding="utf-8") as f:
                     f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 atomic_write_text(self._cursor_file, str(cursor))
-        from cirno_memory.repository import MemoryRepository
-
-        MemoryRepository(self.workspace).ingest_history(
+            if archive_id:
+                # Publish identity before ingestion can make this entry eligible
+                # for retention. A failed ingestion is resumed from this identity.
+                index_checkpoint(repository, session_key, archive_id, cursor, ts, content, source_refs)
+        repository.ingest_history(
             cursor, content, session_key, source_refs, timestamp=ts
         )
         if archive_id:

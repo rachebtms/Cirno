@@ -2,7 +2,7 @@
 set -eu
 tool=$(basename "$0")
 case "$tool" in
-    manim|playwright)
+    playwright)
         exec "$CIRNO_SHELL_VENV/bin/python" -m "$tool" "$@"
         ;;
     chromium)

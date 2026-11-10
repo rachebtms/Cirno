@@ -75,10 +75,7 @@ class _AzureTokenProvider:
         """Release credential resources.  Safe to call multiple times."""
         close = getattr(self._credential, "close", None)
         if close is not None:
-            try:
-                await close()
-            except Exception:
-                pass
+            await close()
 
 
 class AzureOpenAIProvider(LLMProvider):

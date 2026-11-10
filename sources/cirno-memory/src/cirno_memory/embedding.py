@@ -116,7 +116,10 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
     if not _LOCK.acquire(blocking=False):
         return {**lexical, "warning_code": "busy", "warning": "Embedding worker is busy; using BM25"}
     try:
+        from cirno_memory.embedding_budget import EmbeddingBudget
+        deadline = EmbeddingBudget(config.embedding_timeout_seconds)
         fingerprint = _fingerprint(config)
+        deadline.remaining()
         access_clauses = ["m.status='active'", "m.layer IN ('knowledge','profile')"]
         args = []
         if not filters.get("maintenance"):
@@ -150,6 +153,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
         from cirno_memory.embedding_api import APIEmbeddingWorker
         worker_type = APIEmbeddingWorker if config.embedding_provider == "api" else EmbeddingWorker
         with worker_type(config) as worker:
+            worker.budget = deadline
             query_vector = worker.request([query[:2000]])["vectors"][0]
             if config.embedding_provider == "api":
                 fingerprint += ":" + str(len(query_vector))
@@ -160,6 +164,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
                     WHERE {where} AND (e.content_hash IS NULL OR e.content_hash!=m.content_hash OR e.completed=0)
                     ORDER BY m.id LIMIT 33""", [fingerprint, *args]).fetchall()
             for row in rows[:32]:
+                deadline.remaining()
                 if not budget:
                     break
                 record = json.loads(row[0])
@@ -184,6 +189,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
             best = {}
             with repo.connect(vectors=True) as db:
                 for row in db.execute(f"SELECT m.body,e.vector,e.start_char,e.end_char,e.chunk_index FROM memories m JOIN vector_chunks e ON e.memory_id=m.id AND e.content_hash=m.content_hash WHERE e.fingerprint=? AND {where}", [fingerprint, *args]):
+                    deadline.remaining()
                     vector = struct.unpack(f"{len(row[1]) // 4}f", row[1])
                     if len(vector) != len(query_vector):
                         continue
@@ -213,6 +219,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
                         scores[record["id"]] = scores.get(record["id"], 0) + 1 / (60 + rank)
                 results = [dict(records[key], score=score) for key, score in sorted(scores.items(), key=lambda pair: pair[1], reverse=True)[:limit]]
             repo.expand_links(results, limit=neighbor_limit, session_key=filters.get("session_key"), project_id=filters.get("project_id"), maintenance=filters.get("maintenance", False))
+            deadline.remaining()
             return {"memories": results, "engine": mode, "has_more": False, "next_offset": 0,
                     "embedding_index_pending": pending, "worker_peak_mb": round(worker.peak_mb, 1)}
     except (OSError, ValueError, RuntimeError, MemoryError, TimeoutError, subprocess.SubprocessError) as exc:

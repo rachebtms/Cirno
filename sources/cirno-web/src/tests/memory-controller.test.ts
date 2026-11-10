@@ -230,3 +230,25 @@ it("does not continue rebuilding after its owner unmounts", async () => {
   expect(fixture.request).toHaveBeenCalledTimes(1);
   expect(changed).not.toHaveBeenCalled();
 });
+it("refreshes committed results and exposes partial retry failures without retrying them forever", async () => {
+  const fixture = service(() => ({ retried: 1, has_more: true, failures: [{ source: "batch-b", error: "Profile changed" }] }));
+  const changed = vi.fn().mockResolvedValue(undefined);
+  const { result } = renderHook(() => useMemoryMaintenance(fixture.api, changed));
+  await act(() => result.current.run("retry"));
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(fixture.request).toHaveBeenCalledTimes(1);
+  expect(result.current.error).toBe("batch-b: Profile changed");
+  expect(result.current.scanned).toBe(1);
+  expect(result.current.busy).toBe(false);
+});
+it("continues successful bounded retry batches sequentially", async () => {
+  let calls = 0;
+  const fixture = service(() => ({ retried: ++calls === 1 ? 10 : 2, has_more: calls === 1 }));
+  const changed = vi.fn().mockResolvedValue(undefined);
+  const { result } = renderHook(() => useMemoryMaintenance(fixture.api, changed));
+  await act(() => result.current.run("retry"));
+  expect(fixture.request).toHaveBeenCalledTimes(2);
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(result.current.scanned).toBe(12);
+  expect(result.current.error).toBeNull();
+});

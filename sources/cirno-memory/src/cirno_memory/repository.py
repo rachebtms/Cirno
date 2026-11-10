@@ -384,6 +384,11 @@ class MemoryRepository:
         if scope_identity(source) != scope_identity(target):
             raise ValueError("Linked memories must have the same visibility scope")
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for record in (source, target):
+                current = db.execute("SELECT revision FROM memories WHERE id=?", (record["id"],)).fetchone()
+                if current is None or current[0] != record["revision"]:
+                    raise ValueError("Linked memory changed; read it before linking evidence")
             db.execute("INSERT OR REPLACE INTO links VALUES(?,?,?,?)", (source_id, target_id, relation, evidence))
             if relation == "supersedes":
                 target.pop("content")

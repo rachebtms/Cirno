@@ -70,3 +70,45 @@ def test_api_batches_share_one_budget_and_expired_work_is_not_sent(monkeypatch):
             instance.request(["already expired"])
     assert len(calls) == 2
     assert calls[1].extensions["timeout"]["read"] == pytest.approx(0.4)
+
+
+def test_cached_vector_scoring_obeys_the_whole_search_deadline(tmp_path, monkeypatch):
+    import cirno_memory.embedding as embedding
+    import cirno_memory.embedding_budget as budget
+    from cirno_memory.repository import MemoryRepository
+
+    class Worker:
+        peak_mb = 1
+        def __init__(self, config):
+            self.budget = budget.EmbeddingBudget(config.embedding_timeout_seconds)
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            pass
+        def request(self, texts, **options):
+            if not options:
+                return {"vectors": [[1.0]]}
+            return {"vectors": [[1.0], [1.0]], "chunks": [
+                {"chunk_index": index, "start_char": 0, "end_char": 5} for index in range(2)
+            ], "has_more": False}
+
+    clock = [0.0]
+    monkeypatch.setattr(budget.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(embedding, "EmbeddingWorker", Worker)
+    monkeypatch.setattr(embedding, "_fingerprint", lambda _: "test")
+    repo = MemoryRepository(tmp_path)
+    repo.save("marker evidence", source="test:result", session_key="a", layer="knowledge")
+    config = MemoryConfig(embedding_enabled=True, embedding_timeout_seconds=1)
+    assert embedding.search(repo, "marker", config, session_key="a")["engine"] == "hybrid"
+    unpack = embedding.struct.unpack
+    scored = []
+    def slow_score(*args):
+        scored.append(1)
+        clock[0] += 2
+        return unpack(*args)
+    monkeypatch.setattr(embedding.struct, "unpack", slow_score)
+    result = embedding.search(repo, "marker", config, session_key="a")
+    assert result["engine"] == "bm25"
+    assert result["warning_code"] == "unavailable"
+    assert "time budget" in result["warning"]
+    assert len(scored) == 1

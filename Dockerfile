@@ -19,6 +19,14 @@ RUN apt-get update && \
 RUN useradd -m -u 1000 -s /bin/bash cirno
 ENV HOME=/home/cirno CIRNO_SHELL_VENV=/app/.venv
 
+# Go is needed to build xurl, but is not part of the runtime image.
+FROM golang:1.27.3-bookworm AS full-go-builder
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOBIN=/out CGO_ENABLED=0 go install github.com/xdevplatform/xurl@v1.3.4 && \
+    cp /usr/local/go/LICENSE /out/Go-LICENSE && \
+    cp /go/pkg/mod/github.com/xdevplatform/xurl@v1.3.4/LICENSE /out/xurl-LICENSE
+
 # Ubuntu 24.04 meets Homebrew's supported glibc baseline on both architectures.
 # BuildKit skips this stage entirely for the default slim variant.
 FROM ubuntu:24.04 AS full-base
@@ -29,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client bubblewrap libmagic1 util-linux && \
     rm -rf /var/lib/apt/lists/* && \
     userdel ubuntu && useradd -m -u 1000 -s /bin/bash cirno && \
-    mkdir -p /home/linuxbrew/.linuxbrew /opt/cirno/bin /opt/cirno/node-tools /opt/cirno/python-tools /opt/cirno/models /opt/nvm && \
+    mkdir -p /home/linuxbrew/.linuxbrew /opt/cirno/bin /opt/cirno/node-tools /opt/cirno/models /opt/nvm && \
     chown -R cirno:cirno /home/linuxbrew /opt/cirno && \
     curl --fail --location --retry 5 --retry-all-errors \
       https://github.com/nvm-sh/nvm/archive/refs/tags/v0.40.8.tar.gz -o /tmp/nvm.tar.gz && \
@@ -49,6 +57,8 @@ RUN --mount=type=cache,target=/home/cirno/.cache,uid=1000,gid=1000 \
     mkdir -p /home/linuxbrew/.linuxbrew/bin && \
     ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew && \
     bash /tmp/install_full_tools.sh
+COPY --from=full-go-builder --chown=cirno:cirno /out/xurl /opt/cirno/bin/xurl
+COPY --from=full-go-builder /out/Go-LICENSE /out/xurl-LICENSE /usr/share/licenses/cirno/xurl/
 USER root
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/cirno/browsers
 COPY sources/deployment/full-image-python.txt /tmp/full-image-python.txt
@@ -56,7 +66,7 @@ COPY sources/deployment/install_full_media.sh /tmp/install_full_media.sh
 RUN bash /tmp/install_full_media.sh
 COPY sources/deployment/full-image-python-command.sh /opt/cirno/bin/cirno-python-tool
 RUN chmod +x /opt/cirno/bin/cirno-python-tool && \
-    for tool in manim playwright chromium; do ln -s cirno-python-tool "/opt/cirno/bin/$tool"; done
+    for tool in playwright chromium; do ln -s cirno-python-tool "/opt/cirno/bin/$tool"; done
 COPY sources/deployment/full-image-shell.sh /etc/profile.d/cirno-tools.sh
 ENV CIRNO_FULL_IMAGE=1 \
     CIRNO_SHELL_VENV=/home/cirno/.cirno/state/tools/python \
@@ -82,7 +92,7 @@ ENV CIRNO_FULL_IMAGE=1 \
     PIPX_BIN_DIR=/home/cirno/.cirno/state/tools/bin \
     NVM_DIR=/home/cirno/.cirno/state/tools/nvm \
     PATH="/home/cirno/.cirno/state/tools/bin:/home/cirno/.cirno/state/tools/npm/bin:/home/cirno/.cirno/state/tools/bun/bin:$PATH" \
-    CIRNO_EXTRAS_DEFAULT=memory-embedding,azure,bedrock,olostep \
+    CIRNO_EXTRAS_DEFAULT=memory-embedding \
     CIRNO_CHANNELS_DEFAULT=telegram
 
 FROM ${CIRNO_VARIANT}-base AS runtime
@@ -93,10 +103,10 @@ WORKDIR /app
 # channels may install their manifest-declared dependencies at startup.
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$CIRNO_SHELL_VENV/bin:/app/.venv/bin:$PATH"
-RUN uv venv --seed "$VIRTUAL_ENV"
 
 # Build the local distributions together; none is fetched from PyPI.
 ARG CIRNO_EXTRAS=
+ARG CIRNO_CHANNELS=
 COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY documents/ documents/
 COPY sources/cirno/ sources/cirno/
@@ -107,21 +117,20 @@ COPY sources/cirno-core/ sources/cirno-core/
 COPY sources/cirno-server/ sources/cirno-server/
 COPY sources/deployment/install_channel_dependencies.py scripts/
 COPY --from=webui-builder /app/build/webui/ build/webui/
-RUN extras="${CIRNO_EXTRAS:-${CIRNO_EXTRAS_DEFAULT:-}}" && \
+# Install and hand ownership over in one layer. A later recursive chown would
+# copy the installed environment into a second image layer.
+RUN uv venv --seed "$VIRTUAL_ENV" && \
+    extras="${CIRNO_EXTRAS:-${CIRNO_EXTRAS_DEFAULT:-}}" && \
     if [ -n "$extras" ]; then project=".[$extras]"; else project="."; fi && \
     CIRNO_SKIP_WEBUI_BUILD=1 uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache \
-    ./sources/cirno-memory ./sources/cirno-usage ./sources/cirno-vault ./sources/cirno-core ./sources/cirno-server "$project"
-
-# Preinstall selected channel dependencies from their manifests. A comma-separated
-# list selects dependencies for the included channels.
-ARG CIRNO_CHANNELS=
-RUN for channel in $(printf '%s' "${CIRNO_CHANNELS:-${CIRNO_CHANNELS_DEFAULT:-}}" | tr ',' ' '); do \
-        python -m scripts.install_channel_dependencies "$channel"; \
-    done
-
-
-# Hand ownership of the writable virtualenv to the Cirno user.
-RUN mkdir -p /home/cirno/.cirno && \
+    ./sources/cirno-memory ./sources/cirno-usage ./sources/cirno-vault ./sources/cirno-core ./sources/cirno-server "$project" && \
+    for channel in $(printf '%s' "${CIRNO_CHANNELS:-${CIRNO_CHANNELS_DEFAULT:-}}" | tr ',' ' '); do \
+        python -m scripts.install_channel_dependencies "$channel" || exit $?; \
+    done && \
+    if [ "${CIRNO_FULL_IMAGE:-}" = "1" ]; then \
+        rm -f "$VIRTUAL_ENV/bin/hf" "$VIRTUAL_ENV/bin/huggingface-cli"; \
+    fi && \
+    mkdir -p /home/cirno/.cirno && \
     chown -R cirno:cirno /home/cirno /app/.venv
 
 COPY sources/deployment/entrypoint.sh /usr/local/bin/entrypoint.sh

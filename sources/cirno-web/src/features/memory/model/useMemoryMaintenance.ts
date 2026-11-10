@@ -34,6 +34,7 @@ export function useMemoryMaintenance(service: MemoryService, onChanged: () => Pr
     let scanned = 0;
     try {
       let phase: Maintenance["phase"] = "idle";
+      let retryError: string | null = null;
       if (action === "reindex") {
         let more = true;
         while (more && !operation.stop && flight.current === operation) {
@@ -44,9 +45,19 @@ export function useMemoryMaintenance(service: MemoryService, onChanged: () => Pr
           setState({ service, phase: "running", scanned, action, error: null });
         }
         phase = more ? "stopped" : "complete";
-      } else await service.retry();
+      } else {
+        let more = true;
+        while (more && !operation.stop && flight.current === operation) {
+          const page = await service.retry();
+          if (flight.current !== operation) return;
+          scanned += page.retried;
+          retryError = page.failures?.map(failure => `${failure.source}: ${failure.error}`).join("\n") || null;
+          more = !!page.has_more && !retryError;
+        }
+      }
       if (flight.current !== operation) return;
       await onChanged();
+      if (retryError) throw new Error(retryError);
       if (flight.current === operation) setState({ service, phase, scanned, action, error: null });
     } catch (reason) {
       if (flight.current === operation)

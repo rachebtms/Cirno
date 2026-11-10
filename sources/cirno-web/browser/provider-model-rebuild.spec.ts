@@ -91,3 +91,21 @@ for (const width of [390, 1440]) test(`direct provider activation restores focus
   await trigger.click();
   await expect(provider.getByRole("textbox", { name: "API URL", exact: true })).toHaveValue("https://saved.example/v1");
 });
+
+for (const width of [390, 1440]) test(`cancelling provider settings returns to the model draft at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/browser/fixture.html?case=provider-model-rebuild&lang=en&theme=light");
+  await page.getByRole("button", { name: "New preset", exact: true }).click();
+  const draft = page.getByRole("dialog", { name: "New preset", exact: true });
+  await draft.getByRole("textbox", { name: /^Preset name/ }).fill("Keep my draft");
+  const trigger = draft.getByRole("button", { name: "Configure", exact: true });
+  await trigger.click();
+  const provider = page.getByRole("dialog", { name: "OpenAI", exact: true });
+  await provider.getByRole("textbox", { name: "API URL", exact: true }).fill("https://unsaved.example/v1");
+  await provider.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(provider).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(draft.getByRole("textbox", { name: /^Preset name/ })).toHaveValue("Keep my draft");
+  await trigger.click();
+  await expect(provider.getByRole("textbox", { name: "API URL", exact: true })).not.toHaveValue("https://unsaved.example/v1");
+});

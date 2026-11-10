@@ -160,3 +160,12 @@ def test_retention_waits_for_failed_catalog_ingestion_and_retry_does_not_duplica
     assert journal.append_history("Original evidence", session_key="worker:a", archive_id="first") == 1
     assert [entry["cursor"] for entry, _ in journal.iter_valid_entries()] == [4, 5]
     assert MemoryRepository(tmp_path).read_source("history-1", session_key="worker:a")["content"] == "Original evidence"
+
+
+def test_retired_checkpoint_retry_keeps_original_cursor_and_does_not_duplicate(tmp_path):
+    journal = MemoryJournal(tmp_path, max_history_entries=1)
+    first = journal.append_history("Original checkpoint", session_key="worker:a", archive_id="first")
+    journal.append_history("Later checkpoint", session_key="worker:a", archive_id="later")
+    assert [entry["cursor"] for entry, _ in journal.iter_valid_entries()] == [2]
+    assert journal.append_history("Original checkpoint", session_key="worker:a", archive_id="first") == first
+    assert [entry["cursor"] for entry, _ in journal.iter_valid_entries()] == [2]

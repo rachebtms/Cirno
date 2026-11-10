@@ -15,7 +15,7 @@ from typing import Any
 from cirno_memory.repository import MemoryRepository
 from cirno_memory.scopes import scope_identity
 from cirno_core.memory.consolidation_contract import LearningPlan
-from cirno_core.memory.consolidation_receipts import write_receipt
+from cirno_core.memory.consolidation_receipts import index_receipt, receipt_path, write_receipt
 from cirno_core.session.roles import conversation_role
 from cirno_core.session.history_visibility import is_hidden_history_message
 from cirno_core.runtime.context import public_history_message
@@ -207,29 +207,39 @@ class ConsolidationLearning:
 
     def apply(self, plan: LearningPlan, evidence: dict[str, Any], summary: str) -> None:
         """Validate before mutation, then persist auditable, idempotent changes."""
-        record = {
-            "source": evidence["id"],
-            "session_key": self.session_key,
-            "project_id": self.project_id,
-            "documents": self.documents,
-            "inputs": self.inputs,
-            "known": self.known,
-            "max_updates": self.max_updates,
-            "context_chars": self.context_chars,
-            "summary": summary,
-            "plan": plan.model_dump(),
-            "status": "pending",
-        }
-        write_receipt(self.repo, record)
-        try:
-            self._apply(plan, evidence)
-        except Exception as exc:
-            record.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        path = receipt_path(self.repo, evidence["id"])
+        with file_write_transaction([path]):
+            if path.exists():
+                previous = json.loads(path.read_text(encoding="utf-8"))
+                if previous["status"] == "completed":
+                    if previous["plan"] != plan.model_dump() or previous["summary"] != summary:
+                        raise ValueError("Archived consolidation already has a different completed plan")
+                    index_receipt(self.repo, previous)
+                    self.completed = True
+                    return
+            record = {
+                "source": evidence["id"],
+                "session_key": self.session_key,
+                "project_id": self.project_id,
+                "documents": self.documents,
+                "inputs": self.inputs,
+                "known": self.known,
+                "max_updates": self.max_updates,
+                "context_chars": self.context_chars,
+                "summary": summary,
+                "plan": plan.model_dump(),
+                "status": "pending",
+            }
             write_receipt(self.repo, record)
-            raise
-        record["status"] = "completed"
-        write_receipt(self.repo, record)
-        self.completed = True
+            try:
+                self._apply(plan, evidence)
+            except Exception as exc:
+                record.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+                write_receipt(self.repo, record)
+                raise
+            record["status"] = "completed"
+            write_receipt(self.repo, record)
+            self.completed = True
 
     def _finding_source(self, finding, evidence):
         parents = [self.inputs[ref.memory_id] for ref in finding.evidence if ref.memory_id]

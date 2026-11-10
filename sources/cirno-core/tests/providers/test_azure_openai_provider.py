@@ -649,3 +649,14 @@ def test_get_default_model():
         api_key="k", api_base="https://r.com", default_model="my-deploy",
     )
     assert provider.get_default_model() == "my-deploy"
+
+
+async def test_aad_cleanup_failure_is_reported_after_closing_other_provider_resources(monkeypatch):
+    credential = MagicMock()
+    credential.close = AsyncMock(side_effect=OSError("AAD credential transport did not close"))
+    _install_fake_azure_identity(monkeypatch, MagicMock(return_value=credential))
+    provider = AzureOpenAIProvider(api_key="", api_base="https://res.openai.azure.com")
+    with pytest.raises(OSError, match="credential transport did not close"):
+        await provider.aclose()
+    assert provider._client.is_closed()
+    credential.close.assert_awaited_once()

@@ -11,5 +11,4 @@ numpy
 Pillow
 matplotlib
 PyMuPDF
-manim
 playwright
