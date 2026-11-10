@@ -124,10 +124,6 @@
           "label": "Múi giờ",
           "help": "Chọn múi giờ. Độ lệch UTC được tính theo ngày hiện tại."
         },
-        "agents_defaults_dream_enabled": {
-          "label": "Sắp xếp bộ nhớ",
-          "help": "Tự động sắp xếp thông tin hữu ích từ cuộc trò chuyện. Bộ nhớ hiện có vẫn được sử dụng khi tắt."
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
@@ -248,14 +244,6 @@
           "label": "Thời gian cache",
           "help": "Thời gian giữ danh mục ứng dụng CLI trong bộ nhớ đệm."
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream interval (hours)",
-          "help": "Tổng hợp khi rảnh hoặc theo khoảng thời gian cố định."
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream model",
-          "help": "Chọn mô hình riêng cho Dream; để trống để dùng mô hình hiện tại."
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
           "label": "Khoảng kiểm tra nén ngữ cảnh khi nhàn rỗi (giây)",
           "help": "Tần suất kiểm tra hội thoại để nén ngữ cảnh; khác với thời gian không hoạt động. Khởi động lại để áp dụng."
@@ -272,29 +260,13 @@
           "label": "Model retries",
           "help": "Restart to apply."
         },
-        "agents_defaults_dream_mode": {
-          "label": "Lịch Dream",
-          "help": "Tổng hợp khi rảnh hoặc theo khoảng thời gian cố định."
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Thời gian rảnh trước Dream (giây)",
-          "help": "Chỉ chạy khi không có tác vụ; tin nhắn mới sẽ ngắt Dream."
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Bản ghi mỗi đợt Dream",
-          "help": "Các bản ghi còn lại vẫn trong hàng đợi."
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Ký tự mỗi đợt Dream",
-          "help": "Giới hạn đầu vào mỗi đợt; vẫn giữ toàn bộ nguồn gốc."
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "Giới hạn ký ức chung (token)",
           "help": "Giới hạn chèn MEMORY.md; tệp đầy đủ vẫn trong Home."
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "Giới hạn điểm lưu tác vụ (token)",
-          "help": "Khôi phục trạng thái tác vụ độc lập với Dream."
+          "help": "Khôi phục trạng thái tác vụ độc lập với context consolidation."
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "Số tệp quét chỉ mục",
@@ -314,22 +286,18 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "Giới hạn tiến trình nhúng (MB)",
-          "help": "Giới hạn RSS của tiến trình con; vượt mức thì dùng BM25. Không giới hạn toàn dịch vụ."
+          "help": "Peak embedding worker memory budget (MiB), including model loading. Accepts 512, 1024 or higher. Exceeding it falls back to BM25; this is not a whole-service limit."
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "Thời gian chờ nhúng (giây)",
-          "help": "Giới hạn mỗi yêu cầu; khi lỗi thì dùng BM25."
+          "help": "Time budget for the whole embedding search, including the query and all incremental indexing batches. A visible timeout falls back to BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
           "label": "Giải phóng bộ nhớ sau khi nén",
           "help": "Sau khi nén, giữ bằng chứng và lịch sử trên đĩa, giải phóng tin nhắn thực thi cũ khỏi RAM."
         },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Giới hạn vòng lặp Dream",
-          "help": "Giới hạn lượt mô hình mỗi đợt; đầu vào chưa xong vẫn trong hàng đợi."
-        },
         "agents_defaults_idle_compact_percent": {
-          "label": "Ngưỡng nén khi nhàn rỗi (%)",
+          "label": "Idle consolidation trigger (%)",
           "help": "Tỷ lệ cửa sổ của mô hình hiện tại. 0 tắt nén khi nhàn rỗi; cấu hình mô hình có thể ghi đè."
         },
         "agents_defaults_idle_compact_keep_percent": {
@@ -416,18 +384,6 @@
           "label": "Thời hạn lệnh tối đa được yêu cầu (giây)",
           "help": "Thời gian tối đa mô hình có thể yêu cầu cho mỗi lệnh. 0 bỏ giới hạn này; thời gian mặc định được đặt riêng."
         },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "Ngân sách đầu ra nén (token)",
-          "help": "Ngân sách riêng gồm cả suy luận, không vượt giới hạn đầu ra của mô hình."
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "Mức suy luận khi nén",
-          "help": "Giảm mức để dành chỗ cho nội dung tóm tắt. Kế thừa dùng thiết lập cuộc trò chuyện; nhà cung cấp ánh xạ giá trị không hỗ trợ."
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "Ngưỡng nhắc lưu trạng thái (%)",
-          "help": "Nhắc tác nhân lưu trạng thái ở tỷ lệ này của ngân sách đầu vào đang dùng. Không ngắt yêu cầu đang chạy."
-        },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL cơ sở API",
           "help": "URL tương thích OpenAI như https://host/v1, hoặc endpoint /embeddings đầy đủ. Hỗ trợ HTTP tự lưu trữ."
@@ -460,10 +416,6 @@
           "label": "Tổng mỗi tin nhắn (MiB)",
           "help": "Tổng ảnh và tài liệu tải lên, không gồm video và tham chiếu tệp cục bộ. Khởi động lại và tải lại trang để áp dụng."
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "Không gian dành cho đầu ra (%)",
-          "help": "Tỷ lệ ngữ cảnh dành cho câu trả lời kế tiếp, không vượt giới hạn đầu ra. Mặc định 5%. Giới hạn thực tế điều chỉnh theo phần còn lại."
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "Lời nhắc bổ sung dùng chung",
           "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Lời nhắc bổ sung cho Worker",
           "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "Consolidation output budget (tokens)",
+          "help": "Task checkpoint and memory updates share this output budget, capped by the model output limit."
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "Mức suy luận khi nén",
+          "help": "Giảm mức để dành chỗ cho nội dung tóm tắt. Kế thừa dùng thiết lập cuộc trò chuyện; nhà cung cấp ánh xạ giá trị không hỗ trợ."
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "Ngưỡng nhắc lưu trạng thái (%)",
+          "help": "Nhắc tác nhân lưu trạng thái ở tỷ lệ này của ngân sách đầu vào đang dùng. Không ngắt yêu cầu đang chạy."
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "Không gian dành cho đầu ra (%)",
+          "help": "Tỷ lệ ngữ cảnh dành cho câu trả lời kế tiếp, không vượt giới hạn đầu ra. Mặc định 5%. Giới hạn thực tế điều chỉnh theo phần còn lại."
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "Learn during consolidation",
+          "help": "Produce task checkpoints, durable memories and verified Skill improvements in the same request, without a separate model run."
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "Maximum updates per consolidation",
+          "help": "Bound the total memory and document updates. A pass may produce no useful updates."
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "Additional reference budget (characters)",
+          "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "Giới hạn lệnh"
         },
-        "compaction-generation": {
-          "title": "Tạo điểm tiếp tục"
-        },
         "embedding": {
           "title": "Dịch vụ embedding"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "Lời nhắc hệ thống bổ sung"
+        },
+        "consolidation-generation": {
+          "title": "Consolidation generation"
+        },
+        "consolidation": {
+          "title": "Learning and idle consolidation",
+          "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
         }
       },
       "save": "Lưu thay đổi",
@@ -597,8 +581,8 @@
       "noResults": "Không có cài đặt phù hợp.",
       "pending": "Thay đổi chưa lưu",
       "idleCompaction": {
-        "label": "Tự động nén khi không hoạt động",
-        "help": "Tự động nén ngữ cảnh khi hết thời gian chờ để giảm lượng token dùng cho các yêu cầu tiếp theo.",
+        "label": "Consolidate idle conversations",
+        "help": "Consolidate context and retain useful experience after the idle timeout.",
         "wait": "Giới hạn thời gian không hoạt động",
         "minutes": "phút",
         "numberError": "Nhập số phút là số nguyên không âm."
@@ -663,8 +647,6 @@
       "nodes": "Nút",
       "reading": "Văn bản và đọc",
       "activity": "Hiển thị thực thi",
-      "context": "Nén ngữ cảnh",
-      "dream": "Hợp nhất Dream",
       "memory-search": "Tìm kiếm bộ nhớ",
       "execution": "Mục tiêu và thực thi",
       "shell": "Thực thi Shell",
@@ -675,7 +657,8 @@
       "coordination": "Phối hợp hội thoại",
       "regional": "Thời gian và khu vực",
       "approval": "Phê duyệt AI",
-      "backup": "Sao lưu và khôi phục"
+      "backup": "Sao lưu và khôi phục",
+      "consolidation": "Context consolidation"
     },
     "sections": {
       "interface": "Giao diện",
@@ -957,7 +940,8 @@
         "api": "API",
         "cron": "Tự động hóa",
         "dream": "Sắp xếp bộ nhớ",
-        "system": "Lượt gọi phụ trợ"
+        "system": "Lượt gọi phụ trợ",
+        "consolidation": "Context consolidation"
       }
     },
     "providers": {
@@ -2133,20 +2117,20 @@
             "description": "Hiện N tin nhắn đã lưu gần nhất."
           },
           "dream": {
-            "title": "Chạy Dream",
+            "title": "Chạy consolidation",
             "description": "Sắp xếp bộ nhớ ngay."
           },
           "dream_log": {
-            "title": "Nhật ký Dream",
-            "description": "Xem thay đổi từ lần chạy Dream gần nhất."
+            "title": "Nhật ký consolidation",
+            "description": "Xem thay đổi từ lần chạy consolidation gần nhất."
           },
           "dream_restore": {
             "title": "Khôi phục bộ nhớ",
-            "description": "Khôi phục ảnh chụp bộ nhớ Dream trước đó."
+            "description": "Khôi phục ảnh chụp bộ nhớ consolidation trước đó."
           },
           "dream_prompt": {
-            "title": "Thiết lập Dream",
-            "description": "Đặt cách Dream sắp xếp bộ nhớ vùng làm việc này."
+            "title": "Thiết lập consolidation",
+            "description": "Đặt cách consolidation sắp xếp bộ nhớ vùng làm việc này."
           },
           "goal": {
             "title": "Mục tiêu dài hạn",
@@ -2179,6 +2163,10 @@
           "access": {
             "title": "Chế độ truy cập",
             "description": "Chọn mặc định, AI xét duyệt hoặc toàn quyền."
+          },
+          "consolidate": {
+            "title": "Consolidate context",
+            "description": "Organize task context and retain verified experience"
           }
         },
         "badges": {
@@ -2805,7 +2793,8 @@
     "agentVisible": "Hiển thị cho Agent",
     "agentHidden": "Riêng tư",
     "keepSecret": "Để trống để giữ giá trị đã lưu.",
-    "sshNode": "SSH Node"
+    "sshNode": "SSH Node",
+    "memory": "Memory"
   },
   "files": {
     "title": "Files",
@@ -2852,12 +2841,12 @@
     "evidence": "Nguồn",
     "more": "Tải thêm",
     "reindex": "Tạo lại chỉ mục",
-    "retry": "Thử lại Dream bị lỗi",
-    "pending": "Dream đang chờ: {{count}}",
+    "retry": "Retry saving consolidation results",
+    "pending": "Pending next consolidation: {{count}}",
     "failed": "Lỗi: {{count}}",
     "indexed": "Đã lập chỉ mục: {{count}}",
     "indexSize": "Chỉ mục: {{size}} MB",
-    "lastDream": "Dream gần nhất",
+    "lastDream": "consolidation gần nhất",
     "noDream": "Chưa chạy",
     "includeHistory": "Gồm bản ghi đã thay thế",
     "revision": "Phiên bản {{revision}}",
@@ -2881,7 +2870,7 @@
     "until": "Đến ngày",
     "discoverTags": "Duyệt thẻ",
     "databases": "Cơ sở dữ liệu",
-    "dreamOutcomes": "Kết quả Dream gần đây",
+    "dreamOutcomes": "Kết quả consolidation gần đây",
     "createdOutcome": "Đã tạo",
     "mergedOutcome": "Đã hợp nhất",
     "skippedOutcome": "Bỏ qua",
@@ -2898,10 +2887,12 @@
     "fallback_unavailable": "Không thể tìm kiếm vectơ; đã dùng BM25.",
     "searchDetails": "Lý do",
     "indexPending": "Chỉ mục vectơ chưa hoàn tất. Kết quả chỉ gồm nội dung đã lập chỉ mục; tìm lại để tiếp tục lập chỉ mục.",
-    "statusTitle": "Chỉ mục và hợp nhất",
+    "statusTitle": "Index and context consolidation",
     "noTags": "Chưa có thẻ.",
     "resultsFor": "Kết quả cho “{{query}}”",
-    "noMatches": "Không có ký ức phù hợp với tìm kiếm này."
+    "noMatches": "Không có ký ức phù hợp với tìm kiếm này.",
+    "lastConsolidation": "Last consolidation",
+    "noConsolidation": "Not run yet"
   },
   "userQuestion": {
     "title": "Một câu hỏi dành cho bạn",
@@ -3124,5 +3115,27 @@
       "manual": "Thứ tự đã lưu"
     },
     "projectActions": "Thao tác dự án {{name}}"
+  },
+  "memoryGraph": {
+    "description": "Explore saved knowledge, connections and original sources.",
+    "cloud": "Memory cloud",
+    "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
+    "nodeCount": "{{count}} memories",
+    "fit": "Fit to view",
+    "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
+    "renderError": "The 3D view could not start. You can still search and read the results.",
+    "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",
+    "open": "Open Memory",
+    "limit": "Showing up to {{count}} memories. Narrow the filters to explore other records.",
+    "linksLimit": "Showing the first 1,500 connections within these results.",
+    "relation_tag": "Shared tag",
+    "relation_supports": "Supports",
+    "relation_conflicts": "Conflicts",
+    "relation_supersedes": "Supersedes",
+    "relation_related": "Related",
+    "relation_derived_from": "Derived from",
+    "filters": "Filters",
+    "refreshIndex": "Refresh index status",
+    "loading": "Loading memory view…"
   }
 }

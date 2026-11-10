@@ -41,7 +41,6 @@ ENV HOME=/home/cirno \
     HOMEBREW_NO_INSTALL_CLEANUP=1 \
     PATH="/home/linuxbrew/.linuxbrew/opt/python@3.12/libexec/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/opt/cirno/bin:/opt/cirno/node-tools/bin:$PATH"
 COPY sources/deployment/full-image.Brewfile /tmp/full-image.Brewfile
-COPY sources/deployment/full-image-python.txt /tmp/full-image-python.txt
 COPY sources/deployment/install_full_tools.sh /tmp/install_full_tools.sh
 COPY sources/deployment/bundle_embedding.py /tmp/bundle_embedding.py
 USER cirno
@@ -51,6 +50,13 @@ RUN --mount=type=cache,target=/home/cirno/.cache,uid=1000,gid=1000 \
     ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew && \
     bash /tmp/install_full_tools.sh
 USER root
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/cirno/browsers
+COPY sources/deployment/full-image-python.txt /tmp/full-image-python.txt
+COPY sources/deployment/install_full_media.sh /tmp/install_full_media.sh
+RUN bash /tmp/install_full_media.sh
+COPY sources/deployment/full-image-python-command.sh /opt/cirno/bin/cirno-python-tool
+RUN chmod +x /opt/cirno/bin/cirno-python-tool && \
+    for tool in manim playwright chromium; do ln -s cirno-python-tool "/opt/cirno/bin/$tool"; done
 COPY sources/deployment/full-image-shell.sh /etc/profile.d/cirno-tools.sh
 ENV CIRNO_FULL_IMAGE=1 \
     CIRNO_SHELL_VENV=/home/cirno/.cirno/state/tools/python \

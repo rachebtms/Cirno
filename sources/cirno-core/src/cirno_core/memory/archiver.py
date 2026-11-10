@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from cirno_usage.context import llm_usage_source
 from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain
 
 from cirno_core.memory.checkpoint_prompt import with_working_notes
+from cirno_core.memory.checkpoint_generation import generate_checkpoint
+from cirno_core.memory.consolidation_contract import split_result
+from cirno_core.memory.consolidation_learning import ConsolidationLearning
+from cirno_core.memory.consolidation_receipts import cached_output, invalid_output
 from cirno_core.memory.store import MemoryStore
 from cirno_core.memory.working_state import (
     EvidenceCheckpoint,
@@ -18,13 +21,11 @@ from cirno_core.memory.working_state import (
     summary_has_handoff,
     working_notes,
 )
-from cirno_core.providers.contracts import LLMResponse, ProviderCallContext, ProviderConversationState
-from cirno_core.providers.context_budget import ContextBudget
+from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.providers.reasoning_history import history_policy
 from cirno_core.session.model import Session
 from cirno_core.session.summary import is_summary_checkpoint, session_summary_from_metadata
-from cirno_core.utils.model_messages import build_assistant_message
 from cirno_core.utils.prompt_templates import render_template
 from cirno_core.utils.text import truncate_text_to_tokens
 from cirno_core.utils.token_estimation import estimate_prompt_tokens_chain
@@ -32,10 +33,6 @@ from cirno_core.utils.token_estimation import estimate_prompt_tokens_chain
 if TYPE_CHECKING:
     from cirno_core.utils.llm_runtime import LLMRuntime
 
-_ARCHIVE_TOOL_RESULT = (
-    "Session archival does not execute tools. Use only the supplied conversation and "
-    "return the requested compact checkpoint now; do not call another tool."
-)
 
 
 class MemoryArchiver:
@@ -127,6 +124,10 @@ class MemoryArchiver:
         project_id: str | None = None,
     ) -> str | None:
         """Generate a replacement checkpoint and optionally persist it."""
+        # Match the immutable evidence writer's message numbering; instruction
+        # prefixes stay in the request for caching, not in the source transcript.
+        source_messages = [message for message in source_messages
+                           if message.get("role") not in {"system", "developer"}]
         if not source_messages:
             return None
         runtime = runtime.with_generation_overrides(
@@ -168,11 +169,34 @@ class MemoryArchiver:
                 )
             return EvidenceCheckpoint(raw)
 
+        learning = None
+        if persist and runtime.consolidation_learn:
+            learning = await asyncio.to_thread(ConsolidationLearning,
+                self.store.workspace, source_messages, session_key=session_key,
+                project_id=project_id, context_chars=runtime.consolidation_context_chars,
+                max_updates=runtime.consolidation_max_updates,
+            )
+        cached = await shield_and_drain(asyncio.to_thread(cached_output, learning, evidence)) if learning and evidence else None
         prompt = render_template(
             "agent/consolidator_archive.md",
             strip=True,
             archive_count=len(source_messages),
         )
+        if learning is not None:
+            instruction = render_template(
+                "agent/consolidation_learning.md", strip=True,
+                archive_count=len(source_messages), learning_context="",
+                max_updates=runtime.consolidation_max_updates,
+            )
+            if input_token_budget is not None and provider_state is None:
+                baseline, _ = await asyncio.to_thread(estimate_prompt_tokens_chain,
+                    runtime.provider, runtime.model,
+                    [*history, {"role": "user", "content": instruction}],
+                    request_tools)
+                learning.context_chars = min(learning.context_chars,
+                    max(0, input_token_budget - baseline - 256))
+            references = await asyncio.to_thread(learning.context) if cached is None else "(using saved learning plan)"
+            prompt = instruction + "\n" + references
         if history_policy(runtime.provider, tools=request_tools, for_count=True) == "omit":
             prompt = await asyncio.to_thread(
                 with_working_notes,
@@ -188,7 +212,7 @@ class MemoryArchiver:
         state_controller: ProviderConversationStateController | None = None
         state_messages: list[dict[str, Any]] = []
         call_tools = request_tools
-        if provider_state is not None:
+        if provider_state is not None and cached is None:
             instruction_messages: list[dict[str, Any]] = []
             for message in history:
                 if message.get("role") not in {"system", "developer"}:
@@ -215,7 +239,7 @@ class MemoryArchiver:
                 *[dict(message) for message in history],
                 prompt_message,
             ]
-        if input_token_budget is not None and provider_context is None:
+        if cached is None and input_token_budget is not None and provider_context is None:
             estimated, source = await asyncio.to_thread(
                 estimate_prompt_tokens_chain,
                 runtime.provider,
@@ -233,86 +257,14 @@ class MemoryArchiver:
                 )
                 return await raw_fallback()
 
-        response: LLMResponse | None = None
-        for attempt in range(2):
-            try:
-                measured = state_controller.estimate_request_context_tokens(state_messages, tool_definitions=call_tools) if state_controller is not None else None
-                if measured is None:
-                    measured, _ = await asyncio.to_thread(
-                        estimate_prompt_tokens_chain, runtime.provider, runtime.model,
-                        [*history, *request_messages] if state_controller is not None else request_messages,
-                        call_tools,
-                    )
-                max_output = ContextBudget(runtime.context_window_tokens, runtime.generation.max_tokens).output_limit(measured)
-                provider_context = replace(
-                    provider_context or ProviderCallContext(),
-                    context_window_tokens=runtime.context_window_tokens, input_tokens=measured,
-                )
-                with llm_usage_source("dream"):
-                    response = await runtime.provider.chat_stream_with_retry(
-                        model=runtime.model,
-                        messages=request_messages,
-                        tools=call_tools,
-                        temperature=runtime.generation.temperature,
-                        max_tokens=max_output,
-                        reasoning_effort=runtime.generation.reasoning_effort,
-                        provider_context=provider_context,
-                    )
-            except Exception:
-                phase = "provider call" if attempt == 0 else "tool-call recovery"
-                logger.opt(exception=True).warning(
-                    "Memory archive {} failed; using raw checkpoint",
-                    phase,
-                )
-                return await raw_fallback()
-            if response.should_execute_tools is not True or attempt == 1:
-                break
-
-            logger.info(
-                "Memory archive provider returned {} tool call(s); requesting checkpoint",
-                len(response.tool_calls),
-            )
-            assistant_message = build_assistant_message(
-                response.content,
-                tool_calls=[call.to_openai_tool_call() for call in response.tool_calls],
-                reasoning_content=response.reasoning_content,
-                thinking_blocks=response.thinking_blocks,
-            )
-            tool_messages = [
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "name": call.name,
-                    "content": _ARCHIVE_TOOL_RESULT,
-                }
-                for call in response.tool_calls
-            ]
-            request_messages = [
-                *request_messages,
-                assistant_message,
-                *tool_messages,
-            ]
-            if state_controller is not None:
-                state_controller.observe_response(
-                    response,
-                    state_messages,
-                )
-                state_messages.extend(
-                    [
-                        state_controller.project_response_message(
-                            dict(assistant_message),
-                            response,
-                        ),
-                        *[dict(message) for message in tool_messages],
-                    ]
-                )
-                provider_context = state_controller.prepare_request(
-                    state_messages,
-                    context_window_tokens=runtime.context_window_tokens,
-                )
-                if provider_context is None or provider_context.conversation_state is None:
-                    return await raw_fallback()
-        assert response is not None
+        response: LLMResponse | None = LLMResponse(content=cached) if cached is not None else None
+        if response is None:
+            response = await generate_checkpoint(runtime=runtime, history=history,
+                request_messages=request_messages, call_tools=call_tools,
+                provider_context=provider_context, state_controller=state_controller,
+                state_messages=state_messages)
+        if response is None:
+            return await raw_fallback()
         if response.finish_reason in {"error", "length"}:
             logger.warning(
                 "Memory archive provider did not complete ({}); using raw checkpoint",
@@ -326,6 +278,12 @@ class MemoryArchiver:
         if not summary or not summary.strip():
             logger.warning("Memory archive provider returned no summary; using raw checkpoint")
             return await raw_fallback()
+        try:
+            summary, learning_plan = split_result(summary)
+        except ValueError as error:
+            if learning is not None and evidence is not None:
+                await shield_and_drain(asyncio.to_thread(invalid_output, learning, evidence, summary, error))
+            raise
         summary = self.store.journal.normalize_entry(summary)
         if summary and (
             summary.strip() == "(nothing)"
@@ -340,6 +298,13 @@ class MemoryArchiver:
                 "Memory archive provider summary was not safe to replay; using raw checkpoint"
             )
             return await raw_fallback()
+        if learning is not None and evidence is not None:
+            # Inline and awaited: the owning task cannot resume model work until
+            # learning is durable. Physical file writes settle before cancellation.
+            if not learning.completed:
+                await shield_and_drain(asyncio.to_thread(learning.apply, learning_plan, evidence, summary))
+        elif learning_plan.size:
+            raise ValueError("Provider returned memory updates while learning is disabled")
         if persist and summary != "(nothing)":
             refs = [
                 {
@@ -363,6 +328,7 @@ class MemoryArchiver:
                 summary,
                 session_key=session_key,
                 source_refs=refs,
+                archive_id=evidence["id"] if evidence else None,
             )
             if repository is not None and evidence:
                 await asyncio.to_thread(

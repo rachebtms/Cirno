@@ -132,9 +132,7 @@ def system_settings_payload(
                 "enabled": config.agents.defaults.heartbeat.enabled,
                 "interval_s": config.agents.defaults.heartbeat.interval_s,
             },
-            "dream": {
-                "schedule": defaults.dream.describe_schedule(),
-            },
+            "consolidation": {"mode": "inline", "learning": defaults.consolidation.learn},
         },
         "usage": llm_usage_payload(get_data_dir() / "llm_usage.sqlite3", timezone_name=defaults.timezone),
         "advanced": {

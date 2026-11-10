@@ -532,8 +532,8 @@ describe("webui i18n", () => {
     });
 
     expect(screen.getByRole("listbox", { name: "斜杠命令" })).toBeInTheDocument();
-    expect(screen.getByText("压缩上下文")).toBeInTheDocument();
-    expect(screen.getByText("压缩上下文后继续对话")).toBeInTheDocument();
+    expect(screen.getByText("整理上下文")).toBeInTheDocument();
+    expect(screen.getByText("整理上下文后继续对话")).toBeInTheDocument();
     expect(screen.getByText("/compact")).toBeInTheDocument();
   });
 

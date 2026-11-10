@@ -1,6 +1,5 @@
 """The image tool must reach a subsequent model request as visual input."""
 from unittest.mock import AsyncMock, MagicMock
-import pytest
 from PIL import Image
 from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.agent.tools.filesystem.view_image import ViewImageTool

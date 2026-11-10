@@ -1,7 +1,6 @@
 """Cancellation stays in its originating conversation and survives delivery replay."""
 import json
 
-import pytest
 
 from cirno_core.agent.tools.ask_user import AskUserTool
 from cirno_core.agent.tools.cancel_ask import CancelAskTool

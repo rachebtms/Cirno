@@ -87,9 +87,9 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         lifecycle="finalize_active_turn",
     ),
     BuiltinCommandSpec(
-        "/compact",
-        "Compact context",
-        "Compact this chat's context and continue the conversation.",
+        "/consolidate",
+        "Consolidate context",
+        "Organize task context and retain verified experience before continuing.",
         "archive",
     ),
     BuiltinCommandSpec(
@@ -142,34 +142,6 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "Create a named CLI trigger bound to this chat session.",
         "zap",
         "<name>",
-        accepts_args=True,
-    ),
-    BuiltinCommandSpec(
-        "/dream",
-        "Run Dream",
-        "Manually trigger memory consolidation.",
-        "sparkles",
-    ),
-    BuiltinCommandSpec(
-        "/dream-log",
-        "Show Dream log",
-        "Show what the last Dream consolidation changed.",
-        "book-open",
-        accepts_args=True,
-    ),
-    BuiltinCommandSpec(
-        "/dream-restore",
-        "Restore memory",
-        "Revert memory to a previous Dream snapshot.",
-        "undo-2",
-        accepts_args=True,
-    ),
-    BuiltinCommandSpec(
-        "/dream-prompt",
-        "Dream memory",
-        "Tell Dream how to organize this workspace's memory.",
-        "file-text",
-        "[init]",
         accepts_args=True,
     ),
     BuiltinCommandSpec(

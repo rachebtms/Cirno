@@ -13,7 +13,6 @@ import struct
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
 from cirno_memory.scopes import visibility_filter
@@ -26,6 +25,8 @@ class EmbeddingWorker:
         self.config = config
         self.process = None
         self.peak_mb = 0.0
+        from cirno_memory.embedding_budget import EmbeddingBudget
+        self.budget = EmbeddingBudget(config.embedding_timeout_seconds)
 
     def __enter__(self):
         for value in (self.config.embedding_model_path, self.config.embedding_tokenizer_path):
@@ -35,19 +36,22 @@ class EmbeddingWorker:
             [sys.executable, str(Path(__file__).with_name("embedding_worker.py")),
              str(Path(self.config.embedding_model_path).expanduser()), str(Path(self.config.embedding_tokenizer_path).expanduser())],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, bufsize=1, env={**os.environ, "TOKENIZERS_PARALLELISM": "false", "OMP_NUM_THREADS": "1"},
+            bufsize=0, env={**os.environ, "TOKENIZERS_PARALLELISM": "false", "OMP_NUM_THREADS": "1"},
         )
         return self
 
     def request(self, texts, **options):
         process = self.process
         assert process is not None and process.stdin and process.stdout
-        process.stdin.write(json.dumps({"texts": texts, **options}, ensure_ascii=False) + "\n")
-        process.stdin.flush()
-        deadline = time.monotonic() + self.config.embedding_timeout_seconds
+        payload = memoryview((json.dumps({"texts": texts, **options}, ensure_ascii=False) + "\n").encode())
+        response = bytearray()
+        os.set_blocking(process.stdin.fileno(), False)
+        os.set_blocking(process.stdout.fileno(), False)
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
-            while time.monotonic() < deadline:
+            selector.register(process.stdin, selectors.EVENT_WRITE)
+            while True:
+                remaining = self.budget.remaining()
                 # Monitor the whole child RSS, including imports and ONNX initialization.
                 if os.name == "posix":
                     measured = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True, timeout=2)
@@ -55,18 +59,29 @@ class EmbeddingWorker:
                     self.peak_mb = max(self.peak_mb, rss)
                     if rss > self.config.embedding_max_rss_mb:
                         raise MemoryError(f"Embedding worker exceeded {self.config.embedding_max_rss_mb} MB RSS ({rss:.1f} MB); using BM25")
-                if selector.select(timeout=0.05):
-                    line = process.stdout.readline()
-                    if not line:
+                for key, _ in selector.select(timeout=min(0.05, remaining)):
+                    if key.fileobj is process.stdin:
+                        written = os.write(process.stdin.fileno(), payload[:65536])
+                        payload = payload[written:]
+                        if not payload:
+                            selector.unregister(process.stdin)
+                        continue
+                    chunk = os.read(process.stdout.fileno(), 65536)
+                    if not chunk:
                         raise RuntimeError("Embedding worker exited; install cirno-ai[memory-embedding] and verify model files")
-                    result = json.loads(line)
+                    response.extend(chunk)
+                    if len(response) > 16 * 1024 * 1024:
+                        raise ValueError("Embedding worker response exceeds 16 MB")
+                    if b"\n" not in response:
+                        continue
+                    self.budget.remaining()
+                    result = json.loads(response)
                     self.peak_mb = max(self.peak_mb, result.get("peak_mb", 0))
                     if self.peak_mb > self.config.embedding_max_rss_mb:
-                        raise MemoryError(f"Embedding worker peak {self.peak_mb:.1f} MB exceeds configured limit; using BM25")
+                        raise MemoryError(f"Embedding worker peak {self.peak_mb:.1f} MB exceeds configured limit of {self.config.embedding_max_rss_mb} MB; using BM25")
                     if result.get("error"):
                         raise RuntimeError(result["error"])
                     return result
-        raise TimeoutError("Embedding worker timed out; using BM25")
 
     def __exit__(self, *_):
         if self.process:

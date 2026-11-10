@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno_core.memory.archiver import _ARCHIVE_TOOL_RESULT
+from cirno_core.memory.checkpoint_generation import _ARCHIVE_TOOL_RESULT
 from cirno_core.memory.journal import HISTORY_ENTRY_MAX_CHARS
 from cirno_core.memory.consolidation import Consolidator
 from cirno_core.memory.store import MemoryStore
@@ -212,7 +212,7 @@ class TestTurnTranscriptSummary:
         assert result == "replacement checkpoint"
         call = mock_provider.chat_stream_with_retry.await_args.kwargs
         assert call["messages"][0] == accepted[0]
-        assert call["messages"][-1]["content"] == _ARCHIVE_PROMPT
+        assert "## Task" in call["messages"][-1]["content"] and "## Memory updates" in call["messages"][-1]["content"]
         assert accepted[1] not in call["messages"]
         assert call["tools"] == []
         provider_context = call["provider_context"]
@@ -896,7 +896,7 @@ class TestCompactIdleSession:
             "second user",
             "second assistant",
         ]
-        assert latest_messages[-1]["content"] == _ARCHIVE_PROMPT
+        assert "## Task" in latest_messages[-1]["content"] and "## Memory updates" in latest_messages[-1]["content"]
         sessions.invalidate("cli:incremental")
         reloaded = sessions.get_or_create("cli:incremental")
         assert reloaded.last_archived == 5
@@ -1218,7 +1218,7 @@ class TestCompactIdleSession:
         # The replacement overview covers all model-visible conversation context.
         assert "u0" not in sent_content
         assert "u26" in sent_content
-        assert sent_messages[-1]["content"] == _ARCHIVE_PROMPT
+        assert "## Task" in sent_messages[-1]["content"] and "## Memory updates" in sent_messages[-1]["content"]
 
     @pytest.mark.asyncio
     async def test_full_archive_replaces_entire_tool_turn(
@@ -1293,7 +1293,7 @@ class TestCompactIdleSession:
             "user",
         ]
         assert sent_messages[2]["tool_calls"][0]["id"] == "call-1"
-        assert sent_messages[-1]["content"] == _ARCHIVE_PROMPT
+        assert "## Task" in sent_messages[-1]["content"] and "## Memory updates" in sent_messages[-1]["content"]
         assert call["tools"] == tools
         assert "tool_choice" not in call
 
@@ -1495,7 +1495,7 @@ class TestCompactIdleSession:
             "new user",
             "new answer",
         ]
-        assert sent[-1]["content"] == _ARCHIVE_PROMPT
+        assert "## Task" in sent[-1]["content"] and "## Memory updates" in sent[-1]["content"]
 
 
     @pytest.mark.asyncio

@@ -1,5 +1,5 @@
 import { ProfileFiles } from "@/features/profile/ProfileFiles";
-import { MemoryLibrary } from "@/features/memory/MemoryLibrary";
+import { MemorySettings } from "@/features/memory/MemorySettings";
 import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
 import { NotificationSettings } from "../notifications/NotificationSettings";
 import { AppearanceSettings, OverviewSettings } from "../overview/OverviewSettings";
@@ -20,7 +20,7 @@ export function createPersonalSections(bindings: SettingsComposition): SectionRe
   };
 
   const renderMemory: SectionRenderer = () => {
-    return <div className="settings-stack"><ProfileFiles client={controller.client} section="memory" /><MemoryLibrary client={controller.client} /></div>;
+    return <div className="settings-stack"><ProfileFiles client={controller.client} section="memory" /><MemorySettings client={controller.client} /></div>;
   };
 
   const renderPersonality: SectionRenderer = () => {

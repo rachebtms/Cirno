@@ -124,10 +124,6 @@
           "label": "時區",
           "help": "UTC 偏移按當前日期顯示"
         },
-        "agents_defaults_dream_enabled": {
-          "label": "記憶整理",
-          "help": "自動整理對話中的有用資訊。關閉後停止整理，已有記憶仍可使用。"
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "启用心跳",
           "help": "修改后重启生效。"
@@ -248,17 +244,9 @@
           "label": "快取時長",
           "help": "CLI 應用列表的快取有效秒數"
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream 周期（小时）",
-          "help": "閒置時或按固定間隔整理。"
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream 模型",
-          "help": "可為 Dream 選擇獨立模型；未選擇時使用目前模型。"
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "閒置壓縮檢查間隔（秒）",
-          "help": "檢查對話是否符合閒置壓縮條件的間隔，並非閒置時長。重新啟動後生效。"
+          "label": "閒置整理檢查間隔（秒）",
+          "help": "檢查對話是否符合閒置整理條件的間隔，並非閒置時長。重新啟動後生效。"
         },
         "network_request_timeout_s": {
           "label": "模型連線／回應逾時（秒）",
@@ -272,29 +260,13 @@
           "label": "模型重试次数",
           "help": "修改后重启生效。"
         },
-        "agents_defaults_dream_mode": {
-          "label": "Dream 觸發方式",
-          "help": "閒置時或按固定間隔整理。"
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Dream 閒置等待（秒）",
-          "help": "有待處理記憶且無前台任務時執行；新訊息會中斷 Dream。"
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Dream 單批記錄數",
-          "help": "每次處理的記錄上限，其餘記錄繼續排隊。"
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Dream 單批字元數",
-          "help": "限制單次整理輸入量，完整來源仍可讀取。"
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "共用記憶注入上限（Token）",
           "help": "限制 MEMORY.md 的注入量，完整內容保留在 Home。"
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "任務檢查點注入上限（Token）",
-          "help": "獨立於 Dream 恢復目前任務狀態。"
+          "help": "新输入最多注入这些任务状态 Token；自动摘要不会覆盖主动保存的检查点。"
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "索引掃描批量",
@@ -314,27 +286,23 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "嵌入程序上限（MB）",
-          "help": "限制獨立程序 RSS；超限退回 BM25。這不是整個服務的記憶體上限。"
+          "help": "嵌入子程序的峰值記憶體預算（MiB），包含模型載入開銷，可設為 512、1024 或更高。超限時退回 BM25；不限制整個服務。"
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "嵌入請求逾時（秒）",
-          "help": "單次請求時間上限，失敗退回 BM25。"
+          "help": "整次嵌入檢索的時間預算，包含查詢和增量索引的所有批次；逾時會顯示原因並退回 BM25。"
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "壓縮後釋放記憶體",
-          "help": "壓縮後，完整證據及畫面歷史保留在磁碟，僅釋放舊執行訊息的記憶體。"
-        },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Dream 迭代上限",
-          "help": "限制單批整理的模型輪數；未完成的輸入保留在佇列中。"
+          "label": "整理後釋放記憶體",
+          "help": "整理後，完整證據及畫面歷史保留在磁碟，僅釋放舊執行訊息的記憶體。"
         },
         "agents_defaults_idle_compact_percent": {
-          "label": "閒置壓縮触發門檻（%）",
-          "help": "按目前模型的上下文視窗計算。0 表示禁用閒置壓縮；模型設定可以覆盖。"
+          "label": "空闲整理触发比例（%）",
+          "help": "按目前模型的上下文視窗計算。0 表示禁用閒置整理；模型設定可以覆盖。"
         },
         "agents_defaults_idle_compact_keep_percent": {
           "label": "近期上下文保留門檻（%）",
-          "help": "壓縮時保留完整的近期对話轮次，按目前模型視窗計算。必須低于触發門檻。"
+          "help": "整理時保留完整的近期对話轮次，按目前模型視窗計算。必須低于触發門檻。"
         },
         "agents_defaults_goal_continuation_limit": {
           "label": "Goal 預設續跑上限",
@@ -381,8 +349,8 @@
           "help": "逾時後將操作轉交給你審批。"
         },
         "agents_defaults_active_compact_percent": {
-          "label": "執行中壓縮門檻（%）",
-          "help": "依目前模型的上下文視窗計算，每次模型請求前檢查，包含工具執行後。始終預留輸出與安全空間；100 表示最大安全輸入預算。不影響閒置壓縮。"
+          "label": "執行中整理門檻（%）",
+          "help": "依目前模型的上下文視窗計算，每次模型請求前檢查，包含工具執行後。始終預留輸出與安全空間；100 表示最大安全輸入預算。不影響閒置整理。"
         },
         "channels_send_progress": {
           "label": "過程訊息",
@@ -397,8 +365,8 @@
           "help": "向支援的通道傳送思考過程。Web UI 詳情展開方式另行設定。"
         },
         "channels_show_compaction_notices": {
-          "label": "自動壓縮通知",
-          "help": "向已連線通道傳送自動上下文壓縮通知。Web UI 壓縮事件仍可見。"
+          "label": "自動整理通知",
+          "help": "向已連線通道傳送自動上下文整理通知。Web UI 整理事件仍可見。"
         },
         "channels_send_max_retries": {
           "label": "訊息投遞嘗試次數",
@@ -415,18 +383,6 @@
         "tools_exec_max_runtime_limit": {
           "label": "可要求的最長命令時限（秒）",
           "help": "模型可要求的單次命令最長時限。0 表示取消此上限；預設命令時限另行設定。"
-        },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "壓縮輸出預算（Token）",
-          "help": "壓縮的獨立輸出預算，包含思考，且不超過模型輸出上限。"
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "壓縮思考強度",
-          "help": "降低強度可為交接正文保留空間。繼承使用會話模型設定；不支援的值依提供商規則映射。"
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "檢查點提醒門檻（%）",
-          "help": "達到主動壓縮輸入預算的此百分比時，提醒 Agent 儲存任務狀態。不會中斷產生中的請求。"
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API 基礎位址",
@@ -460,10 +416,6 @@
           "label": "每則訊息檔案總大小（MiB）",
           "help": "每則訊息上傳的圖片和文件總大小，不含影片；本機檔案參照不計入。重新啟動服務並重新整理網頁後生效。"
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "輸出預留空間（%）",
-          "help": "為下一次回覆預留的上下文比例，最多預留至模型輸出上限，預設 5%。每次請求的輸出上限隨剩餘空間調整，不會按最大輸出設定提前壓縮。"
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "共用追加系統提示詞",
           "help": "Router 與 Worker 共用，在各自追加提示詞之前加入。自動儲存，從下一輪生效；留空即可停用。"
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Worker 追加系統提示詞",
           "help": "僅追加至 Worker，在共用追加提示詞之後加入。自動儲存，從下一輪生效；留空則只使用共用追加提示詞。"
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "整理输出预算（Token）",
+          "help": "任务摘要与记忆更新共用此输出预算，受模型输出上限限制。"
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "整理思考強度",
+          "help": "降低強度可為交接正文保留空間。繼承使用會話模型設定；不支援的值依提供商規則映射。"
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "檢查點提醒門檻（%）",
+          "help": "達到主動整理輸入預算的此百分比時，提醒 Agent 儲存任務狀態。不會中斷產生中的請求。"
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "輸出預留空間（%）",
+          "help": "為下一次回覆預留的上下文比例，最多預留至模型輸出上限，預設 5%。每次請求的輸出上限隨剩餘空間調整，不會按最大輸出設定提前整理。"
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "整理时保存经验",
+          "help": "同一次请求生成任务摘要、提炼长期记忆并改进 Skills，不另起模型任务。"
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "每次最多更新数",
+          "help": "限制每次保存的记忆及文档更新总数；没有值得保留的经验时可为零。"
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "额外参考内容上限（字符）",
+          "help": "用于已有记忆与完整文档快照；只追加在请求末尾，保持系统前缀稳定。"
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "命令時間限制"
         },
-        "compaction-generation": {
-          "title": "壓縮交接產生"
-        },
         "embedding": {
           "title": "嵌入服務"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "追加系統提示詞"
+        },
+        "consolidation-generation": {
+          "title": "整理生成"
+        },
+        "consolidation": {
+          "title": "记忆与空闲整理",
+          "help": "任务中、手动与空闲整理共用同一流程，保存结果后再继续任务。"
         }
       },
       "save": "儲存變更",
@@ -597,8 +581,8 @@
       "noResults": "找不到相符設定。",
       "pending": "尚未儲存的變更",
       "idleCompaction": {
-        "label": "閒置自動壓縮",
-        "help": "閒置逾時後壓縮上下文，減少後續用量。",
+        "label": "空闲时自动整理",
+        "help": "空闲超时后整理上下文并沉淀经验，减少后续请求的上下文用量。",
         "wait": "閒置時限",
         "minutes": "分鐘",
         "numberError": "請輸入非負整數分鐘數。"
@@ -663,8 +647,6 @@
       "nodes": "Nodes",
       "reading": "文字與閱讀",
       "activity": "執行過程顯示",
-      "context": "上下文壓縮",
-      "dream": "Dream 記憶整合",
       "memory-search": "記憶檢索",
       "execution": "Goal 與執行",
       "shell": "Shell 執行",
@@ -675,7 +657,8 @@
       "coordination": "對話協作",
       "regional": "時間與地區",
       "approval": "AI 審批",
-      "backup": "備份與還原"
+      "backup": "備份與還原",
+      "consolidation": "上下文整理"
     },
     "sections": {
       "interface": "介面",
@@ -921,7 +904,7 @@
       "shortcutsTitle": "常用設定",
       "shortcuts": {
         "memory": "搜尋已儲存的知識，查看記憶來源",
-        "context": "調整壓縮時機與上下文保留比例",
+        "context": "調整整理時機與上下文保留比例",
         "execution": "設定自動續跑上限與執行預設值",
         "personality": "編輯個性、偏好與行為指令",
         "telegram": "綁定個人私聊，選擇接收的通知",
@@ -957,7 +940,8 @@
         "api": "API",
         "cron": "自動任務",
         "dream": "記憶整理",
-        "system": "輔助呼叫"
+        "system": "輔助呼叫",
+        "consolidation": "上下文整理"
       }
     },
     "providers": {
@@ -1061,9 +1045,9 @@
       "unsupportedModelList": "手動輸入模型 ID。",
       "providerNotConfigured": "載入模型前請先設定此供應商。",
       "autoProviderCustomOnly": "自動選擇供應商時，請手動輸入模型 ID。",
-      "idleCompactPercent": "閒置壓縮触發門檻（%）",
+      "idleCompactPercent": "閒置整理触發門檻（%）",
       "idleCompactKeepPercent": "近期上下文保留門檻（%）",
-      "compactPercentHint": "按此模型上下文視窗計算；留空繼承全域設定。触發門檻 0 表示禁用閒置壓縮。",
+      "compactPercentHint": "按此模型上下文視窗計算；留空繼承全域設定。触發門檻 0 表示禁用閒置整理。",
       "inheritGlobal": "繼承全域設定",
       "reasoningHistory": "歷史思考回傳",
       "reasoningHistoryHelp": "控制明文思考回傳。自動依介面處理，原生簽章狀態始終保留。DeepSeek 工具請求必須保留歷史思考；被忽略的歷史不計入下一輪輸入，但已產生的 Token 仍會計費。",
@@ -1910,35 +1894,35 @@
     "compaction": {
       "reasons": {
         "idle": {
-          "started": "對話閒置，正在自動壓縮上下文",
-          "succeeded": "對話閒置，已自動壓縮上下文",
-          "failed": "閒置時自動壓縮上下文失敗",
-          "cancelled": "閒置期間的自動壓縮未完成"
+          "started": "對話閒置，正在自動整理上下文",
+          "succeeded": "對話閒置，已自動整理上下文",
+          "failed": "閒置時自動整理上下文失敗",
+          "cancelled": "閒置期間的自動整理未完成"
         },
         "context_pressure": {
-          "started": "上下文較長，正在壓縮",
-          "succeeded": "上下文較長，已自動壓縮",
-          "failed": "上下文較長，自動壓縮失敗",
-          "cancelled": "上下文較長，壓縮已取消"
+          "started": "上下文較長，正在整理",
+          "succeeded": "上下文較長，已自動整理",
+          "failed": "上下文較長，自動整理失敗",
+          "cancelled": "上下文較長，整理已取消"
         },
         "manual": {
-          "started": "正在手動壓縮",
-          "succeeded": "手動壓縮完成",
-          "failed": "手動壓縮失敗",
-          "cancelled": "手動壓縮已取消"
+          "started": "正在手動整理",
+          "succeeded": "手動整理完成",
+          "failed": "手動整理失敗",
+          "cancelled": "手動整理已取消"
         },
         "provider_native": {
-          "started": "模型服務正在壓縮上下文",
-          "succeeded": "模型服務已壓縮上下文",
-          "failed": "模型服務未能完成上下文壓縮",
-          "cancelled": "模型服務的上下文壓縮已取消"
+          "started": "模型服務正在整理上下文",
+          "succeeded": "模型服務已整理上下文",
+          "failed": "模型服務未能完成上下文整理",
+          "cancelled": "模型服務的上下文整理已取消"
         }
       },
-      "cancelled": "上下文壓縮已取消",
-      "empty": "無需壓縮上下文",
-      "started": "正在壓縮上下文…",
-      "failed": "上下文壓縮失敗",
-      "succeeded": "上下文已壓縮",
+      "cancelled": "上下文整理已取消",
+      "empty": "無需整理上下文",
+      "started": "正在整理上下文…",
+      "failed": "上下文整理失敗",
+      "succeeded": "上下文已整理",
       "attempts": "共尝试 {{count}} 次",
       "errorUnavailable": "這条旧記錄未儲存具体錯誤原因。",
       "attempt": "第 {{number}} 次尝试",
@@ -2109,8 +2093,8 @@
             "description": "重置當前會話，開始新會話"
           },
           "compact": {
-            "title": "壓縮上下文",
-            "description": "壓縮上下文後繼續對話"
+            "title": "整理上下文",
+            "description": "整理上下文後繼續對話"
           },
           "stop": {
             "title": "停止任務",
@@ -2133,20 +2117,20 @@
             "description": "檢視最近 N 條已儲存的訊息"
           },
           "dream": {
-            "title": "執行 Dream",
+            "title": "執行 上下文整理",
             "description": "手動整理記憶"
           },
           "dream_log": {
-            "title": "Dream 日誌",
-            "description": "檢視上次 Dream 整理的修改"
+            "title": "上下文整理 日誌",
+            "description": "檢視上次 上下文整理 整理的修改"
           },
           "dream_restore": {
             "title": "恢復記憶",
-            "description": "恢復到之前的 Dream 記憶快照"
+            "description": "恢復到之前的 上下文整理 記憶快照"
           },
           "dream_prompt": {
-            "title": "Dream 設定",
-            "description": "設定 Dream 如何整理當前工作區記憶"
+            "title": "上下文整理 設定",
+            "description": "設定 上下文整理 如何整理當前工作區記憶"
           },
           "goal": {
             "title": "長期目標",
@@ -2179,6 +2163,10 @@
           "access": {
             "title": "權限模式",
             "description": "選擇預設權限、AI 審批或完全存取。"
+          },
+          "consolidate": {
+            "title": "整理上下文",
+            "description": "整理任务上下文并保存已验证的经验"
           }
         },
         "badges": {
@@ -2199,7 +2187,7 @@
       },
       "encoding": "編碼中…",
       "remove": "移除附件",
-      "normalizedSizeHint": "{{orig}} → {{current}}（已自動壓縮）",
+      "normalizedSizeHint": "{{orig}} → {{current}}（已自動整理）",
       "textTooLarge": "訊息文字過大（最大 {{max}}）",
       "imageRejected": {
         "unsupported_type": "不支援的檔案類型",
@@ -2771,7 +2759,7 @@
         "answer": "模型回覆",
         "reasoning": "模型思考",
         "tool": "工具呼叫",
-        "compaction": "上下文壓縮",
+        "compaction": "上下文整理",
         "request": "API 請求",
         "file": "檔案變更",
         "lifecycle": "生命週期",
@@ -2805,7 +2793,8 @@
     "agentVisible": "Agent 可見",
     "agentHidden": "僅自己可見",
     "keepSecret": "留空則保留已儲存的秘密值。",
-    "sshNode": "SSH Node"
+    "sshNode": "SSH Node",
+    "memory": "記憶"
   },
   "files": {
     "title": "文件",
@@ -2911,12 +2900,12 @@
     "evidence": "查看來源",
     "more": "載入更多",
     "reindex": "重建索引",
-    "retry": "重試失敗的 Dream",
-    "pending": "Dream 待處理：{{count}}",
+    "retry": "重试保存整理结果",
+    "pending": "待下次整理的记录：{{count}}",
     "failed": "失敗：{{count}}",
     "indexed": "已索引：{{count}}",
     "indexSize": "索引：{{size}} MB",
-    "lastDream": "最近 Dream",
+    "lastDream": "最近 上下文整理",
     "noDream": "尚未執行",
     "includeHistory": "包含被取代的記錄",
     "revision": "版本 {{revision}}",
@@ -2957,10 +2946,12 @@
     "fallback_unavailable": "向量檢索無法使用，已使用 BM25。",
     "searchDetails": "查看原因",
     "indexPending": "向量索引尚未完成，目前結果僅涵蓋已索引內容；再次搜尋可繼續建立索引。",
-    "statusTitle": "索引與記憶整理",
+    "statusTitle": "索引与上下文整理",
     "noTags": "暫無標籤。",
     "resultsFor": "「{{query}}」的搜尋結果",
-    "noMatches": "沒有符合此次搜尋的記憶。"
+    "noMatches": "沒有符合此次搜尋的記憶。",
+    "lastConsolidation": "最近整理",
+    "noConsolidation": "尚未整理"
   },
   "userQuestion": {
     "title": "想確認一下",
@@ -3008,7 +2999,7 @@
     "kind": {
       "question": "非同步提問",
       "recovery": "對話復原",
-      "compaction": "上下文壓縮",
+      "compaction": "上下文整理",
       "dream": "記憶整理",
       "turn": "對話執行",
       "message": "訊息",
@@ -3124,5 +3115,27 @@
       "manual": "已儲存的順序"
     },
     "projectActions": "專案 {{name}} 的操作"
+  },
+  "memoryGraph": {
+    "description": "檢索記憶，探索關聯，追溯原始來源。",
+    "cloud": "記憶點雲",
+    "cloudDescription": "可互動的記憶關係圖。彩色點代表記憶，灰色點代表共同標籤；也可以透過結果列表存取所有記錄。",
+    "nodeCount": "{{count}} 條記憶",
+    "fit": "適應視圖",
+    "gestureHelp": "拖曳旋轉 · 捲動或雙指縮放 · 點選記憶查看內容",
+    "renderError": "三維視圖無法啟動，仍可透過結果列表檢索和閱讀記憶。",
+    "settingsHelp": "記憶檢索與關係圖已移至記憶分頁，索引維護保留在此處。",
+    "open": "開啟記憶",
+    "limit": "最多顯示 {{count}} 條記憶，請縮小篩選範圍查看其他記錄。",
+    "linksLimit": "僅顯示這些結果之間的前 1,500 條關聯。",
+    "relation_tag": "共同標籤",
+    "relation_supports": "支持",
+    "relation_conflicts": "衝突",
+    "relation_supersedes": "取代",
+    "relation_related": "相關",
+    "relation_derived_from": "來源於",
+    "filters": "篩選條件",
+    "refreshIndex": "重新整理索引狀態",
+    "loading": "正在載入記憶視圖…"
   }
 }

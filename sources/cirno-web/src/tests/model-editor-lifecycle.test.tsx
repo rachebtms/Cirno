@@ -92,7 +92,7 @@ describe("model editor save and preview lifecycle", () => {
     await user.click(advanced);
     fireEvent.change(
       within(dialog).getByRole("spinbutton", {
-        name: "Idle compaction trigger (%)",
+        name: "Idle consolidation trigger (%)",
       }),
       { target: { value: "35" } },
     );
@@ -101,7 +101,7 @@ describe("model editor save and preview lifecycle", () => {
     expect(advanced).toHaveAttribute("aria-expanded", "true");
     expect(
       within(dialog).getByRole("spinbutton", {
-        name: "Idle compaction trigger (%)",
+        name: "Idle consolidation trigger (%)",
       }),
     ).toHaveValue(35);
     await user.click(advanced);

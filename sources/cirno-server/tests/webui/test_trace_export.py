@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 from zipfile import ZipFile
 
-import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from cirno_core.observability.recordings import TraceRecordings

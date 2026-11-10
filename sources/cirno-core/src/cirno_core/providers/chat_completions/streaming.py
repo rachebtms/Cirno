@@ -43,13 +43,34 @@ class ChatStreamAccumulator:
         self._usage: LLMUsage | None = None
         self.completed = False
 
+    def _tool_index(self, index: int | None, identity: str | None, fallback: int) -> int:
+        if index is not None:
+            return index
+        if not identity:
+            if fallback or not self._tools:
+                return fallback
+            if len(self._tools) == 1:
+                return next(iter(self._tools))
+            raise ValueError("Tool-call delta is missing both index and ID for multiple calls")
+        # Compatible gateways may omit index while identifying every delta by ID.
+        # Keep those calls separate even when each chunk contains just one call.
+        matches = [slot for slot, buffer in self._tools.items() if buffer.id == identity]
+        if len(matches) > 1:
+            raise ValueError("Tool-call delta has an ambiguous ID and no index")
+        if matches:
+            return matches[0]
+        existing = self._tools.get(fallback)
+        if existing is None or not existing.id:
+            return fallback
+        return max(self._tools) + 1
+
     def _tool_delta(
         self, value: object, fallback_index: int, *, legacy: bool = False
     ) -> dict[str, Any]:
         index = wire_field(value, "index") if not legacy else 0
-        index = index if index is not None else fallback_index
-        buffer = self._tools.setdefault(index, _ToolBuffer())
         identity = wire_field(value, "id") if not legacy else None
+        index = self._tool_index(index, identity, fallback_index)
+        buffer = self._tools.setdefault(index, _ToolBuffer())
         function = value if legacy else wire_field(value, "function")
         name = wire_field(function, "name") if function is not None else None
         arguments = wire_field(function, "arguments") if function is not None else None

@@ -7,11 +7,12 @@ from typing import Literal, cast
 from cirno_memory.config import MemoryConfig
 from cirno_core.config.base import Base
 from cirno_core.config.home import get_default_workspace
-from cirno_core.config.models import CompactionConfig, FallbackCandidate, ModelAPIConfig
+from cirno_core.config.models import ConsolidationConfig, FallbackCandidate, ModelAPIConfig
 from cirno_core.config.prompts import SystemPrompts
 from cirno_core.config.timezone import detect_system_timezone
 from cirno_core.cron.types import CronSchedule
 from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic.alias_generators import to_snake
 
 
 class DreamConfig(Base):
@@ -127,14 +128,37 @@ class AgentDefaults(Base):
         ge=0,
     )  # Minimum interval in seconds between scans for idle sessions
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
-    compaction: CompactionConfig = Field(default_factory=CompactionConfig)
-    dream: DreamConfig = Field(default_factory=DreamConfig)
+    consolidation: ConsolidationConfig = Field(
+        default_factory=ConsolidationConfig,
+        validation_alias=AliasChoices("consolidation", "compaction"),
+    )
+    # Legacy batch/history compatibility; never scheduled or serialized.
+    dream: DreamConfig = Field(default_factory=DreamConfig, exclude=True)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     idle_compact_percent: float = Field(default=20, ge=0, le=100)
     active_compact_percent: int = Field(default=100, ge=1, le=100)
     idle_compact_keep_percent: float = Field(default=5, ge=0, le=100)
     idle_compact_min_tokens: int = Field(default=32_000, ge=0)
     idle_compact_keep_recent_tokens: int = Field(default=8_000, ge=0)
+
+    @property
+    def compaction(self) -> ConsolidationConfig:
+        """Compatibility for internal checkpoint-budget consumers."""
+        return self.consolidation
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_consolidation(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        merged = {to_snake(key): item for key, item in dict(data.pop("compaction", {})).items()}
+        merged.update({to_snake(key): item for key, item in dict(data.get("consolidation", {})).items()})
+        legacy = data.get("dream", {})
+        if isinstance(legacy, dict) and "enabled" in legacy:
+            merged.setdefault("learn", legacy["enabled"])
+        data["consolidation"] = merged
+        return data
 
     @model_validator(mode="before")
     @classmethod

@@ -105,7 +105,7 @@ async def test_compact_lock_contention_keeps_heartbeat_running(loop) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("command", ["/compact", " /COMPACT@cirno ", "/summarize"])
+@pytest.mark.parametrize("command", ["/consolidate", "/dream", "/compact", " /COMPACT@cirno ", "/summarize"])
 async def test_compact_emits_one_lifecycle_and_keeps_the_session(loop, command) -> None:
     bus = loop.bus
     session = loop.sessions.get_or_create("cli:test")

@@ -26,7 +26,9 @@ export function useStripReorder(ids: string[], move: (id: string, target: string
       container.setPointerCapture(pointerId);
     };
     const timer = event.pointerType === "touch" ? window.setTimeout(start, 350) : undefined;
-    const finish = () => {
+    const finish = (event?: globalThis.PointerEvent) => {
+      if (event && event.pointerId !== pointerId) return;
+      if (!event || event.type === "pointercancel") suppressClick.current = false;
       window.clearTimeout(timer);
       if (container.hasPointerCapture(pointerId)) container.releasePointerCapture(pointerId);
       window.removeEventListener("pointermove", motion);

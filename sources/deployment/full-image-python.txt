@@ -7,3 +7,9 @@ pdfplumber
 reportlab
 lxml
 debugpy
+numpy
+Pillow
+matplotlib
+PyMuPDF
+manim
+playwright

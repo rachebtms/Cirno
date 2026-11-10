@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import cast
 
 from cirno_core.agent.loop import AgentLoop
@@ -12,7 +12,6 @@ from cirno_core.cron.bound_runner import run_bound_cron_job
 from cirno_core.cron.service import CronJobSkippedError, CronService
 from cirno_core.cron.session_turns import is_bound_cron_job
 from cirno_core.cron.types import CronJob, CronPayload, CronRunResult, CronSchedule
-from cirno_core.memory.dream_run import run_dream
 from cirno_core.runtime.heartbeat import has_active_tasks
 from loguru import logger
 
@@ -23,11 +22,10 @@ class ScheduledAgentJobs:
         agent: AgentLoop,
         cron: CronService,
         *,
-        prepare: Callable[[], Awaitable[None]],
         report: Callable[[str], None],
     ):
-        self.agent, self.cron, self.prepare, self.report = agent, cron, prepare, report
-        self._system_jobs = {"dream": self.dream, "heartbeat": self.heartbeat}
+        self.agent, self.cron, self.report = agent, cron, report
+        self._system_jobs = {"heartbeat": self.heartbeat}
 
     async def execute(self, job: CronJob) -> str | CronRunResult | None:
         """Execute a cron job through the agent."""
@@ -51,14 +49,6 @@ class ScheduledAgentJobs:
         )
         raise CronJobSkippedError(reason)
 
-    async def dream(self) -> None:
-        result = await run_dream(
-            self.agent,
-            commit_subject="dream: periodic memory consolidation",
-            prepare=self.prepare,
-        )
-        logger.info("Dream {}: {}", result.status, result.reason)
-
     async def heartbeat(self) -> None:
         from cirno_core.config.home import get_home_path
         from cirno_core.runtime.heartbeat import enqueue_heartbeat, heartbeat_paused
@@ -81,29 +71,13 @@ class ScheduledAgentJobs:
 
     def register(self, config: Config) -> None:
         hb_cfg = config.agents.defaults.heartbeat
-        # Register Dream system job (idempotent on restart)
-
-        dream_cfg = config.agents.defaults.dream
-        if dream_cfg.enabled and dream_cfg.mode == "interval":
-            self.cron.register_system_job(
-                CronJob(
-                    id="dream",
-                    name="dream",
-                    schedule=dream_cfg.build_schedule(config.agents.defaults.timezone),
-                    payload=CronPayload(kind="system_event"),
-                )
-            )
-            self.report(f"[green]✓[/green] Dream: {dream_cfg.describe_schedule()}")
-        else:
-            self.report(
-                f"Dream: {dream_cfg.describe_schedule() if dream_cfg.enabled else 'disabled'}"
-            )
-            self.cron.remove_system_job("dream")
-
+        # Old persisted jobs must not survive the unified, inline learning flow.
+        self.cron.remove_system_job("dream")
         from cirno_core.memory.idle import MemoryIdleCoordinator
 
-        memory_idle = MemoryIdleCoordinator(self.agent, config, self.dream)
+        memory_idle = MemoryIdleCoordinator(self.agent, config)
         self.agent.memory_idle_callback = memory_idle.check
+        self.report("Context consolidation: checkpoint and learning in one request")
 
         # Register Heartbeat system job (idempotent on restart)
         if hb_cfg.enabled:

@@ -148,9 +148,9 @@
     --text-reading-size: var(--custom-reading-size, 16px);
   }
 
-  @media (any-pointer: coarse) {
+  @media (any-pointer: coarse), (max-width: 767px) {
     :root, .reading-typography {
-      /* Prevent iOS from zooming the page when a smaller reading size is selected. */
+      /* Keep compact editors readable and prevent iOS focus zoom with small reading text. */
       --text-composer-size: max(16px, var(--text-reading-size));
     }
   }

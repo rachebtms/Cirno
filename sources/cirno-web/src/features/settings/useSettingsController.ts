@@ -1,3 +1,4 @@
+import { canonicalSettingsSection } from "./contracts";
 import {
   networkSafetyFormFromPayload,
   visibleWebuiDefaultAccessMode,
@@ -73,7 +74,8 @@ export function useSettingsController({
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const [loading, setLoading] = useState(() => initialSettings === null);
   const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
+  const normalizedInitialSection = canonicalSettingsSection(initialSection);
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(normalizedInitialSection);
   const [pendingRestartSections, setPendingRestartSections] = useState<PendingRestartSections>(
     EMPTY_PENDING_RESTART_SECTIONS,
   );
@@ -98,8 +100,8 @@ export function useSettingsController({
   const featureCatalog = systemState.cirnoFeatures?.features ?? [];
 
   useEffect(() => {
-    setActiveSection(initialSection);
-  }, [initialSection]);
+    setActiveSection(normalizedInitialSection);
+  }, [normalizedInitialSection]);
 
   const selectSection = useCallback(
     (section: SettingsSectionKey) => {

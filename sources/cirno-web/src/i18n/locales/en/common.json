@@ -124,10 +124,6 @@
           "label": "Timezone",
           "help": "Choose a timezone. UTC offsets reflect the current date."
         },
-        "agents_defaults_dream_enabled": {
-          "label": "Memory consolidation",
-          "help": "Automatically organize useful information from conversations. Turning this off keeps existing memories available."
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
@@ -248,17 +244,9 @@
           "label": "Cache duration",
           "help": "How long the CLI app catalog stays cached."
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream interval (hours)",
-          "help": "Used when Dream scheduling is set to Interval. Restart to apply."
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream model",
-          "help": "Use a separate model for Dream; leave empty to use the active model."
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Idle compaction check interval (seconds)",
-          "help": "How often to check conversations for idle compaction; separate from the inactivity timeout. Restart to apply."
+          "label": "Idle consolidation check interval (seconds)",
+          "help": "How often to check conversations for idle consolidation; separate from the inactivity timeout. Restart to apply."
         },
         "network_request_timeout_s": {
           "label": "Model connection / response timeout (seconds)",
@@ -273,8 +261,8 @@
           "help": "Restart to apply."
         },
         "agents_defaults_idle_compact_percent": {
-          "label": "Idle compaction trigger (%)",
-          "help": "Percentage of the current model’s context window. 0 disables idle compaction; model configurations can override."
+          "label": "Idle consolidation trigger (%)",
+          "help": "Percentage of the current model’s context window. 0 disables idle consolidation; model configurations can override."
         },
         "agents_defaults_idle_compact_keep_percent": {
           "label": "Recent context retention (%)",
@@ -284,29 +272,13 @@
           "label": "Default Goal continuation limit",
           "help": "0 means unlimited. Counts persist; individual Goals can override."
         },
-        "agents_defaults_dream_mode": {
-          "label": "Dream schedule",
-          "help": "Choose idle consolidation or a fixed interval."
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Idle before Dream (seconds)",
-          "help": "Only runs with pending memory and no foreground execution. New input interrupts idle Dream."
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Dream batch entries",
-          "help": "Maximum records per pass. Remaining records stay queued."
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Dream batch characters",
-          "help": "Bound the input for one consolidation pass. Full sources remain readable."
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "Shared memory budget (tokens)",
           "help": "Maximum MEMORY.md injection. Full memory stays in Home."
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "Task checkpoint budget (tokens)",
-          "help": "Restore this much task state independently of Dream."
+          "help": "Restore this much task state as part of context consolidation."
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "Index scan batch",
@@ -326,19 +298,15 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "Embedding worker limit (MB)",
-          "help": "Peak worker RSS limit. Exceeding it falls back to BM25; this is not a whole-service limit."
+          "help": "Peak embedding worker memory budget (MiB), including model loading. Accepts 512, 1024 or higher. Exceeding it falls back to BM25; this is not a whole-service limit."
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "Embedding timeout (seconds)",
-          "help": "Time limit for one worker request; failure falls back to BM25."
+          "help": "Time budget for the whole embedding search, including the query and all incremental indexing batches. A visible timeout falls back to BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "Free memory after compaction",
-          "help": "After compaction, retain the complete evidence on disk and display history while releasing old execution messages from RAM."
-        },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Dream iteration limit",
-          "help": "Stop a consolidation pass after this many model rounds. Unfinished input stays queued."
+          "label": "Free memory after consolidation",
+          "help": "After consolidation, retain the complete evidence on disk and display history while releasing old execution messages from RAM."
         },
         "tools_exec_max_runtime": {
           "label": "Command runtime",
@@ -381,8 +349,8 @@
           "help": "A timeout sends the operation to you for approval."
         },
         "agents_defaults_active_compact_percent": {
-          "label": "Active compaction trigger (%)",
-          "help": "Percentage of the selected model’s context window. Checked before each model request, including tool rounds. Output space and a safety reserve are always protected; 100 uses the maximum safe input budget. This does not change idle compaction."
+          "label": "Active consolidation trigger (%)",
+          "help": "Percentage of the selected model’s context window. Checked before each model request, including tool rounds. Output space and a safety reserve are always protected; 100 uses the maximum safe input budget. This does not change idle consolidation."
         },
         "channels_send_progress": {
           "label": "Progress messages",
@@ -397,8 +365,8 @@
           "help": "Send reasoning updates when the channel supports them. Web UI detail expansion is controlled separately."
         },
         "channels_show_compaction_notices": {
-          "label": "Automatic compaction notices",
-          "help": "Send automatic context compaction notices to connected channels. Web UI compaction events remain visible."
+          "label": "Automatic consolidation notices",
+          "help": "Send automatic context consolidation notices to connected channels. Web UI consolidation events remain visible."
         },
         "channels_send_max_retries": {
           "label": "Delivery attempts",
@@ -415,18 +383,6 @@
         "tools_exec_max_runtime_limit": {
           "label": "Maximum requested command duration (seconds)",
           "help": "Largest duration the model may request for one command. 0 removes this ceiling. The default command duration remains separate."
-        },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "Checkpoint output budget (tokens)",
-          "help": "Separate output budget for compaction, including reasoning. Limited by the model’s output budget."
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "Checkpoint reasoning effort",
-          "help": "Use lower effort to leave room for the checkpoint text. Inherit uses the conversation model’s effort; unsupported values follow the provider’s mapping."
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "Checkpoint reminder (%)",
-          "help": "Remind the agent to save task state before this percentage of the active input budget. This does not interrupt a running model request."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API base URL",
@@ -460,10 +416,6 @@
           "label": "Files per message (MiB)",
           "help": "Combined uploaded image and document size per message, excluding video. Local file references are excluded. Restart and refresh the browser to apply."
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "Minimum output space (%)",
-          "help": "Reserve this share of the context window for the next response, capped by its configured output limit. Default 5%. The actual output limit shrinks with the remaining space; the maximum output setting does not reserve its full value."
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "Shared additional system prompt",
           "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Worker additional system prompt",
           "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "Consolidation output budget (tokens)",
+          "help": "Task checkpoint and memory updates share this output budget, capped by the model output limit."
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "Checkpoint reasoning effort",
+          "help": "Use lower effort to leave room for the checkpoint text. Inherit uses the conversation model’s effort; unsupported values follow the provider’s mapping."
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "Checkpoint reminder (%)",
+          "help": "Remind the agent to save task state before this percentage of the active input budget. This does not interrupt a running model request."
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "Minimum output space (%)",
+          "help": "Reserve this share of the context window for the next response, capped by its configured output limit. Default 5%. The actual output limit shrinks with the remaining space; the maximum output setting does not reserve its full value."
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "Learn during consolidation",
+          "help": "Produce task checkpoints, durable memories and verified Skill improvements in the same request, without a separate model run."
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "Maximum updates per consolidation",
+          "help": "Bound the total memory and document updates. A pass may produce no useful updates."
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "Additional reference budget (characters)",
+          "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "Command time limits"
         },
-        "compaction-generation": {
-          "title": "Checkpoint generation"
-        },
         "embedding": {
           "title": "Embedding service"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "Additional system prompts"
+        },
+        "consolidation-generation": {
+          "title": "Consolidation generation"
+        },
+        "consolidation": {
+          "title": "Learning and idle consolidation",
+          "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
         }
       },
       "save": "Save changes",
@@ -597,8 +581,8 @@
       "noResults": "No matching settings.",
       "pending": "Unsaved changes",
       "idleCompaction": {
-        "label": "Auto-compact idle sessions",
-        "help": "Automatically compact context after the idle timeout to reduce token usage on subsequent requests.",
+        "label": "Consolidate idle conversations",
+        "help": "Consolidate context and retain useful experience after the idle timeout.",
         "wait": "Idle timeout",
         "minutes": "minutes",
         "numberError": "Enter a non-negative whole number of minutes."
@@ -663,8 +647,6 @@
       "personality": "Personality",
       "reading": "Text & reading",
       "activity": "Execution display",
-      "context": "Context compaction",
-      "dream": "Dream consolidation",
       "memory-search": "Memory retrieval",
       "execution": "Goals & execution",
       "shell": "Shell execution",
@@ -675,7 +657,8 @@
       "coordination": "Conversation coordination",
       "regional": "Time & region",
       "approval": "AI approvals",
-      "backup": "Backup & restore"
+      "backup": "Backup & restore",
+      "consolidation": "Context consolidation"
     },
     "sections": {
       "interface": "Interface",
@@ -743,9 +726,9 @@
       "providerNotConfigured": "Configure this provider before loading models.",
       "autoProviderCustomOnly": "Enter a model ID manually when using automatic provider selection.",
       "availableCount": "Models available: {{count}}",
-      "idleCompactPercent": "Idle compaction trigger (%)",
+      "idleCompactPercent": "Idle consolidation trigger (%)",
       "idleCompactKeepPercent": "Recent context retention (%)",
-      "compactPercentHint": "Percentage of this model’s context window. Leave blank to inherit; a 0 trigger disables idle compaction.",
+      "compactPercentHint": "Percentage of this model’s context window. Leave blank to inherit; a 0 trigger disables idle consolidation.",
       "inheritGlobal": "Inherit global settings",
       "reasoningHistory": "Reasoning history",
       "reasoningHistoryHelp": "Controls plaintext reasoning replay. Automatic follows the API; native signed state stays intact. DeepSeek tool requests require preservation. Ignored history does not count toward the next input; generated tokens are still billed.",
@@ -1183,7 +1166,8 @@
         "api": "API",
         "cron": "Automations",
         "dream": "Memory",
-        "system": "Auxiliary calls"
+        "system": "Auxiliary calls",
+        "consolidation": "Context consolidation"
       },
       "systemHelp": "Includes internal tasks and calls without a recorded source."
     },
@@ -1912,32 +1896,32 @@
         "idle": {
           "started": "Automatically compacting context after inactivity",
           "succeeded": "Context automatically compacted after inactivity",
-          "failed": "Automatic context compaction failed after inactivity",
-          "cancelled": "Automatic compaction after inactivity did not finish"
+          "failed": "Automatic context consolidation failed after inactivity",
+          "cancelled": "Automatic consolidation after inactivity did not finish"
         },
         "context_pressure": {
           "started": "Compacting a long context",
           "succeeded": "Long context compacted",
           "failed": "Failed to compact a long context",
-          "cancelled": "Compaction of a long context cancelled"
+          "cancelled": "consolidation of a long context cancelled"
         },
         "manual": {
-          "started": "Manual compaction in progress",
-          "succeeded": "Manual compaction complete",
-          "failed": "Manual compaction failed",
-          "cancelled": "Manual compaction cancelled"
+          "started": "Manual consolidation in progress",
+          "succeeded": "Manual consolidation complete",
+          "failed": "Manual consolidation failed",
+          "cancelled": "Manual consolidation cancelled"
         },
         "provider_native": {
           "started": "Compacting context on the provider's server",
           "succeeded": "Context compacted on the provider's server",
-          "failed": "Failed to compact context on the provider's server",
-          "cancelled": "Context compaction cancelled on the provider's server"
+          "failed": "Failed to consolidate context on the provider's server",
+          "cancelled": "Context consolidation cancelled on the provider's server"
         }
       },
-      "cancelled": "Context compaction cancelled",
+      "cancelled": "Context consolidation cancelled",
       "empty": "Nothing to compact.",
       "started": "Compressing context",
-      "failed": "Context compaction failed",
+      "failed": "Context consolidation failed",
       "succeeded": "Context compacted",
       "attempts": "{{count}} attempts",
       "errorUnavailable": "This record does not include an error reason.",
@@ -2125,8 +2109,8 @@
             "description": "Reset this conversation and start a new one."
           },
           "compact": {
-            "title": "Compact context",
-            "description": "Compact context and continue chatting."
+            "title": "consolidate context",
+            "description": "consolidate context and continue chatting."
           },
           "stop": {
             "title": "Stop task",
@@ -2149,20 +2133,20 @@
             "description": "Show the last N saved messages."
           },
           "dream": {
-            "title": "Run Dream",
+            "title": "Run consolidation",
             "description": "Organize memory now."
           },
           "dream_log": {
-            "title": "Dream log",
-            "description": "View changes from the last Dream run."
+            "title": "consolidation log",
+            "description": "View changes from the last consolidation run."
           },
           "dream_restore": {
             "title": "Restore memory",
-            "description": "Restore a previous Dream memory snapshot."
+            "description": "Restore a previous consolidation memory snapshot."
           },
           "dream_prompt": {
-            "title": "Dream settings",
-            "description": "Set how Dream organizes this workspace's memory."
+            "title": "consolidation settings",
+            "description": "Set how consolidation organizes this workspace's memory."
           },
           "goal": {
             "title": "Long-running goal",
@@ -2195,6 +2179,10 @@
           "access": {
             "title": "Access mode",
             "description": "Choose Default, AI review or Full Access."
+          },
+          "consolidate": {
+            "title": "Consolidate context",
+            "description": "Organize task context and retain verified experience"
           }
         },
         "controlRunning": "Stop the current task before changing conversation options.",
@@ -2771,7 +2759,7 @@
         "answer": "Model reply",
         "reasoning": "Reasoning",
         "tool": "Tool call",
-        "compaction": "Compaction",
+        "compaction": "consolidation",
         "request": "API request",
         "file": "File change",
         "lifecycle": "Lifecycle",
@@ -2805,7 +2793,8 @@
     "agentVisibilityHint": "Allow Agent tools to list and manage this credential. Secret values are never returned by credential tools.",
     "agentVisible": "Agent visible",
     "agentHidden": "Private",
-    "keepSecret": "Leave blank to keep the saved value."
+    "keepSecret": "Leave blank to keep the saved value.",
+    "memory": "Memory"
   },
   "files": {
     "title": "Files",
@@ -2911,12 +2900,12 @@
     "evidence": "Source",
     "more": "Load more",
     "reindex": "Rebuild index",
-    "retry": "Retry failed Dream",
-    "pending": "Pending Dream: {{count}}",
+    "retry": "Retry saving consolidation results",
+    "pending": "Pending next consolidation: {{count}}",
     "failed": "Failed: {{count}}",
     "indexed": "Indexed: {{count}}",
     "indexSize": "Index: {{size}} MB",
-    "lastDream": "Last Dream",
+    "lastDream": "Last consolidation",
     "noDream": "Not run yet",
     "includeHistory": "Include superseded records",
     "revision": "Version {{revision}}",
@@ -2940,7 +2929,7 @@
     "until": "Through",
     "discoverTags": "Browse tags",
     "databases": "Databases",
-    "dreamOutcomes": "Recent Dream results",
+    "dreamOutcomes": "Recent consolidation results",
     "createdOutcome": "Created",
     "mergedOutcome": "Merged",
     "skippedOutcome": "Skipped",
@@ -2957,10 +2946,12 @@
     "fallback_unavailable": "Vector retrieval is unavailable; using BM25.",
     "searchDetails": "Reason",
     "indexPending": "Vector indexing is incomplete. Results cover indexed content; search again to continue indexing.",
-    "statusTitle": "Index and Dream",
+    "statusTitle": "Index and context consolidation",
     "noTags": "No tags yet.",
     "resultsFor": "Results for “{{query}}”",
-    "noMatches": "No memories match this search."
+    "noMatches": "No memories match this search.",
+    "lastConsolidation": "Last consolidation",
+    "noConsolidation": "Not run yet"
   },
   "userQuestion": {
     "title": "A question for you",
@@ -3008,7 +2999,7 @@
     "kind": {
       "question": "Question",
       "recovery": "Session recovery",
-      "compaction": "Context compaction",
+      "compaction": "Context consolidation",
       "dream": "Memory consolidation",
       "turn": "Conversation run",
       "message": "Message",
@@ -3124,5 +3115,27 @@
       "manual": "Saved order"
     },
     "projectActions": "Project actions for {{name}}"
+  },
+  "memoryGraph": {
+    "description": "Explore saved knowledge, connections and original sources.",
+    "cloud": "Memory cloud",
+    "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
+    "nodeCount": "{{count}} memories",
+    "fit": "Fit to view",
+    "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
+    "renderError": "The 3D view could not start. You can still search and read the results.",
+    "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",
+    "open": "Open Memory",
+    "limit": "Showing up to {{count}} memories. Narrow the filters to explore other records.",
+    "linksLimit": "Showing the first 1,500 connections within these results.",
+    "relation_tag": "Shared tag",
+    "relation_supports": "Supports",
+    "relation_conflicts": "Conflicts",
+    "relation_supersedes": "Supersedes",
+    "relation_related": "Related",
+    "relation_derived_from": "Derived from",
+    "filters": "Filters",
+    "refreshIndex": "Refresh index status",
+    "loading": "Loading memory view…"
   }
 }

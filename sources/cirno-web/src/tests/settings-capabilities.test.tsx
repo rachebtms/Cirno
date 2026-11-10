@@ -8,32 +8,10 @@ import { requestMutationMock, jsonResponse, settingsPayload, renderSettingsView,
 describe("Settings capabilities", () => {
   installSettingsViewTestHooks();
 
-  it("keeps other capability switches stable while saving and queues their edits", async () => {
-    const payload = { ...settingsPayload(), runtime_config: {
-      "tools.web.enable": true, "agents.defaults.dream.enabled": true,
-    } };
-    const memorySaved = { ...payload, runtime_config: { ...payload.runtime_config, "agents.defaults.dream.enabled": false } };
-    let finishMemory!: (value: SettingsPayload) => void;
-    requestMutationMock.mockImplementationOnce(() => new Promise<SettingsPayload>((resolve) => { finishMemory = resolve; }))
-      .mockResolvedValueOnce({ ...memorySaved, runtime_config: { ...memorySaved.runtime_config, "tools.web.enable": false } });
-    renderSettingsView({ initialSection: "capabilities", initialSettings: payload });
-    const memory = screen.getByRole("switch", { name: "Memory consolidation" });
-    const web = screen.getByRole("switch", { name: "Web access" });
-    expect(memory).toBeChecked();
-    expect(web).toBeChecked();
-    fireEvent.click(memory);
-    await waitFor(() => expect(memory).toBeDisabled());
-    expect(web).toBeEnabled();
-    expect(web).toBeChecked();
-    fireEvent.click(web);
-    expect(web).not.toBeChecked();
-    await act(async () => finishMemory(memorySaved));
-    await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
-      "settings.runtime_config.update", { values: { "tools.web.enable": false } }, 20_000,
-    ));
-    await waitFor(() => expect(web).toBeEnabled());
-    expect(memory).not.toBeChecked();
-    expect(web).not.toBeChecked();
+  it("keeps consolidation controls on their dedicated settings page", () => {
+    renderSettingsView({ initialSection: "capabilities", initialSettings: settingsPayload() });
+    expect(screen.queryByRole("switch", { name: "Learn during consolidation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Web access" })).toBeInTheDocument();
   });
 
   it("reveals web search settings when web tools are enabled", async () => {

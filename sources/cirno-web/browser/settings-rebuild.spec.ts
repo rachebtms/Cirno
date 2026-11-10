@@ -20,7 +20,7 @@ for (const width of [390, 1440]) for (const theme of ["light", "dark"]) {
         }
       }).observe(document.body, { childList: true, subtree: true });
     });
-    const trigger = page.getByRole("spinbutton", { name: "Active compaction trigger (%)" });
+    const trigger = page.getByRole("spinbutton", { name: "Active consolidation trigger (%)" });
     await trigger.fill("73");
     await expect(page.getByLabel("Saved settings")).toHaveText('{"agents.defaults.active_compact_percent":73}');
     const navigate = async (label: string) => {
@@ -32,7 +32,7 @@ for (const width of [390, 1440]) for (const theme of ["light", "dark"]) {
         await expect(chooser).not.toBeVisible();
       } else await page.getByRole("button", { name: label, exact: true }).click();
     };
-    await page.getByText("Auto-compact idle sessions", { exact: true }).click();
+    await page.getByText("Consolidate idle conversations", { exact: true }).click();
     await expect(page.getByLabel("Saved settings")).toHaveText('{"agents.defaults.idle_compact_after_minutes":0}');
     await navigate("Goals & execution");
     const workspace = page.getByRole("textbox", { name: "Default workspace" });

@@ -25,7 +25,7 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
     config.providers.custom.api_base = "https://example.test/v1"
     config.providers.custom.api_key = "test-key"
     update_runtime_config(config, {
-        "agents.defaults.dream.interval_h": 6,
+        "agents.defaults.consolidation.max_updates": 6,
         "agents.defaults.heartbeat.enabled": False,
         "agents.defaults.heartbeat.interval_s": 3600,
         "network.request_timeout_s": 180,
@@ -36,7 +36,7 @@ def test_maintenance_and_model_connection_settings_reach_the_runtime():
     assert provider.request_timeout_s == 180
     assert provider.stream_idle_timeout_s == 150
     assert len(provider.retry_policy.delays) == 4
-    assert config.agents.defaults.dream.build_schedule("UTC").every_ms == 6 * 3_600_000
+    assert config.agents.defaults.consolidation.max_updates == 6
     assert not config.agents.defaults.heartbeat.enabled
 
 

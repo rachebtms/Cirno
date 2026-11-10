@@ -25,8 +25,8 @@ async def cmd_dream_log(ctx: CommandContext) -> OutboundMessage:
     if not git.is_initialized():
         if store.journal.get_last_dream_cursor() == 0:
             msg = (
-                "Dream has not run yet. Run `/dream`, or wait for the next scheduled Dream cycle.\n\n"
-                "Use `/dream-prompt` to see or change how Dream organizes memory."
+                "Dream has not run yet. Use Context consolidation in Settings, or `/consolidate` in a conversation.\n\n"
+                "Use Settings → Context consolidation for context and learning settings."
             )
         else:
             msg = "Dream history is not available because memory versioning is not initialized."
@@ -70,7 +70,7 @@ async def cmd_dream_log(ctx: CommandContext) -> OutboundMessage:
         else:
             content = (
                 "Dream memory has no saved versions yet.\n\n"
-                "Use `/dream-prompt` to see or change how Dream organizes memory."
+                "Use Settings → Context consolidation for context and learning settings."
             )
 
     return OutboundMessage(

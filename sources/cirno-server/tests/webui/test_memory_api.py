@@ -24,25 +24,43 @@ async def test_memory_settings_pagination_history_and_source():
     token, _ = repo.pending()
     repo.finish(token, error="provider timeout")
     assert (await api("memory.status"))["last_dream"]["error"] == "provider timeout"
-    assert (await api("memory.retry"))["retried"] == 1
+    assert (await api("memory.retry"))["retried"] == 0  # no generated plan to replay; legacy input remains pending
     assert (await api("memory.reindex"))["scanned"] == 1
     assert get_home_path() in repo.path.parents
 
 
 def test_memory_runtime_settings_round_trip_and_atomic_validation():
     config = Config()
-    values = {"agents.defaults.dream.mode": "idle", "agents.defaults.dream.idle_after_seconds": 240,
-              "agents.defaults.dream.batch_entries": 6, "agents.defaults.dream.batch_chars": 8000,
+    values = {"agents.defaults.consolidation.learn": True,
+              "agents.defaults.consolidation.max_updates": 6, "agents.defaults.consolidation.context_chars": 8000,
               "agents.defaults.memory.context_tokens": 1024, "agents.defaults.memory.checkpoint_tokens": 2048,
               "agents.defaults.memory.index_scan_batch": 80, "agents.defaults.memory.embedding_enabled": False}
     assert update_runtime_config(config, values)
     assert config.agents.defaults.memory.context_tokens == 1024
-    assert config.agents.defaults.dream.batch_entries == 6
+    assert config.agents.defaults.consolidation.max_updates == 6
     previous = config.model_dump()
     with pytest.raises(WebUISettingsError):
         update_runtime_config(config, {"agents.defaults.memory.embedding_max_rss_mb": 0,
-                                       "agents.defaults.dream.batch_entries": 4})
+                                       "agents.defaults.consolidation.max_updates": 4})
     assert config.model_dump() == previous
+    assert update_runtime_config(config, {"agents.defaults.memory.embedding_max_rss_mb": 512})
+    assert config.agents.defaults.memory.embedding_max_rss_mb == 512
+
+
+@pytest.mark.asyncio
+async def test_memory_graph_reuses_search_filters_and_includes_links_across_pages():
+    repo = MemoryRepository(get_home_path())
+    first = repo.save("Calibration evidence", source="test", session_key="a", tags=["calibration"])
+    second = repo.save("Calibration knowledge", source="test", session_key="a", tags=["calibration"])
+    repo.save("Unrelated", source="test", session_key="a")
+    repo.link(first["id"], second["id"], "supports", "Measured", maintenance=True)
+    page = await instance_action({"action": "memory.graph", "values": {"tags": ["calibration"], "limit": 1}}, sessions=None, bus=None)
+    assert page["has_more"]
+    assert page["links"] == []
+    ids = [row["id"] for row in page["memories"]]
+    next_page = await instance_action({"action": "memory.graph", "values": {"tags": ["calibration"], "limit": 1, "offset": page["next_offset"], "ids": ids}}, sessions=None, bus=None)
+    assert not next_page["has_more"]
+    assert next_page["links"] == [{"source": first["id"], "target": second["id"], "relation": "supports"}]
 
 
 @pytest.mark.asyncio
@@ -58,14 +76,15 @@ async def test_settings_tags_dates_and_database_status():
 
 
 @pytest.mark.asyncio
-async def test_settings_uses_shared_semantic_search_and_preserves_filters(monkeypatch):
+@pytest.mark.parametrize("action", ["memory.list", "memory.graph"])
+async def test_settings_uses_shared_semantic_search_and_preserves_filters(monkeypatch, action):
     import cirno_memory.embedding as embedding
     seen = {}
     def semantic(repo, query, config, **filters):
         seen.update(query=query, enabled=config.embedding_enabled, **filters)
         return {"memories": [], "engine": "hybrid", "has_more": False, "next_offset": 0, "embedding_index_pending": True}
     monkeypatch.setattr(embedding, 'search', semantic)
-    result = await instance_action({'action': 'memory.list', 'values': {
+    result = await instance_action({'action': action, 'values': {
         'query': 'calibration', 'mode': 'hybrid', 'scope': 'project', 'layer': 'knowledge',
         'tags': ['calibration'], 'since': '2024-02-29', 'time_zone': 'Asia/Shanghai', 'limit': 10,
     }}, sessions=None, bus=None)

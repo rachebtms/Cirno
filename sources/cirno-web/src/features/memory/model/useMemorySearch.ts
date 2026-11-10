@@ -7,14 +7,15 @@ interface SearchSnapshot {
   query: MemoryQuery;
   result: MemorySearchResult;
 }
-export function useMemorySearch(service: MemoryService) {
+export const MEMORY_GRAPH_LIMIT = 300;
+export function useMemorySearch(service: MemoryService, graph = false) {
   const resource = useRequest<SearchSnapshot>(service);
   const { load } = resource;
   const [draftState, setDraft] = useState({ service, value: { ...EMPTY_MEMORY_QUERY } });
   const draft = draftState.service === service ? draftState.value : EMPTY_MEMORY_QUERY;
   const search = useCallback(
-    (query: MemoryQuery) => load(async () => ({ query: { ...query }, result: await service.list(query) })),
-    [service, load],
+    (query: MemoryQuery) => load(async () => ({ query: { ...query }, result: await (graph ? service.graph(query) : service.list(query)) })),
+    [service, graph, load],
   );
   useEffect(() => {
     setDraft({ service, value: { ...EMPTY_MEMORY_QUERY } });
@@ -28,12 +29,16 @@ export function useMemorySearch(service: MemoryService) {
   };
   const more = async () => {
     const previous = resource.value;
-    if (!previous?.result.has_more || resource.loading) return;
+    if (!previous?.result.has_more || resource.loading || (graph && previous.result.memories.length >= MEMORY_GRAPH_LIMIT)) return;
     await load(async () => {
-      const page = await service.list(previous.query, previous.result.next_offset);
+      const page = await (graph
+        ? service.graph(previous.query, previous.result.next_offset, previous.result.memories.map(row => row.id))
+        : service.list(previous.query, previous.result.next_offset));
       const records = new Map(previous.result.memories.map((record) => [record.id, record]));
       for (const record of page.memories) records.set(record.id, record);
-      return { query: previous.query, result: { ...page, memories: [...records.values()] } };
+      const memories = [...records.values()];
+      return { query: previous.query, result: { ...page, memories,
+        has_more: page.has_more && (!graph || memories.length < MEMORY_GRAPH_LIMIT) } };
     });
   };
   return {

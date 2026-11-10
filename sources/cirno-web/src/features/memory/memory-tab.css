@@ -1,0 +1,29 @@
+.memory-screen {
+  height: 100%;
+  overflow: auto;
+  padding: clamp(1rem, 3cqi, 2rem);
+}
+.memory-screen > .memory-library { max-width: 100rem; margin-inline: auto; }
+.memory-screen h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.025em; }
+.memory-screen .memory-library-heading .memory-hint { margin-top: 0.35rem; }
+.memory-open-button { justify-self: start; gap: 0.625rem; }
+.memory-explorer { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 1.25rem; min-width: 0; align-items: start; }
+.memory-explorer-results { min-width: 0; max-height: 65dvh; overflow: auto; }
+.memory-explorer-results .memory-record { padding: 0.875rem 0.625rem; }
+.memory-cloud { position: relative; min-width: 0; height: clamp(26rem, 60dvh, 48rem); overflow: hidden; border: 1px solid var(--separator); border-radius: 1rem; background: var(--surface); }
+.memory-cloud-scene { position: absolute; inset: 0 0 4.5rem; background: var(--surface); touch-action: none; }
+.memory-cloud-scene canvas { display: block; }
+.memory-cloud-toolbar { position: absolute; inset: 0.875rem 0.875rem auto; display: flex; align-items: center; justify-content: space-between; pointer-events: none; gap: 1rem; }
+.memory-cloud-toolbar > span { color: var(--muted); font-size: 0.8125rem; background: var(--surface); padding: 0.375rem 0.625rem; border-radius: 0.5rem; }
+.memory-cloud-toolbar > .button { pointer-events: auto; }
+.memory-cloud-legend { position: absolute; left: 1rem; right: 1rem; bottom: 2.875rem; display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; pointer-events: none; }
+.memory-cloud-legend > span { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--muted); font-size: 0.75rem; }
+.memory-cloud-legend i { width: 0.375rem; height: 0.375rem; border-radius: 50%; }
+.memory-cloud-help { position: absolute; inset: auto 1rem 0.875rem; color: var(--muted); font-size: 0.75rem; pointer-events: none; }
+.memory-cloud-empty, .memory-cloud-error { position: absolute; inset: 40% 1.5rem auto; text-align: center; color: var(--muted); font-size: 0.875rem; }
+.memory-cloud-error { display: grid; gap: 0.5rem; }
+@container cirno-tab (max-width: 850px) {
+  .memory-explorer { grid-template-columns: minmax(0, 1fr); }
+  .memory-cloud { height: 24rem; }
+  .memory-explorer-results { max-height: none; overflow: visible; }
+}

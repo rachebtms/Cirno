@@ -272,7 +272,7 @@ def _run_claimed_server(
 
     # Set cron callback (needs agent)
 
-    scheduled_jobs = ScheduledAgentJobs(agent, cron, prepare=mcp_provider.connect, report=console.print)
+    scheduled_jobs = ScheduledAgentJobs(agent, cron, report=console.print)
     cron.on_job = scheduled_jobs.execute
 
     def _webui_runtime_model_name() -> str | None:

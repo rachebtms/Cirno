@@ -124,10 +124,6 @@
           "label": "タイムゾーン",
           "help": "タイムゾーンを選択します。UTC との時差は現在の日付に基づきます。"
         },
-        "agents_defaults_dream_enabled": {
-          "label": "記憶の整理",
-          "help": "会話の有用な情報を自動で整理します。オフにしても既存の記憶は使用できます。"
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
@@ -248,14 +244,6 @@
           "label": "キャッシュ期間",
           "help": "CLI アプリのカタログをキャッシュする期間です。"
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream interval (hours)",
-          "help": "待機中または一定間隔で整理します。"
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream model",
-          "help": "Dream 専用モデルを選択できます。未選択なら現在のモデルを使用します。"
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
           "label": "アイドル圧縮の確認間隔（秒）",
           "help": "会話がアイドル圧縮の条件を満たすか確認する間隔です。非アクティブ時間とは別です。再起動後に適用されます。"
@@ -272,29 +260,13 @@
           "label": "Model retries",
           "help": "Restart to apply."
         },
-        "agents_defaults_dream_mode": {
-          "label": "Dream の実行時機",
-          "help": "待機中または一定間隔で整理します。"
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Dream までの待機時間（秒）",
-          "help": "実行中のタスクがない場合のみ動作し、新しい入力で中断します。"
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Dream の一括記録数",
-          "help": "残りの記録は待機列に保持します。"
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Dream の一括文字数",
-          "help": "各回の入力量を制限し、元の出典は全文を保持します。"
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "共有記憶の上限（トークン）",
           "help": "MEMORY.md の注入を制限し、全文は Home に保持します。"
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "タスク状態の上限（トークン）",
-          "help": "Dream に依存せずタスク状態を復元します。"
+          "help": "context consolidation に依存せずタスク状態を復元します。"
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "索引走査の一括件数",
@@ -314,22 +286,18 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "埋め込みプロセスの上限（MB）",
-          "help": "子プロセスの RSS 上限です。超過時は BM25 に戻ります。サービス全体の上限ではありません。"
+          "help": "Peak embedding worker memory budget (MiB), including model loading. Accepts 512, 1024 or higher. Exceeding it falls back to BM25; this is not a whole-service limit."
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "埋め込みの制限時間（秒）",
-          "help": "リクエスト単位の制限時間です。失敗時は BM25 に戻ります。"
+          "help": "Time budget for the whole embedding search, including the query and all incremental indexing batches. A visible timeout falls back to BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
           "label": "圧縮後にメモリを解放",
           "help": "圧縮後も証拠と表示履歴はディスクに保持し、古い実行メッセージのメモリを解放します。"
         },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Dream の反復上限",
-          "help": "各回のモデル呼び出し回数を制限し、未完了の入力は待機列に保持します。"
-        },
         "agents_defaults_idle_compact_percent": {
-          "label": "アイドル時の圧縮開始率（%）",
+          "label": "Idle consolidation trigger (%)",
           "help": "現在のモデルの文脈ウィンドウに対する割合。0 は無効化。モデル設定で上書きできます。"
         },
         "agents_defaults_idle_compact_keep_percent": {
@@ -416,18 +384,6 @@
           "label": "要求可能なコマンド最長時間（秒）",
           "help": "モデルが指定できるコマンド実行時間の上限です。0で上限なし。既定の実行時間は別に設定します。"
         },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "圧縮の出力予算（トークン）",
-          "help": "推論を含む圧縮専用の予算です。モデルの出力上限を超えません。"
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "圧縮時の推論強度",
-          "help": "強度を下げて要約本文の余地を確保します。継承は会話の設定を使い、未対応の値は提供元が変換します。"
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "保存の通知しきい値（%）",
-          "help": "アクティブな入力予算のこの割合で、エージェントに作業状態の保存を促します。実行中の要求は中断しません。"
-        },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API ベース URL",
           "help": "https://host/v1 など OpenAI 互換の URL、または完全な /embeddings エンドポイント。自己ホストの HTTP も使えます。"
@@ -460,10 +416,6 @@
           "label": "メッセージ内の合計サイズ（MiB）",
           "help": "動画を除く画像・文書の合計です。ローカルファイル参照は含みません。再起動とページ更新後に適用されます。"
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "出力用の予約領域（%）",
-          "help": "次の応答に予約するコンテキストの割合です。出力上限を超えず、既定は5%です。実際の出力上限は残り領域に合わせて調整されます。"
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "共通の追加システムプロンプト",
           "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Worker の追加システムプロンプト",
           "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "Consolidation output budget (tokens)",
+          "help": "Task checkpoint and memory updates share this output budget, capped by the model output limit."
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "圧縮時の推論強度",
+          "help": "強度を下げて要約本文の余地を確保します。継承は会話の設定を使い、未対応の値は提供元が変換します。"
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "保存の通知しきい値（%）",
+          "help": "アクティブな入力予算のこの割合で、エージェントに作業状態の保存を促します。実行中の要求は中断しません。"
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "出力用の予約領域（%）",
+          "help": "次の応答に予約するコンテキストの割合です。出力上限を超えず、既定は5%です。実際の出力上限は残り領域に合わせて調整されます。"
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "Learn during consolidation",
+          "help": "Produce task checkpoints, durable memories and verified Skill improvements in the same request, without a separate model run."
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "Maximum updates per consolidation",
+          "help": "Bound the total memory and document updates. A pass may produce no useful updates."
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "Additional reference budget (characters)",
+          "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "コマンドの時間制限"
         },
-        "compaction-generation": {
-          "title": "引き継ぎの生成"
-        },
         "embedding": {
           "title": "埋め込みサービス"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "追加システムプロンプト"
+        },
+        "consolidation-generation": {
+          "title": "Consolidation generation"
+        },
+        "consolidation": {
+          "title": "Learning and idle consolidation",
+          "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
         }
       },
       "save": "変更を保存",
@@ -597,8 +581,8 @@
       "noResults": "一致する設定はありません。",
       "pending": "未保存の変更",
       "idleCompaction": {
-        "label": "未使用時の自動圧縮",
-        "help": "未使用時間が上限に達するとコンテキストを自動圧縮し、次回以降のトークン使用量を減らします。",
+        "label": "Consolidate idle conversations",
+        "help": "Consolidate context and retain useful experience after the idle timeout.",
         "wait": "未使用時間の上限",
         "minutes": "分",
         "numberError": "分数を0以上の整数で入力してください。"
@@ -663,8 +647,6 @@
       "nodes": "ノード",
       "reading": "文字と閲覧",
       "activity": "実行過程の表示",
-      "context": "コンテキスト圧縮",
-      "dream": "Dream 記憶統合",
       "memory-search": "記憶検索",
       "execution": "Goal と実行",
       "shell": "Shell 実行",
@@ -675,7 +657,8 @@
       "coordination": "会話の連携",
       "regional": "日時と地域",
       "approval": "AI 承認",
-      "backup": "バックアップと復元"
+      "backup": "バックアップと復元",
+      "consolidation": "Context consolidation"
     },
     "sections": {
       "interface": "インターフェース",
@@ -957,7 +940,8 @@
         "api": "API",
         "cron": "自動タスク",
         "dream": "メモリ整理",
-        "system": "補助処理"
+        "system": "補助処理",
+        "consolidation": "Context consolidation"
       }
     },
     "providers": {
@@ -2133,20 +2117,20 @@
             "description": "保存済みメッセージの直近 N 件を表示します。"
           },
           "dream": {
-            "title": "Dream を実行",
+            "title": "consolidation を実行",
             "description": "メモリーを今すぐ整理します。"
           },
           "dream_log": {
-            "title": "Dream ログ",
-            "description": "前回の Dream の変更を確認します。"
+            "title": "consolidation ログ",
+            "description": "前回の consolidation の変更を確認します。"
           },
           "dream_restore": {
             "title": "メモリを復元",
-            "description": "以前の Dream メモリースナップショットに戻します。"
+            "description": "以前の consolidation メモリースナップショットに戻します。"
           },
           "dream_prompt": {
-            "title": "Dream 設定",
-            "description": "このワークスペースのメモリーを Dream が整理する方法を設定します。"
+            "title": "consolidation 設定",
+            "description": "このワークスペースのメモリーを consolidation が整理する方法を設定します。"
           },
           "goal": {
             "title": "長期目標",
@@ -2179,6 +2163,10 @@
           "access": {
             "title": "アクセス権限",
             "description": "既定、AI 承認、フルアクセスを選びます。"
+          },
+          "consolidate": {
+            "title": "Consolidate context",
+            "description": "Organize task context and retain verified experience"
           }
         },
         "badges": {
@@ -2805,7 +2793,8 @@
     "agentVisible": "Agent に公開中",
     "agentHidden": "非公開",
     "keepSecret": "空欄の場合、保存済みの値を保持します。",
-    "sshNode": "SSH Node"
+    "sshNode": "SSH Node",
+    "memory": "Memory"
   },
   "files": {
     "title": "Files",
@@ -2852,12 +2841,12 @@
     "evidence": "出典",
     "more": "さらに読み込む",
     "reindex": "索引を再構築",
-    "retry": "失敗した Dream を再試行",
-    "pending": "Dream 待機中：{{count}}",
+    "retry": "Retry saving consolidation results",
+    "pending": "Pending next consolidation: {{count}}",
     "failed": "失敗：{{count}}",
     "indexed": "索引済み：{{count}}",
     "indexSize": "索引：{{size}} MB",
-    "lastDream": "最近の Dream",
+    "lastDream": "最近の consolidation",
     "noDream": "未実行",
     "includeHistory": "置き換え済みの記録を含む",
     "revision": "バージョン {{revision}}",
@@ -2881,7 +2870,7 @@
     "until": "終了日",
     "discoverTags": "タグを見る",
     "databases": "データベース",
-    "dreamOutcomes": "最近のDream結果",
+    "dreamOutcomes": "最近のconsolidation結果",
     "createdOutcome": "作成済み",
     "mergedOutcome": "統合済み",
     "skippedOutcome": "保存不要",
@@ -2898,10 +2887,12 @@
     "fallback_unavailable": "ベクトル検索を利用できないため、BM25 を使用しました。",
     "searchDetails": "理由",
     "indexPending": "ベクトル索引は未完成です。検索結果は索引済みの内容のみです。再検索で索引作成を続行できます。",
-    "statusTitle": "インデックスと記憶整理",
+    "statusTitle": "Index and context consolidation",
     "noTags": "タグはまだありません。",
     "resultsFor": "「{{query}}」の検索結果",
-    "noMatches": "検索条件に一致する記憶はありません。"
+    "noMatches": "検索条件に一致する記憶はありません。",
+    "lastConsolidation": "Last consolidation",
+    "noConsolidation": "Not run yet"
   },
   "userQuestion": {
     "title": "確認したいこと",
@@ -3124,5 +3115,27 @@
       "manual": "保存した順序"
     },
     "projectActions": "プロジェクト「{{name}}」の操作"
+  },
+  "memoryGraph": {
+    "description": "Explore saved knowledge, connections and original sources.",
+    "cloud": "Memory cloud",
+    "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
+    "nodeCount": "{{count}} memories",
+    "fit": "Fit to view",
+    "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
+    "renderError": "The 3D view could not start. You can still search and read the results.",
+    "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",
+    "open": "Open Memory",
+    "limit": "Showing up to {{count}} memories. Narrow the filters to explore other records.",
+    "linksLimit": "Showing the first 1,500 connections within these results.",
+    "relation_tag": "Shared tag",
+    "relation_supports": "Supports",
+    "relation_conflicts": "Conflicts",
+    "relation_supersedes": "Supersedes",
+    "relation_related": "Related",
+    "relation_derived_from": "Derived from",
+    "filters": "Filters",
+    "refreshIndex": "Refresh index status",
+    "loading": "Loading memory view…"
   }
 }

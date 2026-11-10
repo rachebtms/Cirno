@@ -47,8 +47,10 @@ function Filter({
 export function MemoryFilters({
   service,
   search,
+  compact = false,
 }: {
   service: MemoryService;
+  compact?: boolean;
   search: ReturnType<typeof useMemorySearch>;
 }) {
   const { t } = useTranslation();
@@ -73,23 +75,7 @@ export function MemoryFilters({
       options: ["all", "user", "project", "session"].map((scope) => [scope, tr(scope)] as const),
     },
   ] as const;
-  return (
-    <Form
-      className="memory-search-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void search.submit();
-      }}
-    >
-      <div className="memory-query-row">
-        <TextField value={draft.query} onChange={(query) => change({ query })}>
-          <Label className="sr-only">{tr("search")}</Label>
-          <Input placeholder={tr("search")} />
-        </TextField>
-        <Button type="submit" isIconOnly isPending={search.loading} aria-label={tr("search")}>
-          <Search size={18} />
-        </Button>
-      </div>
+  const advanced = <>
       <div className="memory-search-filters">
         {filters.map((filter) => (
           <Filter
@@ -157,6 +143,27 @@ export function MemoryFilters({
         selected={draft.includeHistory}
         onChange={(includeHistory) => apply({ includeHistory })}
       />
+  </>;
+  return (
+    <Form
+      className="memory-search-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void search.submit();
+      }}
+    >
+      <div className="memory-query-row">
+        <TextField value={draft.query} onChange={(query) => change({ query })}>
+          <Label className="sr-only">{tr("search")}</Label>
+          <Input placeholder={tr("search")} />
+        </TextField>
+        <Button type="submit" isIconOnly isPending={search.loading} aria-label={tr("search")}>
+          <Search size={18} />
+        </Button>
+      </div>
+      {compact ? <Accordion><Accordion.Item id="filters"><Accordion.Heading><Accordion.Trigger>
+        {t("memoryGraph.filters")}<Accordion.Indicator />
+      </Accordion.Trigger></Accordion.Heading><Accordion.Panel><div className="memory-advanced-filters">{advanced}</div></Accordion.Panel></Accordion.Item></Accordion> : advanced}
     </Form>
   );
 }

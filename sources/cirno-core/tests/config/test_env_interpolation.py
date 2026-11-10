@@ -128,7 +128,8 @@ class TestResolveConfig:
         save_config(config, config_path)
 
         saved = json.loads(config_path.read_text(encoding="utf-8"))
-        assert saved["agents"]["defaults"]["dream"]["intervalH"] == 4
+        assert "dream" not in saved["agents"]["defaults"]
+        assert "consolidation" in saved["agents"]["defaults"]
         assert "openaiCodex" not in saved["providers"]
         assert "xaiGrok" not in saved["providers"]
         assert "githubCopilot" not in saved["providers"]

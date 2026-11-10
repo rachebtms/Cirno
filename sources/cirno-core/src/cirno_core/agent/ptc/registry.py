@@ -101,6 +101,7 @@ class RunCodeTool(Tool):
 class PtcToolRegistry(ToolRegistry):
     """Orchestrate ordinary tools; keep credential calls outside logged source."""
     def __init__(self, native: ToolRegistry):
+        from cirno_core.agent.tools.role_policy import is_coordination_tool
         super().__init__()
         self.native = ToolRegistry()
         self.register(RunCodeTool())
@@ -110,6 +111,8 @@ class PtcToolRegistry(ToolRegistry):
                 self.register(native.get(name))
             else:
                 self.native.register(native.get(name))
+                if is_coordination_tool(name):
+                    self.register(native.get(name))
 
     def model_instructions(self) -> str:
         declarations = [schema["function"] for schema in self.native.get_definitions()]
@@ -122,6 +125,8 @@ class PtcToolRegistry(ToolRegistry):
         return (
             "PTC Mode is enabled for this conversation. Use ptc__run to orchestrate ordinary tools. "
             "Credential tools, when provided, must be called directly, never from source code or printed output. "
+            "Coordination tools are also available directly. When the Router's ordinary work budget "
+            "is exhausted, reply or delegate using a direct coordination tool instead of another ptc__run. "
             "Call the tools below from Python as await tools.group.operation({...}) or named arguments. "
             "Tool results are parsed JSON when possible, otherwise strings. "
             "Use print/return to keep only relevant results. Catch ToolError to handle a rejected subcall. "

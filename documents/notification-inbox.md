@@ -6,7 +6,7 @@ Open Inbox from the workspace launcher on desktop or mobile. Its category pages 
 | --- | --- |
 | `#/inbox?category=operations` | Asynchronous questions, tool approvals and conversation recovery requiring user action |
 | `#/inbox?category=conversations` | Explicit work reports; ordinary replies and successful completions are not recorded |
-| `#/inbox?category=system` | Dream, context-compaction outcomes and failed runs, including failure reasons |
+| `#/inbox?category=system` | Context consolidation outcomes and failed runs, including failure reasons |
 
 Operation notices open the existing workflow: questions return to the originating conversation's composer, tool approvals open the requested operation, and recovery opens the affected conversation. Marking a notice read does not answer a question or approve access. Accepted user answers resolve their corresponding question notices; messages from another agent cannot stand in for user answers.
 

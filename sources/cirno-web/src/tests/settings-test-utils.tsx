@@ -73,9 +73,7 @@ export function settingsPayload(): SettingsPayload {
         enabled: true,
         interval_s: 1800,
       },
-      dream: {
-        schedule: "every 2h",
-      },
+      consolidation: { mode: "inline", learning: true },
     },
     advanced: {
       restrict_to_workspace: false,
@@ -91,11 +89,11 @@ export function settingsPayload(): SettingsPayload {
     },
     requires_restart: false,
     version: {
-      current: "0.2.5",
+      current: "0.2.6",
     },
     docs: {
-      version: "0.2.5",
-      base_url: "https://github.com/rachebtms/Cirno/tree/main/documents/docs/0.2.5",
+      version: "0.2.6",
+      base_url: "https://github.com/rachebtms/Cirno/tree/main/documents/docs/0.2.6",
       chat_apps_url: "https://github.com/rachebtms/Cirno/blob/main/documents/configuration.md",
       latest_url: "https://github.com/rachebtms/Cirno/tree/main/documents",
     },

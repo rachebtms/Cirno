@@ -315,11 +315,11 @@ def test_validator_accepts_dream_model_preset() -> None:
     assert config.agents.defaults.dream.model_override == "dream"
 
 
-def test_validator_rejects_unknown_dream_model_preset() -> None:
-    with pytest.raises(ValueError, match="Dream model preset 'unknown' not found"):
-        Config.model_validate({
-            "agents": {"defaults": {"dream": {"modelOverride": "unknown"}}},
-        })
+def test_retired_dream_model_does_not_block_loading_old_configuration() -> None:
+    config = Config.model_validate({
+        "agents": {"defaults": {"dream": {"modelOverride": "unknown"}}},
+    })
+    assert "dream" not in config.agents.defaults.model_dump()
 
 
 def test_model_preset_accepts_explicit_default_name() -> None:

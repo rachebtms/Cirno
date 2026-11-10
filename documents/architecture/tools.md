@@ -28,8 +28,7 @@ MCP calls use provider-safe names. Names requiring character normalization recei
 
 Action-based implementations expose separate operations with their action
 bound by the registry. Memory and Node schemas contain only the relevant
-parameters. A caller cannot override the bound action. Dream alone receives
-`memory.confirm`; ordinary turns cannot acknowledge Dream's evidence queue.
+parameters. A caller cannot override the bound action. Context consolidation acknowledges only supplied, explicitly reviewed and unchanged pending input revisions. Ordinary turns do not receive `memory.confirm`.
 
 Only the Router conversation receives `user.message`. Ordinary conversations
 reply through normal assistant output. The same selection is used for turns,
@@ -42,8 +41,10 @@ exclude Router-only messaging, cross-conversation controls and Project managemen
 Both native and nested PTC execution check the same role policy. Within each run,
 the Router may make at most nine ordinary calls and spend ten cumulative seconds
 executing them; overlapping calls count elapsed time once. Model waiting is not
-charged. PTC computation also has a ten-second deadline, and its nested ordinary
-calls share the run's allowance. Replies and coordination remain available after
+charged. PTC programs share the same cumulative wall-time allowance across model
+rounds, including Python computation; nested ordinary calls count once. In PTC
+mode, coordination tools are also exposed directly, so replying or creating a
+Worker does not require another execution program. Replies and coordination remain available after
 exhaustion so the Router can delegate unfinished work. A timed-out operation may
 have completed effects; its error instructs the model to inspect before retrying.
 

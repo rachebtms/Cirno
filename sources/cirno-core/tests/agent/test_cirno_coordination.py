@@ -469,7 +469,7 @@ async def test_paused_scheduler_does_not_enqueue_even_with_active_periodic_tasks
     get_home_path().mkdir(parents=True, exist_ok=True)
     (get_home_path() / "HEARTBEAT.md").write_text("## Active tasks\nCheck ongoing research\n")
     await instance_action({"action": "router.heartbeat.update", "values": {"paused": True}}, sessions=sessions, bus=bus)
-    jobs = ScheduledAgentJobs(SimpleNamespace(sessions=sessions, bus=bus), CronService(home / "cron.json"), prepare=AsyncMock(), report=lambda _: None)
+    jobs = ScheduledAgentJobs(SimpleNamespace(sessions=sessions, bus=bus), CronService(home / "cron.json"), report=lambda _: None)
     await jobs.heartbeat()
     assert bus.inbound_size == 0
     await instance_action({"action": "router.heartbeat.update", "values": {"paused": False}}, sessions=sessions, bus=bus)

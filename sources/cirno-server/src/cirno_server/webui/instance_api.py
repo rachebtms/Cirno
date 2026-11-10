@@ -100,18 +100,30 @@ async def instance_action(
         def memory_action():
             repo = MemoryRepository(get_home_path())
             repo.sync_profiles()
-            if action == "memory.list":
+            if action in {"memory.list", "memory.graph"}:
                 from cirno_core.config.loader import load_config
                 from cirno_memory.search import search
+                from cirno_memory.graph import MAX_GRAPH_NODES, graph_ids, memory_graph
+                ids = graph_ids(values.get("ids", [])) if action == "memory.graph" else []
+                limit = int(values.get("limit", 10))
+                if action == "memory.graph":
+                    if len(ids) == MAX_GRAPH_NODES:
+                        raise ValueError("Graph is full; narrow the filters to explore other memories")
+                    limit = min(limit, MAX_GRAPH_NODES - len(ids))
                 config = load_config()
-                return search(repo, str(values.get("query", "")), config.agents.defaults.memory,
+                result = search(repo, str(values.get("query", "")), config.agents.defaults.memory,
                                    mode=str(values.get("mode", "bm25")), maintenance=True,
                                    scope=values.get("scope"), layer=values.get("layer"), tags=values.get("tags"),
                                    include_history=bool(values.get("include_history")),
                                    since=values.get("since"), until=values.get("until"), time_field=values.get("time_field", "observed_at"), time_zone=values.get("time_zone") or config.agents.defaults.timezone,
-                                   limit=int(values.get("limit", 10)), offset=int(values.get("offset", 0)))
+                                   limit=limit, offset=int(values.get("offset", 0)))
+                if action == "memory.graph":
+                    ids = list(dict.fromkeys([*ids, *(record["id"] for record in result["memories"])]))
+                    result.update(memory_graph(repo, ids, maintenance=True))
+                return result
             if action == "memory.status":
-                return {**repo.status(), **repo.receipts(limit=6)}
+                from cirno_core.memory.consolidation_receipts import outcomes
+                return {**repo.status(), **repo.receipts(limit=6), **outcomes(repo)}
             if action == "memory.tags":
                 return repo.list_tags(maintenance=True, prefix=str(values.get("prefix", "")), limit=int(values.get("limit", 30)), offset=int(values.get("offset", 0)))
             if action == "memory.read":
@@ -124,10 +136,11 @@ async def instance_action(
             if action == "memory.reindex":
                 return repo.reconcile(rebuild=True, limit=100)
             if action == "memory.retry":
-                return repo.retry_failed()
+                from cirno_core.memory.consolidation_receipts import retry_learning
+                return retry_learning(repo)
             raise ValueError("Unknown memory action")
         result = await asyncio.to_thread(memory_action)
-        if action == "memory.list" and sessions is not None:
+        if action in {"memory.list", "memory.graph"} and sessions is not None:
             titles = {}
             projects = {}
             for record in result["memories"]:

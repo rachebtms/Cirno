@@ -11,6 +11,8 @@ A Skill is a directory containing `SKILL.md` and only the resources needed to pe
 
 Use a concrete task to identify reusable steps, inputs, checks and outputs. Read overlapping Skills first. Keep one-off facts in memory rather than making a Skill. Dream may extract a workflow only after it appears in at least two independent tasks; repeated summaries of one task do not count as independent evidence.
 
+During foreground work, a tested non-trivial procedure worth repeating or an explicit user request can justify a new Skill. User corrections and a single verified failure/fix can justify updating an existing Skill immediately; they do not need to recur twice. Save useful lessons at milestones rather than waiting for a long Goal to finish or for idle Dream. Generalize procedures without copying private user/Project facts, credentials or raw chat into shared Skills.
+
 Keep instructions concise. Put essential workflow rules in `SKILL.md`, optional detail in `references/`, executable helpers in `scripts/`, and output templates in `assets/`. Reference only resources that actually exist. Use `files__search` to narrow large files before reading them.
 
 ## Create and edit

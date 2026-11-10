@@ -32,6 +32,9 @@ export interface MemoryStatus {
   index_bytes: number;
   databases?: Record<string, number>;
   receipts?: { memory_id: string; outcome: string; reason: string; input_revision: number }[];
+  last_consolidation?: { at: string; status: string; error?: string | null } | null;
+  consolidation_failed?: number;
+  consolidation_failures?: { source: string; error: string | null; at: string }[];
   last_dream: {
     at: string;
     error?: string;
@@ -51,7 +54,10 @@ export interface MemorySearchResult {
   warning_code?: string;
   warning?: string;
   embedding_index_pending?: boolean;
+  links?: MemoryLink[];
+  links_truncated?: boolean;
 }
+export interface MemoryLink { source: string; target: string; relation: string }
 export interface EvidenceReference {
   id: string;
   revision?: number;

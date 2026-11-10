@@ -16,7 +16,7 @@ These guides describe the current Cirno implementation. The Python service owns 
 
 ## Behavior and architecture
 
-- [Memory](architecture/memory.md): BM25, evidence, scopes, Dream and optional embeddings.
+- [Memory](architecture/memory.md): BM25, evidence, scopes, context consolidation and optional embeddings.
 - [Asynchronous questions](architecture/async-questions.md): queued questions and steering replies.
 - [Programmatic tool calling](architecture/ptc.md): PTC execution and conversation reply delivery.
 - [Operation review](architecture/access-review.md): permission modes, independent AI review and owner decisions.
@@ -33,6 +33,8 @@ These guides describe the current Cirno implementation. The Python service owns 
 Historical reviews, benchmark runs and earlier implementations are local archive material under ignored `references/`. They are not current product documentation or bundled Agent guidance. Third-party license text remains in its original form.
 
 ## Release notes
+
+- [0.2.6](releases/0.2.6.md): unified context consolidation and Skill learning, memory cloud search, credential privacy, bounded embedding retrieval and long-task recovery fixes.
 
 - [0.2.5](releases/0.2.5.md): mobile keyboard visibility, automatic settings saving, model icon alignment and bundled full-image Python libraries.
 - [0.2.4](releases/0.2.4.md): role-specific execution contracts, editable system prompts, cache-aware context and memory scope/integrity fixes.

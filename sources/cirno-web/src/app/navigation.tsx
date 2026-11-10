@@ -1,3 +1,4 @@
+import { canonicalSettingsSection } from "@/features/settings/contracts";
 import type { SettingsSectionKey } from "@/features/settings/SettingsView";
 import { settingsSections } from "@/features/settings/modules";
 import { CirnoClient } from "@/lib/cirno-client";
@@ -181,7 +182,7 @@ export function readShellRoute(): ShellRoute {
 
   const [path, query = ""] = hash.split("?", 2);
   const params = new URLSearchParams(query);
-  const rawSettingsSection = params.get("section");
+  const rawSettingsSection = canonicalSettingsSection(params.get("section"));
   const settingsSection = isSettingsSectionKey(rawSettingsSection)
     ? rawSettingsSection
     : "overview";

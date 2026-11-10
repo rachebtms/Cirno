@@ -424,9 +424,7 @@ function modelSettings(model: string, provider: string): SettingsPayload {
         enabled: true,
         interval_s: 1800,
       },
-      dream: {
-        schedule: "every 2h",
-      },
+      consolidation: { mode: "inline", learning: true },
     },
     advanced: {
       restrict_to_workspace: false,

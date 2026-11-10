@@ -150,6 +150,7 @@
   font-size: 0.9375rem;
   font-weight: 500;
 }
+.memory-status-refresh { margin-inline-start: auto; }
 .memory-index-status .card__content {
   display: grid;
   gap: 0.875rem;
@@ -293,3 +294,5 @@
 .memory-source-footer > .alert {
   width: 100%;
 }
+
+.memory-advanced-filters { display: grid; gap: 1rem; padding-block: 0.75rem; }

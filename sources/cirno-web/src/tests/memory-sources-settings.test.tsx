@@ -31,7 +31,9 @@ function setup(overrides?: (action: string, values: Record<string, unknown>) => 
           pending: 2,
           failed: 1,
           index_bytes: 1048576,
-          last_dream: { at: "2026-10-31T00:00:00Z", error: "Provider unavailable" },
+          last_dream: null,
+          last_consolidation: { at: "2026-10-31T00:00:00Z", status: "failed", error: "Storage unavailable" },
+          consolidation_failed: 1,
         };
       if (action === "memory.list")
         return {
@@ -114,10 +116,10 @@ describe("memory library", () => {
     );
   });
 
-  it("surfaces the failure reason and retries pending Dream work", async () => {
+  it("surfaces learning persistence failures and retries generated results", async () => {
     const request = setup();
-    expect(await screen.findByText(/Provider unavailable/)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Retry failed Dream" }));
+    expect(await screen.findByText(/Storage unavailable/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Retry saving consolidation results" }));
     await waitFor(() => expect(request).toHaveBeenCalledWith("instance.action", { action: "memory.retry" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Rebuild index" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Rebuild index" }));
@@ -203,6 +205,7 @@ it("uses the selected retrieval mode and explains BM25 fallback", async () => {
         action: "memory.list",
         values: expect.objectContaining({ mode: "semantic", query: "calibration", offset: 0 }),
       }),
+      150_000,
     ),
   );
   expect(await screen.findByText("Vector retrieval is disabled; using BM25.")).toBeVisible();

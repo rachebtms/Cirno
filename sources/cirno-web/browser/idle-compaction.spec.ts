@@ -9,11 +9,14 @@ for (const locale of ["en", "zh-CN"]) {
       await page.goto("/browser/fixture.html?case=idle-compaction");
       const chinese = locale === "zh-CN";
       const input = page.getByRole("textbox", { name: chinese ? "空闲时限" : "Idle timeout" });
-      const toggle = page.getByRole("switch", { name: chinese ? "空闲自动压缩" : "Auto-compact idle sessions" });
+      const toggle = page.getByRole("switch", { name: chinese ? "空闲时自动整理" : "Consolidate idle conversations" });
       const persisted = page.getByRole("status", { name: "Persisted minutes" });
       await expect(input).toHaveValue("720");
       for (const draft of ["37", "0"]) {
         await input.fill(draft);
+        await page.getByRole("button", { name: "Fail next save" }).evaluate((button: HTMLButtonElement) => button.click());
+        await input.press("Enter");
+        await expect(page.getByText("Fixture save failed")).toBeVisible();
         await page.getByRole("button", { name: chinese ? "取消" : "Cancel", exact: true }).click();
         await expect(input).toHaveValue("720");
         await expect(persisted).toHaveText("720");
@@ -23,12 +26,12 @@ for (const locale of ["en", "zh-CN"]) {
       await page.getByText(chinese ? "分钟" : "minutes", { exact: true }).click();
       await expect(persisted).toHaveText("721");
       await expect(toggle).toBeEnabled();
-      await page.getByText(chinese ? "空闲自动压缩" : "Auto-compact idle sessions", { exact: true }).click();
+      await page.getByText(chinese ? "空闲时自动整理" : "Consolidate idle conversations", { exact: true }).click();
       await expect(persisted).toHaveText("0");
       await expect(input).toHaveCount(0);
       await page.reload();
       await expect(toggle).not.toBeChecked();
-      await page.getByText(chinese ? "空闲自动压缩" : "Auto-compact idle sessions", { exact: true }).click();
+      await page.getByText(chinese ? "空闲时自动整理" : "Consolidate idle conversations", { exact: true }).click();
       await expect(input).toHaveValue("15");
       await expect(toggle).toBeEnabled();
 

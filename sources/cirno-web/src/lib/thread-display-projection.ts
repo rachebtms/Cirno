@@ -21,7 +21,7 @@ function prepareMessage(original: UIMessage): PreparedMessage {
     hidden: isSystemCommandTurnId(message.turnId)
       || (message.role === "user" && isModelCommandText(message.content))
       || (message.role === "assistant" && message.renderAs !== "text" && isModelCommandResponseText(message.content)),
-    compact: message.role === "user" && message.content.trim().toLowerCase() === "/compact",
+    compact: message.role === "user" && ["/consolidate", "/compact", "/dream"].includes(message.content.trim().toLowerCase()),
   };
   preparedMessages.set(original, prepared);
   return prepared;

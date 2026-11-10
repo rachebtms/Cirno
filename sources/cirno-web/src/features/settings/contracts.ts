@@ -14,8 +14,7 @@ export type SettingsSectionKey =
   | "appearance"
   | "reading"
   | "activity"
-  | "context"
-  | "dream"
+  | "consolidation"
   | "memory-search"
   | "approval"
   | "execution"
@@ -50,3 +49,8 @@ export type ApplySettingsPayload = (
   payload: SettingsPayload,
   options?: { preserveAgentForm?: boolean; preserveCapabilityForms?: boolean },
 ) => void;
+
+/** Migrate saved links without registering duplicate settings pages. */
+export function canonicalSettingsSection<T extends string | null>(value: T): T | "consolidation" {
+  return value === "context" || value === "dream" ? "consolidation" : value;
+}

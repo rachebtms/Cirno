@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils";
 
 const overviewShortcuts = [
   { section: "memory", icon: MemoryIcon },
-  { section: "context", icon: CompactIcon },
+  { section: "consolidation", icon: CompactIcon },
   { section: "execution", icon: Play },
   { section: "personality", icon: UserRound },
   { section: "telegram", icon: Link },

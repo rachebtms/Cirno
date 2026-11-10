@@ -18,7 +18,7 @@ for (const surface of ["register", "login", "chat"]) test(`${browserName}: keybo
     // Use the shipping entry HTML, including critical CSS. Auth renders the
     // actual application; chat substitutes only its boot module for local data.
     if (surface === "chat") {
-      await page.route("**/src/main.tsx", route => route.fulfill({
+      await page.route(/\/src\/main\.tsx(?:\?.*)?$/, route => route.fulfill({
         contentType: "application/javascript", body: 'import "/browser/fixture.tsx";',
       }));
     } else {

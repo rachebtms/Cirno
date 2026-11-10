@@ -151,6 +151,26 @@ async def test_parallel_tools_share_elapsed_time_instead_of_counting_it_twice(mo
     assert policy.calls == 2 and policy.seconds == 3.0
 
 
+async def test_ptc_programs_share_cumulative_time_and_coordination_stays_callable(monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr("cirno_core.agent.tools.role_policy.time", SimpleNamespace(monotonic=lambda: clock[0]))
+    policy = RoleToolPolicy(RouterConversation())
+    async with policy.admit("ptc__run"):
+        async with policy.admit("shell__exec"):
+            clock[0] = 6.0
+    assert policy.seconds == 6 and policy.calls == 1
+    assert policy.remaining("ptc__run") == 4
+    async with policy.admit("ptc__run"):
+        clock[0] = 11.0
+    with pytest.raises(ValueError, match="budget exhausted"):
+        policy.remaining("ptc__run")
+    tools = PtcToolRegistry(catalog("exec", "create_session", "message"))
+    assert tools.has("create_session") and tools.has("message")
+    assert not tools.has("exec")
+    assert policy.remaining("conversations__create") is None
+    assert policy.remaining("user__message") is None
+
+
 async def test_upstream_timeout_keeps_its_original_diagnosis():
     policy = RoleToolPolicy(RouterConversation())
     with pytest.raises(TimeoutError, match="upstream timeout"):

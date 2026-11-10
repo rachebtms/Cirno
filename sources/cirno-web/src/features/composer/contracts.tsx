@@ -153,6 +153,7 @@ export const BUILTIN_COMMAND_ICONS: Record<string, LucideIcon> = {
   "/resume": ResumeIcon,
   "/clear": Eraser,
   "/new": NewChatIcon,
+  "/consolidate": CompactIcon,
   "/compact": CompactIcon,
   "/stop": StopIcon,
   "/restart": RestartIcon,

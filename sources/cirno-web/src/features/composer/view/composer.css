@@ -6,6 +6,9 @@
 .composer-surface[data-disabled] { opacity: .65; }
 .composer-editor { position: relative; min-width: 0; }
 .composer-editor-text { display: block; width: 100%; min-height: var(--composer-editor-min-height); padding: 1rem 1rem .5rem; background: transparent; border: 0; border-radius: 0; box-shadow: none; resize: none; color: var(--foreground); font-family: inherit; font-size: var(--text-composer-size, 1rem); line-height: 1.6; text-autospace: no-autospace; }
+@container cirno-tab (max-width: 767px) {
+  .composer-editor { --text-composer-size: max(16px, var(--text-reading-size, 1rem)); }
+}
 .composer-editor-text:focus-visible { outline: none; box-shadow: none; }
 .composer-editor .textarea { position: relative; z-index: 1; caret-color: var(--foreground); }
 .composer-editor .composer-editor-decorated { color: transparent; }

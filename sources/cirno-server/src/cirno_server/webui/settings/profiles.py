@@ -33,12 +33,14 @@ def profile_payload(name: str) -> dict[str, Any]:
 
 
 def update_profile(name: str, content: str, revision: str) -> dict[str, Any]:
-    """Preserve edits made by Dream or another browser since this file was read."""
-    if profile_payload(name)["revision"] != revision:
-        raise WebUISettingsError("This Home file changed. Reload it before saving.", status=409)
-    path = _profile_path(name)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Compare and save under the same ownership used by consolidation edits."""
     from cirno_core.utils.atomic_file import atomic_write_text
+    from cirno_core.utils.file_transactions import file_write_transaction
 
-    atomic_write_text(path, content)
-    return profile_payload(name)
+    path = _profile_path(name)
+    with file_write_transaction([path]):
+        if profile_payload(name)["revision"] != revision:
+            raise WebUISettingsError("This Home file changed. Reload it before saving.", status=409)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(path, content)
+        return profile_payload(name)

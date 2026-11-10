@@ -18,6 +18,10 @@ _COORDINATION = frozenset({
 })
 
 
+def is_coordination_tool(name: str) -> bool:
+    return implementation_name(name) in _COORDINATION
+
+
 class RoleToolPolicy:
     def __init__(self, role: ConversationRole):
         self.role = role
@@ -32,10 +36,8 @@ class RoleToolPolicy:
         if not self.role.allows_tool(name):
             raise ValueError(f"Tool {name} is unavailable to the {self.role.name} role")
         limits = self.role.direct_execution
-        if limits is None or name in _COORDINATION:
+        if limits is None or is_coordination_tool(name):
             return None
-        if name == "run_code":
-            return limits.max_seconds
         current = time.monotonic()
         occupied = current - self._started if self._active else 0
         remaining = limits.max_seconds - self.seconds - occupied
@@ -71,13 +73,11 @@ class RoleToolPolicy:
         if remaining is None:
             yield
             return
-        if name == "run_code":
-            # Nested real operations own the ordinary allowance. Coordination
-            # remains available, but Python computation/sleep is bounded too.
-            async with self._deadline(remaining):
-                yield
-            return
-        self.calls += 1
+        # Charge a PTC program's wall time once, together with any nested work.
+        # Its nested operations own the call count; the wrapper is not a second
+        # ordinary call. Direct coordination stays available after exhaustion.
+        if name != "run_code":
+            self.calls += 1
         if not self._active:
             self._started = time.monotonic()
         self._active += 1

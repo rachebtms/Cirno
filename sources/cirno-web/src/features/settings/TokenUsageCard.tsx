@@ -7,7 +7,7 @@ import { TokenUsageDetails } from "@/features/settings/TokenUsageDetails";
 import { SettingsHint } from "@/features/settings/shared/SettingsHint";
 
 type Usage = NonNullable<SettingsPayload["usage"]>;
-const SOURCE_KEYS = ["user", "api", "cron", "dream", "system"] as const;
+const SOURCE_KEYS = ["user", "api", "cron", "dream", "consolidation", "system"] as const;
 const SEGMENT_CLASSES = [
   "bg-orange-100 text-orange-500 dark:bg-orange-400/15 dark:text-orange-400",
   "bg-neutral-300 dark:bg-neutral-500",
@@ -71,7 +71,8 @@ export function TokenUsageCard({ usage, timeZone }: { usage?: Usage; timeZone?: 
     user: t("settings.usage.sources.user", { defaultValue: "Chat" }),
     api: t("settings.usage.sources.api", { defaultValue: "API" }),
     cron: t("settings.usage.sources.cron", { defaultValue: "Automations" }),
-    dream: t("settings.usage.sources.dream", { defaultValue: "Memory" }),
+    dream: t("settings.usage.sources.consolidation", { defaultValue: "Context consolidation" }),
+    consolidation: t("settings.usage.sources.consolidation", { defaultValue: "Context consolidation" }),
     system: t("settings.usage.sources.system", { defaultValue: "Auxiliary calls" }),
     other: t("settings.usage.unclassified", { defaultValue: "Unclassified" }),
   };
@@ -79,7 +80,7 @@ export function TokenUsageCard({ usage, timeZone }: { usage?: Usage; timeZone?: 
   for (const day of days) {
     let classified = 0;
     for (const [source, value] of Object.entries(day.usage?.sources ?? {})) {
-      const key = SOURCE_KEYS.some(known => known === source) ? source : "other";
+      const key = source === "dream" ? "consolidation" : SOURCE_KEYS.some(known => known === source) ? source : "other";
       sources.set(key, (sources.get(key) ?? 0) + value.total_tokens);
       classified += value.total_tokens;
     }

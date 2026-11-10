@@ -50,6 +50,14 @@ class CompactionConfig(Base):
     output_reserve_percent: int = Field(default=5, ge=1, le=50)
 
 
+class ConsolidationConfig(CompactionConfig):
+    """One request produces a task checkpoint and source-backed learning."""
+
+    learn: bool = True
+    max_updates: int = Field(default=8, ge=1, le=32)
+    context_chars: int = Field(default=16000, ge=2000, le=64000)
+
+
 class RequestOverrides(Base):
     """Optional request differences; omitted fields inherit connection defaults."""
 

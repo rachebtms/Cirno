@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from contextlib import suppress
+from contextlib import nullcontext, suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, cast
@@ -65,6 +65,7 @@ class MemoryJournal:
         max_chars: int | None = None,
         session_key: str | None = None,
         source_refs: list[dict[str, Any]] | None = None,
+        archive_id: str | None = None,
     ) -> int:
         """Append *entry* to history.jsonl and return its auto-incrementing cursor.
 
@@ -85,7 +86,7 @@ class MemoryJournal:
                 "history entry stripped to empty (likely template leak); "
                 "persisting empty content to avoid re-polluting Dream input",
             )
-        return self.append_record(content, session_key=session_key, source_refs=source_refs)
+        return self.append_record(content, session_key=session_key, source_refs=source_refs, archive_id=archive_id)
 
     def append_record(
         self,
@@ -93,26 +94,40 @@ class MemoryJournal:
         *,
         session_key: str | None = None,
         source_refs: list[dict[str, Any]] | None = None,
+        archive_id: str | None = None,
     ) -> int:
         """Persist already sanitized, bounded content without rewriting chunk edges."""
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         # Cursor allocation and the append must be atomic: concurrent writers
         # could otherwise read the same current cursor and emit duplicates.
         with self._append_lock:
-            cursor = self._next_cursor()
-            record: dict[str, Any] = {"cursor": cursor, "timestamp": ts, "content": content}
-            if session_key:
-                record["session_key"] = session_key
-            if source_refs:
-                record["source_refs"] = source_refs
-            with open(self.history_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            atomic_write_text(self._cursor_file, str(cursor))
+            existing = next((entry for entry, _ in self.iter_valid_entries()
+                             if entry.get("archive_id") == archive_id
+                             and entry.get("session_key") == session_key), None) if archive_id else None
+            if existing is not None:
+                if existing["content"] != content:
+                    raise ValueError("Archived checkpoint already exists with different content")
+                cursor, ts = existing["cursor"], existing["timestamp"]
+                source_refs = existing.get("source_refs")
+            else:
+                cursor = self._next_cursor()
+                record: dict[str, Any] = {"cursor": cursor, "timestamp": ts, "content": content}
+                if session_key:
+                    record["session_key"] = session_key
+                if source_refs:
+                    record["source_refs"] = source_refs
+                if archive_id:
+                    record["archive_id"] = archive_id
+                with open(self.history_file, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                atomic_write_text(self._cursor_file, str(cursor))
         from cirno_memory.repository import MemoryRepository
 
         MemoryRepository(self.workspace).ingest_history(
             cursor, content, session_key, source_refs, timestamp=ts
         )
+        if archive_id:
+            self.compact_history(indexed=True)
         return cursor
 
     @staticmethod
@@ -161,18 +176,24 @@ class MemoryJournal:
         """Return history entries with a valid cursor > *since_cursor*."""
         return [e for e, c in self.iter_valid_entries() if c > since_cursor]
 
-    def compact_history(self) -> None:
+    def compact_history(self, *, indexed: bool = False) -> None:
         """Stream journal retention without loading the long-term corpus into RAM."""
         if self.max_history_entries <= 0:
             return
+        from cirno_memory.repository import MemoryRepository
+        repository = MemoryRepository(self.workspace) if indexed else None
         with self._append_lock:
-            last = self.get_last_dream_cursor()
             count, first_pending = 0, None
-            for entry in self._stream_entries():
-                cursor = cast(int, entry["cursor"])
-                if cursor > last and first_pending is None:
-                    first_pending = count
-                count += 1
+            last = self.get_last_dream_cursor() if not indexed else 0
+            # Consolidation keeps every event in the immutable memory catalog;
+            # retention no longer depends on the retired idle Dream cursor.
+            with repository.connect() if repository else nullcontext(None) as db:
+                for entry in self._stream_entries():
+                    cursor = cast(int, entry["cursor"])
+                    pending = (db.execute("SELECT 1 FROM memories WHERE id=?", (f"history-{cursor}",)).fetchone() is None) if db else cursor > last
+                    if pending and first_pending is None:
+                        first_pending = count
+                    count += 1
             keep_from = min(
                 max(0, count - self.max_history_entries),
                 first_pending if first_pending is not None else count,

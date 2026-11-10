@@ -36,12 +36,10 @@ RUNTIME_CONFIG_PATHS = (
     "tools.exec.idle_timeout",
     "tools.exec.idle_action",
     "tools.exec.max_runtime_limit",
-    "agents.defaults.dream.max_tool_iterations",
+    "agents.defaults.consolidation.learn",
+    "agents.defaults.consolidation.max_updates",
+    "agents.defaults.consolidation.context_chars",
     "agents.defaults.memory.release_archived_runtime",
-    "agents.defaults.dream.mode",
-    "agents.defaults.dream.idle_after_seconds",
-    "agents.defaults.dream.batch_entries",
-    "agents.defaults.dream.batch_chars",
     "agents.defaults.memory.context_tokens",
     "agents.defaults.memory.checkpoint_tokens",
     "agents.defaults.memory.index_scan_batch",
@@ -56,15 +54,13 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.memory.embedding_max_rss_mb",
     "agents.defaults.memory.embedding_timeout_seconds",
 
-    'agents.defaults.dream.interval_h',
-    'agents.defaults.dream.model_override',
     'agents.defaults.idle_compact_check_interval_seconds',
     'agents.defaults.idle_compact_percent',
     'agents.defaults.active_compact_percent',
-    'agents.defaults.compaction.output_reserve_percent',
-    'agents.defaults.compaction.max_tokens',
-    'agents.defaults.compaction.reasoning_effort',
-    'agents.defaults.compaction.checkpoint_reminder_percent',
+    'agents.defaults.consolidation.output_reserve_percent',
+    'agents.defaults.consolidation.max_tokens',
+    'agents.defaults.consolidation.reasoning_effort',
+    'agents.defaults.consolidation.checkpoint_reminder_percent',
     'agents.defaults.idle_compact_keep_percent',
     'agents.defaults.heartbeat.enabled',
     'agents.defaults.heartbeat.interval_s',
@@ -82,7 +78,6 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.max_tool_result_chars",
     "agents.defaults.provider_retry_mode",
     "agents.defaults.tool_status_summary_max_chars",
-    "agents.defaults.dream.enabled",
     "server.uploads.max_file_mb",
     "server.uploads.max_video_mb",
     "server.uploads.max_total_mb",
@@ -171,7 +166,7 @@ def update_runtime_config(
         if not workspace or not Path(workspace).expanduser().is_absolute():
             raise WebUISettingsError("agents.defaults.workspace: enter an absolute directory path")
         validated.agents.defaults.workspace = workspace
-    for purpose in ("dream", "approval"):
+    for purpose in ("approval",):
         path = f"agents.defaults.{purpose}.model_override"
         model = getattr(validated.agents.defaults, purpose).model_override
         if path in values and model and model != "default" and model not in validated.model_presets:

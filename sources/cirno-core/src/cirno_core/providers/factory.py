@@ -36,6 +36,9 @@ class ProviderSnapshot:
     compaction_reasoning_effort: str = "low"
     checkpoint_reminder_percent: int = 85
     output_reserve_percent: int = 5
+    consolidation_learn: bool = True
+    consolidation_max_updates: int = 8
+    consolidation_context_chars: int = 16000
 
 
 def _resolve_model_preset(
@@ -344,7 +347,10 @@ def build_provider_snapshot(
         compaction_max_tokens=config.agents.defaults.compaction.max_tokens,
         compaction_reasoning_effort=config.agents.defaults.compaction.reasoning_effort,
         checkpoint_reminder_percent=config.agents.defaults.compaction.checkpoint_reminder_percent,
-        output_reserve_percent=config.agents.defaults.compaction.output_reserve_percent,
+        output_reserve_percent=config.agents.defaults.consolidation.output_reserve_percent,
+        consolidation_learn=config.agents.defaults.consolidation.learn,
+        consolidation_max_updates=config.agents.defaults.consolidation.max_updates,
+        consolidation_context_chars=config.agents.defaults.consolidation.context_chars,
     )
 
 

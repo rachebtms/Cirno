@@ -219,6 +219,8 @@ def test_prepare_call_rejects_malformed_json_string_arguments() -> None:
     assert params == '{path:"foo.txt"}'
     assert error is not None
     assert "Invalid JSON arguments" in error
+    assert "No tool was executed" in error
+    assert "exactly one JSON object" in error
 
 
 @pytest.mark.parametrize("union", ["oneOf", "anyOf"])

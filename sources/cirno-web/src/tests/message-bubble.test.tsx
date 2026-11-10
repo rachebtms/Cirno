@@ -260,11 +260,11 @@ describe("MessageBubble", () => {
       id: "compact-empty", role: "assistant", content: "Nothing to compact.",
       compactReply: "empty", createdAt: 1,
     }]} />);
-    expect(screen.getByText("无需压缩上下文")).toBeInTheDocument();
+    expect(screen.getByText("无需整理上下文")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "消息操作" })).toBeVisible();
-    expect(container).toHaveTextContent("无需压缩上下文");
+    expect(container).toHaveTextContent("无需整理上下文");
     fireEvent.click(screen.getByRole("button", { name: "复制" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("无需压缩上下文"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("无需整理上下文"));
   });
 
   it("renders a compacted context notice", () => {

@@ -7,8 +7,8 @@ for (const locale of ["en", "zh-CN"]) for (const width of [390, 1280]) {
     await seedPreviewPreferences(page, { language: locale });
     const chinese = locale === "zh-CN";
     await page.goto("/browser/fixture.html?case=idle-compaction");
-    await expect(page.getByRole("spinbutton", { name: chinese ? "压缩输出预算（Token）" : "Checkpoint output budget (tokens)" })).toHaveValue("8192");
-    await expect(page.getByRole("button", { name: chinese ? "压缩思考强度" : "Checkpoint reasoning effort" })).toHaveText(chinese ? "低" : "Low");
+    await expect(page.getByRole("spinbutton", { name: chinese ? "整理输出预算（Token）" : "Consolidation output budget (tokens)" })).toHaveValue("8192");
+    await expect(page.getByRole("button", { name: chinese ? "整理思考强度" : "Checkpoint reasoning effort" })).toHaveText(chinese ? "低" : "Low");
     await page.getByTestId("settings-section-transition").evaluate(async (el) => { await Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)); });
     await page.screenshot({ path: test.info().outputPath(`context-${locale}-${width}.png`), fullPage: true });
     await page.goto("/browser/fixture.html?case=idle-compaction&section=memory-search");

@@ -222,8 +222,6 @@ class TurnProcessor:
         return result
 
     def log_completion(self, ctx: TurnContext, *, outcome: str | None = None) -> None:
-        if ctx.kind is TurnKind.USER:
-            self.agent._last_memory_activity = time.monotonic()
         duration_ms = ctx.turn_latency_ms
         if duration_ms is None:
             duration_ms = max(0, round((time.time() - ctx.turn_wall_started_at) * 1000))

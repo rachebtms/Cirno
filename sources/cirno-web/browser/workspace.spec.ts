@@ -183,7 +183,8 @@ for (const width of [390, 1440]) test(`launchers and separate conversation catal
   await page.setViewportSize({ width, height: 900 });
   await page.goto("/browser/fixture.html?case=workspace&lang=en");
   const launcher = page.getByRole("navigation", { name: "Launcher", exact: true });
-  await expect(launcher.getByRole("button")).toHaveCount(11);
+  await expect(launcher.getByRole("button")).toHaveCount(12);
+  await expect(launcher.getByRole("button", { name: "Open Memory", exact: true })).toHaveCount(1);
   const buttons = launcher.locator("[data-launcher-scroll]").getByRole("button");
   const first = (await buttons.nth(0).boundingBox())!, second = (await buttons.nth(1).boundingBox())!;
   expect(first.width).toBeGreaterThanOrEqual(43);

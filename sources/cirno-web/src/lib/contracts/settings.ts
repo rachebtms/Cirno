@@ -142,9 +142,7 @@ export interface SettingsPayload {
       enabled: boolean;
       interval_s: number;
     };
-    dream: {
-      schedule: string;
-    };
+    consolidation?: { mode: "inline"; learning: boolean };
   };
   usage?: {
     days: Array<{
@@ -169,7 +167,7 @@ export interface SettingsPayload {
       timed_requests?: number;
       duration_ms?: number;
       sources?: Record<
-        "user" | "api" | "cron" | "dream" | "system" | string,
+        "user" | "api" | "cron" | "dream" | "consolidation" | "system" | string,
         {
           input_tokens: number;
           output_tokens: number;

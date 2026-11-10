@@ -33,10 +33,19 @@ if (section === "memory-search") Object.assign(initial.runtime_config!, {
   "agents.defaults.memory.embedding_api_chunk_chars": 768,
 });
 Object.assign(initial.runtime_config!, {
-  "agents.defaults.compaction.output_reserve_percent": 5,
-  "agents.defaults.compaction.max_tokens": 8192,
-  "agents.defaults.compaction.reasoning_effort": "low",
-  "agents.defaults.compaction.checkpoint_reminder_percent": 85,
+  "agents.defaults.active_compact_percent": 100,
+  "agents.defaults.idle_compact_percent": 20,
+  "agents.defaults.idle_compact_keep_percent": 5,
+  "agents.defaults.idle_compact_check_interval_seconds": 60,
+  "agents.defaults.memory.checkpoint_tokens": 2000,
+  "agents.defaults.memory.release_archived_runtime": true,
+  "agents.defaults.consolidation.learn": true,
+  "agents.defaults.consolidation.max_updates": 8,
+  "agents.defaults.consolidation.context_chars": 16000,
+  "agents.defaults.consolidation.output_reserve_percent": 5,
+  "agents.defaults.consolidation.max_tokens": 8192,
+  "agents.defaults.consolidation.reasoning_effort": "low",
+  "agents.defaults.consolidation.checkpoint_reminder_percent": 85,
 });
 let persisted = initial;
 
@@ -76,7 +85,7 @@ export function IdleCompactionFixture() {
         <button onClick={() => { failNext = true; }}>Fail next save</button>
         <output aria-label="Persisted minutes">{String(snapshot.runtime_config?.[path])}</output>
       </div>
-      <SettingsView themePreference="light" initialSection={section === "memory-search" ? "memory-search" : section === "models" ? "models" : "context"} initialSettings={initial}
+      <SettingsView themePreference="light" initialSection={section === "memory-search" ? "memory-search" : section === "models" ? "models" : "consolidation"} initialSettings={initial}
         onSettingsChange={setSnapshot} onChangeTheme={() => {}} onBackToChat={() => {}}
         onModelNameChange={() => {}} onRestart={() => {}} />
     </div>

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -15,15 +16,19 @@ COMMANDS = (
     "tmux", "rg", "fd", "fzf", "bat", "jq", "yq", "tree", "python3", "pipx", "uv", "uvx", "hf",
     "node", "npm", "npx", "bun", "summarize", "mcporter", "gog", "xurl", "ffmpeg", "yt-dlp",
     "pandoc", "pdftotext", "tesseract", "sqlite3", "brew",
+    "soffice", "latex", "dvisvgm", "manim", "chromium", "playwright", "fc-list",
 )
 
 
 def check_python_packages() -> None:
-    result = subprocess.run(
-        ["python", "-c", "import docx, openpyxl, pptx, pypdf, pdfplumber, reportlab, lxml.etree, debugpy"],
-        capture_output=True, text=True, timeout=45,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+    from cirno_core.processes.environment import ExecutionEnvironment
+
+    imports = "import docx, openpyxl, pptx, pypdf, pdfplumber, reportlab, lxml.etree, debugpy, numpy, PIL, matplotlib, pymupdf, fitz, manim, playwright"
+    command = shlex.join(["python", "-c", imports])
+    for args in (["python", "-c", imports], ["python3", "-c", imports],
+                 ["bash", "-c", command], ["bash", "-lc", command]):
+        result = subprocess.run(args, env=ExecutionEnvironment().build(), capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
     print("OK bundled Python document, PDF, XML and debugging libraries", flush=True)
 
 
@@ -75,11 +80,16 @@ def main() -> None:
         ["mcporter", "--version"], ["gog", "--version"], ["xurl", "--help"], ["ffmpeg", "-version"],
         ["yt-dlp", "--version"], ["pandoc", "--version"], ["pdftotext", "-v"], ["tesseract", "--version"],
         ["sqlite3", "--version"], ["brew", "--version"], ["bash", "-c", "nvm --version"],
+        ["soffice", "--version"], ["latex", "--version"], ["dvisvgm", "--version"],
+        ["manim", "--version"], ["chromium", "--version"], ["playwright", "--version"],
     ]
     for command in commands:
         result = subprocess.run(command, capture_output=True, text=True, timeout=45)
         assert result.returncode == 0, f"{command}: {result.stdout}\n{result.stderr}"
         print(f"OK {' '.join(command)}", flush=True)
+    from cirno_core.processes.environment import ExecutionEnvironment
+    subprocess.run(["python", str(Path(__file__).with_name("verify_full_media.py"))],
+                   env=ExecutionEnvironment().build(), check=True, timeout=360)
     from cirno_core.config.loader import load_config
     from cirno_server.channels.telegram.manifest import PLUGIN
     from cirno_server.features.service import extra_installed

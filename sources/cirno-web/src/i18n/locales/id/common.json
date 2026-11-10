@@ -124,10 +124,6 @@
           "label": "Zona waktu",
           "help": "Pilih zona waktu. Selisih waktu dari UTC mengikuti tanggal saat ini."
         },
-        "agents_defaults_dream_enabled": {
-          "label": "Penataan memori",
-          "help": "Menata informasi berguna dari percakapan secara otomatis. Memori yang ada tetap digunakan saat dinonaktifkan."
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
@@ -248,14 +244,6 @@
           "label": "Durasi cache",
           "help": "Lama katalog aplikasi CLI disimpan dalam cache."
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream interval (hours)",
-          "help": "Konsolidasi saat diam atau pada interval tetap."
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream model",
-          "help": "Pilih model terpisah untuk Dream; kosongkan untuk memakai model aktif."
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
           "label": "Interval pemeriksaan pemadatan saat tidak aktif (detik)",
           "help": "Seberapa sering percakapan diperiksa untuk pemadatan; terpisah dari batas waktu tidak aktif. Mulai ulang untuk menerapkan."
@@ -272,29 +260,13 @@
           "label": "Model retries",
           "help": "Restart to apply."
         },
-        "agents_defaults_dream_mode": {
-          "label": "Jadwal Dream",
-          "help": "Konsolidasi saat diam atau pada interval tetap."
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Waktu diam sebelum Dream (detik)",
-          "help": "Hanya saat tidak ada tugas aktif; masukan baru menghentikan Dream."
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Catatan per kelompok Dream",
-          "help": "Catatan tersisa tetap dalam antrean."
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Karakter per kelompok Dream",
-          "help": "Batasi masukan tiap putaran; sumber lengkap tetap dapat dibaca."
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "Batas ingatan bersama (token)",
           "help": "Batasi penyisipan MEMORY.md; berkas lengkap tetap di Home."
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "Batas titik simpan tugas (token)",
-          "help": "Pulihkan status tugas tanpa bergantung pada Dream."
+          "help": "Pulihkan status tugas tanpa bergantung pada context consolidation."
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "Ukuran kelompok pemindaian",
@@ -314,22 +286,18 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "Batas proses embedding (MB)",
-          "help": "Batas RSS proses anak; jika terlampaui gunakan BM25. Bukan batas seluruh layanan."
+          "help": "Peak embedding worker memory budget (MiB), including model loading. Accepts 512, 1024 or higher. Exceeding it falls back to BM25; this is not a whole-service limit."
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "Batas waktu embedding (detik)",
-          "help": "Batas tiap permintaan; jika gagal gunakan BM25."
+          "help": "Time budget for the whole embedding search, including the query and all incremental indexing batches. A visible timeout falls back to BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
           "label": "Bebaskan memori setelah pemadatan",
           "help": "Setelah pemadatan, bukti dan riwayat tetap di disk; pesan eksekusi lama dilepaskan dari RAM."
         },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Batas iterasi Dream",
-          "help": "Batasi putaran model tiap proses; masukan yang belum selesai tetap dalam antrean."
-        },
         "agents_defaults_idle_compact_percent": {
-          "label": "Ambang pemadatan saat menganggur (%)",
+          "label": "Idle consolidation trigger (%)",
           "help": "Persentase jendela model saat ini. 0 menonaktifkan pemadatan saat menganggur; pengaturan model dapat menimpanya."
         },
         "agents_defaults_idle_compact_keep_percent": {
@@ -416,18 +384,6 @@
           "label": "Durasi maksimum yang diminta (detik)",
           "help": "Durasi maksimum yang dapat diminta model per perintah. 0 menghapus batas ini; durasi bawaan diatur terpisah."
         },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "Anggaran output pemadatan (token)",
-          "help": "Anggaran terpisah termasuk penalaran, dibatasi oleh output model."
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "Upaya penalaran pemadatan",
-          "help": "Turunkan upaya agar ringkasan mendapat ruang. Warisi memakai pengaturan percakapan; penyedia memetakan nilai yang tidak didukung."
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "Ambang pengingat (%)",
-          "help": "Mengingatkan agen menyimpan status pada persentase anggaran input aktif ini. Tidak memutus permintaan yang berjalan."
-        },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL dasar API",
           "help": "URL kompatibel OpenAI seperti https://host/v1, atau endpoint /embeddings lengkap. HTTP mandiri didukung."
@@ -460,10 +416,6 @@
           "label": "Total per pesan (MiB)",
           "help": "Jumlah gambar dan dokumen yang diunggah, tanpa video atau referensi berkas lokal. Mulai ulang dan muat ulang halaman untuk menerapkan."
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "Ruang cadangan keluaran (%)",
-          "help": "Persentase konteks untuk jawaban berikutnya, dibatasi maksimum keluaran. Bawaan 5%. Batas keluaran aktual mengikuti ruang tersisa."
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "Prompt sistem tambahan bersama",
           "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Prompt sistem tambahan Worker",
           "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "Consolidation output budget (tokens)",
+          "help": "Task checkpoint and memory updates share this output budget, capped by the model output limit."
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "Upaya penalaran pemadatan",
+          "help": "Turunkan upaya agar ringkasan mendapat ruang. Warisi memakai pengaturan percakapan; penyedia memetakan nilai yang tidak didukung."
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "Ambang pengingat (%)",
+          "help": "Mengingatkan agen menyimpan status pada persentase anggaran input aktif ini. Tidak memutus permintaan yang berjalan."
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "Ruang cadangan keluaran (%)",
+          "help": "Persentase konteks untuk jawaban berikutnya, dibatasi maksimum keluaran. Bawaan 5%. Batas keluaran aktual mengikuti ruang tersisa."
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "Learn during consolidation",
+          "help": "Produce task checkpoints, durable memories and verified Skill improvements in the same request, without a separate model run."
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "Maximum updates per consolidation",
+          "help": "Bound the total memory and document updates. A pass may produce no useful updates."
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "Additional reference budget (characters)",
+          "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "Batas waktu perintah"
         },
-        "compaction-generation": {
-          "title": "Pembuatan titik lanjut"
-        },
         "embedding": {
           "title": "Layanan embedding"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "Prompt sistem tambahan"
+        },
+        "consolidation-generation": {
+          "title": "Consolidation generation"
+        },
+        "consolidation": {
+          "title": "Learning and idle consolidation",
+          "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
         }
       },
       "save": "Simpan perubahan",
@@ -597,8 +581,8 @@
       "noResults": "Tidak ada pengaturan yang cocok.",
       "pending": "Perubahan belum disimpan",
       "idleCompaction": {
-        "label": "Padatkan sesi tidak aktif secara otomatis",
-        "help": "Padatkan konteks secara otomatis saat batas waktu tidak aktif tercapai untuk mengurangi penggunaan token pada permintaan berikutnya.",
+        "label": "Consolidate idle conversations",
+        "help": "Consolidate context and retain useful experience after the idle timeout.",
         "wait": "Batas waktu tidak aktif",
         "minutes": "menit",
         "numberError": "Masukkan jumlah menit berupa bilangan bulat nol atau lebih."
@@ -663,8 +647,6 @@
       "nodes": "Node",
       "reading": "Teks dan bacaan",
       "activity": "Tampilan eksekusi",
-      "context": "Pemadatan konteks",
-      "dream": "Konsolidasi Dream",
       "memory-search": "Pencarian memori",
       "execution": "Tujuan dan eksekusi",
       "shell": "Eksekusi Shell",
@@ -675,7 +657,8 @@
       "coordination": "Koordinasi percakapan",
       "regional": "Waktu & wilayah",
       "approval": "Persetujuan AI",
-      "backup": "Cadangkan dan pulihkan"
+      "backup": "Cadangkan dan pulihkan",
+      "consolidation": "Context consolidation"
     },
     "sections": {
       "interface": "Antarmuka",
@@ -957,7 +940,8 @@
         "api": "API",
         "cron": "Otomasi",
         "dream": "Penataan memori",
-        "system": "Panggilan pendukung"
+        "system": "Panggilan pendukung",
+        "consolidation": "Context consolidation"
       }
     },
     "providers": {
@@ -2133,20 +2117,20 @@
             "description": "Tampilkan N pesan terakhir yang tersimpan."
           },
           "dream": {
-            "title": "Jalankan Dream",
+            "title": "Jalankan consolidation",
             "description": "Atur memori sekarang."
           },
           "dream_log": {
-            "title": "Log Dream",
-            "description": "Lihat perubahan dari eksekusi Dream terakhir."
+            "title": "Log consolidation",
+            "description": "Lihat perubahan dari eksekusi consolidation terakhir."
           },
           "dream_restore": {
             "title": "Pulihkan memori",
-            "description": "Pulihkan snapshot memori Dream sebelumnya."
+            "description": "Pulihkan snapshot memori consolidation sebelumnya."
           },
           "dream_prompt": {
-            "title": "Pengaturan Dream",
-            "description": "Atur cara Dream mengelola memori ruang kerja ini."
+            "title": "Pengaturan consolidation",
+            "description": "Atur cara consolidation mengelola memori ruang kerja ini."
           },
           "goal": {
             "title": "Tujuan jangka panjang",
@@ -2179,6 +2163,10 @@
           "access": {
             "title": "Mode akses",
             "description": "Pilih bawaan, tinjauan AI, atau akses penuh."
+          },
+          "consolidate": {
+            "title": "Consolidate context",
+            "description": "Organize task context and retain verified experience"
           }
         },
         "badges": {
@@ -2805,7 +2793,8 @@
     "agentVisible": "Terlihat oleh Agent",
     "agentHidden": "Pribadi",
     "keepSecret": "Kosongkan untuk mempertahankan nilai tersimpan.",
-    "sshNode": "SSH Node"
+    "sshNode": "SSH Node",
+    "memory": "Memory"
   },
   "files": {
     "title": "Files",
@@ -2852,12 +2841,12 @@
     "evidence": "Sumber",
     "more": "Muat lagi",
     "reindex": "Bangun ulang indeks",
-    "retry": "Coba ulang Dream yang gagal",
-    "pending": "Dream tertunda: {{count}}",
+    "retry": "Retry saving consolidation results",
+    "pending": "Pending next consolidation: {{count}}",
     "failed": "Gagal: {{count}}",
     "indexed": "Terindeks: {{count}}",
     "indexSize": "Indeks: {{size}} MB",
-    "lastDream": "Dream terakhir",
+    "lastDream": "consolidation terakhir",
     "noDream": "Belum dijalankan",
     "includeHistory": "Sertakan catatan yang diganti",
     "revision": "Versi {{revision}}",
@@ -2881,7 +2870,7 @@
     "until": "Sampai",
     "discoverTags": "Jelajahi tag",
     "databases": "Basis data",
-    "dreamOutcomes": "Hasil Dream terbaru",
+    "dreamOutcomes": "Hasil consolidation terbaru",
     "createdOutcome": "Dibuat",
     "mergedOutcome": "Digabung",
     "skippedOutcome": "Dilewati",
@@ -2898,10 +2887,12 @@
     "fallback_unavailable": "Pencarian vektor tidak tersedia; menggunakan BM25.",
     "searchDetails": "Alasan",
     "indexPending": "Indeks vektor belum lengkap. Hasil hanya mencakup konten terindeks; cari lagi untuk melanjutkan pengindeksan.",
-    "statusTitle": "Indeks dan konsolidasi",
+    "statusTitle": "Index and context consolidation",
     "noTags": "Belum ada tag.",
     "resultsFor": "Hasil untuk “{{query}}”",
-    "noMatches": "Tidak ada memori yang sesuai dengan pencarian ini."
+    "noMatches": "Tidak ada memori yang sesuai dengan pencarian ini.",
+    "lastConsolidation": "Last consolidation",
+    "noConsolidation": "Not run yet"
   },
   "userQuestion": {
     "title": "Pertanyaan untuk Anda",
@@ -3124,5 +3115,27 @@
       "manual": "Urutan tersimpan"
     },
     "projectActions": "Tindakan proyek {{name}}"
+  },
+  "memoryGraph": {
+    "description": "Explore saved knowledge, connections and original sources.",
+    "cloud": "Memory cloud",
+    "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
+    "nodeCount": "{{count}} memories",
+    "fit": "Fit to view",
+    "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
+    "renderError": "The 3D view could not start. You can still search and read the results.",
+    "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",
+    "open": "Open Memory",
+    "limit": "Showing up to {{count}} memories. Narrow the filters to explore other records.",
+    "linksLimit": "Showing the first 1,500 connections within these results.",
+    "relation_tag": "Shared tag",
+    "relation_supports": "Supports",
+    "relation_conflicts": "Conflicts",
+    "relation_supersedes": "Supersedes",
+    "relation_related": "Related",
+    "relation_derived_from": "Derived from",
+    "filters": "Filters",
+    "refreshIndex": "Refresh index status",
+    "loading": "Loading memory view…"
   }
 }

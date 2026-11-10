@@ -140,7 +140,7 @@ class MemoryRepository:
              scope="session", kind=None, layer=None, title="", tags=None,
              source_refs=None, memory_id=None, expected_revision=None, enqueue=True,
              status=None, observed_at=None, based_on=None, maintenance=False,
-             turn_id=None, message_id=None, created_at=None) -> dict:
+             turn_id=None, message_id=None, created_at=None, expected_parent_revision=None) -> dict:
         if not content.strip() or not source.strip():
             raise ValueError("content and source are required; do not invent evidence")
         if len(content) > 64_000 or len(source) > 4000:
@@ -191,6 +191,8 @@ class MemoryRepository:
                 if not parent:
                     raise KeyError("Evidence memory not found")
                 parent = json.loads(parent[0])
+                if expected_parent_revision is not None and parent["revision"] != expected_parent_revision:
+                    raise ValueError("Evidence changed; read its current revision before deriving knowledge")
                 parent_observed_at = parent.get("observed_at")
                 if not maintenance and not self.visible(parent, access_session, access_project):
                     raise PermissionError("Evidence is outside the current scope")
@@ -372,11 +374,13 @@ class MemoryRepository:
         cap = min(max(int(limit), 1), 50)
         return {"tags": [dict(row) for row in rows[:cap]], "has_more": len(rows) > cap, "next_offset": max(0, int(offset)) + min(cap, len(rows))}
 
-    def link(self, source_id, target_id, relation, evidence, *, session_key=None, project_id=None, maintenance=False):
+    def link(self, source_id, target_id, relation, evidence, *, session_key=None, project_id=None, maintenance=False, expected_target_revision=None):
         if relation not in RELATIONS or not str(evidence).strip() or source_id == target_id:
             raise ValueError("Use a supported relation, two different records and an evidence explanation")
         source = self.read(source_id, session_key=session_key, project_id=project_id, maintenance=maintenance)
         target = self.read(target_id, session_key=session_key, project_id=project_id, maintenance=maintenance)
+        if expected_target_revision is not None and target["revision"] != expected_target_revision:
+            raise ValueError("Linked evidence changed during consolidation")
         if scope_identity(source) != scope_identity(target):
             raise ValueError("Linked memories must have the same visibility scope")
         with self.connect() as db:
@@ -465,6 +469,41 @@ class MemoryRepository:
                          project_id=project_id, scope="project" if project_id else "session", layer="source",
                          kind="source", memory_id=identity, enqueue=False)
         return {**saved, "evidence_path": str(path), "message_count": evidence.message_count}
+
+    def consolidation_inputs(self, session_key, project_id=None, *, limit=8, max_chars=8000, include_user=False):
+        """Complete pending records in exactly the owning consolidation scope."""
+        clause, owner = ("m.scope='project' AND m.project_id=?", project_id) if project_id else ("m.scope='session' AND m.session_key=?", session_key)
+        if include_user and project_id is None:
+            clause = "(" + clause + " OR m.scope='user')"
+        with self.connect() as db:
+            rows = db.execute(f"SELECT m.body FROM dream_queue q JOIN memories m ON m.id=q.memory_id WHERE {clause} AND m.status='active' AND q.lease_until<=? ORDER BY q.queued_at LIMIT ?", (owner, time.time(), limit)).fetchall()
+        records, size = [], 0
+        for row in rows:
+            record = json.loads(row[0])
+            content = self.body_content(record)
+            if size + len(content) > max_chars:
+                continue
+            records.append({**record, "content": content})
+            size += len(content)
+        return records
+
+    def settle_consolidation(self, token, inputs, targets, *, session_key, project_id=None):
+        """Consume only unchanged inputs explicitly reviewed by the single pass."""
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for record in inputs:
+                row = db.execute("SELECT revision,lease_until FROM dream_queue WHERE memory_id=?", (record["id"],)).fetchone()
+                if row is None or row["revision"] != record["revision"] or row["lease_until"] > time.time():
+                    continue
+                # Body edits outside the catalog must not acknowledge stale evidence.
+                current = self.read(record["id"], session_key=session_key, project_id=project_id)
+                if current["content_hash"] != record["content_hash"]:
+                    continue
+                ids = list(dict.fromkeys(targets.get(record["id"], [])))
+                db.execute("INSERT OR REPLACE INTO dream_receipts VALUES(?,?,?,?,?,?,?)", (
+                    token, record["id"], record["revision"], "created" if ids else "skipped",
+                    json.dumps(ids), record["review_reason"], now()))
+                db.execute("DELETE FROM dream_queue WHERE memory_id=? AND revision=?", (record["id"], record["revision"]))
 
     def pending(self, *, limit=20, max_chars=12000, lease_seconds=600):
         token = uuid4().hex

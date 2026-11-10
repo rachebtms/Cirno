@@ -124,10 +124,6 @@
           "label": "Fuso horário",
           "help": "Escolha um fuso horário. A diferença em relação ao UTC considera a data atual."
         },
-        "agents_defaults_dream_enabled": {
-          "label": "Consolidação de memória",
-          "help": "Organiza informações úteis das conversas. A memória existente continua disponível após desativar."
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
@@ -248,17 +244,9 @@
           "label": "Duração do cache",
           "help": "Tempo de armazenamento do catálogo de aplicativos CLI em cache."
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream interval (hours)",
-          "help": "Consolidar quando ocioso ou em intervalo fixo."
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream model",
-          "help": "Escolha um modelo separado para Dream; vazio usa o modelo ativo."
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "Intervalo de verificação da compactação por inatividade (segundos)",
-          "help": "Frequência de verificação das conversas para compactação, separada do tempo de inatividade. Reinicie para aplicar."
+          "label": "Intervalo de verificação da consolidateação por inatividade (segundos)",
+          "help": "Frequência de verificação das conversas para consolidateação, separada do tempo de inatividade. Reinicie para aplicar."
         },
         "network_request_timeout_s": {
           "label": "Tempo de conexão / resposta do modelo (segundos)",
@@ -272,29 +260,13 @@
           "label": "Model retries",
           "help": "Restart to apply."
         },
-        "agents_defaults_dream_mode": {
-          "label": "Agendamento do Dream",
-          "help": "Consolidar quando ocioso ou em intervalo fixo."
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Inatividade antes do Dream (segundos)",
-          "help": "Somente sem tarefas ativas; nova mensagem interrompe o Dream."
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Registros por lote Dream",
-          "help": "Os registros restantes continuam na fila."
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Caracteres por lote Dream",
-          "help": "Limita a entrada por rodada; as fontes completas continuam disponíveis."
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "Memória compartilhada (tokens)",
           "help": "Limita a inclusão de MEMORY.md; o arquivo completo fica em Home."
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "Ponto de controle (tokens)",
-          "help": "Restaura o estado da tarefa independentemente do Dream."
+          "help": "Restaura o estado da tarefa independentemente do context consolidation."
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "Tamanho do lote do índice",
@@ -314,23 +286,19 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "Limite do processo de vetores (MB)",
-          "help": "Limite RSS do processo filho; ao exceder, usa BM25. Não limita o serviço inteiro."
+          "help": "Peak embedding worker memory budget (MiB), including model loading. Accepts 512, 1024 or higher. Exceeding it falls back to BM25; this is not a whole-service limit."
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "Tempo limite de vetores (segundos)",
-          "help": "Limite por solicitação; em caso de falha, usa BM25."
+          "help": "Time budget for the whole embedding search, including the query and all incremental indexing batches. A visible timeout falls back to BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "Liberar memória após compactação",
-          "help": "Após compactar, mantém as evidências e o histórico em disco e libera mensagens antigas da memória."
-        },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Limite de iterações Dream",
-          "help": "Limita as rodadas por execução; entradas inacabadas ficam na fila."
+          "label": "Liberar memória após consolidateação",
+          "help": "Após consolidatear, mantém as evidências e o histórico em disco e libera mensagens antigas da memória."
         },
         "agents_defaults_idle_compact_percent": {
-          "label": "Limiar de compactação por inatividade (%)",
-          "help": "Porcentagem da janela do modelo atual. 0 desativa a compactação por inatividade; cada modelo pode alterar o valor."
+          "label": "Idle consolidation trigger (%)",
+          "help": "Porcentagem da janela do modelo atual. 0 desativa a consolidateação por inatividade; cada modelo pode alterar o valor."
         },
         "agents_defaults_idle_compact_keep_percent": {
           "label": "Contexto recente mantido (%)",
@@ -381,8 +349,8 @@
           "help": "Quando o tempo acabar, a operação será enviada para sua aprovação."
         },
         "agents_defaults_active_compact_percent": {
-          "label": "Limite de compactação ativa (%)",
-          "help": "Porcentagem do contexto do modelo escolhido. Verificada antes de cada solicitação, inclusive após ferramentas. A reserva de saída e segurança é sempre mantida; 100 usa o máximo seguro. Não altera a compactação por inatividade."
+          "label": "Limite de consolidateação ativa (%)",
+          "help": "Porcentagem do contexto do modelo escolhido. Verificada antes de cada solicitação, inclusive após ferramentas. A reserva de saída e segurança é sempre mantida; 100 usa o máximo seguro. Não altera a consolidateação por inatividade."
         },
         "channels_send_progress": {
           "label": "Mensagens de progresso",
@@ -397,7 +365,7 @@
           "help": "Envia o raciocínio aos canais compatíveis. Os detalhes web são configurados separadamente."
         },
         "channels_show_compaction_notices": {
-          "label": "Avisos de compactação automática",
+          "label": "Avisos de consolidateação automática",
           "help": "Envia avisos aos canais. Os eventos web continuam visíveis."
         },
         "channels_send_max_retries": {
@@ -415,18 +383,6 @@
         "tools_exec_max_runtime_limit": {
           "label": "Duração máxima solicitada (segundos)",
           "help": "Duração máxima que o modelo pode solicitar por comando. 0 remove esse limite; a duração padrão é configurada separadamente."
-        },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "Orçamento de saída da compactação (tokens)",
-          "help": "Orçamento separado, incluindo raciocínio, limitado pela saída do modelo."
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "Esforço na compactação",
-          "help": "Reduza o esforço para reservar espaço para o resumo. Herdar usa a configuração da conversa; o provedor adapta valores não suportados."
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "Limiar do lembrete (%)",
-          "help": "Solicita salvar o estado nesta porcentagem do orçamento de entrada ativo. Não interrompe uma solicitação em andamento."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL base da API",
@@ -460,10 +416,6 @@
           "label": "Total por mensagem (MiB)",
           "help": "Soma das imagens e documentos enviados, sem vídeos ou referências a arquivos locais. Reinicie e atualize a página para aplicar."
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "Espaço reservado para saída (%)",
-          "help": "Percentual do contexto reservado para a próxima resposta, até o limite de saída. Padrão: 5%. O limite real acompanha o espaço restante."
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "Instruções adicionais compartilhadas",
           "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Instruções adicionais do Worker",
           "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "Consolidation output budget (tokens)",
+          "help": "Task checkpoint and memory updates share this output budget, capped by the model output limit."
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "Esforço na consolidateação",
+          "help": "Reduza o esforço para reservar espaço para o resumo. Herdar usa a configuração da conversa; o provedor adapta valores não suportados."
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "Limiar do lembrete (%)",
+          "help": "Solicita salvar o estado nesta porcentagem do orçamento de entrada ativo. Não interrompe uma solicitação em andamento."
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "Espaço reservado para saída (%)",
+          "help": "Percentual do contexto reservado para a próxima resposta, até o limite de saída. Padrão: 5%. O limite real acompanha o espaço restante."
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "Learn during consolidation",
+          "help": "Produce task checkpoints, durable memories and verified Skill improvements in the same request, without a separate model run."
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "Maximum updates per consolidation",
+          "help": "Bound the total memory and document updates. A pass may produce no useful updates."
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "Additional reference budget (characters)",
+          "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "Limites de comandos"
         },
-        "compaction-generation": {
-          "title": "Geração do ponto de retomada"
-        },
         "embedding": {
           "title": "Serviço de embeddings"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "Instruções de sistema adicionais"
+        },
+        "consolidation-generation": {
+          "title": "Consolidation generation"
+        },
+        "consolidation": {
+          "title": "Learning and idle consolidation",
+          "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
         }
       },
       "save": "Salvar alterações",
@@ -597,8 +581,8 @@
       "noResults": "Nenhuma configuração correspondente.",
       "pending": "Alterações não salvas",
       "idleCompaction": {
-        "label": "Compactação automática por inatividade",
-        "help": "Compacta o contexto automaticamente ao atingir o limite de inatividade para reduzir o uso de tokens nas próximas solicitações.",
+        "label": "Consolidate idle conversations",
+        "help": "Consolidate context and retain useful experience after the idle timeout.",
         "wait": "Limite de inatividade",
         "minutes": "minutos",
         "numberError": "Digite um número inteiro de minutos maior ou igual a zero."
@@ -663,8 +647,6 @@
       "nodes": "Nós",
       "reading": "Texto e leitura",
       "activity": "Exibição de execução",
-      "context": "Compactação do contexto",
-      "dream": "Consolidação Dream",
       "memory-search": "Busca de memória",
       "execution": "Objetivos e execução",
       "shell": "Execução Shell",
@@ -675,7 +657,8 @@
       "coordination": "Coordenação de conversas",
       "regional": "Hora e região",
       "approval": "Aprovações de IA",
-      "backup": "Backup e restauração"
+      "backup": "Backup e restauração",
+      "consolidation": "Context consolidation"
     },
     "sections": {
       "interface": "Interface do usuário",
@@ -1184,7 +1167,8 @@
         "api": "API",
         "cron": "Automações",
         "dream": "Consolidação de memória",
-        "system": "Chamadas auxiliares"
+        "system": "Chamadas auxiliares",
+        "consolidation": "Context consolidation"
       }
     },
     "providers": {
@@ -2143,20 +2127,20 @@
             "description": "Mostre as últimas N mensagens salvas."
           },
           "dream": {
-            "title": "Executar Dream",
+            "title": "Executar consolidation",
             "description": "Organize a memória agora."
           },
           "dream_log": {
-            "title": "Log Dream",
-            "description": "Veja as alterações da última execução do Dream."
+            "title": "Log consolidation",
+            "description": "Veja as alterações da última execução do consolidation."
           },
           "dream_restore": {
             "title": "Restaurar memória",
-            "description": "Restaure um snapshot anterior da memória Dream."
+            "description": "Restaure um snapshot anterior da memória consolidation."
           },
           "dream_prompt": {
-            "title": "Ajustes do Dream",
-            "description": "Defina como Dream organiza a memória deste espaço."
+            "title": "Ajustes do consolidation",
+            "description": "Defina como consolidation organiza a memória deste espaço."
           },
           "goal": {
             "title": "Objetivo de longa duração",
@@ -2189,6 +2173,10 @@
           "access": {
             "title": "Modo de acesso",
             "description": "Escolha padrão, revisão por IA ou acesso total."
+          },
+          "consolidate": {
+            "title": "Consolidate context",
+            "description": "Organize task context and retain verified experience"
           }
         },
         "controlRunning": "Pare a tarefa antes de mudar as opções.",
@@ -2805,7 +2793,8 @@
     "agentVisible": "Visível para o Agent",
     "agentHidden": "Privada",
     "keepSecret": "Deixe em branco para manter o valor salvo.",
-    "sshNode": "SSH Node"
+    "sshNode": "SSH Node",
+    "memory": "Memory"
   },
   "files": {
     "title": "Files",
@@ -2852,12 +2841,12 @@
     "evidence": "Fonte",
     "more": "Carregar mais",
     "reindex": "Reconstruir índice",
-    "retry": "Tentar Dream novamente",
-    "pending": "Dream pendentes: {{count}}",
+    "retry": "Retry saving consolidation results",
+    "pending": "Pending next consolidation: {{count}}",
     "failed": "Falhas: {{count}}",
     "indexed": "Indexados: {{count}}",
     "indexSize": "Índice: {{size}} MB",
-    "lastDream": "Último Dream",
+    "lastDream": "Último consolidation",
     "noDream": "Ainda não executado",
     "includeHistory": "Incluir registros substituídos",
     "revision": "Versão {{revision}}",
@@ -2881,7 +2870,7 @@
     "until": "Até",
     "discoverTags": "Explorar etiquetas",
     "databases": "Bancos de dados",
-    "dreamOutcomes": "Resultados recentes do Dream",
+    "dreamOutcomes": "Resultados recentes do consolidation",
     "createdOutcome": "Criado",
     "mergedOutcome": "Mesclado",
     "skippedOutcome": "Ignorado",
@@ -2898,10 +2887,12 @@
     "fallback_unavailable": "Busca vetorial indisponível; foi usado BM25.",
     "searchDetails": "Motivo",
     "indexPending": "O índice vetorial está incompleto. Apenas o conteúdo indexado aparece; pesquise novamente para continuar a indexação.",
-    "statusTitle": "Índice e consolidação",
+    "statusTitle": "Index and context consolidation",
     "noTags": "Ainda não há etiquetas.",
     "resultsFor": "Resultados para “{{query}}”",
-    "noMatches": "Nenhuma memória corresponde a esta pesquisa."
+    "noMatches": "Nenhuma memória corresponde a esta pesquisa.",
+    "lastConsolidation": "Last consolidation",
+    "noConsolidation": "Not run yet"
   },
   "userQuestion": {
     "title": "Uma pergunta para você",
@@ -3124,5 +3115,27 @@
       "manual": "Ordem salva"
     },
     "projectActions": "Ações do projeto {{name}}"
+  },
+  "memoryGraph": {
+    "description": "Explore saved knowledge, connections and original sources.",
+    "cloud": "Memory cloud",
+    "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
+    "nodeCount": "{{count}} memories",
+    "fit": "Fit to view",
+    "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
+    "renderError": "The 3D view could not start. You can still search and read the results.",
+    "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",
+    "open": "Open Memory",
+    "limit": "Showing up to {{count}} memories. Narrow the filters to explore other records.",
+    "linksLimit": "Showing the first 1,500 connections within these results.",
+    "relation_tag": "Shared tag",
+    "relation_supports": "Supports",
+    "relation_conflicts": "Conflicts",
+    "relation_supersedes": "Supersedes",
+    "relation_related": "Related",
+    "relation_derived_from": "Derived from",
+    "filters": "Filters",
+    "refreshIndex": "Refresh index status",
+    "loading": "Loading memory view…"
   }
 }

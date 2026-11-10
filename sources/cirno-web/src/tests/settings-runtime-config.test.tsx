@@ -13,7 +13,7 @@ import { settingsPayload } from "@/tests/settings-test-utils";
 const mutation = vi.fn();
 function payload() {
   return { ...settingsPayload(), advanced: { ...settingsPayload().advanced, exec_max_runtime_limit: 86400 }, runtime_config: {
-    "agents.defaults.timezone_mode": "auto", "agents.defaults.timezone": "UTC", "agents.defaults.dream.enabled": true,
+    "agents.defaults.timezone_mode": "auto", "agents.defaults.timezone": "UTC", "agents.defaults.consolidation.learn": true,
     "agents.defaults.idle_compact_after_minutes": 15, "agents.defaults.idle_compact_percent": 5,
     "agents.defaults.idle_compact_keep_percent": 5, "tools.exec.enable": true, "tools.exec.max_runtime": 60,
     "tools.exec.allowed_env_keys": ["TERM"], "tools.exec.sandbox": "", "network.proxy": "http://localhost:8080",
@@ -38,6 +38,19 @@ function expectSave(values: Record<string, unknown>) {
 }
 
 describe("Runtime configuration", () => {
+  it("automatically saves a local embedding budget above 200 MiB", async () => {
+    const initial = payload() as SettingsPayload;
+    initial.runtime_config = { ...initial.runtime_config,
+      "agents.defaults.memory.embedding_enabled": true,
+      "agents.defaults.memory.embedding_provider": "local",
+      "agents.defaults.memory.embedding_max_rss_mb": 200 };
+    render(<Harness page="memory-search" initial={initial} />);
+    const field = screen.getByRole("spinbutton", { name: "Embedding worker limit (MB)" });
+    fireEvent.change(field, { target: { value: "512" } });
+    fireEvent.blur(field);
+    await expectSave({ "agents.defaults.memory.embedding_max_rss_mb": 512 });
+    expect(field).toHaveValue(512);
+  });
   it.each([
     ["shared", "Shared additional system prompt"],
     ["router", "Router additional system prompt"],
@@ -63,18 +76,18 @@ describe("Runtime configuration", () => {
     expect([...paths, "tools.cli_apps.enable"].sort()).toEqual([...runtimeConfigKeys].sort());
   });
   it.each([
-    ["agents.defaults.idle_compact_percent", "Idle compaction trigger (%)", 30],
+    ["agents.defaults.idle_compact_percent", "Idle consolidation trigger (%)", 30],
     ["agents.defaults.idle_compact_keep_percent", "Recent context retention (%)", 4],
   ])("saves only the edited compaction setting %s", async (path, label, value) => {
-    render(<Harness page="context" />);
+    render(<Harness page="consolidation" />);
     fireEvent.change(screen.getByRole("spinbutton", { name: label }), { target: { value: String(value) } });
     await expectSave({ [path]: value });
   });
   it("saves the Dream switch independently", async () => {
-    render(<Harness page="dream" />);
-    const control = screen.getByRole("switch", { name: "Memory consolidation" });
+    render(<Harness page="consolidation" />);
+    const control = screen.getByRole("switch", { name: "Learn during consolidation" });
     await userEvent.setup().click(control);
-    await expectSave({ "agents.defaults.dream.enabled": false });
+    await expectSave({ "agents.defaults.consolidation.learn": false });
     expect(control).not.toBeChecked();
   });
   it.each(["bwrap", "seatbelt", ""])("saves sandbox %s and shows only its relevant fields", async value => {
@@ -181,8 +194,8 @@ describe("Runtime configuration", () => {
   it("keeps Save actions hidden while immediately saving idle compaction", async () => {
     let finish!: (value: SettingsPayload) => void;
     mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));
-    render(<Harness page="context" />);
-    await userEvent.setup().click(screen.getByRole("switch", { name: "Auto-compact idle sessions" }));
+    render(<Harness page="consolidation" />);
+    await userEvent.setup().click(screen.getByRole("switch", { name: "Consolidate idle conversations" }));
     await expectSave({ "agents.defaults.idle_compact_after_minutes": 0 });
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();

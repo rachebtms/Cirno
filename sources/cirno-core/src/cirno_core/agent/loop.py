@@ -352,9 +352,7 @@ class AgentLoop:
         self._next_idle_compact_check_at = time.monotonic()
         self._next_goal_check_at = 0.0
         self._goal_check_task: asyncio.Task[Any] | None = None
-        self._last_memory_activity = time.monotonic()
         self.memory_idle_callback: Callable[[], Awaitable[None]] | None = None
-        self._idle_memory_task: asyncio.Task[Any] | None = None
         if model_preset:
             self.set_model_preset(model_preset, publish_update=False)
         self._register_default_tools(provider_snapshot_loader=provider_snapshot_loader)

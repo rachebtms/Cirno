@@ -158,7 +158,10 @@ class ToolRegistry:
         try:
             params = self._coerce_params(tool, params)
         except json.JSONDecodeError as exc:
-            return tool, params, ToolResult.error(f"Invalid JSON arguments: {exc}")
+            return tool, params, ToolResult.error(
+                f"Invalid JSON arguments for '{name}': {exc}. No tool was executed. "
+                "Send exactly one JSON object matching the tool schema."
+            )
         if not isinstance(params, dict):
             return tool, params, (
                 ToolResult.error(

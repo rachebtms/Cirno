@@ -17,7 +17,6 @@ from .control import (
     cmd_stop,
     cmd_user_shell,
 )
-from .dream import cmd_dream, cmd_dream_prompt
 from .dream_history import cmd_dream_log, cmd_dream_restore
 from .history import cmd_history
 from .models import cmd_model
@@ -37,7 +36,8 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.priority("/restart", cmd_restart)
     router.priority("/status", cmd_status)
     router.exact("/new", cmd_new)
-    router.exact("/compact", cmd_compact, session_queue=True)
+    for name in ("/consolidate", "/compact", "/dream"):
+        router.exact(name, cmd_compact, session_queue=True)
     router.exact("/status", cmd_status)
     router.exact("/model", cmd_model)
     router.prefix("/model ", cmd_model)
@@ -47,13 +47,10 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.prefix("/goal ", cmd_goal)
     router.exact("/trigger", cmd_trigger)
     router.prefix("/trigger ", cmd_trigger)
-    router.exact("/dream", cmd_dream)
     router.exact("/dream-log", cmd_dream_log)
     router.prefix("/dream-log ", cmd_dream_log)
     router.exact("/dream-restore", cmd_dream_restore)
     router.prefix("/dream-restore ", cmd_dream_restore)
-    router.exact("/dream-prompt", cmd_dream_prompt)
-    router.prefix("/dream-prompt ", cmd_dream_prompt)
     router.exact("/skill", cmd_skill)
     router.exact("/help", cmd_help)
     router.exact(USER_SHELL_COMMAND, cmd_user_shell)

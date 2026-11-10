@@ -15,6 +15,15 @@ class SSHConnection(BaseModel):
     identity_file: str = ""
     host_key: str = ""
 
+    def agent_metadata(self) -> dict:
+        """Describe a usable connection without exposing its authentication or environment values."""
+        result = self.model_dump(include={"id", "name", "host", "port", "username", "auth_method",
+                                          "working_directory", "init_script"})
+        result.update(has_password=bool(self.password), has_identity_file=bool(self.identity_file))
+        if isinstance(self, SSHSessionSettings):
+            result["environment_names"] = sorted(self.environment)
+        return result
+
 
 class SSHCredential(SSHConnection, SSHSessionSettings):
     node_enabled: bool = False

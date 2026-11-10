@@ -124,10 +124,6 @@
           "label": "时区",
           "help": "UTC 偏移按当前日期显示"
         },
-        "agents_defaults_dream_enabled": {
-          "label": "记忆整理",
-          "help": "自动整理对话中的有用信息。关闭后停止整理，已有记忆仍可使用。"
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "启用心跳",
           "help": "修改后重启生效。"
@@ -248,17 +244,9 @@
           "label": "缓存时长",
           "help": "CLI 应用列表的缓存有效秒数"
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream 间隔（小时）",
-          "help": "仅用于 Dream 的间隔调度模式，重启后生效。"
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream 模型",
-          "help": "可为 Dream 选择独立模型；未选择时使用当前模型。"
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
-          "label": "空闲压缩检查间隔（秒）",
-          "help": "扫描会话是否满足空闲压缩条件的间隔，并非空闲时长。重启后生效。"
+          "label": "空闲整理检查间隔（秒）",
+          "help": "扫描会话是否满足空闲整理条件的间隔，并非空闲时长。重启后生效。"
         },
         "network_request_timeout_s": {
           "label": "模型连接／响应超时（秒）",
@@ -273,32 +261,16 @@
           "help": "修改后重启生效。"
         },
         "agents_defaults_idle_compact_percent": {
-          "label": "空闲压缩触发阈值（%）",
-          "help": "按当前模型的上下文窗口计算。0 表示禁用空闲压缩；模型配置可以覆盖。"
+          "label": "空闲整理触发比例（%）",
+          "help": "按当前模型的上下文窗口计算。0 表示禁用空闲整理；模型配置可以覆盖。"
         },
         "agents_defaults_idle_compact_keep_percent": {
           "label": "近期上下文保留阈值（%）",
-          "help": "压缩时保留完整的近期对话轮次，按当前模型窗口计算。必须低于触发阈值。"
+          "help": "整理时保留完整的近期对话轮次，按当前模型窗口计算。必须低于触发阈值。"
         },
         "agents_defaults_goal_continuation_limit": {
           "label": "Goal 默认续跑上限",
           "help": "0 为无限。次数持久保存；单个 Goal 可覆盖。"
-        },
-        "agents_defaults_dream_mode": {
-          "label": "Dream 触发方式",
-          "help": "空闲时整理，或按固定间隔整理。"
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Dream 空闲等待（秒）",
-          "help": "有待处理记忆且无前台任务时运行；新消息会中断空闲 Dream。"
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Dream 单批记录数",
-          "help": "每次处理的记录上限，其余记录继续排队。"
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Dream 单批字符数",
-          "help": "限制单次整理输入量，完整来源仍可读取。"
         },
         "agents_defaults_memory_context_tokens": {
           "label": "共享记忆注入上限（Token）",
@@ -306,7 +278,7 @@
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "任务检查点注入上限（Token）",
-          "help": "独立于 Dream 恢复当前任务状态。"
+          "help": "新输入最多注入这些任务状态 Token；自动摘要不会覆盖主动保存的检查点。"
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "索引扫描批量",
@@ -326,19 +298,15 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "嵌入进程上限（MB）",
-          "help": "限制独立进程 RSS；超限回退 BM25。这不是整个服务的内存上限。"
+          "help": "嵌入子进程的峰值内存预算（MiB），包含模型加载开销，可设为 512、1024 或更高。超限时回退至 BM25；不限制整个服务。"
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "嵌入请求超时（秒）",
-          "help": "单次进程请求时间上限，失败回退 BM25。"
+          "help": "整次嵌入检索的时间预算，包含查询和增量索引的所有批次；超时会显示原因并回退至 BM25。"
         },
         "agents_defaults_memory_release_archived_runtime": {
-          "label": "压缩后释放内存",
-          "help": "压缩后，完整证据和界面历史保留在磁盘，仅释放旧执行消息的内存。"
-        },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Dream 迭代上限",
-          "help": "限制单批整理的模型轮数；未完成的输入保留在队列中。"
+          "label": "整理后释放内存",
+          "help": "整理后，完整证据和界面历史保留在磁盘，仅释放旧执行消息的内存。"
         },
         "tools_exec_max_runtime": {
           "label": "运行上限",
@@ -381,8 +349,8 @@
           "help": "超时后将操作转交给你审批。"
         },
         "agents_defaults_active_compact_percent": {
-          "label": "执行中压缩阈值（%）",
-          "help": "按当前模型的上下文窗口计算，每次请求模型前检查，包括工具执行后的请求。始终预留输出和安全空间；100 表示使用最大安全输入预算。此项不影响空闲压缩。"
+          "label": "执行中整理阈值（%）",
+          "help": "按当前模型的上下文窗口计算，每次请求模型前检查，包括工具执行后的请求。始终预留输出和安全空间；100 表示使用最大安全输入预算。此项不影响空闲整理。"
         },
         "channels_send_progress": {
           "label": "过程消息",
@@ -397,8 +365,8 @@
           "help": "向支持的通道发送思考过程。Web UI 的详情展开方式单独设置。"
         },
         "channels_show_compaction_notices": {
-          "label": "自动压缩通知",
-          "help": "向已连接通道发送自动上下文压缩通知。Web UI 的压缩事件仍然可见。"
+          "label": "自动整理通知",
+          "help": "向已连接通道发送自动上下文整理通知。Web UI 的整理事件仍然可见。"
         },
         "channels_send_max_retries": {
           "label": "消息投递尝试次数",
@@ -415,18 +383,6 @@
         "tools_exec_max_runtime_limit": {
           "label": "可请求的最长命令时限（秒）",
           "help": "模型可请求的单次命令最长时限。0 表示取消此上限；默认命令时限另行设置。"
-        },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "压缩输出预算（Token）",
-          "help": "压缩使用的独立输出预算，包含思考，且不会超过模型的输出上限。"
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "压缩思考强度",
-          "help": "使用较低强度，为交接正文留出空间。继承使用会话模型的强度；不支持的值按提供商规则映射。"
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "检查点提醒阈值（%）",
-          "help": "达到主动压缩输入预算的此百分比时，提醒 Agent 保存任务状态。不会打断正在生成的请求。"
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API 基础地址",
@@ -460,10 +416,6 @@
           "label": "每条消息文件总大小（MiB）",
           "help": "每条消息上传的图片和文档总大小，不含视频；本地文件引用不计入。重启服务并刷新网页后生效。"
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "输出预留空间（%）",
-          "help": "为下一次回复预留的上下文比例，最多预留到模型输出上限，默认 5%。每次请求的输出上限随剩余空间调整，不会按配置的最大输出长度提前压缩。"
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "共享追加系统提示词",
           "help": "Router 和 Worker 共用，在各自追加提示词之前添加。自动保存，从下一轮生效；留空即可停用。"
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Worker 追加系统提示词",
           "help": "仅追加到 Worker，在共享追加提示词之后添加。自动保存，从下一轮生效；留空则只使用共享追加提示词。"
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "整理输出预算（Token）",
+          "help": "任务摘要与记忆更新共用此输出预算，受模型输出上限限制。"
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "整理思考强度",
+          "help": "使用较低强度，为交接正文留出空间。继承使用会话模型的强度；不支持的值按提供商规则映射。"
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "检查点提醒阈值（%）",
+          "help": "达到主动整理输入预算的此百分比时，提醒 Agent 保存任务状态。不会打断正在生成的请求。"
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "输出预留空间（%）",
+          "help": "为下一次回复预留的上下文比例，最多预留到模型输出上限，默认 5%。每次请求的输出上限随剩余空间调整，不会按配置的最大输出长度提前整理。"
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "整理时保存经验",
+          "help": "同一次请求生成任务摘要、提炼长期记忆并改进 Skills，不另起模型任务。"
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "每次最多更新数",
+          "help": "限制每次保存的记忆及文档更新总数；没有值得保留的经验时可为零。"
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "额外参考内容上限（字符）",
+          "help": "用于已有记忆与完整文档快照；只追加在请求末尾，保持系统前缀稳定。"
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "命令时间限制"
         },
-        "compaction-generation": {
-          "title": "压缩交接生成"
-        },
         "embedding": {
           "title": "嵌入服务"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "追加系统提示词"
+        },
+        "consolidation-generation": {
+          "title": "整理生成"
+        },
+        "consolidation": {
+          "title": "记忆与空闲整理",
+          "help": "任务中、手动与空闲整理共用同一流程，保存结果后再继续任务。"
         }
       },
       "save": "保存修改",
@@ -597,8 +581,8 @@
       "noResults": "没有匹配的设置。",
       "pending": "有未保存的修改",
       "idleCompaction": {
-        "label": "空闲自动压缩",
-        "help": "空闲超时后压缩上下文，减少后续用量。",
+        "label": "空闲时自动整理",
+        "help": "空闲超时后整理上下文并沉淀经验，减少后续请求的上下文用量。",
         "wait": "空闲时限",
         "minutes": "分钟",
         "numberError": "请输入非负整数分钟数。"
@@ -663,8 +647,6 @@
       "personality": "个性",
       "reading": "文字与阅读",
       "activity": "执行过程显示",
-      "context": "上下文压缩",
-      "dream": "Dream 记忆整合",
       "memory-search": "记忆检索",
       "execution": "Goal 与执行",
       "shell": "Shell 执行",
@@ -675,7 +657,8 @@
       "coordination": "会话协作",
       "regional": "时间与地区",
       "approval": "AI 审批",
-      "backup": "备份与恢复"
+      "backup": "备份与恢复",
+      "consolidation": "上下文整理"
     },
     "sections": {
       "interface": "界面",
@@ -743,9 +726,9 @@
       "providerNotConfigured": "加载模型前请先配置此提供商。",
       "autoProviderCustomOnly": "自动选择提供商时，请手动输入模型 ID。",
       "availableCount": "可用模型：{{count}} 个",
-      "idleCompactPercent": "空闲压缩触发阈值（%）",
+      "idleCompactPercent": "空闲整理触发阈值（%）",
       "idleCompactKeepPercent": "近期上下文保留阈值（%）",
-      "compactPercentHint": "按此模型上下文窗口计算；留空继承全局设置。触发阈值 0 表示禁用空闲压缩。",
+      "compactPercentHint": "按此模型上下文窗口计算；留空继承全局设置。触发阈值 0 表示禁用空闲整理。",
       "inheritGlobal": "继承全局设置",
       "reasoningHistory": "历史思考回传",
       "reasoningHistoryHelp": "控制明文思考的回传方式。自动按接口处理，原生签名状态始终保留。DeepSeek 工具请求必须保留历史思考；被接口忽略的历史不计入下一轮输入，但已经生成的 Token 仍会计费。",
@@ -1148,7 +1131,7 @@
       "shortcutsTitle": "常用设置",
       "shortcuts": {
         "memory": "搜索已保存的知识，查看记忆来源",
-        "context": "调整压缩时机与上下文保留比例",
+        "context": "调整整理时机与上下文保留比例",
         "execution": "设置自动续跑上限与执行默认值",
         "personality": "编辑个性、偏好与行为指令",
         "telegram": "绑定个人私聊，选择接收的通知",
@@ -1183,7 +1166,8 @@
         "api": "API",
         "cron": "自动任务",
         "dream": "记忆整理",
-        "system": "辅助调用"
+        "system": "辅助调用",
+        "consolidation": "上下文整理"
       },
       "systemHelp": "包括内部任务和未标注来源的调用"
     },
@@ -1910,35 +1894,35 @@
     "compaction": {
       "reasons": {
         "idle": {
-          "started": "会话空闲，正在自动压缩上下文",
-          "succeeded": "会话空闲，已自动压缩上下文",
-          "failed": "空闲时自动压缩上下文失败",
-          "cancelled": "空闲期间的自动压缩未完成"
+          "started": "会话空闲，正在自动整理上下文",
+          "succeeded": "会话空闲，已自动整理上下文",
+          "failed": "空闲时自动整理上下文失败",
+          "cancelled": "空闲期间的自动整理未完成"
         },
         "context_pressure": {
-          "started": "上下文较长，正在压缩",
-          "succeeded": "上下文较长，已自动压缩",
-          "failed": "上下文较长，自动压缩失败",
-          "cancelled": "上下文较长，压缩已取消"
+          "started": "上下文较长，正在整理",
+          "succeeded": "上下文较长，已自动整理",
+          "failed": "上下文较长，自动整理失败",
+          "cancelled": "上下文较长，整理已取消"
         },
         "manual": {
-          "started": "正在手动压缩",
-          "succeeded": "手动压缩完成",
-          "failed": "手动压缩失败",
-          "cancelled": "手动压缩已取消"
+          "started": "正在手动整理",
+          "succeeded": "手动整理完成",
+          "failed": "手动整理失败",
+          "cancelled": "手动整理已取消"
         },
         "provider_native": {
-          "started": "模型服务正在压缩上下文",
-          "succeeded": "模型服务已压缩上下文",
-          "failed": "模型服务未能完成上下文压缩",
-          "cancelled": "模型服务的上下文压缩已取消"
+          "started": "模型服务正在整理上下文",
+          "succeeded": "模型服务已整理上下文",
+          "failed": "模型服务未能完成上下文整理",
+          "cancelled": "模型服务的上下文整理已取消"
         }
       },
-      "cancelled": "上下文压缩已取消",
-      "empty": "无需压缩上下文",
-      "started": "正在压缩上下文",
-      "failed": "上下文压缩失败",
-      "succeeded": "上下文已压缩",
+      "cancelled": "上下文整理已取消",
+      "empty": "无需整理上下文",
+      "started": "正在整理上下文",
+      "failed": "上下文整理失败",
+      "succeeded": "上下文已整理",
       "attempts": "共尝试 {{count}} 次",
       "errorUnavailable": "这条旧记录未保存具体错误原因。",
       "attempt": "第 {{number}} 次尝试",
@@ -2124,8 +2108,8 @@
             "description": "重置当前会话，开始新会话"
           },
           "compact": {
-            "title": "压缩上下文",
-            "description": "压缩上下文后继续对话"
+            "title": "整理上下文",
+            "description": "整理上下文后继续对话"
           },
           "stop": {
             "title": "停止任务",
@@ -2148,20 +2132,20 @@
             "description": "查看最近 N 条已保存的消息"
           },
           "dream": {
-            "title": "运行 Dream",
+            "title": "运行 上下文整理",
             "description": "手动整理记忆"
           },
           "dream_log": {
-            "title": "Dream 日志",
-            "description": "查看上次 Dream 整理的修改"
+            "title": "上下文整理 日志",
+            "description": "查看上次 上下文整理 整理的修改"
           },
           "dream_restore": {
             "title": "恢复记忆",
-            "description": "恢复到之前的 Dream 记忆快照"
+            "description": "恢复到之前的 上下文整理 记忆快照"
           },
           "dream_prompt": {
-            "title": "Dream 设置",
-            "description": "设置 Dream 如何整理当前工作区记忆"
+            "title": "上下文整理 设置",
+            "description": "设置 上下文整理 如何整理当前工作区记忆"
           },
           "goal": {
             "title": "长期目标",
@@ -2194,6 +2178,10 @@
           "access": {
             "title": "权限模式",
             "description": "选择默认权限、AI 审批或完全访问。"
+          },
+          "consolidate": {
+            "title": "整理上下文",
+            "description": "整理任务上下文并保存已验证的经验"
           }
         },
         "controlRunning": "请先停止当前任务，再修改会话选项。",
@@ -2219,7 +2207,7 @@
       },
       "encoding": "处理中…",
       "remove": "移除附件",
-      "normalizedSizeHint": "{{orig}} → {{current}}（已自动压缩）",
+      "normalizedSizeHint": "{{orig}} → {{current}}（已自动整理）",
       "textTooLarge": "消息文本过大（最大 {{max}}）",
       "imageRejected": {
         "unsupported_type": "不支持的文件类型",
@@ -2771,7 +2759,7 @@
         "answer": "模型回复",
         "reasoning": "模型思考",
         "tool": "工具调用",
-        "compaction": "上下文压缩",
+        "compaction": "上下文整理",
         "request": "API 请求",
         "file": "文件变更",
         "lifecycle": "生命周期",
@@ -2805,7 +2793,8 @@
     "agentVisibilityHint": "允许 Agent 工具列出和管理此凭据。凭据工具不会返回秘密值。",
     "agentVisible": "Agent 可见",
     "agentHidden": "仅自己可见",
-    "keepSecret": "留空则保留已保存的秘密值。"
+    "keepSecret": "留空则保留已保存的秘密值。",
+    "memory": "记忆"
   },
   "files": {
     "title": "文件",
@@ -2911,12 +2900,12 @@
     "evidence": "查看来源",
     "more": "加载更多",
     "reindex": "重建索引",
-    "retry": "重试失败的 Dream",
-    "pending": "Dream 待处理：{{count}}",
+    "retry": "重试保存整理结果",
+    "pending": "待下次整理的记录：{{count}}",
     "failed": "失败：{{count}}",
     "indexed": "已索引：{{count}}",
     "indexSize": "索引：{{size}} MB",
-    "lastDream": "最近 Dream",
+    "lastDream": "最近 上下文整理",
     "noDream": "尚未运行",
     "includeHistory": "包含被替代的记录",
     "revision": "版本 {{revision}}",
@@ -2957,10 +2946,12 @@
     "fallback_unavailable": "向量检索不可用，已使用 BM25。",
     "searchDetails": "查看原因",
     "indexPending": "向量索引尚未完成，当前结果仅覆盖已索引内容；再次搜索可继续建立索引。",
-    "statusTitle": "索引与记忆整理",
+    "statusTitle": "索引与上下文整理",
     "noTags": "暂无标签。",
     "resultsFor": "“{{query}}”的检索结果",
-    "noMatches": "没有符合此次检索的记忆。"
+    "noMatches": "没有符合此次检索的记忆。",
+    "lastConsolidation": "最近整理",
+    "noConsolidation": "尚未整理"
   },
   "userQuestion": {
     "title": "想确认一下",
@@ -3008,7 +2999,7 @@
     "kind": {
       "question": "异步提问",
       "recovery": "会话恢复",
-      "compaction": "上下文压缩",
+      "compaction": "上下文整理",
       "dream": "记忆整理",
       "turn": "会话运行",
       "message": "消息",
@@ -3124,5 +3115,27 @@
       "manual": "已保存的顺序"
     },
     "projectActions": "项目 {{name}} 的操作"
+  },
+  "memoryGraph": {
+    "description": "检索记忆，探索关联，追溯原始来源。",
+    "cloud": "记忆点云",
+    "cloudDescription": "可交互的记忆关系图。彩色点代表记忆，灰色点代表共同标签；也可以通过结果列表访问所有记录。",
+    "nodeCount": "{{count}} 条记忆",
+    "fit": "适应视图",
+    "gestureHelp": "拖动旋转 · 滚动或双指缩放 · 点击记忆查看内容",
+    "renderError": "三维视图无法启动，仍可通过结果列表检索和阅读记忆。",
+    "settingsHelp": "记忆检索与关系图已移至记忆标签页，索引维护保留在此处。",
+    "open": "打开记忆",
+    "limit": "最多显示 {{count}} 条记忆，请缩小筛选范围查看其他记录。",
+    "linksLimit": "仅显示这些结果之间的前 1,500 条关联。",
+    "relation_tag": "共同标签",
+    "relation_supports": "支持",
+    "relation_conflicts": "冲突",
+    "relation_supersedes": "替代",
+    "relation_related": "相关",
+    "relation_derived_from": "来源于",
+    "filters": "筛选条件",
+    "refreshIndex": "刷新索引状态",
+    "loading": "正在加载记忆视图…"
   }
 }

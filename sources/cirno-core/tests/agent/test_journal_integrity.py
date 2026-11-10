@@ -129,3 +129,34 @@ def test_failed_retention_replacement_preserves_evidence_and_removes_staging(tmp
 
     assert journal.history_file.read_bytes() == original
     assert set(journal.memory_dir.iterdir()) == files_before
+def test_consolidation_journal_retention_keeps_indexed_evidence_and_does_not_need_dream(tmp_path):
+    from cirno_core.memory.journal import MemoryJournal
+    from cirno_memory.repository import MemoryRepository
+    journal = MemoryJournal(tmp_path, max_history_entries=2)
+    for i in range(5):
+        journal.append_history(f"Exact event {i}", session_key="worker:a", archive_id=f"batch-{i}")
+    assert [entry["cursor"] for entry, _ in journal.iter_valid_entries()] == [4, 5]
+    assert journal.get_last_dream_cursor() == 0
+    repo = MemoryRepository(tmp_path)
+    assert repo.read_source("history-1", session_key="worker:a")["content"] == "Exact event 0"
+    assert journal.append_history("Exact event 4", session_key="worker:a", archive_id="batch-4") == 5
+    assert journal.append_history("Next event", session_key="worker:a", archive_id="batch-5") == 6
+
+
+def test_retention_waits_for_failed_catalog_ingestion_and_retry_does_not_duplicate(tmp_path, monkeypatch):
+    from cirno_core.memory.journal import MemoryJournal
+    from cirno_memory.repository import MemoryRepository
+    journal = MemoryJournal(tmp_path, max_history_entries=2)
+    ingest = MemoryRepository.ingest_history
+    def fail(*args, **kwargs):
+        raise OSError("index storage unavailable")
+    monkeypatch.setattr(MemoryRepository, "ingest_history", fail)
+    with pytest.raises(OSError, match="storage unavailable"):
+        journal.append_history("Original evidence", session_key="worker:a", archive_id="first")
+    monkeypatch.setattr(MemoryRepository, "ingest_history", ingest)
+    for i in range(4):
+        journal.append_history(f"Later {i}", session_key="worker:a", archive_id=f"later-{i}")
+    assert len(list(journal.iter_valid_entries())) == 5
+    assert journal.append_history("Original evidence", session_key="worker:a", archive_id="first") == 1
+    assert [entry["cursor"] for entry, _ in journal.iter_valid_entries()] == [4, 5]
+    assert MemoryRepository(tmp_path).read_source("history-1", session_key="worker:a")["content"] == "Original evidence"

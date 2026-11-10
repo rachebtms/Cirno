@@ -22,7 +22,7 @@ describe("Settings models", () => {
     requestMutationMock.mockResolvedValue(payload);
     renderSettingsView({ initialSection: "models", initialSettings: payload });
     await openPresetAdvancedOptions();
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Idle compaction trigger (%)" }), {
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Idle consolidation trigger (%)" }), {
       target: { value: "35" },
     });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Recent context retention (%)" }), {

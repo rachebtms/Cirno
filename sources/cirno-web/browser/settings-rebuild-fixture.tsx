@@ -17,7 +17,7 @@ import type { RuntimeConfigValue, SettingsPayload } from "@/lib/contracts/settin
 export function SettingsRebuildFixture({ embedded = false }: { embedded?: boolean }) {
   useTheme();
   const { t } = useTranslation();
-  const [section, setSection] = useState<SettingsSectionKey>(embedded ? "overview" : "context");
+  const [section, setSection] = useState<SettingsSectionKey>(embedded ? "overview" : "consolidation");
   const [saved, setSaved] = useState("");
   const [settings, setSettings] = useState(() => ({
     model_presets: [{ id: "research", name: "Research model" }], advanced: { exec_max_runtime_limit: 86400 },
@@ -25,9 +25,9 @@ export function SettingsRebuildFixture({ embedded = false }: { embedded?: boolea
       "agents.defaults.active_compact_percent": 80, "agents.defaults.idle_compact_percent": 35,
       "agents.defaults.idle_compact_keep_percent": 10, "agents.defaults.idle_compact_after_minutes": 15,
       "agents.defaults.idle_compact_check_interval_seconds": 60, "agents.defaults.memory.checkpoint_tokens": 2000,
-      "agents.defaults.compaction.output_reserve_percent": 5,
-      "agents.defaults.memory.release_archived_runtime": true, "agents.defaults.compaction.max_tokens": 4096,
-      "agents.defaults.compaction.reasoning_effort": "low", "agents.defaults.compaction.checkpoint_reminder_percent": 60,
+      "agents.defaults.consolidation.output_reserve_percent": 5,
+      "agents.defaults.memory.release_archived_runtime": true, "agents.defaults.consolidation.max_tokens": 4096,
+      "agents.defaults.consolidation.reasoning_effort": "low", "agents.defaults.consolidation.checkpoint_reminder_percent": 60,
       "agents.defaults.workspace": "/workspace", "agents.defaults.max_tool_iterations": 200,
       "agents.defaults.provider_retry_mode": "standard", "agents.defaults.goal_continuation_limit": 0,
       "agents.defaults.max_tool_result_chars": 16000, "agents.defaults.resume.message": "Continue",

@@ -48,10 +48,10 @@ Start with the [documentation index](documents/README.md). It covers [memory](do
 
 ## Releases
 
-The current version is **0.2.5**. See the [release notes](documents/releases/0.2.5.md). Instances on 0.1.6, 0.2.0, 0.2.1, 0.2.2, 0.2.3 or 0.2.4 are automatically migrated at startup while retaining their instance volume. See [instance migration](documents/migrations.md) and the [Docker upgrade steps](documents/docker.md#upgrading-from-016).
+The current version is **0.2.6**. See the [release notes](documents/releases/0.2.6.md). Instances on 0.1.6, 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4 or 0.2.5 are automatically migrated at startup while retaining their instance volume. See [instance migration](documents/migrations.md) and the [Docker upgrade steps](documents/docker.md#upgrading-from-016).
 
 ## Acknowledgements and updates
 
 Cirno draws on ideas and earlier code from [Nanobot](https://github.com/HKUDS/nanobot), [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), and [DeepSeek SuperAgent](https://github.com/deepseek-ai/dsh-superagent-prototype). Upstream copyright and third-party notices are preserved in [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Cirno is maintained independently. Update the checkout, rebuild the frontend and reinstall the Python package to upgrade; containers update by rebuilding or pulling a published image. The application retains service restart but has no in-app updater.
 
-The [tabbed workspace guide](documents/workspace.md) covers file editors, local and SSH terminals, request transparency, and encrypted personal credentials in 0.2.5.
+The [tabbed workspace guide](documents/workspace.md) covers file editors, local and SSH terminals, request transparency, and encrypted personal credentials in 0.2.6.

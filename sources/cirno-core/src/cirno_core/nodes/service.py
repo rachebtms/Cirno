@@ -63,20 +63,22 @@ class Nodes:
         return args
 
     def list_nodes(self) -> list[dict]:
-        return [{"id": record["id"], "name": record["label"], "agent_visible": record["agent_visible"], **ssh.public()}
+        return [{"id": record["id"], "name": record["label"], "agent_visible": record["agent_visible"],
+                 **(ssh.agent_metadata() if self.credentials.actor == "agent" else ssh.public())}
                 for record, ssh in self.credentials.ssh_records() if ssh.node_enabled]
 
     def catalog(self) -> dict:
         nodes = self.list_nodes()
         allowed = {node["id"] for node in nodes}
         jobs = self.data.list("node_jobs")
-        return {"nodes": nodes, "jobs": jobs if self.credentials.actor == "owner"
-                else [job for job in jobs if job["node_id"] in allowed]}
+        if self.credentials.actor == "agent":
+            jobs = [{key: job[key] for key in ("id", "node_id", "state", "created_at", "pid", "stop_requested") if key in job}
+                    for job in jobs if job["node_id"] in allowed]
+        return {"nodes": nodes, "jobs": jobs}
 
     @staticmethod
     def public_node(record: dict) -> dict:
-        return {**{key: value for key, value in record.items() if key != "password"},
-                "has_password": bool(record.get("password"))}
+        return Node.model_validate(record).agent_metadata()
 
     def save_node(self, values: dict) -> dict:
         if set(values) - {"id", "credential_id", "working_directory", "init_script", "environment"}:

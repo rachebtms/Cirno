@@ -22,9 +22,9 @@ for (const theme of ["light", "dark"]) test(`tab width owns layout across splits
   await page.screenshot({ path: `/tmp/cirno-review87-split-${theme}.png`, fullPage: true });
   await pane.getByRole("button", { name: /^Settings:/ }).click();
   const chooser = page.getByRole("dialog", { name: "Settings", exact: true });
-  await chooser.getByRole("searchbox").fill("Context compaction");
-  await chooser.getByRole("button", { name: "Context compaction", exact: true }).click();
-  const field = pane.getByRole("spinbutton", { name: "Active compaction trigger (%)" });
+  await chooser.getByRole("searchbox").fill("Context consolidation");
+  await chooser.getByRole("button", { name: "Context consolidation", exact: true }).click();
+  const field = pane.getByRole("spinbutton", { name: "Active consolidation trigger (%)" });
   await field.fill("73");
   // Moving the same mounted tab to the wide group must switch its layout immediately.
   await page.locator(".workbench-group-bar").nth(0).getByRole("button", { name: "Move to other tab group" }).click();

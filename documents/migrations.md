@@ -1,12 +1,12 @@
 # Instance upgrades
 
-Cirno 0.2.5 upgrades instances from 0.2.0, 0.2.1, 0.2.2, 0.2.3 and 0.2.4 and imports the published 0.1.6 layout at startup. Stop the
+Cirno 0.2.6 upgrades instances from 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4 and 0.2.5 and imports the published 0.1.6 layout at startup. Stop the
 old service and keep the same instance volume and external workspace mounts.
 The configuration records the last version as `lastRunVersion`; unversioned
 configuration is treated as 0.1.6. Later migrations belong to the startup
 migration registry, rather than the Agent's runtime storage code.
 
-The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3, 0.2.3 → 0.2.4 and 0.2.4 → 0.2.5 steps update only the configuration version. Conversations,
+The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3, 0.2.3 → 0.2.4, 0.2.4 → 0.2.5 and 0.2.5 → 0.2.6 steps update only the configuration version. Conversations,
 profiles, credentials and settings keep their existing data. Configuration
 originals and resumable journals stay under `state/migrations/<source>-to-<target>/`.
 Instances on 0.1.6 run the registered steps in order. First-use introductions
@@ -90,3 +90,5 @@ An interrupted installation resumes from its saved migration plan before startup
 Startup also moves existing SSH Nodes from `state/instance.sqlite3` into the encrypted credential vault. Node IDs and remote job references stay unchanged. Existing enrolled Nodes retain Agent access; new owner-created credentials default to private and unenrolled. Other records in an older vault remain intact and default to private when the visibility field is added.
 
 Each encrypted record commits before its old plaintext row is removed. An interrupted import retries the same ID, and a conflicting existing credential stops startup instead of replacing either record. Deleted SQLite payloads are erased and the old Node store is vacuumed. Existing external backups are not rewritten.
+
+Version 0.2.6 unifies compaction and Dream settings as context consolidation. Legacy configuration remains accepted through the configuration loader, while new saves use the unified fields. The offline version step preserves the existing configuration, profiles and conversation state.

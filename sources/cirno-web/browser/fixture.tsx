@@ -10,6 +10,7 @@ import { ChannelsFixture } from "./channels-fixture";
 import { TelegramFixture } from "./telegram-fixture";
 import { SkillsFixture, installSkillsFixtureApi } from "./skills-fixture";
 import { MemoryFixture } from "./memory-fixture";
+import { MemoryGraphFixture } from "./memory-graph-fixture";
 import { AutomationsFixture } from "./automations-fixture";
 import { AutomationCatalogFixture } from "./automation-catalog-fixture";
 import { NotificationsFixture } from "./notifications-fixture";
@@ -292,6 +293,8 @@ createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurfa
     ? <TelegramFixture />
     : parameters.get("case") === "skills-rebuild"
     ? <SkillsFixture />
+    : parameters.get("case") === "memory-graph"
+    ? <MemoryGraphFixture />
     : parameters.get("case") === "memory-rebuild"
     ? <MemoryFixture />
     : parameters.get("case") === "automation-catalog"

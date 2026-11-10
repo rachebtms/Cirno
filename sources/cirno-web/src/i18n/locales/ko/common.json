@@ -124,10 +124,6 @@
           "label": "시간대",
           "help": "시간대를 선택하세요. UTC 시차는 현재 날짜를 기준으로 표시됩니다."
         },
-        "agents_defaults_dream_enabled": {
-          "label": "기억 정리",
-          "help": "대화의 유용한 정보를 자동으로 정리합니다. 꺼도 기존 기억은 계속 사용합니다."
-        },
         "agents_defaults_heartbeat_enabled": {
           "label": "Enable heartbeat",
           "help": "Restart to apply."
@@ -248,14 +244,6 @@
           "label": "캐시 유지 시간",
           "help": "CLI 앱 카탈로그를 캐시에 보관하는 시간입니다."
         },
-        "agents_defaults_dream_interval_h": {
-          "label": "Dream interval (hours)",
-          "help": "유휴 시간 또는 고정 간격으로 정리합니다."
-        },
-        "agents_defaults_dream_model_override": {
-          "label": "Dream model",
-          "help": "Dream 전용 모델을 선택할 수 있습니다. 비워 두면 현재 모델을 사용합니다."
-        },
         "agents_defaults_idle_compact_check_interval_seconds": {
           "label": "유휴 압축 확인 간격(초)",
           "help": "대화가 유휴 압축 조건을 충족하는지 확인하는 간격입니다. 유휴 시간 제한과는 별개이며 재시작 후 적용됩니다."
@@ -272,29 +260,13 @@
           "label": "Model retries",
           "help": "Restart to apply."
         },
-        "agents_defaults_dream_mode": {
-          "label": "Dream 실행 시점",
-          "help": "유휴 시간 또는 고정 간격으로 정리합니다."
-        },
-        "agents_defaults_dream_idle_after_seconds": {
-          "label": "Dream 전 유휴 시간 (초)",
-          "help": "실행 중인 작업이 없을 때만 실행하며 새 입력은 Dream을 중단합니다."
-        },
-        "agents_defaults_dream_batch_entries": {
-          "label": "Dream 일괄 기록 수",
-          "help": "남은 기록은 대기열에 보관합니다."
-        },
-        "agents_defaults_dream_batch_chars": {
-          "label": "Dream 일괄 문자 수",
-          "help": "각 실행의 입력량을 제한하며 원본은 전체를 보관합니다."
-        },
         "agents_defaults_memory_context_tokens": {
           "label": "공유 기억 한도 (토큰)",
           "help": "MEMORY.md 주입량을 제한하며 전체 파일은 Home에 보관합니다."
         },
         "agents_defaults_memory_checkpoint_tokens": {
           "label": "작업 체크포인트 한도 (토큰)",
-          "help": "Dream과 독립적으로 작업 상태를 복원합니다."
+          "help": "context consolidation과 독립적으로 작업 상태를 복원합니다."
         },
         "agents_defaults_memory_index_scan_batch": {
           "label": "색인 검사 일괄 크기",
@@ -314,22 +286,18 @@
         },
         "agents_defaults_memory_embedding_max_rss_mb": {
           "label": "임베딩 프로세스 한도 (MB)",
-          "help": "자식 프로세스 RSS 한도이며 초과 시 BM25로 돌아갑니다. 전체 서비스 한도는 아닙니다."
+          "help": "Peak embedding worker memory budget (MiB), including model loading. Accepts 512, 1024 or higher. Exceeding it falls back to BM25; this is not a whole-service limit."
         },
         "agents_defaults_memory_embedding_timeout_seconds": {
           "label": "임베딩 제한 시간 (초)",
-          "help": "요청별 제한 시간이며 실패 시 BM25로 돌아갑니다."
+          "help": "Time budget for the whole embedding search, including the query and all incremental indexing batches. A visible timeout falls back to BM25."
         },
         "agents_defaults_memory_release_archived_runtime": {
           "label": "압축 후 메모리 해제",
           "help": "압축 후 증거와 표시 기록은 디스크에 유지하고 이전 실행 메시지의 메모리를 해제합니다."
         },
-        "agents_defaults_dream_max_tool_iterations": {
-          "label": "Dream 반복 한도",
-          "help": "회차별 모델 호출 수를 제한하며 미완료 입력은 대기열에 유지합니다."
-        },
         "agents_defaults_idle_compact_percent": {
-          "label": "유휴 압축 시작 비율(%)",
+          "label": "Idle consolidation trigger (%)",
           "help": "현재 모델의 문맥 창에 대한 비율입니다. 0은 유휴 압축을 끄며 모델 설정으로 재정의할 수 있습니다."
         },
         "agents_defaults_idle_compact_keep_percent": {
@@ -416,18 +384,6 @@
           "label": "요청 가능한 명령 최대 시간 (초)",
           "help": "모델이 요청할 수 있는 명령 실행 시간의 상한입니다. 0은 상한 없음이며 기본 실행 시간은 별도로 설정합니다."
         },
-        "agents_defaults_compaction_max_tokens": {
-          "label": "압축 출력 예산(토큰)",
-          "help": "추론을 포함한 압축 전용 예산입니다. 모델 출력 한도를 넘지 않습니다."
-        },
-        "agents_defaults_compaction_reasoning_effort": {
-          "label": "압축 추론 강도",
-          "help": "강도를 낮춰 요약 본문 공간을 확보합니다. 상속은 대화 설정을 사용하며 미지원 값은 제공자가 변환합니다."
-        },
-        "agents_defaults_compaction_checkpoint_reminder_percent": {
-          "label": "체크포인트 알림 기준(%)",
-          "help": "활성 입력 예산이 이 비율에 도달하면 작업 상태 저장을 알립니다. 실행 중인 요청은 중단하지 않습니다."
-        },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API 기본 URL",
           "help": "https://host/v1 같은 OpenAI 호환 URL 또는 전체 /embeddings 주소입니다. 자체 호스팅 HTTP도 지원합니다."
@@ -460,10 +416,6 @@
           "label": "메시지당 총 파일 크기 (MiB)",
           "help": "동영상을 제외한 이미지와 문서의 합계입니다. 로컬 파일 참조는 제외됩니다. 재시작 및 새로 고침 후 적용됩니다."
         },
-        "agents_defaults_compaction_output_reserve_percent": {
-          "label": "출력 예약 공간 (%)",
-          "help": "다음 응답을 위해 남겨 둘 컨텍스트 비율입니다. 출력 한도 이내에서 기본 5%를 예약하며 실제 출력 한도는 남은 공간에 맞게 조정됩니다."
-        },
         "agents_defaults_system_prompts_shared": {
           "label": "공유 추가 시스템 프롬프트",
           "help": "Applied to Router and Workers before their role-specific additions. Automatically saved; applies from the next turn. Leave empty to disable."
@@ -475,6 +427,34 @@
         "agents_defaults_system_prompts_worker": {
           "label": "Worker 추가 시스템 프롬프트",
           "help": "Applied only to Workers after the shared addition. Automatically saved; applies from the next turn. Leave empty to use only the shared addition."
+        },
+        "agents_defaults_consolidation_max_tokens": {
+          "label": "Consolidation output budget (tokens)",
+          "help": "Task checkpoint and memory updates share this output budget, capped by the model output limit."
+        },
+        "agents_defaults_consolidation_reasoning_effort": {
+          "label": "압축 추론 강도",
+          "help": "강도를 낮춰 요약 본문 공간을 확보합니다. 상속은 대화 설정을 사용하며 미지원 값은 제공자가 변환합니다."
+        },
+        "agents_defaults_consolidation_checkpoint_reminder_percent": {
+          "label": "체크포인트 알림 기준(%)",
+          "help": "활성 입력 예산이 이 비율에 도달하면 작업 상태 저장을 알립니다. 실행 중인 요청은 중단하지 않습니다."
+        },
+        "agents_defaults_consolidation_output_reserve_percent": {
+          "label": "출력 예약 공간 (%)",
+          "help": "다음 응답을 위해 남겨 둘 컨텍스트 비율입니다. 출력 한도 이내에서 기본 5%를 예약하며 실제 출력 한도는 남은 공간에 맞게 조정됩니다."
+        },
+        "agents_defaults_consolidation_learn": {
+          "label": "Learn during consolidation",
+          "help": "Produce task checkpoints, durable memories and verified Skill improvements in the same request, without a separate model run."
+        },
+        "agents_defaults_consolidation_max_updates": {
+          "label": "Maximum updates per consolidation",
+          "help": "Bound the total memory and document updates. A pass may produce no useful updates."
+        },
+        "agents_defaults_consolidation_context_chars": {
+          "label": "Additional reference budget (characters)",
+          "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
         }
       },
       "groups": {
@@ -574,9 +554,6 @@
         "command-limits": {
           "title": "명령 시간 제한"
         },
-        "compaction-generation": {
-          "title": "체크포인트 생성"
-        },
         "embedding": {
           "title": "임베딩 서비스"
         },
@@ -585,6 +562,13 @@
         },
         "system-prompts": {
           "title": "추가 시스템 프롬프트"
+        },
+        "consolidation-generation": {
+          "title": "Consolidation generation"
+        },
+        "consolidation": {
+          "title": "Learning and idle consolidation",
+          "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
         }
       },
       "save": "변경 사항 저장",
@@ -597,8 +581,8 @@
       "noResults": "일치하는 설정이 없습니다.",
       "pending": "저장하지 않은 변경 사항",
       "idleCompaction": {
-        "label": "유휴 시 자동 압축",
-        "help": "유휴 시간 제한에 도달하면 컨텍스트를 자동으로 압축해 이후 요청의 토큰 사용량을 줄입니다.",
+        "label": "Consolidate idle conversations",
+        "help": "Consolidate context and retain useful experience after the idle timeout.",
         "wait": "유휴 시간 제한",
         "minutes": "분",
         "numberError": "분 단위로 0 이상의 정수를 입력하세요."
@@ -663,8 +647,6 @@
       "nodes": "노드",
       "reading": "텍스트 및 읽기",
       "activity": "실행 과정 표시",
-      "context": "컨텍스트 압축",
-      "dream": "Dream 메모리 통합",
       "memory-search": "메모리 검색",
       "execution": "목표 및 실행",
       "shell": "Shell 실행",
@@ -675,7 +657,8 @@
       "coordination": "대화 협업",
       "regional": "시간 및 지역",
       "approval": "AI 승인",
-      "backup": "백업 및 복원"
+      "backup": "백업 및 복원",
+      "consolidation": "Context consolidation"
     },
     "sections": {
       "interface": "인터페이스",
@@ -957,7 +940,8 @@
         "api": "API",
         "cron": "자동화",
         "dream": "기억 정리",
-        "system": "보조 호출"
+        "system": "보조 호출",
+        "consolidation": "Context consolidation"
       }
     },
     "providers": {
@@ -2133,20 +2117,20 @@
             "description": "저장된 최근 N개 메시지를 표시합니다."
           },
           "dream": {
-            "title": "Dream 실행",
+            "title": "consolidation 실행",
             "description": "메모리를 지금 정리합니다."
           },
           "dream_log": {
-            "title": "Dream 로그",
-            "description": "지난 Dream 실행의 변경을 확인합니다."
+            "title": "consolidation 로그",
+            "description": "지난 consolidation 실행의 변경을 확인합니다."
           },
           "dream_restore": {
             "title": "메모리 복원",
-            "description": "이전 Dream 메모리 스냅샷을 복원합니다."
+            "description": "이전 consolidation 메모리 스냅샷을 복원합니다."
           },
           "dream_prompt": {
-            "title": "Dream 설정",
-            "description": "Dream이 이 작업 공간의 메모리를 정리하는 방법을 설정합니다."
+            "title": "consolidation 설정",
+            "description": "consolidation이 이 작업 공간의 메모리를 정리하는 방법을 설정합니다."
           },
           "goal": {
             "title": "장기 목표",
@@ -2179,6 +2163,10 @@
           "access": {
             "title": "접근 모드",
             "description": "기본, AI 승인 또는 전체 접근을 선택합니다."
+          },
+          "consolidate": {
+            "title": "Consolidate context",
+            "description": "Organize task context and retain verified experience"
           }
         },
         "badges": {
@@ -2805,7 +2793,8 @@
     "agentVisible": "Agent에 공개됨",
     "agentHidden": "비공개",
     "keepSecret": "비워 두면 저장된 값을 유지합니다.",
-    "sshNode": "SSH Node"
+    "sshNode": "SSH Node",
+    "memory": "Memory"
   },
   "files": {
     "title": "Files",
@@ -2852,12 +2841,12 @@
     "evidence": "출처",
     "more": "더 보기",
     "reindex": "색인 재구축",
-    "retry": "실패한 Dream 재시도",
-    "pending": "Dream 대기: {{count}}",
+    "retry": "Retry saving consolidation results",
+    "pending": "Pending next consolidation: {{count}}",
     "failed": "실패: {{count}}",
     "indexed": "색인됨: {{count}}",
     "indexSize": "색인: {{size}} MB",
-    "lastDream": "최근 Dream",
+    "lastDream": "최근 consolidation",
     "noDream": "실행 기록 없음",
     "includeHistory": "대체된 기록 포함",
     "revision": "버전 {{revision}}",
@@ -2881,7 +2870,7 @@
     "until": "종료일",
     "discoverTags": "태그 탐색",
     "databases": "데이터베이스",
-    "dreamOutcomes": "최근 Dream 결과",
+    "dreamOutcomes": "최근 consolidation 결과",
     "createdOutcome": "생성됨",
     "mergedOutcome": "병합됨",
     "skippedOutcome": "저장 불필요",
@@ -2898,10 +2887,12 @@
     "fallback_unavailable": "벡터 검색을 사용할 수 없어 BM25를 사용했습니다.",
     "searchDetails": "이유",
     "indexPending": "벡터 색인이 완료되지 않았습니다. 색인된 내용만 표시됩니다. 다시 검색하면 색인이 계속됩니다.",
-    "statusTitle": "색인 및 기억 정리",
+    "statusTitle": "Index and context consolidation",
     "noTags": "태그가 없습니다.",
     "resultsFor": "“{{query}}” 검색 결과",
-    "noMatches": "검색 조건에 맞는 기억이 없습니다."
+    "noMatches": "검색 조건에 맞는 기억이 없습니다.",
+    "lastConsolidation": "Last consolidation",
+    "noConsolidation": "Not run yet"
   },
   "userQuestion": {
     "title": "확인할 사항",
@@ -3124,5 +3115,27 @@
       "manual": "저장된 순서"
     },
     "projectActions": "프로젝트 {{name}} 작업"
+  },
+  "memoryGraph": {
+    "description": "Explore saved knowledge, connections and original sources.",
+    "cloud": "Memory cloud",
+    "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
+    "nodeCount": "{{count}} memories",
+    "fit": "Fit to view",
+    "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
+    "renderError": "The 3D view could not start. You can still search and read the results.",
+    "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",
+    "open": "Open Memory",
+    "limit": "Showing up to {{count}} memories. Narrow the filters to explore other records.",
+    "linksLimit": "Showing the first 1,500 connections within these results.",
+    "relation_tag": "Shared tag",
+    "relation_supports": "Supports",
+    "relation_conflicts": "Conflicts",
+    "relation_supersedes": "Supersedes",
+    "relation_related": "Related",
+    "relation_derived_from": "Derived from",
+    "filters": "Filters",
+    "refreshIndex": "Refresh index status",
+    "loading": "Loading memory view…"
   }
 }

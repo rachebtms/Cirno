@@ -5,10 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cirno_core.agent.loop import AgentLoop
-from cirno_core.bus.events import InboundMessage, OutboundMessage
+from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.command.builtin.dream import cmd_dream
-from cirno_core.command.router import CommandContext
 from cirno_core.memory.dream_run import run_dream
 from cirno_memory.repository import MemoryRepository
 
@@ -72,68 +70,8 @@ async def test_completed_dream_does_not_ack_unconfirmed_input(agent):
     assert row["retry_after"] > 0
 
 
-async def test_manual_dream_reports_failure_and_keeps_it_on_the_owned_task(agent):
-    agent.process_direct = AsyncMock(side_effect=RuntimeError("model unavailable"))
-    message = InboundMessage(channel="cli", sender_id="owner", chat_id="dream", content="/dream")
-    await cmd_dream(
-        CommandContext(
-            msg=message,
-            session=None,
-            key=message.session_key,
-            raw="/dream",
-            loop=agent,
-        )
-    )
-    task = next(iter(agent._background_tasks))
-
-    with pytest.raises(RuntimeError, match="model unavailable"):
-        await task
-    await asyncio.sleep(0)
-
-    assert not agent._background_tasks
-    assert agent.bus.outbound_size == 1
-    failure = agent.bus.outbound.get_nowait()
-    assert failure.content == "Dream failed: model unavailable"
-    assert (failure.channel, failure.chat_id) == ("cli", "dream")
-    assert agent.context.memory.journal.get_last_dream_cursor() == 0
-    assert pending_batch(agent)["lease"] is None
 
 
-async def test_manual_dream_is_tracked_and_cancellation_requeues_without_penalty(agent):
-    started = asyncio.Event()
-
-    async def wait_for_cancel(*_args, **_kwargs):
-        started.set()
-        await asyncio.Event().wait()
-
-    agent.process_direct = wait_for_cancel
-    message = InboundMessage(channel="cli", sender_id="owner", chat_id="dream", content="/dream")
-    response = await cmd_dream(
-        CommandContext(
-            msg=message,
-            session=None,
-            key=message.session_key,
-            raw="/dream",
-            loop=agent,
-        )
-    )
-    assert response.content == "Dreaming..."
-    await asyncio.wait_for(started.wait(), timeout=3)
-    assert agent.lifecycle.has_pending_work()
-    assert len(agent._background_tasks) == 1
-    task = next(iter(agent._background_tasks))
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    await asyncio.sleep(0)
-
-    assert not agent._background_tasks
-    assert agent.context.memory.journal.get_last_dream_cursor() == 0
-    row = pending_batch(agent)
-    assert row["lease"] is None
-    assert row["attempts"] == 0
-    assert row["retry_after"] == 0
-    assert agent.bus.outbound_size == 0
 
 
 async def test_prompt_preparation_failure_releases_the_claimed_batch(agent, monkeypatch):

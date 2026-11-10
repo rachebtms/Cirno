@@ -42,13 +42,13 @@ Settings → Network & retries exposes request timeout, stream idle timeout and 
 
 ## Settings pages
 
-Overview shows model and web-search status, plus shortcuts to Memory library, Context compaction, Goals & execution, Personality, Telegram, Nodes, MCP and Tools & CLI Apps.
+Overview shows model and web-search status, plus shortcuts to Memory library, Context consolidation, Goals & execution, Personality, Telegram, Nodes, MCP and Tools & CLI Apps.
 
 - Providers: connections, credentials and optional upstream balance queries.
 - Models: named presets, call order, context-window capacity and generation parameters.
 - Appearance, Text & reading, Execution display: paired color themes, language, text size, code wrapping and independent brief/detailed reasoning and tool steps. These owner preferences are stored by the service and synchronized across connected devices.
 - Browser notifications: per-device browser permission, synchronized sound settings and Inbox category mutes.
-- Memory library, Context compaction, Dream consolidation, Memory retrieval: separate pages for stored knowledge, context thresholds, background consolidation and optional embeddings.
+- Memory library, Context consolidation, Memory retrieval: stored knowledge; unified context thresholds, experience retention and self-improvement; optional embeddings.
 - Personality: separate Router and Worker personalities, shared user preferences and agent instructions.
 - Agent heartbeat: periodic checks of `HEARTBEAT.md` and wakeups in the Router, separate from service health checks.
 - Conversation coordination: concurrent subagents and the per-source outgoing cross-conversation message limit.
@@ -92,15 +92,17 @@ A failed request stays visible with Retry. Closing sign-in cancels its server
 flow; if cancellation fails, the dialog stays open for retry. A cleanup failure
 after leaving Settings appears as a persistent notification with Retry and Close.
 
-Each provider and model has a stable ID, separate from its display name. Newly created entries receive generated IDs; built-in providers use IDs such as `deepseek`. Configuration dictionary keys are IDs. Model tools and conversation selections reference model IDs, so renaming a model leaves active conversations, fallback order and Dream selections unchanged. The upstream model identifier is a separate field, such as `deepseek-chat`.
+Each provider and model has a stable ID, separate from its display name. Newly created entries receive generated IDs; built-in providers use IDs such as `deepseek`. Configuration dictionary keys are IDs. Model tools and conversation selections reference model IDs, so renaming a model leaves active conversations, fallback order and approval model selections unchanged. The upstream model identifier is a separate field, such as `deepseek-chat`.
 
 Balance queries are disabled until configured. Set a complete balance endpoint and select DeepSeek's balance format or a custom JSON response with a JSON Pointer to the amount (for example `/data/balance`) and currency. The endpoint may use a different host from the model API. A separate balance API key is optional; leaving it blank uses the provider key. Refresh queries manually from the provider's balance panel. Balance settings do not change model routing or invalidate its runtime cache.
 
-## Idle context compaction
+## Context consolidation
 
-Settings → Context compaction configures inactivity and two percentages of the active model's context window. Defaults are 15 minutes of inactivity, a 20% trigger and 5% recent-context retention. Idle compaction requires both inactivity and the usage trigger. A zero timeout or trigger disables it. Model preset advanced options can override either percentage; an empty value inherits the global value. Set each model's context-window capacity correctly for meaningful percentages.
+Task checkpoints, durable learning and supported Skill improvements are produced in the same model request. Results are saved before task execution continues. There is no separate model, Dream schedule or idle Dream task. Additional references stay at the request tail for cache reuse. Configure learning, maximum updates, reference characters and the shared output/reasoning budget on this page. Disabling learning keeps context checkpoint generation enabled. Older compaction generation settings migrate to `agents.defaults.consolidation`; an old Dream enabled flag becomes `consolidation.learn`, and old scheduling/model/iteration options are retired when configuration is saved. `/consolidate` is the manual command; `/compact` and `/dream` remain hidden compatibility aliases.
 
-Retention must be below a nonzero trigger. Compaction summarizes older context while retaining complete recent turns and paired tool calls/results within its budget. Counts are estimates until a subsequent provider request reports actual usage. Context-window pressure during execution is a separate compaction trigger.
+Settings → Context consolidation configures inactivity and two percentages of the active model's context window. Defaults are 15 minutes of inactivity, a 20% trigger and 5% recent-context retention. Idle consolidation requires both inactivity and the usage trigger. A zero timeout or trigger disables it. Model preset advanced options can override either percentage; an empty value inherits the global value. Set each model's context-window capacity correctly for meaningful percentages.
+
+Retention must be below a nonzero trigger. Consolidation summarizes older context while retaining complete recent turns and paired tool calls/results within its budget. Counts are estimates until a subsequent provider request reports actual usage. Context-window pressure during execution is a another trigger of the same flow.
 
 ## Projects and conversations
 
@@ -124,7 +126,7 @@ Settings → Personality provides three automatically saved text fields:
 
 Each field accepts up to 32,000 characters. Clear a field to remove its addition. The shared field initially contains the owner's unlimited-token effort instruction; the two role-specific fields start empty. This instruction requests thorough work and does not alter provider billing or model limits.
 
-Changes apply to the next turn without restarting. A running turn keeps its captured prompt, including during compaction. Shared additions precede the role-specific addition, after the built-in instructions and profile context. They customize behavior within the Harness contracts: role permissions, Router delegation and execution budgets remain enforced. Internal Dream and heartbeat decision requests do not receive these conversation additions.
+Changes apply to the next turn without restarting. A running turn keeps its captured prompt, including during compaction. Shared additions precede the role-specific addition, after the built-in instructions and profile context. They customize behavior within the Harness contracts: role permissions, Router delegation and execution budgets remain enforced. Consolidation reuses the captured conversation prefix; heartbeat decision requests do not receive these conversation additions.
 
 The corresponding configuration keys are `agents.defaults.system_prompts.shared`, `agents.defaults.system_prompts.router` and `agents.defaults.system_prompts.worker`. The same settings page also edits `SOUL.md`, `WORKER.md` and `USER.md`; those profile files remain separate from these additions.
 
@@ -141,6 +143,8 @@ Settings → Shell execution separates the default command duration from **Maxim
 Settings → Nodes manages SSH connections, host fingerprints, direct commands and persistent jobs. Supply host, port, SSH username, remote working directory and either key or password authentication. A key path refers to a file on the server. A blank password while editing preserves the saved password. SSH credentials are encrypted in the credential vault and omitted from connection listings; Node enrollment and job tracking use instance state. Saved host keys or the server’s `known_hosts` verify the server; compare scanned fingerprints before saving them.
 
 SSH connection details and Agent visibility live in **Credentials**. Enrollment in **Nodes** is optional. The shared SSH startup form stores the remote working directory, an optional initialization script path and environment variables such as `CUDA_VISIBLE_DEVICES=2`. Variables are exported, the shell changes directory, and the initialization script is sourced in that same Bash shell before the command. `~/` resolves on the remote host. A failing directory or initialization step stops execution and reports its error. Direct commands, new interactive Terminals and submitted jobs share this setup; inspecting/stopping jobs does not rerun the initialization script. Updating settings does not retroactively change an already-open Terminal.
+
+Agent Node listings and operation-review evidence expose connection metadata, authentication-presence flags and environment variable names. They omit passwords, private-key paths and environment values. Agent job listings contain status metadata; reading a job's output requires an explicit SSH status operation with the usual access review. Owner forms retain their complete editable settings. Marking a credential Agent-visible permits using it through its ID and managing its metadata; only the owner can reveal the stored value.
 
 Execute command runs a command and returns output without creating a job. The `nodes` tool namespace also lists connections, transfers files and starts, inspects or stops persistent jobs. Job output, PID and exit status stay on the remote host; tracking records stay in `state/instance.sqlite3`. No remote Cirno daemon or client is installed. Remote execution requires Bash and OpenSSH; persistent jobs also require `setsid`. An uncertain submission exposes its job ID for inspection before resubmitting.
 
@@ -171,7 +175,7 @@ Returning to the foreground checks the WebSocket connection and reloads the serv
 
 ## Long tasks and embeddings
 
-See [Model context and long-running work](model-context.md) for per-model reasoning replay, active/idle compaction, checkpoint generation and visible progress. See [Memory retrieval](memory-retrieval.md) for local CPU and external API embeddings. Both vector modes remain optional; BM25 is available without an embedding service.
+See [Model context and long-running work](model-context.md) for per-model reasoning replay, active/idle consolidation, checkpoint generation and visible progress. See [Memory retrieval](memory-retrieval.md) for local CPU and external API embeddings. Both vector modes remain optional; BM25 is available without an embedding service.
 
 ## Browser file uploads
 

@@ -8,9 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cirno_core.utils.prompt_templates import render_template
 
-_ARCHIVE_PROMPT = render_template("agent/consolidator_archive.md", strip=True)
 
 
 class TestNewCommandArchival:
@@ -116,7 +114,7 @@ class TestNewCommandArchival:
         await loop.aclose()
         sent = loop.provider.chat_stream_with_retry.call_args.kwargs["messages"]
         assert sent[1:-1] == ordinary_history
-        assert sent[-1]["content"] == _ARCHIVE_PROMPT
+        assert "## Task" in sent[-1]["content"] and "## Memory updates" in sent[-1]["content"]
 
     @pytest.mark.asyncio
     async def test_new_clears_session_and_responds(self, tmp_path: Path) -> None:

@@ -170,9 +170,9 @@ def test_runtime_payload_matches_shared_catalogue_contract():
 def test_disabling_memory_consolidation_preserves_other_memory_settings():
     config = Config()
     before = config.agents.defaults.model_dump()
-    assert update_runtime_config(config, {"agents.defaults.dream.enabled": False})
+    assert update_runtime_config(config, {"agents.defaults.consolidation.learn": False})
     after = config.agents.defaults.model_dump()
-    before["dream"]["enabled"] = False
+    before["consolidation"]["learn"] = False
     assert after == before
 
 

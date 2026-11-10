@@ -172,8 +172,9 @@ class Consolidator:
     def _input_token_budget(self, runtime: LLMRuntime) -> int:
         """Available input token budget for consolidation LLM."""
         return ContextBudget(
-            runtime.context_window_tokens, runtime.generation.max_tokens,
-            runtime.output_reserve_percent, runtime.active_compact_percent,
+            runtime.context_window_tokens,
+            min(runtime.generation.max_tokens, runtime.compaction_max_tokens),
+            runtime.output_reserve_percent,
         ).input_limit
 
     async def archive_session(

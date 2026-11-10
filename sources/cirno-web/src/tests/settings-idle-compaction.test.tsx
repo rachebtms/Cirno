@@ -20,12 +20,12 @@ function setup(minutes = 720) {
       runtime_config: { ...persisted.runtime_config, ...values } };
     return persisted;
   });
-  renderSettingsView({ initialSection: "context", initialSettings: persisted, onRestart: vi.fn() });
+  renderSettingsView({ initialSection: "consolidation", initialSettings: persisted, onRestart: vi.fn() });
   return () => persisted;
 }
 
 const input = () => screen.getByRole("textbox", { name: "Idle timeout" });
-const toggle = () => screen.getByRole("switch", { name: "Auto-compact idle sessions" });
+const toggle = () => screen.getByRole("switch", { name: "Consolidate idle conversations" });
 
 function edit(next: string) {
   act(() => input().focus());
@@ -41,10 +41,10 @@ function expectSaved(minutes: number) {
 describe("Idle compaction settings", () => {
   installSettingsViewTestHooks();
 
-  it.each([15, 720, 0])("reads %i minutes in Context compaction", (minutes) => {
+  it.each([15, 720, 0])("reads %i minutes in Context consolidation", (minutes) => {
     setup(minutes);
-    const sessions = within(screen.getByRole("region", { name: "Context compaction" }));
-    expect(sessions.getByRole("switch", { name: "Auto-compact idle sessions" })).toHaveProperty("checked", minutes > 0);
+    const sessions = within(screen.getByRole("region", { name: "Learning and idle consolidation" }));
+    expect(sessions.getByRole("switch", { name: "Consolidate idle conversations" })).toHaveProperty("checked", minutes > 0);
     if (minutes) expect(input()).toHaveValue(String(minutes));
     else expect(screen.queryByRole("textbox", { name: "Idle timeout" })).not.toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe("Idle compaction settings", () => {
     await waitFor(() => expect(input()).toBeEnabled());
     expect(screen.getAllByText("Saved. Restart to apply changes.").length).toBeGreaterThan(0);
     cleanup();
-    renderSettingsView({ initialSection: "context", initialSettings: persisted() });
+    renderSettingsView({ initialSection: "consolidation", initialSettings: persisted() });
     expect(input()).toHaveValue("721");
   });
 
@@ -74,7 +74,7 @@ describe("Idle compaction settings", () => {
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(requestMutationMock).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("heading", { name: "Context compaction" }));
+    await user.click(screen.getByRole("heading", { name: "Context consolidation" }));
     await waitFor(() => expectSaved(37));
   });
 

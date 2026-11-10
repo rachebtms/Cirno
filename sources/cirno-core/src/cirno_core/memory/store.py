@@ -125,6 +125,7 @@ class MemoryStore:
                 f"[RAW] {len(messages)} messages{suffix}\n{chunk}",
                 session_key=session_key,
             )
+        self.journal.compact_history(indexed=True)
         logger.warning(
             "Memory consolidation degraded: raw-archived {} messages in {} entries",
             len(messages),

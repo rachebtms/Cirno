@@ -88,6 +88,44 @@ def test_invalid_ssh_does_not_echo_the_secret(credentials):
     assert 'must-not-leak' not in str(error.value)
 
 
+async def test_node_listing_and_review_expose_metadata_without_connection_secrets(credentials, monkeypatch):
+    from cirno_core.agent.approval.reviewer import operation_evidence
+    from cirno_core.agent.tools.instance_features import NodeTool
+
+    ssh = {"host": "gpu.example", "username": "researcher", "auth_method": "password",
+           "password": "ssh-secret", "identity_file": "/private/ssh-key",
+           "environment": {"SSH_PASSWORD": "env-secret", "CUSTOM": "unclassified-secret"},
+           "working_directory": "/research", "init_script": "~/setup.sh"}
+    record = credentials.save(label="GPU", kind="ssh", ssh=ssh, node_enabled=True, agent_visible=True)
+    credentials.data.save("node_jobs", {"node_id": record["id"], "state": "completed",
+                                       "command": "echo command-secret", "output": "output-secret",
+                                       "error": "error-secret", "created_at": "2026-11-10T00:00:00Z"})
+    monkeypatch.setattr('cirno_core.agent.tools.instance_features.Nodes', lambda **kwargs: Nodes(credentials.data, **kwargs))
+    monkeypatch.setattr('cirno_core.nodes.service.Nodes', lambda **kwargs: Nodes(credentials.data, **kwargs))
+    result = json.loads(await NodeTool().execute(action="list"))
+    review = operation_evidence("node", {"node_id": record["id"], "command": "uptime"}, credentials.data.state_dir)
+    model_metadata = Credentials(credentials.data, actor="agent").describe(record["id"])
+    rendered = json.dumps([result, review, model_metadata])
+    for secret in ("ssh-secret", "env-secret", "unclassified-secret", "/private/ssh-key",
+                   "command-secret", "output-secret", "error-secret"):
+        assert secret not in rendered
+    assert result["nodes"][0]["environment_names"] == ["CUSTOM", "SSH_PASSWORD"]
+    assert result["nodes"][0]["has_password"] is True
+    assert result["nodes"][0]["working_directory"] == "/research"
+    assert result["jobs"][0]["state"] == "completed"
+    assert review["remote_target"]["configuration_sha256"]
+    assert Nodes(credentials.data).node(record["id"]).password == "ssh-secret"
+    assert Nodes(credentials.data).catalog()["nodes"][0]["environment"] == ssh["environment"]
+    assert Nodes(credentials.data).catalog()["jobs"][0]["output"] == "output-secret"
+
+
+def test_agent_service_cannot_reveal_visible_credentials(credentials):
+    record = credentials.save(label="Visible", value="owner-secret", agent_visible=True)
+    with pytest.raises(ValueError, match="Only the owner"):
+        Credentials(credentials.data, actor="agent").reveal(record["id"])
+    assert credentials.reveal(record["id"])["value"] == "owner-secret"
+
+
 async def test_ipv6_transfers_and_auth_environment_use_the_saved_connection(credentials, monkeypatch):
     from unittest.mock import AsyncMock
     record = credentials.save(label='IPv6', kind='ssh', ssh={'host': '2001:db8::1', 'username': 'worker', 'port': 2222}, node_enabled=True)

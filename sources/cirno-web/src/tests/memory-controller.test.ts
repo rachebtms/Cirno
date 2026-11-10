@@ -4,6 +4,7 @@ import { createMemoryService } from "@/features/memory/model/service";
 import { useMemorySearch } from "@/features/memory/model/useMemorySearch";
 import { useMemoryInspector } from "@/features/memory/model/useMemoryInspector";
 import { useMemoryMaintenance } from "@/features/memory/model/useMemoryMaintenance";
+import { EMPTY_MEMORY_QUERY } from "@/features/memory/model/service";
 import type { MemoryRecord } from "@/lib/contracts/memory";
 const row: MemoryRecord = {
   id: "fact",
@@ -38,6 +39,14 @@ function service(
   };
 }
 afterEach(cleanup);
+it("waits for the server's whole-search embedding budget without extending lexical reads", async () => {
+  const requestMutation = vi.fn().mockResolvedValue({ memories: [], has_more: false, next_offset: 0 });
+  const api = createMemoryService({ requestMutation });
+  await api.graph({ ...EMPTY_MEMORY_QUERY, query: "calibration", mode: "semantic" });
+  expect(requestMutation).toHaveBeenLastCalledWith("instance.action", expect.any(Object), 150_000);
+  await api.list({ ...EMPTY_MEMORY_QUERY, query: "calibration" });
+  expect(requestMutation.mock.lastCall).toHaveLength(2);
+});
 it("paginates the submitted search rather than a newly typed draft", async () => {
   const fixture = service((action, values) =>
     action === "memory.list"

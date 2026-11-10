@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import time
 from typing import TYPE_CHECKING
 
 from cirno_core.bus.events import (
@@ -60,10 +59,6 @@ class SessionDispatcher:
         from cirno_core.runtime.heartbeat import discard_paused_heartbeat
         if await discard_paused_heartbeat(self.agent.sessions, msg):
             return
-        self.agent._last_memory_activity = time.monotonic()
-        if self.agent._idle_memory_task and not self.agent._idle_memory_task.done():
-            self.agent._idle_memory_task.cancel()
-            await asyncio.gather(self.agent._idle_memory_task, return_exceptions=True)
         raw = command_text(msg)
         effective_key = self.session_key(msg)
         if msg.metadata.get(INBOUND_META_RUNTIME_CONTROL) == RUNTIME_CONTROL_SESSION_DISCARD:

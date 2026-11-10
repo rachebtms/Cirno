@@ -25,7 +25,7 @@ class MemoryConfig(BaseModel):
     embedding_api_chunk_chars: int = Field(default=768, ge=128, le=4096)
     embedding_model_path: str = Field(default="", validate_default=True)
     embedding_tokenizer_path: str = Field(default="", validate_default=True)
-    embedding_max_rss_mb: int = Field(default=200, ge=50, le=200)
+    embedding_max_rss_mb: int = Field(default=200, ge=50)
     embedding_timeout_seconds: int = Field(default=30, ge=1, le=120)
 
     @field_validator("embedding_model_path", "embedding_tokenizer_path")

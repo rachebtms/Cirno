@@ -48,9 +48,14 @@ class Credentials:
     def describe(self, identifier: str) -> dict:
         record = self._check_access(self.vault.read_record(identifier))
         metadata = {key: record[key] for key in ("id", "label", "kind", "agent_visible")}
-        return {**metadata, **({"ssh": SSHCredential.model_validate_json(record["value"]).public()} if record["kind"] == "ssh" else {})}
+        if record["kind"] == "ssh":
+            ssh = SSHCredential.model_validate_json(record["value"])
+            metadata["ssh"] = ssh.agent_metadata() if self.actor == "agent" else ssh.public()
+        return metadata
 
     def reveal(self, identifier: str) -> dict:
+        if self.actor != "owner":
+            raise ValueError("Only the owner can reveal credential values")
         record = self._check_access(self.vault.read_record(identifier))
         if record["kind"] == "ssh":
             return {"ssh": SSHCredential.model_validate_json(record["value"]).model_dump()}

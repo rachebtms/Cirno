@@ -31,10 +31,6 @@ export function createRuntimeSections(bindings: SettingsComposition): SectionRen
           onChange={(enabled) => toggleRuntime("tools.web.enable", enabled)}>
           {renderBrowser({ embedded: true })}
         </SettingsFeature>
-        <SettingsFeature title={t("settings.runtimeConfig.fields.agents_defaults_dream_enabled.label")}
-          enabled={state.value("agents.defaults.dream.enabled") === true}
-          disabled={restartInProgress || state.saving === "memory" || !settings.runtime_config} error={state.errors.memory}
-          onChange={(enabled) => toggleRuntime("agents.defaults.dream.enabled", enabled)} />
         {!settings.runtime_config ? <p className="settings-list-inset text-[13px] text-muted-foreground">{t("settings.runtimeConfig.unavailable")}</p> : null}
       </section>
     );
@@ -108,13 +104,7 @@ export function createRuntimeSections(bindings: SettingsComposition): SectionRen
     );
   };
 
-  const renderContext: SectionRenderer = () => {
-    return runtimeConfiguration("context");
-  };
-
-  const renderDream: SectionRenderer = () => {
-    return runtimeConfiguration("dream");
-  };
+  const renderConsolidation: SectionRenderer = () => runtimeConfiguration("consolidation");
 
   const renderMemorySearch: SectionRenderer = () => {
     return runtimeConfiguration("memory-search");
@@ -147,8 +137,7 @@ export function createRuntimeSections(bindings: SettingsComposition): SectionRen
     "coordination": renderCoordination,
     "regional": renderRegional,
     "runtime": renderRuntime,
-    "context": renderContext,
-    "dream": renderDream,
+    "consolidation": renderConsolidation,
     "memory-search": renderMemorySearch,
     "approval": renderApproval,
     "execution": renderExecution,

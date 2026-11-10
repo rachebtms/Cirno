@@ -33,7 +33,7 @@ The instance root defaults to `~/.cirno/`. Select another instance with `cirno -
 | `home/memory/` | Scoped knowledge, original evidence, revisions and memory databases |
 | `home/skills/<name>/SKILL.md` | Installed and learned Skills |
 | `home/skills-history/` | Retained Skill versions |
-| `home/prompts/dream.md` | Optional Dream prompt override |
+| `home/prompts/dream.md` | Retained legacy prompt; no longer executed by unified consolidation |
 | `workspace/` | Default task directory; conversations may select other directories |
 
 A project's own `AGENTS.md` supplies project instructions in addition to Home instructions. Projects have independent IDs and can share a working directory. Conversation histories remain separate when projects or directories change. Conversation storage belongs to the instance under `state/sessions/`; changing, copying or moving the default workspace does not select another conversation database. Workspaces do not need identity markers. The fixed conversation database is `state/sessions/instance/sessions.sqlite3`; startup imports v0.1.6's workspace-bound databases into it. See [instance migration](migrations.md) for ID conflicts, retained originals and recovery.
@@ -44,7 +44,7 @@ retain their earlier results. These files remain until you remove them; changing
 workspaces or starting more conversations does not prune existing references.
 Include external workspaces when backing up this evidence.
 
-Bundled Skills are part of the application. Home Skills override or extend them through the loader. File tools expose supported Home resources according to their access policy; Dream has additional maintenance permissions, while ordinary execution does not directly rewrite shared profiles. The user can edit profiles through Settings. Directory separation expresses ownership; Full Access can still access files outside the workspace.
+Bundled Skills are part of the application. Home Skills override or extend them through the loader. File tools expose supported Home resources according to their access policy; consolidation has restricted, evidence-checked document updates, while ordinary execution does not directly rewrite shared profiles. The user can edit profiles through Settings. Directory separation expresses ownership; Full Access can still access files outside the workspace.
 
 Skill availability, validation and setup hints share one runtime metadata parser.
 Invalid requirement lists are reported as errors; they do not remove a Skill's
@@ -58,10 +58,10 @@ reports the failure. Deleting a Home Skill preserves its retained versions.
 
 Upgrading from 0.1.6 preserves the instance directory and account. It converts conversation and automation storage once; replacing the container image does not require re-registration. Older layouts should first be upgraded to 0.1.6.
 
-Back up the entire instance root with the service stopped. Copying only Agent Home does not preserve accounts, conversations or task queues. Copying only Markdown does not preserve memory scopes, revisions, links or Dream processing state. Workspaces outside the instance root require their own backups. See [memory storage](architecture/memory.md) for authoritative and rebuildable databases.
+Back up the entire instance root with the service stopped. Copying only Agent Home does not preserve accounts, conversations or task queues. Copying only Markdown does not preserve memory scopes, revisions, links or consolidation evidence and processing state. Workspaces outside the instance root require their own backups. See [memory storage](architecture/memory.md) for authoritative and rebuildable databases.
 
 ## First introduction and profile changes
 
-New owner registration creates `home/BOOTSTRAP.md` for the Router’s first introduction. Agreed assistant identity and personality go to `SOUL.md`; user names, preferred forms of address, background and lasting communication preferences go to `USER.md`. Explicit changes are applied during the conversation through file tools, rather than waiting for Dream or only saving a memory record. Workers use `WORKER.md` for their own personality and share `USER.md`. Existing profile content is preserved when adding details.
+New owner registration creates `home/BOOTSTRAP.md` for the Router’s first introduction. Agreed assistant identity and personality go to `SOUL.md`; user names, preferred forms of address, background and lasting communication preferences go to `USER.md`. Explicit changes are applied during the conversation through file tools, without waiting for context consolidation or only saving a memory record. Workers use `WORKER.md` for their own personality and share `USER.md`. Existing profile content is preserved when adding details.
 
 When the introduction is finished or skipped, the Router empties `BOOTSTRAP.md`. Login, restart and clearing conversation history do not recreate it. These files remain editable in Settings → Personality and are included in instance backups. The first wake is a durable system input, visibly identified as First awakening; it is not a fabricated user message.

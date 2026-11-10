@@ -7,7 +7,7 @@ import {
   OverviewIcon,
   SystemIcon,
 } from "@/components/icons/product-icons";
-import { Activity, Archive, Bell, BookOpen, BookOpenText, Brain, Globe, HeartPulse, KeyRound, Link, MessagesSquare, Moon, Network, Play, Search, Server, ShieldCheck, Terminal, UserRound, Wrench, type LucideIcon } from "lucide-react";
+import { Activity, Archive, Bell, BookOpen, BookOpenText, Brain, Globe, HeartPulse, KeyRound, Link, MessagesSquare, Network, Play, Search, Server, ShieldCheck, Terminal, UserRound, Wrench, type LucideIcon } from "lucide-react";
 
 import type { SettingsSectionKey } from "@/features/settings/contracts";
 
@@ -23,8 +23,7 @@ export const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIc
   { key: "providers", icon: Network, fallback: "Providers", group: "agent" },
   { key: "models", icon: ModelsIcon, fallback: "Models", group: "agent" },
   { key: "memory", icon: Brain, fallback: "Memory library", group: "agent" },
-  { key: "context", icon: Archive, fallback: "Context compaction", group: "agent" },
-  { key: "dream", icon: Moon, fallback: "Dream consolidation", group: "agent" },
+  { key: "consolidation", icon: Archive, fallback: "Context consolidation", group: "agent" },
   { key: "memory-search", icon: Search, fallback: "Memory retrieval", group: "agent" },
   { key: "approval", icon: ShieldCheck, fallback: "AI approvals", group: "agent" },
   { key: "execution", icon: Play, fallback: "Goals & execution", group: "agent" },

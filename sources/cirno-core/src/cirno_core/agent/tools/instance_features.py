@@ -49,7 +49,7 @@ class NodeTool(Tool):
 
     @property
     def description(self):
-        return "Use configured Nodes through SSH only. Remote operations require AI approval or Full Access; Default permits listing saved records only. Execute short commands, transfer files, or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. Unknown submissions must be inspected before retrying."
+        return "Use configured Nodes by ID through SSH only. Listing returns connection and job-status metadata, never authentication secrets, environment values or historical job output. Configured SSH credentials and environment values are applied internally. Remote operations require AI approval or Full Access; Default permits listing saved records only. Execute short commands, transfer files, or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. Unknown submissions must be inspected before retrying."
 
     def approval_reason(self, params):
         if params.get("action") != "list":

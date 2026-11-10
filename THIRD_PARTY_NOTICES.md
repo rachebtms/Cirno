@@ -2,6 +2,10 @@
 
 Cirno is derived from Nanobot; upstream copyright and license terms are retained in `LICENSE`. The notices below cover redistributed browser components in the Cirno server distribution (`cirno-server`, installed by `cirno-ai`). Browser source lives in `sources/cirno-web/`; release wheels embed compiled assets under `cirno_server/web/dist/`. Additional bundled notices are in `sources/cirno-web/public/licenses/` and `public/brand/provider-icons-NOTICE.txt`. Cirno does not distribute a native TUI executable.
 
+## Full-image Python rendering tools
+
+The full Docker image additionally installs PyMuPDF into `/opt/cirno/python-packages` for Agent commands. Its upstream source is https://github.com/pymupdf/PyMuPDF and its GNU Affero General Public License v3 text is at https://github.com/pymupdf/PyMuPDF/blob/main/COPYING. The installed distribution retains its upstream license files and metadata. Other full-image Python, browser, office and TeX packages retain their upstream notices in their installed distributions.
+
 ---
 
 ## HeroUI — browser components and styles (Apache-2.0)
@@ -325,3 +329,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
+
+## Memory relationship graph — browser renderer
+
+- **Source**: https://github.com/vasturiano/3d-force-graph
+- **Packages**: `3d-force-graph`, Three.js and their renderer/layout dependencies.
+- **License**: MIT and other retained upstream terms, collected in `sources/cirno-web/public/licenses/Memory-Graph-LICENSES.txt`, distributed at `/licenses/Memory-Graph-LICENSES.txt`.

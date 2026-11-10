@@ -5,6 +5,7 @@ import type { ComponentType, ReactNode } from "react";
 
 export type BuiltinPanelKind =
   | "conversations"
+  | "memory"
   | "files"
   | "file"
   | "terminal"

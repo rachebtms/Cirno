@@ -8,10 +8,9 @@ from loguru import logger
 
 
 class MemoryIdleCoordinator:
-    def __init__(self, agent, config, run_dream):
-        self.agent, self.config, self.run_dream = agent, config, run_dream
+    def __init__(self, agent, config):
+        self.agent, self.config = agent, config
         self.next_scan = 0.0
-        self.next_dream = 0.0
 
     async def check(self):
         agent = self.agent
@@ -28,10 +27,3 @@ class MemoryIdleCoordinator:
                 await asyncio.to_thread(maintain)
             except (OSError, ValueError) as exc:
                 logger.warning("Memory maintenance: {}", exc)
-        cfg = self.config.agents.defaults.dream
-        if (not cfg.enabled or cfg.mode != "idle" or current < self.next_dream
-                or current - agent._last_memory_activity < cfg.idle_after_seconds):
-            return
-        # Back off even for an empty queue or provider failure; foreground dispatch cancels this task.
-        self.next_dream = current + max(60, cfg.idle_after_seconds)
-        agent._idle_memory_task = agent.schedule_background(self.run_dream())

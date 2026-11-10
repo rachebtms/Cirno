@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 
 import httpx
+from cirno_memory.embedding_budget import EmbeddingBudget
 
 
 class APIEmbeddingWorker:
@@ -13,6 +14,7 @@ class APIEmbeddingWorker:
         self.config = config
         self.client = None
         self.dimensions = None
+        self.budget = EmbeddingBudget(config.embedding_timeout_seconds)
 
     def __enter__(self):
         if not self.config.embedding_api_base or not self.config.embedding_api_model.strip():
@@ -44,11 +46,13 @@ class APIEmbeddingWorker:
         endpoint = self.config.embedding_api_base.rstrip("/")
         if not endpoint.endswith("/embeddings"):
             endpoint += "/embeddings"
-        with self.client.stream("POST", endpoint, json={"model": self.config.embedding_api_model, "input": texts, "encoding_format": "float"}) as response:
+        with self.client.stream("POST", endpoint, timeout=self.budget.remaining(), json={"model": self.config.embedding_api_model, "input": texts, "encoding_format": "float"}) as response:
+            self.budget.remaining()
             if response.status_code != 200:
                 raise ValueError(f"Embedding API returned HTTP {response.status_code}; check its address, credentials and model")
             body = bytearray()
             for chunk in response.iter_bytes():
+                self.budget.remaining()
                 body.extend(chunk)
                 if len(body) > 16 * 1024 * 1024:
                     raise ValueError("Embedding API response exceeds 16 MB")
