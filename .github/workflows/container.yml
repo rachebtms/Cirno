@@ -76,11 +76,18 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Configure CI package-repository DNS
+        run: |
+          interface=$(ip -o -4 route show to default | awk 'NR == 1 { print $5 }')
+          sudo resolvectl dns "$interface" 1.1.1.1 1.0.0.1
+          sudo resolvectl flush-caches
+          getent ahostsv4 archive.ubuntu.com
+          getent ahostsv4 ports.ubuntu.com
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         with:
-          # Share runner DNS rather than the failing nested builder bridge.
-          driver-opts: network=host
-          buildkitd-flags: --allow-insecure-entitlement network.host
+          buildkitd-config-inline: |
+            [dns]
+              nameservers = ["1.1.1.1", "1.0.0.1"]
       - name: Container metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
@@ -97,8 +104,6 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          network: host
-          allow: network.host
           load: true
           platforms: linux/${{ matrix.arch }}
           tags: cirno:smoke
@@ -175,8 +180,6 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          network: host
-          allow: network.host
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
