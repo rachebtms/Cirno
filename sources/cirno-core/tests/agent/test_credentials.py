@@ -119,11 +119,37 @@ async def test_node_listing_and_review_expose_metadata_without_connection_secret
     assert Nodes(credentials.data).catalog()["jobs"][0]["output"] == "output-secret"
 
 
-def test_agent_service_cannot_reveal_visible_credentials(credentials):
+def test_agent_reads_visible_credentials_and_respects_revocation(credentials):
     record = credentials.save(label="Visible", value="owner-secret", agent_visible=True)
-    with pytest.raises(ValueError, match="Only the owner"):
-        Credentials(credentials.data, actor="agent").reveal(record["id"])
+    agent = Credentials(credentials.data, actor="agent")
+    assert agent.reveal(record["id"])["value"] == "owner-secret"
+    credentials.save(id=record["id"], label="Hidden", agent_visible=False)
+    with pytest.raises(ValueError, match="not available"):
+        agent.reveal(record["id"])
     assert credentials.reveal(record["id"])["value"] == "owner-secret"
+
+
+@pytest.mark.parametrize("kind", ["password", "token", "text", "identity", "ssh"])
+async def test_explicit_credential_read_returns_only_authorized_secret(monkeypatch, credentials, kind):
+    from cirno_core.agent.tools.naming import definitions
+
+    monkeypatch.setattr("cirno_core.agent.tools.credential.Credentials", lambda **kwargs: Credentials(credentials.data, **kwargs))
+    fields = {"ssh": {"host": "gpu.example", "username": "worker", "password": "read-secret", "auth_method": "password"}} if kind == "ssh" else {"value": "read-secret", "username": "worker"}
+    record = credentials.save(label="Readable", kind=kind, agent_visible=True, **fields)
+    tool = CredentialTool()
+    schemas = {schema["function"]["name"]: schema["function"] for schema, _ in definitions(tool)}
+    read = schemas["credentials__read"]["parameters"]
+    assert read["required"] == ["id"] and set(read["properties"]) == {"id"}
+    assert "read-secret" not in await tool.execute(action="list")
+    result = json.loads(await tool.execute(action="read", id=record["id"]))
+    values = result["ssh"] if kind == "ssh" else result
+    assert values["username"] == "worker"
+    assert values["password" if kind == "ssh" else "value"] == "read-secret"
+    credentials.save(id=record["id"], label="Private", kind=kind, agent_visible=False, **fields)
+    denied = await tool.execute(action="read", id=record["id"])
+    assert "not available" in str(denied) and "read-secret" not in str(denied)
+    credentials.delete(record["id"])
+    assert "no longer exists" in str(await tool.execute(action="read", id=record["id"]))
 
 
 async def test_ipv6_transfers_and_auth_environment_use_the_saved_connection(credentials, monkeypatch):

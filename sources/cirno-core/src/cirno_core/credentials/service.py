@@ -54,8 +54,6 @@ class Credentials:
         return metadata
 
     def reveal(self, identifier: str) -> dict:
-        if self.actor != "owner":
-            raise ValueError("Only the owner can reveal credential values")
         record = self._check_access(self.vault.read_record(identifier))
         if record["kind"] == "ssh":
             return {"ssh": SSHCredential.model_validate_json(record["value"]).model_dump()}

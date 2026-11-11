@@ -1,4 +1,4 @@
-"""Manage encrypted values without recalling them into model context."""
+"""List credential metadata and explicitly read Agent-visible secret values."""
 
 import asyncio
 import json
@@ -16,10 +16,10 @@ from cirno_core.credentials.service import Credentials
 @tool_parameters(
     tool_parameters_schema(
         action=StringSchema(
-            "list, store or delete. Secret values cannot be read by this tool.",
-            enum=("list", "store", "delete"),
+            "list metadata, read one visible credential, store or delete.",
+            enum=("list", "read", "store", "delete"),
         ),
-        id=StringSchema("Record ID for update/delete."),
+        id=StringSchema("Record ID for read, update or delete."),
         label=StringSchema("Human-readable label; never put a secret in the label."),
         kind=StringSchema("Value type.", enum=("password", "text", "identity", "token", "ssh")),
         username=StringSchema("Optional account username, encrypted with the secret."),
@@ -42,7 +42,7 @@ class CredentialTool(Tool):
 
     @property
     def description(self):
-        return "Manage the owner's encrypted personal credentials: list metadata, store/update a known secret or long text, or delete an explicitly identified record. Only Agent-visible records can be listed or managed; Agent-created and updated records are visible. Values are encrypted on disk and never returned to model context. Do not put secrets in memory, files, titles, reports or labels. SSH records stay unavailable to remote tools until the owner enables them as SSH Nodes. Prefer owner entry through the Credentials tab. Previously pasted chat secrets remain in that chat."
+        return "Manage the owner's encrypted personal credentials. List returns metadata only; use credentials.read with a record ID to retrieve its secret value and account username, or its SSH connection fields. Only Agent-visible records can be listed, read or managed; Agent-created and updated records are visible. Read a secret only when needed for the user's task. Do not copy secrets into replies, memory, titles, reports or labels. SSH Node enrollment remains controlled by the owner. Values remain encrypted on disk."
 
     def approval_reason(self, params):
         if params.get("action") == "delete" or params.get("action") == "store" and params.get("id"):
@@ -54,6 +54,10 @@ class CredentialTool(Tool):
         try:
             if action == "list":
                 result = await asyncio.to_thread(vault.list)
+            elif action == "read":
+                if not id:
+                    return ToolResult.error("Choose a credential ID to read")
+                result = await asyncio.to_thread(vault.reveal, id)
             elif action == "store":
                 result = await asyncio.to_thread(
                     vault.save, id=id, label=label, kind=kind, value=value, username=username, ssh=ssh

@@ -2790,7 +2790,7 @@
     "sshNodePickerHint": "Choose an SSH credential from Credentials. Removing a Node keeps its credential.",
     "noSSHCredentials": "Create an SSH credential in Credentials first.",
     "agentVisibility": "Available to Agent",
-    "agentVisibilityHint": "Allow Agent tools to list and manage this credential. Secret values are never returned by credential tools.",
+    "agentVisibilityHint": "Allow Agent tools to list, read the secret value, update and delete this credential.",
     "agentVisible": "Agent visible",
     "agentHidden": "Private",
     "keepSecret": "Leave blank to keep the saved value.",

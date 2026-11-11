@@ -45,6 +45,12 @@ PROJECT_FIELDS = {
     "assign": "to project_id",
     "delete": "id",
 }
+CREDENTIAL_FIELDS = {
+    "list": "",
+    "read": "id",
+    "store": "id label kind username value ssh",
+    "delete": "id",
+}
 
 MEMORY_DESCRIPTIONS = {
     "search": "Recall source-grounded memory. BM25 by default; semantic/hybrid uses the configured local CPU or API embeddings. Knowledge is the default; use purpose=evidence to verify raw messages or exact values.",
@@ -107,18 +113,12 @@ def definitions(tool):
             MEMORY_DESCRIPTIONS[action] if original == "memory" else f"{dotted}: {tool.description}"
         )
         params = fn["parameters"]
-        fields = (
-            MEMORY_FIELDS.get(action)
-            if original == "memory"
-            else NODE_FIELDS.get(action)
-            if original == "node"
-            else PROJECT_FIELDS.get(action)
-            if original == "project"
-            else None
-        )
+        fields = {"memory": MEMORY_FIELDS, "node": NODE_FIELDS, "project": PROJECT_FIELDS,
+                  "credential": CREDENTIAL_FIELDS}.get(original, {}).get(action)
         selected = set(fields.split()) if fields is not None else set(properties) - {"action"}
         params["properties"] = {key: value for key, value in properties.items() if key in selected}
         required = {
+            "credential": {"read": ["id"], "delete": ["id"], "store": ["label"]},
             "project": {
                 "get": ["id"], "create": ["name"], "update": ["id"],
                 "assign": ["to", "project_id"], "delete": ["id"],

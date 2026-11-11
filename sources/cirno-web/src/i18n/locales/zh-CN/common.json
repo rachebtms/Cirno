@@ -2790,7 +2790,7 @@
     "sshNodePickerHint": "从 Credentials 中选择 SSH 凭据。从 Nodes 移除时会保留凭据。",
     "noSSHCredentials": "请先在 Credentials 中创建 SSH 凭据。",
     "agentVisibility": "对 Agent 可见",
-    "agentVisibilityHint": "允许 Agent 工具列出和管理此凭据。凭据工具不会返回秘密值。",
+    "agentVisibilityHint": "允许 Agent 工具列出、读取秘密值、修改和删除此凭据。",
     "agentVisible": "Agent 可见",
     "agentHidden": "仅自己可见",
     "keepSecret": "留空则保留已保存的秘密值。",
