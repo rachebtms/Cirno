@@ -12,31 +12,21 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     steps:
+      - name: Use working upstream DNS on the runner
+        run: |
+          interface=$(ip -o -4 route show to default | awk 'NR == 1 { print $5 }')
+          sudo resolvectl dns "$interface" 1.1.1.1 1.0.0.1
+          sudo resolvectl flush-caches
+          getent ahostsv4 archive.ubuntu.com
+          getent ahostsv4 ports.ubuntu.com
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
         with:
-          driver-opts: network=host
-          buildkitd-flags: --allow-insecure-entitlement network.host
-      - name: Compare host and build resolver access
+          buildkitd-config-inline: |
+            [dns]
+              nameservers = ["1.1.1.1", "1.0.0.1"]
+      - name: Verify normal container and build APT access
         run: |
-          cat /etc/resolv.conf
-          resolvectl status
-          python3 -c 'import os; print({k: bool(os.environ.get(k)) for k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")})'
-          for host in archive.ubuntu.com ports.ubuntu.com azure.archive.ubuntu.com registry.npmjs.org pypi.org; do
-            echo "HOST $host"
-            timeout 15 getent ahostsv4 "$host" || true
-          done
-          dig +tries=1 +time=3 @1.1.1.1 archive.ubuntu.com A || true
-          dig +tries=1 +time=3 @8.8.8.8 ports.ubuntu.com A || true
-          curl -fsSL --max-time 15 'https://dns.google/resolve?name=archive.ubuntu.com&type=A' || true
+          docker run --rm ubuntu:24.04 apt-get -o APT::Update::Error-Mode=any update
           mkdir -p /tmp/resolver-probe
-          cat > /tmp/resolver-probe/Dockerfile <<'DOCKERFILE'
-          FROM ubuntu:24.04
-          RUN id; ls -l /etc/resolv.conf /etc/nsswitch.conf; cat /etc/resolv.conf; cat /etc/nsswitch.conf; \
-              for host in archive.ubuntu.com ports.ubuntu.com registry.npmjs.org; do \
-                echo "ROOT $host"; timeout 15 getent ahostsv4 "$host" || true; \
-                echo "APT $host"; timeout 15 su -s /bin/sh _apt -c "ls -l /etc/resolv.conf; cat /etc/resolv.conf; getent ahostsv4 $host" || true; \
-              done
-          RUN apt-get -o APT::Sandbox::User=root -o APT::Update::Error-Mode=any update
-          DOCKERFILE
-          docker run --rm --network host ubuntu:24.04 sh -c 'ls -l /etc/resolv.conf; cat /etc/resolv.conf; getent ahostsv4 ports.ubuntu.com; su -s /bin/sh _apt -c "getent ahostsv4 ports.ubuntu.com"' || true
-          docker buildx build --network host --allow network.host --progress plain /tmp/resolver-probe
+          printf '%s\n' 'FROM ubuntu:24.04' 'RUN apt-get -o APT::Update::Error-Mode=any update' > /tmp/resolver-probe/Dockerfile
+          docker buildx build --progress plain /tmp/resolver-probe
