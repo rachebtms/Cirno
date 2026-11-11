@@ -1,6 +1,6 @@
 # Contributing to Cirno
 
-Install development dependencies from the repository root with `python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e ".[dev]"`. Storage libraries are independently installable under `sources/cirno-memory/`, `sources/cirno-usage/` and `sources/cirno-vault/`. Core and server modules use `sources/cirno-core/src/cirno_core/` and `sources/cirno-server/src/cirno_server/`. The application facade is `cirno`. Run Python checks and focused tests from the repository root.
+Create and activate a development environment with `uv venv --python 3.12 .venv` and `. .venv/bin/activate`. Install development dependencies from the repository root with `uv pip install -e sources/cirno-setup -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e ".[dev]"`. Storage libraries are independently installable under `sources/cirno-memory/`, `sources/cirno-usage/` and `sources/cirno-vault/`. Core and server modules use `sources/cirno-core/src/cirno_core/` and `sources/cirno-server/src/cirno_server/`. The application facade is `cirno`. Run Python checks and focused tests from the repository root.
 
 Use Node.js 24. From `sources/cirno-web/`, run `npm ci`, `npm run typecheck`, `npm test` and `npm run build`. The browser build writes to `build/webui/` at the repository root.
 
@@ -28,7 +28,7 @@ npm --prefix sources/cirno-web test
 npm --prefix sources/cirno-web run build
 python sources/deployment/install_channel_dependencies.py --all-channels
 python sources/development/check_import_boundaries.py
-python -m ruff check sources/cirno-memory sources/cirno-usage sources/cirno-vault sources/cirno-core sources/cirno-server --select F --exclude tests
+python -m ruff check sources/cirno-setup sources/cirno-memory sources/cirno-usage sources/cirno-vault sources/cirno-core sources/cirno-server --select F --exclude tests
 python -m pytest -q -n 2
 ```
 

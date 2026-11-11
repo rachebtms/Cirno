@@ -299,3 +299,14 @@ def test_unlimited_requested_command_duration_persists_and_accepts_long_default(
     with pytest.raises(WebUISettingsError):
         update_runtime_config_settings({"tools.exec.max_runtime_limit": 60}, config_path=path)
     assert load_config(path).tools.exec.max_runtime_limit == 0
+
+
+def test_setup_is_not_an_application_setting_or_saved_configuration(tmp_path):
+    path = tmp_path / "config.json"
+    config = Config.model_validate({"tools": {"startup": {"components": ["presets.rachebtms"]}}})
+    save_config(config, path)
+    assert "startup" not in json.loads(path.read_text())["tools"]
+    before = path.read_bytes()
+    with pytest.raises(WebUISettingsError):
+        update_runtime_config_settings({"tools.startup.components": ["presets.rachebtms"]}, config_path=path)
+    assert path.read_bytes() == before

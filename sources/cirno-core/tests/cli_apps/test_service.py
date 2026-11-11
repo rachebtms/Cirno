@@ -458,7 +458,6 @@ def test_install_dispatches_safe_pip_and_installs_skill(
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
-    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
     monkeypatch.setattr(
         manager,
         "_fetch_skill_content",
@@ -471,7 +470,7 @@ def test_install_dispatches_safe_pip_and_installs_skill(
 
     payload = manager.install("gimp")
 
-    assert calls == [[sys.executable, "-m", "pip", "install", "cli-anything-gimp"]]
+    assert calls == [["uv", "pip", "install", "--python", sys.executable, "cli-anything-gimp"]]
     assert payload["last_action"]["ok"] is True
     assert payload["last_action"]["installed"] is True
     assert "state_recorded" in payload["last_action"]["verification"]
@@ -820,11 +819,10 @@ def test_uninstall_uses_safe_python_m_pip_uninstall_command(
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
-    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
 
     payload = manager.uninstall("suno")
 
-    assert calls == [[sys.executable, "-m", "pip", "uninstall", "-y", "suno-cli"]]
+    assert calls == [["uv", "pip", "uninstall", "--python", sys.executable, "suno-cli"]]
     assert payload["last_action"]["ok"] is True
 
 
@@ -848,11 +846,10 @@ def test_uninstall_uses_recorded_pip_distribution(
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
-    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
 
     payload = manager.uninstall("gimp")
 
-    assert calls == [[sys.executable, "-m", "pip", "uninstall", "-y", "actual-dist-name"]]
+    assert calls == [["uv", "pip", "uninstall", "--python", sys.executable, "actual-dist-name"]]
     assert payload["last_action"]["ok"] is True
     assert payload["last_action"]["removed"] is True
     assert "entry_point_absent" in payload["last_action"]["verification"]
@@ -871,7 +868,6 @@ def test_uninstall_keeps_state_when_entry_point_still_available(
         "_run_argv",
         lambda argv, *, timeout: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
-    monkeypatch.setattr(manager.commands, "_pip_available", staticmethod(lambda: True))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/local/bin/cli-anything-gimp" if command == "cli-anything-gimp" else None,
@@ -1030,7 +1026,7 @@ def test_run_blocks_working_dir_outside_workspace(tmp_path: Path) -> None:
         manager.run("gimp", working_dir="/etc", restrict_to_workspace=True)
 
 
-def test_install_uses_uv_pip_when_pip_unavailable(
+def test_install_uses_uv_pip_without_pip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1042,7 +1038,6 @@ def test_install_uses_uv_pip_when_pip_unavailable(
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(CliCommands, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
@@ -1062,12 +1057,11 @@ def test_install_uses_uv_pip_when_pip_unavailable(
     ]
 
 
-def test_update_uses_uv_pip_reinstall_when_pip_unavailable(
+def test_update_uses_uv_pip_reinstall_without_pip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager = _manager(tmp_path)
-    monkeypatch.setattr(CliCommands, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
@@ -1090,7 +1084,7 @@ def test_update_uses_uv_pip_reinstall_when_pip_unavailable(
     ]
 
 
-def test_uninstall_uses_uv_pip_when_pip_unavailable(
+def test_uninstall_uses_uv_pip_without_pip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1103,7 +1097,6 @@ def test_uninstall_uses_uv_pip_when_pip_unavailable(
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(CliCommands, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,

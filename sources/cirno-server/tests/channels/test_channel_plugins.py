@@ -1505,88 +1505,56 @@ def test_package_manifest_metadata_drives_optional_feature_payload(monkeypatch):
     assert demo["webui"] == "webui/entry.tsx"
 
 
-@pytest.mark.parametrize(
-    "index_url",
-    [
-        "",
-        "https://mirror.example/simple",
-    ],
-)
-def test_enable_uses_uv_when_tool_environment_has_no_pip(
-    monkeypatch,
-    index_url,
-):
+@pytest.mark.parametrize("index_url", ["", "https://mirror.example/simple"])
+def test_uv_install_preserves_proxy_and_legacy_index(monkeypatch, index_url):
     from cirno_server.features import service as optional_features
 
-    calls: list[list[str]] = []
-    call_envs: list[dict[str, str] | None] = []
+    calls = []
+    environments = []
 
-    def _run(
-        argv: list[str],
-        *,
-        env: dict[str, str] | None = None,
-    ) -> subprocess.CompletedProcess[str]:
+    def run(argv, **kwargs):
         calls.append(argv)
-        call_envs.append(env)
-        if len(calls) == 1:
-            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="No module named pip")
-        if argv[0] == "uv":
-            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
-        return subprocess.CompletedProcess(
-            argv,
-            1,
-            stdout="",
-            stderr="No module named ensurepip",
-        )
+        environments.append(kwargs["env"])
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
-    monkeypatch.setattr("shutil.which", lambda name: "uv" if name == "uv" else None)
+    monkeypatch.setattr(optional_features.subprocess, "run", run)
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
     monkeypatch.delenv("UV_INDEX_URL", raising=False)
     if index_url:
         monkeypatch.setenv("PIP_INDEX_URL", index_url)
     else:
         monkeypatch.delenv("PIP_INDEX_URL", raising=False)
-
-    assert optional_features.install_extra("feishu", ["lark-oapi>=1.5.0"], runner=_run).ok is True
-    assert calls == [
-        [sys.executable, "-m", "pip", "install", "lark-oapi>=1.5.0"],
-        [
-            "uv",
-            "pip",
-            "install",
-            "--python",
-            sys.executable,
-            "lark-oapi>=1.5.0",
-        ],
-    ]
-    assert call_envs[0] is None
-    assert call_envs[1] is not None
-    assert call_envs[1]["HTTPS_PROXY"] == "http://proxy.example:8080"
-    if index_url:
-        assert call_envs[1]["UV_INDEX_URL"] == index_url
-    else:
-        assert "UV_INDEX_URL" not in call_envs[1]
+    assert optional_features.install_extra("feishu", ["lark-oapi>=1.5.0"]).ok
+    assert calls == [["uv", "pip", "install", "--python", sys.executable, "lark-oapi>=1.5.0"]]
+    assert environments[0]["HTTPS_PROXY"] == "http://proxy.example:8080"
+    assert environments[0].get("UV_INDEX_URL", "") == index_url
 
 
-def test_enable_bootstraps_pip_with_ensurepip(monkeypatch):
+def test_uv_install_failure_does_not_fall_back_to_pip(monkeypatch):
     from cirno_server.features import service as optional_features
 
-    calls: list[list[str]] = []
+    calls = []
 
-    def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    def run(argv):
         calls.append(argv)
-        if len(calls) == 1:
-            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="No module named pip")
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="repository unavailable")
 
-    monkeypatch.setattr("shutil.which", lambda _name: None)
+    result = optional_features.install_extra("bedrock", None, runner=run)
+    assert not result.ok
+    assert result.output == "repository unavailable"
+    assert calls == [["uv", "pip", "install", "--python", sys.executable, "cirno-ai[bedrock]"]]
 
-    assert optional_features.install_extra("bedrock", None, runner=_run).ok is True
-    assert calls == [
-        [sys.executable, "-m", "pip", "install", "cirno-ai[bedrock]"],
-        [sys.executable, "-m", "ensurepip", "--upgrade"],
-        [sys.executable, "-m", "pip", "install", "cirno-ai[bedrock]"],
-    ]
+
+def test_missing_uv_is_reported_as_installation_failure(monkeypatch):
+    from cirno_server.features import service as optional_features
+
+    def run(*args, **kwargs):
+        raise FileNotFoundError("uv")
+
+    monkeypatch.setattr(optional_features.subprocess, "run", run)
+    result = optional_features.install_extra("bedrock", None)
+    assert not result.ok
+    assert "uv is required" in result.output
 
 
 def test_install_extra_logs_command_and_output(monkeypatch):

@@ -1,9 +1,3 @@
-"""Non-secret tool paths and persistent package/configuration locations."""
+"""Non-secret tool environment paths shared with the setup package."""
 
-TOOL_ENV_KEYS = (
-    "PATH", "VIRTUAL_ENV", "BASH_ENV", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
-    "NVM_DIR", "GOPATH", "GOBIN", "BUN_INSTALL", "HF_HOME", "GH_CONFIG_DIR", "TEA_CONFIG_DIR",
-    "GIT_CONFIG_GLOBAL", "NPM_CONFIG_CACHE", "NPM_CONFIG_PREFIX", "NPM_CONFIG_USERCONFIG", "PIP_CACHE_DIR",
-    "UV_TOOL_DIR", "UV_TOOL_BIN_DIR", "PIPX_HOME", "PIPX_BIN_DIR", "CIRNO_SHELL_VENV",
-    "PLAYWRIGHT_BROWSERS_PATH",
-)
+from cirno_setup.environment import TOOL_ENV_KEYS as TOOL_ENV_KEYS

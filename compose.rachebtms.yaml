@@ -1,0 +1,3 @@
+services:
+  cirno:
+    command: ["+presets.rachebtms", "--timeout", "1800"]

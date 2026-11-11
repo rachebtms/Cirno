@@ -4,11 +4,11 @@ Cirno is derived from Nanobot; upstream copyright and license terms are retained
 
 ## Full-image xurl executable
 
-The full image builds [xurl v1.3.4](https://github.com/xdevplatform/xurl/tree/v1.3.4) in a separate Go stage and distributes the executable without the compiler. The upstream xurl MIT license and Go BSD license are retained under `/usr/share/licenses/cirno/xurl/` in the image.
+The optional `tools.xurl` setup component downloads the architecture-specific [xurl v1.3.4 release](https://github.com/xdevplatform/xurl/releases/tag/v1.3.4), verifies its pinned SHA-256 hash and preserves files included in the upstream archive under `state/tools/bundled/xurl/`. The Go compiler is not installed.
 
 ## Full-image Python rendering tools
 
-The full Docker image additionally installs PyMuPDF into `/opt/cirno/python-packages` for Agent commands. Its upstream source is https://github.com/pymupdf/PyMuPDF and its GNU Affero General Public License v3 text is at https://github.com/pymupdf/PyMuPDF/blob/main/COPYING. The installed distribution retains its upstream license files and metadata. Other full-image Python, browser, office and TeX packages retain their upstream notices in their installed distributions.
+The optional `pip.pymupdf` setup component installs PyMuPDF into `/home/cirno/.cirno/state/tools/bundled/python` for Agent commands. Its upstream source is https://github.com/pymupdf/PyMuPDF and its GNU Affero General Public License v3 text is at https://github.com/pymupdf/PyMuPDF/blob/main/COPYING. The installed distribution retains its upstream license files and metadata. Other selected Python, browser, office and TeX packages retain their upstream notices in their installed distributions.
 
 ---
 
@@ -269,7 +269,7 @@ SOFTWARE.
 
 - **Upstream**: https://github.com/FlagOpen/FlagEmbedding and https://huggingface.co/BAAI/bge-small-zh-v1.5
 - **ONNX conversion**: https://huggingface.co/Xenova/bge-small-zh-v1.5 at `75c43b069aac4d136ba6bc1122f995fedcfd2781`.
-- **Bundled only in the full container**: INT8 ONNX weights, tokenizer, model card and upstream `LICENSE` under `/opt/cirno/models/bge-small-zh-v1.5/`. The download script verifies each file's SHA-256 hash. The model is not loaded until embeddings are enabled.
+- **Installed by the optional `memory.bge_small_zh` setup component**: INT8 ONNX weights, tokenizer, model card and upstream `LICENSE` under `/home/cirno/.cirno/state/tools/models/bge-small-zh-v1.5/`. The download script verifies each file's SHA-256 hash. The model is not loaded until embeddings are enabled.
 - **License**: MIT, Copyright (c) 2022 staoxiao. The complete upstream license accompanies the model files in the image.
 
 The full container also installs third-party CLI packages through Homebrew, npm, Go and uv. Their license files and package metadata remain in their installed distributions.
@@ -339,3 +339,5 @@ THE SOFTWARE.
 - **Source**: https://github.com/vasturiano/3d-force-graph
 - **Packages**: `3d-force-graph`, Three.js and their renderer/layout dependencies.
 - **License**: MIT and other retained upstream terms, collected in `sources/cirno-web/public/licenses/Memory-Graph-LICENSES.txt`, distributed at `/licenses/Memory-Graph-LICENSES.txt`.
+
+The unified base also retains the official Node.js runtime and npm layout. Node.js license text is installed at `/usr/share/licenses/nodejs/LICENSE`; npm retains its included license files. Optional package installs keep their upstream runtime files and notices intact.

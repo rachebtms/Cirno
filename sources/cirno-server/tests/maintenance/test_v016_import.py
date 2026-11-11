@@ -136,9 +136,9 @@ def test_unconfigured_trigger_queues_are_moved_and_completion_is_notified_once(r
     assert (instance / "state/triggers/inbox").is_dir()
     assert not migrate_instance(path)
     rows = NotificationInbox(instance / "state").list(category="system")["items"]
-    assert len(rows) == 8
+    assert len(rows) == 9
     assert all(row["kind"] == "migration" for row in rows)
-    assert {row["data"]["from"] for row in rows} == {"0.1.6", "0.2.0", "0.2.1", "0.2.2", "0.2.3", "0.2.4", "0.2.5", "0.2.6"}
+    assert {row["data"]["from"] for row in rows} == {"0.1.6", "0.2.0", "0.2.1", "0.2.2", "0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7"}
 
 
 @pytest.mark.parametrize(("previous", "updated"), [("/", "/v0/ws"), ("/socket", "/v0/socket"), ("/api/socket", "/v0/socket"), ("/v0/custom", "/v0/custom")])

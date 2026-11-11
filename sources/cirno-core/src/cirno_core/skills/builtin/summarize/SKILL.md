@@ -43,7 +43,7 @@ Set the API key for your chosen provider:
 - xAI: `XAI_API_KEY`
 - Google: `GEMINI_API_KEY` (aliases: `GOOGLE_GENERATIVE_AI_API_KEY`, `GOOGLE_API_KEY`)
 
-Select a model supported by the installed CLI and your provider. Check `summarize --help` for flags supported by that installed version; Cirno does not configure or bundle this CLI automatically.
+Select a model supported by the installed CLI and your provider. Check `summarize --help` for flags supported by that installed version. Cirno's full image installs this CLI during startup, but provider credentials and its model configuration remain separate from Cirno's settings.
 
 ## Useful flags
 

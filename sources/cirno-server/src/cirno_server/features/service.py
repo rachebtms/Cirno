@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 from collections.abc import Callable
@@ -13,6 +12,12 @@ from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.config.schema import Config
+from cirno_setup.python import environment as python_environment
+from cirno_setup.python import package_command
+from cirno_setup.requirements import requirement_installed as setup_requirement_installed
+from loguru import logger
+from packaging.requirements import Requirement
+
 from cirno_server.channels._setup import channel_setup_spec
 from cirno_server.channels.contracts import (
     ChannelSetupSpec,
@@ -27,9 +32,6 @@ from cirno_server.channels.contracts import (
     stringify_channel_value,
 )
 from cirno_server.channels.registry import channel_default_enabled
-from loguru import logger
-from packaging.requirements import Requirement
-from packaging.utils import canonicalize_name
 
 
 class OptionalFeatureError(Exception):
@@ -43,7 +45,7 @@ class OptionalFeatureError(Exception):
 class InstallResult:
     ok: bool
     label: str
-    pip_cmd: list[str]
+    command: list[str]
     failed_cmd: list[str] | None = None
     output: str = ""
 
@@ -123,55 +125,8 @@ def install_args_for_extra(
     return [target], f'"{target}"'
 
 
-def _requirement_installed(req: Requirement, extra: str, seen: set[tuple[str, str]]) -> bool:
-    if req.marker and not req.marker.evaluate({"extra": extra}):
-        return True
-    key = (
-        canonicalize_name(req.name),
-        ",".join(sorted(canonicalize_name(value) for value in req.extras)),
-    )
-    if key in seen:
-        return True
-    seen.add(key)
-    try:
-        dist = distribution(req.name)
-    except PackageNotFoundError:
-        return False
-    if req.specifier and not req.specifier.contains(dist.version, prereleases=True):
-        return False
-
-    for requested_extra in req.extras:
-        if not _extra_dependencies_installed(dist, requested_extra, seen):
-            return False
-    return True
-
-
-def _extra_dependencies_installed(
-    dist: Any,
-    requested_extra: str,
-    seen: set[tuple[str, str]],
-) -> bool:
-    normalized = canonicalize_name(requested_extra)
-    provided = {
-        canonicalize_name(value)
-        for value in cast(list[str], dist.metadata.get_all("Provides-Extra") or [])
-    }
-    if provided and normalized not in provided:
-        return False
-
-    matched = False
-    for raw in cast(list[str], dist.requires or []):
-        req = Requirement(raw)
-        if req.marker and not req.marker.evaluate({"extra": requested_extra}):
-            continue
-        matched = True
-        if not _requirement_installed(req, requested_extra, seen):
-            return False
-    return matched or bool(provided)
-
-
 def requirement_installed(raw: str, extra: str = "") -> bool:
-    return _requirement_installed(Requirement(raw), extra, set())
+    return setup_requirement_installed(raw, extra, lookup=distribution)
 
 
 def extra_installed(extra: str, deps: list[str] | None) -> bool:
@@ -191,8 +146,10 @@ def run_install_command(
             capture_output=True,
             text=True,
             timeout=_INSTALL_TIMEOUT_SECONDS,
-            env=env,
+            env=python_environment(os.environ if env is None else env),
         )
+    except FileNotFoundError as exc:
+        return subprocess.CompletedProcess(argv, 127, stdout="", stderr=f"uv is required for Python dependency installation: {exc}")
     except subprocess.TimeoutExpired as exc:
         stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else exc.stdout
         stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr
@@ -212,10 +169,6 @@ def _log_completed_command(label: str, proc: subprocess.CompletedProcess[str]) -
         logger.info("{} output:\n{}", label, output[:_LOG_OUTPUT_LIMIT])
 
 
-def missing_pip(proc: subprocess.CompletedProcess[str]) -> bool:
-    return "no module named pip" in f"{proc.stdout}\n{proc.stderr}".lower()
-
-
 def install_extra(
     extra: str,
     deps: list[str] | None,
@@ -233,59 +186,23 @@ def install_packages(
     runner: Callable[..., subprocess.CompletedProcess[str]] = run_install_command,
     log_name: str | None = None,
 ) -> InstallResult:
-    """Install into the running interpreter, bootstrapping pip only when needed."""
+    """Install optional service dependencies through the shared uv command."""
     import importlib
 
     extra = log_name or label
-    pip_cmd = [sys.executable, "-m", "pip", "install", *install_args]
+    command = package_command("install", sys.executable, install_args)
     if not install_args:
         logger.info("Optional feature '{}' has no installable dependencies for this platform", extra)
-        return InstallResult(True, label, pip_cmd)
+        return InstallResult(True, label, command)
 
-    logger.info("Installing optional feature '{}': {}", extra, command_text(pip_cmd))
-    proc = runner(pip_cmd)
+    logger.info("Installing optional feature '{}': {}", extra, command_text(command))
+    proc = runner(command)
     _log_completed_command(f"Optional feature '{extra}' install", proc)
     if proc.returncode == 0:
         importlib.invalidate_caches()
-        return InstallResult(True, label, pip_cmd)
-
-    failed_cmd = pip_cmd
-    failed_proc = proc
-    if missing_pip(proc):
-        if shutil.which("uv"):
-            uv_args = ["--reinstall" if arg == "--force-reinstall" else arg for arg in install_args]
-            uv_cmd = ["uv", "pip", "install", "--python", sys.executable, *uv_args]
-            uv_env = os.environ.copy()
-            if index_url := os.environ.get("PIP_INDEX_URL", "").strip():
-                uv_env["UV_INDEX_URL"] = index_url
-            logger.info("pip missing while installing '{}'; running {}", extra, command_text(uv_cmd))
-            uv_proc = runner(uv_cmd, env=uv_env)
-            _log_completed_command(f"Optional feature '{extra}' uv install", uv_proc)
-            if uv_proc.returncode == 0:
-                importlib.invalidate_caches()
-                return InstallResult(True, label, pip_cmd)
-            output = (uv_proc.stderr or uv_proc.stdout or "").strip()
-            return InstallResult(False, label, pip_cmd, failed_cmd=uv_cmd, output=output)
-
-        ensure_cmd = [sys.executable, "-m", "ensurepip", "--upgrade"]
-        logger.info("pip missing while installing '{}'; running {}", extra, command_text(ensure_cmd))
-        ensure_proc = runner(ensure_cmd)
-        _log_completed_command(f"Optional feature '{extra}' ensurepip", ensure_proc)
-        if ensure_proc.returncode == 0:
-            logger.info("Retrying optional feature '{}': {}", extra, command_text(pip_cmd))
-            proc = runner(pip_cmd)
-            _log_completed_command(f"Optional feature '{extra}' install retry", proc)
-            if proc.returncode == 0:
-                importlib.invalidate_caches()
-                return InstallResult(True, label, pip_cmd)
-            failed_cmd = pip_cmd
-            failed_proc = proc
-        else:
-            failed_cmd = ensure_cmd
-            failed_proc = ensure_proc
-
-    output = (failed_proc.stderr or failed_proc.stdout or "").strip()
-    return InstallResult(False, label, pip_cmd, failed_cmd=failed_cmd, output=output)
+        return InstallResult(True, label, command)
+    output = (proc.stderr or proc.stdout or "").strip()
+    return InstallResult(False, label, command, failed_cmd=command, output=output)
 
 
 def read_config_data(path: Path) -> dict[str, Any]:
@@ -440,6 +357,7 @@ def optional_features_payload(
     last_action: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from cirno_core.config.loader import load_config
+
     from cirno_server.channels.registry import discover_plugins
 
     config = config or load_config()
@@ -671,7 +589,7 @@ def _install_feature_dependencies(
         runner=runner,
     )
     if not result.ok:
-        failed = command_text(result.failed_cmd or result.pip_cmd)
+        failed = command_text(result.failed_cmd or result.command)
         detail = f": {result.output}" if result.output else ""
         raise OptionalFeatureError(f"Failed: {failed}{detail}", status=500)
     return True
@@ -685,6 +603,7 @@ def install_optional_feature_support(
 ) -> dict[str, Any]:
     """Install channel dependencies without enabling or changing configuration."""
     from cirno_core.config.loader import get_config_path, load_config
+
     from cirno_server.channels.registry import discover_plugins
 
     config_path = config_path or get_config_path()
@@ -749,6 +668,7 @@ def enable_optional_feature(
     runner: Any = run_install_command,
 ) -> dict[str, Any]:
     from cirno_core.config.loader import get_config_path
+
     from cirno_server.channels.registry import discover_plugins
 
     config_path = config_path or get_config_path()
@@ -857,6 +777,7 @@ def disable_optional_feature(
     instance_id: str | None = None,
 ) -> dict[str, Any]:
     from cirno_core.config.loader import get_config_path, load_config
+
     from cirno_server.channels.registry import discover_plugins
 
     config_path = config_path or get_config_path()

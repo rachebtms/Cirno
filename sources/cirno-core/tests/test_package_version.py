@@ -50,7 +50,7 @@ def test_workspace_packages_and_frontend_lockfile_share_one_version() -> None:
 
     root = Path(__file__).resolve().parents[3]
     manifests = [tomllib.loads((root / name).read_text())["project"] for name in (
-        "pyproject.toml", "sources/cirno-memory/pyproject.toml", "sources/cirno-usage/pyproject.toml", "sources/cirno-vault/pyproject.toml",
+        "pyproject.toml", "sources/cirno-setup/pyproject.toml", "sources/cirno-memory/pyproject.toml", "sources/cirno-usage/pyproject.toml", "sources/cirno-vault/pyproject.toml",
         "sources/cirno-core/pyproject.toml", "sources/cirno-server/pyproject.toml",
     )]
     expected = manifests[0]["version"]

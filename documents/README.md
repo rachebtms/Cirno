@@ -34,6 +34,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.8](releases/0.2.8.md): unified container image, command-selected persistent dependencies and standard uv/npm/browser tool environments.
+
 - [0.2.7](releases/0.2.7.md): consolidation retry and journal recovery fixes, revision-safe memory links, retrieval deadlines and a smaller full-image toolset.
 
 - [0.2.6](releases/0.2.6.md): unified context consolidation and Skill learning, memory cloud search, credential privacy, bounded embedding retrieval and long-task recovery fixes.
@@ -52,3 +54,5 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 - [0.1.1](releases/0.1.1.md): browser setup, conversation and Goal fixes, and inbox behavior.
 
 - [Tabbed workspace, terminals, event inspection and credentials](workspace.md)
+
+- [Environment setup](setup.md): namespaced components, personal presets and unified container provisioning.

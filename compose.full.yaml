@@ -1,3 +1,0 @@
-services:
-  cirno:
-    image: ghcr.io/rachebtms/cirno:latest-full

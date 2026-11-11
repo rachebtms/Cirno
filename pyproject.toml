@@ -1,6 +1,6 @@
 [project]
 name = "cirno-ai"
-version = "0.2.7"
+version = "0.2.8"
 description = "A lightweight personal AI assistant framework"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -21,20 +21,20 @@ license-files = [
     "THIRD_PARTY_NOTICES.md",
 ]
 
-dependencies = ["cirno-server==0.2.7"]
+dependencies = ["cirno-server==0.2.8"]
 
 [project.optional-dependencies]
 memory-embedding = [
-    "cirno-core[memory-embedding]==0.2.7",
+    "cirno-core[memory-embedding]==0.2.8",
 ]
 azure = [
-    "cirno-core[azure]==0.2.7",
+    "cirno-core[azure]==0.2.8",
 ]
 bedrock = [
-    "cirno-core[bedrock]==0.2.7",
+    "cirno-core[bedrock]==0.2.8",
 ]
 olostep = [
-    "cirno-core[olostep]==0.2.7",
+    "cirno-core[olostep]==0.2.8",
 ]
 dev = [
     "hatchling",
@@ -43,7 +43,6 @@ dev = [
     "pytest-asyncio>=1.3.0,<2.0.0",
     "pytest-cov>=6.0.0,<7.0.0",
     "pytest-xdist>=3.8.0,<4.0.0",
-    "virtualenv>=20.35.4,<21.0.0",
     "ruff>=0.1.0",
     "basedpyright>=1.39.0,<2.0.0",
     "pymupdf>=1.25.0",
@@ -72,16 +71,16 @@ select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
 
 [tool.basedpyright]
-include = ["sources/cirno-memory/src", "sources/cirno-usage/src", "sources/cirno-vault/src", "sources/cirno-core/src", "sources/cirno-server/src", "sources/cirno/src"]
+include = ["sources/cirno-setup/src", "sources/cirno-memory/src", "sources/cirno-usage/src", "sources/cirno-vault/src", "sources/cirno-core/src", "sources/cirno-server/src", "sources/cirno/src"]
 exclude = ["**/tests"]
-extraPaths = ["sources/cirno-memory/src", "sources/cirno-usage/src", "sources/cirno-vault/src", "sources/cirno-core/src", "sources/cirno-server/src", "sources/cirno/src"]
+extraPaths = ["sources/cirno-setup/src", "sources/cirno-memory/src", "sources/cirno-usage/src", "sources/cirno-vault/src", "sources/cirno-core/src", "sources/cirno-server/src", "sources/cirno/src"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["sources/cirno-memory/tests", "sources/cirno-usage/tests", "sources/cirno-vault/tests", "sources/cirno-core/tests", "sources/cirno-server/tests", "sources/cirno-server/src/cirno_server/channels"]
+testpaths = ["sources/cirno-setup/tests", "sources/cirno-memory/tests", "sources/cirno-usage/tests", "sources/cirno-vault/tests", "sources/cirno-core/tests", "sources/cirno-server/tests", "sources/cirno-server/src/cirno_server/channels"]
 
 [tool.coverage.run]
 source = ["cirno_memory", "cirno_usage", "cirno_vault", "cirno_core", "cirno_server", "cirno"]

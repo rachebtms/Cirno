@@ -1,0 +1,3 @@
+from cirno_setup.recipe import Recipe
+
+recipe = Recipe(dependencies=('brew.gogcli', 'brew.tea', 'brew.yq', 'channels.telegram', 'memory.bge_small_zh', 'memory.embedding', 'npm.mcporter', 'npm.summarize', 'pip.debugpy', 'pip.lxml', 'pip.matplotlib', 'pip.numpy', 'pip.openpyxl', 'pip.pdfplumber', 'pip.pillow', 'pip.playwright', 'pip.pymupdf', 'pip.pypdf', 'pip.pytest', 'pip.python_docx', 'pip.python_pptx', 'pip.reportlab', 'pip.yt_dlp', 'system.browser', 'system.development', 'system.ffmpeg', 'system.fonts', 'system.homebrew', 'system.latex', 'system.libreoffice', 'system.pdf', 'system.utilities', 'tools.chromium', 'tools.homebrew', 'tools.node', 'tools.nvm', 'tools.pandoc', 'tools.xurl'), description="rachebtms research, operations, documents and development tools")

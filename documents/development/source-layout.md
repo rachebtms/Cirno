@@ -112,7 +112,9 @@ confirmations remain owned by their pane while their overlays are closed.
 Install the local distributions together from the repository root:
 
 ```sh
-python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e ".[dev]"
+uv venv --python 3.12 .venv
+. .venv/bin/activate
+uv pip install -e sources/cirno-setup -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e ".[dev]"
 npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run build
 cirno

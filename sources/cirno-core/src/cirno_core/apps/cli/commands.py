@@ -11,11 +11,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from cirno_setup.python import environment as python_environment
+from cirno_setup.python import package_command
+from loguru import logger
+
 from cirno_core.apps.cli import branding, command_support, contracts
 from cirno_core.apps.cli import output as cli_output
 from cirno_core.security.workspace_policy import is_path_within
 from cirno_core.utils.tool_environment import TOOL_ENV_KEYS
-from loguru import logger
 
 _SAFE_NPM_DIR_RE = re.compile(r"^[a-z0-9._-]+$", re.IGNORECASE)
 
@@ -62,13 +65,6 @@ class CliCommands:
         return args[0]
 
     @staticmethod
-    def _pip_available() -> bool:
-        """Return True if pip is importable for the current interpreter."""
-        from importlib.util import find_spec
-
-        return find_spec("pip") is not None
-
-    @staticmethod
     def _pip_interpreter() -> str:
         venv = os.environ.get("CIRNO_SHELL_VENV")
         return (
@@ -85,31 +81,16 @@ class CliCommands:
             raise contracts.CliAppError("unsupported pip install command")
         tokens = shlex.split(install_cmd)
         args = tokens[2:] if tokens[:2] == ["pip", "install"] else tokens[4:]
-        pip_available = self._pip_available()
-        if pip_available:
-            prefix = [self._pip_interpreter(), "-m", "pip", "install"]
-        elif shutil.which("uv"):
-            prefix = ["uv", "pip", "install", "--python", self._pip_interpreter()]
-        else:
-            raise contracts.CliAppError("pip is not available and uv is not installed")
         if update:
-            if pip_available:
-                prefix.extend(["--upgrade", "--force-reinstall"])
-            else:
-                prefix.extend(["--upgrade", "--reinstall"])
-        return prefix + args
+            args = ["--upgrade", "--reinstall", *args]
+        return package_command("install", self._pip_interpreter(), args)
 
     def _pip_uninstall_argv(
         self,
         app: dict[str, Any],
         installed_entry: dict[str, Any] | None = None,
     ) -> list[str]:
-        if self._pip_available():
-            prefix = [self._pip_interpreter(), "-m", "pip", "uninstall", "-y"]
-        elif shutil.which("uv"):
-            prefix = ["uv", "pip", "uninstall", "--python", self._pip_interpreter()]
-        else:
-            raise contracts.CliAppError("pip is not available and uv is not installed")
+        prefix = package_command("uninstall", self._pip_interpreter(), [])
         distribution = str((installed_entry or {}).get("pip_distribution") or "").strip()
         if distribution:
             return [*prefix, distribution]
@@ -258,7 +239,7 @@ class CliCommands:
         # Desktop CLIs use this directory to locate the running application.
         if "XDG_RUNTIME_DIR" in os.environ:
             env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
-        return env
+        return python_environment(env)
 
     def _run_argv(self, argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
         command = subprocess.list2cmdline(argv)

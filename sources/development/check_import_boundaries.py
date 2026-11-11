@@ -50,6 +50,7 @@ _TOOL_CONFIG_MODULES = (
 )
 
 IMPORT_RULES = (
+    ImportRule("independent-setup", ("cirno_setup",), ("cirno_core", "cirno_server", "cirno_memory", "cirno_usage", "cirno_vault", "cirno")),
     ImportRule("independent-memory", ("cirno_memory",), ("cirno_core", "cirno_server", "cirno", "cirno_usage", "cirno_vault")),
     ImportRule("independent-usage", ("cirno_usage",), ("cirno_core", "cirno_server", "cirno", "cirno_vault", "cirno_memory")),
     ImportRule("independent-vault", ("cirno_vault",), ("cirno_core", "cirno_server", "cirno", "cirno_usage", "cirno_memory")),
@@ -285,7 +286,7 @@ def main() -> int:
         help="core source directory",
     )
     args = parser.parse_args()
-    roots = [args.root] if (args.root / "__init__.py").is_file() else [args.root / "cirno-core/src/cirno_core", args.root / "cirno-server/src/cirno_server", args.root / "cirno-memory/src/cirno_memory", args.root / "cirno-usage/src/cirno_usage", args.root / "cirno-vault/src/cirno_vault"]
+    roots = [args.root] if (args.root / "__init__.py").is_file() else [args.root / "cirno-setup/src/cirno_setup", args.root / "cirno-core/src/cirno_core", args.root / "cirno-server/src/cirno_server", args.root / "cirno-memory/src/cirno_memory", args.root / "cirno-usage/src/cirno_usage", args.root / "cirno-vault/src/cirno_vault"]
     checked = 0
     violations = []
     for root in roots:

@@ -7,7 +7,6 @@ import socket
 import subprocess
 import sys
 import time
-import venv
 from pathlib import Path
 
 import httpx
@@ -27,7 +26,7 @@ def test_release_wheels_start_with_owned_resources(tmp_path: Path):
     checkout.mkdir()
     for name in ("pyproject.toml", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copyfile(repository / name, checkout / name)
-    for name in ("cirno-memory", "cirno-usage", "cirno-vault", "cirno-core", "cirno-server", "cirno"):
+    for name in ("cirno-setup", "cirno-memory", "cirno-usage", "cirno-vault", "cirno-core", "cirno-server", "cirno"):
         shutil.copytree(repository / "sources" / name, checkout / "sources" / name,
                         ignore=shutil.ignore_patterns("tests", "__pycache__", ".pytest_cache", ".ruff_cache", ".DS_Store", "dist"))
     shutil.copytree(repository / "documents", checkout / "documents")
@@ -35,18 +34,22 @@ def test_release_wheels_start_with_owned_resources(tmp_path: Path):
     wheels = tmp_path / "wheels"
     env = {**os.environ, "CIRNO_SKIP_WEBUI_BUILD": "1"}
     env.pop("PYTHONPATH", None)
-    for source in (*(checkout / "sources" / name for name in ("cirno-memory", "cirno-usage", "cirno-vault", "cirno-core", "cirno-server")), checkout):
+    for source in (*(checkout / "sources" / name for name in ("cirno-setup", "cirno-memory", "cirno-usage", "cirno-vault", "cirno-core", "cirno-server")), checkout):
         subprocess.run([sys.executable, "-m", "hatchling", "build", "-t", "wheel", "-d", str(wheels)],
                        cwd=source, env=env, check=True, capture_output=True, timeout=60)
     installation = tmp_path / "installation"
     # Reuse installed third-party dependencies; Cirno itself must resolve from these wheels.
-    venv.EnvBuilder(with_pip=True, system_site_packages=True).create(installation)
+    subprocess.run(["uv", "venv", "--no-project", "--python", sys.executable, "--system-site-packages", str(installation)], check=True, env=env, capture_output=True)
     python = installation / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    subprocess.run([str(python), "-I", "-m", "pip", "install", "--no-index", "--no-deps", "--force-reinstall",
+    subprocess.run(["uv", "pip", "install", "--python", str(python), "--no-index", "--no-deps", "--reinstall",
                     *map(str, wheels.glob("*.whl"))], cwd=tmp_path, env=env,
                    check=True, capture_output=True, timeout=60)
     probe = subprocess.run([str(python), "-I", "-c", "\n".join([
-        "import cirno_memory, cirno_usage, cirno_vault, json, sys, tempfile",
+        "import cirno_setup, cirno_memory, cirno_usage, cirno_vault, json, sys, tempfile",
+        "from cirno_setup.registry import catalogue",
+        "assert 'presets.rachebtms' in catalogue()",
+        "from importlib.resources import files",
+        "assert json.loads(files('cirno_setup').joinpath('assets/artifacts.json').read_text())['xurl']['amd64']['sha256']",
         "from cirno_memory.repository import MemoryRepository",
         "from pathlib import Path",
         "from cirno_usage.store import LLMUsageStore",
@@ -71,7 +74,7 @@ def test_release_wheels_start_with_owned_resources(tmp_path: Path):
         "for colors in permutations(('red', 'green', 'blue')):",
         "    clip = files('cirno_core.providers').joinpath('probe_media', '-'.join(colors) + '.mp4').read_bytes()",
         "    assert b'ftyp' in clip[:32]",
-        "print(json.dumps({'packages': [m.__file__ for m in (cirno, cirno_core, cirno_server, cirno_memory, cirno_usage, cirno_vault)], 'assets': str(default_webui_dist_dir())}))",
+        "print(json.dumps({'packages': [m.__file__ for m in (cirno, cirno_setup, cirno_core, cirno_server, cirno_memory, cirno_usage, cirno_vault)], 'assets': str(default_webui_dist_dir())}))",
     ])], cwd=tmp_path, env=env, check=True, capture_output=True, text=True, timeout=15)
     paths = json.loads(probe.stdout)
     assert all(Path(path).is_relative_to(installation) for path in paths["packages"])

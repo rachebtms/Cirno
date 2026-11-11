@@ -8,3 +8,4 @@ services:
       - "8765:8765"
     volumes:
       - ~/.cirno:/home/cirno/.cirno
+      - ~/.cirno/state/tools/homebrew:/home/linuxbrew/.linuxbrew

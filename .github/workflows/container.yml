@@ -31,15 +31,10 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
-          cache: pip
-          cache-dependency-path: |
-            pyproject.toml
-            sources/cirno-memory/pyproject.toml
-            sources/cirno-usage/pyproject.toml
-            sources/cirno-vault/pyproject.toml
-            sources/cirno-core/pyproject.toml
-            sources/cirno-server/pyproject.toml
-            sources/cirno-server/src/cirno_server/channels/*/manifest.py
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: '**/pyproject.toml'
       - name: Verify Web UI
         working-directory: sources/cirno-web
         run: |
@@ -52,31 +47,28 @@ jobs:
         env:
           CIRNO_SKIP_WEBUI_BUILD: '1'
         run: |
-          python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e '.[dev]'
-          python sources/deployment/install_channel_dependencies.py --all-channels
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e sources/cirno-setup -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e '.[dev]'
+          .venv/bin/python sources/deployment/install_channel_dependencies.py --all-channels
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Verify backend
         run: |
-          python -m ruff check sources/cirno-memory sources/cirno-usage sources/cirno-vault sources/cirno-core sources/cirno-server --exclude '**/tests/**' --exclude '**/conftest.py' --select F
+          python -m ruff check sources/cirno-setup sources/cirno-memory sources/cirno-usage sources/cirno-vault sources/cirno-core sources/cirno-server --exclude '**/tests/**' --exclude '**/conftest.py' --select F
           python sources/development/check_import_boundaries.py
           python -m pytest -q -n 2
 
   container:
-    name: Container (${{ matrix.variant }}, ${{ matrix.arch }})
+    name: Container (${{ matrix.arch }})
     needs: checks
     strategy:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
-        variant: [slim, full]
         include:
           - arch: amd64
             runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
-          - variant: slim
-            suffix: ""
-          - variant: full
-            suffix: "-full"
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -90,7 +82,6 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          flavor: suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -102,16 +93,18 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          build-args: CIRNO_VARIANT=${{ matrix.variant }}
           load: true
           platforms: linux/${{ matrix.arch }}
           tags: cirno:smoke
-          cache-from: type=gha,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=container-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=container-${{ matrix.arch }}
       - name: Verify container startup and Web UI
         run: |
-          docker run -d --name cirno-smoke --memory=${{ matrix.variant == 'full' && '1g' || '400m' }} --mount source=cirno-smoke-data,target=/home/cirno/.cirno -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke
-          curl --fail --retry 30 --retry-delay 2 --retry-all-errors --retry-max-time 90 --connect-timeout 2 --max-time 5 http://127.0.0.1:18790/v0/health
+          mounts=(--mount source=cirno-smoke-data,target=/home/cirno/.cirno)
+          docker run --rm --entrypoint mkdir "${mounts[@]}" cirno:smoke -p /home/cirno/.cirno/state/tools/homebrew
+          mounts+=(--mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew)
+          docker run -d --name cirno-smoke --memory=400m "${mounts[@]}" -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke
+          python sources/development/wait_for_container.py --timeout 90
           curl --fail --output /tmp/cirno-smoke.html http://127.0.0.1:8765/
           grep -q '<html' /tmp/cirno-smoke.html
           python3 - <<'PY'
@@ -130,18 +123,29 @@ jobs:
           assert bootstrap["token"] and bootstrap["api_token"]
           PY
           docker exec cirno-smoke grep -Eq '^Uid:[[:space:]]+1000[[:space:]]' /proc/1/status
-      - name: Verify preinstalled tools and bundled embedding
-        if: matrix.variant == 'full'
+      - name: Verify base, selected preset and container recreation
         run: |
-          docker cp sources/development/verify_full_image.py cirno-smoke:/tmp/verify_full_image.py
-          docker cp sources/development/verify_full_media.py cirno-smoke:/tmp/verify_full_media.py
-          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_full_image.py
+          docker cp sources/development/verify_setup_image.py cirno-smoke:/tmp/verify_setup_image.py
+          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_image.py --base
+          docker cp sources/development/verify_setup_minimal.py cirno-smoke:/tmp/verify_setup_minimal.py
+          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_minimal.py
+          docker cp sources/development/verify_setup_toolchains.py cirno-smoke:/tmp/verify_setup_toolchains.py
+          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_toolchains.py
           docker rm -f cirno-smoke
-          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke
-          curl --fail --retry 30 --retry-delay 2 --retry-all-errors --retry-max-time 90 --connect-timeout 2 --max-time 5 http://127.0.0.1:18790/v0/health
+          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +presets.rachebtms --timeout 1800
+          python sources/development/wait_for_container.py --timeout 1800
+          docker cp sources/development/verify_setup_image.py cirno-smoke:/tmp/verify_setup_image.py
+          docker cp sources/development/verify_setup_media.py cirno-smoke:/tmp/verify_setup_media.py
+          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_image.py
+          docker exec cirno-smoke apt-get update
+          docker exec -e DEBIAN_FRONTEND=noninteractive cirno-smoke apt-get install -y --no-install-recommends hello
+          docker rm -f cirno-smoke
+          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +presets.rachebtms --timeout 1800
+          python sources/development/wait_for_container.py --timeout 600
           curl --fail http://127.0.0.1:8765/v0/auth/status | python3 -c 'import json, sys; assert not json.load(sys.stdin)["registration_required"]'
-          docker cp sources/development/verify_full_image.py cirno-smoke:/tmp/verify_full_image.py
-          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_full_image.py --check-persistence
+          docker cp sources/development/verify_setup_image.py cirno-smoke:/tmp/verify_setup_image.py
+          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_image.py --check-persistence
+          docker exec --user 1000:1000 cirno-smoke hello
       - name: Sign in to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
@@ -165,12 +169,11 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          build-args: CIRNO_VARIANT=${{ matrix.variant }}
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=container-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=container-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=container-${{ matrix.arch }}
       - name: Export image digest
         if: github.event_name != 'pull_request'
         env:
@@ -182,22 +185,15 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: digests-${{ matrix.variant }}-${{ matrix.arch }}
+          name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
   publish:
-    name: Publish multi-platform manifest (${{ matrix.variant }})
+    name: Publish multi-platform manifest
     if: github.event_name != 'pull_request'
     needs: container
-    strategy:
-      matrix:
-        include:
-          - variant: slim
-            suffix: ""
-          - variant: full
-            suffix: "-full"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -208,7 +204,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
-          pattern: digests-${{ matrix.variant }}-*
+          pattern: digests-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Container metadata
@@ -216,7 +212,6 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          flavor: suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch

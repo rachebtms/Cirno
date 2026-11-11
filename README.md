@@ -6,12 +6,14 @@ Conversations have separate histories, input queues, Goals and cancellation scop
 
 ## Run from source
 
-Requires Python 3.11+ and Node.js 24 for the frontend build. From the repository root:
+Requires uv, Python 3.11+ and Node.js 24 for the frontend build. From the repository root:
 
 ```sh
+uv venv --python 3.12 .venv
+. .venv/bin/activate
 npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run build
-python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e .
+uv pip install -e sources/cirno-setup -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e .
 cirno --port 8000
 ```
 
@@ -32,11 +34,12 @@ Open `http://localhost:8765`. On a new instance, register your instance owner in
 
 The [GitHub Actions workflow](.github/workflows/container.yml) is configured to verify, build and publish Linux AMD64/ARM64 images to `ghcr.io/rachebtms/cirno`. Publication requires committed code, a pushed trigger and a successful workflow. Compose uses the published image without a local build. See [container deployment and publishing](documents/docker.md).
 
-Use `docker compose -f compose.yaml -f compose.full.yaml up -d` for the `latest-full` variant, which includes Telegram dependencies, CLI tools, Homebrew and optional embedding weights. Embedding inference remains disabled by default.
+One Docker image supports a minimal environment or selected tools. Use `docker compose -f compose.yaml -f compose.rachebtms.yaml up -d` to install `+presets.rachebtms` at startup, or put individual namespaced components and `--timeout` in the Compose `command` list. Omitting the list starts the minimal environment. `cirno-setup` verifies the environment before starting Cirno. Tools and caches reuse the existing instance directory. See [environment setup](documents/setup.md).
 
 ## Repository and documentation
 
 - `sources/cirno-core/`: execution engine, model providers, memory coordination, tools, Skills and session state.
+- `sources/cirno-setup/`: independent namespaced tool setup, dependency planning and persistent installers.
 - `sources/cirno-memory/`, `sources/cirno-usage/`, `sources/cirno-vault/`: memory retrieval, usage accounting and encrypted credentials.
 - `sources/cirno-server/`: HTTP/WebSocket API, Telegram, service lifecycle and settings.
 - `sources/cirno/`: lightweight application distribution and public SDK facade.
@@ -48,10 +51,10 @@ Start with the [documentation index](documents/README.md). It covers [memory](do
 
 ## Releases
 
-The current version is **0.2.7**. See the [release notes](documents/releases/0.2.7.md). Instances on 0.1.6, 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4, 0.2.5 or 0.2.6 are automatically migrated at startup while retaining their instance volume. See [instance migration](documents/migrations.md) and the [Docker upgrade steps](documents/docker.md#upgrading-from-016).
+The current version is **0.2.8**. See the [release notes](documents/releases/0.2.8.md). Instances on 0.1.6, 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4, 0.2.5, 0.2.6 or 0.2.7 are automatically migrated at startup while retaining their instance volume. See [instance migration](documents/migrations.md) and the [Docker upgrade steps](documents/docker.md#upgrading-from-016).
 
 ## Acknowledgements and updates
 
 Cirno draws on ideas and earlier code from [Nanobot](https://github.com/HKUDS/nanobot), [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), and [DeepSeek SuperAgent](https://github.com/deepseek-ai/dsh-superagent-prototype). Upstream copyright and third-party notices are preserved in [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Cirno is maintained independently. Update the checkout, rebuild the frontend and reinstall the Python package to upgrade; containers update by rebuilding or pulling a published image. The application retains service restart but has no in-app updater.
 
-The [tabbed workspace guide](documents/workspace.md) covers file editors, local and SSH terminals, request transparency, and encrypted personal credentials in 0.2.7.
+The [tabbed workspace guide](documents/workspace.md) covers file editors, local and SSH terminals, request transparency, and encrypted personal credentials in 0.2.8.

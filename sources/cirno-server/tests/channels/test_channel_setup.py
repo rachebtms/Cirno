@@ -114,6 +114,7 @@ def test_channel_manifests_only_import_contract_modules() -> None:
     channel_dir = Path(channel_setup_module.__file__).parent
     allowed_imports = {
         "cirno_server.channels._manifest",
+        "cirno_setup.contracts.telegram",
         "cirno_server.channels.contracts",
         "cirno_server.channels.plugin",
     }

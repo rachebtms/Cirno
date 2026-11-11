@@ -5,64 +5,35 @@ cd "$(dirname "$0")/../../.." || exit 1
 RUN_ID="$$-${RANDOM}"
 IMAGE_NAME="cirno-test-${RUN_ID}"
 CONTAINER_NAME="cirno-test-run-${RUN_ID}"
-ONBOARDED_IMAGE="cirno-test-onboarded-${RUN_ID}"
 
 cleanup() {
     result=$?
     trap - EXIT
-    echo ""
-    echo "=== Cleanup ==="
     docker rm -f "$CONTAINER_NAME" > /dev/null 2>&1 || true
-    docker rmi -f "$ONBOARDED_IMAGE" "$IMAGE_NAME" > /dev/null 2>&1 || true
+    docker rmi -f "$IMAGE_NAME" > /dev/null 2>&1 || true
     exit "$result"
 }
 trap cleanup EXIT
 
-echo "=== Building Docker image ==="
 docker build -t "$IMAGE_NAME" .
-
-echo ""
-echo "=== Running 'cirno onboard' ==="
-docker run --name "$CONTAINER_NAME" "$IMAGE_NAME" onboard
-
-echo ""
-echo "=== Running 'cirno status' ==="
-docker commit "$CONTAINER_NAME" "$ONBOARDED_IMAGE" > /dev/null
-if STATUS_OUTPUT=$(docker run --rm "$ONBOARDED_IMAGE" status 2>&1); then
-    echo "$STATUS_OUTPUT"
-else
-    result=$?
-    echo "$STATUS_OUTPUT"
-    exit "$result"
-fi
-
-echo ""
-echo "=== Validating output ==="
-PASS=true
-
-check() {
-    if echo "$STATUS_OUTPUT" | grep -q "$1"; then
-        echo "  PASS: found '$1'"
-    else
-        echo "  FAIL: missing '$1'"
-        PASS=false
-    fi
-}
-
-check "cirno Status"
-check "Config:"
-check "Workspace:"
-check "Model:"
-check "OpenRouter API:"
-check "Anthropic API:"
-check "OpenAI API:"
-
-echo ""
-if $PASS; then
-    echo "=== All checks passed ==="
-else
-    echo "=== Some checks FAILED ==="
-    exit 1
-fi
-
-echo "Done."
+docker run -d --name "$CONTAINER_NAME" -e CIRNO_DOCKER_BOOTSTRAP=1 "$IMAGE_NAME"
+docker exec "$CONTAINER_NAME" /app/.venv/bin/python -c '
+import json, time, urllib.request, urllib.error
+for attempt in range(120):
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:18790/v0/health", timeout=2) as response:
+            if json.load(response).get("ready"):
+                break
+    except (urllib.error.URLError, TimeoutError):
+        pass
+    time.sleep(.5)
+else:
+    raise SystemExit("Cirno did not become ready")
+'
+docker cp sources/development/verify_setup_image.py "$CONTAINER_NAME:/tmp/verify_setup_image.py"
+docker cp sources/development/verify_setup_minimal.py "$CONTAINER_NAME:/tmp/verify_setup_minimal.py"
+docker exec --user 1000:1000 "$CONTAINER_NAME" /app/.venv/bin/python /tmp/verify_setup_image.py --base
+docker exec --user 1000:1000 "$CONTAINER_NAME" /app/.venv/bin/python /tmp/verify_setup_minimal.py
+docker cp sources/development/verify_setup_toolchains.py "$CONTAINER_NAME:/tmp/verify_setup_toolchains.py"
+docker exec --user 1000:1000 "$CONTAINER_NAME" /app/.venv/bin/python /tmp/verify_setup_toolchains.py
+echo "=== All checks passed ==="

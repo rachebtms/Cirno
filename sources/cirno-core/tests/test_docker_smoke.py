@@ -30,10 +30,8 @@ def docker_boundary(tmp_path):
         "with open(os.environ['DOCKER_CALLS'], 'a') as log:\n"
         "    log.write(json.dumps(args) + '\\n')\n"
         "stage = args[0]\n"
-        "if stage == 'run': stage = args[-1]\n"
-        "if stage == 'status':\n"
-        "    print('cirno Status\\nConfig: configured\\nWorkspace: ready\\nModel: test\\n'\n"
-        "          'OpenRouter API: unset\\nAnthropic API: unset\\nOpenAI API: unset')\n"
+        "if stage == 'run': stage = 'startup'\n"
+        "if stage == 'exec': stage = 'health' if '-c' in args else ('base' if '--base' in args else 'verify')\n"
         "if stage == os.environ.get('DOCKER_FAIL_STAGE'): sys.exit(23)\n",
         encoding="utf-8",
     )
@@ -65,27 +63,23 @@ def _assert_owned_cleanup(calls):
     suffix = image.removeprefix("cirno-test-")
     assert suffix and suffix != image
     container = f"cirno-test-run-{suffix}"
-    onboarded = f"cirno-test-onboarded-{suffix}"
-    assert calls[-2:] == [["rm", "-f", container], ["rmi", "-f", onboarded, image]]
+    assert calls[-2:] == [["rm", "-f", container], ["rmi", "-f", image]]
     for call in calls:
-        if call[0] == "run" and call[-1] == "onboard":
-            assert call == ["run", "--name", container, image, "onboard"]
-        elif call[0] == "commit":
-            assert call == ["commit", container, onboarded]
-        elif call[0] == "run" and call[-1] == "status":
-            assert call == ["run", "--rm", onboarded, "status"]
-    return {image, container, onboarded}
+        if call[0] == "run":
+            assert call == ["run", "-d", "--name", container, "-e", "CIRNO_DOCKER_BOOTSTRAP=1", image]
+        elif call[0] == "exec":
+            assert container in call
+        elif call[0] == "cp":
+            assert call[-1].startswith(container + ":")
+    return {image, container}
 
 
-@pytest.mark.parametrize("stage", ["build", "onboard", "commit", "status"])
+@pytest.mark.parametrize("stage", ["build", "startup", "health", "base", "verify"])
 def test_smoke_failure_preserves_exit_and_cleans_only_owned_resources(docker_boundary, stage):
     result, calls = docker_boundary(stage, fail_stage=stage)
     assert result.returncode == 23, result.stdout + result.stderr
     assert "All checks passed" not in result.stdout
     _assert_owned_cleanup(calls)
-    if stage == "status":
-        # Valid-looking output must never turn a failed status process green.
-        assert "cirno Status" in result.stdout
 
 
 def test_concurrent_smoke_runs_use_distinct_resources_and_cleanup(docker_boundary):

@@ -1,5 +1,3 @@
-ARG CIRNO_VARIANT=slim
-
 # The browser bundle is architecture-independent; never run Node under QEMU.
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS webui-builder
 
@@ -10,72 +8,41 @@ COPY sources/cirno-web/ ./
 COPY sources/cirno-core/src/cirno_core/agent/tools/names.json /app/sources/cirno-core/src/cirno_core/agent/tools/names.json
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS slim-base
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS python-build-tools
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl git bubblewrap openssh-client libmagic1 && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN useradd -m -u 1000 -s /bin/bash cirno
-ENV HOME=/home/cirno CIRNO_SHELL_VENV=/app/.venv
-
-# Go is needed to build xurl, but is not part of the runtime image.
-FROM golang:1.27.3-bookworm AS full-go-builder
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    GOBIN=/out CGO_ENABLED=0 go install github.com/xdevplatform/xurl@v1.3.4 && \
-    cp /usr/local/go/LICENSE /out/Go-LICENSE && \
-    cp /go/pkg/mod/github.com/xdevplatform/xurl@v1.3.4/LICENSE /out/xurl-LICENSE
-
-# Ubuntu 24.04 meets Homebrew's supported glibc baseline on both architectures.
-# BuildKit skips this stage entirely for the default slim variant.
-FROM ubuntu:24.04 AS full-base
+# One base for every deployment. Optional tools are selected through cirno-setup.
+FROM ubuntu:24.04 AS runtime
 ARG DEBIAN_FRONTEND=noninteractive
-ARG HOMEBREW_VERSION=7.0.12
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git build-essential file procps locales patch bzip2 xz-utils unzip \
-    openssh-client bubblewrap libmagic1 util-linux && \
-    rm -rf /var/lib/apt/lists/* && \
+    ca-certificates curl git bubblewrap openssh-client libmagic1 libatomic1 util-linux \
+    python3.12 python3.12-venv && rm -rf /var/lib/apt/lists/* && \
     userdel ubuntu && useradd -m -u 1000 -s /bin/bash cirno && \
-    mkdir -p /home/linuxbrew/.linuxbrew /opt/cirno/bin /opt/cirno/node-tools /opt/cirno/models /opt/nvm && \
-    chown -R cirno:cirno /home/linuxbrew /opt/cirno && \
-    curl --fail --location --retry 5 --retry-all-errors \
-      https://github.com/nvm-sh/nvm/archive/refs/tags/v0.40.8.tar.gz -o /tmp/nvm.tar.gz && \
-    echo '7c5b2c4c78e6447b518860ead1f365056e9a03b3562903439bb401607b05a2ef  /tmp/nvm.tar.gz' | sha256sum -c - && \
-    tar -xzf /tmp/nvm.tar.gz -C /opt/nvm --strip-components=1 && rm /tmp/nvm.tar.gz
+    mkdir -p /home/linuxbrew/.linuxbrew /opt/cirno/bin /opt/cirno/setup && \
+    chown -R cirno:cirno /home/linuxbrew && \
+    ln -s /usr/bin/fdfind /opt/cirno/bin/fd && \
+    ln -s /usr/bin/batcat /opt/cirno/bin/bat && \
+    ln -s /usr/bin/python3.12 /opt/cirno/bin/python
+COPY --from=python-build-tools /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+# Keep the official Node/npm layout for npx-based MCP servers and CLI installers.
+COPY --from=webui-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=webui-builder /usr/local/LICENSE /usr/share/licenses/nodejs/LICENSE
+COPY --from=webui-builder /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 ENV HOME=/home/cirno \
     HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew \
     HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_AUTO_UPDATE=1 \
-    HOMEBREW_NO_INSTALL_CLEANUP=1 \
-    PATH="/home/linuxbrew/.linuxbrew/opt/python@3.12/libexec/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/opt/cirno/bin:/opt/cirno/node-tools/bin:$PATH"
-COPY sources/deployment/full-image.Brewfile /tmp/full-image.Brewfile
-COPY sources/deployment/install_full_tools.sh /tmp/install_full_tools.sh
-COPY sources/deployment/bundle_embedding.py /tmp/bundle_embedding.py
-USER cirno
-RUN --mount=type=cache,target=/home/cirno/.cache,uid=1000,gid=1000 \
-    git clone --depth 1 --branch "$HOMEBREW_VERSION" https://github.com/Homebrew/brew /home/linuxbrew/.linuxbrew/Homebrew && \
-    mkdir -p /home/linuxbrew/.linuxbrew/bin && \
-    ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew && \
-    bash /tmp/install_full_tools.sh
-COPY --from=full-go-builder --chown=cirno:cirno /out/xurl /opt/cirno/bin/xurl
-COPY --from=full-go-builder /out/Go-LICENSE /out/xurl-LICENSE /usr/share/licenses/cirno/xurl/
-USER root
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/cirno/browsers
-COPY sources/deployment/full-image-python.txt /tmp/full-image-python.txt
-COPY sources/deployment/install_full_media.sh /tmp/install_full_media.sh
-RUN bash /tmp/install_full_media.sh
-COPY sources/deployment/full-image-python-command.sh /opt/cirno/bin/cirno-python-tool
-RUN chmod +x /opt/cirno/bin/cirno-python-tool && \
-    for tool in playwright chromium; do ln -s cirno-python-tool "/opt/cirno/bin/$tool"; done
-COPY sources/deployment/full-image-shell.sh /etc/profile.d/cirno-tools.sh
-ENV CIRNO_FULL_IMAGE=1 \
-    CIRNO_SHELL_VENV=/home/cirno/.cirno/state/tools/python \
+    HOMEBREW_CACHE=/home/cirno/.cirno/state/cli/cache/homebrew \
+    PLAYWRIGHT_BROWSERS_PATH=/home/cirno/.cirno/state/tools/browsers \
+    PATH="/usr/local/bin:/opt/cirno/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:$PATH"
+COPY sources/deployment/tools-shell.sh /etc/profile.d/cirno-tools.sh
+ENV CIRNO_SHELL_VENV=/home/cirno/.cirno/state/tools/python \
     TEA_CONFIG_DIR=/home/cirno/.cirno/state/cli/config/tea \
     PIP_CACHE_DIR=/home/cirno/.cirno/state/cli/cache/pip \
     NPM_CONFIG_CACHE=/home/cirno/.cirno/state/cli/cache/npm \
     NPM_CONFIG_USERCONFIG=/home/cirno/.cirno/state/cli/config/npmrc \
     BASH_ENV=/etc/profile.d/cirno-tools.sh \
-    CIRNO_BUNDLED_EMBEDDING_DIR=/opt/cirno/models/bge-small-zh-v1.5 \
+    CIRNO_BUNDLED_EMBEDDING_DIR=/home/cirno/.cirno/state/tools/models/bge-small-zh-v1.5 \
     XDG_CONFIG_HOME=/home/cirno/.cirno/state/cli/config \
     XDG_DATA_HOME=/home/cirno/.cirno/state/cli/data \
     XDG_CACHE_HOME=/home/cirno/.cirno/state/cli/cache \
@@ -87,15 +54,14 @@ ENV CIRNO_FULL_IMAGE=1 \
     GIT_CONFIG_GLOBAL=/home/cirno/.cirno/state/cli/gitconfig \
     NPM_CONFIG_PREFIX=/home/cirno/.cirno/state/tools/npm \
     UV_TOOL_DIR=/home/cirno/.cirno/state/tools/uv \
+    UV_CACHE_DIR=/home/cirno/.cirno/state/cli/cache/uv \
+    UV_PYTHON_INSTALL_DIR=/home/cirno/.cirno/state/tools/uv/python \
     UV_TOOL_BIN_DIR=/home/cirno/.cirno/state/tools/bin \
     PIPX_HOME=/home/cirno/.cirno/state/tools/pipx \
     PIPX_BIN_DIR=/home/cirno/.cirno/state/tools/bin \
     NVM_DIR=/home/cirno/.cirno/state/tools/nvm \
-    PATH="/home/cirno/.cirno/state/tools/bin:/home/cirno/.cirno/state/tools/npm/bin:/home/cirno/.cirno/state/tools/bun/bin:$PATH" \
-    CIRNO_EXTRAS_DEFAULT=memory-embedding \
-    CIRNO_CHANNELS_DEFAULT=telegram
-
-FROM ${CIRNO_VARIANT}-base AS runtime
+    PATH="/home/cirno/.cirno/state/tools/bin:/home/cirno/.cirno/state/tools/npm/bin:/home/cirno/.cirno/state/tools/bun/bin:/home/cirno/.cirno/state/tools/bundled/pandoc/bin:/home/cirno/.cirno/state/tools/bundled/xurl/bin:$PATH" \
+    CIRNO_SERVICE_PYTHON=/app/.venv/bin/python
 
 WORKDIR /app
 
@@ -110,6 +76,7 @@ ARG CIRNO_CHANNELS=
 COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY documents/ documents/
 COPY sources/cirno/ sources/cirno/
+COPY sources/cirno-setup/ sources/cirno-setup/
 COPY sources/cirno-memory/ sources/cirno-memory/
 COPY sources/cirno-usage/ sources/cirno-usage/
 COPY sources/cirno-vault/ sources/cirno-vault/
@@ -119,22 +86,23 @@ COPY sources/deployment/install_channel_dependencies.py scripts/
 COPY --from=webui-builder /app/build/webui/ build/webui/
 # Install and hand ownership over in one layer. A later recursive chown would
 # copy the installed environment into a second image layer.
-RUN uv venv --seed "$VIRTUAL_ENV" && \
+RUN uv venv --python /usr/bin/python3.12 "$VIRTUAL_ENV" && \
     extras="${CIRNO_EXTRAS:-${CIRNO_EXTRAS_DEFAULT:-}}" && \
     if [ -n "$extras" ]; then project=".[$extras]"; else project="."; fi && \
     CIRNO_SKIP_WEBUI_BUILD=1 uv pip install --python "$VIRTUAL_ENV/bin/python" --no-cache \
-    ./sources/cirno-memory ./sources/cirno-usage ./sources/cirno-vault ./sources/cirno-core ./sources/cirno-server "$project" && \
+    ./sources/cirno-setup ./sources/cirno-memory ./sources/cirno-usage ./sources/cirno-vault ./sources/cirno-core ./sources/cirno-server "$project" && \
     for channel in $(printf '%s' "${CIRNO_CHANNELS:-${CIRNO_CHANNELS_DEFAULT:-}}" | tr ',' ' '); do \
         python -m scripts.install_channel_dependencies "$channel" || exit $?; \
     done && \
-    if [ "${CIRNO_FULL_IMAGE:-}" = "1" ]; then \
-        rm -f "$VIRTUAL_ENV/bin/hf" "$VIRTUAL_ENV/bin/huggingface-cli"; \
-    fi && \
+    uv venv --python /usr/bin/python3.12 /opt/cirno/setup && \
+    uv pip install --python /opt/cirno/setup/bin/python --no-cache ./sources/cirno-setup && \
+    /opt/cirno/setup/bin/python -I -m cirno_setup --snapshot-base /opt/cirno/setup/lib/python3.12/site-packages/cirno_setup/assets/base-apt-packages.json && \
+    printf '%s\n' 'DPkg::Post-Invoke { "HOME=/home/cirno /opt/cirno/setup/bin/python -I -m cirno_setup --record-apt"; };' > /etc/apt/apt.conf.d/99cirno-persistence && \
     mkdir -p /home/cirno/.cirno && \
     chown -R cirno:cirno /home/cirno /app/.venv
 
-COPY sources/deployment/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
+COPY sources/deployment/entrypoint.sh /opt/cirno/bin/cirno-setup
+RUN chmod +x /opt/cirno/bin/cirno-setup
 
 # Start as root so the entrypoint can chown a mounted data directory
 # before dropping to the non-root
@@ -151,5 +119,5 @@ ENV PATH="$CIRNO_SHELL_VENV/bin:$PATH"
 # Service health endpoint and Web UI/WebSocket port
 EXPOSE 18790 8765
 
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["/opt/cirno/bin/cirno-setup", "--serve"]
 CMD []

@@ -1,7 +1,7 @@
 # API versions
 
 All Cirno service endpoints use a major-version prefix. The current prefix is
-`/v0/`. Cirno 0.2.7 still uses `/v0/`; a minor or patch release does not change
+`/v0/`. Cirno 0.2.8 still uses `/v0/`; a minor or patch release does not change
 that prefix. A future Cirno 1.x API will use `/v1/`.
 
 The v0 contract may change between releases. Update clients together with the

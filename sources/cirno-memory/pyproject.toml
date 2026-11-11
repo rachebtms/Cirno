@@ -1,6 +1,6 @@
 [project]
 name = "cirno-memory"
-version = "0.2.7"
+version = "0.2.8"
 description = "Disk-first evidence, BM25 retrieval, Dream receipts and optional embeddings"
 requires-python = ">=3.11"
 license = "MIT"

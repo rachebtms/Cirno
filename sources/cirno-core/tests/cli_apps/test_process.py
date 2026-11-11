@@ -103,21 +103,31 @@ def test_capture_decodes_cli_bytes_as_utf8_with_replacement(tmp_path):
     assert result.stdout == "\ufffdok"
 
 
-def test_timeout_reaps_owned_child(tmp_path):
+def test_timeout_reaps_owned_child(tmp_path, monkeypatch):
     import subprocess
 
-    pid_path = tmp_path / "timed-pid"
+    processes = []
+    spawn = subprocess.Popen
+
+    def track_process(*args, **kwargs):
+        process = spawn(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr("cirno_core.apps.cli.process.subprocess.Popen", track_process)
     with pytest.raises(subprocess.TimeoutExpired):
         run_cli(
             [
                 sys.executable,
                 "-c",
-                f"import pathlib, os, time; pathlib.Path({str(pid_path)!r}).write_text(str(os.getpid())); time.sleep(10)",
+                "import time; time.sleep(10)",
             ],
             cwd=tmp_path,
             timeout=0.2,
             env=dict(os.environ),
         )
+    assert len(processes) == 1
+    assert processes[0].returncode is not None
     if os.name == "posix":
         with pytest.raises(ProcessLookupError):
-            os.kill(int(pid_path.read_text()), 0)
+            os.kill(processes[0].pid, 0)

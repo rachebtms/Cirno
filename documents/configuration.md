@@ -4,12 +4,14 @@
 
 ## Install from a checkout
 
-Requires Python 3.11+ and Node.js 24. From the repository root:
+Requires uv, Python 3.11+ and Node.js 24. From the repository root:
 
 ```sh
 npm --prefix sources/cirno-web ci
 npm --prefix sources/cirno-web run build
-python -m pip install -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e .
+uv venv --python 3.12 .venv
+. .venv/bin/activate
+uv pip install -e sources/cirno-setup -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e .
 cirno --port 8000
 ```
 
