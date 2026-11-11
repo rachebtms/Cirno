@@ -1,0 +1,35 @@
+name: Diagnose container DNS
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resolver:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+        with:
+          driver-opts: network=host
+          buildkitd-flags: --allow-insecure-entitlement network.host
+      - name: Compare host and build resolver access
+        run: |
+          cat /etc/resolv.conf
+          getent ahostsv4 archive.ubuntu.com
+          getent ahostsv4 ports.ubuntu.com
+          mkdir -p /tmp/resolver-probe
+          cat > /tmp/resolver-probe/Dockerfile <<'DOCKERFILE'
+          FROM ubuntu:24.04
+          RUN id; ls -l /etc/resolv.conf /etc/nsswitch.conf; cat /etc/resolv.conf; cat /etc/nsswitch.conf; \
+              for host in archive.ubuntu.com ports.ubuntu.com registry.npmjs.org; do \
+                echo "ROOT $host"; timeout 15 getent ahostsv4 "$host" || true; \
+                echo "APT $host"; timeout 15 su -s /bin/sh _apt -c "ls -l /etc/resolv.conf; cat /etc/resolv.conf; getent ahostsv4 $host" || true; \
+              done
+          RUN apt-get -o APT::Sandbox::User=root -o APT::Update::Error-Mode=any update
+          DOCKERFILE
+          docker run --rm --network host ubuntu:24.04 sh -c 'ls -l /etc/resolv.conf; cat /etc/resolv.conf; getent ahostsv4 ports.ubuntu.com; su -s /bin/sh _apt -c "getent ahostsv4 ports.ubuntu.com"' || true
+          docker buildx build --network host --allow network.host --progress plain /tmp/resolver-probe
