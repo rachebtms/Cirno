@@ -32,6 +32,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--no-restore-apt", action="store_true", help="Do not restore manually installed system packages")
     result.add_argument("--proxy", help="Proxy for dependency downloads")
     result.add_argument("--serve", action="store_true", help="Start Cirno after all environment checks succeed")
+    result.add_argument("--verify", action="store_true", help="Recheck every selected dependency after all installations complete")
     result.add_argument("--phase", choices=("all", "system", "user"), default="all")
     result.add_argument("--dry-run", action="store_true")
     result.add_argument("--list", action="store_true")
@@ -88,12 +89,12 @@ def main(argv: list[str] | None = None) -> int:
             raise PermissionError("The system phase requires root")
         try:
             prepare(context, steps)
-            ensure(context, selections, phase="system", steps=steps)
+            ensure(context, selections, phase="system", steps=steps, verify_after=arguments.verify)
         finally:
             hand_over_state(context)
     else:
         initialize(context)
-        ensure(context, selections, phase=arguments.phase, steps=steps)
+        ensure(context, selections, phase=arguments.phase, steps=steps, verify_after=arguments.verify)
         if arguments.serve:
             from cirno_setup.launch import start_service
 

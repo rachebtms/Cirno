@@ -132,7 +132,7 @@ jobs:
           docker cp sources/development/verify_setup_toolchains.py cirno-smoke:/tmp/verify_setup_toolchains.py
           docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_toolchains.py
           docker rm -f cirno-smoke
-          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +presets.rachebtms --timeout 1800
+          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +presets.rachebtms --timeout 1800 --verify
           python sources/development/wait_for_container.py --timeout 1800
           docker cp sources/development/verify_setup_image.py cirno-smoke:/tmp/verify_setup_image.py
           docker cp sources/development/verify_setup_media.py cirno-smoke:/tmp/verify_setup_media.py
@@ -140,7 +140,7 @@ jobs:
           docker exec cirno-smoke apt-get update
           docker exec -e DEBIAN_FRONTEND=noninteractive cirno-smoke apt-get install -y --no-install-recommends hello
           docker rm -f cirno-smoke
-          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +presets.rachebtms --timeout 1800
+          docker run -d --name cirno-smoke --memory=1g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +presets.rachebtms --timeout 1800 --verify
           python sources/development/wait_for_container.py --timeout 600
           curl --fail http://127.0.0.1:8765/v0/auth/status | python3 -c 'import json, sys; assert not json.load(sys.stdin)["registration_required"]'
           docker cp sources/development/verify_setup_image.py cirno-smoke:/tmp/verify_setup_image.py

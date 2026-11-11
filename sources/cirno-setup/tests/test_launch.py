@@ -48,6 +48,21 @@ def test_failed_dependency_does_not_start_the_service(tmp_path, monkeypatch):
         cli.main(["--serve", "+pip.pytest"])
 
 
+def test_final_verification_failure_prevents_service_start(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(cli, "initialize", lambda context: None)
+
+    def verify(*args, **kwargs):
+        assert kwargs["verify_after"] is True
+        raise RuntimeError("final verification failed")
+
+    monkeypatch.setattr(cli, "ensure", verify)
+    monkeypatch.setattr(launch, "start_service", lambda *args: pytest.fail("server started before verification"))
+    with pytest.raises(RuntimeError, match="final verification failed"):
+        cli.main(["--serve", "+rachebtms", "--verify"])
+
+
 def test_root_setup_drops_privileges_with_original_installer_arguments(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(cli.os, "geteuid", lambda: 0)

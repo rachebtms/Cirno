@@ -14,7 +14,8 @@ from cirno_setup.context import Context, fingerprint
 from cirno_setup.planner import Step, plan
 
 
-def ensure(context: Context, selectors: list[str], *, phase: str = "all", steps: list[Step] | None = None) -> None:
+def ensure(context: Context, selectors: list[str], *, phase: str = "all", steps: list[Step] | None = None,
+           verify_after: bool = False) -> None:
     selected = plan(context, selectors) if steps is None else steps
     selected = [step for step in selected if phase == "all" or
                 (step.recipe.provider == "apt") == (phase == "system")]
@@ -24,10 +25,11 @@ def ensure(context: Context, selectors: list[str], *, phase: str = "all", steps:
     path = context.root / "setup.json"
     with FileLock(str(context.root / "setup.lock")):
         state: dict[str, Any] = json.loads(path.read_text()) if path.exists() else {"completed": {}}
-        for step in selected:
-            recipe = step.recipe
-            revision = fingerprint([context.architecture, asdict(recipe), context.artifacts])
-            try:
+        try:
+            for step in selected:
+                state["component"] = step.name
+                recipe = step.recipe
+                revision = fingerprint([context.architecture, asdict(recipe), context.artifacts])
                 verification = recipe.verify(context)
                 if verification.ready:
                     state["completed"][step.name] = revision
@@ -43,14 +45,23 @@ def ensure(context: Context, selectors: list[str], *, phase: str = "all", steps:
                 verification = recipe.verify(context)
                 if not verification.ready:
                     raise RuntimeError(f"{step.name} verification failed: {verification.reason}")
-            except Exception as error:
-                state.update(status="failed", component=step.name, error=str(error))
+                state["completed"][step.name] = revision
+                state.pop("error", None)
                 write_json(path, state)
-                raise
-            state["completed"][step.name] = revision
-            state.pop("error", None)
+                print(f"[setup] {step.name}: ready", flush=True)
+            if verify_after:
+                for step in selected:
+                    state.update(status="verifying", component=step.name)
+                    write_json(path, state)
+                    verification = step.recipe.verify(context)
+                    if not verification.ready:
+                        raise RuntimeError(f"{step.name} final verification failed: {verification.reason}")
+                    print(f"[setup] {step.name}: verified", flush=True)
+        except Exception as error:
+            state["completed"].pop(state["component"], None)
+            state.update(status="failed", error=str(error))
             write_json(path, state)
-            print(f"[setup] {step.name}: ready", flush=True)
+            raise
         state.update(status="ready", component=None)
         state.pop("error", None)
         write_json(path, state)

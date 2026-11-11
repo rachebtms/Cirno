@@ -15,6 +15,7 @@ from cirno_setup.recipe import Recipe
 
 BREW_PACKAGE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9@+_.-]*(?:/[a-zA-Z0-9@+_.-]+){0,2}")
 NPM_PACKAGE = re.compile(r"(?:@[a-z0-9_.-]+/)?[a-z0-9][a-z0-9_.-]*(?:@[0-9]+(?:\.[0-9]+){2}(?:-[a-zA-Z0-9.-]+)?)?")
+ALIASES = {"rachebtms": "presets.rachebtms"}
 
 
 @lru_cache(maxsize=1)
@@ -31,7 +32,7 @@ def normalize(selector: str) -> str:
     name = selector.removeprefix("+")
     if not name or name.startswith(("-", "+")) or any(char.isspace() for char in name):
         raise ValueError(f"Invalid setup selector: {selector!r}")
-    return name
+    return ALIASES.get(name, name)
 
 
 def resolve(selector: str, registered: dict[str, Recipe] | None = None) -> Recipe:

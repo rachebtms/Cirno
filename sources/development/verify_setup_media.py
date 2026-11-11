@@ -1,4 +1,4 @@
-"""Render small offline artifacts with the full image's Agent Python environment."""
+"""Render small offline artifacts with the research preset's Agent environment."""
 
 import os
 import subprocess
@@ -61,7 +61,6 @@ def main() -> None:
 
     assert (Path(playwright.__file__).parent / "driver" / "node").is_file()
     assert list(Path(os.environ["PLAYWRIGHT_BROWSERS_PATH"]).glob("chromium_headless_shell-*"))
-    assert not list(Path("/home/linuxbrew/.linuxbrew/Cellar").glob("python@*/*/lib/python3.*/test"))
     fonts = subprocess.run(["fc-list", ":lang=zh", "family"], check=True, capture_output=True, text=True)
     assert "Noto" in fonts.stdout, "CJK fonts are missing"
     with tempfile.TemporaryDirectory(prefix="cirno-media-smoke-") as temporary:

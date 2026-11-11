@@ -51,6 +51,12 @@ def test_personal_preset_retains_office_latex_tools_and_channel(context):
         resolve("+full")
 
 
+def test_personal_preset_short_name_shares_the_canonical_plan(context):
+    expected = plan(context, ["+presets.rachebtms"])
+    assert plan(context, ["+rachebtms"]) == expected
+    assert plan(context, ["+rachebtms", "+presets.rachebtms"]) == expected
+
+
 @pytest.mark.parametrize("selector", ["+pip.--evil", "+brew.--evil", "+apt.--evil", "+npm.;id", "+../evil"])
 def test_package_selectors_cannot_be_options_or_shell_code(selector):
     with pytest.raises(ValueError):
@@ -95,6 +101,48 @@ def test_empty_selection_does_not_install(context, monkeypatch):
     monkeypatch.setattr(backends, "backend", lambda name: pytest.fail("disabled setup touched a backend"))
     ensure(context, [])
     assert not context.root.exists()
+
+
+def test_final_verification_rechecks_reused_and_new_components_after_installation(context, monkeypatch):
+    entries = {"pip.a": Recipe("pip", ("a",)), "pip.b": Recipe("pip", ("b",))}
+    installed = {"a"}
+    events = []
+
+    def verify(ctx, recipe):
+        name = recipe.packages[0]
+        events.append(("verify", name))
+        return Verification(name in installed)
+
+    def install(ctx, recipe):
+        name = recipe.packages[0]
+        events.append(("install", name))
+        installed.add(name)
+
+    monkeypatch.setattr(backends, "backend", lambda _: SimpleNamespace(verify=verify, install=install))
+    monkeypatch.setattr("cirno_setup.runner.os.geteuid", lambda: 1000)
+    ensure(context, [], steps=plan(context, list(entries), entries), verify_after=True)
+    assert events == [("verify", "a"), ("verify", "b"), ("install", "b"), ("verify", "b"),
+                      ("verify", "a"), ("verify", "b")]
+    assert json.loads((context.root / "setup.json").read_text())["status"] == "ready"
+
+
+def test_final_verification_detects_dependencies_broken_by_a_later_install(context, monkeypatch):
+    entries = {"pip.a": Recipe("pip", ("a",)), "pip.b": Recipe("pip", ("b",))}
+    installed = {"a"}
+
+    def install(ctx, recipe):
+        installed.discard("a")
+        installed.add(recipe.packages[0])
+
+    backend = SimpleNamespace(install=install, verify=lambda ctx, recipe:
+                              Verification(recipe.packages[0] in installed, "dependency conflict"))
+    monkeypatch.setattr(backends, "backend", lambda _: backend)
+    monkeypatch.setattr("cirno_setup.runner.os.geteuid", lambda: 1000)
+    with pytest.raises(RuntimeError, match="pip.a final verification failed: dependency conflict"):
+        ensure(context, [], steps=plan(context, list(entries), entries), verify_after=True)
+    state = json.loads((context.root / "setup.json").read_text())
+    assert state["status"] == "failed" and state["component"] == "pip.a"
+    assert "pip.a" not in state["completed"]
 
 
 def test_root_commands_do_not_inherit_user_code_paths(context, monkeypatch):

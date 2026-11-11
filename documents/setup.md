@@ -37,12 +37,15 @@ Or `command: ["+pip.pytest", "+system.libreoffice", "--timeout", "600"]`. The pa
 cirno-setup +pip.pytest +pip.pymupdf
 cirno-setup +channels.telegram
 cirno-setup +npm.summarize +brew.tea
+cirno-setup +rachebtms --verify
 cirno-setup +presets.rachebtms --dry-run
 cirno-setup --list
 cirno-setup --serve +pip.pytest --timeout 300 -- --port 8765
 ```
 
 Standalone invocations install and verify, then exit unless `--serve` is present. `+` is an optional selection prefix, not shell code. Installer options precede `--`; server arguments follow it. `--timeout SECONDS` controls each install/check command; it must be positive and defaults to 1800 seconds. `--proxy URL` configures dependency downloads; standard proxy environment variables also work. `--no-restore-apt` skips restoration of user-added system packages. `--dry-run` prints a dependency plan without changes.
+
+Setup checks installed components and verifies each newly installed dependency by default. `--verify` adds a second serial pass over every selected dependency after all installations finish, including reused components. This catches a later installation breaking an earlier dependency. A failed check reports the component and reason, records a failed status and prevents server startup. `+rachebtms` is shorthand for `+presets.rachebtms`; both expand to the same deduplicated plan.
 
 Outside Docker, set `CIRNO_SERVICE_PYTHON` to the application environment's Python if setup is installed separately with `uv tool`. This selects the target for service/channel extras and the server executable. Manual system-only installation uses `--phase system` as root, followed by `--phase user` as the normal user. `--serve` manages both phases itself and cannot be combined with `--phase`. The supplied system/binary recipes target Linux AMD64/ARM64; system groups use Ubuntu 24.04 packages.
 

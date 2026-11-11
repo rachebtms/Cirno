@@ -74,7 +74,7 @@ Use the research/operations/document preset with the same image:
 docker compose -f compose.yaml -f compose.rachebtms.yaml up -d
 ```
 
-The override sets `command: ["+presets.rachebtms", "--timeout", "1800"]`. The image entrypoint is `cirno-setup --serve`: it installs and verifies the command-line selections, drops privileges, checks the service environment and then replaces itself with Cirno. Installation failures stop startup and are visible in container logs. Health becomes ready only after setup and service startup complete.
+The override sets `command: ["+presets.rachebtms", "--timeout", "1800", "--verify"]`. The image entrypoint is `cirno-setup --serve`: it installs and verifies the command-line selections, drops privileges, checks the service environment and then replaces itself with Cirno. `--verify` rechecks all selected dependencies after installation; `+rachebtms` is shorthand for this preset. Installation failures stop startup and are visible in container logs. Health becomes ready only after setup and service startup complete.
 
 A minimal Compose service omits `command` entirely. To choose individual components:
 

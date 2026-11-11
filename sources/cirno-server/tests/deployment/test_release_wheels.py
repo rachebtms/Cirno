@@ -38,12 +38,14 @@ def test_release_wheels_start_with_owned_resources(tmp_path: Path):
         subprocess.run([sys.executable, "-m", "hatchling", "build", "-t", "wheel", "-d", str(wheels)],
                        cwd=source, env=env, check=True, capture_output=True, timeout=60)
     installation = tmp_path / "installation"
-    # Reuse installed third-party dependencies; Cirno itself must resolve from these wheels.
-    subprocess.run(["uv", "venv", "--no-project", "--python", sys.executable, "--system-site-packages", str(installation)], check=True, env=env, capture_output=True)
+    # A nested virtual environment does not inherit its parent's packages.
+    # Resolve dependencies normally and install every Cirno package from these wheels.
+    subprocess.run(["uv", "venv", "--no-project", "--python", sys.executable, str(installation)], check=True, env=env, capture_output=True)
     python = installation / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    subprocess.run(["uv", "pip", "install", "--python", str(python), "--no-index", "--no-deps", "--reinstall",
-                    *map(str, wheels.glob("*.whl"))], cwd=tmp_path, env=env,
-                   check=True, capture_output=True, timeout=60)
+    installed = subprocess.run(["uv", "pip", "install", "--python", str(python),
+                               *map(str, wheels.glob("*.whl"))], cwd=tmp_path, env=env,
+                              capture_output=True, text=True, timeout=180)
+    assert installed.returncode == 0, installed.stdout + installed.stderr
     probe = subprocess.run([str(python), "-I", "-c", "\n".join([
         "import cirno_setup, cirno_memory, cirno_usage, cirno_vault, json, sys, tempfile",
         "from cirno_setup.registry import catalogue",
@@ -75,7 +77,8 @@ def test_release_wheels_start_with_owned_resources(tmp_path: Path):
         "    clip = files('cirno_core.providers').joinpath('probe_media', '-'.join(colors) + '.mp4').read_bytes()",
         "    assert b'ftyp' in clip[:32]",
         "print(json.dumps({'packages': [m.__file__ for m in (cirno, cirno_setup, cirno_core, cirno_server, cirno_memory, cirno_usage, cirno_vault)], 'assets': str(default_webui_dist_dir())}))",
-    ])], cwd=tmp_path, env=env, check=True, capture_output=True, text=True, timeout=15)
+    ])], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=15)
+    assert probe.returncode == 0, probe.stdout + probe.stderr
     paths = json.loads(probe.stdout)
     assert all(Path(path).is_relative_to(installation) for path in paths["packages"])
     assert Path(paths["assets"]).is_relative_to(installation)
