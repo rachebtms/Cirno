@@ -16,6 +16,8 @@ The checks job is a release gate: test failures prevent container builds. AMD64 
 
 Backend tests run with two workers, and Python dependency downloads are cached alongside the existing npm and Docker build caches. The architecture-independent browser bundle builds on the build host's native architecture. CI uses native runners for both architectures and does not use QEMU.
 
+CI's BuildKit daemon and build steps use the runner's host network to avoid the nested builder's DNS failures when accessing package repositories. This applies to image construction; deployment and smoke-test containers retain their normal Docker networking.
+
 ## Deploy
 
 Use the repository's minimal `compose.yaml` to run the published image:
