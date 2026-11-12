@@ -70,7 +70,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: write
@@ -157,6 +157,13 @@ jobs:
           docker cp sources/development/verify_setup_image.py cirno-smoke:/tmp/verify_setup_image.py
           docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_image.py --check-persistence
           docker exec --user 1000:1000 cirno-smoke hello
+      - name: Verify every setup package with +all
+        run: |
+          docker rm -f cirno-smoke
+          docker run -d --name cirno-smoke --memory=4g --mount source=cirno-smoke-data,target=/home/cirno/.cirno --mount source=cirno-smoke-data,target=/home/linuxbrew/.linuxbrew,volume-subpath=state/tools/homebrew -p 127.0.0.1:18790:18790 -p 127.0.0.1:8765:8765 -e CIRNO_DOCKER_BOOTSTRAP=1 cirno:smoke +all --timeout 3600 --verify
+          python sources/development/wait_for_container.py --timeout 3600
+          docker cp sources/development/verify_setup_all.py cirno-smoke:/tmp/verify_setup_all.py
+          docker exec --user 1000:1000 cirno-smoke /app/.venv/bin/python /tmp/verify_setup_all.py
       - name: Sign in to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4

@@ -296,7 +296,7 @@ export function ThreadShell({
       forkBoundaryMessageCount,
     },
     refreshHistory,
-    resetHistory,
+    resetHistory: resetStreamHistory,
     loadOlder,
     loadTraceDetails: loadBodyTraceDetails,
     streamError,
@@ -317,6 +317,11 @@ export function ThreadShell({
     !hideHeader && !session && !loading && !!onTemporaryChatEnabledChange;
   const promptNavigation = usePromptHistory(historyKey, historyVersion, displayMessages);
   const updateNavigationMessages = promptNavigation.updateMessages;
+  const showLatestHistory = promptNavigation.latest;
+  const resetHistory = useCallback((turnId?: string) => {
+    showLatestHistory();
+    resetStreamHistory(turnId);
+  }, [showLatestHistory, resetStreamHistory]);
   useEffect(() => {
     if (!chatId || !messagesReady) return;
     messageCacheRef.current.setLoadedMessages(chatId, promptNavigation.window
@@ -685,7 +690,7 @@ export function ThreadShell({
   useEffect(() => setPendingForkIndex(null), [chatId]);
 
   const composer = (
-    <div className={composerVariant === "hero" ? "thread-composer-stack is-hero" : "thread-composer-stack"}>
+    <div data-editing-message={Boolean(messageEditor) || undefined} className={composerVariant === "hero" ? "thread-composer-stack is-hero" : "thread-composer-stack"}>
       {modelFallback?.chatId === chatId && !modelFallback.dismissed ? (
         <ModelFallbackNotice
           model={modelFallback.model}
@@ -835,7 +840,7 @@ export function ThreadShell({
       active={composerActive}
       enabled={!temporary && !!session?.key.startsWith("websocket:") && webuiCapabilities.includes("webui.subagents.v1")}>
       <QuestionReplyProvider messages={displayMessages} send={messagesReady ? answerQuestion : undefined}>
-        <section ref={shellRef} data-preview-open={previewOpen || undefined} className="thread-preview-layout relative flex min-h-0 flex-1 overflow-hidden">
+        <section ref={shellRef} data-editing-message={Boolean(messageEditor) || undefined} data-preview-open={previewOpen || undefined} className="thread-preview-layout relative flex min-h-0 flex-1 overflow-hidden">
           <div ref={setConversationElement} className={cn(
             "thread-conversation relative flex min-w-0 flex-1 flex-col overflow-hidden",
             headerPortalTarget === undefined && !hideHeader && "thread-workspace",

@@ -34,6 +34,7 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.9](releases/0.2.9.md): complete setup catalogue verification, additional optional tools and mobile message editing fixes.
 - [0.2.8](releases/0.2.8.md): unified container image, command-selected persistent dependencies and standard uv/npm/browser tool environments.
 
 - [0.2.7](releases/0.2.7.md): consolidation retry and journal recovery fixes, revision-safe memory links, retrieval deadlines and a smaller full-image toolset.

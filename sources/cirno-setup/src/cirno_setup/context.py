@@ -8,7 +8,7 @@ import os
 import platform
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,7 @@ class Context:
     policy: Policy
     proxy: str | None = None
     apt_updated: bool = False
+    python_requirements: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def root(self) -> Path:

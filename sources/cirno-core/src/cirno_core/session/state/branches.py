@@ -7,8 +7,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 from cirno_core.bus.events import InboundMessage
-from cirno_core.session.display_history import HistoryFact, HistoryKind
 from cirno_core.session.branching import fork_session, session_prefix
+from cirno_core.session.display_history import HistoryFact, HistoryKind
 from cirno_core.session.model import Session
 from cirno_core.session.recovery.contracts import PENDING_USER_TURN_KEY, RUNTIME_CHECKPOINT_KEY
 from cirno_core.session.sqlite_store import SessionConflictError
@@ -34,10 +34,12 @@ class SessionBranches:
 
         from cirno_core.bus.events import INBOUND_META_TURN_ID
         from cirno_core.session.history_visibility import is_hidden_history_message
+        from cirno_core.session.presentation_history import fact_from_record
         from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
         from cirno_core.session.recovery.pending import record_pending_followup
         from cirno_core.session.session_identity import webui_chat_id
         from cirno_core.session.transcript import session_display_facts
+        from cirno_core.session.transcript.inputs import build_user_transcript_event
 
         chat_id = webui_chat_id(key)
         if not chat_id:
@@ -120,10 +122,24 @@ class SessionBranches:
                 message.metadata[PENDING_FOLLOWUP_ID_KEY] = identifier
                 self.repository.store.delete(key)
                 self.repository.commit(target)
-                if facts:
-                    self.repository.store.append_history(
-                        key, facts, expected_generation=target.generation
-                    )
+                # Edits bypass ordinary Web admission. Save the replacement
+                # input in the same transaction as the rewind, before it can
+                # produce a reply or a browser can reload the new history.
+                event = build_user_transcript_event(
+                    chat_id, content, media_paths=message.media,
+                    local_media_paths=message.metadata.get("local_media_paths"),
+                    cli_apps=message.metadata.get("cli_apps"),
+                    mcp_presets=message.metadata.get("mcp_presets"),
+                    session_mentions=message.metadata.get("session_mentions"),
+                )
+                assert event is not None
+                event.update(turn_id=message.metadata[INBOUND_META_TURN_ID],
+                             turn_phase="user", turn_seq=0,
+                             created_at_ms=int(message.timestamp.timestamp() * 1000))
+                self.repository.store.append_history(
+                    key, [*(facts or []), fact_from_record(event)],
+                    expected_generation=target.generation,
+                )
                 return target, message
 
             target, message = self.repository.store.run_write(write)

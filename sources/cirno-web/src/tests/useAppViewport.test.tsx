@@ -15,6 +15,8 @@ describe("app visual viewport", () => {
   let viewport: EventTarget & { height: number; offsetTop: number; scale: number };
   beforeEach(() => {
     touch = true;
+    vi.stubGlobal("innerHeight", 746);
+    vi.stubGlobal("innerWidth", 390);
     root = document.createElement("div");
     root.id = "root";
     document.body.append(root);
@@ -48,6 +50,34 @@ describe("app visual viewport", () => {
     resize(746, 0);
     expect(document.documentElement.style.getPropertyValue("--app-viewport-height")).toBe("746px");
     expect(document.documentElement.style.getPropertyValue("--app-viewport-top")).toBe("0px");
+  });
+
+  it("collapses mobile chrome for the keyboard and keeps buttons stable through blur", async () => {
+    render(<AppSurface />, { container: root });
+    const input = root.querySelector("textarea")!;
+    input.focus();
+    expect(root).not.toHaveClass("soft-keyboard-open");
+    resize(396, 70);
+    expect(root).toHaveClass("soft-keyboard-open");
+    input.blur();
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(root).toHaveClass("soft-keyboard-open");
+    input.focus();
+    expect(root).toHaveClass("soft-keyboard-open");
+    resize(746, 0);
+    expect(root).not.toHaveClass("soft-keyboard-open");
+  });
+
+  it("detects a keyboard when Android also shrinks the layout viewport", () => {
+    render(<AppSurface />, { container: root });
+    root.querySelector("textarea")!.focus();
+    vi.stubGlobal("innerHeight", 396);
+    resize(396, 0);
+    expect(root).toHaveClass("soft-keyboard-open");
+    vi.stubGlobal("innerWidth", 844);
+    vi.stubGlobal("innerHeight", 390);
+    resize(390, 0);
+    expect(root).not.toHaveClass("soft-keyboard-open");
   });
 
   it("fits keyboard changes despite WebKit scale rounding", () => {

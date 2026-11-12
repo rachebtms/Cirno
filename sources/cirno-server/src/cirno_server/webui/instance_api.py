@@ -50,13 +50,25 @@ async def instance_action(
             return {"session_key": key}
         raise ValueError("Unknown inbox action")
     if action == "conversations.edit":
-        from cirno_core.bus.outbound_events import SessionUpdatedEvent, outbound_message_for_event
+        from cirno_core.bus.outbound_events import (
+            SessionUpdatedEvent,
+            UserInputEvent,
+            outbound_message_for_event,
+        )
         from cirno_core.utils.cancellation import shield_and_drain
         async def edit_and_queue():
             with bus.admission.activity():
                 message = await sessions.state.edit_user_input(values["session_key"], values["turn_id"], values["content"])
                 await bus.publish_outbound(outbound_message_for_event(channel="websocket", chat_id=message.chat_id,
                     event=SessionUpdatedEvent(scope="reset"), metadata={}))
+                # As with ordinary admission, every viewer receives the human
+                # input before any model output, even if execution beats the ack.
+                await bus.publish_outbound(outbound_message_for_event(
+                    channel="websocket", chat_id=message.chat_id,
+                    event=UserInputEvent(content=message.content,
+                        created_at_ms=int(message.timestamp.timestamp() * 1000), provenance={}),
+                    metadata=message.metadata,
+                ))
                 await bus.publish_inbound(message)
                 return {"ok": True, "turn_id": message.metadata["webui_turn_id"]}
         return await shield_and_drain(edit_and_queue())
@@ -102,8 +114,8 @@ async def instance_action(
             repo.sync_profiles()
             if action in {"memory.list", "memory.graph"}:
                 from cirno_core.config.loader import load_config
-                from cirno_memory.search import search
                 from cirno_memory.graph import MAX_GRAPH_NODES, graph_ids, memory_graph
+                from cirno_memory.search import search
                 ids = graph_ids(values.get("ids", [])) if action == "memory.graph" else []
                 limit = int(values.get("limit", 10))
                 if action == "memory.graph":

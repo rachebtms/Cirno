@@ -41,3 +41,10 @@
 .workbench-group-actions { display: flex; align-items: center; flex-shrink: 0; }
 .workbench-group-actions button { width: 2.25rem; min-width: 2.25rem; height: 2.5rem; }
 .workbench-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; color: var(--muted); min-width: 0; }
+
+/* Keep the conversation mounted while the touch keyboard owns mobile space. */
+@media (max-width: 1023px) {
+  #root.soft-keyboard-open .workbench-launcher,
+  #root.soft-keyboard-open .workbench-group-bar { display: none; }
+  #root.soft-keyboard-open .workbench-surfaces { grid-template-rows: 0 minmax(0, 1fr); }
+}

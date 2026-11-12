@@ -15,6 +15,12 @@ Server-created providers use the configured `network.requestTimeoutS` and `netwo
 
 The server owns work; the frontend projects conversation state.
 
+## Editing saved messages and mobile input
+
+Editing an idle human message rewinds the conversation to that input and queues a replacement turn. The rewind, replacement display input, retained attachments and pending execution are committed atomically in a new generation. Reloading before execution starts still shows the replacement input; all viewers receive its input event before execution is queued, so generated replies follow it even if they arrive before the edit acknowledgement. Earlier tool side effects are not undone. The browser exits any older history window when a reset is received or an edit is acknowledged.
+
+On touch devices with a mobile workbench layout, opening the software keyboard hides the top tab strip and Launcher; closing the keyboard restores them. Layout remains fitted to the visual viewport. In narrow conversation panes, editing an older message hides the main composer while keeping its unsent draft mounted. Saving or cancelling the edit restores that composer. Desktop navigation remains visible.
+
 ## Identity and display names
 
 Browser routes and WebSocket chat identifiers use fixed UUIDs. The Router has a

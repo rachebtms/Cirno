@@ -1,7 +1,6 @@
 """Editing rewrites context only, with a durable replacement input and new generation."""
 
 import pytest
-
 from cirno_core.bus.events import INBOUND_META_TURN_ID
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model import SessionPolicy
@@ -48,6 +47,10 @@ async def test_edit_preserves_prefix_policy_attachments_and_external_files(sourc
     assert message.media == ["/saved/image.png"]
     assert message.metadata["_history_generation"] == saved.generation
     assert pending_followups(saved)[0].content == "Edited question"
+    facts = await sessions.state.project_history(key, lambda reader: list(reader.all_facts()))
+    assert [fact.content.get("text") for fact in facts] == ["First question", "First answer", "Edited question"]
+    assert facts[-1].turn_id == message.metadata[INBOUND_META_TURN_ID]
+    assert facts[-1].content["media_paths"] == ["/saved/image.png"]
     assert changed_file.read_text() == "Side effect remains"
     facts = await sessions.state.project_history(key, lambda reader: list(reader.navigation()))
     assert all("Original question" != fact.content.get("text") and "Later answer" != fact.content.get("text") for _, _, fact in facts)
@@ -84,15 +87,22 @@ async def test_edited_input_is_recoverable_before_bus_delivery(source):
 
 
 async def test_authenticated_edit_action_queues_one_real_user_request(source):
+    from cirno_core.bus.input_origin import input_origin
     from cirno_core.bus.queue import MessageBus
     from cirno_server.webui.instance_api import instance_action
-    from cirno_core.bus.input_origin import input_origin
     sessions, key, _ = source
     bus = MessageBus()
     result = await instance_action({"action": "conversations.edit", "values": {
         "session_key": key, "turn_id": "second", "content": "Revised request",
     }}, sessions=sessions, bus=bus)
     assert result["ok"] is True
+    from cirno_core.bus.outbound_events import SessionUpdatedEvent, UserInputEvent
+    reset = await bus.consume_outbound()
+    assert isinstance(reset.event, SessionUpdatedEvent) and reset.event.scope == "reset"
+    replacement = await bus.consume_outbound()
+    assert isinstance(replacement.event, UserInputEvent)
+    assert replacement.event.content == "Revised request"
+    assert replacement.metadata[INBOUND_META_TURN_ID] == result["turn_id"]
     message = await bus.consume_inbound()
     assert message.content == "Revised request" and message.is_user_input
     assert message.session_generation == (await sessions.state.read_header(key)).generation
@@ -148,7 +158,7 @@ async def test_edit_anchors_display_history_to_human_turn_when_context_contains_
     ], expected_generation=saved.generation)
     await sessions.state.edit_user_input(key, "human-2", "Revised task")
     facts = await sessions.state.project_history(key, lambda reader: list(reader.all_facts()))
-    assert [fact.content.get("text") for fact in facts] == ["Original task", "Started", "Report received"]
+    assert [fact.content.get("text") for fact in facts] == ["Original task", "Started", "Report received", "Revised task"]
     context = await sessions.state.read(key)
     assert any(message.get("content") == report for message in context.messages)
     assert pending_followups(context)[0].content == "Revised task"
@@ -158,3 +168,31 @@ async def test_edit_anchors_display_history_to_human_turn_when_context_contains_
     ))
     assert response is not None
     assert all("Work report (facts" not in event.get("text", "") for event in response["events"])
+
+
+async def test_edit_first_input_persists_replacement_without_a_prefix(source):
+    sessions, key, _ = source
+    message = await sessions.state.edit_user_input(key, "first", "New beginning")
+    facts = await sessions.state.project_history(key, lambda reader: list(reader.all_facts()))
+    assert len(facts) == 1
+    assert facts[0].content["text"] == "New beginning"
+    assert facts[0].turn_id == message.metadata[INBOUND_META_TURN_ID]
+    assert facts[0].created_at_ms > 0
+
+
+async def test_replacement_survives_restart_and_precedes_its_answer(source):
+    sessions, key, _ = source
+    message = await sessions.state.edit_user_input(key, "second", "Revised request")
+    saved = await sessions.state.read_header(key)
+    await sessions.state.append_history(key, [fact_from_record({
+        "event": "message", "text": "Answer to revised request",
+        "turn_id": message.metadata[INBOUND_META_TURN_ID], "turn_seq": 1,
+    })], expected_generation=saved.generation)
+    reopened = SessionManager(sessions.workspace, sessions_root=sessions.sessions_dir.parent)
+    try:
+        facts = await reopened.state.project_history(key, lambda reader: list(reader.all_facts()))
+        assert [fact.content.get("text") for fact in facts] == [
+            "First question", "First answer", "Revised request", "Answer to revised request",
+        ]
+    finally:
+        await reopened.state.aclose()

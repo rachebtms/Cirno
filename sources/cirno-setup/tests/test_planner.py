@@ -158,3 +158,57 @@ def test_root_commands_do_not_inherit_user_code_paths(context, monkeypatch):
 def test_catalogue_is_data_only_and_every_dependency_resolves(context):
     for name in catalogue():
         plan(context, [name])
+
+
+@pytest.mark.parametrize(("selector", "package", "module"), [
+    ("pip.httpx", "httpx", "httpx"),
+    ("pip.youtube-transcript-api", "youtube-transcript-api", "youtube_transcript_api"),
+    ("pip.marker-pdf", "marker-pdf", "marker"),
+    ("pip.bs4", "beautifulsoup4", "bs4"),
+    ("pip.markdown", "Markdown", "markdown"),
+    ("pip.cairosvg", "CairoSVG", "cairosvg"),
+    ("pip.manim", "manim", "manim"),
+])
+def test_optional_python_packages_verify_the_actual_import(selector, package, module):
+    recipe = resolve("+" + selector)
+    assert recipe.packages == (package,)
+    assert module in recipe.imports
+    assert recipe.target == "tools"
+
+
+def test_rendering_recipes_share_prerequisites_and_keep_heavy_tools_optional(context):
+    steps = plan(context, ["+pip.manim", "+pip.cairosvg", "+apt.sshpass"])
+    names = [step.name for step in steps]
+    assert names.count("system.development") == names.count("system.cairo") == 1
+    assert names.index("system.development") < names.index("system.cairo") < names.index("pip.manim")
+    assert names.index("system.cairo") < names.index("pip.cairosvg")
+    assert names.index("system.latex") < names.index("pip.manim")
+    assert names.index("apt.dvisvgm") < names.index("pip.manim")
+    assert resolve("+apt.sshpass").packages == ("sshpass",)
+    preset = {step.name for step in plan(context, ["+rachebtms"])}
+    assert not {"pip.manim", "pip.marker_pdf", "pip.cairosvg", "system.sshpass"} & preset
+
+
+def test_distribution_aliases_share_one_dependency_plan(context):
+    steps = plan(context, ["+pip.marker-pdf", "+pip.marker_pdf",
+        "+pip.youtube-transcript-api", "+pip.youtube_transcript_api",
+        "+pip.bs4", "+pip.beautifulsoup4"])
+    names = [step.name for step in steps]
+    assert names == ["apt.libgomp1", "pip.marker_pdf", "pip.youtube_transcript_api", "pip.bs4"]
+
+
+def test_all_selector_discovers_the_complete_catalogue_and_deduplicates(context):
+    entries = catalogue()
+    steps = plan(context, ["+all"])
+    names = {step.name for step in steps}
+    assert {name for name, recipe in entries.items() if recipe.provider != "group"} <= names
+    assert {"system.sshpass", "pip.manim", "pip.marker_pdf", "memory.embedding", "channels.telegram"} <= names
+    assert len(steps) == len(names)
+    assert plan(context, ["+all", "+presets.all", "+rachebtms", "+apt.sshpass"]) == steps
+
+
+def test_all_selector_includes_new_recipes_without_changing_a_package_list(context, monkeypatch):
+    entries = {**catalogue(), "pip.future_tool": Recipe("pip", ("future-tool",))}
+    monkeypatch.setattr("cirno_setup.registry.catalogue", lambda: entries)
+    monkeypatch.setattr("cirno_setup.planner.catalogue", lambda: entries)
+    assert "pip.future_tool" in {step.name for step in plan(context, ["+all"])}

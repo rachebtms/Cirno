@@ -15,7 +15,14 @@ from cirno_setup.recipe import Recipe
 
 BREW_PACKAGE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9@+_.-]*(?:/[a-zA-Z0-9@+_.-]+){0,2}")
 NPM_PACKAGE = re.compile(r"(?:@[a-z0-9_.-]+/)?[a-z0-9][a-z0-9_.-]*(?:@[0-9]+(?:\.[0-9]+){2}(?:-[a-zA-Z0-9.-]+)?)?")
-ALIASES = {"rachebtms": "presets.rachebtms"}
+ALIASES = {
+    "all": "presets.all",
+    "apt.sshpass": "system.sshpass",
+    "rachebtms": "presets.rachebtms",
+    "pip.youtube-transcript-api": "pip.youtube_transcript_api",
+    "pip.marker-pdf": "pip.marker_pdf",
+    "pip.beautifulsoup4": "pip.bs4",
+}
 
 
 @lru_cache(maxsize=1)

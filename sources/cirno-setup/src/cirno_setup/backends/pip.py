@@ -20,7 +20,19 @@ def interpreter(context: Context, recipe: Recipe) -> Path:
     return context.service_python if recipe.target == "service" else context.python
 
 
+def requested_requirements(context: Context, recipe: Recipe) -> list[str]:
+    # Carry the roots already encountered in this plan into each uv solve.
+    # Later components may require backtracking an earlier package version;
+    # resolving only the new component can silently break a selected tool.
+    requested = context.python_requirements.setdefault(str(interpreter(context, recipe)), [])
+    for requirement in recipe.packages:
+        if requirement not in requested:
+            requested.append(requirement)
+    return requested
+
+
 def verify(context: Context, recipe: Recipe) -> Verification:
+    requested_requirements(context, recipe)
     requirements = [req for raw in recipe.packages if not (req := Requirement(raw)).marker or req.marker.evaluate()]
     script = (
         "import importlib, importlib.metadata as m, json, sys; "
@@ -51,5 +63,5 @@ def verify(context: Context, recipe: Recipe) -> Verification:
 
 
 def install(context: Context, recipe: Recipe) -> None:
-    arguments = [*(argument for raw in recipe.packages for argument in ("--reinstall-package", Requirement(raw).name)), *recipe.packages]
+    arguments = [*(argument for raw in recipe.packages for argument in ("--reinstall-package", Requirement(raw).name)), *requested_requirements(context, recipe)]
     context.run(package_command("install", interpreter(context, recipe), arguments), env_override={"PYTHONPATH": ""})

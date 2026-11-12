@@ -1,3 +1,4 @@
+import { MobileEditingFixture } from "./mobile-editing-fixture";
 import { KeyboardViewportFixture } from "./keyboard-viewport-fixture";
 import { PreviewLifetimeFixture } from "./preview-lifetime-fixture";
 import { DraftPersistenceFixture, installDraftPersistenceFailure } from "./draft-persistence-fixture";
@@ -307,6 +308,8 @@ createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurfa
     ? <NodesFixture />
     : parameters.get("case") === "trace-rebuild"
     ? <TraceFixture />
+    : parameters.get("case") === "mobile-editing"
+    ? <MobileEditingFixture />
     : parameters.get("case") === "keyboard-viewport"
     ? <ClientProvider client={railClient} token="fixture"><KeyboardViewportFixture parameters={parameters} /></ClientProvider>
     : parameters.get("case") === "entry"

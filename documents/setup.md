@@ -38,6 +38,7 @@ cirno-setup +pip.pytest +pip.pymupdf
 cirno-setup +channels.telegram
 cirno-setup +npm.summarize +brew.tea
 cirno-setup +rachebtms --verify
+cirno-setup +all --verify --timeout 3600
 cirno-setup +presets.rachebtms --dry-run
 cirno-setup --list
 cirno-setup --serve +pip.pytest --timeout 300 -- --port 8765
@@ -45,7 +46,7 @@ cirno-setup --serve +pip.pytest --timeout 300 -- --port 8765
 
 Standalone invocations install and verify, then exit unless `--serve` is present. `+` is an optional selection prefix, not shell code. Installer options precede `--`; server arguments follow it. `--timeout SECONDS` controls each install/check command; it must be positive and defaults to 1800 seconds. `--proxy URL` configures dependency downloads; standard proxy environment variables also work. `--no-restore-apt` skips restoration of user-added system packages. `--dry-run` prints a dependency plan without changes.
 
-Setup checks installed components and verifies each newly installed dependency by default. `--verify` adds a second serial pass over every selected dependency after all installations finish, including reused components. This catches a later installation breaking an earlier dependency. A failed check reports the component and reason, records a failed status and prevents server startup. `+rachebtms` is shorthand for `+presets.rachebtms`; both expand to the same deduplicated plan.
+Setup checks installed components and verifies each newly installed dependency by default. `--verify` adds a second serial pass over every selected dependency after all installations finish, including reused components. This catches a later installation breaking an earlier dependency. A failed check reports the component and reason, records a failed status and prevents server startup. `+rachebtms` is shorthand for `+presets.rachebtms`; both expand to the same deduplicated plan. `+all` (alias of `+presets.all`) selects every built-in recipe and its dependencies, including all presets. The catalogue is discovered automatically, so newly added components are covered without updating a separate list. It does not mean every possible third-party pip/npm/APT package. This exhaustive environment is mainly for Actions; ordinary deployments can keep using explicit selections or `+rachebtms`.
 
 Outside Docker, set `CIRNO_SERVICE_PYTHON` to the application environment's Python if setup is installed separately with `uv tool`. This selects the target for service/channel extras and the server executable. Manual system-only installation uses `--phase system` as root, followed by `--phase user` as the normal user. `--serve` manages both phases itself and cannot be combined with `--phase`. The supplied system/binary recipes target Linux AMD64/ARM64; system groups use Ubuntu 24.04 packages.
 
@@ -68,6 +69,25 @@ Outside Docker, set `CIRNO_SERVICE_PYTHON` to the application environment's Pyth
 `presets.rachebtms` retains the approved former full environment: document/scientific Python libraries and pytest; Node/npm/nvm; tea, gog, yq, summarize, mcporter and xurl; SSH/server utilities; C/C++ development tools; PDF/OCR/FFmpeg; LibreOffice Writer/Calc/Impress; scientific LaTeX/BibTeX/latexmk; Chinese fonts and Chromium/Playwright; Telegram dependencies; and BGE-small runtime/assets. Installation does not enable Telegram, embeddings or third-party accounts. Go, Bun, pipx, the standalone HF CLI, Manim and Azure/Bedrock/Olostep extras are not selected.
 
 LibreOffice and LaTeX install only when selected directly or through a preset. APT resolves their shared system libraries. Venue-specific paper styles must accompany the paper. Playwright keeps its own unmodified driver and installs Chromium with the normal Headless Shell. Standard `chromium.launch(headless=True)` works; no runtime override or special channel is required.
+
+## Additional optional packages
+
+These components install into the same persistent Agent environment and use the shared install/import verification. Add them explicitly to the Compose command; they are not included in `+rachebtms` by default.
+
+| Selector | Installed package / dependency handling |
+| --- | --- |
+| `+pip.httpx` | HTTPX library |
+| `+pip.youtube-transcript-api` | `youtube-transcript-api`, import and CLI `youtube_transcript_api` |
+| `+pip.marker-pdf` | `marker-pdf`, PyTorch and its declared dependencies; verifies `marker`, `torch` and the `marker` / `marker_single` entry points |
+| `+pip.bs4` | Installs the actual `beautifulsoup4` distribution; verifies `bs4` |
+| `+pip.markdown` | Python-Markdown library |
+| `+pip.cairosvg` | CairoSVG plus shared Cairo / FFI / build prerequisites |
+| `+apt.sshpass` / `+system.sshpass` | Ubuntu's `sshpass` package, included in `+all` through the shared APT backend |
+| `+pip.manim` | Manim Community plus shared Cairo/Pango prerequisites, FFmpeg, fonts and the existing LaTeX suite with `dvisvgm` and `tipa` |
+
+The underscore spellings `+pip.youtube_transcript_api` and `+pip.marker_pdf`, and `+pip.beautifulsoup4`, resolve to the same recipes and do not install twice. CairoSVG and Manim share their system prerequisites. Python package dependencies remain managed by uv. Each installation resolves all Python roots encountered so far in the same target environment, allowing uv to choose compatible versions when selected tools disagree about a shared dependency (for example Marker and Manim with Pillow). Service and Agent roots remain separate. See the upstream [CairoSVG requirements](https://cairosvg.org/documentation/) and [Manim installation guide](https://docs.manim.community/en/stable/installation/uv.html).
+
+`marker-pdf` is a large optional installation because it depends on PyTorch. Setup installs the library and entry points without running OCR or downloading model weights. Actual conversions may require model downloads and, depending on the installed Marker version, an inference backend; see the [Marker installation and usage documentation](https://github.com/datalab-to/marker). GPU selection and credentials stay under the owner's control. Installation/import checks do not claim that a particular document or GPU workflow has been exercised.
 
 ## Recipes and execution
 

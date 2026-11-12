@@ -40,7 +40,13 @@
 @container cirno-tab (min-width:640px) { .message-assistant-bubble { max-width:90%; } }
 
 .message-editor { width:100%; min-width:0; padding:16px; border-radius:var(--radius-floating); background:var(--surface-secondary); }
-.message-editor-input { min-height:96px; max-height:50dvh; width:100%; resize:none; font-size:var(--text-reading-size); line-height:var(--cjk-line-height); overflow-wrap:anywhere; }
+.message-editor-input { min-height:96px; max-height:min(50dvh,calc(var(--app-viewport-height,100dvh) * .4)); width:100%; resize:none; font-size:var(--text-reading-size); line-height:var(--cjk-line-height); overflow-wrap:anywhere; }
 .message-editor-warning { margin-top:12px; font-size:13px; line-height:1.5; color:var(--danger); overflow-wrap:anywhere; }
 .message-editor-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:16px; }
 @media (pointer:coarse) { .message-editor-input { font-size:max(16px,var(--text-reading-size)); } .message-action { min-width:44px; min-height:44px; } }
+
+/* Keep the main draft mounted while the inline editor uses a compact pane. */
+@container cirno-tab (max-width:639px) {
+  .thread-composer-stack[data-editing-message],
+  [data-editing-message] .thread-composer-dock { display:none; }
+}
