@@ -1398,3 +1398,12 @@ it("clears Goal and run caches on a server reset without affecting another conve
   expect(client.getGoalState("edited")).toBeUndefined();
   expect(client.getGoalState("other")?.objective).toBe("Other objective");
 });
+
+it("highlights consolidate retry while preserving its arguments as selectable text", () => {
+  const content = "/consolidate retry source-retained";
+  render(<MessageBubble message={{ id: "retry-command", role: "user", content, createdAt: 100 }} slashCommands={[{
+    command: "/consolidate", title: "Consolidate context", description: "Consolidate", icon: "archive", lifecycle: "side_channel", acceptsArgs: true,
+  }]} />);
+  expect(screen.getByTestId("message-slash-command")).toHaveTextContent("/consolidate");
+  expect(screen.getByTestId("message-slash-command").parentElement).toHaveTextContent(content);
+});

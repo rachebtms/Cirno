@@ -1944,6 +1944,25 @@
         "input": "待处理输入审核",
         "updates": "生成的经验更新",
         "receipt": "保存完成状态"
+      },
+      "retry": {
+        "started": "正在重试保存经验",
+        "completed": "经验重试完成",
+        "failed": "经验重试未完成",
+        "cancelled": "经验重试已取消",
+        "not_found": "没有待重试的经验批次",
+        "no_updates": "重试未生成更新",
+        "checkpointUnchanged": "原有上下文摘要和归档位置保持不变。",
+        "notFoundHelp": "当前会话和 Project 范围内没有匹配的失败批次。",
+        "savedCounts": "本次新完成 {{newCount}} 项；此前已完成 {{previousCount}} 项。",
+        "noUpdatesHelp": "本次重新提取没有生成更新；原提案没有在这次提取中写入。",
+        "originalProposals": "重试前的提案（不代表已保存）",
+        "modelCalled": "本次重试调用了模型。",
+        "modelNotCalled": "本次重试没有调用模型。",
+        "mode": {
+          "replay": "已重放保留的保存方案。",
+          "regenerate": "已从原始归档批次重新提取经验。"
+        }
       }
     },
     "loadingConversation": "正在加载会话…",

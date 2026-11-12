@@ -106,6 +106,11 @@ async def test_partial_learning_failure_reports_saved_and_pending_then_retries_w
     monkeypatch.setattr(module, "atomic_write_text", write)
     recovered = await retry_session_learning(archiver, Session(key=ROUTER_SESSION_KEY), runtime)
     assert recovered["retried"] == 1
+    report = recovered["learning_retry"]
+    assert report["mode"] == "replay" and report["model_called"] is False
+    assert len(report["saved"]) == 2 and len(report["previously_saved"]) == 1
+    assert [item["label"] for item in report["requested"]] == ["USER.md"]
+    assert report["pending"] == []
     assert (tmp_path / "USER.md").read_text() == "Original\nName: Ada"
     assert outcomes(repo)["consolidation_failed"] == 0
     assert list(archiver.store.journal.iter_valid_entries()) == checkpoint_events
@@ -267,3 +272,34 @@ async def test_committed_generated_checkpoint_is_reused_even_with_zero_input_bud
     )
     assert result == CHECKPOINT
     runtime.provider.chat_stream_with_retry.assert_awaited_once()
+
+
+@pytest.mark.parametrize("updated_count", [0, 2])
+async def test_learning_retry_reports_regenerated_items_and_empty_extraction(tmp_path, updated_count):
+    proposals = [{"kind": "lesson", "content": f"Proposed lesson {i}", "evidence": [{"source_id": "archive:999"}]} for i in range(4)]
+    archiver, runtime = setup(tmp_path, CHECKPOINT + MARKER + json.dumps({"memories": proposals}))
+    first = await archive(archiver, runtime)
+    assert first.learning_failure
+    journal = list(archiver.store.journal.iter_valid_entries())
+    updates = [{"kind": "lesson", "content": f"Confirmed lesson {i}"} for i in range(updated_count)]
+    runtime.provider.chat_stream_with_retry.return_value = LLMResponse(content="## Memory updates\n" + json.dumps({"memories": updates}))
+    recovered = await retry_session_learning(archiver, Session(key=ROUTER_SESSION_KEY), runtime)
+    report = recovered["learning_retry"]
+    assert report["mode"] == "regenerate" and report["model_called"] is True
+    assert report["outcome"] == ("completed" if updated_count else "no_updates")
+    assert len(report["requested"]) == 4
+    assert len(report["saved"]) == updated_count
+    assert report["pending"] == report["previously_saved"] == []
+    assert list(archiver.store.journal.iter_valid_entries()) == journal
+    assert runtime.provider.chat_stream_with_retry.await_count == 2
+
+
+async def test_missing_learning_retry_is_not_reported_as_one_saved_batch(tmp_path):
+    archiver, runtime = setup(tmp_path, CHECKPOINT)
+    result = await retry_session_learning(archiver, Session(key=ROUTER_SESSION_KEY), runtime, "source-missing")
+    assert result["retried"] == 0
+    assert result["learning_retry"]["outcome"] == "not_found"
+    assert result["learning_retry"]["source"] == "source-missing"
+    assert result["learning_retry"]["saved"] == []
+    assert result["learning_retry"]["model_called"] is False
+    runtime.provider.chat_stream_with_retry.assert_not_awaited()

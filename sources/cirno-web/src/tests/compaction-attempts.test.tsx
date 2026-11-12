@@ -74,3 +74,50 @@ it("explains an evidence fallback instead of claiming a model summary succeeded"
   expect(screen.getByText("Evidence checkpoint saved")).toBeInTheDocument();
   expect(screen.getByText(/complete source records remain archived/)).toBeInTheDocument();
 });
+
+function retryEvent(outcome: "completed" | "no_updates" | "not_found" | "incomplete" = "completed") {
+  return { event: "context_compaction", chat_id: "chat", compaction_id: "retry", phase: outcome === "incomplete" ? "failed" : "succeeded", reason: "manual",
+    learning_retry: { source: "source-retained", mode: "replay", outcome, model_called: false,
+      requested: [{ id: "document:0", kind: "document", label: "USER.md" }],
+      saved: outcome === "completed" ? [{ id: "memory:0", kind: "memory", label: "Measured 43.2 K" }, { id: "document:0", kind: "document", label: "USER.md" }] : [],
+      previously_saved: outcome === "completed" ? [{ id: "memory:0", kind: "memory", label: "Measured 43.2 K" }] : [],
+      pending: outcome === "incomplete" ? [{ id: "document:0", kind: "document", label: "USER.md" }] : [],
+    } };
+}
+
+it("replays detailed learning recovery as a consolidation report with acknowledged writes", () => {
+  const event = retryEvent();
+  expect(decodeNotification(event)).toEqual(event);
+  expect(decodeNotification({ ...event, learning_retry: { ...event.learning_retry, saved: "invalid" } })).toBeNull();
+  const events = parseWebuiThreadPayload({ schemaVersion: 3, projection: "events", events: [event] }).events;
+  const messages = projectThreadEvents(events);
+  expect(messages).toHaveLength(1);
+  expect(messages[0].kind).toBe("compaction");
+  expect(messages[0].content).toBe("");
+  render(<ContextCompactionNotice compaction={messages[0].compaction!} />);
+  expect(screen.getByText("Learning retry completed")).toBeInTheDocument();
+  expect(screen.getByText("Newly completed: 1; previously completed: 1.")).toBeInTheDocument();
+  expect(screen.getByText("Document: USER.md")).toBeInTheDocument();
+  expect(screen.getByText("No model request was made for this retry.")).toBeInTheDocument();
+  expect(screen.getByText("source-retained")).toBeInTheDocument();
+});
+
+it("explains empty regeneration and separates original proposals from saved updates", () => {
+  const event = retryEvent("no_updates");
+  event.learning_retry.mode = "regenerate";
+  event.learning_retry.model_called = true;
+  const message = projectThreadEvents(parseWebuiThreadPayload({ schemaVersion: 3, projection: "events", events: [event] }).events)[0];
+  render(<ContextCompactionNotice compaction={message.compaction!} />);
+  expect(screen.getByText("Retry produced no updates")).toBeInTheDocument();
+  expect(screen.getByText("Newly completed: 0; previously completed: 0.")).toBeInTheDocument();
+  expect(screen.getByText("No updates were generated; the original proposals were not saved by this extraction.")).toBeInTheDocument();
+  expect(screen.getByText("Original proposals (not a list of saved updates)")).toBeInTheDocument();
+  expect(screen.getByText("A model request was made for this retry.")).toBeInTheDocument();
+});
+
+it("does not merge learning-only recovery into an unrelated checkpoint attempt", () => {
+  const retry = projectThreadEvents(parseWebuiThreadPayload({ schemaVersion: 3, projection: "events", events: [retryEvent()] }).events)[0];
+  const original = attempt("original", "failed");
+  original.compaction!.reason = "manual";
+  expect(projectWebuiThreadMessages([original, retry])).toHaveLength(2);
+});

@@ -156,3 +156,53 @@ def test_pending_handle_preserves_revision_and_private_scope_checks(tmp_path):
         learning.apply(
             LearningPlan.model_validate({"memories": [finding(source_id)]}), evidence, "checkpoint"
         )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {"quote": "Rephrased, not an exact quotation"},
+        {"message": 999, "quote": "Rephrased, not an exact quotation"},
+        {"message": 0, "quote": "Repeated text"},
+    ],
+)
+def test_ordinary_legacy_archive_references_use_batch_provenance(tmp_path, reference):
+    messages = [{"role": "tool", "content": "Repeated text"}] * 2
+    learning, evidence, _ = make_learning(tmp_path, messages)
+    plan = LearningPlan.model_validate(
+        {
+            "memories": [
+                {"kind": "observation", "content": "A task observation", "evidence": [reference]},
+            ]
+        }
+    )
+    learning.apply(plan, evidence, "checkpoint")
+    saved = learning.repo.search(session_key="worker:a", layer="knowledge")["memories"]
+    assert saved[0]["source_refs"] == [
+        {"memory_id": evidence["id"], "revision": evidence["revision"]}
+    ]
+
+
+@pytest.mark.parametrize("scope", ["session", "user"])
+def test_pending_input_still_requires_its_exact_revision_and_quote(tmp_path, scope):
+    learning, evidence, _ = make_learning(
+        tmp_path, [{"role": "tool", "content": "Private result"}], ROUTER_SESSION_KEY
+    )
+    pending = learning.repo.save(
+        "Shared original input", source="test:input", session_key=ROUTER_SESSION_KEY, scope=scope
+    )
+    learning.context()
+    plan = LearningPlan.model_validate(
+        {
+            "memories": [
+                {
+                    "kind": "lesson",
+                    "content": "A derived lesson",
+                    "evidence": [{"memory_id": pending["id"], "quote": "Rewritten quotation"}],
+                },
+            ]
+        }
+    )
+    with pytest.raises(LearningEvidenceError, match="does not match its memory"):
+        learning.apply(plan, evidence, "checkpoint")
+    assert not learning.repo.search(session_key=ROUTER_SESSION_KEY, layer="knowledge")["memories"]

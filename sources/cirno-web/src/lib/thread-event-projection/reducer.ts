@@ -193,6 +193,7 @@ export function projectThreadEvent(
         ...(event.context_window_tokens !== undefined ? { context_window_tokens: event.context_window_tokens } : {}),
         ...(event.evidence_checkpoint ? { evidence_checkpoint: true } : {}),
         ...(event.learning_failure ? { learning_failure: event.learning_failure } : {}),
+        ...(event.learning_retry ? { learning_retry: event.learning_retry } : {}),
         ...(event.context_estimated !== undefined ? { context_estimated: event.context_estimated } : {}),
         ...(!options.persisted ? { announce: true } : {}),
       },

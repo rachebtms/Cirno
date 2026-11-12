@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from typing import Any
+from typing import Any, Callable
 
 from cirno_usage.context import llm_usage_source
 from loguru import logger
@@ -30,6 +30,7 @@ async def generate_checkpoint(
     provider_context: ProviderCallContext | None,
     state_controller: ProviderConversationStateController | None,
     state_messages: list[dict[str, Any]],
+    on_model_request: Callable[[], None] | None = None,
 ) -> LLMResponse | None:
     response = None
     for attempt in range(runtime.compaction_max_retries + 1):
@@ -60,6 +61,8 @@ async def generate_checkpoint(
                 input_tokens=measured,
             )
             with llm_usage_source("consolidation"):
+                if on_model_request is not None:
+                    on_model_request()
                 response = await runtime.provider.chat_stream_with_retry(
                     model=runtime.model,
                     messages=request_messages,

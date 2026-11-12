@@ -51,6 +51,7 @@ class ContextCompactionEvent(AgentEvent):
     context_estimated: bool | None = None
     evidence_checkpoint: bool = False
     learning_failure: dict[str, Any] | None = None
+    learning_retry: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

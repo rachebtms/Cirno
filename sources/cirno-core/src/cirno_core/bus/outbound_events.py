@@ -154,6 +154,14 @@ def _event_content(event: AgentEvent) -> str:
     ):
         return event.content
     if isinstance(event, ContextCompactionEvent):
+        if event.learning_retry:
+            report = event.learning_retry
+            saved = "; ".join(item["label"] or item["kind"] for item in report["saved"]) or "none"
+            pending = "; ".join(item["label"] or item["kind"] for item in report["pending"]) or "none"
+            return (f"Learning recovery: {event.phase} ({report['outcome']}). "
+                    f"Saved updates: {len(report['saved'])}: {saved}. Pending: {pending}. "
+                    f"Model requested: {report['model_called']}. Source: {report['source'] or 'none'}. "
+                    f"Existing task checkpoint unchanged.{(' Error: ' + event.error) if event.error else ''}")
         if event.phase == "started":
             return "Compressing context…"
         if event.phase == "failed":

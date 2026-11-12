@@ -125,6 +125,7 @@ class MemoryArchiver:
         project_id: str | None = None,
         learning_only: bool = False,
         checkpoint_text: str | None = None,
+        on_model_request: Callable[[], None] | None = None,
     ) -> str | None:
         """Generate a replacement checkpoint and optionally persist it."""
         # Match the immutable evidence writer's message numbering; instruction
@@ -254,7 +255,7 @@ class MemoryArchiver:
             response = await generate_checkpoint(runtime=runtime, history=history,
                 request_messages=request_messages, call_tools=call_tools,
                 provider_context=provider_context, state_controller=state_controller,
-                state_messages=state_messages)
+                state_messages=state_messages, on_model_request=on_model_request)
         if response is None:
             return await raw_fallback()
         if response.finish_reason in {"error", "length"}:

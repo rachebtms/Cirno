@@ -37,3 +37,16 @@ def test_compaction_fact_preserves_progress_and_failure_details(phase, details):
     for field, value in details.items():
         assert replay[field] == value
     assert replay["reason"] == "context_pressure"
+
+
+def test_learning_recovery_report_survives_durable_projection():
+    from cirno_core.bus.agent_events import ContextCompactionEvent
+    from cirno_core.memory.consolidation_retry_report import empty_report
+    from cirno_core.session.outbound_wire import encode_context_compaction
+
+    report = empty_report("source-retained")
+    report.update(mode="replay", outcome="completed", saved=[{"id": "memory:0", "kind": "memory", "label": "Verified result"}])
+    event = ContextCompactionEvent("retry-1", "succeeded", reason="manual", learning_retry=report)
+    record = encode_context_compaction("research", event)
+    replay = record_from_fact(fact_from_record(record), "websocket:research")
+    assert replay["learning_retry"] == report

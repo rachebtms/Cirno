@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { settings } from "@/dev/gallery/settings";
+import { useTheme } from "@/hooks/useTheme";
 import { CirnoClient } from "@/lib/cirno-client";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import { ClientProvider } from "@/providers/ClientProvider";
@@ -9,6 +10,7 @@ import { ClientProvider } from "@/providers/ClientProvider";
 // The browser spec controls HTTP and WebSocket frames; all projection and caching
 // run through the real client and thread, without model calls or saved user data.
 export function AnswerOrderFixture() {
+  useTheme();
   const [client] = useState(() => new CirnoClient({
     url: `ws://${location.host}/answer-order-socket`, reconnect: false,
   }));

@@ -76,7 +76,8 @@ export function projectWebuiThreadMessages(messages: UIMessage[]): UIMessage[] {
   for (const message of visible) {
     const previous = grouped.at(-1);
     if (message.kind === "compaction" && message.compaction && previous?.kind === "compaction"
-      && previous.compaction?.phase === "failed" && previous.compaction.reason === message.compaction.reason) {
+      && previous.compaction?.phase === "failed" && previous.compaction.reason === message.compaction.reason
+      && previous.compaction.learning_retry?.source === message.compaction.learning_retry?.source) {
       grouped[grouped.length - 1] = { ...message, compaction: { ...message.compaction,
         attempts: [...(previous.compaction.attempts ?? [previous.compaction]), message.compaction] } };
     } else grouped.push(message);

@@ -1944,6 +1944,25 @@
         "input": "Tinjauan masukan",
         "updates": "Pembaruan pembelajaran",
         "receipt": "Status penyimpanan"
+      },
+      "retry": {
+        "started": "Mencoba menyimpan pembelajaran lagi",
+        "completed": "Percobaan ulang pembelajaran selesai",
+        "failed": "Percobaan ulang pembelajaran belum selesai",
+        "cancelled": "Percobaan ulang pembelajaran dibatalkan",
+        "not_found": "Tidak ada kelompok pembelajaran tertunda",
+        "no_updates": "Percobaan ulang tidak menghasilkan pembaruan",
+        "checkpointUnchanged": "Ringkasan tugas dan posisi arsip tetap sama.",
+        "notFoundHelp": "Tidak ada kelompok gagal yang cocok dengan percakapan dan cakupan Project ini.",
+        "savedCounts": "Baru selesai: {{newCount}}; sebelumnya selesai: {{previousCount}}.",
+        "noUpdatesHelp": "Ekstraksi ulang tidak menghasilkan pembaruan; usulan asli tidak disimpan melalui ekstraksi ini.",
+        "originalProposals": "Usulan asli (bukan daftar pembaruan tersimpan)",
+        "modelCalled": "Percobaan ulang ini memanggil model.",
+        "modelNotCalled": "Percobaan ulang ini tidak memanggil model.",
+        "mode": {
+          "replay": "Rencana penyimpanan yang dipertahankan dijalankan ulang.",
+          "regenerate": "Pembelajaran diekstrak ulang dari kelompok arsip asli."
+        }
       }
     },
     "loadingConversation": "Memuat percakapan…",

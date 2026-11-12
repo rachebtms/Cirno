@@ -192,18 +192,9 @@ async def cmd_compact(ctx: CommandContext) -> OutboundMessage | None:
     session = ctx.session or await loop.sessions.state.get(ctx.key)
     runtime = ctx.runtime or await loop.runtime_for_session(session)
     if ctx.args.strip():
-        from cirno_core.memory.consolidation_recovery import retry_session_learning
-        parts = ctx.args.split()
-        if parts[0] != "retry" or len(parts) > 2:
-            raise ValueError("Usage: /consolidate retry [source-id]")
-        async with loop.consolidator.get_lock(ctx.key):
-            result = await retry_session_learning(loop.consolidator.archiver, session, runtime, parts[1] if len(parts) == 2 else None)
-        failure = result.get("learning_failure")
-        text = (f"Learning retry incomplete. Source: {failure['source']}. Pending: "
-                + "; ".join(item["label"] or item["kind"] for item in failure["pending"])
-                + f". Error: {failure['error']}" if failure else
-                f"Learning retry completed: {result['retried']} batch. Existing task checkpoint retained.")
-        return OutboundMessage(channel=ctx.msg.channel, chat_id=ctx.msg.chat_id, content=text, metadata=dict(ctx.msg.metadata or {}))
+        from cirno_core.command.builtin.consolidation import retry_consolidation
+        await retry_consolidation(ctx, session, runtime)
+        return None
     delivery = (await loop.turn_delivery_factory.create(ctx.msg, ctx.key))
 
     await loop.consolidator.compact_idle_session(

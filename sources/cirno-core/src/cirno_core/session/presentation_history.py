@@ -32,7 +32,7 @@ _CONTENT_FIELDS = frozenset({
     "merge_next", "latency_ms", "usage", "round_usages", "context_window_tokens", "goal_state",
     "outcome", "failure_kind", "failure_error_kind", "failure_attempts", "failure_message",
     "transcript_incomplete", "stream_id", "compaction_id", "phase", "reason", "render_as",
-    "context_tokens", "context_estimated", "evidence_checkpoint", "learning_failure", "error",
+    "context_tokens", "context_estimated", "evidence_checkpoint", "learning_failure", "learning_retry", "error",
 })
 
 

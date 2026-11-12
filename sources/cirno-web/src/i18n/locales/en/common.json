@@ -1944,6 +1944,25 @@
         "input": "Input review",
         "updates": "Generated learning updates",
         "receipt": "Save completion status"
+      },
+      "retry": {
+        "started": "Retrying learning updates",
+        "completed": "Learning retry completed",
+        "failed": "Learning retry incomplete",
+        "cancelled": "Learning retry cancelled",
+        "not_found": "No pending learning batch",
+        "no_updates": "Retry produced no updates",
+        "checkpointUnchanged": "The existing task checkpoint and archive position are unchanged.",
+        "notFoundHelp": "No failed batch matches this conversation and Project scope.",
+        "savedCounts": "Newly completed: {{newCount}}; previously completed: {{previousCount}}.",
+        "noUpdatesHelp": "No updates were generated; the original proposals were not saved by this extraction.",
+        "originalProposals": "Original proposals (not a list of saved updates)",
+        "modelCalled": "A model request was made for this retry.",
+        "modelNotCalled": "No model request was made for this retry.",
+        "mode": {
+          "replay": "Replayed the retained save plan.",
+          "regenerate": "Regenerated learning from the original archived batch."
+        }
       }
     },
     "loadingConversation": "Loading conversation…",

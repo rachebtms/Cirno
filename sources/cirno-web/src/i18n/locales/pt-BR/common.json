@@ -1944,6 +1944,25 @@
         "input": "Revisão de entradas",
         "updates": "Aprendizado gerado",
         "receipt": "Estado de gravação"
+      },
+      "retry": {
+        "started": "Tentando salvar o aprendizado novamente",
+        "completed": "Nova tentativa de aprendizado concluída",
+        "failed": "Nova tentativa de aprendizado incompleta",
+        "cancelled": "Nova tentativa de aprendizado cancelada",
+        "not_found": "Nenhum lote de aprendizado pendente",
+        "no_updates": "A nova tentativa não produziu atualizações",
+        "checkpointUnchanged": "O resumo e a posição do arquivo existentes permanecem inalterados.",
+        "notFoundHelp": "Nenhum lote com falha corresponde a esta conversa e ao escopo do Project.",
+        "savedCounts": "Concluídos agora: {{newCount}}; anteriormente: {{previousCount}}.",
+        "noUpdatesHelp": "A nova extração não gerou atualizações; as propostas originais não foram salvas nesta extração.",
+        "originalProposals": "Propostas originais (não são atualizações salvas)",
+        "modelCalled": "Esta tentativa fez uma solicitação ao modelo.",
+        "modelNotCalled": "Esta tentativa não fez solicitações ao modelo.",
+        "mode": {
+          "replay": "O plano de salvamento retido foi executado novamente.",
+          "regenerate": "O aprendizado foi extraído novamente do lote original."
+        }
       }
     },
     "loadingConversation": "Carregando conversa…",

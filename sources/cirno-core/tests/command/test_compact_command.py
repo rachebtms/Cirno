@@ -507,3 +507,59 @@ async def test_manual_compact_storage_failure_propagates_and_retains_context(loo
     restored = loop.sessions.get_or_create(key)
     assert restored.messages == before
     assert restored.last_archived == 0
+
+
+@pytest.mark.parametrize("outcome", ["completed", "no_updates", "not_found", "incomplete"])
+async def test_retry_command_emits_consolidation_report_instead_of_assistant_reply(loop, monkeypatch, outcome):
+    from cirno_core.memory.consolidation_retry_report import empty_report
+    from cirno_core.command.builtin.catalog import builtin_command_palette
+
+    source = "source-retained"
+    report = empty_report(source)
+    report.update(mode="replay", outcome=outcome)
+    result = {"retried": int(outcome in {"completed", "no_updates"}), "learning_retry": report}
+    if outcome == "incomplete":
+        result["learning_failure"] = {"error": "Could not save USER.md"}
+    retry = AsyncMock(return_value=result)
+    monkeypatch.setattr("cirno_core.command.builtin.consolidation.retry_session_learning", retry)
+    command = f"/consolidate retry {source}"
+    msg = InboundMessage(channel="cli", sender_id="user", chat_id="test", content=command)
+    response = await loop.processing.process(msg, runtime=loop.llm_runtime())
+    assert response is None
+    events = [loop.bus.outbound.get_nowait().event for _ in range(loop.bus.outbound_size)]
+    assert len(events) == 2 and all(isinstance(event, ContextCompactionEvent) for event in events)
+    assert [event.phase for event in events] == ["started", "failed" if outcome == "incomplete" else "succeeded"]
+    assert events[0].compaction_id == events[1].compaction_id
+    assert events[1].learning_retry == report
+    retry.assert_awaited_once()
+    assert retry.await_args.args[-1] == source
+    loop.provider.chat_stream_with_retry.assert_not_awaited()
+    spec = next(item for item in builtin_command_palette() if item["command"] == "/consolidate")
+    assert spec["accepts_args"] is True and "retry" in spec["arg_hint"]
+
+
+async def test_retry_command_failure_stays_a_failed_consolidation_report(loop, monkeypatch):
+    monkeypatch.setattr("cirno_core.command.builtin.consolidation.retry_session_learning", AsyncMock(side_effect=OSError("Could not read retained source")))
+    command = "/consolidate retry source-retained"
+    response = await loop.processing.process(InboundMessage(channel="cli", sender_id="user", chat_id="test", content=command), runtime=loop.llm_runtime())
+    assert response is None
+    events = [loop.bus.outbound.get_nowait().event for _ in range(loop.bus.outbound_size)]
+    assert [event.phase for event in events] == ["started", "failed"]
+    assert "Could not read retained source" in events[-1].error
+
+
+async def test_retry_argument_error_is_a_report_not_an_agent_reply(loop):
+    response = await loop.processing.process(InboundMessage(channel="cli", sender_id="user", chat_id="test", content="/consolidate retry source-retained extra"), runtime=loop.llm_runtime())
+    assert response is None
+    events = [loop.bus.outbound.get_nowait().event for _ in range(loop.bus.outbound_size)]
+    assert [event.phase for event in events] == ["started", "failed"]
+    assert "Usage: /consolidate retry" in events[-1].error
+
+
+async def test_cancelled_learning_retry_closes_its_report(loop, monkeypatch):
+    monkeypatch.setattr("cirno_core.command.builtin.consolidation.retry_session_learning", AsyncMock(side_effect=asyncio.CancelledError()))
+    command = "/consolidate retry source-retained"
+    with pytest.raises(asyncio.CancelledError):
+        await loop.commands.dispatch(CommandContext(msg=InboundMessage(channel="cli", sender_id="user", chat_id="test", content=command), session=None, key="cli:test", raw=command, loop=loop))
+    events = [loop.bus.outbound.get_nowait().event for _ in range(loop.bus.outbound_size)]
+    assert [event.phase for event in events] == ["started", "cancelled"]

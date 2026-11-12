@@ -110,6 +110,7 @@ class ContextCompactionWirePayload(_ChatWirePayload):
     context_estimated: NotRequired[bool]
     evidence_checkpoint: NotRequired[bool]
     learning_failure: NotRequired[dict[str, Any]]
+    learning_retry: NotRequired[dict[str, Any]]
 
 
 class SubagentTaskWirePayload(_ChatWirePayload):
@@ -245,6 +246,8 @@ def encode_context_compaction(
         payload["evidence_checkpoint"] = True
     if event.learning_failure is not None:
         payload["learning_failure"] = event.learning_failure
+    if event.learning_retry is not None:
+        payload["learning_retry"] = event.learning_retry
     if event.context_estimated is not None:
         payload["context_estimated"] = event.context_estimated
     return payload

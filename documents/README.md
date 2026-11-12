@@ -34,6 +34,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.13](releases/0.2.13.md): reliable legacy learning recovery, highlighted retry commands and localized consolidation reports with confirmed save details.
+
 - [0.2.12](releases/0.2.12.md): independent checkpoint and learning outcomes, stable prompt prefixes, recoverable learning and configurable sequential retries.
 
 - [0.2.11](releases/0.2.11.md): reliable SSH job recovery and monitoring, grounded consolidation retries, memory loading controls and unlimited setup deadlines.

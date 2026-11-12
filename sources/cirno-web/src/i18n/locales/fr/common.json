@@ -1944,6 +1944,25 @@
         "input": "Examen des entrées",
         "updates": "Apprentissage généré",
         "receipt": "État de validation"
+      },
+      "retry": {
+        "started": "Nouvelle tentative de sauvegarde",
+        "completed": "Nouvelle tentative terminée",
+        "failed": "Nouvelle tentative incomplète",
+        "cancelled": "Nouvelle tentative annulée",
+        "not_found": "Aucun lot en attente",
+        "no_updates": "La nouvelle tentative ne produit aucune mise à jour",
+        "checkpointUnchanged": "Le résumé et la position dans les archives restent inchangés.",
+        "notFoundHelp": "Aucun lot en échec ne correspond à cette conversation et à ce Project.",
+        "savedCounts": "Terminés maintenant : {{newCount}} ; auparavant : {{previousCount}}.",
+        "noUpdatesHelp": "La nouvelle extraction ne produit aucune mise à jour ; les propositions initiales ne sont pas sauvegardées par cette extraction.",
+        "originalProposals": "Propositions initiales (pas une liste des mises à jour sauvegardées)",
+        "modelCalled": "Cette tentative a effectué une requête au modèle.",
+        "modelNotCalled": "Cette tentative n’a effectué aucune requête au modèle.",
+        "mode": {
+          "replay": "Le plan de sauvegarde conservé a été réexécuté.",
+          "regenerate": "L’apprentissage a été réextrait du lot archivé initial."
+        }
       }
     },
     "loadingConversation": "Chargement de la conversation…",

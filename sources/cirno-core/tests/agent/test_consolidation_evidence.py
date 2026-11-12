@@ -69,7 +69,7 @@ def test_quote_only_profile_evidence_still_requires_actual_user(tmp_path):
     assert not (tmp_path / "USER.md").exists()
 
 
-def test_invalid_later_quote_prevents_all_learning_writes(tmp_path):
+def test_ordinary_archive_quotes_are_not_used_as_provenance_or_a_save_gate(tmp_path):
     item = ConsolidationLearning(
         tmp_path,
         [{"role": "tool", "content": "Measured 43.2 K"}],
@@ -90,12 +90,13 @@ def test_invalid_later_quote_prevents_all_learning_writes(tmp_path):
                 },
                 {
                     "kind": "fact",
-                    "content": "Invented measurement",
+                    "content": "Calibration was measured at 43.2 kelvin",
                     "evidence": [{"quote": "Measured 44 K"}],
                 },
             ]
         }
     )
-    with pytest.raises(LearningEvidenceError):
-        item.apply(plan, evidence, "checkpoint")
-    assert not item.repo.search(session_key="worker:a", layer="knowledge")["memories"]
+    item.apply(plan, evidence, "checkpoint")
+    saved = item.repo.search(session_key="worker:a", layer="knowledge")["memories"]
+    assert len(saved) == 2
+    assert all(row["source_refs"] == [{"memory_id": evidence["id"], "revision": evidence["revision"]}] for row in saved)

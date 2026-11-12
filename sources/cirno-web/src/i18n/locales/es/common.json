@@ -1944,6 +1944,25 @@
         "input": "Revisión de entradas",
         "updates": "Aprendizaje generado",
         "receipt": "Estado de guardado"
+      },
+      "retry": {
+        "started": "Reintentando guardar aprendizaje",
+        "completed": "Reintento de aprendizaje completado",
+        "failed": "Reintento de aprendizaje incompleto",
+        "cancelled": "Reintento de aprendizaje cancelado",
+        "not_found": "No hay lotes de aprendizaje pendientes",
+        "no_updates": "El reintento no produjo cambios",
+        "checkpointUnchanged": "El resumen y la posición del archivo existentes no cambiaron.",
+        "notFoundHelp": "No hay lotes fallidos en esta conversación y ámbito de Project.",
+        "savedCounts": "Completados ahora: {{newCount}}; anteriormente: {{previousCount}}.",
+        "noUpdatesHelp": "La nueva extracción no generó cambios; las propuestas originales no se guardaron en esta extracción.",
+        "originalProposals": "Propuestas originales (no son cambios guardados)",
+        "modelCalled": "Este reintento realizó una solicitud al modelo.",
+        "modelNotCalled": "Este reintento no realizó solicitudes al modelo.",
+        "mode": {
+          "replay": "Se repitió el plan de guardado retenido.",
+          "regenerate": "Se volvió a extraer aprendizaje del lote original."
+        }
       }
     },
     "loadingConversation": "Cargando conversación…",

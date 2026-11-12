@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from cirno_core.memory.consolidation_evidence import needs_new_output
 from cirno_core.memory.consolidation_receipts import PREFIX, _retry_one, receipt_path
 from cirno_core.memory.consolidation_result import learning_failure
+from cirno_core.memory.consolidation_retry_report import completed_report, empty_report
 from cirno_core.session.model import Session
 from cirno_memory.repository import MemoryRepository
 from cirno_core.utils.cancellation import shield_and_drain
@@ -42,10 +43,36 @@ async def retry_session_learning(
 
     record = await asyncio.to_thread(pending)
     if record is None:
-        return {"retried": 0}
+        report = empty_report(source)
+        report.update(mode="none", outcome="not_found")
+        return {"retried": 0, "learning_retry": report}
+    original = record
+    model_called = False
+
+    def request_started():
+        nonlocal model_called
+        model_called = True
+
+    async def finish(*, mode, failure=None):
+        report = await asyncio.to_thread(
+            completed_report,
+            repo,
+            original,
+            mode=mode,
+            model_called=model_called,
+        )
+        result = {
+            "retried": 0 if failure or report["outcome"] == "incomplete" else 1,
+            "source": original["source"],
+            "learning_retry": report,
+        }
+        if failure:
+            result["learning_failure"] = failure
+        return result
+
     try:
         await shield_and_drain(asyncio.to_thread(_retry_one, repo, record))
-        return {"retried": 1, "source": record["source"]}
+        return await finish(mode="replay")
     except Exception as error:
         record = await asyncio.to_thread(
             lambda: json.loads(receipt_path(repo, record["source"]).read_text())
@@ -53,15 +80,15 @@ async def retry_session_learning(
         if record.get("saved_items") or not (
             record.get("raw_output") is not None or needs_new_output(record)
         ):
-            return {
-                "retried": 0,
-                "learning_failure": learning_failure(
+            return await finish(
+                mode="replay",
+                failure=learning_failure(
                     record["source"],
                     str(error),
                     record.get("plan", {}),
                     record.get("saved_items", []),
                 ),
-            }
+            )
 
     def original_messages():
         evidence = repo.read(
@@ -96,6 +123,7 @@ async def retry_session_learning(
             request_tools=archiver._get_tool_definitions(session),
             project_id=session.metadata.get("project_id"),
             learning_only=True,
+            on_model_request=request_started,
             checkpoint_text=record.get("summary")
             or "Learning-only recovery; no task checkpoint replacement.",
         )
@@ -121,15 +149,7 @@ async def retry_session_learning(
                 )
 
         failure = await shield_and_drain(asyncio.to_thread(retain_error))
-        return {
-            "retried": 0 if failure else 1,
-            "source": record["source"],
-            **({"learning_failure": failure} if failure else {}),
-        }
+        return await finish(mode="regenerate", failure=failure)
 
     failure = getattr(result, "learning_failure", None)
-    return {
-        "retried": 0 if failure else 1,
-        "source": record["source"],
-        **({"learning_failure": failure} if failure else {}),
-    }
+    return await finish(mode="regenerate", failure=failure)

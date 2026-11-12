@@ -20,6 +20,17 @@ export interface LearningFailure {
   pending: Array<{ id: string; kind: string; label: string }>
 }
 
+export interface LearningRetryReport {
+  source: string | null
+  mode: "pending" | "none" | "replay" | "regenerate"
+  outcome: "running" | "completed" | "no_updates" | "not_found" | "incomplete"
+  model_called: boolean
+  requested: LearningFailure["saved"]
+  saved: LearningFailure["saved"]
+  previously_saved: LearningFailure["saved"]
+  pending: LearningFailure["pending"]
+}
+
 export interface ContextCompaction {
   reason?: CompactionReason
   id: string
@@ -29,6 +40,7 @@ export interface ContextCompaction {
   context_estimated?: boolean
   evidence_checkpoint?: boolean
   learning_failure?: LearningFailure
+  learning_retry?: LearningRetryReport
   phase: "started" | "succeeded" | "failed" | "cancelled"
 }
 
@@ -56,6 +68,7 @@ export type NotificationEvent =
       context_estimated?: boolean
       evidence_checkpoint?: boolean
       learning_failure?: LearningFailure
+      learning_retry?: LearningRetryReport
     }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -104,6 +117,7 @@ export function decodeNotification(value: unknown): NotificationEvent | null | u
     && optional(value.context_estimated, "boolean")
     && optional(value.evidence_checkpoint, "boolean")
     && (value.learning_failure === undefined || isLearningFailure(value.learning_failure))
+    && (value.learning_retry === undefined || isLearningRetryReport(value.learning_retry))
     && [value.context_tokens, value.context_window_tokens].every(tokens => tokens === undefined
       || (typeof tokens === "number" && Number.isFinite(tokens) && tokens >= 0))
     ? value as unknown as NotificationEvent : null
@@ -113,6 +127,15 @@ function isLearningFailure(value: unknown): value is LearningFailure {
   return isRecord(value) && typeof value.source === "string" && typeof value.error === "string"
     && [value.saved, value.pending].every(items => Array.isArray(items) && items.every(item =>
       isRecord(item) && typeof item.id === "string" && typeof item.kind === "string" && typeof item.label === "string"))
+}
+
+function isLearningRetryReport(value: unknown): value is LearningRetryReport {
+  return isRecord(value) && (value.source === null || typeof value.source === "string")
+    && ["pending", "none", "replay", "regenerate"].includes(String(value.mode))
+    && ["running", "completed", "no_updates", "not_found", "incomplete"].includes(String(value.outcome))
+    && typeof value.model_called === "boolean"
+    && [value.saved, value.pending, value.requested, value.previously_saved].every(items => Array.isArray(items)
+      && items.every(item => isRecord(item) && typeof item.id === "string" && typeof item.kind === "string" && typeof item.label === "string"))
 }
 
 function isRetryStatus(value: Record<string, unknown>): boolean {

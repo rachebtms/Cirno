@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from cirno_core.memory.consolidation_contract import EvidenceRef, LearningPlan
+from cirno_core.memory.consolidation_contract import EvidenceRef, Finding, LearningPlan
 from cirno_core.memory.consolidation_evidence import LearningEvidenceError
 from cirno_core.runtime.context import public_history_message
 
@@ -68,12 +68,24 @@ def bind_plan(plan: LearningPlan, sources: dict[str, dict]) -> LearningPlan:
             )
         return EvidenceRef.model_validate(sources[ref.source_id])
 
+    def bind_finding(finding: Finding) -> Finding:
+        refs = [bind(ref) for ref in finding.evidence]
+        # Ordinary findings belong to the immutable batch, including when old
+        # output still carries model-written archive quotations. Those quotes
+        # neither locate the source nor substantiate the finding.
+        # Input-based findings keep every reference: discarding an archive ref
+        # there could promote mixed private evidence into shared memory.
+        if not any(ref.memory_id is not None for ref in refs):
+            refs = [
+                ref
+                for original, ref in zip(finding.evidence, refs)
+                if original.source_id is not None
+            ]
+        return finding.model_copy(update={"evidence": refs})
+
     return plan.model_copy(
         update={
-            "memories": [
-                finding.model_copy(update={"evidence": [bind(ref) for ref in finding.evidence]})
-                for finding in plan.memories
-            ],
+            "memories": [bind_finding(finding) for finding in plan.memories],
             "documents": [
                 edit.model_copy(update={"evidence": [bind(ref) for ref in edit.evidence]})
                 for edit in plan.documents

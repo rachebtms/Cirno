@@ -1944,6 +1944,25 @@
         "input": "待處理輸入審核",
         "updates": "產生的經驗更新",
         "receipt": "儲存完成狀態"
+      },
+      "retry": {
+        "started": "正在重試儲存經驗",
+        "completed": "經驗重試完成",
+        "failed": "經驗重試未完成",
+        "cancelled": "經驗重試已取消",
+        "not_found": "沒有待重試的經驗批次",
+        "no_updates": "重試未產生更新",
+        "checkpointUnchanged": "原有上下文摘要和歸檔位置保持不變。",
+        "notFoundHelp": "目前對話和 Project 範圍內沒有符合的失敗批次。",
+        "savedCounts": "本次新完成 {{newCount}} 項；先前已完成 {{previousCount}} 項。",
+        "noUpdatesHelp": "本次重新擷取沒有產生更新；原提案沒有在此次擷取中寫入。",
+        "originalProposals": "重試前的提案（不代表已儲存）",
+        "modelCalled": "本次重試呼叫了模型。",
+        "modelNotCalled": "本次重試沒有呼叫模型。",
+        "mode": {
+          "replay": "已重播保留的儲存方案。",
+          "regenerate": "已從原始歸檔批次重新擷取經驗。"
+        }
       }
     },
     "loadingConversation": "正在載入會話…",

@@ -218,20 +218,27 @@ async def test_failed_learning_save_reuses_generated_checkpoint_without_another_
     {"message": 0, "quote": "43.2 at 280 K"},
     {"quote": "Calibration was measured at 43.2 Kelvin"},
 ])
-async def test_invalid_citation_can_be_regenerated_on_manual_retry(tmp_path, legacy, invalid_ref):
+@pytest.mark.parametrize("recovery", ["command", "memory"])
+async def test_retained_legacy_quote_failure_can_be_saved_without_regeneration(
+    tmp_path, monkeypatch, legacy, invalid_ref, recovery
+):
     from cirno_core.memory.consolidation_receipts import receipt_path
 
     invalid = finding()
     invalid["evidence"] = [invalid_ref]
-    valid = finding()
-    valid["evidence"] = [{"source_id": "archive:1"}]
     archiver, runtime = fixture(tmp_path, result(memories=[invalid]))
-    runtime.provider.chat_stream_with_retry.side_effect = [
-        LLMResponse(content=result(memories=[invalid])),
-        LLMResponse(content=result(memories=[valid])),
-    ]
     kwargs = dict(runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[])
-    summary = await archiver.archive(MESSAGES, **kwargs)
+    apply = ConsolidationLearning._apply
+
+    def old_apply(self, plan, evidence):
+        for item in plan.memories:
+            self._evidence(item.evidence)
+        return apply(self, plan, evidence)
+
+    # Reproduce the receipt left by the released pre-fix validator.
+    with monkeypatch.context() as patch:
+        patch.setattr(ConsolidationLearning, "_apply", old_apply)
+        summary = await archiver.archive(MESSAGES, **kwargs)
     assert summary == CHECKPOINT
     assert "quote does not match" in summary.learning_failure["error"]
     repo = MemoryRepository(tmp_path)
@@ -242,17 +249,22 @@ async def test_invalid_citation_can_be_regenerated_on_manual_retry(tmp_path, leg
         receipt.pop("regenerate_output")
         receipt["error"] = "ValueError: Learning evidence quote does not match the archived message"
         path.write_text(json.dumps(receipt))
-    assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
-    assert runtime.provider.chat_stream_with_retry.await_count == 1
-    assert (await retry_session_learning(archiver, Session(key="worker:one"), runtime))["retried"] == 1
-    assert runtime.provider.chat_stream_with_retry.await_count == 2
+    # First consolidation after upgrading retains the old checkpoint and warning.
+    cached = await archiver.archive(MESSAGES, **kwargs)
+    assert cached == CHECKPOINT and cached.learning_failure["source"] == source["id"]
+    journal = list(archiver.store.journal.iter_valid_entries())
+    if recovery == "command":
+        retried = await retry_session_learning(archiver, Session(key="worker:one"), runtime)
+    else:
+        retried = retry_learning(repo)
+    assert retried["retried"] == 1
+    runtime.provider.chat_stream_with_retry.assert_awaited_once()
     saved = repo.search(session_key="worker:one", layer="knowledge")["memories"]
     assert len(saved) == 1
-    assert saved[0]["source_refs"][0]["message"] == 1
-    assert saved[0]["source_refs"][0]["quote"] == MESSAGES[1]["content"]
-    # Completed plans still reuse their result, including source-handle citations.
+    assert saved[0]["source_refs"] == [{"memory_id": source["id"], "revision": source["revision"]}]
+    assert list(archiver.store.journal.iter_valid_entries()) == journal
     assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
-    assert runtime.provider.chat_stream_with_retry.await_count == 2
+    runtime.provider.chat_stream_with_retry.assert_awaited_once()
 
 
 @pytest.mark.parametrize("after_append", [False, True])
@@ -327,3 +339,18 @@ async def test_instruction_prefixes_are_not_numbered_as_learning_evidence(tmp_pa
     import json
     lines = (tmp_path / evidence["source"]).read_text().splitlines()
     assert [json.loads(line)["role"] for line in lines] == ["user", "tool"]
+
+
+async def test_four_new_ordinary_findings_save_despite_old_style_model_quotations(tmp_path):
+    updates = [{
+        "kind": "lesson", "content": f"Research lesson {i}",
+        "evidence": [{"message": 500 + i, "quote": f"Rephrased model excerpt {i}"}],
+    } for i in range(4)]
+    archiver, runtime = fixture(tmp_path, result(memories=updates))
+    summary = await archiver.archive(MESSAGES, runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[])
+    assert summary == CHECKPOINT and getattr(summary, "learning_failure", None) is None
+    repo = MemoryRepository(tmp_path)
+    saved = repo.search(session_key="worker:one", layer="knowledge")["memories"]
+    assert len(saved) == 4
+    assert all(row["source_refs"] == [{"memory_id": row["based_on"], "revision": 1}] for row in saved)
+    runtime.provider.chat_stream_with_retry.assert_awaited_once()

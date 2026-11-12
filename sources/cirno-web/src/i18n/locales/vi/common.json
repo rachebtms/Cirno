@@ -1944,6 +1944,25 @@
         "input": "Duyệt đầu vào",
         "updates": "Kinh nghiệm được tạo",
         "receipt": "Trạng thái lưu"
+      },
+      "retry": {
+        "started": "Đang thử lưu kiến thức lại",
+        "completed": "Đã hoàn tất thử lại",
+        "failed": "Thử lại chưa hoàn tất",
+        "cancelled": "Đã hủy thử lại",
+        "not_found": "Không có lô kiến thức chờ thử lại",
+        "no_updates": "Thử lại không tạo cập nhật",
+        "checkpointUnchanged": "Bản tóm tắt tác vụ và vị trí lưu trữ không thay đổi.",
+        "notFoundHelp": "Không có lô bị lỗi phù hợp với cuộc trò chuyện và phạm vi Project này.",
+        "savedCounts": "Mới hoàn tất: {{newCount}}; đã hoàn tất trước đó: {{previousCount}}.",
+        "noUpdatesHelp": "Lần trích xuất lại không tạo cập nhật; các đề xuất ban đầu không được lưu trong lần này.",
+        "originalProposals": "Đề xuất ban đầu (không phải danh sách cập nhật đã lưu)",
+        "modelCalled": "Lần thử lại này đã gọi mô hình.",
+        "modelNotCalled": "Lần thử lại này không gọi mô hình.",
+        "mode": {
+          "replay": "Đã chạy lại kế hoạch lưu được giữ lại.",
+          "regenerate": "Đã trích xuất lại kiến thức từ lô lưu trữ ban đầu."
+        }
       }
     },
     "loadingConversation": "Đang tải cuộc trò chuyện…",

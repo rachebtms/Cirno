@@ -1944,6 +1944,25 @@
         "input": "入力の確認",
         "updates": "生成された学習更新",
         "receipt": "保存の完了状態"
+      },
+      "retry": {
+        "started": "学習内容を再保存中",
+        "completed": "学習の再試行が完了",
+        "failed": "学習の再試行が未完了",
+        "cancelled": "学習の再試行をキャンセル",
+        "not_found": "再試行待ちの学習バッチなし",
+        "no_updates": "再試行で更新なし",
+        "checkpointUnchanged": "既存のコンテキスト要約とアーカイブ位置は変更されていません。",
+        "notFoundHelp": "この会話と Project の範囲に該当する失敗バッチはありません。",
+        "savedCounts": "今回完了: {{newCount}} 件、以前に完了: {{previousCount}} 件。",
+        "noUpdatesHelp": "再抽出で更新は生成されず、元の提案は今回保存されませんでした。",
+        "originalProposals": "元の処理待ち提案（保存済みの一覧ではありません）",
+        "modelCalled": "今回の再試行でモデルを呼び出しました。",
+        "modelNotCalled": "今回の再試行ではモデルを呼び出していません。",
+        "mode": {
+          "replay": "保存済みの書き込み計画を再実行しました。",
+          "regenerate": "元のアーカイブから学習内容を再抽出しました。"
+        }
       }
     },
     "loadingConversation": "会話を読み込み中…",

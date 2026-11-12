@@ -3,15 +3,18 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { UIContextCompaction } from "@/lib/contracts/messages";
 import { LearningFailureNotice } from "./LearningFailureNotice";
+import { LearningRetryNotice } from "./LearningRetryNotice";
 
 export function ContextCompactionNotice({ compaction }: { compaction: UIContextCompaction }) {
   const { t } = useTranslation();
-  const titleFor = (attempt: UIContextCompaction) => t(attempt.reason
+  const titleFor = (attempt: UIContextCompaction) => attempt.learning_retry
+    ? t(`thread.compaction.retry.${attempt.phase === "succeeded" ? attempt.learning_retry.outcome : attempt.phase}`)
+    : t(attempt.reason
     ? `thread.compaction.reasons.${attempt.reason}.${attempt.phase}`
     : `thread.compaction.${attempt.phase}`);
   const attempts = compaction.attempts ?? [compaction];
   const title = compaction.learning_failure ? t("thread.compaction.learningFailed") : compaction.evidence_checkpoint ? t("thread.compaction.evidenceCheckpoint") : titleFor(compaction);
-  const expandable = attempts.length > 1 || compaction.phase === "failed" || compaction.evidence_checkpoint === true || !!compaction.learning_failure;
+  const expandable = attempts.length > 1 || compaction.phase === "failed" || compaction.evidence_checkpoint === true || !!compaction.learning_failure || !!compaction.learning_retry;
 
   return <div role={compaction.announce ? "status" : undefined}
     aria-live={compaction.announce ? "polite" : undefined} aria-busy={compaction.phase === "started"}
@@ -28,6 +31,7 @@ export function ContextCompactionNotice({ compaction }: { compaction: UIContextC
             <p>{t("thread.compaction.attempt", { number: index + 1 })} · {titleFor(attempt)}</p>
             {attempt.evidence_checkpoint ? <p>{t("thread.compaction.evidenceCheckpointHelp")}</p> : null}
             {attempt.learning_failure ? <LearningFailureNotice failure={attempt.learning_failure} /> : null}
+            {attempt.learning_retry ? <LearningRetryNotice report={attempt.learning_retry} active={attempt.phase === "started"} /> : null}
             {attempt.phase === "failed" ? <p className="whitespace-pre-wrap text-destructive/80">{attempt.error || t("thread.compaction.errorUnavailable")}</p> : null}
           </li>)}
         </ol>
