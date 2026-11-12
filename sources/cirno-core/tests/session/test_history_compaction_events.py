@@ -18,6 +18,9 @@ from cirno_core.session.presentation_history import fact_from_record, record_fro
             },
         ),
         ("failed", {"error": "Provider disconnected before producing a checkpoint"}),
+        ("succeeded", {"learning_failure": {"source": "source-original", "error": "Could not save USER.md",
+                                          "saved": [{"id": "memory:0", "kind": "memory", "label": "Result"}],
+                                          "pending": [{"id": "document:0", "kind": "document", "label": "USER.md"}]}}),
     ],
 )
 def test_compaction_fact_preserves_progress_and_failure_details(phase, details):

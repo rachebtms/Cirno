@@ -515,7 +515,7 @@ class TestConsolidatorArchiveErrorHandling:
         runtime = replace(runtime, context_window_tokens=128_000)
         consolidator.store.raw_archive = MagicMock()
         monkeypatch.setattr(
-            "cirno_core.memory.archiver.render_template",
+            "cirno_core.memory.consolidation_preparation.render_template",
             MagicMock(side_effect=RuntimeError("template failed")),
         )
         session = Session(key="test:template")
@@ -806,9 +806,10 @@ class TestCompactIdleSession:
             sent = mock_provider.chat_stream_with_retry.call_args.kwargs
             assert sent["provider_context"].conversation_state is None
             contents = [message.get("content", "") for message in sent["messages"]]
-            assert "Archived conversation summary." in contents[0]
+            assert "Archived conversation summary." in contents[1]
+            assert "Archived conversation summary." not in contents[0]
             assert "question-0" not in contents
-            assert contents[1:-1] == []
+            assert contents[2:-1] == []
             assert "Next question" in contents[-1]
         finally:
             await loop.aclose()

@@ -98,3 +98,19 @@ def test_streamed_response_event_keeps_final_content_outside_event_payload() -> 
 
     assert msg.content == "final answer"
     assert isinstance(msg.event, StreamedResponseEvent)
+
+
+def test_learning_failure_keeps_checkpoint_success_and_reports_partial_writes():
+    failure = {
+        "source": "source-abc", "error": "USER.md write failed",
+        "saved": [{"id": "memory:0", "kind": "memory", "label": "43.2 K"}],
+        "pending": [{"id": "document:0", "kind": "document", "label": "USER.md"}],
+    }
+    event = ContextCompactionEvent("1", "succeeded", learning_failure=failure)
+    message = outbound_message_for_event(channel="telegram", chat_id="owner", event=event)
+    assert "checkpoint saved" in message.content
+    assert "Saved learning: 43.2 K" in message.content
+    assert "Pending: USER.md" in message.content
+    assert "USER.md write failed" in message.content
+    assert "source-abc" in message.content
+    assert "/consolidate retry" in message.content

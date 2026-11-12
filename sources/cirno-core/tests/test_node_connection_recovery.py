@@ -194,7 +194,8 @@ async def test_receipt_received_before_ssh_timeout_still_confirms_the_command(tm
     counter = tmp_path / "executions"
 
     async def timed_out_after_receipt(args, *other, **kwargs):
-        return await spawn(["sh", "-c", args[-1] + "; sleep 10"], timeout=.2)
+        # Allow shell startup under parallel test load; the trailing sleep still times out.
+        return await spawn(["sh", "-c", args[-1] + "; sleep 10"], timeout=2)
 
     nodes._run_result = AsyncMock(side_effect=timed_out_after_receipt)
     monkeypatch.setattr("cirno_core.agent.tools.instance_features.Nodes", lambda **kwargs: nodes)

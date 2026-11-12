@@ -269,7 +269,8 @@ async def test_subagent_pressure_uses_transient_summary(tmp_path):
     consolidator.summarize_transcript.assert_awaited_once()
     assert consolidator.summarize_transcript.await_args.kwargs["persist"] is False
     model_request = provider.chat_stream_with_retry.await_args_list[2].kwargs["messages"]
-    assert "Subagent checkpoint." in model_request[0]["content"]
+    assert "Subagent checkpoint." not in model_request[0]["content"]
+    assert "Subagent checkpoint." in model_request[1]["content"]
     assert sum(message.get("role") == "tool" for message in model_request) == 1
 
 

@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "コンテキスト整理の生成リトライ回数",
+          "help": "失敗後の追加の逐次試行回数（0–10）。0 は1回のみ。学習の失敗で保存済み要約は再生成されません。接続の再試行は別設定です。"
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "attempt": "試行 {{number}}",
       "errorUnavailable": "この記録にはエラーの原因がありません。",
       "evidenceCheckpoint": "根拠の引き継ぎを保存",
-      "evidenceCheckpointHelp": "モデル要約を生成できないか、未完了または作業状態が欠落していたため、範囲を限定した元の根拠を保持しました。完全な原記録は保存されています。"
+      "evidenceCheckpointHelp": "モデル要約を生成できないか、未完了または作業状態が欠落していたため、範囲を限定した元の根拠を保持しました。完全な原記録は保存されています。",
+      "learningFailed": "要約を保存しました。学習の保存は未完了です",
+      "learningFailedHelp": "タスクは続行できます。保存が未完了の学習と、完了した更新を分けて表示します。",
+      "learningSaved": "完了した学習更新",
+      "learningPending": "再試行が必要な更新（一部は書き込み済みの場合があります）",
+      "learningSource": "元の記録",
+      "learningRetryHelp": "メモリで保存を再試行するか、元の会話で次のコマンドを実行して保持されたバッチを再試行します。",
+      "learningKinds": {
+        "memory": "メモリ",
+        "document": "文書",
+        "input": "入力の確認",
+        "updates": "生成された学習更新",
+        "receipt": "保存の完了状態"
+      }
     },
     "loadingConversation": "会話を読み込み中…",
     "empty": {

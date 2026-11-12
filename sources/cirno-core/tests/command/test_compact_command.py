@@ -204,11 +204,12 @@ async def test_compacted_session_waits_for_new_input_without_continuation(
     expected_summary = reloaded.metadata["_last_summary"]
     assert sent[0] == {
         "role": "system",
-        "content": loop.context.build_system_prompt(channel="cli", session_summary=expected_summary),
+        "content": loop.context.build_system_prompt(channel="cli"),
     }
-    assert [message["role"] for message in sent] == ["system", "user"]
-    assert sent[1]["content"].startswith("hi\n\n")
-    assert "File access: no workspace restriction." in sent[1]["content"]
+    assert [message["role"] for message in sent] == ["system", "user", "user"]
+    assert expected_summary["text"] in sent[1]["content"]
+    assert sent[2]["content"].startswith("hi\n\n")
+    assert "File access: no workspace restriction." in sent[2]["content"]
 
     loop.sessions.invalidate(key)
     resumed = loop.sessions.get_or_create(key)

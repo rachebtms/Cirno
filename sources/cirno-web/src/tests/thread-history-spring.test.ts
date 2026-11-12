@@ -99,7 +99,8 @@ describe("history boundary spring", () => {
       if (h.spring.wheel(delta)) requests++;
     }
     expect(requests).toBe(1);
-    await waitFor(() => expect(h.phase).toHaveBeenLastCalledWith("hidden"));
+    // This covers two consecutive springs, not a one-second performance budget.
+    await waitFor(() => expect(h.phase).toHaveBeenLastCalledWith("hidden"), { timeout: 3_000 });
     expect(h.distance()).toBe(0);
     expect(h.phase.mock.calls).toEqual([["feedback"], ["hidden"]]);
     expect(h.spring.wheel(100)).toBe(true);

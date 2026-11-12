@@ -103,6 +103,13 @@ class RequestCompactor:
         )
         if not summary:
             return
+        learning_failure = getattr(summary, "learning_failure", None)
+        if learning_failure:
+            await state.events.emit(ContextCompactionEvent(
+                compaction_id=response.provider_compaction_event_id or uuid4().hex,
+                phase="succeeded", reason="provider_native",
+                learning_failure=learning_failure,
+            ))
         compaction.active_summary = summary
         compaction.summary_checkpoint = SessionSummaryCheckpoint(
             summary=summary,
@@ -225,6 +232,7 @@ class RequestCompactor:
                 context_window_tokens=state.config.context_window_tokens,
                 context_estimated=True,
                 evidence_checkpoint=isinstance(summary, EvidenceCheckpoint),
+                learning_failure=getattr(summary, "learning_failure", None),
             ),
         )
         return prepared

@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "额外参考内容上限（字符）",
           "help": "用于已有记忆与完整文档快照；只追加在请求末尾，保持系统前缀稳定。"
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "整理生成重试次数",
+          "help": "生成失败后的额外串行尝试次数（0–10）；0 表示只尝试一次。经验失败不会重新生成已保存的摘要；模型服务的网络重试另行设置。"
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "errorUnavailable": "这条旧记录未保存具体错误原因。",
       "attempt": "第 {{number}} 次尝试",
       "evidenceCheckpoint": "已保存证据交接",
-      "evidenceCheckpointHelp": "模型摘要未完成、不可用或遗漏任务状态，已改为保留有上限的原文证据交接。完整原始记录仍然保留。"
+      "evidenceCheckpointHelp": "模型摘要未完成、不可用或遗漏任务状态，已改为保留有上限的原文证据交接。完整原始记录仍然保留。",
+      "learningFailed": "摘要已保存；经验保存未完成",
+      "learningFailedHelp": "任务可以继续。以下经验尚未完成保存；已完成的项会单独列出。",
+      "learningSaved": "已完成的经验更新",
+      "learningPending": "待重试的更新（可能已有部分写入）",
+      "learningSource": "原始来源",
+      "learningRetryHelp": "可在记忆页重试保存，或在原会话执行以下命令，重试一个保留的批次。",
+      "learningKinds": {
+        "memory": "记忆",
+        "document": "文档",
+        "input": "待处理输入审核",
+        "updates": "生成的经验更新",
+        "receipt": "保存完成状态"
+      }
     },
     "loadingConversation": "正在加载会话…",
     "empty": {

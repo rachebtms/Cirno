@@ -189,7 +189,8 @@ async def test_sdk_turn_waits_for_running_idle_archive_and_uses_its_summary(bot)
         provider.release_summary.set()
         await asyncio.wait_for(archive, timeout=5)
         await asyncio.wait_for(provider.turn_started.wait(), timeout=5)
-        assert "Shared transcript summary." in provider.turn_messages[0]["content"]
+        assert "Shared transcript summary." not in provider.turn_messages[0]["content"]
+        assert "Shared transcript summary." in provider.turn_messages[1]["content"]
         provider.release_turn.set()
         result = await asyncio.wait_for(turn, timeout=5)
         assert result.content == "new reply"

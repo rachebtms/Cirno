@@ -38,6 +38,7 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.exact("/new", cmd_new)
     for name in ("/consolidate", "/compact", "/dream"):
         router.exact(name, cmd_compact, session_queue=True)
+    router.prefix("/consolidate ", cmd_compact, session_queue=True)
     router.exact("/status", cmd_status)
     router.exact("/model", cmd_model)
     router.prefix("/model ", cmd_model)

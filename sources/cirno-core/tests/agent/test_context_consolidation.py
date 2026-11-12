@@ -13,6 +13,9 @@ from cirno_core.config.schema import Config
 from cirno_core.memory.archiver import MemoryArchiver
 from cirno_core.memory.consolidation_contract import MARKER
 from cirno_core.memory.consolidation_learning import ConsolidationLearning
+from cirno_core.memory.consolidation_receipts import retry_learning
+from cirno_core.memory.consolidation_recovery import retry_session_learning
+from cirno_core.session.model import Session
 from cirno_core.memory.store import MemoryStore
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import LLMResponse
@@ -88,6 +91,23 @@ async def test_one_request_preserves_cache_prefix_and_saves_scoped_knowledge(tmp
     assert len(repo.search(project_id="project-a", layer="knowledge")["memories"]) == 1
 
 
+async def test_consolidation_source_handles_need_no_model_written_quote_or_extra_request(tmp_path):
+    update = finding()
+    update["evidence"] = [{"source_id": "archive:1"}]
+    archiver, runtime = fixture(tmp_path, result(memories=[update]))
+    history = [{"role": "system", "content": "Stable cached prefix"}, *deepcopy(MESSAGES)]
+    kwargs = dict(runtime=runtime, session_key="worker:one", history=history, request_tools=[])
+    assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
+    call = runtime.provider.chat_stream_with_retry.call_args.kwargs
+    assert call["messages"][:-1] == history
+    assert '"source_id": "archive:1"' in call["messages"][-1]["content"]
+    assert "omit evidence" in call["messages"][-1]["content"]
+    assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
+    runtime.provider.chat_stream_with_retry.assert_awaited_once()
+    saved = MemoryRepository(tmp_path).search(session_key="worker:one", layer="knowledge")["memories"]
+    assert saved[0]["source_refs"][0]["quote"] == MESSAGES[1]["content"]
+
+
 async def test_learning_finishes_before_owning_task_can_resume_and_cancellation_drains(
     tmp_path, monkeypatch
 ):
@@ -138,15 +158,16 @@ async def test_learning_can_be_disabled_without_disabling_checkpoint(tmp_path):
     ]
 
 
-async def test_invalid_plan_is_visible_and_does_not_replace_the_checkpoint(tmp_path):
+async def test_invalid_learning_plan_keeps_checkpoint_and_reports_deferred_learning(tmp_path):
     archiver, runtime = fixture(tmp_path, CHECKPOINT + MARKER + '{"memories": [invalid]}')
-    with pytest.raises(ValueError):
-        await archiver.archive(
-            MESSAGES, runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[]
-        )
+    summary = await archiver.archive(
+        MESSAGES, runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[]
+    )
+    assert summary == CHECKPOINT
+    assert summary.learning_failure["pending"][0]["kind"] == "updates"
     repo = MemoryRepository(tmp_path)
     assert repo.search(session_key="worker:one", layer="source")["memories"]
-    assert not repo.search(session_key="worker:one", layer="task")["memories"]
+    assert repo.search(session_key="worker:one", layer="task")["memories"]
     runtime.provider.chat_stream_with_retry.assert_awaited_once()
 
 
@@ -184,28 +205,35 @@ async def test_failed_learning_save_reuses_generated_checkpoint_without_another_
 
     monkeypatch.setattr(ConsolidationLearning, "_apply", fail_once)
     kwargs = dict(runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[])
-    with pytest.raises(OSError, match="storage temporarily"):
-        await archiver.archive(MESSAGES, **kwargs)
+    summary = await archiver.archive(MESSAGES, **kwargs)
+    assert summary == CHECKPOINT
+    assert "storage temporarily" in summary.learning_failure["error"]
     assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
+    assert retry_learning(MemoryRepository(tmp_path)) == {"retried": 1}
     runtime.provider.chat_stream_with_retry.assert_awaited_once()
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-async def test_invalid_citation_can_be_regenerated_on_manual_retry(tmp_path, legacy):
+@pytest.mark.parametrize("invalid_ref", [
+    {"message": 0, "quote": "43.2 at 280 K"},
+    {"quote": "Calibration was measured at 43.2 Kelvin"},
+])
+async def test_invalid_citation_can_be_regenerated_on_manual_retry(tmp_path, legacy, invalid_ref):
     from cirno_core.memory.consolidation_receipts import receipt_path
 
     invalid = finding()
-    invalid["evidence"] = [{"message": 0, "quote": "43.2 at 280 K"}]
+    invalid["evidence"] = [invalid_ref]
     valid = finding()
-    valid["evidence"] = [{"quote": "43.2 at 280 K"}]
+    valid["evidence"] = [{"source_id": "archive:1"}]
     archiver, runtime = fixture(tmp_path, result(memories=[invalid]))
     runtime.provider.chat_stream_with_retry.side_effect = [
         LLMResponse(content=result(memories=[invalid])),
         LLMResponse(content=result(memories=[valid])),
     ]
     kwargs = dict(runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[])
-    with pytest.raises(ValueError, match="quote does not match"):
-        await archiver.archive(MESSAGES, **kwargs)
+    summary = await archiver.archive(MESSAGES, **kwargs)
+    assert summary == CHECKPOINT
+    assert "quote does not match" in summary.learning_failure["error"]
     repo = MemoryRepository(tmp_path)
     source = repo.search(session_key="worker:one", layer="source")["memories"][0]
     if legacy:
@@ -215,12 +243,14 @@ async def test_invalid_citation_can_be_regenerated_on_manual_retry(tmp_path, leg
         receipt["error"] = "ValueError: Learning evidence quote does not match the archived message"
         path.write_text(json.dumps(receipt))
     assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
+    assert runtime.provider.chat_stream_with_retry.await_count == 1
+    assert (await retry_session_learning(archiver, Session(key="worker:one"), runtime))["retried"] == 1
     assert runtime.provider.chat_stream_with_retry.await_count == 2
     saved = repo.search(session_key="worker:one", layer="knowledge")["memories"]
     assert len(saved) == 1
     assert saved[0]["source_refs"][0]["message"] == 1
-    assert saved[0]["source_refs"][0]["quote"] == "43.2 at 280 K"
-    # Completed plans still reuse their result, including quote-only citations.
+    assert saved[0]["source_refs"][0]["quote"] == MESSAGES[1]["content"]
+    # Completed plans still reuse their result, including source-handle citations.
     assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
     assert runtime.provider.chat_stream_with_retry.await_count == 2
 

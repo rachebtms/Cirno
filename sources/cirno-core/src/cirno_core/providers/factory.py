@@ -33,6 +33,7 @@ class ProviderSnapshot:
     idle_compact_keep_percent: float | None = None
     active_compact_percent: int = 100
     compaction_max_tokens: int = 8192
+    compaction_max_retries: int = 1
     compaction_reasoning_effort: str = "low"
     checkpoint_reminder_percent: int = 85
     output_reserve_percent: int = 5
@@ -345,6 +346,7 @@ def build_provider_snapshot(
         idle_compact_keep_percent=resolved.idle_compact_keep_percent,
         active_compact_percent=config.agents.defaults.active_compact_percent,
         compaction_max_tokens=config.agents.defaults.compaction.max_tokens,
+        compaction_max_retries=config.agents.defaults.consolidation.max_retries,
         compaction_reasoning_effort=config.agents.defaults.compaction.reasoning_effort,
         checkpoint_reminder_percent=config.agents.defaults.compaction.checkpoint_reminder_percent,
         output_reserve_percent=config.agents.defaults.consolidation.output_reserve_percent,

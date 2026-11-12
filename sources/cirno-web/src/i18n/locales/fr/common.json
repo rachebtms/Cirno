@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "Nouvelles tentatives de génération de consolidation",
+          "help": "Tentatives supplémentaires en série après échec (0–10). Zéro signifie une seule tentative. Un échec d’apprentissage ne régénère pas un résumé enregistré. Les reprises réseau sont distinctes."
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "attempt": "Tentative {{number}}",
       "errorUnavailable": "Ce relevé ne contient pas la cause de l’erreur.",
       "evidenceCheckpoint": "Point de reprise factuel enregistré",
-      "evidenceCheckpointHelp": "Le résumé était indisponible, incomplet ou sans état de travail. Une sélection limitée des éléments sources est conservée ; les archives complètes restent disponibles."
+      "evidenceCheckpointHelp": "Le résumé était indisponible, incomplet ou sans état de travail. Une sélection limitée des éléments sources est conservée ; les archives complètes restent disponibles.",
+      "learningFailed": "Résumé enregistré ; apprentissage incomplet",
+      "learningFailedHelp": "La tâche peut continuer. Les mises à jour terminées sont séparées de celles dont l’enregistrement est incomplet.",
+      "learningSaved": "Mises à jour terminées",
+      "learningPending": "Mises à jour à réessayer (écritures partielles possibles)",
+      "learningSource": "Source originale",
+      "learningRetryHelp": "Réessayez l’enregistrement dans Mémoire, ou exécutez cette commande dans la conversation d’origine pour reprendre un lot conservé.",
+      "learningKinds": {
+        "memory": "Mémoire",
+        "document": "Document",
+        "input": "Examen des entrées",
+        "updates": "Apprentissage généré",
+        "receipt": "État de validation"
+      }
     },
     "loadingConversation": "Chargement de la conversation…",
     "empty": {

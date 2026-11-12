@@ -32,7 +32,7 @@ async def generate_checkpoint(
     state_messages: list[dict[str, Any]],
 ) -> LLMResponse | None:
     response = None
-    for attempt in range(2):
+    for attempt in range(runtime.compaction_max_retries + 1):
         try:
             measured = (
                 state_controller.estimate_request_context_tokens(
@@ -75,8 +75,14 @@ async def generate_checkpoint(
                 "Memory archive {} failed; using raw checkpoint",
                 phase,
             )
+            if attempt < runtime.compaction_max_retries:
+                continue
             return None
-        if response.should_execute_tools is not True or attempt == 1:
+        if response.finish_reason in {"error", "length"} or not response.content and not response.should_execute_tools:
+            if attempt < runtime.compaction_max_retries:
+                continue
+            return response
+        if response.should_execute_tools is not True or attempt == runtime.compaction_max_retries:
             break
 
         logger.info(

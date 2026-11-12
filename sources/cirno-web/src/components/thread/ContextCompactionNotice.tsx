@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 import type { UIContextCompaction } from "@/lib/contracts/messages";
+import { LearningFailureNotice } from "./LearningFailureNotice";
 
 export function ContextCompactionNotice({ compaction }: { compaction: UIContextCompaction }) {
   const { t } = useTranslation();
@@ -9,8 +10,8 @@ export function ContextCompactionNotice({ compaction }: { compaction: UIContextC
     ? `thread.compaction.reasons.${attempt.reason}.${attempt.phase}`
     : `thread.compaction.${attempt.phase}`);
   const attempts = compaction.attempts ?? [compaction];
-  const title = compaction.evidence_checkpoint ? t("thread.compaction.evidenceCheckpoint") : titleFor(compaction);
-  const expandable = attempts.length > 1 || compaction.phase === "failed" || compaction.evidence_checkpoint === true;
+  const title = compaction.learning_failure ? t("thread.compaction.learningFailed") : compaction.evidence_checkpoint ? t("thread.compaction.evidenceCheckpoint") : titleFor(compaction);
+  const expandable = attempts.length > 1 || compaction.phase === "failed" || compaction.evidence_checkpoint === true || !!compaction.learning_failure;
 
   return <div role={compaction.announce ? "status" : undefined}
     aria-live={compaction.announce ? "polite" : undefined} aria-busy={compaction.phase === "started"}
@@ -26,6 +27,7 @@ export function ContextCompactionNotice({ compaction }: { compaction: UIContextC
           {attempts.map((attempt, index) => <li key={attempt.id} className="break-words">
             <p>{t("thread.compaction.attempt", { number: index + 1 })} · {titleFor(attempt)}</p>
             {attempt.evidence_checkpoint ? <p>{t("thread.compaction.evidenceCheckpointHelp")}</p> : null}
+            {attempt.learning_failure ? <LearningFailureNotice failure={attempt.learning_failure} /> : null}
             {attempt.phase === "failed" ? <p className="whitespace-pre-wrap text-destructive/80">{attempt.error || t("thread.compaction.errorUnavailable")}</p> : null}
           </li>)}
         </ol>

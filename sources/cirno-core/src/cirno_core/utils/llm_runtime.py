@@ -31,6 +31,7 @@ class LLMRuntime:
     idle_compact_keep_percent: float | None = None
     active_compact_percent: int = 100
     compaction_max_tokens: int = 8192
+    compaction_max_retries: int = 1
     compaction_reasoning_effort: str = "low"
     checkpoint_reminder_percent: int = 85
     output_reserve_percent: int = 5
@@ -109,6 +110,7 @@ def runtime_from_provider_snapshot(
             idle_compact_keep_percent=snapshot.idle_compact_keep_percent,
             active_compact_percent=snapshot.active_compact_percent,
             compaction_max_tokens=snapshot.compaction_max_tokens,
+            compaction_max_retries=snapshot.compaction_max_retries,
             compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
             checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent,
             output_reserve_percent=snapshot.output_reserve_percent,
@@ -123,7 +125,7 @@ def runtime_from_provider_snapshot(
         model_preset=snapshot.model_preset,
         snapshot_signature=snapshot.signature,
     ), active_compact_percent=snapshot.active_compact_percent,
-       compaction_max_tokens=snapshot.compaction_max_tokens, compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
+       compaction_max_tokens=snapshot.compaction_max_tokens, compaction_max_retries=snapshot.compaction_max_retries, compaction_reasoning_effort=snapshot.compaction_reasoning_effort,
        checkpoint_reminder_percent=snapshot.checkpoint_reminder_percent,
        output_reserve_percent=snapshot.output_reserve_percent,
        consolidation_learn=snapshot.consolidation_learn,

@@ -14,12 +14,15 @@ class EvidenceRef(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     message: int | None = Field(default=None, ge=0)
     memory_id: str | None = None
-    quote: str = Field(min_length=1, max_length=1000)
+    source_id: str | None = Field(default=None, min_length=1, max_length=160)
+    quote: str | None = Field(default=None, min_length=1, max_length=1000)
 
     @model_validator(mode="after")
     def one_source(self):
-        if self.message is not None and self.memory_id is not None:
-            raise ValueError("Evidence cannot name both message and memory_id")
+        if sum(value is not None for value in (self.message, self.memory_id, self.source_id)) > 1:
+            raise ValueError("Evidence must not combine source_id, message and memory_id")
+        if self.source_id is None and self.quote is None:
+            raise ValueError("Legacy evidence requires an exact quote")
         # A quote without an index must resolve to exactly one archived message.
         return self
 
@@ -28,7 +31,7 @@ class Finding(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     content: str = Field(min_length=1, max_length=6000)
     kind: Literal["fact", "observation", "hypothesis", "lesson"]
-    evidence: list[EvidenceRef] = Field(min_length=1, max_length=8)
+    evidence: list[EvidenceRef] = Field(default_factory=list, max_length=8)
     supersedes: str | None = None
 
 

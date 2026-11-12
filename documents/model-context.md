@@ -62,3 +62,11 @@ A continuously reasoning request cannot be made to produce a truthful progress r
 `files.view_image` adds a local image to the next model request as actual visual content. It shares filesystem permissions, size limits and image conversion with `files.read`; it does not run OCR or pass only a filename. The configured model must support image input. Images are excluded from persisted inline payloads while file references remain available for later reads.
 
 New model setup tests image and native video input using small semantic samples. Accepting the request alone is not a positive result: the response must identify the sample. Authentication failures, timeouts and inconclusive replies remain unverified, with details available from **Test capabilities**. Model settings also let the owner explicitly choose Supported, Unsupported or Automatic / unverified. Declared unsupported visual inputs fail visibly without silently removing media. Native video probing uses the OpenAI-compatible `video_url` transport; other selected request APIs remain unverified for native video. This is distinct from reading extracted video frames as images.
+
+### Independent learning failures and cache boundaries
+
+Context consolidation treats the task checkpoint as the continuation requirement. Optional memory/Skill learning can fail without preventing that checkpoint from being saved. The notice records which updates completed, which remain incomplete, their error and the immutable source ID. Memory can replay saved writes without an API request; `/consolidate retry [source-id]` explicitly retries one retained batch in the original conversation. It never replaces the current task checkpoint. All retries are serial.
+
+`agents.defaults.consolidation.max_retries` sets additional generation attempts (default 1, 0–10); zero disables extra attempts. Provider network retries are configured separately. Learning failures do not automatically regenerate a usable checkpoint.
+
+The system/developer prefix stays unchanged during compaction; the checkpoint is a subsequent history message. The replaced history naturally loses its old exact-prefix cache match, while stable policy remains reusable. Compare provider-reported cache hits and misses to assess real cost; structural prefix tests alone cannot measure a proxy's billing behavior.

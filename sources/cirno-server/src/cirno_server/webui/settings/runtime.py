@@ -61,6 +61,7 @@ RUNTIME_CONFIG_PATHS = (
     'agents.defaults.active_compact_percent',
     'agents.defaults.consolidation.output_reserve_percent',
     'agents.defaults.consolidation.max_tokens',
+    'agents.defaults.consolidation.max_retries',
     'agents.defaults.consolidation.reasoning_effort',
     'agents.defaults.consolidation.checkpoint_reminder_percent',
     'agents.defaults.idle_compact_keep_percent',

@@ -160,5 +160,11 @@ def _event_content(event: AgentEvent) -> str:
             return "Unable to compact context."
         if event.phase == "cancelled":
             return "Context compaction cancelled."
+        if event.learning_failure:
+            saved = "; ".join(item["label"] or item["kind"] for item in event.learning_failure["saved"]) or "none"
+            pending = "; ".join(item["label"] or item["kind"] for item in event.learning_failure["pending"])
+            return (f"Context checkpoint saved; learning is incomplete. Saved learning: {saved}. Pending: {pending}. "
+                    f"Error: {event.learning_failure['error']}. Source: {event.learning_failure['source']}. "
+                    "Use /consolidate retry to retry learning.")
         return "Context compacted."
     return ""

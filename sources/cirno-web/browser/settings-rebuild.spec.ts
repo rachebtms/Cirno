@@ -32,6 +32,10 @@ for (const width of [390, 1440]) for (const theme of ["light", "dark"]) {
         await expect(chooser).not.toBeVisible();
       } else await page.getByRole("button", { name: label, exact: true }).click();
     };
+    const retries = page.getByRole("spinbutton", { name: "Consolidation generation retries" });
+    await retries.fill("0");
+    await retries.press("Enter");
+    await expect(page.getByLabel("Saved settings")).toHaveText('{"agents.defaults.consolidation.max_retries":0}');
     await page.getByText("Consolidate idle conversations", { exact: true }).click();
     await expect(page.getByLabel("Saved settings")).toHaveText('{"agents.defaults.idle_compact_after_minutes":0}');
     await navigate("Goals & execution");

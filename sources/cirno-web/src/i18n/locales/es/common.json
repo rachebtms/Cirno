@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "Reintentos de generación de consolidación",
+          "help": "Intentos adicionales en serie tras un fallo (0–10). Cero significa un solo intento. Un fallo de aprendizaje no regenera el resumen guardado. Los reintentos de red se configuran aparte."
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "attempt": "Intento {{number}}",
       "errorUnavailable": "Este registro no incluye la causa del error.",
       "evidenceCheckpoint": "Punto de control de evidencias guardado",
-      "evidenceCheckpointHelp": "El resumen no estaba disponible, estaba incompleto u omitía el estado. Se conservó una selección limitada de evidencias; los registros originales completos siguen archivados."
+      "evidenceCheckpointHelp": "El resumen no estaba disponible, estaba incompleto u omitía el estado. Se conservó una selección limitada de evidencias; los registros originales completos siguen archivados.",
+      "learningFailed": "Resumen guardado; aprendizaje incompleto",
+      "learningFailedHelp": "La tarea puede continuar. Las actualizaciones completadas se muestran separadas de las que no se guardaron por completo.",
+      "learningSaved": "Actualizaciones completadas",
+      "learningPending": "Actualizaciones pendientes (puede haber escrituras parciales)",
+      "learningSource": "Fuente original",
+      "learningRetryHelp": "Reintenta guardar en Memoria o ejecuta este comando en la conversación original para reintentar un lote conservado.",
+      "learningKinds": {
+        "memory": "Memoria",
+        "document": "Documento",
+        "input": "Revisión de entradas",
+        "updates": "Aprendizaje generado",
+        "receipt": "Estado de guardado"
+      }
     },
     "loadingConversation": "Cargando conversación…",
     "empty": {

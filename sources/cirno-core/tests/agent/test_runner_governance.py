@@ -39,7 +39,7 @@ from cirno_core.providers.fallback_provider import FallbackProvider
 from cirno_core.providers.generation import GenerationSettings
 from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.runtime.context import public_history_message
-from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT
+from cirno_core.session.summary import SUMMARY_CONTINUATION_TEXT, summary_context_message
 from cirno_usage.types import LLMUsage
 
 from sources.development.testing.runtime import make_run_spec
@@ -48,12 +48,10 @@ _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
 
 def _build_transcript(transcript: TranscriptInput) -> list[dict]:
-    system = (
-        transcript.session_summary["text"]
-        if transcript.session_summary is not None
-        else "system"
-    )
-    messages = [{"role": "system", "content": system}, *transcript.history]
+    messages = [{"role": "system", "content": "system"}]
+    if transcript.session_summary is not None:
+        messages.append(summary_context_message(transcript.session_summary["text"]))
+    messages.extend(transcript.history)
     if transcript.current_message is not None:
         messages.append({"role": transcript.current_role, "content": transcript.current_message})
     return messages
@@ -202,21 +200,23 @@ async def test_runner_summarizes_history_and_preserves_current_input(monkeypatch
 
     consolidate.assert_awaited_once_with(
         [
-            {"role": "system", "content": "existing checkpoint"},
+            {"role": "system", "content": "system"},
+            summary_context_message("existing checkpoint"),
             {"role": "user", "content": "old question"},
             {"role": "assistant", "content": old_answer},
         ],
         "existing checkpoint",
     )
     assert requests[0][0] == [
-        {"role": "system", "content": "fresh checkpoint"},
+        {"role": "system", "content": "system"},
+        summary_context_message("fresh checkpoint"),
         {"role": "user", "content": "continue the current task"},
     ]
     assert requests[0][1].conversation_state is None
     assert result.provider_state == candidate_state
     assert result.summary_checkpoint is not None
     assert result.summary_checkpoint.summary == "fresh checkpoint"
-    assert result.summary_checkpoint.transcript_boundary == 3
+    assert result.summary_checkpoint.transcript_boundary == 4
     assert any(message.get("content") == old_answer for message in result.messages)
 
 
@@ -266,7 +266,7 @@ async def test_runner_governs_history_before_summarizing_it(monkeypatch):
         "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
         lambda _provider, _model, messages, _tools: (
             (100, "test-counter")
-            if messages[0].get("content") == "fresh checkpoint"
+            if any("fresh checkpoint" in str(message.get("content")) for message in messages)
             else (600, "test-counter")
         ),
     )
@@ -461,11 +461,8 @@ async def test_runner_keeps_current_tool_exchange_outside_summary(monkeypatch):
 
     def estimate(_provider, _model, messages, _tools):
         has_tool_result = any(message.get("role") == "tool" for message in messages)
-        has_old_system = any(
-            message.get("role") == "system" and message.get("content") == "system"
-            for message in messages
-        )
-        return (600 if has_tool_result and has_old_system else 100, "test-counter")
+        has_checkpoint = any("fresh checkpoint" in str(message.get("content")) for message in messages)
+        return (600 if has_tool_result and not has_checkpoint else 100, "test-counter")
 
     monkeypatch.setattr(
         "cirno_core.agent.governance.budget.estimate_prompt_tokens_chain",
@@ -495,9 +492,10 @@ async def test_runner_keeps_current_tool_exchange_outside_summary(monkeypatch):
         None,
     )
     assert [message["role"] for message in requests[1]] == [
-        "system", "user", "assistant", "tool",
+        "system", "user", "user", "assistant", "tool",
     ]
-    assert requests[1][1]["content"] == SUMMARY_CONTINUATION_TEXT
+    assert "fresh checkpoint" in requests[1][1]["content"]
+    assert requests[1][2]["content"] == SUMMARY_CONTINUATION_TEXT
     assert requests[1][-1]["content"] == full_result
     assert result.summary_checkpoint is not None
     assert result.summary_checkpoint.transcript_boundary == 2
@@ -523,12 +521,12 @@ async def test_repeated_pressure_advances_summary_boundary(monkeypatch):
     tools.execute = AsyncMock(side_effect=["result-1", "result-2"])
 
     def estimate(_provider, _model, messages, _tools):
-        system = messages[0].get("content")
+        summary = "\n".join(str(message.get("content")) for message in messages if message.get("role") == "user")
         contents = {message.get("content") for message in messages}
         if "result-2" in contents:
-            return (100 if system == "checkpoint-2" else 600, "test-counter")
+            return (100 if "checkpoint-2" in summary else 600, "test-counter")
         if "result-1" in contents:
-            return (100 if system == "checkpoint-1" else 600, "test-counter")
+            return (100 if "checkpoint-1" in summary else 600, "test-counter")
         return 100, "test-counter"
 
     monkeypatch.setattr(
@@ -563,7 +561,8 @@ async def test_repeated_pressure_advances_summary_boundary(monkeypatch):
     assert consolidate.await_args_list[0].args[1] is None
     assert consolidate.await_args_list[1].args[1] == "checkpoint-1"
     second_prefix = consolidate.await_args_list[1].args[0]
-    assert second_prefix[0]["content"] == "checkpoint-1"
+    assert second_prefix[0]["content"] == "system"
+    assert "checkpoint-1" in second_prefix[1]["content"]
     assert any(message.get("content") == "result-1" for message in second_prefix)
     assert result.final_content == "done"
     assert result.summary_checkpoint is not None

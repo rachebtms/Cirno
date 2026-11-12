@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "Số lần thử lại tạo bản tổng hợp",
+          "help": "Số lần thử bổ sung tuần tự sau lỗi (0–10). Không nghĩa là chỉ thử một lần. Lỗi học không tạo lại tóm tắt đã lưu. Thử lại mạng được cấu hình riêng."
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "attempt": "Lần thử {{number}}",
       "errorUnavailable": "Bản ghi này không có nguyên nhân lỗi.",
       "evidenceCheckpoint": "Đã lưu điểm tiếp tục từ bằng chứng",
-      "evidenceCheckpointHelp": "Tóm tắt không khả dụng, chưa hoàn tất hoặc thiếu trạng thái công việc. Đã giữ một phần bằng chứng nguồn có giới hạn; bản gốc đầy đủ vẫn được lưu."
+      "evidenceCheckpointHelp": "Tóm tắt không khả dụng, chưa hoàn tất hoặc thiếu trạng thái công việc. Đã giữ một phần bằng chứng nguồn có giới hạn; bản gốc đầy đủ vẫn được lưu.",
+      "learningFailed": "Đã lưu tóm tắt; lưu kinh nghiệm chưa hoàn tất",
+      "learningFailedHelp": "Tác vụ có thể tiếp tục. Các cập nhật đã hoàn tất được liệt kê riêng với các mục chưa lưu đầy đủ.",
+      "learningSaved": "Cập nhật đã hoàn tất",
+      "learningPending": "Cập nhật cần thử lại (có thể đã ghi một phần)",
+      "learningSource": "Nguồn gốc",
+      "learningRetryHelp": "Thử lưu lại trong Bộ nhớ, hoặc chạy lệnh này trong hội thoại gốc để thử lại một lô đã giữ.",
+      "learningKinds": {
+        "memory": "Bộ nhớ",
+        "document": "Tài liệu",
+        "input": "Duyệt đầu vào",
+        "updates": "Kinh nghiệm được tạo",
+        "receipt": "Trạng thái lưu"
+      }
     },
     "loadingConversation": "Đang tải cuộc trò chuyện…",
     "empty": {

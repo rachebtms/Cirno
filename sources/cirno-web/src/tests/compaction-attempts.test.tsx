@@ -13,6 +13,23 @@ function attempt(id: string, phase: "failed" | "succeeded"): UIMessage {
 }
 
 describe("compaction attempts", () => {
+  it("keeps task success and learning failure separate through persisted replay", () => {
+    const failure = { source: "source-original", error: "Could not save USER.md", saved: [
+      { id: "memory:0", kind: "memory", label: "Measured 43.2 K" },
+    ], pending: [{ id: "document:0", kind: "document", label: "USER.md" }] };
+    const event = { event: "context_compaction", chat_id: "chat", compaction_id: "partial", phase: "succeeded", learning_failure: failure };
+    expect(decodeNotification(event)).toEqual(event);
+    expect(decodeNotification({ ...event, learning_failure: { ...failure, pending: "invalid" } })).toBeNull();
+    const replay = parseWebuiThreadPayload({ schemaVersion: 3, projection: "events", events: [event] }).events;
+    const compaction = projectThreadEvents(replay)[0].compaction!;
+    expect(compaction.phase).toBe("succeeded");
+    expect(compaction.learning_failure).toEqual(failure);
+    render(<ContextCompactionNotice compaction={compaction} />);
+    expect(screen.getByText("Checkpoint saved; learning incomplete")).toBeInTheDocument();
+    expect(screen.getByText("Memory: Measured 43.2 K")).toBeInTheDocument();
+    expect(screen.getByText("Document: USER.md")).toBeInTheDocument();
+    expect(screen.getByText("/consolidate retry source-original")).toBeInTheDocument();
+  });
   it("groups consecutive failures with the final success and exposes each error", () => {
     const raw = [attempt("one", "failed"), attempt("two", "failed"), attempt("three", "succeeded")];
     const grouped = projectWebuiThreadMessages(raw);

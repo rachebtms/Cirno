@@ -5,6 +5,7 @@ import { InlineError } from "@/ui/feedback/InlineError";
 import { fmtDateTime } from "@/lib/format-time";
 import type { MemoryStatus } from "@/lib/contracts/memory";
 import type { useMemoryMaintenance } from "../model/useMemoryMaintenance";
+import { LearningFailureNotice } from "@/components/thread/LearningFailureNotice";
 
 export function MemoryStats({
   data,
@@ -46,7 +47,8 @@ export function MemoryStats({
               {tr("lastConsolidation")}: {data.last_consolidation ? fmtDateTime(data.last_consolidation.at) : tr("noConsolidation")}
             </p>
             <InlineError message={data.last_consolidation?.error ?? undefined} />
-            {(data.consolidation_failures ?? []).map(failure => <InlineError key={failure.source} message={failure.error ?? undefined} />)}
+            {(data.consolidation_failures ?? []).map(failure => <LearningFailureNotice key={failure.source}
+              failure={{ source: failure.source, error: failure.error ?? "", saved: failure.saved ?? [], pending: failure.pending ?? [] }} />)}
             <Accordion variant="surface">
               {!!data.receipts?.length && (
                 <Accordion.Item id="receipts">

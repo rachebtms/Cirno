@@ -37,7 +37,8 @@ def _make_loop(
 
 
 @pytest.mark.asyncio
-async def test_runner_pressure_commits_summary_and_current_delta(tmp_path) -> None:
+@pytest.mark.parametrize("learning_failed", [False, True])
+async def test_runner_pressure_commits_summary_and_current_delta(tmp_path, learning_failed) -> None:
     loop = _make_loop(
         tmp_path, estimated_tokens=100, context_window_tokens=1_624, max_tokens=100,
     )
@@ -62,7 +63,7 @@ async def test_runner_pressure_commits_summary_and_current_delta(tmp_path) -> No
 
     loop.provider.estimate_prompt_tokens.side_effect = estimate
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=[
-        LLMResponse(content="Current checkpoint.", tool_calls=[]),
+        LLMResponse(content="Current checkpoint." + ('\n## Memory updates\n{"memories": broken}' if learning_failed else ""), tool_calls=[]),
         LLMResponse(content="done", tool_calls=[]),
     ])
 
@@ -71,10 +72,11 @@ async def test_runner_pressure_commits_summary_and_current_delta(tmp_path) -> No
     assert result.content == "done"
     assert loop.provider.chat_stream_with_retry.await_count == 2
     model_request = loop.provider.chat_stream_with_retry.await_args_list[1].kwargs["messages"]
-    assert "Current checkpoint." in model_request[0]["content"]
-    assert [message["role"] for message in model_request] == ["system", "user"]
-    assert model_request[1]["content"].startswith("continue the task\n\n")
-    assert "File access: no workspace restriction." in model_request[1]["content"]
+    assert "Current checkpoint." in model_request[1]["content"]
+    assert "Current checkpoint." not in model_request[0]["content"]
+    assert [message["role"] for message in model_request] == ["system", "user", "user"]
+    assert model_request[2]["content"].startswith("continue the task\n\n")
+    assert "File access: no workspace restriction." in model_request[2]["content"]
 
     reloaded = loop.sessions.get_or_create("cli:test")
     assert reloaded.messages[0]["content"] == "old-user-0"
@@ -128,9 +130,10 @@ async def test_ephemeral_runner_pressure_summarizes_without_persisting(tmp_path)
     assert result.content == "done"
     assert loop.provider.chat_stream_with_retry.await_count == 2
     model_request = loop.provider.chat_stream_with_retry.await_args_list[1].kwargs["messages"]
-    assert "Transient checkpoint." in model_request[0]["content"]
-    assert model_request[1]["content"].startswith("continue the task\n\n")
-    assert "File access: no workspace restriction." in model_request[1]["content"]
+    assert "Transient checkpoint." in model_request[1]["content"]
+    assert "Transient checkpoint." not in model_request[0]["content"]
+    assert model_request[2]["content"].startswith("continue the task\n\n")
+    assert "File access: no workspace restriction." in model_request[2]["content"]
 
     reloaded = loop.sessions.get_or_create("cli:ephemeral")
     assert reloaded.messages[: len(original_messages)] == original_messages
@@ -192,7 +195,8 @@ async def test_ephemeral_tool_loop_pressure_summarizes_before_next_model_call(
     assert result.content == "done"
     assert loop.provider.chat_stream_with_retry.await_count == 4
     model_request = loop.provider.chat_stream_with_retry.await_args_list[3].kwargs["messages"]
-    assert "Tool-loop checkpoint." in model_request[0]["content"]
+    assert "Tool-loop checkpoint." in model_request[1]["content"]
+    assert "Tool-loop checkpoint." not in model_request[0]["content"]
     assert sum(message.get("role") == "tool" for message in model_request) == 1
     assert loop.context.memory.journal.read_unprocessed_history(since_cursor=0) == []
 

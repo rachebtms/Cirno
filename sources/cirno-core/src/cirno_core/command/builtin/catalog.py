@@ -89,7 +89,7 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
     BuiltinCommandSpec(
         "/consolidate",
         "Consolidate context",
-        "Organize task context and retain verified experience before continuing.",
+        "Save a task checkpoint and optional learning. Use /consolidate retry [source-id] to retry deferred learning without replacing the checkpoint.",
         "archive",
     ),
     BuiltinCommandSpec(

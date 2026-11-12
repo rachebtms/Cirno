@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
+from typing import Any
 
 from loguru import logger
 
@@ -49,6 +50,7 @@ class ContextCompactionEvent(AgentEvent):
     context_window_tokens: int | None = None
     context_estimated: bool | None = None
     evidence_checkpoint: bool = False
+    learning_failure: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

@@ -16,7 +16,8 @@ from cirno_memory.repository import MemoryRepository
 from cirno_memory.scopes import scope_identity
 from cirno_core.memory.consolidation_contract import LearningPlan
 from cirno_core.memory.consolidation_evidence import LearningEvidenceError, resolve_message, source_refs
-from cirno_core.memory.consolidation_receipts import index_receipt, receipt_path, write_receipt
+from cirno_core.memory.learning_commit import commit_learning
+from cirno_core.memory.consolidation_sources import archive_sources, bind_plan
 from cirno_core.session.roles import conversation_role
 from cirno_core.session.history_visibility import is_hidden_history_message
 from cirno_core.skills.history import snapshot_skill
@@ -49,12 +50,18 @@ class ConsolidationLearning:
         self.known: dict[str, dict[str, Any]] = {}
         self.context_chars = context_chars
         self.inputs: dict[str, dict[str, Any]] = {}
+        self.sources: dict[str, dict] = {}
         self.completed = False
+        self.deferred_failure = None
+        self.raw_checkpoint = False
+        self.saved_items: list[str] = []
+        self.record_saved = lambda _: None
 
     def context(self) -> str:
         """Bound only additional reference material, never truncate task evidence."""
         remaining = self.context_chars
-        sections = []
+        sections, self.sources = archive_sources(self.messages, max(0, remaining // 8))
+        remaining -= sum(len(block) + 1 for block in sections)
         # Only a personal Router may update shared identity/user profiles.
         paths = []
         if not self.project_id and conversation_role(self.session_key).name == "router":
@@ -104,6 +111,7 @@ class ConsolidationLearning:
         for record in pending:
             block = json.dumps(
                 {
+                    "source_id": "input:" + record["id"],
                     "memory_id": record["id"],
                     "revision": record["revision"],
                     "pending": True,
@@ -113,6 +121,7 @@ class ConsolidationLearning:
             )
             if len(block) <= remaining:
                 self.inputs[record["id"]] = record
+                self.sources["input:" + record["id"]] = {"memory_id": record["id"], "quote": record["content"][:1000]}
                 sections.append(block)
                 remaining -= len(block)
         records = self.repo.search(
@@ -199,41 +208,7 @@ class ConsolidationLearning:
 
     def apply(self, plan: LearningPlan, evidence: dict[str, Any], summary: str) -> None:
         """Validate before mutation, then persist auditable, idempotent changes."""
-        path = receipt_path(self.repo, evidence["id"])
-        with file_write_transaction([path]):
-            if path.exists():
-                previous = json.loads(path.read_text(encoding="utf-8"))
-                if previous["status"] == "completed":
-                    if previous["plan"] != plan.model_dump() or previous["summary"] != summary:
-                        raise ValueError("Archived consolidation already has a different completed plan")
-                    index_receipt(self.repo, previous)
-                    self.completed = True
-                    return
-            record = {
-                "source": evidence["id"],
-                "session_key": self.session_key,
-                "project_id": self.project_id,
-                "documents": self.documents,
-                "inputs": self.inputs,
-                "known": self.known,
-                "max_updates": self.max_updates,
-                "context_chars": self.context_chars,
-                "summary": summary,
-                "plan": plan.model_dump(),
-                "status": "pending",
-            }
-            write_receipt(self.repo, record)
-            try:
-                self._apply(plan, evidence)
-            except Exception as exc:
-                record.update(status="failed", error=f"{type(exc).__name__}: {exc}")
-                if isinstance(exc, LearningEvidenceError):
-                    record["regenerate_output"] = True
-                write_receipt(self.repo, record)
-                raise
-            record["status"] = "completed"
-            write_receipt(self.repo, record)
-            self.completed = True
+        commit_learning(self, plan, evidence, summary)
 
     def _finding_source(self, finding, evidence):
         parents = [self.inputs[ref.memory_id] for ref in finding.evidence if ref.memory_id]
@@ -262,6 +237,7 @@ class ConsolidationLearning:
         )
 
     def _apply(self, plan: LearningPlan, evidence: dict[str, Any]) -> None:
+        plan = bind_plan(plan, self.sources)
         if plan.size > self.max_updates:
             raise ValueError("Consolidation learning exceeds the configured update budget")
         if any(review.memory_id not in self.inputs for review in plan.reviewed_inputs):
@@ -297,7 +273,7 @@ class ConsolidationLearning:
                     validation = validate_skill(path.parent, document_content=edit.content)
                     if not validation["valid"]:
                         raise ValueError("; ".join(validation["errors"]))
-            for finding in plan.memories:
+            for finding_index, finding in enumerate(plan.memories):
                 parent = self._finding_source(finding, evidence)
                 identity = self._finding_id(finding, evidence)
                 try:
@@ -316,7 +292,7 @@ class ConsolidationLearning:
                         memory_id=identity,
                         enqueue=False,
                         expected_parent_revision=parent["revision"],
-                        source_refs=source_refs(self.messages, finding.evidence),
+                        source_refs=source_refs(self.messages, finding.evidence) or [{"memory_id": evidence["id"], "revision": evidence["revision"]}],
                     )
                 self.repo.link(
                     saved["id"],
@@ -348,6 +324,7 @@ class ConsolidationLearning:
                         project_id=self.project_id,
                         expected_target_revision=self.known[finding.supersedes]["revision"],
                     )
+                self.record_saved(f"memory:{finding_index}")
             for path, edit in zip(paths, plan.documents):
                 if path.name == "SKILL.md":
                     snapshot_skill(path.parent, self.home)
@@ -356,6 +333,8 @@ class ConsolidationLearning:
                     snapshot_skill(path.parent, self.home)
             if any(path.name != "SKILL.md" for path in paths):
                 self.repo.sync_profiles()
+            for index in range(len(plan.documents)):
+                self.record_saved(f"document:{index}")
         self.repo.settle_consolidation(
             "consolidation:" + evidence["id"],
             [
@@ -366,3 +345,5 @@ class ConsolidationLearning:
             session_key=self.session_key,
             project_id=self.project_id,
         )
+        for index in range(len(plan.reviewed_inputs)):
+            self.record_saved(f"input:{index}")

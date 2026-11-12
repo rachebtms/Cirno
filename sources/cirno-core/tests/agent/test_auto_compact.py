@@ -855,7 +855,9 @@ class TestAutoCompactIntegration:
         assert not any(
             "[Resumed Session]" in str(m.get("content", "")) for m in session_after.messages
         )
-        assert resumed_system_prompt.count(overview) == 1
+        assert overview not in resumed_system_prompt
+        request = loop.provider.chat_stream_with_retry.await_args_list[-1].kwargs["messages"]
+        assert sum(str(message.get("content", "")).count(overview) for message in request) == 1
         # Persisted model-only context must not leak into the public history.
         assert not any(
             "[/Runtime Context]" in str(public_history_message(m).get("content", ""))

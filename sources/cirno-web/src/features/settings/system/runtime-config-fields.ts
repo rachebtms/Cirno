@@ -51,6 +51,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "system-prompts", path: "agents.defaults.system_prompts.worker", kind: "multiline", max: 32000 },
   { group: "workspace", path: "agents.defaults.workspace", kind: "text", saveOnBlur: true },
   { group: "consolidation-generation", path: "agents.defaults.consolidation.max_tokens", kind: "number", min: 512, max: 32768 },
+  { group: "consolidation-generation", path: "agents.defaults.consolidation.max_retries", kind: "number", min: 0, max: 10 },
   { group: "consolidation-generation", path: "agents.defaults.consolidation.reasoning_effort", kind: "select", options: ["inherit", "low", "none"] },
   { group: "consolidation-generation", path: "agents.defaults.consolidation.checkpoint_reminder_percent", kind: "number", min: 1, max: 100 },
   { group: "active-context", path: "agents.defaults.active_compact_percent", kind: "number", min: 1, max: 100 },

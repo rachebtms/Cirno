@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "Tentativas de geração da consolidação",
+          "help": "Tentativas adicionais em sequência após falha (0–10). Zero significa uma única tentativa. Falhas de aprendizado não regeneram o resumo salvo. Novas tentativas de rede são configuradas separadamente."
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "attempt": "Tentativa {{number}}",
       "errorUnavailable": "Este registro não inclui a causa do erro.",
       "evidenceCheckpoint": "Ponto de retomada de evidências salvo",
-      "evidenceCheckpointHelp": "O resumo estava indisponível, incompleto ou sem o estado da tarefa. Uma seleção limitada de evidências foi preservada; os registros originais completos continuam arquivados."
+      "evidenceCheckpointHelp": "O resumo estava indisponível, incompleto ou sem o estado da tarefa. Uma seleção limitada de evidências foi preservada; os registros originais completos continuam arquivados.",
+      "learningFailed": "Resumo salvo; aprendizado incompleto",
+      "learningFailedHelp": "A tarefa pode continuar. As atualizações concluídas são separadas das que não foram salvas por completo.",
+      "learningSaved": "Atualizações concluídas",
+      "learningPending": "Atualizações pendentes (pode haver gravações parciais)",
+      "learningSource": "Fonte original",
+      "learningRetryHelp": "Tente salvar novamente em Memória ou execute este comando na conversa original para repetir um lote preservado.",
+      "learningKinds": {
+        "memory": "Memória",
+        "document": "Documento",
+        "input": "Revisão de entradas",
+        "updates": "Aprendizado gerado",
+        "receipt": "Estado de gravação"
+      }
     },
     "loadingConversation": "Carregando conversa…",
     "empty": {

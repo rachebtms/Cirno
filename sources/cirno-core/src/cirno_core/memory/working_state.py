@@ -6,9 +6,10 @@ from typing import Any
 
 from cirno_core.utils.reasoning import extract_reasoning
 from cirno_core.utils.text import truncate_text_to_tokens
+from cirno_core.memory.consolidation_result import ConsolidationCheckpoint
 
 
-class EvidenceCheckpoint(str):
+class EvidenceCheckpoint(ConsolidationCheckpoint):
     """A bounded evidence handoff, not a successful model-generated summary."""
 
 

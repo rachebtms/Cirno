@@ -208,3 +208,12 @@ class TestMidTurnCommandDispatchedDirectly:
         assert result.content == (
             'Command "/status" does not accept arguments. Did you mean "/status"?'
         )
+
+
+@pytest.mark.parametrize("content", ["/consolidate retry", "/consolidate retry source-abc", "/consolidate@MyBot retry source-abc"])
+def test_learning_recovery_uses_owning_session_queue(content):
+    router = CommandRouter()
+    register_builtin_commands(router)
+    assert router.requires_session_queue(content)
+    assert router.is_dispatchable_command(content)
+    assert not router.is_priority(content)

@@ -45,6 +45,7 @@ class CompactionConfig(Base):
     """Small, independent checkpoint-generation budget."""
 
     max_tokens: int = Field(default=8192, ge=512, le=32768)
+    max_retries: int = Field(default=1, ge=0, le=10, strict=True)
     reasoning_effort: Literal["inherit", "low", "none"] = "low"
     checkpoint_reminder_percent: int = Field(default=85, ge=1, le=100)
     output_reserve_percent: int = Field(default=5, ge=1, le=50)

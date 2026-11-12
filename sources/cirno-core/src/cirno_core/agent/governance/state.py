@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass, replace
-from datetime import datetime
+from dataclasses import dataclass
 from typing import Any
 
 from cirno_core.agent.context import TranscriptInput
@@ -16,6 +15,7 @@ from cirno_core.agent.governance.contracts import (
 )
 from cirno_core.session.summary import (
     SessionSummaryCheckpoint,
+    summary_context_message,
 )
 
 
@@ -43,22 +43,15 @@ class ContextCompactionState:
     ) -> tuple[list[dict[str, Any]], ContextCompactionState]:
         """Build the raw transcript and its initial H/delta boundary."""
         messages = list(transcript_builder(transcript_input))
-        accepted_history_boundary = 1 + len(transcript_input.history)
+        accepted_history_boundary = len(messages) - (transcript_input.current_message is not None)
+        instruction_prefix: list[dict[str, Any]] = []
+        for message in messages:
+            if message.get("role") not in {"system", "developer"}:
+                break
+            instruction_prefix.append(deepcopy(message))
 
         def build_summary_transcript(summary: str) -> list[dict[str, Any]]:
-            return transcript_builder(
-                replace(
-                    transcript_input,
-                    history=[],
-                    current_message=None,
-                    media=None,
-                    session_summary={
-                        "text": summary,
-                        "last_active": datetime.now().astimezone().isoformat(),
-                    },
-                    runtime_context_blocks=None,
-                )
-            )
+            return [*deepcopy(instruction_prefix), summary_context_message(summary)]
 
         return messages, cls(
             raw_messages=messages,
@@ -90,16 +83,7 @@ class ContextCompactionState:
             instruction_prefix.append(dict(message))
 
         def build_summary_transcript(summary: str) -> list[dict[str, Any]]:
-            archived_context = (
-                f"[Archived Context Summary]\n\nPrevious conversation summary:\n{summary}"
-            )
-            prefix = deepcopy(instruction_prefix)
-            for index in range(len(prefix) - 1, -1, -1):
-                content = prefix[index].get("content")
-                if isinstance(content, str):
-                    prefix[index]["content"] = f"{content}\n\n---\n\n{archived_context}"
-                    return prefix
-            return [{"role": "system", "content": archived_context}, *prefix]
+            return [*deepcopy(instruction_prefix), summary_context_message(summary)]
 
         return cls(
             raw_messages=raw_messages,

@@ -11,9 +11,11 @@ from cirno_core.utils.cancellation import shield_and_drain
 
 from cirno_core.memory.checkpoint_prompt import with_working_notes
 from cirno_core.memory.checkpoint_generation import generate_checkpoint
-from cirno_core.memory.consolidation_contract import split_result
-from cirno_core.memory.consolidation_learning import ConsolidationLearning
-from cirno_core.memory.consolidation_receipts import cached_output, invalid_output
+from cirno_core.memory.consolidation_contract import MARKER, LearningPlan, split_result
+from cirno_core.memory.consolidation_result import ConsolidationCheckpoint, learning_failure
+from cirno_core.memory.consolidation_preparation import prepare_learning
+from cirno_core.memory.learning_commit import stage_learning
+from cirno_core.memory.consolidation_receipts import invalid_output, defer_learning_for_evidence_checkpoint
 from cirno_core.memory.store import MemoryStore
 from cirno_core.memory.working_state import (
     EvidenceCheckpoint,
@@ -26,7 +28,6 @@ from cirno_core.providers.conversation_state import ProviderConversationStateCon
 from cirno_core.providers.reasoning_history import history_policy
 from cirno_core.session.model import Session
 from cirno_core.session.summary import is_summary_checkpoint, session_summary_from_metadata
-from cirno_core.utils.prompt_templates import render_template
 from cirno_core.utils.text import truncate_text_to_tokens
 from cirno_core.utils.token_estimation import estimate_prompt_tokens_chain
 
@@ -122,12 +123,14 @@ class MemoryArchiver:
         provider_state: ProviderConversationState | None = None,
         persist: bool = True,
         project_id: str | None = None,
+        learning_only: bool = False,
+        checkpoint_text: str | None = None,
     ) -> str | None:
         """Generate a replacement checkpoint and optionally persist it."""
         # Match the immutable evidence writer's message numbering; instruction
         # prefixes stay in the request for caching, not in the source transcript.
         source_messages = [message for message in source_messages
-                           if message.get("role") not in {"system", "developer"}]
+                           if message.get("role") not in {"system", "developer"} and (learning_only or not is_summary_checkpoint(message))]
         if not source_messages:
             return None
         runtime = runtime.with_generation_overrides(
@@ -151,6 +154,8 @@ class MemoryArchiver:
             )
 
         async def raw_fallback() -> str:
+            if learning_only:
+                raise RuntimeError("Learning regeneration produced no usable result; the existing checkpoint was not changed")
             raw = await asyncio.to_thread(
                 self._raw_checkpoint,
                 source_messages,
@@ -167,36 +172,23 @@ class MemoryArchiver:
                 await asyncio.to_thread(
                     repository.record_compaction, session_key, raw, evidence["id"], project_id
                 )
-            return EvidenceCheckpoint(raw)
+            failure = preparation_failure
+            if learning is not None and evidence:
+                try:
+                    failure = await shield_and_drain(asyncio.to_thread(defer_learning_for_evidence_checkpoint, learning, evidence, raw))
+                except Exception as error:
+                    failure = learning_failure(evidence["id"], f"Could not retain failed learning output: {error}", {}, [])
+            return EvidenceCheckpoint(raw, failure)
 
-        learning = None
-        if persist and runtime.consolidation_learn:
-            learning = await asyncio.to_thread(ConsolidationLearning,
-                self.store.workspace, source_messages, session_key=session_key,
-                project_id=project_id, context_chars=runtime.consolidation_context_chars,
-                max_updates=runtime.consolidation_max_updates,
-            )
-        cached = await shield_and_drain(asyncio.to_thread(cached_output, learning, evidence)) if learning and evidence else None
-        prompt = render_template(
-            "agent/consolidator_archive.md",
-            strip=True,
-            archive_count=len(source_messages),
+        learning, cached, prompt, preparation_failure = await prepare_learning(
+            home=self.store.workspace, source_messages=source_messages,
+            runtime=runtime, session_key=session_key, project_id=project_id,
+            repository=repository, evidence=evidence, history=history,
+            request_tools=request_tools, input_token_budget=input_token_budget,
+            native_state=provider_state is not None, learning_only=learning_only,
         )
-        if learning is not None:
-            instruction = render_template(
-                "agent/consolidation_learning.md", strip=True,
-                archive_count=len(source_messages), learning_context="",
-                max_updates=runtime.consolidation_max_updates,
-            )
-            if input_token_budget is not None and provider_state is None:
-                baseline, _ = await asyncio.to_thread(estimate_prompt_tokens_chain,
-                    runtime.provider, runtime.model,
-                    [*history, {"role": "user", "content": instruction}],
-                    request_tools)
-                learning.context_chars = min(learning.context_chars,
-                    max(0, input_token_budget - baseline - 256))
-            references = await asyncio.to_thread(learning.context) if cached is None else "(using saved learning plan)"
-            prompt = instruction + "\n" + references
+        if cached is None and input_token_budget is not None and input_token_budget <= 0:
+            return await raw_fallback()
         if history_policy(runtime.provider, tools=request_tools, for_count=True) == "omit":
             prompt = await asyncio.to_thread(
                 with_working_notes,
@@ -278,14 +270,31 @@ class MemoryArchiver:
         if not summary or not summary.strip():
             logger.warning("Memory archive provider returned no summary; using raw checkpoint")
             return await raw_fallback()
+        warning = preparation_failure or (learning.deferred_failure if learning is not None else None)
         try:
+            if learning_only and MARKER not in summary:
+                # A heading at the beginning also has to follow the delimiter contract.
+                if summary.startswith("## Memory updates\n"):
+                    summary = "\n" + summary
+                else:
+                    raise ValueError("Learning retry did not return structured memory updates")
             summary, learning_plan = split_result(summary)
         except ValueError as error:
             if learning is not None and evidence is not None:
-                await shield_and_drain(asyncio.to_thread(invalid_output, learning, evidence, summary, error))
-            raise
+                warning = learning_failure(evidence["id"], f"{type(error).__name__}: {error}", {}, [])
+                try:
+                    await shield_and_drain(asyncio.to_thread(invalid_output, learning, evidence, summary, error))
+                except Exception as receipt_error:
+                    warning["error"] += f"; could not save the failed plan: {receipt_error}"
+                    logger.warning("Could not retain invalid learning output for {}: {}", session_key, receipt_error)
+            else:
+                warning = learning_failure(evidence["id"] if evidence else "", f"{type(error).__name__}: {error}", {}, [])
+            summary = summary.partition(MARKER)[0]
+            learning_plan = LearningPlan()
         summary = self.store.journal.normalize_entry(summary)
-        if summary and (
+        if learning_only and checkpoint_text:
+            summary = checkpoint_text
+        if summary and not learning_only and (
             summary.strip() == "(nothing)"
             or (working_notes(source_messages) and not summary_has_handoff(summary))
         ):
@@ -298,14 +307,12 @@ class MemoryArchiver:
                 "Memory archive provider summary was not safe to replay; using raw checkpoint"
             )
             return await raw_fallback()
-        if learning is not None and evidence is not None:
-            # Inline and awaited: the owning task cannot resume model work until
-            # learning is durable. Physical file writes settle before cancellation.
-            if not learning.completed:
-                await shield_and_drain(asyncio.to_thread(learning.apply, learning_plan, evidence, summary))
-        elif learning_plan.size:
-            raise ValueError("Provider returned memory updates while learning is disabled")
-        if persist and summary != "(nothing)":
+        if learning is not None and evidence is not None and warning is None and not learning.completed and not learning_only:
+            try:
+                await shield_and_drain(asyncio.to_thread(stage_learning, learning, learning_plan, evidence, summary))
+            except Exception as error:
+                warning = learning_failure(evidence["id"], f"Could not retain learning plan: {error}", learning_plan.model_dump(), [])
+        if not learning_only and persist and summary != "(nothing)":
             refs = [
                 {
                     key: message[key]
@@ -334,6 +341,19 @@ class MemoryArchiver:
                 await asyncio.to_thread(
                     repository.record_compaction, session_key, summary, evidence["id"], project_id
                 )
+        if learning is not None and evidence is not None:
+            # Learning is separate from the already committed task checkpoint.
+            # Accepted file writes still settle before ownership is released.
+            if not learning.completed and warning is None:
+                try:
+                    await shield_and_drain(asyncio.to_thread(learning.apply, learning_plan, evidence, summary))
+                except Exception as error:
+                    logger.warning("Learning was not completed for {}; retaining the checkpoint: {}", session_key, error)
+                    warning = learning_failure(evidence["id"], f"{type(error).__name__}: {error}", learning_plan.model_dump(), learning.saved_items)
+        elif learning_plan.size and warning is None:
+            warning = learning_failure(evidence["id"] if evidence else "", "Learning is disabled; generated memory updates were not applied", learning_plan.model_dump(), [])
+        if warning:
+            return EvidenceCheckpoint(summary, warning) if learning is not None and learning.raw_checkpoint else ConsolidationCheckpoint(summary, warning)
         return summary
 
     async def archive_session(
@@ -359,27 +379,11 @@ class MemoryArchiver:
         previous_summary = session_summary["text"] if session_summary else None
 
         async def raw_checkpoint():
-            from cirno_memory.repository import MemoryRepository
-
-            repo = await asyncio.to_thread(MemoryRepository, self.store.workspace)
-            evidence = await asyncio.to_thread(
-                repo.archive_messages, messages, session.key, session.metadata.get("project_id")
+            return await self.archive(
+                messages, runtime=runtime, session_key=session.key,
+                history=[], request_tools=[], previous_summary=previous_summary,
+                input_token_budget=0, project_id=session.metadata.get("project_id"),
             )
-            summary = await asyncio.to_thread(
-                self._raw_checkpoint,
-                messages,
-                session_key=session.key,
-                previous_summary=previous_summary,
-                max_tokens=runtime.generation.max_tokens,
-            )
-            await asyncio.to_thread(
-                repo.record_compaction,
-                session.key,
-                summary,
-                evidence["id"],
-                session.metadata.get("project_id"),
-            )
-            return EvidenceCheckpoint(summary)
 
         if input_token_budget <= 0:
             logger.debug(

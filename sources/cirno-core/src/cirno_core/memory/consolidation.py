@@ -16,6 +16,7 @@ from cirno_core.bus.agent_events import (
 )
 from cirno_core.memory.archiver import MemoryArchiver
 from cirno_core.memory.store import MemoryStore
+from cirno_core.memory.consolidation_result import ConsolidationCheckpoint
 from cirno_core.memory.working_state import (
     EvidenceCheckpoint,
 )
@@ -105,7 +106,9 @@ class Consolidator:
         if summary is None:
             return None
         text = truncate_text_to_tokens(summary, max(1, max_output_tokens))
-        return EvidenceCheckpoint(text) if isinstance(summary, EvidenceCheckpoint) else text
+        if isinstance(summary, ConsolidationCheckpoint):
+            return type(summary)(text, summary.learning_failure)
+        return text
 
     async def summarize_provider_compaction(
         self,
@@ -280,6 +283,7 @@ class Consolidator:
                     context_window_tokens=runtime.context_window_tokens,
                     context_estimated=True,
                     evidence_checkpoint=isinstance(summary, EvidenceCheckpoint),
+                    learning_failure=getattr(summary, "learning_failure", None),
                 ),
             )
 

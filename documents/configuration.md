@@ -217,3 +217,5 @@ running task links. Historical prose remains unchanged. Login and password chang
 preserve the current name.
 
 Trace’s download action saves a snapshot of the whole recording as ZIP, including events outside the current page and filters, API input messages, tool definitions and responses. Recording continues during export. The archive contains a manifest, event/request JSONL indexes and content-addressed JSON blobs, so repeated long-context prefixes are stored once. The inspector’s copy action copies the JSON currently displayed in its selected tab; load more messages first when copying a paged message list. Clearing or closing a recording does not delete a downloaded archive.
+
+Context consolidation exposes `max_retries` (JSON alias `maxRetries`) in Settings, with default 1 and range 0–10. This is the number of additional serial generation attempts; 0 means one attempt only. It does not control provider-level network retries. Optional learning failures retain their plans and original batches, display incomplete updates and do not veto task-checkpoint persistence. Use `/consolidate retry [source-id]` for explicit recovery.

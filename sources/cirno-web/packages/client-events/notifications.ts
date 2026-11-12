@@ -13,6 +13,13 @@ export interface RecoveryState {
 
 export type CompactionReason = "idle" | "context_pressure" | "manual" | "provider_native"
 
+export interface LearningFailure {
+  source: string
+  error: string
+  saved: Array<{ id: string; kind: string; label: string }>
+  pending: Array<{ id: string; kind: string; label: string }>
+}
+
 export interface ContextCompaction {
   reason?: CompactionReason
   id: string
@@ -21,6 +28,7 @@ export interface ContextCompaction {
   context_window_tokens?: number
   context_estimated?: boolean
   evidence_checkpoint?: boolean
+  learning_failure?: LearningFailure
   phase: "started" | "succeeded" | "failed" | "cancelled"
 }
 
@@ -47,6 +55,7 @@ export type NotificationEvent =
       context_window_tokens?: number
       context_estimated?: boolean
       evidence_checkpoint?: boolean
+      learning_failure?: LearningFailure
     }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -94,9 +103,16 @@ export function decodeNotification(value: unknown): NotificationEvent | null | u
     && optional(value.error, "string")
     && optional(value.context_estimated, "boolean")
     && optional(value.evidence_checkpoint, "boolean")
+    && (value.learning_failure === undefined || isLearningFailure(value.learning_failure))
     && [value.context_tokens, value.context_window_tokens].every(tokens => tokens === undefined
       || (typeof tokens === "number" && Number.isFinite(tokens) && tokens >= 0))
     ? value as unknown as NotificationEvent : null
+}
+
+function isLearningFailure(value: unknown): value is LearningFailure {
+  return isRecord(value) && typeof value.source === "string" && typeof value.error === "string"
+    && [value.saved, value.pending].every(items => Array.isArray(items) && items.every(item =>
+      isRecord(item) && typeof item.id === "string" && typeof item.kind === "string" && typeof item.label === "string"))
 }
 
 function isRetryStatus(value: Record<string, unknown>): boolean {

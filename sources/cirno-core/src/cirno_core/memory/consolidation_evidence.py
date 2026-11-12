@@ -30,6 +30,8 @@ def matches_quote(message: dict[str, Any], quote: str, *, user_only: bool) -> bo
 
 
 def resolve_message(messages: list[dict[str, Any]], ref: EvidenceRef, *, user_only=False) -> int:
+    if ref.source_id is not None or ref.quote is None:
+        raise LearningEvidenceError("Learning evidence source_id has not been bound to an archived quote")
     if ref.message is not None:
         if ref.message >= len(messages):
             raise LearningEvidenceError("Learning evidence message is outside the archived batch")
@@ -56,9 +58,9 @@ def resolve_message(messages: list[dict[str, Any]], ref: EvidenceRef, *, user_on
 
 def source_refs(messages: list[dict[str, Any]], refs: list[EvidenceRef]) -> list[dict[str, Any]]:
     return [
-        ref.model_dump()
+        ref.model_dump(exclude={"source_id"})
         if ref.memory_id is not None
-        else ref.model_copy(update={"message": resolve_message(messages, ref)}).model_dump()
+        else ref.model_copy(update={"message": resolve_message(messages, ref)}).model_dump(exclude={"source_id"})
         for ref in refs
     ]
 

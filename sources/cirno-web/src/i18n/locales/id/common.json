@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "Percobaan ulang pembuatan konsolidasi",
+          "help": "Percobaan tambahan secara berurutan setelah gagal (0–10). Nol berarti satu percobaan saja. Kegagalan pembelajaran tidak membuat ulang ringkasan tersimpan. Percobaan jaringan diatur terpisah."
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "attempt": "Percobaan {{number}}",
       "errorUnavailable": "Catatan ini tidak memuat penyebab kesalahan.",
       "evidenceCheckpoint": "Titik lanjut bukti tersimpan",
-      "evidenceCheckpointHelp": "Ringkasan tidak tersedia, tidak lengkap atau kehilangan status tugas. Bukti sumber terbatas dipertahankan; catatan asli lengkap tetap diarsipkan."
+      "evidenceCheckpointHelp": "Ringkasan tidak tersedia, tidak lengkap atau kehilangan status tugas. Bukti sumber terbatas dipertahankan; catatan asli lengkap tetap diarsipkan.",
+      "learningFailed": "Ringkasan tersimpan; pembelajaran belum lengkap",
+      "learningFailedHelp": "Tugas dapat dilanjutkan. Pembaruan yang selesai ditampilkan terpisah dari yang belum tersimpan sepenuhnya.",
+      "learningSaved": "Pembaruan selesai",
+      "learningPending": "Pembaruan untuk dicoba lagi (sebagian mungkin sudah tertulis)",
+      "learningSource": "Sumber asli",
+      "learningRetryHelp": "Coba simpan lagi di Memori, atau jalankan perintah ini di percakapan asal untuk mencoba ulang satu batch tersimpan.",
+      "learningKinds": {
+        "memory": "Memori",
+        "document": "Dokumen",
+        "input": "Tinjauan masukan",
+        "updates": "Pembaruan pembelajaran",
+        "receipt": "Status penyimpanan"
+      }
     },
     "loadingConversation": "Memuat percakapan…",
     "empty": {

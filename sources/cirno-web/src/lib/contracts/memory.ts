@@ -34,7 +34,7 @@ export interface MemoryStatus {
   receipts?: { memory_id: string; outcome: string; reason: string; input_revision: number }[];
   last_consolidation?: { at: string; status: string; error?: string | null } | null;
   consolidation_failed?: number;
-  consolidation_failures?: { source: string; error: string | null; at: string }[];
+  consolidation_failures?: { source: string; error: string | null; at: string; saved?: Array<{ id: string; kind: string; label: string }>; pending?: Array<{ id: string; kind: string; label: string }> }[];
   last_dream: {
     at: string;
     error?: string;

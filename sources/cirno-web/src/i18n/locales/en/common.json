@@ -455,6 +455,10 @@
         "agents_defaults_consolidation_context_chars": {
           "label": "Additional reference budget (characters)",
           "help": "Bound existing memories and complete document snapshots appended at the request tail, preserving the system prefix."
+        },
+        "agents_defaults_consolidation_max_retries": {
+          "label": "Consolidation generation retries",
+          "help": "Additional serial attempts after generation fails (0–10). Zero means one attempt. Learning failures do not regenerate a saved checkpoint; provider network retries are configured separately."
         }
       },
       "groups": {
@@ -1927,7 +1931,20 @@
       "errorUnavailable": "This record does not include an error reason.",
       "attempt": "Attempt {{number}}",
       "evidenceCheckpoint": "Evidence checkpoint saved",
-      "evidenceCheckpointHelp": "The model summary was unavailable, incomplete or omitted task state. A bounded evidence handoff was retained instead; complete source records remain archived."
+      "evidenceCheckpointHelp": "The model summary was unavailable, incomplete or omitted task state. A bounded evidence handoff was retained instead; complete source records remain archived.",
+      "learningFailed": "Checkpoint saved; learning incomplete",
+      "learningFailedHelp": "The task can continue. Some learning updates were not fully saved; completed writes are listed separately.",
+      "learningSaved": "Completed learning updates",
+      "learningPending": "Incomplete updates (some writes may already exist)",
+      "learningSource": "Original source",
+      "learningRetryHelp": "Retry saving in Memory, or run this command in the original conversation to retry one retained batch.",
+      "learningKinds": {
+        "memory": "Memory",
+        "document": "Document",
+        "input": "Input review",
+        "updates": "Generated learning updates",
+        "receipt": "Save completion status"
+      }
     },
     "loadingConversation": "Loading conversation…",
     "empty": {

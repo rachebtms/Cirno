@@ -227,6 +227,8 @@ def _client_projection_event(
                 projected[field] = value
         if record.get("evidence_checkpoint") is True:
             projected["evidence_checkpoint"] = True
+        if isinstance(record.get("learning_failure"), dict):
+            projected["learning_failure"] = record["learning_failure"]
         estimated = record.get("context_estimated")
         if isinstance(estimated, bool):
             projected["context_estimated"] = estimated
