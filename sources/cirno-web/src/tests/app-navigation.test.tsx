@@ -25,6 +25,30 @@ import App from "@/App";
 describe("App navigation", () => {
   installAppTestLifecycle();
 
+  it("switches to a conversation tab after deferring a required settings restart", async () => {
+    const payload = { ...baseSettingsPayload(), requires_restart: true };
+    mockFetchRoutes({ "/v0/settings": payload });
+    render(<App />);
+    const user = userEvent.setup();
+    await screen.findByRole("textbox", { name: "Message input" });
+    await user.click(screen.getByRole("button", { name: "Open Settings" }));
+    await screen.findByRole("navigation", { name: "Settings sections" });
+    const chat = screen.getAllByRole("tab").find(tab => tab.getAttribute("aria-selected") !== "true")!;
+    await user.click(chat);
+    let dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
+    expect(window.location.hash).toBe("#/settings");
+    await user.click(chat);
+    dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
+    await user.click(within(dialog).getByRole("button", { name: "Restart later" }));
+    await waitFor(() => expect(window.location.hash).toBe("#/new"));
+    expect(chat).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("textbox", { name: "Message input" })).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(await screen.findByText("Saved. Restart to apply changes.")).toBeVisible();
+  });
+
   it("keeps a just-created topic route while the session list catches up", async () => {
     render(<App />);
 

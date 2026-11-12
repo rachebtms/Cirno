@@ -275,19 +275,19 @@ describe("temporary chat navigation", () => {
     act(() => TestSocket.current.open());
     await openAppConversation("Regular topic");
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    await screen.findByRole("button", { name: "Back to chat" });
+    await screen.findByRole("navigation", { name: "Settings sections" });
     expect(window.location.hash).toBe("#/settings");
     first.unmount();
     vi.mocked(fetch).mockClear();
     render(<App />);
-    await screen.findByRole("button", { name: "Back to chat" });
+    await screen.findByRole("navigation", { name: "Settings sections" });
     act(() => TestSocket.current.open());
     expect(
       vi
         .mocked(fetch)
         .mock.calls.filter(([url]) => String(url).includes("/webui-thread")),
     ).toEqual([]);
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Regular topic" }));
     await waitFor(() =>
       expect(window.location.hash).toBe("#/chat/websocket%3Aregular"),
     );
@@ -306,7 +306,7 @@ describe("temporary chat navigation", () => {
     act(() => TestSocket.current.open());
     const chatId = await startTemporaryChat("Temporary navigation check");
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    await screen.findByRole("button", { name: "Back to chat" });
+    await screen.findByRole("navigation", { name: "Settings sections" });
     expect(window.location.hash).toBe("#/settings");
     act(() =>
       TestSocket.current.receive({
@@ -315,7 +315,7 @@ describe("temporary chat navigation", () => {
         text: "Reply while in settings",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    fireEvent.click(screen.getAllByRole("tab").find(tab => tab.getAttribute("aria-selected") !== "true" && tab.textContent?.includes("Temporary navigation check"))!);
     await waitFor(() =>
       expect(window.location.hash).toBe(`#/temporary/${chatId}`),
     );

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { ClientProvider } from "@/providers/ClientProvider";
 import type { SettingsPayload } from "@/lib/contracts/settings";
+import type { SettingsExitGuard } from "@/features/settings/contracts";
 import type { CirnoClient } from "@/lib/cirno-client";
 
 export { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -117,7 +118,8 @@ type SettingsViewTestOptions = Partial<Pick<
 >> & { client?: CirnoClient };
 
 export function renderSettingsView(options: SettingsViewTestOptions = {}) {
-  render(
+  let exitGuard: SettingsExitGuard | null = null;
+  const view = render(
     <ClientProvider client={options.client ?? {
       requestMutation: (action: string, args: {action?: string; name?: string}, timeout?: number) => {
         if (action === 'instance.action' && args.action === 'memory.list') return Promise.resolve({memories: [], has_more: false, next_offset: 0});
@@ -132,6 +134,7 @@ export function renderSettingsView(options: SettingsViewTestOptions = {}) {
       },
     } as never} token="tok">
       <SettingsView
+        registerExitGuard={guard => { exitGuard = guard; }}
         themePreference={options.themePreference ?? "light"}
         initialSection={options.initialSection ?? "apps"}
         initialSettings={options.initialSettings}
@@ -148,6 +151,10 @@ export function renderSettingsView(options: SettingsViewTestOptions = {}) {
       />
     </ClientProvider>,
   );
+  return { ...view, requestExit: (leave: () => void) => {
+    if (!exitGuard) throw new Error("Settings exit guard is not registered");
+    exitGuard(leave);
+  } };
 }
 
 export async function openPopover(trigger: HTMLElement) {

@@ -73,15 +73,16 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     if (value) dirty.current.add(id); else dirty.current.delete(id);
   }, []);
   const registerClose = useCallback((id: string, close: () => Promise<void>) => { closers.current.set(id, close); }, []);
-  const activate = (tab: WorkspaceTab) => props.beforeActivate(() => {
+  const commitActivation = (tab: WorkspaceTab) => {
     focusedGroup.current = tab.group ?? 0;
     currentState.current = { ...currentState.current, active: tab.id };
     setActive(tab.id);
     if (tab.type === "route") props.onRoute(tab.route);
-  });
+  };
+  const activate = (tab: WorkspaceTab) => props.beforeActivate(() => commitActivation(tab));
   const focusGroup = (group: TabGroup) => { focusedGroup.current = group; };
   const mergeGroups = () => setTabs(current => current.map(tab => ({ ...tab, group: 0 })));
-  const move = (id: string, group: TabGroup, before?: string) => {
+  const move = (id: string, group: TabGroup, before?: string) => props.beforeActivate(() => {
     const current = currentState.current;
     const target = current.tabs.find(tab => tab.id === id);
     if (!target) return;
@@ -91,8 +92,8 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     next.splice(index < 0 ? next.length : index, 0, moved);
     currentState.current = { ...current, tabs: next };
     setTabs(next);
-    activate(moved);
-  };
+    commitActivation(moved);
+  });
   const open = (type: PanelKind, path?: string, parent?: PanelTab) => props.beforeActivate(() => {
     const tab: WorkspaceTab & PanelTab = { id: crypto.randomUUID(), type, path, group: focusedGroup.current,
       sessionKey: parent ? parent.sessionKey : props.route.activeKey, scope: parent ? parent.scope : props.scope };
@@ -124,7 +125,7 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
       const remaining = latestTabs.filter(item => item.id !== id);
       const next = tabNeighbor(latestTabs, id, remaining);
       setTabs(current => current.filter(item => item.id !== id));
-      if (latestActive === id) { if (next) activate(next); else setActive(""); }
+      if (latestActive === id) { if (next) commitActivation(next); else setActive(""); }
     } catch (reason) { setError(String(reason)); }
     finally { closingIds.current.delete(id); setClosing(new Set(closingIds.current)); }
   };
@@ -132,11 +133,11 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     if (dirty.current.has(id)) setPendingClose(id);
     else props.beforeActivate(() => void close(id));
   };
-  const routeTo = (view: string, activeKey = props.route.activeKey) => {
+  const routeTo = (view: string, activeKey = props.route.activeKey) => props.beforeActivate(() => {
     const requested = { view, activeKey, settingsSection: view === "automations" ? "automations" : "overview" };
     const existing = currentState.current.tabs.find(tab => tab.id === routeTabId(requested));
     props.onRoute(existing?.type === "route" ? existing.route : requested);
-  };
+  });
   return { tabs, active, focusRevision: selection.revision, visited, selected, routeVisible, routeKey, error, closing,
     pendingClose, setPendingClose, activate, open, close, requestClose, routeTo, reorder, setDirty, registerClose, focusGroup, move, mergeGroups };
 }

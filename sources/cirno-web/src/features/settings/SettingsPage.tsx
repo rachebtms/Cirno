@@ -21,7 +21,7 @@ import { createAutomationSections } from "./composition/AutomationSections";
 
 export function SettingsPage(props: SettingsPageProps) {
   const bindings = useSettingsComposition(props);
-  const { dialogLayoutAnchor, setDialogLayoutAnchor, controller, showSidebar, activeSection, selectSection, backToChat, onLogout, requestExit, settings, restartViaSettingsSurface, restartInProgress, hideHeader, t, pendingExit, setPendingExit, presetDeletedCallback, setAutomationDetailReturn, loading, error, proxySetupOpen, setProxySetupOpen } = bindings;
+  const { dialogLayoutAnchor, setDialogLayoutAnchor, controller, showSidebar, activeSection, selectSection, onLogout, requestExit, settings, restartViaSettingsSurface, restartInProgress, hideHeader, t, pendingExit, setPendingExit, presetDeletedCallback, setAutomationDetailReturn, loading, error, proxySetupOpen, setProxySetupOpen } = bindings;
   const sections = {
     ...createModelSections(bindings),
     ...createRuntimeSections(bindings),
@@ -47,7 +47,6 @@ export function SettingsPage(props: SettingsPageProps) {
         <SettingsNavigation
           activeSection={activeSection}
           onSelectSection={selectSection}
-          onBackToChat={backToChat}
           onLogout={onLogout ? () => requestExit(onLogout) : undefined}
 
           onRestart={settings ? restartViaSettingsSurface : undefined}

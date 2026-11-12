@@ -437,7 +437,7 @@ describe("App catalog-data", () => {
     mockFetchRoutes({ "/v0/settings": baseSettingsPayload() });
     window.history.replaceState(null, "", "/#/settings");
     render(<App />);
-    await screen.findByRole("button", { name: "Back to chat" });
+    await screen.findByRole("navigation", { name: "Settings sections" });
     expect(await openAppCatalog()).toBeVisible();
     expect(screen.getByRole("tab", { name: "Conversations" })).toHaveAttribute(
       "aria-selected",

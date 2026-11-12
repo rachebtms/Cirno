@@ -16,8 +16,9 @@ export function useSplitLayout(model: WorkbenchModel) {
   const selected = groupTabs.map((tabs, group) => tabs.find(tab => tab.id === state.selected[group])?.id ?? tabs.at(-1)?.id ?? null);
   // New activations select their owning group, without disturbing the other group's page.
   useEffect(() => {
-    if (previous.current === model.active) return;
-    previous.current = model.active;
+    const identity = `${model.active}:${activeTab?.group ?? 0}`;
+    if (previous.current === identity) return;
+    previous.current = identity;
     if (!activeTab) return;
     const group = activeTab.group ?? 0;
     setState(current => ({ ...current, focused: group,
@@ -34,15 +35,12 @@ export function useSplitLayout(model: WorkbenchModel) {
   const activate = (id: string) => {
     const tab = model.tabs.find(tab => tab.id === id);
     if (!tab) return;
-    const group = tab.group ?? 0;
-    focus(group);
-    setState(current => ({ ...current, selected: current.selected.map((old, index) => index === group ? id : old) as GroupLayout["selected"] }));
+    // The model commits selection after the current page's exit guard accepts it.
+    // Keep that page (and its restart/save dialog) visible until then.
     model.activate(tab);
   };
   const enabled = state.enabled || groupTabs[1].length > 0;
   const transfer = (id: string, group: TabGroup, before?: string) => {
-    focus(group);
-    setState(current => ({ ...current, selected: current.selected.map((old, index) => index === group ? id : old) as GroupLayout["selected"] }));
     model.move(id, group, before);
   };
   const toggle = () => {

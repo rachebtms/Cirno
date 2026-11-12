@@ -155,10 +155,9 @@ function SidebarPreview() {
   const { t } = useGalleryTranslation();
   const [section, setSection] = useState<SettingsSectionKey>("models");
   const [pending, setPending] = useState(true);
-  const [action, setAction] = useState<"back" | "logout" | "restart" | null>(null);
+  const [action, setAction] = useState<"logout" | "restart" | null>(null);
   return <div className="flex min-h-96 flex-col gap-6 lg:flex-row">
     <SettingsNavigation activeSection={section} onSelectSection={setSection} restartPending={pending}
-      onBackToChat={() => setAction("back")}
       onLogout={() => setAction("logout")}
       onRestart={() => { setPending(false); setAction("restart"); }} />
     <div className="space-y-3 p-4"><p role="status" className="text-sm">{t("controls.common.selected", { value: t(`settings.nav.${section}`, { ns: "common" }) })}</p>

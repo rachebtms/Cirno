@@ -7,10 +7,10 @@ describe("Settings navigation lifecycle", () => {
 
   it("asks before leaving with pending changes and lets the user restart later", () => {
     const leave = vi.fn();
-    renderSettingsView({ initialSection: "runtime", initialSettings: {
+    const view = renderSettingsView({ initialSection: "runtime", initialSettings: {
       ...settingsPayload(), requires_restart: true, restart_required_sections: ["runtime"],
     }, onBackToChat: leave });
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    act(() => view.requestExit(leave));
     const dialog = screen.getByRole("dialog", { name: "Restart before leaving?" });
     expect(leave).not.toHaveBeenCalled();
     expect(within(dialog).getByText("Your changes are saved. Restart to apply them.")).toBeVisible();
@@ -24,18 +24,18 @@ describe("Settings navigation lifecycle", () => {
 
   it("restarts from the exit prompt", () => {
     const restart = vi.fn();
-    renderSettingsView({ initialSection: "runtime", initialSettings: {
+    const view = renderSettingsView({ initialSection: "runtime", initialSettings: {
       ...settingsPayload(), requires_restart: true,
     }, onRestart: restart });
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    act(() => view.requestExit(() => {}));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restart" }));
     expect(restart).toHaveBeenCalledTimes(1);
   });
 
   it("leaves directly when no restart is pending", () => {
     const leave = vi.fn();
-    renderSettingsView({ initialSection: "runtime", initialSettings: settingsPayload(), onBackToChat: leave });
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    const view = renderSettingsView({ initialSection: "runtime", initialSettings: settingsPayload(), onBackToChat: leave });
+    act(() => view.requestExit(leave));
     expect(leave).toHaveBeenCalledTimes(1);
   });
 

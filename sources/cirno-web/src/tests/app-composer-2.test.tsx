@@ -108,7 +108,7 @@ describe("App composer", () => {
       releaseRefreshedSettings();
       await refreshedSettingsReady;
     });
-    fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open New conversation" }));
     await waitFor(() => expect(window.location.hash).toBe("#/new"));
     expect(
       await screen.findByText(HERO_GREETING_PATTERN, {}, { timeout: 10_000 }),

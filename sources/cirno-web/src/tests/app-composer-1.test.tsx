@@ -47,7 +47,7 @@ describe("App composer", () => {
     expect(
       screen.getByRole("navigation", { name: "Settings sections" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Back to chat" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Back to chat" })).not.toBeInTheDocument();
     expect(container.querySelectorAll("main")).toHaveLength(1);
     expect(
       screen.getByRole("navigation", { name: "Settings sections" }),

@@ -81,7 +81,7 @@ class Context:
             "NODE_EXTRA_CA_CERTS",
             "PLAYWRIGHT_DOWNLOAD_HOST", "PLAYWRIGHT_CHROMIUM_DOWNLOAD_HOST",
             "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT",
-            "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "UV_FIND_LINKS",
+            "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "UV_FIND_LINKS", "UV_TORCH_BACKEND",
             "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PIP_FIND_LINKS",
         )
         env = {key: os.environ[key] for key in keys if key in os.environ}
@@ -105,6 +105,9 @@ class Context:
             env.update(HTTP_PROXY=self.proxy, HTTPS_PROXY=self.proxy, ALL_PROXY=self.proxy)
         env.setdefault("UV_CACHE_DIR", str(self.home / ".cirno/state/cli/cache/uv"))
         env.setdefault("UV_PYTHON_INSTALL_DIR", str(self.root / "uv/python"))
+        # PyPI's Linux PyTorch builds pull in CUDA even on CPU-only hosts.
+        # uv selects the matching accelerator index, falling back to CPU.
+        env.setdefault("UV_TORCH_BACKEND", "auto")
         from cirno_setup.python import environment
 
         return environment(env)

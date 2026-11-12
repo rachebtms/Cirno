@@ -46,7 +46,7 @@ export function ShellSurface(surface: ShellSurfaceProps) {
   const { catalog, inboxUnread, headerTitle } = workspacePresentation;
   const { onSelectSearchResult } = conversationActions;
   const { activeWorkspaceScope } = conversationState;
-  const { navigate } = conversationProjection;
+  const { commitNavigation } = conversationProjection;
   const { onNewChat } = workspaceActions;
   const tabSessions = useMemo(
     () =>
@@ -119,7 +119,7 @@ export function ShellSurface(surface: ShellSurfaceProps) {
                   runningChatIds={runningChatIds}
                   sessions={tabSessions}
                   scope={activeWorkspaceScope}
-                  onRoute={(route) => navigate(route as ShellRoute)}
+                  onRoute={(route) => commitNavigation(route as ShellRoute)}
                   onNewChat={onNewChat}
                   onCloseTemporaryChat={(key) =>
                     workspaceActions.onCloseTemporaryChat(key, {
@@ -129,9 +129,7 @@ export function ShellSurface(surface: ShellSurfaceProps) {
                   onRouteVisibleChange={setWorkspaceRouteVisible}
                   beforeActivate={(action) => {
                     if (view !== "chat" && settingsExitGuardRef.current)
-                      settingsExitGuardRef.current(action, {
-                        promptRestart: false,
-                      });
+                      settingsExitGuardRef.current(action);
                     else action();
                   }}
                   renderRoute={(route, visible, focused) => <WorkbenchRoute {...{ route, visible, focused, surface }} />}

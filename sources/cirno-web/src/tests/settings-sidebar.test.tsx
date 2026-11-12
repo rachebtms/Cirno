@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { SettingsNavigation } from "@/features/settings/ui/SettingsNavigation";
 import type { SettingsSectionKey } from "@/features/settings/contracts";
-import { installSettingsViewTestHooks, renderSettingsView, settingsPayload } from "@/tests/settings-test-utils";
+import { installSettingsViewTestHooks } from "@/tests/settings-test-utils";
 
 installSettingsViewTestHooks();
 afterEach(cleanup);
@@ -18,7 +18,7 @@ function media(initial: boolean) {
 }
 function Navigation({ onRestart, restartPending = false }: { onRestart?: () => void; restartPending?: boolean }) {
   const [active, select] = useState<SettingsSectionKey>("models");
-  return <SettingsNavigation activeSection={active} onSelectSection={select} onBackToChat={() => {}} onRestart={onRestart} restartPending={restartPending} />;
+  return <SettingsNavigation activeSection={active} onSelectSection={select} onRestart={onRestart} restartPending={restartPending} />;
 }
 it("searches desktop categories and navigates without mixing Memory and Personality", async () => {
   media(false); const user = userEvent.setup(); render(<Navigation />);
@@ -60,11 +60,7 @@ it("keeps restart status and its action available in mobile navigation", async (
   await user.click(screen.getByRole("button", { name: "Settings: Models" }));
   await user.click(screen.getByRole("button", { name: "Restart" })); expect(restart).toHaveBeenCalledOnce();
 });
-it("retains the pending-restart exit choice in the settings application", async () => {
-  media(true); const user = userEvent.setup(); const back = vi.fn();
-  renderSettingsView({ initialSection: "models", initialSettings: { ...settingsPayload(), requires_restart: true }, onBackToChat: back });
-  await user.click(screen.getByRole("button", { name: "Back to chat" }));
-  const dialog = screen.getByRole("dialog", { name: "Restart before leaving?" });
-  expect(back).not.toHaveBeenCalled(); await user.click(within(dialog).getByRole("button", { name: "Restart later" }));
-  expect(back).toHaveBeenCalledOnce();
+it.each([false, true])("omits the retired back-to-chat button (compact=%s)", compact => {
+  media(compact); render(<Navigation />);
+  expect(screen.queryByRole("button", { name: "Back to chat" })).not.toBeInTheDocument();
 });

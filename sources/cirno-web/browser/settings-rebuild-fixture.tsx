@@ -44,7 +44,7 @@ export function SettingsRebuildFixture({ embedded = false }: { embedded?: boolea
   };
   const state = useRuntimeConfigSettings(settings, client, setSettings);
   return <TabSurface style={{ height: embedded ? "100%" : "100dvh", display: "flex", flex: 1 }}>
-    <SettingsLayout navigation={<SettingsNavigation activeSection={section} onSelectSection={setSection} onBackToChat={() => {}} />}
+    <SettingsLayout navigation={<SettingsNavigation activeSection={section} onSelectSection={setSection} />}
       section={section} title={t(`settings.nav.${section}`)}>
       {section === "overview" ? <TokenUsageCard usage={fixtureUsage} timeZone="UTC" /> : section === "account" ? <AccountSettings />
         : <RuntimeConfiguration page={section as RuntimeConfigPage} settings={settings} state={state} isRestarting={false} />}

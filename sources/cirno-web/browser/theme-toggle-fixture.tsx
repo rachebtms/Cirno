@@ -66,6 +66,6 @@ function ThemeChatFixture({ theme, toggle }: { theme: "light" | "dark"; toggle: 
 function SettingsSelectionFixture({ theme, toggle }: { theme: "light" | "dark"; toggle: () => void }) {
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("overview");
   return <main className="flex h-screen flex-col bg-background"><ThreadHeader title="Settings" theme={theme} onToggleTheme={toggle} onToggleSidebar={noop} />
-    <div className="min-h-0 flex-1"><SettingsNavigation activeSection={activeSection} onSelectSection={setActiveSection} onBackToChat={noop} /></div>
+    <div className="min-h-0 flex-1"><SettingsNavigation activeSection={activeSection} onSelectSection={setActiveSection} /></div>
   </main>;
 }

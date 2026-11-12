@@ -106,3 +106,13 @@ def test_installer_preserves_standard_browser_download_configuration(tmp_path, m
     values = context.environment()
     assert values["PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT"] == "120000"
     assert values["PLAYWRIGHT_DOWNLOAD_HOST"] == "https://mirror.example"
+
+
+@pytest.mark.parametrize("selected", [None, "cpu", "cu130"])
+def test_setup_selects_matching_pytorch_backend_and_preserves_override(tmp_path, monkeypatch, selected):
+    monkeypatch.setattr("cirno_setup.context.os.geteuid", lambda: 1000)
+    monkeypatch.delenv("UV_TORCH_BACKEND", raising=False)
+    if selected:
+        monkeypatch.setenv("UV_TORCH_BACKEND", selected)
+    context = Context(tmp_path, tmp_path, Policy())
+    assert context.environment()["UV_TORCH_BACKEND"] == (selected or "auto")

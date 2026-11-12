@@ -1,6 +1,6 @@
 import { useTabCompact } from "@/ui/layout/TabSurface";
 import { Button, Modal, SearchField, Spinner } from "@heroui/react";
-import { ChevronDown, ChevronLeft, LogOut, RotateCw } from "lucide-react";
+import { ChevronDown, LogOut, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SettingsSectionKey } from "../contracts";
@@ -16,7 +16,6 @@ export function standaloneSectionTitle(section: SettingsSectionKey) {
 export interface SettingsNavigationProps {
   activeSection: SettingsSectionKey;
   onSelectSection: (section: SettingsSectionKey) => void;
-  onBackToChat: () => void;
   onLogout?: () => void;
   onRestart?: () => void;
   isRestarting?: boolean;
@@ -43,9 +42,7 @@ export function SettingsNavigation(props: SettingsNavigationProps) {
     {props.onLogout && <Button variant="tertiary" onPress={props.onLogout}><LogOut size={16} />{t("app.account.logout")}</Button>}
   </div>;
   if (mobile) return <aside className="settings-mobile-navigation">
-    <Button isIconOnly variant="tertiary" aria-label={t("settings.backToChat")} onPress={props.onBackToChat}><ChevronLeft size={18} /></Button>
     <Button variant="tertiary" aria-label={`${t("settings.sidebar.title")}: ${label}`} onPress={() => setOpen(true)}>{label}<ChevronDown size={16} /></Button>
-    <span />
     {props.restartPending && <p role="status" className="settings-mobile-restart">{t("settings.status.savedRestartApply")}</p>}
     <Modal.Backdrop isOpen={open} onOpenChange={setOpen} ><Modal.Container><Modal.Dialog className="settings-navigation-dialog">
         <Modal.CloseTrigger /><Modal.Header><Modal.Heading>{t("settings.sidebar.title")}</Modal.Heading></Modal.Header>
@@ -53,7 +50,7 @@ export function SettingsNavigation(props: SettingsNavigationProps) {
       </Modal.Dialog></Modal.Container></Modal.Backdrop>
   </aside>;
   return <aside className="settings-desktop-navigation">
-    <header><Button isIconOnly variant="tertiary" aria-label={t("settings.backToChat")} onPress={props.onBackToChat}><ChevronLeft size={18} /></Button>
+    <header>
       <span className="settings-navigation-title">{t("settings.sidebar.title")}</span>
     </header>{search}{navigation}
     {props.restartPending && <p role="status" className="settings-navigation-status">{t("settings.status.savedRestartApply")}</p>}
