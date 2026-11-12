@@ -7,6 +7,7 @@ import { NodeEditor } from "./ui/NodeEditor";
 import { NodeCommand } from "./ui/NodeCommand";
 import { NodeList } from "./ui/NodeList";
 import { NodeJobs } from "./ui/NodeJobs";
+import { NodeJobSettings } from "./ui/NodeJobSettings";
 import "./nodes.css";
 
 export function NodesSettings({ client }: { client: CirnoClient }) {
@@ -20,7 +21,7 @@ export function NodesSettings({ client }: { client: CirnoClient }) {
     {nodes.error && !nodes.draft && !nodes.target && <Alert status="danger" role="alert"><Alert.Description>{nodes.error}</Alert.Description></Alert>}
     {nodes.notice && !nodes.draft && <pre className="node-output" role="status">{nodes.notice}</pre>}
     {nodes.loading && !nodes.nodes.length ? <Spinner aria-label={t("common.loading")} /> : nodes.nodes.length ? <NodeList nodes={nodes} /> : !nodes.listError && <p className="node-help">{t("features.noNodes")}</p>}
-    {!nodes.loading && !nodes.listError && <NodeJobs nodes={nodes} />}
+    {nodes.ready && <><NodeJobSettings nodes={nodes} client={client} /><NodeJobs nodes={nodes} /></>}
     <NodeEditor nodes={nodes} /><NodeCommand nodes={nodes} />
   </section>;
 }

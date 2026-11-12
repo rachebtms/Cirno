@@ -1,6 +1,24 @@
 import { expect, test } from "@playwright/test";
 import { switchControl } from "./control-driver";
 
+for (const width of [390, 1440]) test(`Node job policy autosaves and cached states refresh at ${width}px`, async ({ page }, info) => {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.goto("/browser/fixture.html?case=nodes-rebuild&lang=en&theme=dark&jobs=1");
+  await expect(page.getByText("Running (last known)", { exact: false })).toBeVisible();
+  const interval = page.getByRole("spinbutton", { name: "Automatic SSH check interval (seconds)" });
+  await interval.fill("0"); await interval.press("Tab");
+  await expect(interval).toBeEnabled();
+  const retention = page.getByRole("spinbutton", { name: "Finished record retention (days)" });
+  await retention.fill("0"); await retention.press("Tab");
+  await expect(retention).toBeEnabled();
+  await expect(page.getByText("Completed · research-job", { exact: true })).toBeVisible({ timeout: 8000 });
+  await expect(interval).toHaveValue("0"); await expect(retention).toHaveValue("0");
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+  const policy = page.getByRole("region", { name: "Job monitoring and retention" });
+  await policy.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath("node-job-policy.png"), animations: "disabled" });
+});
+
 for (const width of [390, 1440]) for (const theme of ["light", "dark"]) {
   test(`SSH Node enrollment and direct execution at ${width}px in ${theme}`, async ({ page }, info) => {
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
@@ -11,6 +29,12 @@ for (const width of [390, 1440]) for (const theme of ["light", "dark"]) {
     await command.getByRole("textbox", { name: /^Command/ }).fill("true");
     await command.getByRole("button", { name: "Run", exact: true }).click();
     await expect(command.getByRole("status")).toContainText("Command completed");
+    await command.getByRole("textbox", { name: /^Command/ }).fill("ssh-keygen -lf missing");
+    await command.getByRole("button", { name: "Run", exact: true }).click();
+    await expect(command.getByRole("status")).toContainText("Exit code: 2");
+    await expect(command.getByRole("status")).toContainText("No such file or directory");
+    await expect(command.getByRole("status")).not.toContainText("Command completed");
+    await expect(command.getByRole("alert")).toHaveCount(0);
     await command.getByRole("button", { name: "Close", exact: true }).last().click();
     await page.getByRole("button", { name: "Add Node", exact: true }).click();
     const form = page.getByRole("dialog", { name: "Add Node", exact: true });

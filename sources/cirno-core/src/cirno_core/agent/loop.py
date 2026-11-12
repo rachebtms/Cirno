@@ -69,6 +69,7 @@ from cirno_core.security.workspace_access import (
 from cirno_core.session import turn_continuation
 from cirno_core.session.manager import SESSION_CACHE_MAX_SIZE, SessionManager
 from cirno_core.session.model import Session, SessionPolicy
+from cirno_core.session.request_usage import RECENT_REQUEST_USAGE_KEY
 from cirno_core.session.recovery.contracts import RecoveryAdmission
 from cirno_core.triggers.local_turns import LocalTriggerTurnCoordinator
 from cirno_core.utils.cancellation import shield_and_drain
@@ -623,6 +624,7 @@ class AgentLoop:
             "context_window_tokens": runtime.context_window_tokens,
             "estimated": True,
             "source": source,
+            "recent_requests": session.metadata.get(RECENT_REQUEST_USAGE_KEY, []),
         }
 
     async def run(self) -> None:

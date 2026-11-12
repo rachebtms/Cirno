@@ -16,6 +16,7 @@ from cirno_core.agent.tools.schema import (
 )
 from cirno_core.config.home import get_home_path
 from cirno_core.nodes.service import Nodes
+from cirno_core.nodes.commands import CommandOutcomeUnknown
 from cirno_core.security.workspace_access import current_workspace_scope
 from cirno_core.security.workspace_policy import resolve_allowed_path
 from cirno_core.skills.history import inspect_skill
@@ -49,7 +50,7 @@ class NodeTool(Tool):
 
     @property
     def description(self):
-        return "Use configured Nodes by ID through SSH only. Listing returns connection and job-status metadata, never authentication secrets, environment values or historical job output. Configured SSH credentials and environment values are applied internally. Remote operations require AI approval or Full Access; Default permits listing saved records only. Execute short commands, transfer files, or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. Unknown submissions must be inspected before retrying."
+        return "Use configured Nodes by ID through SSH only. Listing returns connection and job-status metadata, never authentication secrets, environment values or historical job output. Configured SSH credentials and environment values are applied internally. Remote operations require AI approval or Full Access; Default permits listing saved records only. Execute short commands; read stdout, stderr and exit_code (nonzero is a remote command result, not a transport failure). If execute returns execution_unknown, inspect remote effects before retrying; the command may have run. A connection_warning alongside an exit_code means completion was confirmed despite a later disconnect. Transfer files or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. If start returns submission_unknown, retain its id and call status with job_id; never start a replacement while its outcome is unconfirmed."
 
     def approval_reason(self, params):
         if params.get("action") != "list":
@@ -77,7 +78,7 @@ class NodeTool(Tool):
                 if not node_id or not command:
                     raise ValueError("node_id and command are required")
                 result = (
-                    await nodes.execute(node_id, command)
+                    (await nodes.execute_command(node_id, command)).to_dict()
                     if action == "execute"
                     else await nodes.start_job(node_id, command)
                 )
@@ -103,6 +104,8 @@ class NodeTool(Tool):
                 )
             else:
                 raise ValueError("Unknown Node action")
+        except CommandOutcomeUnknown as exc:
+            return ToolResult.error(json.dumps(exc.to_dict(), ensure_ascii=False))
         except (ValueError, KeyError, RuntimeError, OSError, TimeoutError) as exc:
             return ToolResult.error(str(exc))
         return json.dumps(result, ensure_ascii=False)

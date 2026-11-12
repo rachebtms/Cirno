@@ -8,10 +8,12 @@ from typing import Any
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.history_visibility import is_hidden_history_message
 from cirno_core.session.model import Session
+from cirno_core.session.request_usage import RECENT_REQUEST_USAGE_KEY
 from cirno_core.session.roles import conversation_role
 from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY
 
 _FORK_VOLATILE_METADATA_KEYS = {
+    RECENT_REQUEST_USAGE_KEY,
     "_stopped_at_iteration_limit",
     PARENT_SESSION_KEY,
     SESSION_TYPE_KEY,

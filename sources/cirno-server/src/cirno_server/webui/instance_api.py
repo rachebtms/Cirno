@@ -85,6 +85,10 @@ async def instance_action(
         return await sessions.projects.action(action.removeprefix("projects."), values, bus=bus)
     if action == "nodes.list":
         return await asyncio.to_thread(Nodes(data).catalog)
+    if action == "nodes.settings.save":
+        from cirno_core.nodes.policy import save_policy
+        policy = await asyncio.to_thread(save_policy, data, values)
+        return {"job_settings": policy.model_dump()}
     if action == "nodes.save":
         node = await asyncio.to_thread(Nodes(data).save_node, values)
         return {"node": node, "nodes": await asyncio.to_thread(Nodes(data).list_nodes)}
@@ -100,7 +104,8 @@ async def instance_action(
         timeout = int(values.get("timeout", 120))
         if not 1 <= timeout <= 3600:
             raise ValueError("Command timeout must be between 1 and 3600 seconds")
-        return {"output": await Nodes(data).execute(values["id"], command, timeout=timeout)}
+        result = await Nodes(data).execute_command(values["id"], command, timeout=timeout)
+        return {**result.to_dict(), "output": "\n".join(part for part in (result.output, result.connection_warning) if part)}
     if action == "nodes.test":
         return {"output": await Nodes(data).execute(values["id"], 'printf "SSH connection ready"')}
     if action in {"nodes.job", "nodes.stop"}:
@@ -114,14 +119,15 @@ async def instance_action(
             repo.sync_profiles()
             if action in {"memory.list", "memory.graph"}:
                 from cirno_core.config.loader import load_config
-                from cirno_memory.graph import MAX_GRAPH_NODES, graph_ids, memory_graph
+                from cirno_memory.graph import DEFAULT_GRAPH_NODES, graph_ids, graph_node_limit, memory_graph
                 from cirno_memory.search import search
-                ids = graph_ids(values.get("ids", [])) if action == "memory.graph" else []
+                max_nodes = graph_node_limit(values.get("max_nodes", DEFAULT_GRAPH_NODES)) if action == "memory.graph" else DEFAULT_GRAPH_NODES
+                ids = graph_ids(values.get("ids", []), max_nodes=max_nodes) if action == "memory.graph" else []
                 limit = int(values.get("limit", 10))
                 if action == "memory.graph":
-                    if len(ids) == MAX_GRAPH_NODES:
+                    if len(ids) == max_nodes:
                         raise ValueError("Graph is full; narrow the filters to explore other memories")
-                    limit = min(limit, MAX_GRAPH_NODES - len(ids))
+                    limit = min(limit, max_nodes - len(ids))
                 config = load_config()
                 result = search(repo, str(values.get("query", "")), config.agents.defaults.memory,
                                    mode=str(values.get("mode", "bm25")), maintenance=True,
@@ -131,7 +137,7 @@ async def instance_action(
                                    limit=limit, offset=int(values.get("offset", 0)))
                 if action == "memory.graph":
                     ids = list(dict.fromkeys([*ids, *(record["id"] for record in result["memories"])]))
-                    result.update(memory_graph(repo, ids, maintenance=True))
+                    result.update(memory_graph(repo, ids, maintenance=True, max_nodes=max_nodes))
                 return result
             if action == "memory.status":
                 from cirno_core.memory.consolidation_receipts import outcomes

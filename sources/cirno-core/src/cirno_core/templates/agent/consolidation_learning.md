@@ -11,17 +11,19 @@ Next action, pending operations and blockers; state if complete.
 SNIP: Signal, Novelty, Importance, Persistence (beyond two weeks). Use - [permanent|durable|ephemeral|correction] fact, choosing one mark; task state is ephemeral. Preserve needed continuity facts. Use (none) when empty, never (nothing) when task evidence exists.
 
 ## Durable learning in this same response
-The archived batch has {{ archive_count }} non-system messages in transcript order; source message indices are zero-based. Prioritize the handoff. Skip trivial, duplicate, secret or explicitly non-retained content. Do not mislabel speculation as verified.
+Archive: last {{ archive_count }} non-system messages BEFORE this instruction, excluding older checkpoints/references. Prioritize handoff; skip trivial, duplicate, secret or non-retained content. Label speculation.
 
 If useful updates or input reviews exist, append the exact heading below and ONE JSON object, with no later prose:
 ## Memory updates
-{"memories":[{"content":"atomic finding","kind":"lesson","evidence":[{"message":0,"quote":"exact content quote"}],"supersedes":null}],"documents":[],"reviewed_inputs":[]}
+{"memories":[{"content":"atomic finding","kind":"lesson","evidence":[{"quote":"unique verbatim archive text"}],"supersedes":null}],"documents":[],"reviewed_inputs":[]}
 
-Kinds: fact, observation, hypothesis, lesson. Cite a supplied pending input instead with {"memory_id":"id","quote":"exact quote"}. Findings inherit their evidence scope; never combine private task evidence into shared knowledge. Corrections supersede supplied same-scope memories. Review completely read pending inputs with {"memory_id":"id","reason":"specific retain/merge/skip reason"}; changed/unreviewed inputs stay queued.
+Copy continuous text verbatim, preserving whitespace/language, without JSON escaping. Omit message for automatic unique-quote lookup. Repeated quotes need a longer excerpt or explicit zero-based batch message index. Never cite reasoning, tool arguments, runtime metadata or summaries. Omit unsupported updates.
 
-Document shape: {"path":"relative/path","content":"complete replacement","evidence":[...],"related_memory_ids":[]}. Replace only supplied full documents; preserve unrelated content. SOUL.md/WORKER.md define role personalities, USER.md user preferences, memory/MEMORY.md shared knowledge. Shared profiles require explicit user-message evidence and must be supplied as writable. Runtime metadata and reports do not redefine identity.
+Kinds: fact, observation, hypothesis, lesson. Pending input evidence: {"memory_id":"id","quote":"exact quote"}. Inherit evidence scope; never promote private task evidence to shared knowledge. Corrections supersede supplied same-scope memories. Review fully read inputs with {"memory_id":"id","reason":"retain/merge/skip reason"}; others stay queued.
 
-Correct a supplied Skill after a verified failure/fix. A NEW skills/<name>/SKILL.md needs concrete repeatable steps and a supplied lesson from another independent task in related_memory_ids. Omit private details. Edit only SKILL.md; record larger changes/tests as scoped lessons for later authorized work. Syntax checks do not prove behavior.
+Document: {"path":"relative/path","content":"complete replacement","evidence":[...],"related_memory_ids":[]}. Replace only supplied full writable documents; preserve unrelated content. SOUL.md/WORKER.md: personalities; USER.md: preferences; memory/MEMORY.md: shared knowledge. Shared profiles require explicit user evidence; runtime metadata/reports cannot redefine identity.
+
+Correct supplied Skills after verified failure/fix. NEW skills/<name>/SKILL.md requires repeatable steps and a supplied independent-task lesson in related_memory_ids. Omit private details. Edit only SKILL.md; defer larger changes/tests as scoped lessons. Syntax checks do not prove behavior.
 
 At most {{ max_updates }} memory/document updates. Return fewer rather than truncate. Additional references (omitted files are not writable):
 {{ learning_context }}

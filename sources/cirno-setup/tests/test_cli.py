@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import pytest
 from cirno_setup.cli import main
 
 
@@ -57,7 +58,8 @@ def test_initializer_does_not_delete_the_interpreter_running_setup(tmp_path, mon
 
 
 
-def test_standalone_uv_install_preserves_user_packages(tmp_path):
+@pytest.mark.parametrize("timeout", [0, 1800])
+def test_standalone_uv_install_preserves_user_packages(tmp_path, timeout):
     import zipfile
     from pathlib import Path
 
@@ -67,7 +69,7 @@ def test_standalone_uv_install_preserves_user_packages(tmp_path):
     from cirno_setup.policy import Policy
     from cirno_setup.recipe import Recipe
 
-    context = Context(tmp_path / "home", Path(__file__).parents[1] / "src/cirno_setup/assets", Policy())
+    context = Context(tmp_path / "home", Path(__file__).parents[1] / "src/cirno_setup/assets", Policy(timeout_seconds=timeout))
     initialize(context)
     wheel = tmp_path / "cirno_setup_probe-0.0.1-py3-none-any.whl"
     metadata = "cirno_setup_probe-0.0.1.dist-info"

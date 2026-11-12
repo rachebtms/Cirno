@@ -66,4 +66,17 @@ describe("memory cloud", () => {
     await waitFor(() => expect(screen.getByTestId("graph-ids")).toHaveTextContent(/^match$/));
     expect(requestMutation).toHaveBeenLastCalledWith("instance.action", expect.objectContaining({ values: expect.objectContaining({ query: "not yet applied", offset: 0, ids: [] }) }));
   });
+  it("loads all remaining pages into both the point cloud and the results list", async () => {
+    const requestMutation = vi.fn(async (_method: string, { values }: { values: Record<string, unknown> }) => {
+      const offset = Number(values.offset);
+      return { memories: [{ ...row, id: String(offset), title: `Memory ${offset}` }], links: [],
+        has_more: offset < 60, next_offset: offset + 30 };
+    });
+    render(<MemoryTab client={{ requestMutation } as WebUIMutationTransport} active />);
+    fireEvent.click(await screen.findByRole("button", { name: "Load all" }));
+    await waitFor(() => expect(screen.getByTestId("graph-ids")).toHaveTextContent("0,30,60"));
+    for (const offset of [0, 30, 60]) expect(screen.getByRole("button", { name: `Memory ${offset}` })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Load all" })).not.toBeInTheDocument();
+    expect(requestMutation).toHaveBeenCalledTimes(3);
+  });
 });

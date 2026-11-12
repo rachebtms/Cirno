@@ -129,7 +129,9 @@ def cached_output(learning, evidence: dict) -> str | None:
         if not path.exists():
             return None
         record = json.loads(path.read_text(encoding="utf-8"))
-        if record.get("raw_output") is not None:
+        from cirno_core.memory.consolidation_evidence import needs_new_output
+
+        if record.get("raw_output") is not None or needs_new_output(record):
             return None
         from cirno_core.memory.consolidation_contract import MARKER
 

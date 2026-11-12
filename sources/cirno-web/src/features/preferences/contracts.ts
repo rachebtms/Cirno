@@ -4,6 +4,7 @@ export type FileEditDisplayMode = "summary" | "diff" | "collapsed_diff";
 export type ThemeMode = "system" | "light" | "dark";
 export const MIN_READING_SIZE = 14;
 export const MAX_READING_SIZE = 28;
+export const DEFAULT_MEMORY_GRAPH_LIMIT = 300;
 export interface DisplayPreferences {
   activityMode: ActivityDisplayMode;
   reasoningDetailMode?: "brief" | "detailed";
@@ -12,6 +13,7 @@ export interface DisplayPreferences {
   customReadingTextSize: number;
   codeWrap: boolean;
   brandLogos: boolean;
+  memoryGraphLimit?: number;
   browserNotifications: boolean;
   notificationSound: boolean;
   mutedNotificationCategories?: Array<
@@ -54,6 +56,7 @@ export const DEFAULT_PREFERENCES: DisplayPreferences = {
   customReadingTextSize: 16,
   codeWrap: true,
   brandLogos: true,
+  memoryGraphLimit: DEFAULT_MEMORY_GRAPH_LIMIT,
   browserNotifications: false,
   notificationSound: false,
   mutedNotificationCategories: [],

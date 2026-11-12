@@ -61,6 +61,8 @@ async def record_request_usage(
         )
     # A rewritten input or another model's count cannot bound the next request.
     state.usage = None if response.provider_compaction_applied or response.is_fallback else usage
+    if spec.request_usage_callback is not None:
+        await spec.request_usage_callback(usage)
     return usage
 
 

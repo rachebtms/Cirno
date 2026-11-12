@@ -255,14 +255,16 @@ async def test_independent_review_uses_selected_preset_and_timeout(review, monke
 
 @pytest.mark.parametrize('mode', ['restricted', 'review', 'full'])
 async def test_nodes_execute_obeys_access_and_review(review, monkeypatch, mode):
+    import json
     from cirno_core.agent.tools.instance_features import NodeTool
     from cirno_core.nodes.service import Nodes
+    from cirno_core.nodes.commands import CommandResult
     from cirno_core.agent.tools.context import request_context
     service, request, response, target, sessions, bus = review
     credential = Nodes().credentials.save(label='Research', kind='ssh', ssh={'host': 'lab.example', 'username': 'worker'}, node_enabled=True, agent_visible=True)
     node = Nodes().node(credential['id']).model_dump()
-    execute = AsyncMock(return_value='remote result')
-    monkeypatch.setattr(Nodes, 'execute', execute)
+    execute = AsyncMock(return_value=CommandResult('remote result', '', 0))
+    monkeypatch.setattr(Nodes, 'execute_command', execute)
     scope = build_workspace_scope(request.workspace, mode, source_channel='websocket')
     request = replace(request, workspace_scope=scope)
     params = {'action': 'execute', 'node_id': node['id'], 'command': 'printf hello'}
@@ -276,9 +278,9 @@ async def test_nodes_execute_obeys_access_and_review(review, monkeypatch, mode):
             execute.assert_not_awaited()
         else:
             execute.assert_awaited_once_with(node['id'], 'printf hello')
+            assert json.loads(result) == {"stdout": "remote result", "stderr": "", "exit_code": 0}
         assert response.await_count == (1 if mode == 'review' else 0)
         if mode == 'review':
-            import json
             evidence = json.loads(response.call_args.kwargs['messages'][1]['content'])['operation']
             assert evidence['remote_target']['host'] == 'lab.example'
             assert 'password' not in evidence['remote_target']

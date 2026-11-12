@@ -2840,6 +2840,8 @@
     "history": "Phiên bản",
     "evidence": "Nguồn",
     "more": "Tải thêm",
+    "loadAll": "Tải tất cả",
+    "paginationError": "Không thể tiếp tục tải ký ức. Vui lòng tìm kiếm lại.",
     "reindex": "Tạo lại chỉ mục",
     "retry": "Retry saving consolidation results",
     "pending": "Pending next consolidation: {{count}}",
@@ -2911,6 +2913,30 @@
     "remaining_other": "Còn {{count}} câu hỏi"
   },
   "features": {
+    "nodeJobPolicy": "Giám sát và lưu giữ tác vụ",
+    "nodeJobPolicyHelp": "Máy chủ kiểm tra trạng thái mà không gọi mô hình, kể cả khi đóng trang. Kiểm tra tự động chỉ đọc trạng thái; hãy đọc thủ công để lấy toàn bộ đầu ra.",
+    "nodeJobInteger": "Nhập số nguyên không âm.",
+    "nodeJobChecked": "Xác nhận gần nhất: {{time}}",
+    "nodeJobNotChecked": "Chưa kiểm tra kể từ khi gửi.",
+    "nodeJobFinished": "Xác nhận kết thúc: {{time}}",
+    "nodeJobCheckError": "Kiểm tra thất bại; đang hiển thị trạng thái đã biết gần nhất: {{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "Khoảng kiểm tra SSH (giây)",
+      "retention_days": "Lưu giữ bản ghi đã kết thúc (ngày)"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 tắt kiểm tra tự động. Tự động lưu, không cần khởi động lại.",
+      "retention_days": "0 giữ vô thời hạn. Chỉ xóa bản ghi cục bộ đã kết thúc và đầu ra đệm; giữ nguyên tác vụ đang chạy hoặc chưa xác nhận và tệp từ xa."
+    },
+    "nodeJobStates": {
+      "running": "Đang chạy (trạng thái gần nhất)",
+      "submitting": "Đang gửi",
+      "submission_unknown": "Chưa xác nhận gửi",
+      "unknown": "Chưa xác nhận trạng thái",
+      "completed": "Hoàn tất",
+      "failed": "Thất bại",
+      "stopped": "Đã dừng"
+    },
     "projects": "Dự án",
     "ordinaryConversations": "Cuộc trò chuyện",
     "createProject": "Tạo dự án",
@@ -2960,6 +2986,7 @@
     "runCommand": "Chạy",
     "close": "Đóng",
     "commandCompleted": "Lệnh đã hoàn tất.",
+    "commandExitCode": "Mã thoát: {{code}}",
     "removeNode": "Xóa khỏi Nodes",
     "nodeInitScript": "Tập lệnh khởi tạo",
     "nodeInitScriptHint": "Đường dẫn từ xa được nạp trong Bash sau khi đặt biến và thư mục. Áp dụng cho lệnh, cửa sổ đầu cuối mới và tác vụ nền.",
@@ -3117,6 +3144,8 @@
     "projectActions": "Thao tác dự án {{name}}"
   },
   "memoryGraph": {
+    "nodeLimit": "Giới hạn ký ức",
+    "limitError": "Nhập một số nguyên dương.",
     "description": "Explore saved knowledge, connections and original sources.",
     "cloud": "Memory cloud",
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",

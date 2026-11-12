@@ -17,6 +17,29 @@ function mount(request: ReturnType<typeof vi.fn>) {
 }
 
 describe("Node operations", () => {
+  it("allows remote status operations to finish within the backend SSH deadline", async () => {
+    const request = server(payload => payload.action === "nodes.test" ? Promise.resolve({ output: "SSH ready" }) : undefined);
+    const view = mount(request);
+    await waitFor(() => expect(view.result.current.ready).toBe(true));
+    await act(async () => view.result.current.readJob({ id: "job", node_id: node.id, state: "running", command: "train" }));
+    expect(request).toHaveBeenCalledWith("instance.action", { action: "nodes.job", values: { id: "job" } }, 130_000);
+    await act(async () => view.result.current.test(node));
+    expect(request).toHaveBeenCalledWith("instance.action", { action: "nodes.test", values: { id: node.id } }, 130_000);
+  });
+
+  it("retains a remote program's nonzero exit code without treating it as an SSH failure", async () => {
+    const request = server(payload => payload.action === "nodes.execute" ? Promise.resolve({ output: "File not found", exit_code: 2 }) : undefined);
+    const view = mount(request);
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    act(() => view.result.current.startCommand(node));
+    act(() => view.result.current.setCommand("ssh-keygen -lf missing"));
+    await act(async () => view.result.current.execute());
+    expect(view.result.current.output).toBe("File not found");
+    expect(view.result.current.exitCode).toBe(2);
+    expect(view.result.current.error).toBe("");
+    act(() => view.result.current.startCommand(node));
+    expect(view.result.current.exitCode).toBeNull();
+  });
   it("exposes a list failure and retries metadata without reading stored passwords", async () => {
     let failed = true;
     const request = server(payload => payload.action === "nodes.list" && failed ? Promise.reject("Node store unavailable") : undefined);

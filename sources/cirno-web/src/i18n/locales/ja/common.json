@@ -2840,6 +2840,8 @@
     "history": "履歴",
     "evidence": "出典",
     "more": "さらに読み込む",
+    "loadAll": "すべて読み込む",
+    "paginationError": "記憶の読み込みを続行できません。もう一度検索してください。",
     "reindex": "索引を再構築",
     "retry": "Retry saving consolidation results",
     "pending": "Pending next consolidation: {{count}}",
@@ -2911,6 +2913,30 @@
     "remaining_other": "未回答の質問：{{count}} 件"
   },
   "features": {
+    "nodeJobPolicy": "ジョブ監視と保存期間",
+    "nodeJobPolicyHelp": "ページを閉じてもサーバーがモデルを呼び出さずに状態を確認します。自動確認は状態のみです。出力は「状態を読む」で取得します。",
+    "nodeJobInteger": "0 以上の整数を入力してください。",
+    "nodeJobChecked": "最終確認: {{time}}",
+    "nodeJobNotChecked": "送信後、状態は未確認です。",
+    "nodeJobFinished": "終了確認: {{time}}",
+    "nodeJobCheckError": "状態確認に失敗しました。最後の既知の状態を表示しています: {{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "SSH 自動確認間隔（秒）",
+      "retention_days": "終了した記録の保存期間（日）"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 で自動確認を無効化。自動保存され、再起動は不要です。",
+      "retention_days": "0 は無期限。終了したローカル記録と出力キャッシュのみ削除し、実行中・未確認のジョブやリモートファイルは保持します。"
+    },
+    "nodeJobStates": {
+      "running": "実行中（最後の確認）",
+      "submitting": "送信中",
+      "submission_unknown": "送信未確認",
+      "unknown": "状態未確認",
+      "completed": "完了",
+      "failed": "失敗",
+      "stopped": "停止"
+    },
     "projects": "プロジェクト",
     "ordinaryConversations": "会話",
     "createProject": "プロジェクトを作成",
@@ -2960,6 +2986,7 @@
     "runCommand": "実行",
     "close": "閉じる",
     "commandCompleted": "コマンドが完了しました。",
+    "commandExitCode": "終了コード: {{code}}",
     "removeNode": "Nodes から削除",
     "nodeInitScript": "初期化スクリプト",
     "nodeInitScriptHint": "リモートのスクリプトパス。環境変数と作業ディレクトリを設定後、Bashで読み込みます。コマンド、新規ターミナル、バックグラウンド処理に適用されます。",
@@ -3117,6 +3144,8 @@
     "projectActions": "プロジェクト「{{name}}」の操作"
   },
   "memoryGraph": {
+    "nodeLimit": "表示上限",
+    "limitError": "正の整数を入力してください。",
     "description": "Explore saved knowledge, connections and original sources.",
     "cloud": "Memory cloud",
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",

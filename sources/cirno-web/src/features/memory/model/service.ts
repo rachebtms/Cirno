@@ -1,4 +1,5 @@
 import type { WebUIMutationTransport } from "@/lib/api";
+import { DEFAULT_MEMORY_GRAPH_LIMIT } from "@/features/preferences/contracts";
 import type {
   EvidenceReference,
   EvidencePage,
@@ -39,8 +40,8 @@ export function createMemoryService(client: WebUIMutationTransport) {
   return {
     list: (query: MemoryQuery, offset = 0) =>
       call<MemorySearchResult>("memory.list", { ...queryValues(query), limit: 10, offset }),
-    graph: (query: MemoryQuery, offset = 0, ids: string[] = []) =>
-      call<MemorySearchResult>("memory.graph", { ...queryValues(query), limit: Math.min(30, 300 - ids.length), offset, ids }),
+    graph: (query: MemoryQuery, offset = 0, ids: string[] = [], maxNodes = DEFAULT_MEMORY_GRAPH_LIMIT) =>
+      call<MemorySearchResult>("memory.graph", { ...queryValues(query), limit: Math.min(30, maxNodes - ids.length), offset, ids, max_nodes: maxNodes }),
     status: () => call<MemoryStatus>("memory.status"),
     tags: () => call<{ tags: { name: string; count: number }[] }>("memory.tags", { limit: 30 }),
     read: (id: string, revision: number) => call<MemoryDocument>("memory.read", { id, revision }),

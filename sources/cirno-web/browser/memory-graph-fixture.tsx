@@ -5,7 +5,7 @@ import type { CirnoClient } from "@/lib/cirno-client";
 import type { MemoryRecord } from "@/lib/contracts/memory";
 import { useTheme } from "@/hooks/useTheme";
 
-const records: MemoryRecord[] = Array.from({ length: 72 }, (_, i) => ({
+const records: MemoryRecord[] = Array.from({ length: Number(new URLSearchParams(location.search).get("count") ?? 72) }, (_, i) => ({
   id: `memory-${i}`, title: ["Detector calibration", "Research preference", "Experiment checkpoint", "Original measurement", "Verification result", "Paper reading method"][i % 6] + ` ${i + 1}`,
   source: `test://experiment/${i}`, scope: i % 2 ? "user" : "project", layer: ["knowledge", "profile", "task", "source", "event"][i % 5],
   kind: "fact", revision: 2, status: "active", tags: [["research", "detector"], ["preferences"], ["research", "experiments"]][i % 3],

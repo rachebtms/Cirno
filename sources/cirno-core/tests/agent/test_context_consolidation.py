@@ -190,6 +190,41 @@ async def test_failed_learning_save_reuses_generated_checkpoint_without_another_
     runtime.provider.chat_stream_with_retry.assert_awaited_once()
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_invalid_citation_can_be_regenerated_on_manual_retry(tmp_path, legacy):
+    from cirno_core.memory.consolidation_receipts import receipt_path
+
+    invalid = finding()
+    invalid["evidence"] = [{"message": 0, "quote": "43.2 at 280 K"}]
+    valid = finding()
+    valid["evidence"] = [{"quote": "43.2 at 280 K"}]
+    archiver, runtime = fixture(tmp_path, result(memories=[invalid]))
+    runtime.provider.chat_stream_with_retry.side_effect = [
+        LLMResponse(content=result(memories=[invalid])),
+        LLMResponse(content=result(memories=[valid])),
+    ]
+    kwargs = dict(runtime=runtime, session_key="worker:one", history=MESSAGES, request_tools=[])
+    with pytest.raises(ValueError, match="quote does not match"):
+        await archiver.archive(MESSAGES, **kwargs)
+    repo = MemoryRepository(tmp_path)
+    source = repo.search(session_key="worker:one", layer="source")["memories"][0]
+    if legacy:
+        path = receipt_path(repo, source["id"])
+        receipt = json.loads(path.read_text())
+        receipt.pop("regenerate_output")
+        receipt["error"] = "ValueError: Learning evidence quote does not match the archived message"
+        path.write_text(json.dumps(receipt))
+    assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
+    assert runtime.provider.chat_stream_with_retry.await_count == 2
+    saved = repo.search(session_key="worker:one", layer="knowledge")["memories"]
+    assert len(saved) == 1
+    assert saved[0]["source_refs"][0]["message"] == 1
+    assert saved[0]["source_refs"][0]["quote"] == "43.2 at 280 K"
+    # Completed plans still reuse their result, including quote-only citations.
+    assert await archiver.archive(MESSAGES, **kwargs) == CHECKPOINT
+    assert runtime.provider.chat_stream_with_retry.await_count == 2
+
+
 @pytest.mark.parametrize("after_append", [False, True])
 async def test_completed_learning_survives_checkpoint_commit_retry_without_duplicate_effects(tmp_path, monkeypatch, after_append):
     archiver, runtime = fixture(tmp_path, result(memories=[finding()]))

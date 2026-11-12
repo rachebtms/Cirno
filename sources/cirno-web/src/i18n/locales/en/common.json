@@ -2824,6 +2824,30 @@
     "openPreview": "Open preview tab"
   },
   "features": {
+    "nodeJobPolicy": "Job monitoring and retention",
+    "nodeJobPolicyHelp": "The server checks status without model calls, even when this page is closed. Automatic checks read status only; use Read status for full output.",
+    "nodeJobInteger": "Enter a non-negative whole number.",
+    "nodeJobChecked": "Last confirmed: {{time}}",
+    "nodeJobNotChecked": "Not checked since submission.",
+    "nodeJobFinished": "Completion confirmed: {{time}}",
+    "nodeJobCheckError": "Status check failed; the displayed state is the last known state: {{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "Automatic SSH check interval (seconds)",
+      "retention_days": "Finished record retention (days)"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 disables background SSH checks. Saves automatically; no restart needed.",
+      "retention_days": "0 keeps records indefinitely. Only local finished records and cached output are removed; running or unconfirmed jobs and remote files are kept."
+    },
+    "nodeJobStates": {
+      "running": "Running (last known)",
+      "submitting": "Submitting",
+      "submission_unknown": "Submission unconfirmed",
+      "unknown": "State unconfirmed",
+      "completed": "Completed",
+      "failed": "Failed",
+      "stopped": "Stopped"
+    },
     "projects": "Projects",
     "ordinaryConversations": "Conversations",
     "createProject": "Create project",
@@ -2873,6 +2897,7 @@
     "runCommand": "Run",
     "close": "Close",
     "commandCompleted": "Command completed.",
+    "commandExitCode": "Exit code: {{code}}",
     "removeNode": "Remove from Nodes",
     "nodeInitScript": "Initialization script",
     "nodeInitScriptHint": "Remote script path, loaded in Bash after changing directory and exporting the configured variables. Applies to commands, new terminals and background jobs.",
@@ -2899,6 +2924,8 @@
     "history": "Versions",
     "evidence": "Source",
     "more": "Load more",
+    "loadAll": "Load all",
+    "paginationError": "Could not continue loading memories. Please search again.",
     "reindex": "Rebuild index",
     "retry": "Retry saving consolidation results",
     "pending": "Pending next consolidation: {{count}}",
@@ -3117,6 +3144,8 @@
     "projectActions": "Project actions for {{name}}"
   },
   "memoryGraph": {
+    "nodeLimit": "Memory limit",
+    "limitError": "Enter a positive whole number.",
     "description": "Explore saved knowledge, connections and original sources.",
     "cloud": "Memory cloud",
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",

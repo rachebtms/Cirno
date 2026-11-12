@@ -123,7 +123,7 @@ class Context:
         return subprocess.run(
             arguments,
             env={**self.environment(), **(env_override or {})},
-            timeout=self.policy.timeout_seconds,
+            timeout=self.policy.subprocess_timeout(),
             check=True,
             text=True,
             capture_output=capture,
@@ -142,7 +142,7 @@ class Context:
             return subprocess.run(
                 arguments,
                 env={**self.environment(), **(env_override or {})},
-                timeout=min(60, self.policy.timeout_seconds),
+                timeout=self.policy.subprocess_timeout(maximum=60),
                 text=True,
                 capture_output=True,
             )

@@ -15,18 +15,20 @@ MODEL_FILES = {
 }
 
 
-def main(destination: Path) -> None:
-    destination.mkdir(parents=True, exist_ok=True)
-    downloads = [
+def downloads() -> list[tuple[str, str, str]]:
+    return [
         (name, f"https://huggingface.co/{MODEL_REPOSITORY}/resolve/{MODEL_REVISION}/{name}", expected)
         for name, expected in MODEL_FILES.items()
-    ]
-    downloads.append((
+    ] + [(
         "LICENSE",
         "https://raw.githubusercontent.com/FlagOpen/FlagEmbedding/897baa67c0ffddbfccf4e6776ff55310d67809d4/LICENSE",
         "587a673933425dbc36ec61268d3b954051b2d3ef3c9b322ede357976055ffdd5",
-    ))
-    for name, url, expected in downloads:
+    )]
+
+
+def main(destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, url, expected in downloads():
         path = destination / Path(name).name
         if path.is_file():
             with path.open("rb") as handle:

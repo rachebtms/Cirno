@@ -52,53 +52,58 @@ export function recentComposerRoundUsage(messages: UIMessage[]): ComposerRoundUs
       continue;
     }
 
-    seenTurns.add(turnKey);
     const rounds: RoundUsage[] = message.roundUsages ?? [];
-    for (let roundIndex = rounds.length - 1;roundIndex >= 0;roundIndex -= 1) {
+    if (!rounds.length) continue;
+    seenTurns.add(turnKey);
+    for (let roundIndex = rounds.length - 1;roundIndex >= 0 && recent.length < 8;roundIndex -= 1) {
       const round = rounds[roundIndex];
-      const inputTokens = round.prompt_tokens;
-      if (
-        recent.length >= 8
-        || typeof inputTokens !== "number"
-        || !Number.isFinite(inputTokens)
-        || inputTokens <= 0
-      ) {
-        continue;
-      }
-      const outputTokens = round.completion_tokens;
-      const cachedTokens = round.cached_tokens;
-      const estimatedTokens = round.estimated_tokens;
-      const generationMs = round.generation_ms;
-      const measuredOutputTokens = round.measured_completion_tokens;
-      const ttftMs = round.ttft_ms;
-      const timedRequests = round.timed_requests;
-      recent.push({
-        id: `${turnKey}:${roundIndex}`,
-        timestamp: message.completedAt ?? message.createdAt,
-        inputTokens,
-        ...(typeof outputTokens === "number" && Number.isFinite(outputTokens)
-          ? { outputTokens }
-          : {}),
-        ...(typeof cachedTokens === "number" && Number.isFinite(cachedTokens)
-          ? { cachedTokens }
-          : {}),
-        ...(typeof estimatedTokens === "number" && Number.isFinite(estimatedTokens)
-          ? { estimatedTokens }
-          : {}),
-        ...(typeof generationMs === "number" && Number.isFinite(generationMs)
-          ? { generationMs }
-          : {}),
-        ...(typeof measuredOutputTokens === "number" && Number.isFinite(measuredOutputTokens)
-          ? { measuredOutputTokens }
-          : {}),
-        ...(typeof ttftMs === "number" && Number.isFinite(ttftMs) && ttftMs >= 0
-          && typeof timedRequests === "number" && Number.isFinite(timedRequests) && timedRequests > 0
-          ? { ttftMs: ttftMs / timedRequests }
-          : {}),
-      });
+      const converted = composerRoundUsage(round, `${turnKey}:${roundIndex}`, message.completedAt ?? message.createdAt);
+      if (converted) recent.push(converted);
     }
   }
   return recent.reverse();
+}
+
+export function composerRoundUsage(round: RoundUsage, id: string, timestamp: number): ComposerRoundUsage | null {
+  const inputTokens = round.prompt_tokens;
+  if (
+    typeof inputTokens !== "number"
+    || !Number.isFinite(inputTokens)
+    || inputTokens <= 0
+  ) {
+    return null;
+  }
+  const outputTokens = round.completion_tokens;
+  const cachedTokens = round.cached_tokens;
+  const estimatedTokens = round.estimated_tokens;
+  const generationMs = round.generation_ms;
+  const measuredOutputTokens = round.measured_completion_tokens;
+  const ttftMs = round.ttft_ms;
+  const timedRequests = round.timed_requests;
+  return {
+    id,
+    timestamp,
+    inputTokens,
+    ...(typeof outputTokens === "number" && Number.isFinite(outputTokens)
+      ? { outputTokens }
+      : {}),
+    ...(typeof cachedTokens === "number" && Number.isFinite(cachedTokens)
+      ? { cachedTokens }
+      : {}),
+    ...(typeof estimatedTokens === "number" && Number.isFinite(estimatedTokens)
+      ? { estimatedTokens }
+      : {}),
+    ...(typeof generationMs === "number" && Number.isFinite(generationMs)
+      ? { generationMs }
+      : {}),
+    ...(typeof measuredOutputTokens === "number" && Number.isFinite(measuredOutputTokens)
+      ? { measuredOutputTokens }
+      : {}),
+    ...(typeof ttftMs === "number" && Number.isFinite(ttftMs) && ttftMs >= 0
+      && typeof timedRequests === "number" && Number.isFinite(timedRequests) && timedRequests > 0
+      ? { ttftMs: ttftMs / timedRequests }
+      : {}),
+  };
 }
 
 export function latestActiveTurnId(messages: UIMessage[], runStartedAt: number | null): string | null {

@@ -62,9 +62,10 @@ def test_ssh_is_encrypted_and_two_independent_opt_ins_control_execution(credenti
     assert credentials.vault.metadata(record['id'])['kind'] == 'ssh'
 
 
-def test_running_job_preserves_connection_and_credential_until_resolved(credentials):
+@pytest.mark.parametrize("state", ["running", "submitting", "submission_unknown", "unknown"])
+def test_running_job_preserves_connection_and_credential_until_resolved(credentials, state):
     record = credentials.save(label="GPU", kind="ssh", ssh={"host": "gpu.example", "username": "owner"}, node_enabled=True)
-    job = credentials.data.save('node_jobs', {"node_id": record['id'], "state": "submission_unknown"})
+    job = credentials.data.save('node_jobs', {"node_id": record['id'], "state": state})
     for operation in (lambda: Nodes(credentials.data).remove_node(record['id']), lambda: credentials.delete(record['id']),
                       lambda: credentials.save(id=record['id'], label="GPU", kind="ssh", ssh={"host": "other.example", "username": "owner"})):
         with pytest.raises(ValueError, match="Stop or resolve"):
@@ -99,7 +100,7 @@ async def test_node_listing_and_review_expose_metadata_without_connection_secret
     record = credentials.save(label="GPU", kind="ssh", ssh=ssh, node_enabled=True, agent_visible=True)
     credentials.data.save("node_jobs", {"node_id": record["id"], "state": "completed",
                                        "command": "echo command-secret", "output": "output-secret",
-                                       "error": "error-secret", "created_at": "2026-11-10T00:00:00Z"})
+                                       "error": "error-secret", "check_error": "check-secret", "checked_at": "2026-11-10T00:10:00Z", "created_at": "2026-11-10T00:00:00Z"})
     monkeypatch.setattr('cirno_core.agent.tools.instance_features.Nodes', lambda **kwargs: Nodes(credentials.data, **kwargs))
     monkeypatch.setattr('cirno_core.nodes.service.Nodes', lambda **kwargs: Nodes(credentials.data, **kwargs))
     result = json.loads(await NodeTool().execute(action="list"))
@@ -107,8 +108,10 @@ async def test_node_listing_and_review_expose_metadata_without_connection_secret
     model_metadata = Credentials(credentials.data, actor="agent").describe(record["id"])
     rendered = json.dumps([result, review, model_metadata])
     for secret in ("ssh-secret", "env-secret", "unclassified-secret", "/private/ssh-key",
-                   "command-secret", "output-secret", "error-secret"):
+                   "command-secret", "output-secret", "error-secret", "check-secret"):
         assert secret not in rendered
+    assert result["jobs"][0]["checked_at"] == "2026-11-10T00:10:00Z"
+    assert result["jobs"][0]["status_check_failed"] is True
     assert result["nodes"][0]["environment_names"] == ["CUSTOM", "SSH_PASSWORD"]
     assert result["nodes"][0]["has_password"] is True
     assert result["nodes"][0]["working_directory"] == "/research"

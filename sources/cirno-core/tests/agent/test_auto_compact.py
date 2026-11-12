@@ -1523,7 +1523,7 @@ async def test_current_context_measurement_rebuilds_a_previously_compacted_sessi
         loop.provider.estimate_prompt_tokens.reset_mock()
         loop.provider.chat_stream_with_retry.reset_mock()
         measured = await loop.estimate_session_context_usage(key)
-        assert measured == {"context_tokens": 10000, "context_window_tokens": 128000, "estimated": True, "source": "test"}
+        assert measured == {"context_tokens": 10000, "context_window_tokens": 128000, "estimated": True, "source": "test", "recent_requests": []}
         request, tools, model = loop.provider.estimate_prompt_tokens.call_args.args
         assert request[0]["role"] == "system"
         assert "Retained checkpoint." in str(request)
@@ -1537,3 +1537,73 @@ async def test_current_context_measurement_rebuilds_a_previously_compacted_sessi
         assert await loop.sessions.state.read("websocket:missing") is None
     finally:
         await loop.aclose()
+
+
+async def test_request_usage_survives_refresh_during_a_long_turn(tmp_path):
+    from cirno_core.providers.tool_calls import ToolCallRequest
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.session.request_usage import RECENT_REQUEST_USAGE_KEY
+    from cirno_usage.types import LLMUsage
+
+    loop = _make_loop(tmp_path)
+    waiting = asyncio.Event()
+    release = asyncio.Event()
+    key = "cli:request-usage"
+
+    async def respond(**kwargs):
+        if loop.provider.chat_stream_with_retry.await_count == 1:
+            return LLMResponse(
+                content="Inspecting the workspace.", finish_reason="tool_calls",
+                tool_calls=[ToolCallRequest(id="inspect", name="files__list", arguments={"path": "."})],
+                usage=LLMUsage.reported(input_tokens=1200, output_tokens=80, cache_read_tokens=900),
+                generation_ms=2000, ttft_ms=400,
+            )
+        waiting.set()
+        await release.wait()
+        return LLMResponse(content="Finished.", usage=LLMUsage.reported(input_tokens=1500, output_tokens=20))
+
+    loop.provider.chat_stream_with_retry.side_effect = respond
+    turn = asyncio.create_task(loop.process_direct("Inspect this workspace", session_key=key))
+    try:
+        await asyncio.wait_for(waiting.wait(), 10)
+        assert not turn.done()
+        measured = await loop.estimate_session_context_usage(key)
+        request = measured["recent_requests"][0]
+        assert request["usage"]["prompt_tokens"] == 1200
+        assert request["usage"]["cached_tokens"] == 900
+        assert request["usage"]["ttft_ms"] == 400
+        # Read from a new manager, without the active runner or its in-memory session.
+        restored = SessionManager(tmp_path).get_or_create(key)
+        assert restored.metadata[RECENT_REQUEST_USAGE_KEY] == measured["recent_requests"]
+        release.set()
+        await asyncio.wait_for(turn, 10)
+        completed = await loop.estimate_session_context_usage(key)
+        assert len(completed["recent_requests"]) == 2
+        assert completed["recent_requests"][0] == request
+        assert completed["recent_requests"][1]["usage"]["prompt_tokens"] == 1500
+        assert RECENT_REQUEST_USAGE_KEY not in str(loop.provider.chat_stream_with_retry.call_args.kwargs["messages"])
+    finally:
+        release.set()
+        await asyncio.gather(turn, return_exceptions=True)
+        await loop.aclose()
+
+
+def test_recent_request_snapshots_are_bounded_and_keep_unknown_cache_unknown():
+    from cirno_core.session.branching import session_prefix
+    from cirno_core.session.model import Session
+    from cirno_core.session.request_usage import MAX_RECENT_REQUESTS, RECENT_REQUEST_USAGE_KEY, append_request_usage
+    from cirno_usage.types import LLMUsage
+
+    metadata = {}
+    for index in range(20):
+        append_request_usage(metadata, LLMUsage.reported(input_tokens=100 + index, output_tokens=1))
+    recent = metadata[RECENT_REQUEST_USAGE_KEY]
+    assert len(recent) == MAX_RECENT_REQUESTS
+    assert len({request["id"] for request in recent}) == MAX_RECENT_REQUESTS
+    assert recent[0]["usage"]["prompt_tokens"] == 112
+    assert recent[-1]["usage"]["prompt_tokens"] == 119
+    assert "cached_tokens" not in recent[-1]["usage"]
+    source = Session(key="cli:source", metadata=metadata, messages=[{"role": "user", "content": "Regenerate"}])
+    rewound = session_prefix(source, "cli:fork", 0)
+    assert rewound is not None
+    assert RECENT_REQUEST_USAGE_KEY not in rewound.metadata

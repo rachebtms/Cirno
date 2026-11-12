@@ -26,15 +26,16 @@ def test_empty_selection_ignores_saved_settings_and_environment_defaults(tmp_pat
     assert not (instance / "state").exists()
 
 
-def test_user_setup_precedes_service_and_forwards_only_server_arguments(tmp_path, monkeypatch):
+@pytest.mark.parametrize("timeout", [0, 42])
+def test_user_setup_precedes_service_and_forwards_only_server_arguments(tmp_path, monkeypatch, timeout):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(cli.os, "geteuid", lambda: 1000)
     events = []
     monkeypatch.setattr(cli, "initialize", lambda context: events.append("environment"))
     monkeypatch.setattr(cli, "ensure", lambda context, selections, **kwargs: events.append((selections, context.policy.timeout_seconds)))
     monkeypatch.setattr(launch, "start_service", lambda context, arguments: events.append(arguments))
-    assert cli.main(["--serve", "+pip.pytest", "--timeout", "42", "--", "--port", "9000"]) == 0
-    assert events == ["environment", (["+pip.pytest"], 42), ["--port", "9000"]]
+    assert cli.main(["--serve", "+pip.pytest", "--timeout", str(timeout), "--", "--port", "9000"]) == 0
+    assert events == ["environment", (["+pip.pytest"], timeout), ["--port", "9000"]]
     assert not (tmp_path / ".cirno/config.json").exists()
 
 
@@ -63,7 +64,8 @@ def test_final_verification_failure_prevents_service_start(tmp_path, monkeypatch
         cli.main(["--serve", "+rachebtms", "--verify"])
 
 
-def test_root_setup_drops_privileges_with_original_installer_arguments(tmp_path, monkeypatch):
+@pytest.mark.parametrize("timeout", [0, 42])
+def test_root_setup_drops_privileges_with_original_installer_arguments(tmp_path, monkeypatch, timeout):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(cli.os, "geteuid", lambda: 0)
     events = []
@@ -72,12 +74,12 @@ def test_root_setup_drops_privileges_with_original_installer_arguments(tmp_path,
     monkeypatch.setattr(cli, "ensure", lambda *args, **kwargs: events.append(kwargs["phase"]))
     monkeypatch.setattr(cli, "hand_over_state", lambda context: events.append("state ownership"))
     monkeypatch.setattr(launch, "as_user", lambda context, arguments: events.append(arguments))
-    argv = ["--serve", "+pip.pytest", "--timeout", "42", "--", "--config", "/service.json"]
+    argv = ["--serve", "+pip.pytest", "--timeout", str(timeout), "--", "--config", "/service.json"]
     assert cli.main(argv) == 0
     assert events == ["ownership", "system", "system", "state ownership", argv]
 
 
-@pytest.mark.parametrize("options", [["--timeout", "0"], ["--timeout", "-1"], ["--serve", "--phase", "user"]])
+@pytest.mark.parametrize("options", [["--timeout", "-1"], ["--timeout", "1.5"], ["--serve", "--phase", "user"]])
 def test_invalid_startup_options_fail_before_changes(tmp_path, monkeypatch, options):
     monkeypatch.setenv("HOME", str(tmp_path))
     with pytest.raises(SystemExit):

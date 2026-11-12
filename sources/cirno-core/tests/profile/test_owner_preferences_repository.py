@@ -12,19 +12,21 @@ def test_default_theme_contains_day_and_night_palettes(tmp_path):
     snow = next(theme for theme in saved["themes"] if theme["id"] == "cirno-snow")
     assert snow["light"]["background"] != snow["dark"]["background"]
     assert snow["light"].keys() == snow["dark"].keys()
+    assert saved["values"]["memoryGraphLimit"] == 300
 
 
 def test_preferences_survive_restart_and_workspace_changes(tmp_path):
     path = tmp_path / "state" / "preferences.sqlite3"
     PreferencesRepository(path).update(
         {"language": "zh-CN", "themeMode": "dark", "readingTextSize": "large",
-         "launcherOrder": ["credentials", "cirno", "files"]}
+         "launcherOrder": ["credentials", "cirno", "files"], "memoryGraphLimit": 1200}
     )
     loaded = PreferencesRepository(path).read()
     assert loaded["values"]["language"] == "zh-CN"
     assert loaded["values"]["themeMode"] == "dark"
     assert loaded["values"]["readingTextSize"] == "large"
     assert loaded["values"]["launcherOrder"] == ["credentials", "cirno", "files"]
+    assert loaded["values"]["memoryGraphLimit"] == 1200
     assert loaded["revision"] == 1
 
 
@@ -71,6 +73,10 @@ def test_custom_palette_round_trip_and_invalid_edit_rollback(tmp_path):
         {"unrecognizedField": True},
         {"themeMode": "invalid"},
         {"customReadingTextSize": 900},
+        {"memoryGraphLimit": 0},
+        {"memoryGraphLimit": -1},
+        {"memoryGraphLimit": 1.5},
+        {"memoryGraphLimit": True},
     ],
 )
 def test_rejects_invalid_updates_without_changing_revision(tmp_path, patch):

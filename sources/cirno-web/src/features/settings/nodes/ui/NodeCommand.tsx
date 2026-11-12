@@ -12,7 +12,7 @@ export function NodeCommand({ nodes }: { nodes: NodesController }) {
       <Modal.Body><TextField isRequired isDisabled={nodes.busy} value={nodes.command} onChange={nodes.setCommand}>
         <Label>{t("features.command")}</Label><TextArea autoFocus rows={6} autoComplete="off" />
       </TextField>
-        {nodes.output !== null && <pre className="node-output" role="status">{nodes.output || t("features.commandCompleted")}</pre>}
+        {nodes.output !== null && <pre className="node-output" role="status">{nodes.exitCode !== null ? `${t("features.commandExitCode", { code: nodes.exitCode })}\n` : ""}{nodes.output || (nodes.exitCode ? "" : t("features.commandCompleted"))}</pre>}
       </Modal.Body>
       <Modal.Footer className="node-dialog-footer">
         {nodes.error && <Alert status="danger" role="alert"><Alert.Indicator><CircleAlert /></Alert.Indicator><Alert.Content><Alert.Description>{nodes.error}</Alert.Description></Alert.Content></Alert>}

@@ -95,17 +95,23 @@ export function MemoryResults({
         ))}
       </ul>
       {result?.has_more && (
-        <Button
-          variant="secondary"
-          size="sm"
-          isDisabled={search.loading}
-          isPending={search.loading}
-          onPress={() => {
-            void search.more();
-          }}
-        >
-          {t("memoryLibrary.more")}
-        </Button>
+        <div className="memory-pagination">
+          <Button
+            variant="secondary"
+            size="sm"
+            isDisabled={search.loading || search.loadingAll}
+            isPending={search.loading && !search.loadingAll}
+            onPress={() => {
+              void search.more();
+            }}
+          >
+            {t("memoryLibrary.more")}
+          </Button>
+          <Button variant="secondary" size="sm" isDisabled={search.loading || search.loadingAll}
+            isPending={search.loadingAll} onPress={() => { void search.loadAll(); }}>
+            {t("memoryLibrary.loadAll")}
+          </Button>
+        </div>
       )}
     </section>
   );

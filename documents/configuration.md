@@ -17,6 +17,8 @@ cirno --port 8000
 
 The initial local launch creates the default configuration automatically. Open `http://localhost:8000`, register the instance owner, choose a theme and light/dark mode, and configure a provider and model. Theme choices synchronize with Settings and other devices. First-time setup takes place in the browser. Starting the first chat wakes the Router for a short introduction; it asks about its identity, your preferred form of address and whatever background you wish to share. You can skip model setup and introduce yourself later. New instances have no selected model: connect a provider, create a model preset, and select it before chatting. Incomplete setup returns a configuration message without contacting a model service or retrying. Web search defaults to DuckDuckGo and does not require a search API key. Existing instances retain their previous authentication settings. For a server deployment, see [Docker](docker.md).
 
+The keyless DuckDuckGo adapter uses DDGS search. A library failure receives at most one serial retry, with a short backoff inside the configured total search timeout, including time spent waiting for another DDGS call. Cancelling the tool prevents a retry from starting. Final failures retain the exception type and available diagnostic text, with configured API/proxy secrets removed. DDGS may suppress an upstream HTTP status or return no parsed results; an unavailable result is not evidence that no matching pages exist. The adapter does not infer a specific HTTP cause when the library has not exposed it.
+
 ## Model providers
 
 A minimal OpenAI-compatible configuration is included in [examples/config.json](examples/config.json):

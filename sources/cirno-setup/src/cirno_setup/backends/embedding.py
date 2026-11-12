@@ -12,10 +12,13 @@ from cirno_setup.recipe import Recipe, Verification
 def verify(context: Context, recipe: Recipe) -> Verification:
     module = runpy.run_path(str(context.assets / "embedding.py"))
     destination = Path(os.environ.get("CIRNO_BUNDLED_EMBEDDING_DIR", context.root / "models/bge-small-zh-v1.5"))
-    ready = all((destination / Path(name).name).is_file()
-                and digest(destination / Path(name).name) == expected
-                for name, expected in module["MODEL_FILES"].items())
-    return Verification(ready and (destination / "LICENSE").is_file(), "Embedding assets are missing or invalid")
+    for name, _, expected in module["downloads"]():
+        path = destination / Path(name).name
+        if not path.is_file():
+            return Verification(False, f"Embedding asset is missing: {path.name}")
+        if digest(path) != expected:
+            return Verification(False, f"Embedding checksum mismatch: {path.name}")
+    return Verification(True)
 
 
 def install(context: Context, recipe: Recipe) -> None:

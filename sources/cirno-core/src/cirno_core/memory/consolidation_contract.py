@@ -18,8 +18,9 @@ class EvidenceRef(BaseModel):
 
     @model_validator(mode="after")
     def one_source(self):
-        if (self.message is None) == (self.memory_id is None):
-            raise ValueError("Evidence must name exactly one message or memory_id")
+        if self.message is not None and self.memory_id is not None:
+            raise ValueError("Evidence cannot name both message and memory_id")
+        # A quote without an index must resolve to exactly one archived message.
         return self
 
 

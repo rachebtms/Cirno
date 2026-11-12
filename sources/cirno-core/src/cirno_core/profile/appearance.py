@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
+from cirno_memory.graph import DEFAULT_GRAPH_NODES
 
 
 class Palette(BaseModel):
@@ -82,6 +83,7 @@ class Preferences(BaseModel):
     custom_reading_text_size: int = Field(default=16, ge=14, le=28)
     code_wrap: bool = True
     brand_logos: bool = True
+    memory_graph_limit: int = Field(default=DEFAULT_GRAPH_NODES, ge=1, le=9007199254740991, strict=True)
     browser_notifications: bool = False
     notification_sound: bool = False
     muted_notification_categories: list[Literal["operations", "conversations", "system"]] = Field(

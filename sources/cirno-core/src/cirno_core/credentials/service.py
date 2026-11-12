@@ -60,7 +60,8 @@ class Credentials:
         return {key: record[key] for key in ("value", "username") if key in record}
 
     def _require_no_jobs(self, identifier: str) -> None:
-        if any(job["node_id"] == identifier and job.get("state") in {"running", "submitting", "submission_unknown"}
+        from cirno_core.nodes.policy import ACTIVE_JOB_STATES
+        if any(job["node_id"] == identifier and job.get("state") in ACTIVE_JOB_STATES
                for job in self.data.list("node_jobs")):
             raise ValueError("Stop or resolve this Node’s jobs before changing its connection or removing access")
 

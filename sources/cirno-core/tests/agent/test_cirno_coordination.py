@@ -12,6 +12,7 @@ from cirno_core.config.home import set_instance_path
 from cirno_core.runtime.heartbeat import enqueue_heartbeat
 from cirno_core.storage.instance import InstanceData
 from cirno_core.nodes.service import Nodes
+from cirno_core.nodes.commands import CommandResult
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.recovery.pending import pending_followups
 from cirno_server.webui.instance_api import instance_action
@@ -94,8 +95,8 @@ async def test_password_nodes_redact_and_preserve_credentials(setup, monkeypatch
     nodes.credentials.save(id=saved["id"], label="Renamed", kind="ssh", ssh={**connection, "auth_method": "key"})
     assert not nodes.node(saved["id"]).password
     assert data.path.stat().st_mode & 0o777 == 0o600
-    execute = AsyncMock(return_value="direct output")
-    monkeypatch.setattr(Nodes, "execute", execute)
+    execute = AsyncMock(return_value=CommandResult("direct output", "", 0))
+    monkeypatch.setattr(Nodes, "execute_command", execute)
     result = await instance_action(
         {"action": "nodes.execute", "values": {"id": saved["id"], "command": "pwd"}},
         sessions=sessions,
@@ -356,12 +357,22 @@ async def test_interrupted_node_submission_records_unknown_outcome(setup, monkey
     if failure == "cancelled":
         execute.side_effect = asyncio.CancelledError()
     monkeypatch.setattr(nodes, "execute", execute)
-    with pytest.raises(asyncio.CancelledError if failure == "cancelled" else RuntimeError):
-        await nodes.start_job(saved["id"], "run-task")
+    status = AsyncMock(side_effect=RuntimeError("Status connection unavailable"))
+    monkeypatch.setattr(nodes, "read_status", status)
+    if failure == "cancelled":
+        with pytest.raises(asyncio.CancelledError):
+            await nodes.start_job(saved["id"], "run-task")
+        status.assert_not_awaited()
+    else:
+        result = await nodes.start_job(saved["id"], "run-task")
+        assert result["state"] == "submission_unknown"
+        assert result["resubmit_safe"] is False
+        status.assert_awaited_once()
+    execute.assert_awaited_once()
     jobs = nodes.data.list("node_jobs")
     assert len(jobs) == 1
     assert jobs[0]["state"] == "submission_unknown"
-    assert jobs[0]["error"]
+    assert jobs[0]["submission_error"]
 
 
 async def test_inflight_goal_completion_cannot_overwrite_user_pause(setup, monkeypatch):

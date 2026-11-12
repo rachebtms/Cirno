@@ -39,9 +39,11 @@ from cirno_core.session.goal_state import (
     goal_state_runtime_lines,
 )
 from cirno_core.session.model import Session
+from cirno_core.session.request_usage import append_request_usage
 from cirno_core.session.recovery.contracts import PROVIDER_STATE_CHECKPOINT_VERSION, PROVIDER_STATE_CHECKPOINT_VERSION_KEY
 from cirno_core.utils.llm_runtime import LLMRuntime
 from cirno_usage.context import source_from_request
+from cirno_usage.types import LLMUsage
 from loguru import logger
 
 from .injection import PendingInputInjector
@@ -86,6 +88,15 @@ class ModelTurnExecutor:
         self.agent._sync_subagent_runtime_limits()
 
         ephemeral = ephemeral or (session is not None and not session.policy.persist)
+
+        async def _request_usage(usage: LLMUsage) -> None:
+            if session is None or ephemeral:
+                return
+            await self.agent.sessions.state.mutate_metadata(
+                session.key,
+                partial(append_request_usage, usage=usage),
+                expected_generation=session.generation,
+            )
 
         async def _checkpoint(payload: dict[str, Any]) -> None:
             if session is None or ephemeral:
@@ -247,6 +258,7 @@ class ModelTurnExecutor:
                     require_visible_reply=require_visible_reply,
                     provider_retry_mode=self.agent.provider_retry_mode,
                     checkpoint_callback=_checkpoint,
+                    request_usage_callback=_request_usage,
                     consolidate_history=partial(
                         self.agent.consolidator.summarize_transcript,
                         runtime=runtime,

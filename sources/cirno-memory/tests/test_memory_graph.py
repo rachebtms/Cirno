@@ -37,6 +37,36 @@ def test_graph_caps_rows_and_rejects_oversized_requests(tmp_path, monkeypatch):
     assert memory_graph(repo, []) == {"links": [], "links_truncated": False}
 
 
+def test_larger_graphs_preserve_relations_without_exceeding_sqlite_variable_limits(tmp_path, monkeypatch):
+    import sqlite3
+    from contextlib import contextmanager
+
+    repo = MemoryRepository(tmp_path)
+    seed = repo.save("Fixture", source="test", session_key="a", scope="user")
+    ids = [f"memory-{index}" for index in range(1200)]
+    with repo.connect() as db:
+        row = tuple(db.execute("SELECT * FROM memories WHERE id=?", [seed["id"]]).fetchone())
+        db.executemany(f"INSERT INTO memories VALUES ({','.join('?' for _ in row)})", ((identity, *row[1:]) for identity in ids))
+        db.execute("INSERT INTO links VALUES (?,?,?,?)", (ids[0], ids[-1], "supports", "fixture"))
+    connect = repo.connect
+
+    @contextmanager
+    def bounded_connect():
+        with connect() as db:
+            db.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 40)
+            yield db
+
+    monkeypatch.setattr(repo, "connect", bounded_connect)
+    result = memory_graph(repo, ids, max_nodes=1200, maintenance=True)
+    assert result == {"links": [{"source": ids[0], "target": ids[-1], "relation": "supports"}], "links_truncated": False}
+
+
+@pytest.mark.parametrize("limit", [0, -1, 1.5, True, "300"])
+def test_graph_rejects_invalid_node_limits(tmp_path, limit):
+    with pytest.raises(ValueError, match="positive integer"):
+        memory_graph(MemoryRepository(tmp_path), [], max_nodes=limit)
+
+
 @pytest.mark.parametrize("budget", [201, 512, 1024, 8192])
 def test_embedding_budget_can_exceed_200_mib(budget):
     assert MemoryConfig(embedding_max_rss_mb=budget).embedding_max_rss_mb == budget

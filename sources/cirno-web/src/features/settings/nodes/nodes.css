@@ -24,4 +24,10 @@
 .node-output,.node-job-command { white-space:pre-wrap; overflow-wrap:anywhere; font-family:ui-monospace,SFMono-Regular,monospace; font-size:.75rem; line-height:1.6; }
 .node-output { max-height:24rem; overflow:auto; padding:.75rem; border-radius:var(--radius); background:var(--surface-secondary); }
 .node-output pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.node-job-policy { display:grid; gap:.75rem; }
+.node-job-policy-field { display:grid; grid-template-columns:minmax(0,1fr) 7rem; align-items:center; gap:1rem; }
+.node-job-policy-copy { display:grid; min-width:0; gap:.25rem; }
+.node-job-policy-field .description { color:var(--muted); font-size:.75rem; line-height:1.5; }
+.node-job-policy-field input { text-align:end; }
+.node-job-check-error { font-size:.75rem; color:var(--warning); overflow-wrap:anywhere; }
 @container cirno-tab (max-width:600px) { .node-form-grid { grid-template-columns:minmax(0,1fr); } }

@@ -2824,6 +2824,30 @@
     "openPreview": "打开预览标签页"
   },
   "features": {
+    "nodeJobPolicy": "作业状态检查与记录保留",
+    "nodeJobPolicyHelp": "服务器会在后台检查状态，不调用模型；关闭本页后仍生效。自动检查只读取状态，完整输出请点击“读取状态”。",
+    "nodeJobInteger": "请输入大于等于 0 的整数。",
+    "nodeJobChecked": "上次确认：{{time}}",
+    "nodeJobNotChecked": "提交后尚未检查状态。",
+    "nodeJobFinished": "结束确认时间：{{time}}",
+    "nodeJobCheckError": "状态检查失败，当前显示的是上次已知状态：{{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "自动 SSH 检查间隔（秒）",
+      "retention_days": "已结束记录保留时间（天）"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 表示关闭后台 SSH 检查。修改自动保存，无需重启。",
+      "retention_days": "0 表示永久保留。仅清理本地已结束记录和缓存输出；运行中、未确认作业及远端文件均保留。"
+    },
+    "nodeJobStates": {
+      "running": "运行中（上次已知状态）",
+      "submitting": "正在提交",
+      "submission_unknown": "提交状态未确认",
+      "unknown": "状态未确认",
+      "completed": "已完成",
+      "failed": "执行失败",
+      "stopped": "已停止"
+    },
     "projects": "项目",
     "ordinaryConversations": "普通会话",
     "createProject": "创建项目",
@@ -2873,6 +2897,7 @@
     "runCommand": "运行",
     "close": "关闭",
     "commandCompleted": "命令已完成。",
+    "commandExitCode": "退出码：{{code}}",
     "removeNode": "从 Nodes 移除",
     "nodeInitScript": "环境初始化脚本",
     "nodeInitScriptHint": "远程脚本路径；切换目录、设置环境变量后在 Bash 中加载，适用于命令、新终端和后台任务。",
@@ -2899,6 +2924,8 @@
     "history": "历史版本",
     "evidence": "查看来源",
     "more": "加载更多",
+    "loadAll": "加载全部",
+    "paginationError": "无法继续加载记忆，请重新搜索。",
     "reindex": "重建索引",
     "retry": "重试保存整理结果",
     "pending": "待下次整理的记录：{{count}}",
@@ -3117,6 +3144,8 @@
     "projectActions": "项目 {{name}} 的操作"
   },
   "memoryGraph": {
+    "nodeLimit": "展示上限",
+    "limitError": "请输入正整数。",
     "description": "检索记忆，探索关联，追溯原始来源。",
     "cloud": "记忆点云",
     "cloudDescription": "可交互的记忆关系图。彩色点代表记忆，灰色点代表共同标签；也可以通过结果列表访问所有记录。",

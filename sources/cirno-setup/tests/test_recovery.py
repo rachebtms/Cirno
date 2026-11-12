@@ -19,7 +19,9 @@ def context(tmp_path):
     assets.mkdir()
     return Context(home, assets, Policy())
 
-def test_valid_download_cache_is_reused_and_corruption_is_replaced(context, monkeypatch):
+@pytest.mark.parametrize("timeout", [0, 1800])
+def test_valid_download_cache_is_reused_and_corruption_is_replaced(context, monkeypatch, timeout):
+    context.policy.timeout_seconds = timeout
     contents = b"verified dependency archive"
     expected = hashlib.sha256(contents).hexdigest()
     cached = context.root / "downloads" / expected
@@ -37,6 +39,7 @@ def test_valid_download_cache_is_reused_and_corruption_is_replaced(context, monk
     cached.write_bytes(b"interrupted or corrupted download")
     assert download(context, "https://example.invalid/tool", expected).read_bytes() == contents
     assert len(calls) == 1
+    assert calls[0][calls[0].index("--max-time") + 1] == str(timeout)
 
 
 def test_apt_restore_only_installs_missing_packages_and_honors_version_pins(context, monkeypatch):
@@ -84,6 +87,67 @@ def test_broken_managed_executable_is_a_failed_probe(context, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", broken)
     assert not context.probe(["/broken/tool", "--version"])
+
+
+def test_unlimited_download_uses_real_curl_and_verifies_a_local_file(context, tmp_path):
+    contents = b"small offline archive fixture"
+    source = tmp_path / "source.tar"
+    source.write_bytes(contents)
+    context.policy.timeout_seconds = 0
+    result = download(context, source.as_uri(), hashlib.sha256(contents).hexdigest())
+    assert result.read_bytes() == contents
+
+
+@pytest.mark.parametrize("timeout", [0, 1800])
+def test_embedding_verification_rejects_a_corrupted_license(context, monkeypatch, timeout):
+    from cirno_setup.backends import embedding
+    from cirno_setup.recipe import Recipe
+
+    contents = {"onnx/model_quantized.onnx": b"tiny model fixture", "LICENSE": b"license fixture"}
+    downloads = [(name, "https://example.invalid/" + name, hashlib.sha256(data).hexdigest())
+                 for name, data in contents.items()]
+    (context.assets / "embedding.py").write_text(
+        f"MODEL_FILES = {dict((name, checksum) for name, _, checksum in downloads if name != 'LICENSE')!r}\n"
+        f"def downloads():\n    return {downloads!r}\n"
+    )
+    destination = context.root / "models/embedding-fixture"
+    destination.mkdir(parents=True)
+    monkeypatch.setenv("CIRNO_BUNDLED_EMBEDDING_DIR", str(destination))
+    context.policy.timeout_seconds = timeout
+    for name, data in contents.items():
+        (destination / Path(name).name).write_bytes(data)
+    assert embedding.verify(context, Recipe()).ready
+    (destination / "LICENSE").write_bytes(b"interrupted license download")
+    result = embedding.verify(context, Recipe())
+    assert not result.ready
+    assert "checksum mismatch: LICENSE" in result.reason
+
+
+def test_embedding_download_reuses_verified_files_and_repairs_license(tmp_path, monkeypatch):
+    import runpy
+
+    module = runpy.run_path(str(Path(__file__).parents[1] / "src/cirno_setup/assets/embedding.py"))
+    contents = {url: name.encode() for name, url, _ in module["downloads"]()}
+    entries = [(name, url, hashlib.sha256(contents[url]).hexdigest()) for name, url, _ in module["downloads"]()]
+    main = module["main"]
+    monkeypatch.setitem(main.__globals__, "downloads", lambda: entries)
+    calls = []
+
+    def run(arguments, **kwargs):
+        assert kwargs.get("timeout") is None
+        calls.append(arguments[-1])
+        Path(arguments[arguments.index("--output") + 1]).write_bytes(contents[arguments[-1]])
+        return subprocess.CompletedProcess(arguments, 0)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    main(tmp_path)
+    assert len(calls) == len(entries)
+    main(tmp_path)
+    assert len(calls) == len(entries)
+    (tmp_path / "LICENSE").write_bytes(b"broken license")
+    main(tmp_path)
+    assert len(calls) == len(entries) + 1
+    assert (tmp_path / "LICENSE").read_bytes() == b"LICENSE"
 
 
 

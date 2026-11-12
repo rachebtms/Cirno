@@ -15,8 +15,9 @@ def executable(context: Context) -> str | None:
 def verify(context: Context, recipe: Recipe) -> Verification:
     # Default headless launch also checks the default Headless Shell, rather
     # than requiring clients to use a Cirno-specific channel override.
+    launch_timeout_ms = (context.policy.subprocess_timeout(maximum=30) or 0) * 1000
     result = context.inspect([str(context.python), "-c", "from playwright.sync_api import sync_playwright; "
-        "p=sync_playwright().start(); b=p.chromium.launch(headless=True); b.close(); p.stop()"])
+        f"p=sync_playwright().start(); b=p.chromium.launch(headless=True, timeout={launch_timeout_ms}); b.close(); p.stop()"])
     path = executable(context)
     link = context.root / "bin/chromium"
     valid = result.returncode == 0 and path is not None and link.is_symlink() and link.resolve() == Path(path).resolve()

@@ -15,10 +15,10 @@ from typing import Any
 from cirno_memory.repository import MemoryRepository
 from cirno_memory.scopes import scope_identity
 from cirno_core.memory.consolidation_contract import LearningPlan
+from cirno_core.memory.consolidation_evidence import LearningEvidenceError, resolve_message, source_refs
 from cirno_core.memory.consolidation_receipts import index_receipt, receipt_path, write_receipt
 from cirno_core.session.roles import conversation_role
 from cirno_core.session.history_visibility import is_hidden_history_message
-from cirno_core.runtime.context import public_history_message
 from cirno_core.skills.history import snapshot_skill
 from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
 from cirno_core.skills.validation import validate_skill
@@ -147,17 +147,9 @@ class ConsolidationLearning:
                 if current["revision"] != self.inputs[ref.memory_id]["revision"]:
                     raise ValueError("Learning evidence changed during consolidation")
                 if ref.quote not in self.inputs[ref.memory_id]["content"]:
-                    raise ValueError("Learning evidence quote does not match its memory")
+                    raise LearningEvidenceError("Learning evidence quote does not match its memory")
                 continue
-            if ref.message is None or ref.message >= len(self.messages):
-                raise ValueError("Learning evidence message is outside the archived batch")
-            message = self.messages[ref.message]
-            content = (public_history_message(message) if user_only else message).get("content", "")
-            rendered = (
-                content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
-            )
-            if ref.quote not in rendered:
-                raise ValueError("Learning evidence quote does not match the archived message")
+            message = self.messages[resolve_message(self.messages, ref, user_only=user_only)]
             if user_only and (
                 message.get("role") != "user"
                 or is_hidden_history_message(message)
@@ -235,6 +227,8 @@ class ConsolidationLearning:
                 self._apply(plan, evidence)
             except Exception as exc:
                 record.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+                if isinstance(exc, LearningEvidenceError):
+                    record["regenerate_output"] = True
                 write_receipt(self.repo, record)
                 raise
             record["status"] = "completed"
@@ -322,7 +316,7 @@ class ConsolidationLearning:
                         memory_id=identity,
                         enqueue=False,
                         expected_parent_revision=parent["revision"],
-                        source_refs=[ref.model_dump() for ref in finding.evidence],
+                        source_refs=source_refs(self.messages, finding.evidence),
                     )
                 self.repo.link(
                     saved["id"],

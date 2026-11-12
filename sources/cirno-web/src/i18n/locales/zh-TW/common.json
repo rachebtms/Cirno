@@ -2824,6 +2824,30 @@
     "openPreview": "開啟預覽分頁"
   },
   "features": {
+    "nodeJobPolicy": "作業狀態檢查與紀錄保留",
+    "nodeJobPolicyHelp": "伺服器會在背景檢查狀態，不呼叫模型；關閉本頁後仍生效。自動檢查只讀取狀態，完整輸出請點選「讀取狀態」。",
+    "nodeJobInteger": "請輸入大於或等於 0 的整數。",
+    "nodeJobChecked": "上次確認：{{time}}",
+    "nodeJobNotChecked": "提交後尚未檢查狀態。",
+    "nodeJobFinished": "結束確認時間：{{time}}",
+    "nodeJobCheckError": "狀態檢查失敗，目前顯示的是上次已知狀態：{{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "自動 SSH 檢查間隔（秒）",
+      "retention_days": "已結束紀錄保留時間（天）"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 表示關閉背景 SSH 檢查。修改自動儲存，無須重新啟動。",
+      "retention_days": "0 表示永久保留。僅清理本機已結束紀錄和快取輸出；執行中、未確認作業及遠端檔案均保留。"
+    },
+    "nodeJobStates": {
+      "running": "執行中（上次已知狀態）",
+      "submitting": "正在提交",
+      "submission_unknown": "提交狀態未確認",
+      "unknown": "狀態未確認",
+      "completed": "已完成",
+      "failed": "執行失敗",
+      "stopped": "已停止"
+    },
     "authentication": "驗證方式",
     "keyAuthentication": "SSH 金鑰",
     "passwordAuthentication": "密碼",
@@ -2834,6 +2858,7 @@
     "runCommand": "執行",
     "close": "關閉",
     "commandCompleted": "命令已完成。",
+    "commandExitCode": "結束代碼：{{code}}",
     "projects": "專案",
     "ordinaryConversations": "普通對話",
     "createProject": "建立專案",
@@ -2899,6 +2924,8 @@
     "history": "歷史版本",
     "evidence": "查看來源",
     "more": "載入更多",
+    "loadAll": "載入全部",
+    "paginationError": "無法繼續載入記憶，請重新搜尋。",
     "reindex": "重建索引",
     "retry": "重试保存整理结果",
     "pending": "待下次整理的记录：{{count}}",
@@ -3117,6 +3144,8 @@
     "projectActions": "專案 {{name}} 的操作"
   },
   "memoryGraph": {
+    "nodeLimit": "顯示上限",
+    "limitError": "請輸入正整數。",
     "description": "檢索記憶，探索關聯，追溯原始來源。",
     "cloud": "記憶點雲",
     "cloudDescription": "可互動的記憶關係圖。彩色點代表記憶，灰色點代表共同標籤；也可以透過結果列表存取所有記錄。",

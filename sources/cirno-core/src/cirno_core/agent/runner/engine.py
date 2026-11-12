@@ -291,6 +291,16 @@ class AgentRunner:
             if response.should_execute_tools:
                 context.tool_calls = list(response.tool_calls)
                 if hook.wants_streaming():
+                    # A provider/fallback may return complete prose without
+                    # invoking content deltas. Deliver it before its tools;
+                    # this branch never reaches the terminal reply delivery.
+                    if (
+                        not context.streamed_content
+                        and not is_blank_text(response.content)
+                        and not current_conversation_has_delivery()
+                    ):
+                        await hook.on_stream(context, response.content or "")
+                        context.streamed_content = True
                     await hook.on_stream_end(context, resuming=True)
 
                 assistant_message = build_assistant_message(

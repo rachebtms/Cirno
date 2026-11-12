@@ -66,7 +66,7 @@ async def test_ddgs_failure_reaches_model_with_observable_cause(monkeypatch, out
         max_tool_result_chars=AgentDefaults().max_tool_result_chars,
     ))
 
-    assert len(requests) == 1
+    assert len(requests) == 2  # One serial retry, inside the original tool deadline.
     assert provider.chat_stream_with_retry.await_count == 2
     model_messages = provider.chat_stream_with_retry.await_args_list[1].kwargs["messages"]
     tool_message = next(message for message in model_messages if message.get("role") == "tool")
@@ -76,8 +76,9 @@ async def test_ddgs_failure_reaches_model_with_observable_cause(monkeypatch, out
     if outcome == "timeout":
         assert "matching-page availability is unknown" in tool_message["content"]
     else:
-        assert "did not expose a reliable cause" in tool_message["content"]
+        assert "did not expose a reliable HTTP cause" in tool_message["content"]
         assert "does not establish that no matching pages exist" in tool_message["content"]
+    assert "Library detail:" in tool_message["content"]
     assert result.stop_reason == "completed"
     assert result.tool_events[0]["name"] == "web_search"
     assert result.tool_events[0]["status"] == "error"

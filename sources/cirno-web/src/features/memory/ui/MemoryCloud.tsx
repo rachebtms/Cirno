@@ -109,9 +109,11 @@ export function MemoryCloud({ records, links = EMPTY_LINKS, active, loading = fa
     {!error && (loading || (records.length > 0 && !ready)) && <p className="memory-cloud-empty" role="status">{t("memoryGraph.loading")}</p>}
     {!loading && !records.length && <p className="memory-cloud-empty">{t("features.noMemorySources")}</p>}
     {error && <div className="memory-cloud-error"><p>{t("memoryGraph.renderError")}</p><InlineError message={error} /></div>}
+    <div className="memory-cloud-footer">
     <div className="memory-cloud-legend">{Object.entries(MEMORY_COLORS).map(([layer, color]) =>
       <span key={layer}><i style={{ background: color }} />{t(`memoryLibrary.${layer}`)}</span>)}
       <span><i style={{ background: "#91a1a7" }} />{t("memoryGraph.relation_tag")}</span></div>
     <p className="memory-cloud-help">{t("memoryGraph.gestureHelp")}</p>
+    </div>
   </section>;
 }

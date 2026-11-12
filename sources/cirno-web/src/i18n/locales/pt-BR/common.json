@@ -2840,6 +2840,8 @@
     "history": "Versões",
     "evidence": "Fonte",
     "more": "Carregar mais",
+    "loadAll": "Carregar tudo",
+    "paginationError": "Não foi possível continuar carregando as memórias. Pesquise novamente.",
     "reindex": "Reconstruir índice",
     "retry": "Retry saving consolidation results",
     "pending": "Pending next consolidation: {{count}}",
@@ -2911,6 +2913,30 @@
     "remaining_other": "{{count}} perguntas pendentes"
   },
   "features": {
+    "nodeJobPolicy": "Monitoramento e retenção de tarefas",
+    "nodeJobPolicyHelp": "O servidor verifica estados sem chamadas ao modelo, mesmo com esta página fechada. As verificações automáticas leem apenas o estado; consulte a saída completa manualmente.",
+    "nodeJobInteger": "Digite um número inteiro maior ou igual a 0.",
+    "nodeJobChecked": "Última confirmação: {{time}}",
+    "nodeJobNotChecked": "Não verificado desde o envio.",
+    "nodeJobFinished": "Conclusão confirmada: {{time}}",
+    "nodeJobCheckError": "Falha na verificação; exibindo o último estado conhecido: {{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "Intervalo de verificação SSH (segundos)",
+      "retention_days": "Retenção de registros concluídos (dias)"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 desativa as verificações. Salvo automaticamente, sem reiniciar.",
+      "retention_days": "0 mantém indefinidamente. Apenas registros locais concluídos e a saída em cache são removidos; tarefas ativas ou não confirmadas e arquivos remotos são mantidos."
+    },
+    "nodeJobStates": {
+      "running": "Em execução (último estado conhecido)",
+      "submitting": "Enviando",
+      "submission_unknown": "Envio não confirmado",
+      "unknown": "Estado não confirmado",
+      "completed": "Concluído",
+      "failed": "Falhou",
+      "stopped": "Interrompido"
+    },
     "projects": "Projetos",
     "ordinaryConversations": "Conversas",
     "createProject": "Criar projeto",
@@ -2960,6 +2986,7 @@
     "runCommand": "Executar",
     "close": "Fechar",
     "commandCompleted": "Comando concluído.",
+    "commandExitCode": "Código de saída: {{code}}",
     "removeNode": "Remover dos Nodes",
     "nodeInitScript": "Script de inicialização",
     "nodeInitScriptHint": "Caminho remoto carregado no Bash após definir variáveis e diretório. Aplica-se a comandos, novos terminais e tarefas em segundo plano.",
@@ -3117,6 +3144,8 @@
     "projectActions": "Ações do projeto {{name}}"
   },
   "memoryGraph": {
+    "nodeLimit": "Limite de memórias",
+    "limitError": "Digite um número inteiro positivo.",
     "description": "Explore saved knowledge, connections and original sources.",
     "cloud": "Memory cloud",
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",

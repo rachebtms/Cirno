@@ -376,3 +376,5 @@ remove them. Deleting a conversation and closing a tab share group-local neighbo
 selection, preserving other tabs' mounted editors and drafts.
 
 `core/credentials/` owns credential access policy and SSH enrollment over `cirno-vault`. Nodes resolve their authentication there; the instance database retains jobs rather than a second connection store. Existing Node rows migrate into the vault before runtime writers start.
+
+`core/nodes/commands.py` owns command exit receipts and captured process results; `jobs.py` owns durable launches and shared single/batched status projection. `policy.py` persists per-instance polling and retention settings, and `monitor.py` performs serial background checks and terminal-record cleanup. The server application owns the monitor task's startup/cancellation; the browser only refreshes local catalog snapshots. Atomic record mutations prevent late checks or launch acknowledgements from regressing terminal states or resurrecting expired records.

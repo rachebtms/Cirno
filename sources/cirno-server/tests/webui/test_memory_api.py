@@ -61,6 +61,11 @@ async def test_memory_graph_reuses_search_filters_and_includes_links_across_page
     next_page = await instance_action({"action": "memory.graph", "values": {"tags": ["calibration"], "limit": 1, "offset": page["next_offset"], "ids": ids}}, sessions=None, bus=None)
     assert not next_page["has_more"]
     assert next_page["links"] == [{"source": first["id"], "target": second["id"], "relation": "supports"}]
+    enlarged = await instance_action({"action": "memory.graph", "values": {
+        "tags": ["calibration"], "limit": 1, "offset": page["next_offset"],
+        "ids": [*ids, *(f"absent-{index}" for index in range(350))], "max_nodes": 600,
+    }}, sessions=None, bus=None)
+    assert enlarged["links"] == next_page["links"]
 
 
 @pytest.mark.asyncio

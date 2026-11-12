@@ -2840,6 +2840,8 @@
     "history": "버전",
     "evidence": "출처",
     "more": "더 보기",
+    "loadAll": "모두 불러오기",
+    "paginationError": "기억을 계속 불러올 수 없습니다. 다시 검색해 주세요.",
     "reindex": "색인 재구축",
     "retry": "Retry saving consolidation results",
     "pending": "Pending next consolidation: {{count}}",
@@ -2911,6 +2913,30 @@
     "remaining_other": "남은 질문 {{count}}개"
   },
   "features": {
+    "nodeJobPolicy": "작업 모니터링 및 보관",
+    "nodeJobPolicyHelp": "이 페이지를 닫아도 서버가 모델 호출 없이 상태를 확인합니다. 자동 확인은 상태만 읽으며 전체 출력은 상태 읽기로 가져옵니다.",
+    "nodeJobInteger": "0 이상의 정수를 입력하세요.",
+    "nodeJobChecked": "마지막 확인: {{time}}",
+    "nodeJobNotChecked": "제출 후 아직 확인되지 않았습니다.",
+    "nodeJobFinished": "완료 확인: {{time}}",
+    "nodeJobCheckError": "상태 확인 실패. 마지막으로 알려진 상태를 표시합니다: {{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "자동 SSH 확인 간격(초)",
+      "retention_days": "완료된 기록 보관 기간(일)"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0은 자동 확인을 끕니다. 자동 저장되며 재시작이 필요 없습니다.",
+      "retention_days": "0은 무기한 보관입니다. 완료된 로컬 기록과 출력 캐시만 지우며 실행 중이거나 미확인된 작업과 원격 파일은 유지합니다."
+    },
+    "nodeJobStates": {
+      "running": "실행 중(마지막 확인)",
+      "submitting": "제출 중",
+      "submission_unknown": "제출 미확인",
+      "unknown": "상태 미확인",
+      "completed": "완료",
+      "failed": "실패",
+      "stopped": "중지됨"
+    },
     "projects": "프로젝트",
     "ordinaryConversations": "대화",
     "createProject": "프로젝트 만들기",
@@ -2960,6 +2986,7 @@
     "runCommand": "실행",
     "close": "닫기",
     "commandCompleted": "명령이 완료되었습니다.",
+    "commandExitCode": "종료 코드: {{code}}",
     "removeNode": "Nodes에서 제거",
     "nodeInitScript": "초기화 스크립트",
     "nodeInitScriptHint": "환경 변수와 작업 디렉터리를 설정한 후 Bash에서 불러올 원격 스크립트 경로입니다. 명령, 새 터미널 및 백그라운드 작업에 적용됩니다.",
@@ -3117,6 +3144,8 @@
     "projectActions": "프로젝트 {{name}} 작업"
   },
   "memoryGraph": {
+    "nodeLimit": "표시 한도",
+    "limitError": "양의 정수를 입력해 주세요.",
     "description": "Explore saved knowledge, connections and original sources.",
     "cloud": "Memory cloud",
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",

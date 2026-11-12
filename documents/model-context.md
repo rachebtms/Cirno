@@ -18,6 +18,10 @@ DeepSeek tool requests require complete reasoning replay, including earlier turn
 
 The saved transcript retains reasoning independently of request filtering. Changing the policy does not delete it. Provider-reported usage calibrates the display after requests finish. During generation, context usage is an explicitly marked estimate that grows with reasoning, text and tool output; it is not an additional billing measurement.
 
+The session also retains a content-free snapshot of the eight most recent completed provider requests, without waiting for the entire agent turn to finish. The context popover restores these input/output, cache and timing details after a page refresh, even when the relevant chat messages are outside the loaded history page. A request still generating has no final usage yet; its actual details become available when the provider returns. These snapshots are display metadata and are never added to model prompts.
+
+Workers stream ordinary assistant updates between tool rounds. Their role prompt distinguishes these user-facing milestones from private reasoning and coordination reports. A complete response containing both prose and tool calls is also delivered before tool execution when a provider returns it without content deltas; already-streamed text is not repeated. Models still decide what content to generate, so this does not synthesize progress messages or force extra model requests.
+
 ## Checkpoints and compaction
 
 Settings → Context consolidation separates the active input threshold, idle trigger/retention and checkpoint generation. The active threshold is a percentage of the selected model's window, capped by the safe input budget after reserving output space. It is checked between model requests, not by interrupting an active stream.

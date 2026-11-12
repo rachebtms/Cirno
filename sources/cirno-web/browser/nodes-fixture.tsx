@@ -11,6 +11,8 @@ export function NodesFixture() {
   const [view, setView] = useState("nodes");
   const client = useMemo(() => {
     let failSave = true, failCredential = true;
+    let jobSettings = { poll_interval_seconds: 60, retention_days: 30 }, jobReads = 0;
+    const showJobs = new URLSearchParams(location.search).has("jobs");
     let records: CredentialInfo[] = [
       { id: "research", label: "Research Node", kind: "ssh", agent_visible: true },
       { id: "available", label: "Available SSH", kind: "ssh", agent_visible: false },
@@ -45,7 +47,12 @@ export function NodesFixture() {
         return saved;
       }
       if (action === "credentials.delete") { records = records.filter(row => row.id !== id); connections.delete(id); return { ok: true }; }
-      if (action === "nodes.list") return { nodes: nodes(), jobs: [] };
+      if (action === "nodes.list") return { nodes: nodes(), job_settings: jobSettings, jobs: showJobs ? [{
+        id: "research-job", node_id: "research", command: "python train.py --dataset research", output: "Baseline checked.",
+        state: ++jobReads === 1 ? "running" : "completed", checked_at: "2026-11-12T08:00:00Z",
+        ...(jobReads > 1 ? { finished_at: "2026-11-12T08:00:10Z" } : {}),
+      }] : [] };
+      if (action === "nodes.settings.save") { jobSettings = { ...jobSettings, ...values }; return { job_settings: jobSettings }; }
       if (action === "nodes.save") {
         if (failSave) { failSave = false; throw new Error("Fixture Node save failed"); }
         const connection = connections.get(id || String(values.credential_id))!;
@@ -53,7 +60,9 @@ export function NodesFixture() {
         connection.init_script = String(values.init_script ?? ""); connection.environment = values.environment as Record<string, string>;
         return { nodes: nodes() };
       }
-      if (action === "nodes.execute") return { output: values.command === "true" ? "" : "Linux research-node\nCPU load: 0.04\n" };
+      if (action === "nodes.execute") return values.command === "ssh-keygen -lf missing"
+        ? { output: "missing: No such file or directory", stdout: "", stderr: "missing: No such file or directory", exit_code: 2 }
+        : { output: values.command === "true" ? "" : "Linux research-node\nCPU load: 0.04\n", exit_code: 0 };
       if (action === "nodes.test") return { output: "SSH connection succeeded" };
       if (action === "nodes.scan") return { host_key: "fixture-host ssh-ed25519 fixture-key", fingerprints: "SHA256:fixture-host-key" };
       if (action === "nodes.delete") { connections.get(id)!.node_enabled = false; return { ok: true }; }

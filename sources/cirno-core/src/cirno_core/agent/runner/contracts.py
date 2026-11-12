@@ -56,6 +56,7 @@ class AgentRunSpec:
     session_key: str | None = None
     provider_retry_mode: str = "standard"
     checkpoint_callback: CheckpointCallback | None = None
+    request_usage_callback: Callable[[LLMUsage], Awaitable[None]] | None = None
     consolidate_history: HistoryConsolidator | None = None
     consolidate_provider_compaction: ProviderCompactionConsolidator | None = None
     injection_callback: InjectionCallback | None = None

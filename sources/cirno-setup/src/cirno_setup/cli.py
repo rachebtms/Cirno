@@ -18,17 +18,18 @@ from cirno_setup.runner import ensure
 from cirno_setup.system import hand_over_state, prepare
 
 
-def positive_seconds(value: str) -> int:
+def nonnegative_seconds(value: str) -> int:
     seconds = int(value)
-    if seconds <= 0:
-        raise argparse.ArgumentTypeError("timeout must be greater than zero seconds")
+    if seconds < 0:
+        raise argparse.ArgumentTypeError("timeout must be zero or positive seconds")
     return seconds
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="cirno-setup", description="Install +components and optionally start Cirno; put server arguments after --")
     result.add_argument("components", nargs="*")
-    result.add_argument("--timeout", type=positive_seconds, default=apt.DEFAULT_TIMEOUT, metavar="SECONDS")
+    result.add_argument("--timeout", type=nonnegative_seconds, default=apt.DEFAULT_TIMEOUT, metavar="SECONDS",
+                        help=f"Per-command timeout in seconds; 0 disables install/check time limits (default: {apt.DEFAULT_TIMEOUT})")
     result.add_argument("--no-restore-apt", action="store_true", help="Do not restore manually installed system packages")
     result.add_argument("--proxy", help="Proxy for dependency downloads")
     result.add_argument("--serve", action="store_true", help="Start Cirno after all environment checks succeed")

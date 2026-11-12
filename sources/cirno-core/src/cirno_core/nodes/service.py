@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
-from datetime import datetime, timezone
+import time
 from pathlib import Path
-from uuid import uuid4
 
 from filelock import FileLock
 from pydantic import Field
@@ -16,9 +15,11 @@ from cirno_core.credentials.service import Credentials
 from cirno_core.credentials.ssh import SSHConnection
 from cirno_core.credentials.ssh_session import SSHSessionSettings
 from cirno_core.nodes.shell import remote_shell
+from cirno_core.nodes.jobs import NodeJobs
+from cirno_core.nodes.commands import CommandResult, SSHCommandTimeout, SSHProcessError, command_envelope, command_result
+from cirno_core.nodes.policy import read_policy
 from cirno_core.storage.instance import InstanceData
 from cirno_core.utils.atomic_file import atomic_write_text
-from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.subprocess import kill_and_drain
 
 
@@ -39,6 +40,9 @@ class Nodes:
             "BatchMode=no" if node.auth_method == "password" else "BatchMode=yes",
             "-o",
             "ConnectTimeout=15",
+            "-o", "ConnectionAttempts=3",
+            "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=3",
             "-o",
             "StrictHostKeyChecking=yes",
             "-P" if transfer else "-p",
@@ -72,9 +76,10 @@ class Nodes:
         allowed = {node["id"] for node in nodes}
         jobs = self.data.list("node_jobs")
         if self.credentials.actor == "agent":
-            jobs = [{key: job[key] for key in ("id", "node_id", "state", "created_at", "pid", "stop_requested") if key in job}
+            jobs = [{**{key: job[key] for key in ("id", "node_id", "state", "created_at", "pid", "stop_requested", "checked_at", "finished_at", "exit_code") if key in job},
+                     "status_check_failed": bool(job.get("check_error"))}
                     for job in jobs if job["node_id"] in allowed]
-        return {"nodes": nodes, "jobs": jobs}
+        return {"nodes": nodes, "jobs": jobs, "job_settings": read_policy(self.data).model_dump()}
 
     @staticmethod
     def public_node(record: dict) -> dict:
@@ -124,38 +129,42 @@ class Nodes:
         password: str | None = None,
         include_stderr: bool = False,
     ) -> str:
+        result = (await self._run_result(args, timeout, password=password)).checked()
+        return result.output if include_stderr else result.stdout
+
+    async def _run_result(
+        self, args: list[str], timeout: int = 120, *, password: str | None = None,
+    ) -> CommandResult:
         environment = await asyncio.to_thread(self.environment, password) if password is not None else None
         process = await asyncio.create_subprocess_exec(
             *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=environment,
             start_new_session=os.name == "posix",
         )
 
-        async def tail(stream, limit):
-            buffer = bytearray()
+        output_buffer, error_buffer = bytearray(), bytearray()
+
+        async def tail(stream, buffer, limit):
             while chunk := await stream.read(16384):
                 buffer.extend(chunk)
                 if len(buffer) > limit:
                     del buffer[:-limit]
-            return bytes(buffer)
 
         try:
             async with asyncio.timeout(timeout):
-                out, error = await asyncio.gather(
-                    tail(process.stdout, 64000), tail(process.stderr, 16000)
+                await asyncio.gather(
+                    tail(process.stdout, output_buffer, 64000), tail(process.stderr, error_buffer, 16000)
                 )
                 await process.wait()
+        except TimeoutError as error:
+            await kill_and_drain(process, process_group=os.name == "posix")
+            raise SSHCommandTimeout(CommandResult(
+                output_buffer.decode(errors="replace"), error_buffer.decode(errors="replace"), process.returncode,
+                f"SSH command timed out after {timeout:g} seconds.",
+            )) from error
         except BaseException:
             await kill_and_drain(process, process_group=os.name == "posix")
             raise
-        if process.returncode:
-            raise RuntimeError(
-                error.decode(errors="replace") or f"OpenSSH exited with {process.returncode}"
-            )
-        return out.decode(errors="replace") + (
-            ("\n" if out else "") + error.decode(errors="replace")
-            if include_stderr and error
-            else ""
-        )
+        return CommandResult(output_buffer.decode(errors="replace"), error_buffer.decode(errors="replace"), process.returncode)
 
     async def scan_host_key(self, host: str, port: int = 22) -> dict:
         # A scan is untrusted until the user compares and saves the fingerprint.
@@ -198,6 +207,21 @@ class Nodes:
             include_stderr=include_stderr,
         )
 
+    async def read_status(self, node_id: str, command: str, *, timeout=120) -> str:
+        """Reconnect once for an internal read-only status query, within one deadline."""
+        deadline = time.monotonic() + timeout
+        async with asyncio.timeout(timeout):
+            try:
+                return await self.execute(node_id, command, timeout=timeout, initialize=False, include_stderr=False)
+            except SSHProcessError as error:
+                if not error.reconnectable or deadline - time.monotonic() <= 0.5:
+                    raise
+                await asyncio.sleep(0.5)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("SSH status query deadline exceeded during reconnect delay") from error
+                return await self.execute(node_id, command, timeout=remaining, initialize=False, include_stderr=False)
+
     async def transfer(
         self, node_id: str, local_path: str, remote_path: str, *, download=False
     ) -> str:
@@ -212,92 +236,20 @@ class Nodes:
         )
         return "File transferred."
 
-    async def start_job(self, node_id: str, command: str) -> dict:
+    async def execute_command(self, node_id: str, command: str, *, timeout=120) -> CommandResult:
         node = await asyncio.to_thread(self.node, node_id)
-        job = {
-            "id": uuid4().hex,
-            "node_id": node_id,
-            "command": command,
-            "state": "submitting",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        job_id = job["id"]
-        directory = f'"$HOME/.cirno/jobs/{job_id}"'
-        # mkdir is the submission boundary; a retry cannot silently duplicate this job.
-        wrapper = (
-            remote_shell(node, command)
-            + '; result=$?; printf "%s" "$result" > '
-            + directory
-            + "/exit"
-        )
-        script = (
-            f'command -v setsid >/dev/null || exit 69; mkdir -p "$HOME/.cirno/jobs"; '
-            f"mkdir {directory} || exit 70; "
-            f"nohup setsid sh -c {shlex.quote(wrapper)}"
-            f" >{directory}/output.log 2>&1 </dev/null & pid=$!; "
-            f'printf "%s" "$pid" >{directory}/pid; printf "%s" "$pid"'
-        )
-
+        script, marker = command_envelope(remote_shell(node, command))
         try:
-            await self._save_job(job)
-        except asyncio.CancelledError as exc:
-            await self._save_job({**job, "state": "submission_unknown", "error": str(exc) or type(exc).__name__})
-            raise
+            transport = await self._run_result(
+                [*(await asyncio.to_thread(self.arguments, node)), "--", f"{node.username}@{node.host}", script],
+                timeout, password=node.password if node.auth_method == "password" else None,
+            )
+        except SSHCommandTimeout as error:
+            transport = error.result
+        return command_result(transport, marker)
 
-        try:
-            pid = int((await self.execute(node_id, script, include_stderr=False, initialize=False)).strip())
-            if pid <= 0:
-                raise ValueError("SSH returned an invalid job PID")
-        except (Exception, asyncio.CancelledError) as exc:
-            await self._save_job({**job, "state": "submission_unknown", "error": str(exc) or type(exc).__name__})
-            if isinstance(exc, asyncio.CancelledError):
-                raise
-            raise RuntimeError(
-                f"Job {job_id} submission unconfirmed; inspect it before submitting again: {exc}"
-            ) from exc
-        return await self._save_job({**job, "pid": pid, "state": "running"})
-
-    async def _save_job(self, job: dict) -> dict:
-        return await shield_and_drain(asyncio.to_thread(self.data.save, "node_jobs", job))
+    async def start_job(self, node_id: str, command: str) -> dict:
+        return await NodeJobs(self).start_job(node_id, command)
 
     async def inspect_job(self, job_id: str, *, stop=False) -> dict:
-        job = await asyncio.to_thread(self.data.get, "node_jobs", job_id)
-        directory = f'"$HOME/.cirno/jobs/{job_id}"'
-        alive = (
-            f'[ -f {directory}/pid ] && pid=$(cat {directory}/pid) && '
-            f'kill -0 "$pid" 2>/dev/null && ps -ww -p "$pid" -o args= | grep -F {shlex.quote(job_id)} >/dev/null'
-        )
-        stop_script = ""
-        if stop:
-            stop_script = (
-                f'if [ ! -f {directory}/exit ] && {alive}; then '
-                f'kill -TERM -"$pid" && touch {directory}/stop-requested; fi; '
-            )
-        result = await self.execute(
-            job["node_id"],
-            stop_script + f'cirno_job_running=0; if {alive}; then cirno_job_running=1; fi; '
-            f'if [ -f {directory}/exit ]; then printf "EXIT:"; cat {directory}/exit; '
-            'elif [ "$cirno_job_running" = 1 ]; then printf RUNNING; '
-            f'elif [ -f {directory}/stop-requested ]; then printf STOPPED; else printf UNKNOWN; fi; printf "\\n"; tail -c 60000 {directory}/output.log',
-            initialize=False,
-        )
-        status, _, output = result.partition("\n")
-        state = (
-            "completed"
-            if status == "EXIT:0"
-            else "failed"
-            if status.startswith("EXIT:")
-            else "running"
-            if status == "RUNNING"
-            else "stopped"
-            if status == "STOPPED"
-            else "unknown"
-        )
-        return await self._save_job(
-            {
-                **job,
-                "state": state,
-                "output": output,
-                "stop_requested": stop or job.get("stop_requested", False),
-            },
-        )
+        return await NodeJobs(self).inspect_job(job_id, stop=stop)

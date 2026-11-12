@@ -2840,6 +2840,8 @@
     "history": "Versi",
     "evidence": "Sumber",
     "more": "Muat lagi",
+    "loadAll": "Muat semua",
+    "paginationError": "Tidak dapat melanjutkan pemuatan memori. Silakan cari lagi.",
     "reindex": "Bangun ulang indeks",
     "retry": "Retry saving consolidation results",
     "pending": "Pending next consolidation: {{count}}",
@@ -2911,6 +2913,30 @@
     "remaining_other": "{{count}} pertanyaan tersisa"
   },
   "features": {
+    "nodeJobPolicy": "Pemantauan dan retensi tugas",
+    "nodeJobPolicyHelp": "Server memeriksa status tanpa memanggil model meskipun halaman ditutup. Pemeriksaan otomatis hanya membaca status; baca keluaran lengkap secara manual.",
+    "nodeJobInteger": "Masukkan bilangan bulat minimal 0.",
+    "nodeJobChecked": "Konfirmasi terakhir: {{time}}",
+    "nodeJobNotChecked": "Belum diperiksa sejak dikirim.",
+    "nodeJobFinished": "Selesai dikonfirmasi: {{time}}",
+    "nodeJobCheckError": "Pemeriksaan gagal; menampilkan status terakhir yang diketahui: {{error}}",
+    "nodeJobPolicyFields": {
+      "poll_interval_seconds": "Interval pemeriksaan SSH (detik)",
+      "retention_days": "Retensi catatan selesai (hari)"
+    },
+    "nodeJobPolicyHelpFields": {
+      "poll_interval_seconds": "0 menonaktifkan pemeriksaan. Tersimpan otomatis tanpa memulai ulang.",
+      "retention_days": "0 menyimpan selamanya. Hanya catatan lokal yang selesai dan cache keluaran yang dihapus; tugas aktif atau belum dikonfirmasi serta berkas jarak jauh tetap disimpan."
+    },
+    "nodeJobStates": {
+      "running": "Berjalan (status terakhir)",
+      "submitting": "Mengirim",
+      "submission_unknown": "Pengiriman belum dikonfirmasi",
+      "unknown": "Status belum dikonfirmasi",
+      "completed": "Selesai",
+      "failed": "Gagal",
+      "stopped": "Dihentikan"
+    },
     "projects": "Proyek",
     "ordinaryConversations": "Percakapan",
     "createProject": "Buat proyek",
@@ -2960,6 +2986,7 @@
     "runCommand": "Jalankan",
     "close": "Tutup",
     "commandCompleted": "Perintah selesai.",
+    "commandExitCode": "Kode keluar: {{code}}",
     "removeNode": "Hapus dari Nodes",
     "nodeInitScript": "Skrip inisialisasi",
     "nodeInitScriptHint": "Jalur skrip jarak jauh yang dimuat di Bash setelah variabel dan direktori diatur. Berlaku untuk perintah, terminal baru, dan pekerjaan latar belakang.",
@@ -3117,6 +3144,8 @@
     "projectActions": "Tindakan proyek {{name}}"
   },
   "memoryGraph": {
+    "nodeLimit": "Batas memori",
+    "limitError": "Masukkan bilangan bulat positif.",
     "description": "Explore saved knowledge, connections and original sources.",
     "cloud": "Memory cloud",
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",

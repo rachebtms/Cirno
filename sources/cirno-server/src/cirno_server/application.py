@@ -395,6 +395,8 @@ def _run_claimed_server(
                     ),
                 ]
             )
+            from cirno_core.nodes.monitor import monitor_node_jobs
+            tasks.append(asyncio.create_task(monitor_node_jobs(), name="cirno-node-jobs"))
             desktop_activated.set()
             if _webui_channel_enabled(config):
                 tasks.append(

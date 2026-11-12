@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
 from cirno_core.config.paths import get_data_dir
 
-KINDS = {"projects", "nodes", "node_jobs", "memories"}
+KINDS = {"projects", "nodes", "node_jobs", "node_settings", "memories"}
 
 
 class InstanceData:
@@ -73,3 +74,16 @@ class InstanceData:
     def delete(self, kind: str, record_id: str) -> None:
         with self.connect() as connection:
             connection.execute("DELETE FROM records WHERE kind=? AND id=?", (kind, record_id))
+
+    def update(self, kind: str, record_id: str, change: Callable[[dict], dict], *, initial: dict | None = None) -> dict:
+        """Mutate atomically; create only when the caller explicitly supplies initial data."""
+        if kind not in KINDS:
+            raise ValueError("Unknown record kind")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT body FROM records WHERE kind=? AND id=?", (kind, record_id)).fetchone()
+            if row is None and initial is None:
+                raise KeyError(f"{kind} record not found: {record_id}")
+            record = {**change(json.loads(row[0]) if row is not None else dict(initial)), "id": record_id}
+            connection.execute("INSERT INTO records(kind,id,body) VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body", (kind, record_id, json.dumps(record, ensure_ascii=False)))
+        return record
