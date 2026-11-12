@@ -35,12 +35,12 @@ describe("App navigation", () => {
     await screen.findByRole("navigation", { name: "Settings sections" });
     const chat = screen.getAllByRole("tab").find(tab => tab.getAttribute("aria-selected") !== "true")!;
     await user.click(chat);
-    let dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
+    await screen.findByRole("dialog", { name: "Restart before leaving?" });
     await user.keyboard("{Escape}");
     expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
     expect(window.location.hash).toBe("#/settings");
     await user.click(chat);
-    dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
+    const dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
     await user.click(within(dialog).getByRole("button", { name: "Restart later" }));
     await waitFor(() => expect(window.location.hash).toBe("#/new"));
     expect(chat).toHaveAttribute("aria-selected", "true");
