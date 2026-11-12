@@ -5,6 +5,18 @@ import { requestMutationMock, jsonResponse, settingsPayload, renderSettingsView,
 describe("Settings navigation lifecycle", () => {
   installSettingsViewTestHooks();
 
+  it("exposes the memory context and scanning budgets in the actual library page", async () => {
+    renderSettingsView({ initialSection: "memory", initialSettings: { ...settingsPayload(), runtime_config: {
+      "agents.defaults.memory.context_tokens": 2000, "agents.defaults.memory.index_scan_batch": 100,
+    } } });
+    expect(screen.getByRole("spinbutton", { name: "Shared memory budget (tokens)" })).toHaveValue(2000);
+    const batch = screen.getByRole("spinbutton", { name: "Index scan batch" });
+    fireEvent.change(batch, { target: { value: "250" } });
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith("settings.runtime_config.update", {
+      values: { "agents.defaults.memory.index_scan_batch": 250 },
+    }, 20_000));
+  });
+
   it("asks before leaving with pending changes and lets the user restart later", () => {
     const leave = vi.fn();
     const view = renderSettingsView({ initialSection: "runtime", initialSettings: {

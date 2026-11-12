@@ -14,10 +14,11 @@ function fixture() {
     const dirty = vi.fn().mockReturnValue(true);
     const clean = { needsCompletion: () => false, commit: async () => true };
     const controller = {
+        runtimeConfigState: { completion: clean },
         client: {}, settings: { requires_restart: false }, activeSection: "models",
         selectSection: vi.fn(), modelEdits: { needsCompletion: dirty, commit }, safetyEdits: clean, webEdits: clean,
     } as unknown as SettingsController;
-    const view = renderHook(({ owner }) => useSettingsNavigation(owner, false), { initialProps: { owner: controller } });
+    const view = renderHook(({ owner }) => useSettingsNavigation({ ...owner, requiresRestart: () => owner.settings?.requires_restart === true }, false), { initialProps: { owner: controller } });
     return { ...view, controller, commit, dirty };
 }
 it("retains the latest destination when queued settings completions finish out of order", async () => {

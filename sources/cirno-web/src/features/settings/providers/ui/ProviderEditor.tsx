@@ -16,7 +16,7 @@ export function ProviderEditor({ provider, options, disabled }: { provider: Prov
   const change = (value: Partial<typeof form>) => options.onChangeProviderForm(provider.id, value);
   const support = { bedrock: "bedrock", azure_openai: "azure" }[provider.id];
   const feature = options.cirnoFeatures?.features.find(item => item.name === support);
-  return <div className="provider-fields">
+  return <fieldset disabled={disabled} className="provider-fields min-w-0 border-0 p-0">
     {feature && !feature.installed && <Description>{t("settings.capabilities.providerInstallOnSave")}</Description>}
     {support && options.capabilityError && <Alert status="danger" role="alert"><Alert.Description>{options.capabilityError}</Alert.Description></Alert>}
     {state.oauth ? <ProviderOAuthFields provider={provider} options={options} disabled={disabled} dirty={state.dirty} />
@@ -27,5 +27,5 @@ export function ProviderEditor({ provider, options, disabled }: { provider: Prov
         ? <ModelAPIControl provider={provider} title={t("settings.providers.defaultAPI")} description={t("settings.providers.openaiDefaultAPIDescription")} value={form.api} onChange={api => change({ api })} />
         : <ProviderAPIControl value={form.api} onChange={api => change({ api })} />)}
     </ProviderAdvancedOptions>}
-  </div>;
+  </fieldset>;
 }

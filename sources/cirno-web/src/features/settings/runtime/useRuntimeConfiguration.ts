@@ -5,6 +5,7 @@ import { updateRuntimeConfigSettings } from "@/lib/api";
 import type { CirnoClient } from "@/lib/cirno-client";
 import type { RuntimeConfigValue, SettingsPayload } from "@/lib/contracts/settings";
 import type { ApplySettingsPayload } from "../contracts";
+import { useLifetime } from "@/ui/resources/useLifetime";
 
 type Draft = string | boolean;
 
@@ -20,27 +21,38 @@ export function useRuntimeConfigSettings(
   applyPayload: ApplySettingsPayload,
 ) {
   const { t } = useTranslation();
+  const isCurrent = useLifetime(client);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [saving, setSaving] = useState<string | null>(null);
-  const inFlight = useRef(false);
+  const inFlight = useRef<Promise<boolean> | null>(null);
+  const current = useRef({ settings, drafts });
+  current.current = { settings, drafts };
+  const updateDrafts = (update: (drafts: Record<string, Draft>) => Record<string, Draft>) => {
+    current.current.drafts = update(current.current.drafts);
+    setDrafts(current.current.drafts);
+  };
+  const lastFailure = useRef("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [invalidField, setInvalidField] = useState<string | null>(null);
   const delay = useRef(600);
-  const saveLatest = useRef<(group: string) => Promise<void>>(async () => {});
+  const saveLatest = useRef<(group: string) => Promise<boolean>>(async () => true);
   const pendingGroups = useRef<string[]>([]);
-  const queuedSaves = useRef<string[]>([]);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setDrafts({}); setErrors({}); setSaved({}); setSaving(null); setInvalidField(null);
+    return () => { inFlight.current = null; };
+  }, [client]);
   useEffect(() => {
     if (invalidField && saving === null) document.getElementById(`runtime-${invalidField}`)?.focus();
   }, [invalidField, saving]);
-  const value = (path: string): Draft => drafts[path] ?? displayValue(settings?.runtime_config?.[path]);
+  const value = (path: string): Draft => current.current.drafts[path] ?? displayValue(current.current.settings?.runtime_config?.[path]);
   const visible = (field: RuntimeConfigField) => (!field.path.includes(".memory.embedding_") || field.path.endsWith(".embedding_enabled") || value("agents.defaults.memory.embedding_enabled") === true) && (!field.when || (Array.isArray(field.when.value)
     ? field.when.value.includes(String(value(field.when.path)))
     : value(field.when.path) === field.when.value));
   const dirty = (field: RuntimeConfigField) =>
-    drafts[field.path] !== undefined && drafts[field.path] !== displayValue(settings?.runtime_config?.[field.path]);
+    current.current.drafts[field.path] !== undefined && current.current.drafts[field.path] !== displayValue(current.current.settings?.runtime_config?.[field.path]);
   const discard = (group: string) => {
-    setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([path]) =>
+    updateDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([path]) =>
       !RUNTIME_CONFIG_FIELDS.some((field) => field.group === group && field.path === path),
     )));
     setErrors((prev) => ({ ...prev, [group]: "" }));
@@ -48,7 +60,7 @@ export function useRuntimeConfigSettings(
   };
   const change = (field: RuntimeConfigField, next: Draft) => {
     delay.current = ["boolean", "toggle", "select", "preset"].includes(field.kind) ? 0 : 600;
-    setDrafts((prev) => ({ ...prev, [field.path]: next }));
+    updateDrafts((prev) => ({ ...prev, [field.path]: next }));
     setSaved((prev) => ({ ...prev, [field.group]: false }));
     setErrors((prev) => ({ ...prev, [field.group]: "" }));
     setInvalidField(null);
@@ -58,35 +70,39 @@ export function useRuntimeConfigSettings(
     setErrors((prev) => ({ ...prev, [field.group]: message }));
     setInvalidField(field.path);
   };
-  const save = async (group: string, edits: Record<string, Draft> = {}) => {
-    if (!settings?.runtime_config) return;
+  const save = async (group: string) => {
+    if (!isCurrent()) return false;
     if (inFlight.current) {
-      if (!queuedSaves.current.includes(group)) queuedSaves.current.push(group);
-      return;
+      await inFlight.current;
+      if (!isCurrent()) return false;
+      return saveLatest.current(group);
     }
-    const editedValue = (field: RuntimeConfigField) => edits[field.path] ?? value(field.path);
+    const settings = current.current.settings;
+    if (!settings?.runtime_config) return true;
+    const editedValue = (field: RuntimeConfigField) => value(field.path);
     const changed = RUNTIME_CONFIG_FIELDS.filter((field) => field.group === group && visible(field)
       && editedValue(field) !== displayValue(settings.runtime_config?.[field.path]));
-    if (!changed.length) return;
+    if (!changed.length) return true;
+    const submitted = Object.fromEntries(changed.map(field => [field.path, editedValue(field)]));
     const values: Record<string, RuntimeConfigValue> = {};
     for (const field of changed) {
-      const raw = editedValue(field);
+      const raw = submitted[field.path];
       if (field.kind === "idle-compaction") {
         if (!/^\d+$/.test(String(raw)) || !Number.isSafeInteger(Number(raw))) {
           reject(field, t("settings.runtimeConfig.idleCompaction.numberError"));
-          return;
+          return false;
         }
         values[field.path] = Number(raw);
       } else if (field.kind === "number" || field.kind === "duration") {
         const maximum = field.kind === "duration" ? settings.advanced.exec_max_runtime_limit || undefined : field.max;
         const parsed = Number(raw);
         if (String(raw).trim() === "" || !Number.isFinite(parsed)
-          || !Number.isInteger(parsed)
+          || (field.step !== "any" && !Number.isSafeInteger(parsed))
           || (field.min !== undefined && parsed < field.min)
           || (maximum !== undefined && parsed > maximum)) {
           setErrors((prev) => ({ ...prev, [group]: t("settings.runtimeConfig.numberError") }));
           setInvalidField(field.path);
-          return;
+          return false;
         }
         values[field.path] = parsed;
       } else if (field.kind === "list") {
@@ -97,26 +113,33 @@ export function useRuntimeConfigSettings(
         values[field.path] = raw;
       }
     }
-    inFlight.current = true;
     setSaving(group);
     setErrors((prev) => ({ ...prev, [group]: "" }));
-    try {
-      const payload = await updateRuntimeConfigSettings(client, values);
-      applyPayload(payload, { preserveAgentForm: true, preserveCapabilityForms: true });
-      // A response acknowledges only the submitted values, not edits made while it was in flight.
-      setDrafts(current => Object.fromEntries(Object.entries(current).filter(([path, raw]) =>
-        !changed.some(field => field.path === path && editedValue(field) === raw),
-      )));
-      setInvalidField(null);
-      setSaved((prev) => ({ ...prev, [group]: true }));
-    } catch (error) {
-      const message = (error as Error).message;
-      setErrors((prev) => ({ ...prev, [group]: message }));
-      setInvalidField(changed.find((field) => message.startsWith(field.path))?.path ?? null);
-    } finally {
-      inFlight.current = false;
-      setSaving(null);
-    }
+    const request = (async () => {
+      try {
+        const payload = await updateRuntimeConfigSettings(client, values);
+        if (!isCurrent()) return false;
+        current.current.settings = payload;
+        applyPayload(payload, { preserveAgentForm: true, preserveCapabilityForms: true });
+        // A response acknowledges only the submitted values, not edits made while it was in flight.
+        updateDrafts(current => Object.fromEntries(Object.entries(current).filter(([path, raw]) =>
+          submitted[path] !== raw,
+        )));
+        setInvalidField(null);
+        setSaved((prev) => ({ ...prev, [group]: true }));
+        return true;
+      } catch (error) {
+        if (!isCurrent()) return false;
+        const message = error instanceof Error ? error.message : String(error);
+        lastFailure.current = message;
+        setErrors((prev) => ({ ...prev, [group]: message }));
+        setInvalidField(changed.find((field) => message.startsWith(field.path))?.path ?? null);
+        return false;
+      } finally { if (isCurrent()) setSaving(null); }
+    })();
+    inFlight.current = request;
+    try { return await request; }
+    finally { if (inFlight.current === request) inFlight.current = null; }
   };
   saveLatest.current = save;
   pendingGroups.current = [...new Set(RUNTIME_CONFIG_FIELDS.filter((field) =>
@@ -126,35 +149,34 @@ export function useRuntimeConfigSettings(
   useEffect(() => {
     if (saving) return;
     const timer = window.setTimeout(() => {
-      const group = queuedSaves.current.shift() ?? pendingGroups.current[0];
+      const group = pendingGroups.current[0];
       if (group) void saveLatest.current(group);
     }, delay.current);
     return () => window.clearTimeout(timer);
   }, [drafts, saving]);
-  const saveText = async (field: RuntimeConfigField, next: string) => {
-    const payload = await updateRuntimeConfigSettings(client, {
-      [field.path]: field.kind === "list" ? next.split("\n").map((line) => line.trim()).filter(Boolean) : next,
-    });
-    applyPayload(payload, { preserveAgentForm: true, preserveCapabilityForms: true });
-    setSaved((prev) => ({ ...prev, [field.group]: true }));
-  };
   const commit = (field: RuntimeConfigField, next: Draft) => {
     if (next === value(field.path) && !dirty(field)) return;
     change(field, next);
-    void save(field.group, { [field.path]: next });
+    void save(field.group);
   };
   const saveProxy = async (next: string) => {
-    setSaving("proxy");
-    try {
-      const payload = await updateRuntimeConfigSettings(client, { "network.proxy": next.trim() || null });
-      applyPayload(payload, { preserveAgentForm: true, preserveCapabilityForms: true });
-      discard("proxy");
-      setSaved((prev) => ({ ...prev, proxy: true }));
-    } finally {
-      setSaving(null);
-    }
+    const field = RUNTIME_CONFIG_FIELDS.find(field => field.path === "network.proxy")!;
+    change(field, next.trim());
+    if (!await saveLatest.current(field.group)) throw new Error(lastFailure.current);
   };
-  return { value, visible, dirty, discard, change, commit, reject, save, saveText, saveProxy, saving, errors, invalidField, saved };
+  const completion = {
+    needsCompletion: () => !!inFlight.current || RUNTIME_CONFIG_FIELDS.some(field => visible(field) && dirty(field)),
+    commit: async (): Promise<boolean> => {
+      while (true) {
+        if (!isCurrent()) return false;
+        if (inFlight.current && !await inFlight.current) return false;
+        const groups = [...new Set(RUNTIME_CONFIG_FIELDS.filter(field => visible(field) && dirty(field)).map(field => field.group))];
+        if (!groups.length) return true;
+        for (const group of groups) if (!await saveLatest.current(group)) return false;
+      }
+    },
+  };
+  return { value, visible, dirty, discard, change, commit, reject, save, saveProxy, completion, saving, errors, invalidField, saved };
 }
 
 export type RuntimeConfigController = ReturnType<typeof useRuntimeConfigSettings>;

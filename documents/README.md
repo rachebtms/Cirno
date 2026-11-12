@@ -34,6 +34,7 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.10](releases/0.2.10.md): reliable automatic saves, restart-state tracking and restored settings controls.
 - [0.2.9](releases/0.2.9.md): complete setup catalogue verification, additional optional tools and mobile message editing fixes.
 - [0.2.8](releases/0.2.8.md): unified container image, command-selected persistent dependencies and standard uv/npm/browser tool environments.
 

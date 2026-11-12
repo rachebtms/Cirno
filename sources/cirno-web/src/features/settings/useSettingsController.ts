@@ -72,6 +72,8 @@ export function useSettingsController({
   const remoteBrowserAccess =
     typeof window !== "undefined" && !isLoopbackHost(window.location.hostname);
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const [loading, setLoading] = useState(() => initialSettings === null);
   const [error, setError] = useState<string | null>(null);
   const normalizedInitialSection = canonicalSettingsSection(initialSection);
@@ -115,6 +117,7 @@ export function useSettingsController({
       payload: SettingsPayload,
       options: { preserveAgentForm?: boolean; preserveCapabilityForms?: boolean } = {},
     ) => {
+      settingsRef.current = payload;
       setSettings(payload);
       if (!options.preserveAgentForm) {
         const nextForm = agentDraftFromPayload(payload);
@@ -312,6 +315,7 @@ export function useSettingsController({
 
   return {
     applyPayload,
+    requiresRestart: () => settingsRef.current?.requires_restart === true,
     client,
     modelState,
     modelActions,

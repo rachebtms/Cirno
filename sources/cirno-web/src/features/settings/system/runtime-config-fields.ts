@@ -7,6 +7,7 @@ export interface RuntimeConfigField {
   saveOnBlur?: boolean;
   min?: number;
   max?: number;
+  step?: number | "any";
 }
 
 export type RuntimeConfigPage = "personality" | "approval" | "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "consolidation" | "memory-search" | "execution" | "shell" | "web-network";
@@ -80,8 +81,8 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   {"group": "embedding", "path": "agents.defaults.memory.embedding_max_rss_mb", "kind": "number", "min": 50, "when": {"path": "agents.defaults.memory.embedding_provider", "value": "local"}},
   {"group": "embedding", "path": "agents.defaults.memory.embedding_timeout_seconds", "kind": "number", "min": 1, "max": 120, "when": {"path": "agents.defaults.memory.embedding_enabled", "value": true}},
   {"group": "consolidation", "path": "agents.defaults.idle_compact_check_interval_seconds", "kind": "number", "min": 10, "max": 3600},
-  { group: "consolidation", path: "agents.defaults.idle_compact_percent", kind: "number", min: 0, max: 100 },
-  { group: "consolidation", path: "agents.defaults.idle_compact_keep_percent", kind: "number", min: 0, max: 100 },
+  { group: "consolidation", path: "agents.defaults.idle_compact_percent", kind: "number", step: "any", min: 0, max: 100 },
+  { group: "consolidation", path: "agents.defaults.idle_compact_keep_percent", kind: "number", step: "any", min: 0, max: 100 },
   {"group": "heartbeat", "path": "agents.defaults.heartbeat.enabled", "kind": "boolean"},
   {"group": "heartbeat", "path": "agents.defaults.heartbeat.interval_s", "kind": "number", "min": 60},
   {"group": "requests", "path": "network.request_timeout_s", "kind": "number", "min": 60, "max": 3600},
@@ -101,6 +102,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "consolidation", path: "agents.defaults.idle_compact_after_minutes", kind: "idle-compaction", saveOnBlur: true },
   { group: "tools", path: "tools.exec.enable", kind: "boolean" },
   { group: "tools", path: "tools.file.enable", kind: "boolean" },
+  { group: "tools", path: "tools.cli_apps.enable", kind: "boolean" },
   { group: "web", path: "tools.web.enable", kind: "boolean" },
   { group: "tools", path: "tools.my.enable", kind: "boolean" },
   { group: "tools", path: "tools.my.allow_set", kind: "boolean", when: { path: "tools.my.enable", value: true } },

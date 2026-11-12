@@ -98,6 +98,12 @@ Each provider and model has a stable ID, separate from its display name. Newly c
 
 Balance queries are disabled until configured. Set a complete balance endpoint and select DeepSeek's balance format or a custom JSON response with a JSON Pointer to the amount (for example `/data/balance`) and currency. The endpoint may use a different host from the model API. A separate balance API key is optional; leaving it blank uses the provider key. Refresh queries manually from the provider's balance panel. Balance settings do not change model routing or invalidate its runtime cache.
 
+## Saving settings
+
+Runtime settings save automatically. Switching a settings category, leaving the page or closing its workbench tab waits for pending writes, including edits made before the autosave delay expires. A failed save keeps the page open with its draft and error so you can correct, retry or discard it. Restart prompts use the saved configuration: live prompt edits do not keep a restart pending, while rotating an embedding API key does.
+
+Settings → Memory library exposes the shared-memory injection budget and index scan batch alongside the Home memory file and index status. Settings → Tools & CLI Apps includes the CLI Apps master switch, so a disabled tool can be re-enabled from the interface. Idle consolidation trigger and retention percentages accept fractional values.
+
 ## Context consolidation
 
 Task checkpoints, durable learning and supported Skill improvements are produced in the same model request. Results are saved before task execution continues. There is no separate model, Dream schedule or idle Dream task. Additional references stay at the request tail for cache reuse. Configure learning, maximum updates, reference characters and the shared output/reasoning budget on this page. Disabling learning keeps context checkpoint generation enabled. Older compaction generation settings migrate to `agents.defaults.consolidation`; an old Dream enabled flag becomes `consolidation.learn`, and old scheduling/model/iteration options are retired when configuration is saved. `/consolidate` is the manual command; `/compact` and `/dream` remain hidden compatibility aliases.

@@ -14,7 +14,7 @@ export function ScalarField({ field, state, disabled }: ConfigurationFieldProps)
     <Description>{t(`${path}.help`)}</Description>
     {multiline ? <TextArea id={`runtime-${field.path}`} rows={4} className="configuration-textarea" autoComplete="off" />
       : <Input id={`runtime-${field.path}`} type={field.kind === "number" ? "number" : field.kind === "password" ? "password" : "text"}
-        min={field.min} max={field.max} step={1} autoComplete={field.kind === "password" ? "new-password" : "off"} />}
+        min={field.min} max={field.max} step={field.step ?? 1} autoComplete={field.kind === "password" ? "new-password" : "off"} />}
     <FieldError>{error}</FieldError>
   </TextField>;
 }

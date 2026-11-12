@@ -20,11 +20,14 @@ function payload() {
     "agents.defaults.workspace": "/workspace", "agents.defaults.max_tool_iterations": 200,
   } } satisfies SettingsPayload;
 }
-function Harness({ page, initial = payload() }: { page: RuntimeConfigPage; initial?: SettingsPayload }) {
+const client = { requestMutation: mutation } as unknown as CirnoClient;
+function Harness({ page, initial = payload(), canClose = false }: { page: RuntimeConfigPage; initial?: SettingsPayload; canClose?: boolean }) {
   const [settings, setSettings] = useState(initial);
-  const client = { requestMutation: mutation } as unknown as CirnoClient;
   const state = useRuntimeConfigSettings(settings, client, setSettings);
-  return <RuntimeConfiguration page={page} settings={settings} state={state} isRestarting={false} onRestart={() => {}} />;
+  const [open, setOpen] = useState(true);
+  return <>{open ? <RuntimeConfiguration page={page} settings={settings} state={state} isRestarting={false} onRestart={() => {}} /> : <p>Settings closed</p>}
+    {canClose && <button onClick={() => { void state.completion.commit().then(saved => { if (saved) setOpen(false); }); }}>Close settings</button>}</>;
+
 }
 beforeEach(() => { mutation.mockReset().mockImplementation(async (_method, args) => ({ ...payload(), requires_restart: true, runtime_config: { ...payload().runtime_config, ...args.values } })); });
 afterEach(cleanup);
@@ -38,6 +41,49 @@ function expectSave(values: Record<string, unknown>) {
 }
 
 describe("Runtime configuration", () => {
+  it("flushes an edit before the debounce when closing settings", async () => {
+    render(<Harness page="execution" canClose />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Default workspace" }), { target: { value: "/research" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    await expectSave({ "agents.defaults.workspace": "/research" });
+    expect(await screen.findByText("Settings closed")).toBeVisible();
+  });
+  it("keeps settings open when the exit flush fails", async () => {
+    mutation.mockRejectedValueOnce(new Error("Disk is full"));
+    render(<Harness page="execution" canClose />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Default workspace" }), { target: { value: "/research" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Disk is full");
+    expect(screen.queryByText("Settings closed")).not.toBeInTheDocument();
+  });
+  it("accepts fractional idle retention percentages", async () => {
+    render(<Harness page="consolidation" />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Recent context retention (%)" }), { target: { value: "2.5" } });
+    await expectSave({ "agents.defaults.idle_compact_keep_percent": 2.5 });
+  });
+  it("waits for the current write and flushes newer edits before closing", async () => {
+    let finish!: (value: SettingsPayload) => void;
+    mutation.mockImplementationOnce(() => new Promise<SettingsPayload>(resolve => { finish = resolve; }));
+    render(<Harness page="shell" canClose />);
+    const input = screen.getByRole("spinbutton", { name: "Custom runtime (seconds)" });
+    fireEvent.change(input, { target: { value: "17" } }); await expectSave({ "tools.exec.max_runtime": 17 });
+    fireEvent.change(input, { target: { value: "19" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    expect(screen.queryByText("Settings closed")).not.toBeInTheDocument();
+    await act(async () => finish({ ...payload(), runtime_config: { ...payload().runtime_config, "tools.exec.max_runtime": 17 } }));
+    await expectSave({ "tools.exec.max_runtime": 19 });
+    expect(await screen.findByText("Settings closed")).toBeVisible();
+    expect(mutation).toHaveBeenCalledTimes(2);
+  });
+  it("allows re-enabling CLI Apps when the tool is disabled", async () => {
+    const initial = payload() as SettingsPayload;
+    initial.runtime_config = { ...initial.runtime_config, "tools.cli_apps.enable": false };
+    render(<Harness page="tools" initial={initial} />);
+    const toggle = screen.getByRole("switch", { name: "CLI apps" });
+    expect(toggle).not.toBeChecked();
+    await userEvent.setup().click(toggle);
+    await expectSave({ "tools.cli_apps.enable": true });
+  });
   it("automatically saves a local embedding budget above 200 MiB", async () => {
     const initial = payload() as SettingsPayload;
     initial.runtime_config = { ...initial.runtime_config,
@@ -73,7 +119,7 @@ describe("Runtime configuration", () => {
     const paths = RUNTIME_CONFIG_FIELDS.map(field => field.path);
     expect(new Set(paths).size).toBe(paths.length);
     expect(RUNTIME_CONFIG_GROUPS.find(group => group.id === "cli")?.enabledBy).toBe("tools.cli_apps.enable");
-    expect([...paths, "tools.cli_apps.enable"].sort()).toEqual([...runtimeConfigKeys].sort());
+    expect(paths.sort()).toEqual([...runtimeConfigKeys].sort());
   });
   it.each([
     ["agents.defaults.idle_compact_percent", "Idle consolidation trigger (%)", 30],

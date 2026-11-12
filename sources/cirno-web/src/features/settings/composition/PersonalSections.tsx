@@ -20,7 +20,7 @@ export function createPersonalSections(bindings: SettingsComposition): SectionRe
   };
 
   const renderMemory: SectionRenderer = () => {
-    return <div className="settings-stack"><ProfileFiles client={controller.client} section="memory" /><MemorySettings client={controller.client} /></div>;
+    return <div className="settings-stack">{runtimeConfiguration("memory")}<ProfileFiles client={controller.client} section="memory" /><MemorySettings client={controller.client} /></div>;
   };
 
   const renderPersonality: SectionRenderer = () => {

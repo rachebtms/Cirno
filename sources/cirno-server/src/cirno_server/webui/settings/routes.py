@@ -54,7 +54,7 @@ from cirno_server.webui.settings.contracts import (
     SettingsRequest,
     SettingsRouteResult,
 )
-from cirno_server.webui.settings.runtime import runtime_config_payload
+from cirno_server.webui.settings.runtime import runtime_restart_values
 from cirno_server.webui.settings.services import WebUISettingsServices
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
@@ -353,7 +353,7 @@ class WebUISettingsRouter:
     def _restart_values(self, action: str) -> dict[str, Any]:
         config = self.settings.config.load()
         if action == "runtime-config-update":
-            return runtime_config_payload(config)
+            return runtime_restart_values(config)
         return {"use_jina_reader": config.tools.web.fetch.use_jina_reader}
 
     @staticmethod

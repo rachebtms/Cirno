@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
+import json
 import math
 import re
 from pathlib import Path
@@ -125,6 +127,15 @@ def runtime_config_payload(config: Config) -> dict[str, Any]:
     return {
         path: (redact_request_secrets(getattr(parent, leaf), secret=True) if path.endswith(".embedding_api_key") else getattr(parent, leaf))
         for path in RUNTIME_CONFIG_PATHS
+        for parent, leaf in [_parent(config, path)]
+    }
+
+
+def runtime_restart_values(config: Config) -> dict[str, str]:
+    """Compare restart-sensitive values without retaining plaintext secrets."""
+    return {
+        path: hashlib.sha256(json.dumps(getattr(parent, leaf), sort_keys=True).encode()).hexdigest()
+        for path in RUNTIME_CONFIG_PATHS if path not in SYSTEM_PROMPT_PATHS
         for parent, leaf in [_parent(config, path)]
     }
 

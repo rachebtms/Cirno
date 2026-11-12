@@ -13,6 +13,21 @@ import { renderProviderManager, providerDialog } from "./helpers/settings-provid
 
 describe("Settings providers", () => {
   installSettingsViewTestHooks();
+  it("locks advanced provider fields while the submitted configuration is saving", async () => {
+    const payload = { ...settingsPayload(), provider_api_configuration_supported: true };
+    requestMutationMock.mockImplementation(() => new Promise(() => {}));
+    renderProviderManager({ initialSection: "models", initialSettings: payload });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
+    await user.click(await screen.findByRole("button", { name: "Custom" }));
+    await user.type(screen.getByPlaceholderText("My model provider"), "Research endpoint");
+    await user.type(screen.getByPlaceholderText("https://api.example.com/v1"), "https://example.invalid/v1");
+    await user.click(screen.getByRole("button", { name: "Advanced options" }));
+    const body = screen.getByRole("textbox", { name: "Body parameters" });
+    await user.click(within(providerDialog()).getByRole("button", { name: "Add provider" }));
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalled());
+    expect(body).toBeDisabled();
+  });
   it("creates a custom provider with folded advanced request settings", async () => {
     const base = settingsPayload();
     let payload: SettingsPayload = {
