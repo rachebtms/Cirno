@@ -34,8 +34,10 @@ def test_install_keeps_selected_roots_compatible_when_later_packages_need_backtr
 
     def wheel(name, version, dependencies=()):
         dist = f"{name}-{version}.dist-info"
+        # Synthetic releases are written in one clock tick. Distinct source
+        # sizes prevent a prior release's timestamp-based .pyc being reused.
         files = {
-            f"{name}.py": f"version = {version!r}\n",
+            f"{name}.py": f"version = {version!r}\n# {'release ' * int(version.split('.')[0])}\n",
             f"{dist}/METADATA": f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n"
                 + "".join(f"Requires-Dist: {requirement}\n" for requirement in dependencies),
             f"{dist}/WHEEL": "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
