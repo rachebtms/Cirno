@@ -4,6 +4,7 @@ import { expect, it, vi } from "vitest";
 import { FixedSkillsSettings } from "@/features/settings/runtime/FixedSkillsSettings";
 import { useRuntimeConfigSettings } from "@/features/settings/runtime/useRuntimeConfiguration";
 import type { CirnoClient } from "@/lib/cirno-client";
+import type { SettingsPayload } from "@/lib/contracts/settings";
 import { installSettingsViewTestHooks, settingsPayload } from "./settings-test-utils";
 installSettingsViewTestHooks();
 
@@ -11,7 +12,7 @@ it("saves fixed Skills through settings while preserving dependency and author d
   const mutate = vi.fn(async (_method, payload) => ({ ...settingsPayload(), runtime_config: payload.values }));
   const client = { requestMutation: mutate } as unknown as CirnoClient;
   function Harness() {
-    const [settings, setSettings] = useState({ ...settingsPayload(), runtime_config: { "agents.defaults.always_skills": ["removed"] } });
+    const [settings, setSettings] = useState<SettingsPayload>({ ...settingsPayload(), runtime_config: { "agents.defaults.always_skills": ["removed"] } });
     const state = useRuntimeConfigSettings(settings, client, setSettings);
     return <FixedSkillsSettings state={state} loading={false} skills={[
       { name: "chosen", description: "Available", source: "home", available: true },
