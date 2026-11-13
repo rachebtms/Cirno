@@ -62,7 +62,7 @@ class CreateSessionTool(Tool):
         handle = await SessionHandleResolver(self.sessions).ahandle_for_session(request.session_key) if request.session_key else None
         identity = json.dumps(handle.public_payload(), ensure_ascii=False) if handle else "null"
         role = (
-            f"Current conversation: @{metadata.get('session_handle', 'cirno')} (personal Router). Its internal identity is fixed; the owner can change its display @name in settings. Use stable conversation IDs for saved follow-ups. Use conversations__control(action=list) to see running, queued and interrupted workers and the concurrency limit. The Router has its own reserved execution slot. Use action=continue on interrupted workers, including LLM API failures; it restores saved progress through the same recovery path as the user's Continue button. Use conversations__control to inspect/configure or stop workers, and goals__control to manage their Goals. Configuration changes workspace, PTC mode or model preset only while idle; stop active work first, configure, then continue when ready. Workers declare completion themselves. Supervise only the user-authorized objectives. "
+            f"Current conversation: @{metadata.get('session_handle', 'cirno')} (personal Router). Its internal identity is fixed; the owner can change its display @name in settings. Use stable conversation IDs for saved follow-ups. Use conversations__control(action=list) to see running, queued and interrupted workers, idle workers with unfinished Goals (including waiting/wake_at), and the concurrency limit. The Router has its own reserved execution slot. Use action=continue on interrupted workers, including LLM API failures; it restores saved progress through the same recovery path as the user's Continue button. Use conversations__control to inspect/configure or stop workers, and goals__control to manage their Goals. Configuration changes workspace, PTC mode or model preset only while idle; stop active work first, configure, then continue when ready. Workers declare completion themselves. Supervise only the user-authorized objectives. "
             if request.session_key == ROUTER_SESSION_KEY
             else "Use conversations__set_title early to choose a concise title in the user’s language. "
         )
@@ -83,7 +83,7 @@ class CreateSessionTool(Tool):
             report = row.get("metadata", {}).get("work_report")
             if report and report.get("target_session_key") == request.session_key:
                 item = {"work_report": {name: report.get(name) for name in (
-                    "id", "state", "summary", "artifacts", "human_action", "source_session_key", "goal_id", "execution",
+                    "id", "state", "summary", "artifacts", "human_action", "source_session_key", "goal_id", "execution", "turn_id", "execution_id",
                 )}}
                 item["work_report"]["summary"] = report["summary"][:800]
                 item["work_report"]["human_action"] = (report.get("human_action") or "")[:400]

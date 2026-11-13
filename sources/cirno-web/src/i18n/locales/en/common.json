@@ -2141,6 +2141,8 @@
         "deepResearch": "Deep research"
       },
       "slash": {
+        "retryLoad": "Retry command menu",
+        "loadError": "Could not load the command menu:",
         "ariaLabel": "Slash commands",
         "label": "commands",
         "navigateHint": "↑↓ Navigate",
@@ -2190,12 +2192,12 @@
             "description": "Organize memory now."
           },
           "dream_log": {
-            "title": "consolidation log",
-            "description": "View changes from the last consolidation run."
+            "title": "Legacy memory history",
+            "description": "Inspect saved legacy memory Git changes; current record revisions are in Memory."
           },
           "dream_restore": {
-            "title": "Restore memory",
-            "description": "Restore a previous consolidation memory snapshot."
+            "title": "Restore legacy memory change",
+            "description": "List or undo a saved legacy memory Git change. Preview it first."
           },
           "dream_prompt": {
             "title": "consolidation settings",
@@ -3204,6 +3206,7 @@
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
     "nodeCount": "{{count}} memories",
     "fit": "Fit to view",
+    "expand": "Expand view",
     "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
     "renderError": "The 3D view could not start. You can still search and read the results.",
     "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",

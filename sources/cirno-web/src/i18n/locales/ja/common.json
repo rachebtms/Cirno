@@ -2135,6 +2135,8 @@
         "deepResearch": "詳細調査"
       },
       "slash": {
+        "retryLoad": "コマンドメニューを再読み込み",
+        "loadError": "コマンドメニューを読み込めませんでした：",
         "ariaLabel": "スラッシュコマンド",
         "label": "コマンド",
         "navigateHint": "↑↓ 選択",
@@ -2174,12 +2176,12 @@
             "description": "メモリーを今すぐ整理します。"
           },
           "dream_log": {
-            "title": "consolidation ログ",
-            "description": "前回の consolidation の変更を確認します。"
+            "title": "旧版メモリの履歴",
+            "description": "旧版メモリの Git 変更を表示します。現在のレコード履歴はメモリ画面にあります。"
           },
           "dream_restore": {
-            "title": "メモリを復元",
-            "description": "以前の consolidation メモリースナップショットに戻します。"
+            "title": "旧版メモリの変更を元に戻す",
+            "description": "旧版メモリの Git 変更を一覧表示または取り消します。先に内容を確認してください。"
           },
           "dream_prompt": {
             "title": "consolidation 設定",
@@ -3204,6 +3206,7 @@
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
     "nodeCount": "{{count}} memories",
     "fit": "Fit to view",
+    "expand": "表示を拡大",
     "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
     "renderError": "The 3D view could not start. You can still search and read the results.",
     "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",

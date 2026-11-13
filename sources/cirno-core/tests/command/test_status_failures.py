@@ -23,6 +23,7 @@ async def test_status_propagates_failed_data_source(source, monkeypatch):
         model="test-model",
         context_window_tokens=128_000,
         generation=SimpleNamespace(max_tokens=100),
+        output_reserve_percent=5, active_compact_percent=100,
     )
     fetch_usage = AsyncMock(return_value=SimpleNamespace(format=lambda: "search usage"))
     monkeypatch.setattr("cirno_core.command.builtin.service.fetch_search_usage", fetch_usage)

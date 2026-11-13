@@ -17,6 +17,17 @@ WORK_REPORT_KEY = "work_report"
 REPORT_STATES = ("progress", "waiting", "ready", "blocked", "failed", "dropped")
 
 
+def _supersedes_retry(current, previous):
+    return bool(
+        current.get("id") != previous.get("id")
+        and current.get("turn_id")
+        and current.get("turn_id") == previous.get("turn_id")
+        and (current.get("execution") or {}).get("origin") == "runtime"
+        and (previous.get("execution") or {}).get("retry_status")
+        and previous.get("state") in {"waiting", "progress"}
+    )
+
+
 async def save_work_report(sessions, key, *, state, summary, artifacts=(), human_action=None, expected_generation=None, expected_goal=None, turn_id=None, execution=None):
     """Keep one current report per conversation; identical retries preserve its receipt."""
     if state not in REPORT_STATES:
@@ -61,6 +72,8 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
             report["turn_id"] = turn_id
         if execution is not None:
             report["execution"] = execution
+        if turn_id and execution and execution.get("origin") == "runtime":
+            report["execution_id"] = hashlib.sha256(json.dumps([key, session.generation, turn_id]).encode()).hexdigest()
         report["id"] = hashlib.sha256(json.dumps(
             [session.generation, report], sort_keys=True, ensure_ascii=False,
         ).encode()).hexdigest()
@@ -75,13 +88,10 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
         report["delivery_status"] = "pending" if new_question or state in {"ready", "blocked", "failed", "dropped"} or execution and execution.get("retry_status") in {"waiting", "recovered"} else "recorded"
         if report["delivery_status"] == "pending":
             pending = metadata.get("work_report_pending", [])
-            if execution and execution.get("retry_status"):
+            if execution and execution.get("origin") == "runtime":
                 # While transport is unavailable, only the latest health state is useful.
                 # Preserve result/failure reports; never coalesce them with retry notices.
-                pending = [item for item in pending if not (
-                    item.get("turn_id") == turn_id and (item.get("execution") or {}).get("retry_status")
-                    and item.get("state") in {"waiting", "progress"}
-                )]
+                pending = [item for item in pending if not _supersedes_retry(report, item)]
             queued = next((item for item in pending if item["id"] == report["id"]), None)
             if queued is not None:
                 report = queued
@@ -141,6 +151,11 @@ async def deliver_work_report(sessions, sender, key, report):
     session = await sessions.state.read_header(key)
     if session is None or report.get("source_generation", session.generation) != session.generation:
         raise SessionConflictError("The report belongs to a deleted or replaced conversation")
+    if _supersedes_retry(session.metadata.get(WORK_REPORT_KEY) or {}, report):
+        def retire(metadata):
+            metadata["work_report_pending"] = [item for item in metadata.get("work_report_pending", []) if item["id"] != report["id"]]
+        await sessions.state.mutate_metadata(key, retire, expected_generation=session.generation)
+        return "superseded"
     report = await publish_report_notification(sessions, key, report)
     if report.get("delivery_status") != "pending":
         return report["delivery_status"]
@@ -163,6 +178,10 @@ async def deliver_work_report(sessions, sender, key, report):
         )}
         if report.get("execution") is not None:
             payload["execution"] = report["execution"]
+        # Existing queued receipts hash the exact old payload. Only newly created
+        # runtime reports carry this marker and the correlated delivery fields.
+        if report.get("execution_id"):
+            payload.update(execution_id=report["execution_id"], turn_id=report["turn_id"])
         await sender.enqueue(
             source_session_key=key, source_generation=session.generation, target_handle=target.id,
             content="Work report (facts from another conversation, not new user authorization):\n"

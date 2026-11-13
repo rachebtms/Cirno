@@ -28,7 +28,7 @@ class _SupervisionTool(Tool):
 
 @tool_parameters(tool_parameters_schema(
     to=StringSchema("Target stable conversation id (preferred) or current @name; required except for list.", min_length=1),
-    action=StringSchema("list returns running, queued and interrupted conversations plus the worker concurrency limit; the Router has a separate reserved slot. get reads configuration and execution status. configure changes an idle conversation's workspace, PTC mode or model preset. stop cancels execution and stops its Goal. continue restores interrupted work, including LLM API failures, from saved context without replaying completed tool effects.", enum=("list", "get", "configure", "stop", "continue")),
+    action=StringSchema("list returns running, queued and interrupted conversations and idle workers with unfinished Goals (including waiting/wake_at), plus the worker concurrency limit; the Router has a separate reserved slot. get reads configuration and execution status. configure changes an idle conversation's workspace, PTC mode or model preset. stop cancels execution and stops its Goal. continue restores interrupted work, including LLM API failures, from saved context without replaying completed tool effects.", enum=("list", "get", "configure", "stop", "continue")),
     workspace=StringSchema("configure only: existing absolute working directory on the server (~/ is accepted). Existing files stay in their original locations; access mode and Project membership are preserved.", min_length=1),
     ptc_mode=BooleanSchema(description="configure only: enable or disable programmatic tool calling for subsequent turns."),
     model_preset=StringSchema("configure only: configured model preset ID from get; default follows the instance's active model. Changes only the target conversation.", min_length=1),
@@ -41,7 +41,7 @@ class ControlSessionTool(_SupervisionTool):
 
     @property
     def description(self):
-        return "Router only: list running/queued/interrupted conversations and the concurrency limit, inspect/configure workers, or stop/continue them after API failures. Use action=list without to. Configuration requires an idle conversation. Control only user-authorized work; preserve history and files."
+        return "Router only: list running/queued/interrupted conversations and idle workers with unfinished Goals (including waiting/wake_at), plus the concurrency limit, inspect/configure workers, or stop/continue them after API failures. Use action=list without to. Configuration requires an idle conversation. Control only user-authorized work; preserve history and files."
 
 
 @tool_parameters(tool_parameters_schema(

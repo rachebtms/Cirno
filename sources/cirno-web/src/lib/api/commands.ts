@@ -35,6 +35,8 @@ export async function listSlashCommands(
     arg_hint?: string;
     lifecycle?: unknown;
     accepts_args?: unknown;
+    aliases?: string[];
+    hidden?: boolean;
   };
   const body = await request<{ commands: Row[] }>(
     `${base}/v0/commands`,
@@ -53,6 +55,8 @@ export async function listSlashCommands(
         argHint: command.arg_hint ?? "",
         lifecycle: command.lifecycle,
         acceptsArgs: command.accepts_args === true,
+        ...(command.aliases ? { aliases: command.aliases } : {}),
+        ...(command.hidden ? { hidden: true } : {}),
       },
     ];
   });

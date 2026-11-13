@@ -50,6 +50,7 @@ export function ComposerInlineReferenceOverlay({
         offset += segment.text.length;
         if (segment.kind === "text") {
           const bangPrefix = index === 0 ? /^(\s*)!/.exec(segment.text) : null;
+          const commandPrefix = start === 0 && slashCommand ? /^(\s*)(\/\S+)/.exec(segment.text) : null;
           return (
             <span key={`text-${index}`}>
               {bangPrefix ? (
@@ -64,13 +65,14 @@ export function ComposerInlineReferenceOverlay({
                   </InlineTokenHighlight>
                   {segment.text.slice(bangPrefix[0].length)}
                 </>
-              ) : start === 0 && slashCommand ? (
+              ) : commandPrefix ? (
                 <>
+                  {commandPrefix[1]}
                   <SlashCommandText
-                    command={slashCommand}
+                    command={commandPrefix[2]}
                     testId="composer-slash-command"
                   />
-                  {segment.text.slice(slashCommand.length)}
+                  {segment.text.slice(commandPrefix[0].length)}
                 </>
               ) : (
                 segment.text

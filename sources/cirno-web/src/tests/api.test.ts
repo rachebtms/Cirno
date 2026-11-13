@@ -1320,4 +1320,12 @@ describe("webui API helpers", () => {
       }),
     );
   });
+
+  it("retains backend alias and retired-command recognition metadata", async () => {
+    const command = { command: "/consolidate", title: "Consolidate", description: "", icon: "archive", lifecycle: "side_channel", accepts_args: true, aliases: ["/compact", "/dream"] };
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ commands: [command, { ...command, command: "/pairing", aliases: [], hidden: true }] }) } as Response);
+    const result = await listSlashCommands("tok");
+    expect(result[0].aliases).toEqual(["/compact", "/dream"]);
+    expect(result[1].hidden).toBe(true);
+  });
 });

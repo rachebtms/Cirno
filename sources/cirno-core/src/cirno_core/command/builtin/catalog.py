@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from cirno_core.command.router import normalize_command_text
 
@@ -28,8 +28,10 @@ class BuiltinCommandSpec:
     arg_hint: str = ""
     lifecycle: CommandLifecycle = "side_channel"
     accepts_args: bool = False
+    aliases: tuple[str, ...] = ()
+    hidden: bool = False
 
-    def as_dict(self) -> dict[str, str | bool]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "command": self.command,
             "title": self.title,
@@ -38,6 +40,8 @@ class BuiltinCommandSpec:
             "arg_hint": self.arg_hint,
             "lifecycle": self.lifecycle,
             "accepts_args": self.accepts_args,
+            **({"aliases": list(self.aliases)} if self.aliases else {}),
+            **({"hidden": True} if self.hidden else {}),
         }
 
 
@@ -93,6 +97,7 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "archive",
         "[retry [source-id]]",
         accepts_args=True,
+        aliases=("/compact", "/dream"),
     ),
     BuiltinCommandSpec(
         "/stop",
@@ -147,6 +152,30 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         accepts_args=True,
     ),
     BuiltinCommandSpec(
+        "/dream-log",
+        "Legacy memory history",
+        "Inspect saved legacy memory Git changes. Current record revisions are available in Memory.",
+        "book-open",
+        "[commit]",
+        accepts_args=True,
+    ),
+    BuiltinCommandSpec(
+        "/dream-restore",
+        "Restore legacy memory change",
+        "List or undo a saved legacy memory Git change. Preview it with /dream-log first.",
+        "undo-2",
+        "[commit]",
+        accepts_args=True,
+    ),
+    BuiltinCommandSpec(
+        "/dream-prompt", "Legacy Dream instructions", "Dream has been merged into context consolidation.",
+        "file-text", "[init]", accepts_args=True, hidden=True,
+    ),
+    BuiltinCommandSpec(
+        "/pairing", "Legacy channel pairing", "Use the channel's current owner binding in Settings.",
+        "shield", "[action]", accepts_args=True, hidden=True,
+    ),
+    BuiltinCommandSpec(
         "/skill",
         "List skills",
         "List all enabled skills available to the agent.",
@@ -161,9 +190,9 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
 )
 
 
-def builtin_command_palette() -> list[dict[str, str | bool]]:
+def builtin_command_palette(*, include_hidden: bool = False) -> list[dict[str, Any]]:
     """Return structured command metadata for UI command palettes."""
-    return [spec.as_dict() for spec in BUILTIN_COMMAND_SPECS]
+    return [spec.as_dict() for spec in BUILTIN_COMMAND_SPECS if include_hidden or not spec.hidden]
 
 
 def builtin_command_starts_agent_turn(text: str) -> bool:
@@ -171,11 +200,13 @@ def builtin_command_starts_agent_turn(text: str) -> bool:
     normalized = normalize_command_text(text)
     command, separator, args = normalized.partition(" ")
     spec = next(
-        (item for item in BUILTIN_COMMAND_SPECS if item.command == command.lower()),
+        (item for item in BUILTIN_COMMAND_SPECS if command.lower() in (item.command, *item.aliases)),
         None,
     )
-    if spec is None or (separator and not spec.accepts_args):
+    if spec is None:
         return True
+    if separator and not spec.accepts_args:
+        return False  # Registered argument errors are control replies, never model turns.
     if spec.lifecycle == "agent_turn":
         return True
     return spec.lifecycle == "agent_turn_with_args" and bool(args.strip())
@@ -185,6 +216,8 @@ def build_help_text() -> str:
     """Build canonical help text shared across channels."""
     lines = ["❄️ Cirno commands:"]
     for spec in BUILTIN_COMMAND_SPECS:
+        if spec.hidden:
+            continue
         command = spec.command
         if spec.arg_hint:
             command = f"{command} {spec.arg_hint}"

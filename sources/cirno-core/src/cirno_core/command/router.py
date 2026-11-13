@@ -33,13 +33,15 @@ def normalize_command_text(text: str) -> str:
     stripped = text.strip()
     if not stripped.startswith("/"):
         return stripped
-    first, sep, rest = stripped.partition(" ")
-    if "@" not in first:
-        return stripped
-    command, suffix = first.rsplit("@", 1)
-    if command and suffix and _BOT_SUFFIX_RE.fullmatch(suffix):
-        return f"{command}{sep}{rest}" if sep else command
-    return stripped
+    parts = stripped.split(maxsplit=1)
+    first = parts[0]
+    if "@" in first:
+        command, suffix = first.rsplit("@", 1)
+        if command and suffix and _BOT_SUFFIX_RE.fullmatch(suffix):
+            first = command
+    # Prefix handlers and transport lifecycle checks use the same separator.
+    # Internal whitespace/newlines in the argument remain untouched.
+    return first + (" " + parts[1] if len(parts) == 2 else "")
 
 
 @dataclass

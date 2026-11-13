@@ -85,3 +85,27 @@ def test_ambiguous_deltas_are_rejected_instead_of_joining_different_calls():
     reused.consume(chunk("reused", '{"name":', name="skills__validate", index=1))
     with pytest.raises(ValueError, match="ambiguous ID"):
         reused.consume(chunk("reused", '"stss"}'))
+
+
+@pytest.mark.parametrize("indexed", [False, True])
+def test_parallel_identical_chinese_questions_keep_distinct_argument_buffers(indexed):
+    import json
+    question = {"question": "主人，请确认这一轮论文阅读结果。" * 24, "options": ["继续", "暂停"]}
+    arguments = [json.dumps(question, ensure_ascii=False), json.dumps(question, ensure_ascii=False), '{"to":"@fili","limit":20}']
+    names = ["user__ask", "user__ask", "conversations__read"]
+    stream = ChatStreamAccumulator()
+    for start in range(0, max(map(len, arguments)), 13):
+        calls = []
+        for i, text in enumerate(arguments):
+            if start >= len(text):
+                continue
+            call = {"id": f"parallel-{i}", "function": {"arguments": text[start:start + 13]}}
+            if start == 0:
+                call["function"]["name"] = names[i]
+            if indexed:
+                call["index"] = i
+            calls.append(call)
+        stream.consume({"choices": [{"delta": {"tool_calls": calls}}]})
+    parsed = stream.response().tool_calls
+    assert [call.id for call in parsed] == [f"parallel-{i}" for i in range(3)]
+    assert [call.arguments for call in parsed] == [question, question, {"to": "@fili", "limit": 20}]

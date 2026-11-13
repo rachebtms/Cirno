@@ -1,5 +1,5 @@
 import { requestSkillsRefresh } from "@/lib/skill-events";
-import { isRegisteredSlashCommand } from "@/lib/slash-command";
+import { isRegisteredSlashCommand, slashCommandLifecycle } from "@/lib/slash-command";
 import { useEffect, useMemo } from "react";
 import {
   SlashPaletteCommand,
@@ -49,7 +49,9 @@ export function useComposerSelection({
   );
   const hasErrors = images.some((img) => img.status === "error");
   const isUserShell = value.trimStart().startsWith("!");
-  const requiresModelSetup = modelNeedsSetup && !isUserShell;
+  const commandLifecycle = slashCommandLifecycle(value, slashCommands);
+  const requiresModelSetup = modelNeedsSetup && !isUserShell
+    && (commandLifecycle === null || commandLifecycle === "agent_turn");
   const hasComposerContent = value.trim().length > 0 || readyImages.length > 0;
   const canSend =
     !interactionDisabled &&
@@ -103,14 +105,15 @@ export function useComposerSelection({
     if (skillMenuActive) requestSkillsRefresh();
   }, [skillMenuActive]);
   const visibleSlashCommands = useMemo(() => {
-    if (!(isStreaming && onStop)) return slashCommands;
-    const stopCommand = slashCommands.find(
+    const visible = slashCommands.filter(command => !command.hidden);
+    if (!(isStreaming && onStop)) return visible;
+    const stopCommand = visible.find(
       (command) => command.command === "/stop",
     );
-    if (!stopCommand) return slashCommands;
+    if (!stopCommand) return visible;
     return [
       stopCommand,
-      ...slashCommands.filter((command) => command.command !== "/stop"),
+      ...visible.filter((command) => command.command !== "/stop"),
     ];
   }, [isStreaming, onStop, slashCommands]);
   const filteredSlashCommands = useMemo<SlashPaletteCommand[]>(() => {
@@ -157,13 +160,6 @@ export function useComposerSelection({
     if (slashQuery === null) return [];
     const withDetails = visibleSlashCommands
       .filter((command) => {
-        if (
-          slashQuery === "" &&
-          (command.command === "/restart" ||
-            (command.command === "/stop" && !(isStreaming && onStop)))
-        ) {
-          return false;
-        }
         const commandKey = slashCommandI18nKey(command.command);
         const title = t(`thread.composer.slash.commands.${commandKey}.title`, {
           defaultValue: command.title,
@@ -178,6 +174,7 @@ export function useComposerSelection({
           command.command,
           command.title,
           command.description,
+          ...(command.aliases ?? []),
           command.argHint ?? "",
           title,
           description,
@@ -216,9 +213,17 @@ export function useComposerSelection({
         };
       })
       .sort((a, b) => {
+        if (slashQuery !== "") {
+          const matchesName = (command: typeof a) => [command.command, ...(command.aliases ?? [])]
+            .some(name => name.slice(1).startsWith(slashQuery));
+          if (matchesName(a) !== matchesName(b)) return matchesName(a) ? -1 : 1;
+        }
         if (isStreaming) {
           if (a.command === "/stop") return -1;
           if (b.command === "/stop") return 1;
+        } else if (slashQuery === "") {
+          if (a.command === "/stop") return 1;
+          if (b.command === "/stop") return -1;
         }
         if (slashQuery !== "") return 0;
         const aRecent = recentSlashCommands.indexOf(a.command);
@@ -231,7 +236,7 @@ export function useComposerSelection({
         return 0;
       });
 
-    return withDetails.slice(0, 8);
+    return withDetails;
   }, [
     goalState?.active,
     isStreaming,

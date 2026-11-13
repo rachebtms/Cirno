@@ -8,6 +8,19 @@ from cirno_core.command.router import CommandContext
 from .catalog import build_help_text
 
 
+async def cmd_retired(ctx: CommandContext) -> OutboundMessage:
+    """Keep retired command spellings out of the model while explaining their replacements."""
+    command = ctx.raw.split(maxsplit=1)[0].lower()
+    content = {
+        "/pairing": "Generic channel pairing was retired. Bind your personal Telegram account with the owner PIN in Settings → Telegram.",
+        "/dream-prompt": "Dream was merged into Context consolidation. The old prompts/dream.md override is not used by the current checkpoint/learning pipeline. Use Settings → Context consolidation to configure learning and retries; /consolidate runs it in this conversation.",
+    }[command]
+    return OutboundMessage(
+        channel=ctx.msg.channel, chat_id=ctx.msg.chat_id, content=content,
+        metadata={**ctx.msg.metadata, "render_as": "text"},
+    )
+
+
 async def cmd_skill(ctx: CommandContext) -> OutboundMessage:
     """List all enabled skills (name and description only)."""
     loop = ctx.loop

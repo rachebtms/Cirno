@@ -15,23 +15,30 @@ function slashCommandArgs(content: string): string {
   return text.slice(slashCommandName(text).length).trim();
 }
 
+export function slashCommandParts(content: string): { name: string; args: string } {
+  return {
+    name: slashCommandName(content.trim()).replace(/@[A-Za-z0-9_]+$/, "").toLowerCase(),
+    args: slashCommandArgs(content),
+  };
+}
+
 export function isRegisteredSlashCommand(content: string, slashCommands: SlashCommand[]): boolean {
   // Argument validation belongs to the server. Even invalid commands must not
   // wait behind the active response; paths and unknown names are ordinary text.
-  const name = slashCommandName(content.trim()).replace(/@[A-Za-z0-9_]+$/, "").toLowerCase();
-  return slashCommands.some((item) => item.command === name);
+  const { name } = slashCommandParts(content);
+  return slashCommands.some((item) => item.command === name || item.aliases?.includes(name));
 }
 
 export function matchingSlashCommand(
   content: string,
   slashCommands: SlashCommand[],
 ): SlashCommand | null {
-  const commandName = slashCommandName(content.trim()).replace(/@[A-Za-z0-9_]+$/, "").toLowerCase();
+  const { name: commandName } = slashCommandParts(content);
   if (!commandName.startsWith("/")) return null;
-  const command = slashCommands.find((item) => item.command === commandName);
+  const command = slashCommands.find((item) => item.command === commandName || item.aliases?.includes(commandName));
   if (!command) return null;
   if (slashCommandArgs(content).length > 0 && !command.acceptsArgs) return null;
-  return command;
+  return command.command === commandName ? command : { ...command, command: commandName };
 }
 
 export function slashCommandLifecycle(
@@ -39,7 +46,7 @@ export function slashCommandLifecycle(
   slashCommands: SlashCommand[],
 ): ResolvedSlashCommandLifecycle | null {
   const command = matchingSlashCommand(content, slashCommands);
-  if (!command) return null;
+  if (!command) return isRegisteredSlashCommand(content, slashCommands) ? "side_channel" : null;
   if (command.lifecycle === "agent_turn_with_args") {
     return slashCommandArgs(content).length > 0
       ? "agent_turn"

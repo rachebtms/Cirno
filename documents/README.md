@@ -11,6 +11,7 @@ These guides describe the current Cirno implementation. The Python service owns 
 - [Notification inbox](notification-inbox.md): action requests, conversation reports and system notices.
 - [Instance migration](migrations.md): automatic 0.1.6 import, retained originals and interrupted-startup recovery.
 - [Backup and restore](backups.md): complete instance archives, extra directories and restoration.
+- [Conversation input commands](commands.md): complete command catalog, v0.1.6 compatibility and conversation restrictions.
 - [Model context and long-running work](model-context.md)
 - [Memory retrieval](memory-retrieval.md)
 
@@ -33,6 +34,8 @@ These guides describe the current Cirno implementation. The Python service owns 
 Historical reviews, benchmark runs and earlier implementations are local archive material under ignored `references/`. They are not current product documentation or bundled Agent guidance. Third-party license text remains in its original form.
 
 ## Release notes
+
+- [0.2.16](releases/0.2.16.md): complete command discovery and compatibility, expanded memory cloud, waiting Worker supervision, compact Goal reminders and correlated execution reports.
 
 - [0.2.15](releases/0.2.15.md): actionable memory/checkpoint revision conflicts, explicit rejected-write results, and native/PTC persistence checks.
 

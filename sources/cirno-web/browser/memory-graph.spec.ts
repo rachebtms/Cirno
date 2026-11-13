@@ -1,6 +1,36 @@
 import { expect, test } from "@playwright/test";
 import { readPreviewPreferences, seedPreviewPreferences } from "./preference-driver";
 
+for (const width of [390, 1280]) test(`memory cloud expands and returns without another search at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 950 });
+  await seedPreviewPreferences(page, { language: "en", themeMode: "dark" });
+  await page.goto("/browser/fixture.html?case=memory-graph");
+  await page.getByRole("button", { name: "Open Memory", exact: true }).click();
+  const cloud = page.locator(".memory-cloud-scene canvas");
+  await expect(cloud).toBeVisible();
+  const original = (await cloud.boundingBox())!;
+  const calls = await page.getByTestId("memory-graph-calls").textContent();
+  for (const close of ["escape", "button"]) {
+    await page.getByRole("button", { name: "Expand view", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Memory cloud", exact: true });
+    await expect(dialog.locator("canvas")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Fit to view", exact: true })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Fit to view", exact: true }).click();
+    await expect(cloud).toHaveCount(1);
+    await expect.poll(async () => (await cloud.boundingBox())!.height).toBeGreaterThan(original.height);
+    expect((await dialog.boundingBox())!.width).toBeLessThanOrEqual(width);
+    if (close === "escape") {
+      await page.screenshot({ path: `/tmp/cirno-memory-expanded-${width}.png` });
+      await page.keyboard.press("Escape");
+    } else await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(cloud).toBeVisible();
+    await expect(page.getByRole("button", { name: "Expand view", exact: true })).toBeFocused();
+  }
+  await expect(page.getByTestId("memory-graph-calls")).toHaveText(calls!);
+  await expect(page.getByRole("button", { name: "Detector calibration 1", exact: true })).toBeVisible();
+});
+
 for (const language of ["en", "zh-CN"]) for (const width of [390, 1280]) {
   test(`memory graph search, inspection and singleton in ${language} at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });

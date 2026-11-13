@@ -144,13 +144,21 @@ class ConversationControl:
                                "continuation_queued": should_continue}, ensure_ascii=False)
 
     def _execution(self, session: Session) -> dict[str, Any]:
-        key = session.key
-        recovery = recovery_state_from_metadata(session.metadata)
+        return self._execution_metadata(session.key, session.metadata)
+
+    def _execution_metadata(self, key: str, metadata: dict) -> dict[str, Any]:
+        recovery = recovery_state_from_metadata(metadata)
         state = ("running" if key in self.loop._executing_sessions else
                  "queued" if self.loop.dispatch.is_running(key) else
                  "interrupted" if recovery and recovery["status"] in {"awaiting_user", "failed"} else "idle")
         return {"execution_status": state, "recovery": recovery,
-                "goal": parse_goal_state(goal_state_raw(session.metadata))}
+                "goal": parse_goal_state(goal_state_raw(metadata))}
+
+    @staticmethod
+    def _supervisable(status: dict) -> bool:
+        return status["execution_status"] != "idle" or (status["goal"] or {}).get("status") in {
+            "active", "waiting", "paused", "blocked", "stopped",
+        }
 
     async def _list_execution(self) -> str:
         resolver = SessionHandleResolver(self.loop.sessions)
@@ -159,16 +167,13 @@ class ConversationControl:
             key = item["key"]
             if not is_webui_session_key(key):
                 continue
-            recovery = recovery_state_from_metadata(item["metadata"])
-            if key not in self.loop._executing_sessions and not self.loop.dispatch.is_running(key) and not (
-                recovery and recovery["status"] in {"awaiting_user", "failed"}
-            ):
+            if not self._supervisable(self._execution_metadata(key, item["metadata"])):
                 continue
             session = await self.loop.sessions.state.read_header(key)
             if session is None or not session.policy.persist:
                 continue
             status = self._execution(session)
-            if status["execution_status"] == "idle":
+            if not self._supervisable(status):
                 continue
             handle = await resolver.ahandle_for_session(key)
             rows.append({"id": handle.id if handle else None, "session_key": key, "handle": "@" + handle.name if handle else None,

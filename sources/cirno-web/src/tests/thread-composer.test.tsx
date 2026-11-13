@@ -1258,7 +1258,7 @@ describe("ThreadComposer", () => {
     const palette = screen.getByRole("listbox", { name: "Slash commands" });
     expect(palette).toBeInTheDocument();
     expect(palette).toHaveStyle({ maxHeight: "288px" });
-    expect(screen.queryByRole("option", { name: /\/stop/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /\/stop/i })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /\/history/i })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -2845,7 +2845,7 @@ describe("ThreadComposer", () => {
     );
   });
 
-  it("does not classify exact-only slash commands with arguments", () => {
+  it("sends invalid exact-only commands for server validation without finalizing the turn", () => {
     const onSend = vi.fn();
     render(
       <ThreadComposer
@@ -2869,7 +2869,7 @@ describe("ThreadComposer", () => {
     expect(screen.queryByTestId("composer-slash-command")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSend).toHaveBeenCalledWith("/new with a title", undefined, undefined);
+    expect(onSend).toHaveBeenCalledWith("/new with a title", undefined, { sideChannel: true });
   });
 
   it("routes a manually submitted stop command through the stop handler", () => {

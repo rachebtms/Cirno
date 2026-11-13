@@ -44,6 +44,20 @@ async def goal(sessions):
     return (await sessions.state.read_metadata("websocket:worker"))["metadata"].get("goal_state")
 
 
+@pytest.mark.parametrize("state", ["active", "waiting", "paused", "blocked", "stopped"])
+async def test_list_includes_idle_workers_with_unfinished_goals(supervision, state):
+    loop, sessions, _, _, _ = supervision
+    goal_state = {"goal_id": "work", "status": state, "objective": "Read papers", "wake_at": "2030-01-01T00:00:00Z"}
+    await sessions.state.update_metadata("websocket:worker", {"goal_state": goal_state})
+    result = json.loads(await loop.tools.get("control_session").execute(action="list"))
+    worker = next(row for row in result["conversations"] if row["session_key"] == "websocket:worker")
+    assert worker["execution_status"] == "idle"
+    assert worker["goal"] == goal_state
+    await sessions.state.update_metadata("websocket:worker", {"goal_state": {**goal_state, "status": "completed"}})
+    done = json.loads(await loop.tools.get("control_session").execute(action="list"))
+    assert not any(row["session_key"] == "websocket:worker" for row in done["conversations"])
+
+
 async def test_controls_are_hidden_from_ordinary_and_ptc_conversations(supervision):
     loop, _, _, _, _ = supervision
     for ptc in (False, True):

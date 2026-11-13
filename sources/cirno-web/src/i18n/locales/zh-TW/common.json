@@ -2135,6 +2135,8 @@
         "deepResearch": "深度研究"
       },
       "slash": {
+        "retryLoad": "重試載入命令選單",
+        "loadError": "命令選單載入失敗：",
         "ariaLabel": "斜線命令",
         "label": "命令",
         "navigateHint": "↑↓ 選擇",
@@ -2174,12 +2176,12 @@
             "description": "手動整理記憶"
           },
           "dream_log": {
-            "title": "上下文整理 日誌",
-            "description": "檢視上次 上下文整理 整理的修改"
+            "title": "舊版記憶歷史",
+            "description": "檢視舊版記憶的 Git 修改；目前記憶版本請在記憶頁檢視。"
           },
           "dream_restore": {
-            "title": "恢復記憶",
-            "description": "恢復到之前的 上下文整理 記憶快照"
+            "title": "撤銷舊版記憶修改",
+            "description": "列出或撤銷舊版記憶的 Git 修改，請先預覽。"
           },
           "dream_prompt": {
             "title": "上下文整理 設定",
@@ -3204,6 +3206,7 @@
     "cloudDescription": "可互動的記憶關係圖。彩色點代表記憶，灰色點代表共同標籤；也可以透過結果列表存取所有記錄。",
     "nodeCount": "{{count}} 條記憶",
     "fit": "適應視圖",
+    "expand": "放大檢視",
     "gestureHelp": "拖曳旋轉 · 捲動或雙指縮放 · 點選記憶查看內容",
     "renderError": "三維視圖無法啟動，仍可透過結果列表檢索和閱讀記憶。",
     "settingsHelp": "記憶檢索與關係圖已移至記憶分頁，索引維護保留在此處。",

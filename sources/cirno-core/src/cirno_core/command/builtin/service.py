@@ -21,6 +21,11 @@ from cirno_core.utils.searchusage import fetch_search_usage
 
 async def cmd_restart(ctx: CommandContext) -> OutboundMessage:
     """Restart the process."""
+    from .control import _human_control_required
+
+    denied = _human_control_required(ctx)
+    if denied is not None:
+        return denied
     msg = ctx.msg
     set_restart_notice_to_env(
         channel=msg.channel,
@@ -91,6 +96,8 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
             search_usage_text=search_usage_text,
             active_task_count=task_count,
             max_completion_tokens=runtime.generation.max_tokens,
+            output_reserve_percent=runtime.output_reserve_percent,
+            active_compact_percent=runtime.active_compact_percent,
         ),
         metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
     )

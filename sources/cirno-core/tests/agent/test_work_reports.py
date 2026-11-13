@@ -514,6 +514,54 @@ async def test_undelivered_retry_health_coalesces_without_losing_results(setup):
     assert [report["id"] for report in pending] == [result["id"], latest["id"]]
 
 
+async def test_terminal_execution_retires_stale_retry_delivery_and_keeps_other_results(setup):
+    from cirno_core.agent.work_reports import record_execution_report, record_retry_report
+    from cirno_core.bus.agent_events import RetryStatusEvent
+    _, manager, bus = setup
+    verified = await save_work_report(manager, "websocket:worker", state="ready", summary="Keep this artifact")
+    waiting = await record_retry_report(manager, "websocket:worker", turn_id="same-turn", episode=1,
+                                       event=RetryStatusEvent("waiting", 1, 4, "connection"))
+    failed = await record_execution_report(manager, "websocket:worker", turn_id="same-turn", stop_reason="error", failure_error_kind="connection", output="Retries exhausted")
+    metadata = (await manager.state.read_metadata("websocket:worker"))["metadata"]
+    assert [item["id"] for item in metadata["work_report_pending"]] == [verified["id"], failed["id"]]
+    assert failed["execution_id"] == waiting["execution_id"]
+    sender = SendSessionMessageTool(sessions=manager, bus=bus)
+    assert await deliver_work_report(manager, sender, "websocket:worker", waiting) == "superseded"
+    assert bus.inbound_size == 0
+    await deliver_work_report(manager, sender, "websocket:worker", failed)
+    message = await bus.consume_inbound()
+    update = message.metadata["_work_report"]
+    assert update["turn_id"] == "same-turn" and update["execution_id"] == waiting["execution_id"]
+    assert update["state"] == "failed"
+    await manager.state.acknowledge_followups(message.session_key, [message.metadata["_recovery_followup_id"]])
+    again = await record_execution_report(manager, "websocket:worker", turn_id="same-turn", stop_reason="error", failure_error_kind="connection", output="Retries exhausted")
+    assert again["id"] == failed["id"]
+    await save_work_report(manager, "websocket:worker", state="progress", summary="Another result is being inspected")
+    again = await record_execution_report(manager, "websocket:worker", turn_id="same-turn", stop_reason="error", failure_error_kind="connection", output="Retries exhausted")
+    assert again["id"] == failed["id"]
+    await deliver_work_report(manager, sender, "websocket:worker", again)
+    assert bus.inbound_size == 0
+
+
+async def test_legacy_runtime_delivery_keeps_its_receipt_payload_after_upgrade(setup):
+    from cirno_core.agent.work_reports import record_execution_report
+    _, manager, bus = setup
+    legacy = await record_execution_report(manager, "websocket:worker", turn_id="old-turn", stop_reason="error", output="Old failure")
+    legacy.pop("execution_id")
+    legacy["id"] = "legacy-runtime-report"
+    await manager.state.update_metadata("websocket:worker", {"work_report": legacy, "work_report_pending": [legacy]})
+    sender = SendSessionMessageTool(sessions=manager, bus=bus)
+    await deliver_work_report(manager, sender, "websocket:worker", legacy)
+    message = await bus.consume_inbound()
+    old_payload = message.metadata["_work_report"]
+    assert "execution_id" not in old_payload and "turn_id" not in old_payload
+    await manager.state.acknowledge_followups(message.session_key, [message.metadata["_recovery_followup_id"]])
+    # Crash after accepted delivery but before settling the source receipt.
+    await manager.state.update_metadata("websocket:worker", {"work_report": legacy, "work_report_pending": [legacy]})
+    await deliver_work_report(manager, sender, "websocket:worker", legacy)
+    assert bus.inbound_size == 0
+
+
 async def test_long_goal_recap_does_not_block_other_goals(setup):
     _, manager, _ = setup
     await manager.state.get("websocket:another")

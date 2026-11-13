@@ -70,7 +70,7 @@ async def test_settings_restart_does_not_create_or_change_chat_history(history, 
         with monkeypatch.context() as patch:
             patch.setattr("cirno_core.command.builtin.service.asyncio.create_task", discard_restart_task)
             response = await cmd_restart(CommandContext(
-                msg=message, session=None, key=message.session_key, raw=message.content, loop=MagicMock(),
+                msg=message, session=None, key=message.session_key, raw=message.content, loop=MagicMock(), is_user_turn=True,
             ))
         await channel.send(response)
         # A lost ACK retry must not enqueue a second restart.

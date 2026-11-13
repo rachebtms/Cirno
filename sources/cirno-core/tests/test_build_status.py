@@ -74,8 +74,8 @@ def test_status_context_pct_uses_budget_not_total():
         context_tokens_estimate=120000,
         max_completion_tokens=8192,
     )
-    # budget = 128000 - 8192 - 1024 = 118784; pct = 120000/118784*100 ≈ 101%
-    assert "(101% of input budget)" in content
+    # The shared budget reserves 5%, rather than the entire configured output ceiling.
+    assert "(99% of input budget)" in content
 
 
 def test_status_context_pct_capped_at_999():
@@ -91,3 +91,17 @@ def test_status_context_pct_capped_at_999():
         max_completion_tokens=4096,
     )
     assert "(999% of input budget)" in content
+
+
+def test_status_large_output_ceiling_does_not_consume_the_whole_context():
+    from cirno_core.providers.context_budget import ContextBudget
+
+    for reserve, compact in [(5, 100), (10, 80)]:
+        budget = ContextBudget(512_000, 500_000, reserve, compact)
+        content = build_status_content(
+            version="test", model="test", start_time=0, last_usage=None,
+            context_window_tokens=512_000, session_msg_count=10,
+            context_tokens_estimate=256_000, max_completion_tokens=500_000,
+            output_reserve_percent=reserve, active_compact_percent=compact,
+        )
+        assert f"({int(256_000 / budget.input_limit * 100)}% of input budget)" in content

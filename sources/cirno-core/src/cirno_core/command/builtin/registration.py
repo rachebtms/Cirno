@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from cirno_core.command.router import CommandRouter
 
-from .capabilities import cmd_help, cmd_skill, cmd_trigger
-from .catalog import USER_SHELL_COMMAND
+from .capabilities import cmd_help, cmd_retired, cmd_skill, cmd_trigger
+from .catalog import BUILTIN_COMMAND_SPECS, USER_SHELL_COMMAND
 from .control import (
     cmd_access,
     cmd_clear,
@@ -36,9 +36,10 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.priority("/restart", cmd_restart)
     router.priority("/status", cmd_status)
     router.exact("/new", cmd_new)
-    for name in ("/consolidate", "/compact", "/dream"):
+    consolidation = next(spec for spec in BUILTIN_COMMAND_SPECS if spec.command == "/consolidate")
+    for name in (consolidation.command, *consolidation.aliases):
         router.exact(name, cmd_compact, session_queue=True)
-    router.prefix("/consolidate ", cmd_compact, session_queue=True)
+        router.prefix(name + " ", cmd_compact, session_queue=True)
     router.exact("/status", cmd_status)
     router.exact("/model", cmd_model)
     router.prefix("/model ", cmd_model)
@@ -53,6 +54,10 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.exact("/dream-restore", cmd_dream_restore)
     router.prefix("/dream-restore ", cmd_dream_restore)
     router.exact("/skill", cmd_skill)
+    for spec in BUILTIN_COMMAND_SPECS:
+        if spec.hidden:
+            router.exact(spec.command, cmd_retired)
+            router.prefix(spec.command + " ", cmd_retired)
     router.exact("/help", cmd_help)
     router.exact(USER_SHELL_COMMAND, cmd_user_shell)
     router.prefix(f"{USER_SHELL_COMMAND} ", cmd_user_shell)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from cirno_core.providers.context_budget import ContextBudget
+
 if TYPE_CHECKING:
     from cirno_usage.types import LLMUsage
 
@@ -21,6 +23,8 @@ def build_status_content(
     search_usage_text: str | None = None,
     active_task_count: int = 0,
     max_completion_tokens: int = 8192,
+    output_reserve_percent: int = 5,
+    active_compact_percent: int = 100,
 ) -> str:
     """Build a human-readable runtime status snapshot.
 
@@ -39,8 +43,9 @@ def build_status_content(
     last_out = last_usage.output_tokens if last_usage else 0
     cached = last_usage.cache_read_tokens if last_usage else None
     ctx_total = max(context_window_tokens, 0)
-    # Budget mirrors Consolidator formula: ctx_window - max_completion - _SAFETY_BUFFER
-    ctx_budget = max(ctx_total - int(max_completion_tokens) - 1024, 1)
+    ctx_budget = ContextBudget(
+        ctx_total, max_completion_tokens, output_reserve_percent, active_compact_percent,
+    ).input_limit
     ctx_pct = min(int((context_tokens_estimate / ctx_budget) * 100), 999) if ctx_budget > 0 else 0
     ctx_used_str = (
         f"{context_tokens_estimate // 1000}k"
@@ -55,7 +60,8 @@ def build_status_content(
         f"❄️ Cirno v{version}",
         f"\U0001f9e0 Model: {model}",
         token_line,
-        f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}% of input budget)",
+        (f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}% of input budget)"
+         if ctx_budget > 0 else f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} (input budget unavailable)"),
         f"\U0001f4ac Session: {session_msg_count} messages",
         f"\u23f1 Uptime: {uptime}",
         f"\u26a1 Tasks: {active_task_count} active",

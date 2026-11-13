@@ -35,9 +35,6 @@ from cirno_core.security.workspace_access import (
     reset_workspace_scope,
 )
 from cirno_core.session import turn_continuation
-from cirno_core.session.goal_state import (
-    goal_state_runtime_lines,
-)
 from cirno_core.session.model import Session
 from cirno_core.session.request_usage import append_request_usage
 from cirno_core.session.recovery.contracts import PROVIDER_STATE_CHECKPOINT_VERSION, PROVIDER_STATE_CHECKPOINT_VERSION_KEY
@@ -188,20 +185,15 @@ class ModelTurnExecutor:
         workspace_token = bind_workspace_scope(effective_scope)
         turn_scope_stack = ExitStack()
 
+        from cirno_core.agent.goals.continuation import GoalContinuation
+
+        goal_continuation = GoalContinuation()
         # Compute lazily because create_goal may create goal metadata during this run.
         async def _goal_continue() -> str | None:
             current = (
                 await self.agent.sessions.state.read_metadata(session.key) if session else None
             )
-            _goal_lines = goal_state_runtime_lines(current["metadata"] if current else None)
-            if not _goal_lines:
-                return None
-            return (
-                "You have an active sustained goal:\n\n"
-                + "\n".join(_goal_lines)
-                + "\n\nPlease continue working toward the objective using your tools, "
-                "or call goals__update with action='complete' if the work is truly finished."
-            )
+            return goal_continuation.message(current["metadata"] if current else None)
 
         session_metadata = session.metadata if session is not None else None
         try:

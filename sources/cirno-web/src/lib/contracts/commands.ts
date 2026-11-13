@@ -24,4 +24,6 @@ export interface SlashCommand {
   argHint?: string;
   lifecycle: SlashCommandLifecycle;
   acceptsArgs: boolean;
+  aliases?: string[];
+  hidden?: boolean;
 }

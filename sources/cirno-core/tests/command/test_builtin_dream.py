@@ -75,7 +75,7 @@ def _make_ctx(
     msg = InboundMessage(channel="cli", sender_id="u1", chat_id="direct", content=raw)
     store = _FakeStore(git, last_dream_cursor=last_dream_cursor)
     loop = SimpleNamespace(consolidator=SimpleNamespace(store=store))
-    return CommandContext(msg=msg, session=None, key=msg.session_key, raw=raw, args=args, loop=loop)
+    return CommandContext(msg=msg, session=None, key=msg.session_key, raw=raw, args=args, loop=loop, is_user_turn=True)
 
 
 @pytest.mark.asyncio
@@ -247,3 +247,25 @@ async def test_legacy_dream_function_awaits_the_shared_operation_without_backgro
     await cmd_dream(ctx)
     compact.assert_awaited_once_with(ctx)
     ctx.loop.schedule_background.assert_not_called()
+
+
+@pytest.mark.parametrize("handler, command", [(cmd_dream_log, "/dream-log"), (cmd_dream_restore, "/dream-restore")])
+async def test_history_commands_preserve_control_correlation_and_validate_all_arguments(handler, command):
+    git = _FakeGit()
+    ctx = _make_ctx(command, git)
+    ctx.msg.metadata = {"turn_id": "control-turn"}
+    result = await handler(ctx)
+    assert result.metadata == {"turn_id": "control-turn", "render_as": "text"}
+    ctx.args = "abc123 unexpected"
+    result = await handler(ctx)
+    assert "Usage:" in result.content
+    assert git.revert_calls == []
+
+
+async def test_agent_input_cannot_restore_legacy_memory():
+    git = _FakeGit()
+    ctx = _make_ctx("/dream-restore abc123", git, args="abc123")
+    ctx.is_user_turn = False
+    result = await cmd_dream_restore(ctx)
+    assert "direct user request" in result.content
+    assert git.revert_calls == []

@@ -1,6 +1,7 @@
 import { RouterHeartbeatButton } from "./RouterHeartbeatButton";
 import { headerControlClassName } from "@/components/thread/header-control";
 import { conversationRole } from "@/lib/conversation-role";
+import { slashCommandParts } from "@/lib/slash-command";
 import { QuestionReplyProvider, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -220,6 +221,8 @@ export function ThreadShell({
   );
   const [booting, setBooting] = useState(false);
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+  const [commandCatalogError, setCommandCatalogError] = useState("");
+  const [commandCatalogRequest, setCommandCatalogRequest] = useState(0);
   const [mentionCatalogRequestCount, setMentionCatalogRequestCount] = useState(0);
   const requestMentionCatalogs = useCallback(() => setMentionCatalogRequestCount((count) => count + 1), []);
   const { items: cliApps, error: cliAppsError } = useInstalledSettingItems({
@@ -575,24 +578,27 @@ export function ThreadShell({
 
   useEffect(() => {
     let cancelled = false;
+    setCommandCatalogError("");
     (async () => {
       try {
         const commands = await listSlashCommands(getToken());
         if (!cancelled) setSlashCommands(commands);
-      } catch {
-        if (!cancelled) setSlashCommands([]);
+      } catch (error) {
+        if (!cancelled) {
+          setSlashCommands([]);
+          setCommandCatalogError(error instanceof Error ? error.message : String(error));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [getToken]);
+  }, [getToken, commandCatalogRequest]);
 
   const [controlError, setControlError] = useState("");
   const handleComposerControl = useCallback((content: string): boolean | null => {
-    const [rawName, ...parts] = content.trim().split(/\s+/);
-    const name = rawName.toLowerCase();
-    const argument = parts.join(" ").toLowerCase();
+    const { name, args } = slashCommandParts(content);
+    const argument = args.toLowerCase();
     if (!["/temporary", "/ptc", "/access", ...(!session ? ["/model"] : [])].includes(name.toLowerCase())) return null;
     setControlError("");
     if (turnActive || hasPendingToolCalls) { setControlError(t("thread.composer.slash.controlRunning")); return false; }
@@ -603,7 +609,7 @@ export function ThreadShell({
     }
     if (name === "/model" && !argument) return null;
     if (name === "/model") {
-      const selected = resolveModelPresetSelection(settings, parts.join(" "));
+      const selected = resolveModelPresetSelection(settings, args);
       if (!selected) { setControlError(t("thread.composer.slash.modelUsage")); return false; }
       handleModelPresetChange(selected); return true;
     }
@@ -721,6 +727,10 @@ export function ThreadShell({
       ) : null}
       <SubagentTaskDock inputKey={latestSubagentInputKey(displayMessages)} />
       {controlError && <p role="alert" className="px-3 text-sm text-destructive">{controlError}</p>}
+      {commandCatalogError && <div role="status" className="flex items-center gap-2 px-3 text-sm text-destructive">
+        <span>{t("thread.composer.slash.loadError")} {commandCatalogError}</span>
+        <Button variant="ghost" size="sm" aria-label={t("thread.composer.slash.retryLoad")} onClick={() => setCommandCatalogRequest(request => request + 1)}>{t("common.retry")}</Button>
+      </div>}
       {(cliAppsError || mcpPresetsError) && <p role="status" className="px-3 text-sm text-destructive">{[cliAppsError, mcpPresetsError].filter(Boolean).join("; ")}</p>}
       {modelSettingsError && <p role="status" className="px-3 text-sm text-destructive">{modelSettingsError}</p>}
       {modelPresetError && <p role="alert" className="px-3 text-sm text-destructive">{modelPresetError}</p>}

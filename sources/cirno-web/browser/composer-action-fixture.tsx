@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useTheme } from "@/hooks/useTheme";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
+import type { SlashCommand } from "@/lib/contracts/commands";
+
+const COMMANDS: SlashCommand[] = ["/help", "/model", "/history", "/goal", "/consolidate", "/stop", "/restart", "/access", "/resume", "/trigger", "/skill", "/dream-log", "/dream-restore"]
+  .map(command => ({ command, title: command, description: "Command preview", icon: "activity", lifecycle: "side_channel", acceptsArgs: true,
+    argHint: command === "/dream-restore" ? "[commit]" : undefined }));
 
 export function ComposerActionFixture({ parameters }: { parameters: URLSearchParams }) {
   const { toggle } = useTheme();
@@ -18,6 +23,7 @@ export function ComposerActionFixture({ parameters }: { parameters: URLSearchPar
       onModelPresetChange={parameters.has("models") ? setPreset : undefined}
       goalState={parameters.has("goal") ? { active: true, objective: "Keep the work in focus." } : undefined}
       isStreaming={running}
+      slashCommands={parameters.has("commands") ? COMMANDS : undefined}
       onSend={() => { setStopRequested(false); setRunning(true); }}
       onStop={() => setStopRequested(true)}
     />

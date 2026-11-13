@@ -387,12 +387,12 @@ async def test_start_creates_separate_pools_with_proxy(monkeypatch) -> None:
     assert any(cmd.command == "status" for cmd in app.bot.commands)
     assert any(cmd.command == "history" for cmd in app.bot.commands)
     assert any(cmd.command == "skill" for cmd in app.bot.commands)
-    assert any(cmd.command == "dream" for cmd in app.bot.commands)
+    assert any(cmd.command == "consolidate" for cmd in app.bot.commands)
     assert any(cmd.command == "dream_log" for cmd in app.bot.commands)
     assert any(cmd.command == "dream_restore" for cmd in app.bot.commands)
-    assert any(cmd.command == "dream_prompt" for cmd in app.bot.commands)
+    assert not any(cmd.command == "dream_prompt" for cmd in app.bot.commands)
     assert not any(cmd.command == "evaluator_prompt" for cmd in app.bot.commands)
-    assert any(cmd.command == "compact" for cmd in app.bot.commands)
+    assert any(cmd.command == "resume" for cmd in app.bot.commands)
 
 
 @pytest.mark.asyncio
@@ -2399,7 +2399,7 @@ def test_telegram_bus_slash_command_regex_matches_agent_loop_commands() -> None:
     assert pat.fullmatch("/goal ship the feature")
     assert pat.fullmatch("/trigger")
     assert pat.fullmatch("/trigger PR review")
-    assert not pat.fullmatch("/pairing list")
+    assert pat.fullmatch("/pairing list")
     assert pat.fullmatch("/model fast")
     assert pat.fullmatch("/skill")
     assert pat.fullmatch("/skill@cirno_bot")
@@ -2437,7 +2437,7 @@ async def test_on_help_includes_restart_command(personal_owner) -> None:
     assert "/status" in help_text
     assert "/skill" in help_text
     assert "/consolidate" in help_text
-    assert "/dream_log" not in help_text
+    assert "/dream_log" in help_text
     assert "/dream_prompt" not in help_text
     assert "/evaluator_prompt" not in help_text
     assert "/compact" not in help_text
@@ -2445,7 +2445,7 @@ async def test_on_help_includes_restart_command(personal_owner) -> None:
     assert "/trigger" in help_text
     assert "/pairing" not in help_text
     assert "/model" in help_text
-    assert "/dream_restore" not in help_text
+    assert "/dream_restore" in help_text
 
 
 @pytest.mark.asyncio

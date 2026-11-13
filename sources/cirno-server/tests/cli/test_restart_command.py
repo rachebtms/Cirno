@@ -14,6 +14,7 @@ from cirno_core.agent.context import TranscriptInput
 from cirno_core.bus.events import InboundMessage
 from cirno_usage.types import LLMUsage
 from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.session.model import Session
 from cirno_core.session.state import SessionState
 
@@ -25,6 +26,7 @@ def _make_loop():
 
     bus = MessageBus()
     provider = MagicMock(aclose=AsyncMock())
+    provider.generation = GenerationSettings()
     provider.get_default_model.return_value = "test-model"
     workspace = MagicMock()
     workspace.__truediv__ = MagicMock(return_value=MagicMock())
@@ -55,7 +57,7 @@ class TestRestartCommand:
         loop, _bus = _make_loop()
         loop.restart_mode = "exec"
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="direct", content="/restart")
-        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/restart", loop=loop)
+        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/restart", loop=loop, is_user_turn=True)
 
         async def _fast_sleep(_delay: float) -> None:
             return None
@@ -92,7 +94,7 @@ class TestRestartCommand:
 
         loop, _bus = _make_loop()
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="direct", content="/restart")
-        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/restart", loop=loop)
+        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/restart", loop=loop, is_user_turn=True)
 
         async def _fast_sleep(_delay: float) -> None:
             return None
@@ -127,7 +129,7 @@ class TestRestartCommand:
         loop, _bus = _make_loop()
         loop.restart_mode = "exit"
         msg = InboundMessage(channel="cli", sender_id="user", chat_id="direct", content="/restart")
-        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/restart", loop=loop)
+        ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/restart", loop=loop, is_user_turn=True)
 
         async def _fast_sleep(_delay: float) -> None:
             return None

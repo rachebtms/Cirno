@@ -19,6 +19,12 @@ async def cmd_dream_log(ctx: CommandContext) -> OutboundMessage:
     Default: diff of the latest Dream commit versus its parent.
     With /dream-log <sha>: diff of that specific commit.
     """
+    if len(ctx.args.split()) > 1:
+        return OutboundMessage(
+            channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
+            content="Usage: /dream-log [commit]",
+            metadata={**ctx.msg.metadata, "render_as": "text"},
+        )
     store = ctx.loop.consolidator.store
     git = store.git
 
@@ -34,7 +40,7 @@ async def cmd_dream_log(ctx: CommandContext) -> OutboundMessage:
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
             content=msg,
-            metadata={"render_as": "text"},
+            metadata={**ctx.msg.metadata, "render_as": "text"},
         )
 
     args = ctx.args.strip()
@@ -77,7 +83,7 @@ async def cmd_dream_log(ctx: CommandContext) -> OutboundMessage:
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,
         content=content,
-        metadata={"render_as": "text"},
+        metadata={**ctx.msg.metadata, "render_as": "text"},
     )
 
 
@@ -88,6 +94,18 @@ async def cmd_dream_restore(ctx: CommandContext) -> OutboundMessage:
         /dream-restore          — list recent commits
         /dream-restore <sha>    — revert a specific commit
     """
+    if len(ctx.args.split()) > 1:
+        return OutboundMessage(
+            channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
+            content="Usage: /dream-restore [commit]",
+            metadata={**ctx.msg.metadata, "render_as": "text"},
+        )
+    if ctx.args.strip():
+        from .control import _human_control_required
+
+        denied = _human_control_required(ctx)
+        if denied is not None:
+            return denied
     store = ctx.loop.consolidator.store
     git = store.git
     if not git.is_initialized():
@@ -95,6 +113,7 @@ async def cmd_dream_restore(ctx: CommandContext) -> OutboundMessage:
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
             content="Dream history is not available because memory versioning is not initialized.",
+            metadata={**ctx.msg.metadata, "render_as": "text"},
         )
 
     args = ctx.args.strip()
@@ -133,5 +152,5 @@ async def cmd_dream_restore(ctx: CommandContext) -> OutboundMessage:
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,
         content=content,
-        metadata={"render_as": "text"},
+        metadata={**ctx.msg.metadata, "render_as": "text"},
     )

@@ -1,5 +1,7 @@
 # Conversation routing and cancellation
 
+See [Conversation input commands](../commands.md) for the full catalog, v0.1.6 comparison, aliases and lifecycle rules.
+
 A conversation has one immutable canonical session key, formed from its channel and chat identifier. Browser conversations use `websocket:<chat_id>`. Conversations have separate histories, input queues and active task groups. Shared execution sessions are not supported.
 
 WebSocket notifications include their originating chat identifier. Client subscriptions route messages by that identifier, including after reconnecting; changing the visible conversation does not change a running turn’s destination.

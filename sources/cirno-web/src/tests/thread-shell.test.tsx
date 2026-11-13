@@ -5877,6 +5877,39 @@ describe("ThreadShell", () => {
     }
   });
 
+  it("shows command catalog failure and restores the menu after an explicit retry", async () => {
+    const client = makeClient();
+    let requests = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/v0/commands")) {
+        requests++;
+        if (requests === 1) throw new Error("command catalog disconnected");
+        return httpJson({ commands: [{ command: "/help", title: "Help", description: "", icon: "circle-help", lifecycle: "side_channel", accepts_args: false }] });
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }));
+    render(wrap(client, <ThreadShell session={session("catalog-retry")} title="Commands" onToggleSidebar={() => {}} />));
+    const failure = await screen.findByText(/command catalog disconnected/);
+    fireEvent.click(within(failure.parentElement!).getByRole("button", { name: "Retry command menu" }));
+    await waitFor(() => expect(screen.queryByText(/command catalog disconnected/)).not.toBeInTheDocument());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), { target: { value: "/" } });
+    expect(await screen.findByRole("option", { name: /\/help/ })).toBeInTheDocument();
+    expect(requests).toBe(2);
+  });
+
+  it("preserves spaces in new-chat model commands and accepts a transport suffix", async () => {
+    const client = makeClient(), create = vi.fn();
+    const settings = settingsWithFastPreset();
+    settings.model_presets[1].name = "Lab  DeepSeek";
+    render(wrap(client, <ThreadShell session={null} title="New" settingsSnapshot={settings} onToggleSidebar={() => {}} onCreateChat={create} />));
+    const input = screen.getByRole("textbox", { name: "Message input" });
+    await act(async () => {});
+    fireEvent.change(input, { target: { value: "/MODEL@Bot\tLab  DeepSeek" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(await screen.findByRole("button", { name: /Lab\s+DeepSeek/ })).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  });
+
 });
 
 it("dismisses the previous conversation's message editor after navigation", async () => {

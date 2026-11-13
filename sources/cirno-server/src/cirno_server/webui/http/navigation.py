@@ -68,7 +68,7 @@ class NavigationRoutes:
     def _handle_commands(self, request: WsRequest) -> Response:
         if not self.server.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        return _http_json_response({"commands": builtin_command_palette()})
+        return _http_json_response({"commands": builtin_command_palette(include_hidden=True)})
 
     async def _handle_session_context(self, request: WsRequest) -> Response:
         if not self.server.check_api_token(request):

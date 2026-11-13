@@ -2135,6 +2135,8 @@
         "deepResearch": "Riset mendalam"
       },
       "slash": {
+        "retryLoad": "Muat ulang menu perintah",
+        "loadError": "Menu perintah tidak dapat dimuat:",
         "ariaLabel": "Perintah slash",
         "label": "perintah",
         "navigateHint": "↑↓ Pilih",
@@ -2174,12 +2176,12 @@
             "description": "Atur memori sekarang."
           },
           "dream_log": {
-            "title": "Log consolidation",
-            "description": "Lihat perubahan dari eksekusi consolidation terakhir."
+            "title": "Riwayat memori lama",
+            "description": "Lihat perubahan Git lama. Revisi terkini tersedia di halaman Memori."
           },
           "dream_restore": {
-            "title": "Pulihkan memori",
-            "description": "Pulihkan snapshot memori consolidation sebelumnya."
+            "title": "Batalkan perubahan memori lama",
+            "description": "Daftar atau batalkan perubahan Git lama setelah meninjaunya."
           },
           "dream_prompt": {
             "title": "Pengaturan consolidation",
@@ -3204,6 +3206,7 @@
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
     "nodeCount": "{{count}} memories",
     "fit": "Fit to view",
+    "expand": "Perbesar tampilan",
     "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
     "renderError": "The 3D view could not start. You can still search and read the results.",
     "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",

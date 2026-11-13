@@ -41,7 +41,7 @@ class TestIsDispatchableCommand:
     def test_prefix_commands_match(self, router: CommandRouter) -> None:
         assert router.is_dispatchable_command("/dream-log abc123")
         assert router.is_dispatchable_command("/dream-restore def456")
-        assert not router.is_dispatchable_command("/dream-prompt init")
+        assert router.is_dispatchable_command("/dream-prompt init")
         assert router.is_dispatchable_command("/model fast")
         assert router.is_dispatchable_command("/goal migrate the database")
         assert router.is_dispatchable_command("/__shell pwd")
@@ -61,7 +61,7 @@ class TestIsDispatchableCommand:
     def test_case_insensitive(self, router: CommandRouter) -> None:
         assert router.is_dispatchable_command("/NEW")
         assert router.is_dispatchable_command("/Help")
-        assert not router.is_dispatchable_command("/PAIRING")
+        assert router.is_dispatchable_command("/PAIRING")
 
     def test_strips_whitespace(self, router: CommandRouter) -> None:
         assert router.is_dispatchable_command("  /new  ")

@@ -28,6 +28,7 @@ export function UserText({
     [mcpPresets, message.mcpPresets],
   );
   const command = matchingSlashCommand(text, slashCommands),
+    commandPrefix = command ? /^(\s*)(\/\S+)/.exec(text) : null,
     bang = /^(\s*)!/.exec(text);
   if (bang)
     return (
@@ -45,9 +46,9 @@ export function UserText({
     );
   return (
     <>
-      {command && <SlashCommandText command={command.command} />}
+      {commandPrefix && <>{commandPrefix[1]}<SlashCommandText command={commandPrefix[2]} /></>}
       <UserMessageText
-        text={command ? text.slice(command.command.length) : text}
+        text={commandPrefix ? text.slice(commandPrefix[0].length) : text}
         cliApps={apps}
         mcpPresets={presets}
         sessionMentions={message.sessionMentions}

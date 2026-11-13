@@ -48,6 +48,9 @@ RESTART_BACKOFF_MAX_SECONDS = 300.0
 
 from cirno_server.channels.telegram.commands import (
     _TELEGRAM_COMMAND_ALIASES,
+    TELEGRAM_BUS_SLASH_COMMAND_RE,
+    TELEGRAM_HYPHENATED_COMMAND_RE,
+    TELEGRAM_MENU_SPECS,
     telegram_command_text,
 )
 
@@ -76,30 +79,13 @@ class TelegramChannel(BaseChannel):
     # Commands registered with Telegram's command menu
     BOT_COMMANDS: list[BotCommand] = [
         BotCommand("start", "Start the bot"),
-        BotCommand("new", "Start a new conversation"),
-        BotCommand("compact", "Compact this chat's context"),
-        BotCommand("stop", "Stop the current task"),
-        BotCommand("restart", "Restart the bot"),
-        BotCommand("status", "Show bot status"),
-        BotCommand("history", "Show recent conversation messages"),
-        BotCommand("goal", "Start a sustained objective (long-running task)"),
-        BotCommand("trigger", "Create a named local trigger"),
-        BotCommand("model", "Switch runtime model preset"),
-        BotCommand("skill", "List enabled skills"),
-        BotCommand("dream", "Run Dream memory consolidation now"),
-        BotCommand("dream_log", "Show the latest Dream memory change"),
-        BotCommand("dream_restore", "Restore Dream memory to an earlier version"),
-        BotCommand("dream_prompt", "Tell Dream how to organize memory"),
-        BotCommand("help", "Show available commands"),
+        *(BotCommand(spec.command[1:].replace("-", "_"), spec.title) for spec in TELEGRAM_MENU_SPECS),
     ]
 
     # Regex for slash commands routed to AgentLoop via ``_forward_command``.
     # Telegram-safe aliases are normalized before reaching the core router.
     # Canonical hyphenated commands stay on a separate handler (below).
-    TELEGRAM_BUS_SLASH_COMMAND_RE = re.compile(
-        r"^/(?:new|compact|stop|restart|status|dream|history|goal|trigger|model|skill"
-        r"|dream_log|dream_restore|dream_prompt)(?:@\w+)?(?:\s+[\s\S]*)?$"
-    )
+    TELEGRAM_BUS_SLASH_COMMAND_RE = TELEGRAM_BUS_SLASH_COMMAND_RE
 
     @classmethod
     def default_config(cls) -> dict[str, Any]:
@@ -153,7 +139,7 @@ class TelegramChannel(BaseChannel):
         if not content.startswith("/"):
             return content
         command = content.split(maxsplit=1)[0]
-        canonical = _TELEGRAM_COMMAND_ALIASES.get(command, command)
+        canonical = _TELEGRAM_COMMAND_ALIASES.get(command.lower(), command)
         return canonical + content[len(command) :]
 
     async def start(self) -> None:
@@ -253,7 +239,7 @@ class TelegramChannel(BaseChannel):
         self.connection.app.add_handler(
             MessageHandler(
                 filters.Regex(
-                    r"^/(?:dream-log|dream-restore|dream-prompt)(?:@\w+)?(?:\s+[\s\S]*)?$"
+                    TELEGRAM_HYPHENATED_COMMAND_RE
                 ),
                 self._forward_command,
             )

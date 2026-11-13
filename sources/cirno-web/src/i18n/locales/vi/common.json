@@ -2135,6 +2135,8 @@
         "deepResearch": "Nghiên cứu sâu"
       },
       "slash": {
+        "retryLoad": "Tải lại menu lệnh",
+        "loadError": "Không thể tải menu lệnh:",
         "ariaLabel": "Lệnh slash",
         "label": "lệnh",
         "navigateHint": "↑↓ Chọn",
@@ -2174,12 +2176,12 @@
             "description": "Sắp xếp bộ nhớ ngay."
           },
           "dream_log": {
-            "title": "Nhật ký consolidation",
-            "description": "Xem thay đổi từ lần chạy consolidation gần nhất."
+            "title": "Lịch sử bộ nhớ cũ",
+            "description": "Xem thay đổi Git của bộ nhớ cũ. Các phiên bản hiện tại nằm trong trang Bộ nhớ."
           },
           "dream_restore": {
-            "title": "Khôi phục bộ nhớ",
-            "description": "Khôi phục ảnh chụp bộ nhớ consolidation trước đó."
+            "title": "Hoàn tác thay đổi bộ nhớ cũ",
+            "description": "Liệt kê hoặc hoàn tác thay đổi Git cũ sau khi xem trước."
           },
           "dream_prompt": {
             "title": "Thiết lập consolidation",
@@ -3204,6 +3206,7 @@
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
     "nodeCount": "{{count}} memories",
     "fit": "Fit to view",
+    "expand": "Mở rộng chế độ xem",
     "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
     "renderError": "The 3D view could not start. You can still search and read the results.",
     "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",

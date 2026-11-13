@@ -2135,6 +2135,8 @@
         "deepResearch": "Investigación profunda"
       },
       "slash": {
+        "retryLoad": "Reintentar cargar el menú de comandos",
+        "loadError": "No se pudo cargar el menú de comandos:",
         "ariaLabel": "Comandos slash",
         "label": "comandos",
         "navigateHint": "↑↓ Navegar",
@@ -2174,12 +2176,12 @@
             "description": "Organiza la memoria ahora."
           },
           "dream_log": {
-            "title": "Registro consolidation",
-            "description": "Consulta los cambios de la última ejecución de consolidation."
+            "title": "Historial de memoria anterior",
+            "description": "Consulta cambios Git antiguos. Las revisiones actuales están en Memoria."
           },
           "dream_restore": {
-            "title": "Restaurar memoria",
-            "description": "Restaura una instantánea anterior de memoria de consolidation."
+            "title": "Deshacer un cambio antiguo",
+            "description": "Lista o deshaz un cambio Git antiguo tras revisarlo."
           },
           "dream_prompt": {
             "title": "Ajustes consolidation",
@@ -3204,6 +3206,7 @@
     "cloudDescription": "Interactive memory relationship graph. Colored points are memories; gray points are shared tags. The results list provides keyboard access to every record.",
     "nodeCount": "{{count}} memories",
     "fit": "Fit to view",
+    "expand": "Ampliar vista",
     "gestureHelp": "Drag to rotate · Scroll or pinch to zoom · Select a point to read",
     "renderError": "The 3D view could not start. You can still search and read the results.",
     "settingsHelp": "Search memories and explore their connections in the Memory tab. Index maintenance stays here.",

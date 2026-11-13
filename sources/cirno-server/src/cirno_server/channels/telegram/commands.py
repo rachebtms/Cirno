@@ -2,6 +2,26 @@
 
 import re
 
+from cirno_core.command.builtin.catalog import BUILTIN_COMMAND_SPECS
+
+TELEGRAM_MENU_SPECS = tuple(
+    spec for spec in BUILTIN_COMMAND_SPECS
+    if not spec.hidden and spec.command not in {"/temporary", "/ptc"}
+)
+_BUS_NAMES = {
+    name[1:] for spec in BUILTIN_COMMAND_SPECS
+    if spec.command not in {"/temporary", "/ptc", "/help"}
+    for name in (spec.command, *spec.aliases)
+}
+TELEGRAM_BUS_SLASH_COMMAND_RE = re.compile(
+    r"^/(?:" + "|".join(re.escape(name.replace("-", "_")) for name in sorted(_BUS_NAMES))
+    + r")(?:@\w+)?(?:\s+[\s\S]*)?$", re.IGNORECASE,
+)
+TELEGRAM_HYPHENATED_COMMAND_RE = re.compile(
+    r"^/(?:" + "|".join(re.escape(name) for name in sorted(_BUS_NAMES) if "-" in name)
+    + r")(?:@\w+)?(?:\s+[\s\S]*)?$", re.IGNORECASE,
+)
+
 _TELEGRAM_COMMAND_ALIASES = {
     "/dream_log": "/dream-log",
     "/dream_restore": "/dream-restore",

@@ -36,6 +36,7 @@ async def test_status_measurement_yields_and_binds_the_target_context(tmp_path, 
         model="test-model",
         context_window_tokens=512_000,
         generation=SimpleNamespace(max_tokens=100),
+        output_reserve_percent=5, active_compact_percent=100,
     )
 
     def estimate(*_args, **_kwargs):

@@ -73,6 +73,8 @@ Write failures remain tool execution errors in native and PTC paths. A PTC progr
 
 Time filters default to event occurrence (`observed_at`); unknown dates are not guessed. Use `time_field="created_at"` or `"updated_at"` for storage/edit times. Derived knowledge inherits its primary evidence's occurrence time unless explicitly supplied. Dates and naive times use the configured timezone, overridable through `time_zone`; a date-only upper bound includes that entire day.
 
+`memory/entries/*.md` contains body text only. Conversation/Project scope, `session_key`, revisions and source references belong to `catalog.sqlite3`; searching Markdown bodies for a session key is not an index-completeness check. Use scoped memory search/read to inspect catalog records and validate their stored bodies.
+
 Managed edits update the index immediately. Idle scans detect changes and deletions in Markdown mirrors in bounded batches. Shortened or deleted profiles lose stale search chunks. Original evidence is indexed in full, rather than indexing only summaries or file headers.
 
 | Path inside Home | Role |
