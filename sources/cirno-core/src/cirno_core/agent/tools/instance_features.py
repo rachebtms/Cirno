@@ -4,6 +4,7 @@ import asyncio
 import json
 
 from cirno_memory.repository import MemoryRepository
+from cirno_memory.errors import MemoryRevisionConflict
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import current_request_context
@@ -125,7 +126,7 @@ class NodeTool(Tool):
         query=StringSchema("BM25 query in Chinese or English, or exact memory ID."),
         memory_id=StringSchema("Memory ID to read or update."),
         based_on=StringSchema("Evidence memory ID. Derived memory inherits its visibility scope."),
-        expected_revision=IntegerSchema(minimum=1, description="Revision read before editing; protects concurrent edits."),
+        expected_revision=IntegerSchema(minimum=1, description="Use the revision from the latest read, successful write or conflict snapshot. Required when replacing an existing checkpoint or updating a memory; omit only for a new checkpoint."),
         target_id=StringSchema("Target memory ID for a link."),
         relation=StringSchema(enum=["supports", "conflicts", "supersedes", "related", "derived_from"]),
         include_history=BooleanSchema(description="Include superseded/archived records in search."),
@@ -173,7 +174,8 @@ class MemoryTool(Tool):
         return ("Search source-grounded layered memory with BM25 before answering about past decisions, precise values or results. "
                 "Read returned IDs and original sources to verify claims; do not guess from summaries. "
                 "Save atomic observations/hypotheses/facts with sources, or checkpoint long work at milestones and before compaction. "
-                "Use expected_revision to update, history to inspect old versions, and link(supersedes) for evidence-backed corrections. "
+                "Existing checkpoints and memory updates require expected_revision from the latest read/write; conflicts return current state for reconciliation, not blind retries. "
+                "Use history to inspect old versions and link(supersedes) for evidence-backed corrections. "
                 "Default search returns knowledge, task checkpoints and profiles. If empty, search purpose=evidence for recent unprocessed events or archived originals; use tags to discover tags, "
                 "and time_field=observed_at for event dates (unknown dates are excluded). Bounded neighbors show corrections. "
                 "Dream must confirm each input using its revision, outcome, target_ids and reason; normal execution cannot confirm Dream batches. "
@@ -237,6 +239,16 @@ class MemoryTool(Tool):
             return search(repo, query, config.memory, mode=mode, limit=limit, **filters)
         try:
             return json.dumps(await asyncio.to_thread(run), ensure_ascii=False)
+        except MemoryRevisionConflict as exc:
+            retry_action = "checkpoint" if action == "checkpoint" else "update"
+            recovery = (
+                "Compare your proposed content with current.content below and preserve still-relevant progress/evidence. "
+                f"Then retry memory.{retry_action} using expected_revision=current.revision"
+                + (" and memory_id=current.id" if retry_action != "checkpoint" else "")
+                + ". This result already includes the current record; another read is only needed if its content was truncated. "
+                "Do not repeat the same arguments or create a duplicate memory to bypass the conflict."
+            )
+            return ToolResult.error(json.dumps({"recovery": recovery, **exc.to_dict()}, ensure_ascii=False))
         except (ValueError, KeyError, PermissionError, OSError) as exc:
             return ToolResult.error(str(exc))
 

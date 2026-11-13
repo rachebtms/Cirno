@@ -65,7 +65,11 @@ The default `releaseArchivedRuntime` behavior releases consolidated runtime pref
 
 ## Revisions and maintenance
 
-Updates require the `expected_revision` just read. Historical bodies are retained. Relations include `supports`, `conflicts`, `related`, `derived_from` and `supersedes`. Superseded findings leave default search results but remain readable.
+Updates require `expected_revision` from the latest read or successful write. Each conversation has one task checkpoint per Project scope: its first `memory.checkpoint` may omit the version, but replacing it requires the previous checkpoint's returned `revision` as `expected_revision`. Historical bodies are retained. Relations include `supports`, `conflicts`, `related`, `derived_from` and `supersedes`. Superseded findings leave default search results but remain readable.
+
+A rejected write distinguishes a missing version (`memory_revision_required`) from an outdated version (`memory_revision_conflict`). Tool results explicitly report `write_applied: false` and include the authorized current record's ID, revision, source and content, captured before any mutation. The Agent compares that snapshot with its proposal and retries the appropriate checkpoint/update using the snapshot revision; no extra read is needed unless the result was truncated. Another intervening edit is still rejected. Conflict handling never automatically overwrites, creates a duplicate, or schedules another model request. Inaccessible records return the existing scope error without disclosing their state. Snapshots live in the ordinary tool result, leaving the system prefix unchanged.
+
+Write failures remain tool execution errors in native and PTC paths. A PTC program can catch a nested `ToolError` and finish successfully while the nested write remains failed; the program's completion is not a persistence receipt. Agent instructions require a non-error write result with the saved ID and revision before claiming a save. The `current` snapshot in a conflict describes the existing record, not a saved version of the rejected proposal.
 
 Time filters default to event occurrence (`observed_at`); unknown dates are not guessed. Use `time_field="created_at"` or `"updated_at"` for storage/edit times. Derived knowledge inherits its primary evidence's occurrence time unless explicitly supplied. Dates and naive times use the configured timezone, overridable through `time_zone`; a date-only upper bound includes that entire day.
 

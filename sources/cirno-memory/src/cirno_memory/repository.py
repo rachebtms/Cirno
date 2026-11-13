@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cirno_memory.paging import source_chunks
 from cirno_memory.checkpoints import checkpoint_id
+from cirno_memory.errors import MemoryRevisionConflict
 from cirno_memory.scopes import scope_identity, visible, visibility_filter
 
 LAYERS = {"event", "knowledge", "task", "source", "profile"}
@@ -172,7 +173,13 @@ class MemoryRepository:
                 if not maintenance and not self.visible(old, access_session, access_project):
                     raise PermissionError("Memory is outside the current scope")
                 if expected_revision is None or expected_revision != old["revision"]:
-                    raise ValueError("Memory changed; read it and provide expected_revision before updating")
+                    raise MemoryRevisionConflict(
+                        {
+                            "id": old["id"], "revision": old["revision"],
+                            "source": old["source"], "content": self.body_content(old),
+                        },
+                        expected_revision,
+                    )
                 scope, project_id, session_key = old["scope"], old.get("project_id"), old.get("session_key")
             status = status or (old or {}).get("status", "active")
             supplied_parent = based_on

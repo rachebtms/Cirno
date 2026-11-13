@@ -54,15 +54,15 @@ CREDENTIAL_FIELDS = {
 
 MEMORY_DESCRIPTIONS = {
     "search": "Recall source-grounded memory. BM25 by default; semantic/hybrid uses the configured local CPU or API embeddings. Knowledge is the default; use purpose=evidence to verify raw messages or exact values.",
-    "read": "Read a memory and its provenance by ID, optionally at a historical revision.",
+    "read": "Read a memory and its provenance by ID, optionally at a historical revision. For edits use the latest record's revision as expected_revision; historical revisions are not current write versions.",
     "source": "Read original evidence behind a memory; continue with the returned line/character cursor.",
     "history": "Read the saved revision history of a memory.",
     "tags": "Discover available tags and counts; query is a tag prefix.",
     "status": "Read memory index and Dream processing status.",
     "link": "Link two memories with source-grounded supporting, conflicting or correcting evidence.",
-    "checkpoint": "Save task progress: objective, completed work, blockers, next steps and exact artifact references.",
+    "checkpoint": "Save task progress in this conversation's single checkpoint: objective, completed work, blockers, next steps and exact artifact references. The first save may omit expected_revision; subsequent saves must use the revision returned by the latest read or successful checkpoint. On conflict, reconcile the returned current record and retry with its revision, not unchanged arguments.",
     "save": "Save an atomic observation, hypothesis, fact or lesson with a real source. Use based_on when deriving knowledge from existing evidence; never invent a source.",
-    "update": "Update an event or knowledge record using the revision previously read. Profiles and task checkpoints have dedicated writers.",
+    "update": "Update an event or knowledge record using its latest revision as expected_revision. On conflict, reconcile the returned current record and retry with its revision; never repeat unchanged arguments. Profiles and task checkpoints have dedicated writers.",
     "confirm": "Confirm one Dream input with its revision, disposition and verified target IDs; restricted to the current evidence batch.",
 }
 
