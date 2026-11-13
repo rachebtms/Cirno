@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "Tentativas de geração da consolidação",
           "help": "Tentativas adicionais em sequência após falha (0–10). Zero significa uma única tentativa. Falhas de aprendizado não regeneram o resumo salvo. Novas tentativas de rede são configuradas separadamente."
+        },
+        "agents_defaults_always_skills": {
+          "label": "Skills fixos",
+          "help": "Incluir estes Skills no contexto do Router e Worker nos próximos turnos. Skills desativados ou sem dependências são excluídos."
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "Arquivos de memória fixos",
+          "help": "Um caminho relativo a Agent Home por linha, por exemplo memory/research.md. Compartilhados com Router e Worker; MEMORY.md continua automático. Arquivos ilegíveis geram um erro."
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "Orçamento de tokens dos arquivos fixos",
+          "help": "Orçamento compartilhado dos arquivos adicionais, separado de MEMORY.md."
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "Skills fixos"
         }
       },
       "save": "Salvar alterações",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Plugin de Agent",
       "marketplaceResultsFor": "Resultados para “{{query}}”",
       "retryTrends": "Tentar tendências novamente",
-      "historyTab": "Validação e histórico"
+      "historyTab": "Validação e histórico",
+      "fixedUnavailable": "Desativado, indisponível ou desinstalado",
+      "fixedDeclared": "Injeção automática declarada por este Skill"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "Processo encerrado ({{code}})",
     "terminalHint": "Shell interativo do servidor selecionado. Fechar a aba encerra a conexão local; processos remotos desconectados podem continuar.",
     "addRecord": "Adicionar credencial",
-    "vaultHint": "Os valores são criptografados separadamente da memória. Backups completos incluem a chave: mantenha-os privados. As ferramentas de credenciais gerenciam registros sem retornar valores. Segredos colados antes em chats permanecem no histórico.",
+    "vaultHint": "Os valores são criptografados em disco, separados da memória. Backups completos incluem a chave: mantenha-os privados. As listas mostram apenas metadados; credentials.read pode ler valores de credenciais visíveis ao Agent. Segredos colados em chats permanecem no histórico.",
     "label": "Nome",
     "recordType": "Tipo",
     "secretValue": "Valor sensível",

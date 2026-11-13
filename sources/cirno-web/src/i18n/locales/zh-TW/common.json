@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "整理生成重試次數",
           "help": "產生失敗後的額外循序嘗試次數（0–10）；0 表示僅嘗試一次。經驗失敗不會重新產生已儲存的摘要；模型服務的網路重試另行設定。"
+        },
+        "agents_defaults_always_skills": {
+          "label": "固定注入的 Skills",
+          "help": "將所選 Skill 自動注入 Router 和 Worker 上下文，後續輪次生效。已停用或缺少依賴的 Skill 不會注入。"
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "固定注入的記憶檔案",
+          "help": "每行填入一個相對於 Agent Home 的路徑，例如 memory/research.md。內容由 Router 和 Worker 共用；MEMORY.md 仍自動注入。檔案遺失或無法讀取時會明確報錯。"
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "固定記憶檔案 Token 預算",
+          "help": "額外檔案共用此預算，MEMORY.md 的預算分別計算。"
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "记忆与空闲整理",
           "help": "任务中、手动与空闲整理共用同一流程，保存结果后再继续任务。"
+        },
+        "skills": {
+          "title": "固定注入的 Skills"
         }
       },
       "save": "儲存變更",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Agent 外掛",
       "marketplaceResultsFor": "「{{query}}」的搜尋結果",
       "retryTrends": "重試趨勢查詢",
-      "historyTab": "驗證與歷史"
+      "historyTab": "驗證與歷史",
+      "fixedUnavailable": "已停用、無法使用或已解除安裝",
+      "fixedDeclared": "此 Skill 已宣告自動注入"
     },
     "homeFiles": {
       "title": "Home 文件",
@@ -2740,7 +2757,7 @@
     "terminalExited": "程序已結束（{{code}}）",
     "terminalHint": "這是所選伺服器上的互動式終端機。關閉分頁會停止本機連線；已分離的遠端程序可能繼續執行。",
     "addRecord": "新增憑證",
-    "vaultHint": "敏感內容單獨加密保存，不寫入記憶。完整實例備份包含加密金鑰，請妥善保管。憑證工具僅回傳名稱等資訊，不回傳敏感內容。曾貼入對話的秘密仍會保留在該歷史中。",
+    "vaultHint": "敏感內容單獨加密儲存，不寫入記憶。完整實例備份包含加密金鑰，請妥善保管備份。清單僅返回資訊；credentials.read 可讀取對 Agent 可見的憑證值。曾貼到聊天中的秘密仍保留在對應歷史裡。",
     "label": "名稱",
     "recordType": "憑證類型",
     "secretValue": "敏感內容",

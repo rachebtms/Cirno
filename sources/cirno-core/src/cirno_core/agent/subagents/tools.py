@@ -25,12 +25,14 @@ class SubagentTools:
         network: NetworkConfig,
         restrict_to_workspace: bool,
         disabled_skills: set[str],
+        always_skills: set[str] | None = None,
     ):
         self.workspace = workspace
         self.config = config
         self.network = network
         self.restrict_to_workspace = restrict_to_workspace
         self.disabled_skills = disabled_skills
+        self.always_skills = always_skills or set()
         self.system_prompts = SystemPrompts()
         self.system_prompts_loader: Callable[[], SystemPrompts] | None = None
 
@@ -75,8 +77,15 @@ class SubagentTools:
 
         agent_workspace = self.workspace.expanduser().resolve()
         project_workspace = workspace.expanduser().resolve() if workspace else agent_workspace
-        catalog = SkillsLoader(self.workspace, disabled_skills=self.disabled_skills)
-        skills_summary = SkillContext(catalog).build_skills_summary(workspace=project_workspace)
+        system_prompts = self.system_prompts_loader() if self.system_prompts_loader else self.system_prompts
+        catalog = SkillsLoader(self.workspace, disabled_skills=self.disabled_skills, always_skills=self.always_skills)
+        skill_context = SkillContext(catalog)
+        with catalog.snapshot():
+            active = catalog.get_always_skills()
+            active_content = skill_context.load_skills_for_context(active)
+            skills_summary = skill_context.build_skills_summary(exclude=set(active), workspace=project_workspace)
+        if active_content:
+            skills_summary = "# Active Skills\n\n" + active_content + "\n\n" + skills_summary
         from cirno_core.config.home import get_home_path
 
         agent_home = get_home_path().resolve()
@@ -91,5 +100,5 @@ class SubagentTools:
             agent_workspace=str(agent_home),
             history_log=history_log,
             skills_summary=skills_summary or "",
-            system_prompt_additions=(self.system_prompts_loader() if self.system_prompts_loader else self.system_prompts).for_role("worker"),
+            system_prompt_additions=system_prompts.for_role("worker"),
         )

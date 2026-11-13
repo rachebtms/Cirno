@@ -13,7 +13,7 @@ from cirno_core.agent.runner.engine import AgentRunner
 from cirno_core.agent.tools.base import Tool
 from cirno_core.agent.tools.execution import execute_tool_calls
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.agent.tools.role_policy import RoleToolPolicy
+from cirno_core.agent.tools.role_policy import RoleToolPolicy, ToolPolicyDenied
 from cirno_core.agent.tools.selection import conversation_tools
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import LLMResponse
@@ -162,7 +162,7 @@ async def test_ptc_programs_share_cumulative_time_and_coordination_stays_callabl
     assert policy.remaining("ptc__run") == 4
     async with policy.admit("ptc__run"):
         clock[0] = 11.0
-    with pytest.raises(ValueError, match="budget exhausted"):
+    with pytest.raises(ToolPolicyDenied, match="budget exhausted"):
         policy.remaining("ptc__run")
     tools = PtcToolRegistry(catalog("exec", "create_session", "message"))
     assert tools.has("create_session") and tools.has("message")
@@ -201,6 +201,98 @@ async def test_exhausted_work_is_rejected_before_requesting_an_approval(monkeypa
 
 async def test_ptc_computation_timeout_explains_handoff_and_possible_completed_effects():
     role = ConversationRole("router", ("SOUL.md",), "", False, True, frozenset(), DirectExecutionLimits(9, .02))
-    with pytest.raises(TimeoutError, match="Delegate unfinished.*may have completed effects"):
+    with pytest.raises(ToolPolicyDenied, match="Delegate unfinished.*may have completed effects"):
         async with RoleToolPolicy(role).admit("ptc__run"):
             await asyncio.Event().wait()
+
+
+class ReadCounter(Counter):
+    read_only = True
+
+
+def control_catalog():
+    tools = catalog("exec", "read_file", "create_session")
+    tools.register(ReadCounter("read_file"))
+    for name, actions in (("my", ["check", "set"]), ("memory", ["search", "checkpoint", "save"])):
+        tool = Counter(name)
+        tool.parameters = {"type": "object", "properties": {
+            "action": {"type": "string", "enum": actions},
+            "content": {"type": "string"}, "source": {"type": "string"},
+        }, "required": ["action"]}
+        tools.register(tool)
+    return tools
+
+
+@pytest.mark.parametrize("exhaustion", ["calls", "seconds"])
+@pytest.mark.parametrize("ptc", [False, True])
+async def test_supervision_survives_exhaustion_without_exempting_runtime_writes_or_research(ptc, exhaustion):
+    native = control_catalog()
+    tools = PtcToolRegistry(native) if ptc else native
+    definitions = tools.get_definitions()
+    policy = RoleToolPolicy(RouterConversation())
+    setattr(policy, exhaustion, 10)
+    for call in (
+        ToolCallRequest("check", "runtime__check", {}),
+        ToolCallRequest("checkpoint", "memory__checkpoint", {"content": "progress", "source": "user request"}),
+        ToolCallRequest("delegate", "conversations__create", {}),
+    ):
+        _, events = await execute(tools, [call], policy)
+        assert events[0]["status"] == "ok"
+    assert native.get("my").calls == native.get("memory").calls == 1
+    # Grouped implementation names must select the action, too.
+    assert policy.remaining("my", {"action": "check"}) is None
+    assert policy.remaining("memory", {"action": "checkpoint"}) is None
+    for name, params in (("my", {"action": "set"}), ("memory", {"action": "search"}), ("files__read", {})):
+        with pytest.raises(ToolPolicyDenied) as denial:
+            policy.remaining(name, params)
+        assert denial.value.code == "router_budget_exhausted"
+    results, events = await execute(native, [ToolCallRequest("read", "files__read", {})], policy)
+    assert events[0]["status"] == "error" and native.get("read_file").calls == 0
+    assert "Tool policy denied (router_budget_exhausted)" in results[0]
+    assert "ValueError" not in results[0]
+    assert tools.get_definitions() == definitions
+    if ptc:
+        exposed = {item["function"]["name"] for item in definitions}
+        assert {"runtime__check", "memory__checkpoint"} <= exposed
+        assert not {"runtime__set", "memory__save", "memory__search"} & exposed
+        assert tools.prepare_call("runtime__set", {})[2]
+
+
+async def test_nested_supervision_does_not_consume_the_ordinary_call_budget():
+    native = control_catalog()
+    tools = PtcToolRegistry(native)
+    policy = RoleToolPolicy(RouterConversation())
+    code = """for i in range(9):
+    await tools.runtime.check()
+    await tools.memory.checkpoint(content='progress', source='user request')
+    await tools.shell.exec()
+try:
+    await tools.shell.exec()
+except ToolError as error:
+    print(error)
+await tools.runtime.check()
+"""
+    results, events = await execute(tools, [ToolCallRequest("ptc", "ptc__run", {"code": code, "description": "check"})], policy)
+    assert events[0]["status"] == "ok"
+    assert "Tool policy denied (router_budget_exhausted)" in results[0]
+    assert native.get("exec").calls == policy.calls == 9
+    assert native.get("my").calls == 10 and native.get("memory").calls == 9
+
+
+async def test_router_budget_resets_for_the_next_run_in_the_same_conversation():
+    tools = catalog("exec")
+    provider = MagicMock(spec=LLMProvider)
+    provider.chat_stream_with_retry = AsyncMock(side_effect=[
+        LLMResponse(None, tool_calls=[ToolCallRequest(str(i), "shell__exec", {}) for i in range(10)]),
+        LLMResponse("first done"),
+        LLMResponse(None, tool_calls=[ToolCallRequest("new", "shell__exec", {})]),
+        LLMResponse("second done"),
+    ])
+    spec = make_run_spec(provider, tools=tools, model="test", max_iterations=3,
+                         max_tool_result_chars=2000, initial_messages=[{"role": "user", "content": "check"}],
+                         session_key=ROUTER_SESSION_KEY)
+    runner = AgentRunner()
+    await runner.run(spec)
+    assert tools.get("exec").calls == 9
+    await runner.run(spec)
+    assert tools.get("exec").calls == 10

@@ -35,6 +35,14 @@ reply through normal assistant output. The same selection is used for turns,
 compaction and context accounting. PTC wraps that selection rather than
 reintroducing tools excluded from the conversation.
 
+Visible replies use short, complete `user.message` calls. Invalid JSON is rejected
+without delivery; the tool error asks for a complete replacement argument object,
+not a continuation of the broken string. Earlier successful messages remain
+delivered and must not be replayed. The framework does not silently repair live
+arguments, trim repeated text or impose a separate reply-length cap. Chat stream
+slots cannot combine different call IDs into one argument string; an inconsistent
+gateway stream returns an error instead.
+
 The Router receives ordinary execution tools plus coordination controls and
 `user.message`, but excludes transient `subagent` execution. Worker catalogs
 exclude Router-only messaging, cross-conversation controls and Project management.
@@ -43,9 +51,18 @@ the Router may make at most nine ordinary calls and spend ten cumulative seconds
 executing them; overlapping calls count elapsed time once. Model waiting is not
 charged. PTC programs share the same cumulative wall-time allowance across model
 rounds, including Python computation; nested ordinary calls count once. In PTC
-mode, coordination tools are also exposed directly, so replying or creating a
-Worker does not require another execution program. Replies and coordination remain available after
-exhaustion so the Router can delegate unfinished work. A timed-out operation may
+mode, coordination tools, `runtime.check` and `memory.checkpoint` are also exposed
+directly, so supervision does not require another execution program. Replies,
+coordination, runtime snapshot inspection and task-checkpoint saves do not consume
+ordinary calls or their direct execution time and remain available after exhaustion.
+The PTC wrapper itself still consumes wall time; use the direct supervision tools
+after exhaustion. Runtime changes and other memory operations remain budgeted.
+Read-only task execution such as file reading, web search and remote checks also
+remains budgeted; being read-only does not make an investigation a small task.
+The budget starts fresh for each run, not each model round or each PTC program,
+and is not a conversation-lifetime quota. Limits are returned as explicit tool-policy
+decisions with `router_budget_exhausted` or `router_execution_timeout`, rather than
+an implementation `ValueError`. A timed-out operation may
 have completed effects; its error instructs the model to inspect before retrying.
 
 The Router prompt requires paper analysis, literature reviews, development,
@@ -56,6 +73,11 @@ limit and tool permissions. Workers do not inherit the Router's small-task budge
 Access and approval policies apply equally to both roles. Unavailable or already
 exhausted work is rejected before asking the owner to approve it; admission is
 checked again after approval without charging native approval waiting time.
+
+`runtime.check` reads the allowlisted runtime snapshot, not arbitrary configuration
+paths such as `agents.defaults.heartbeat`. Omit `key` to discover its available
+runtime fields. It retains its access and secret-field restrictions even when
+ordinary execution has exhausted its budget.
 
 The Python file-search backend shares directory scanning, filters and paging
 between path discovery and content search. Unreadable directories and failed

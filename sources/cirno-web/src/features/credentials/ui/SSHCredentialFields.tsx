@@ -1,10 +1,11 @@
+import { SecretInput } from "@/ui/fields/SecretInput";
 import { SSHSessionFields } from "@/components/ssh/SSHSessionFields";
 import { Button, Description, FieldError, Input, Label, ListBox, Select, Switch, TextArea, TextField } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { CredentialDraft, CredentialPatch, SSHFields } from "../model/contracts";
 
-export function SSHCredentialFields({ draft, disabled, update, scan, fingerprints }: {
-  draft: CredentialDraft; disabled: boolean; update: (patch: CredentialPatch) => void;
+export function SSHCredentialFields({ draft, disabled, update, scan, fingerprints, visible, toggleVisible }: {
+  draft: CredentialDraft; disabled: boolean; visible: boolean; toggleVisible: () => void; update: (patch: CredentialPatch) => void;
   scan: () => Promise<void>; fingerprints: string;
 }) {
   const { t } = useTranslation();
@@ -24,7 +25,7 @@ export function SSHCredentialFields({ draft, disabled, update, scan, fingerprint
       </Select>
     </div>
     {draft.ssh.auth_method === "password" ? <TextField isRequired={!draft.ssh.has_password} isDisabled={disabled} value={draft.ssh.password} onChange={password => change({ password })}>
-      <Label>{t("features.password")}</Label><Input type="password" autoComplete="new-password" />
+      <Label>{t("features.password")}</Label><SecretInput visible={visible} onToggle={toggleVisible} disabled={disabled} />
       {draft.ssh.has_password && <Description>{t("features.keepPassword")}</Description>}<div className="credential-validation"><FieldError /></div>
     </TextField> : <TextField isDisabled={disabled} value={draft.ssh.identity_file} onChange={identity_file => change({ identity_file })}>
       <Label>{t("features.identityFile")}</Label><Input autoComplete="off" />

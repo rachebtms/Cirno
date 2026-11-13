@@ -224,7 +224,11 @@ class AgentRunner:
             if interrupted:
                 length_recovery_parts.clear()
             else:
-                messages.append(build_length_recovery_message(segment_content))
+                messages.append(build_length_recovery_message(
+                    segment_content,
+                    tool_replies=bool(role_policy and role_policy.role.tool_replies) or spec.require_visible_reply,
+                    discarded_tool_calls=bool(segment_context.response and segment_context.response.has_tool_calls),
+                ))
             if hook.wants_streaming():
                 segment_context.stream_continues_current_message = not interrupted
                 await hook.on_stream_end(segment_context, resuming=True)

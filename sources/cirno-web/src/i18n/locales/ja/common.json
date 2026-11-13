@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "コンテキスト整理の生成リトライ回数",
           "help": "失敗後の追加の逐次試行回数（0–10）。0 は1回のみ。学習の失敗で保存済み要約は再生成されません。接続の再試行は別設定です。"
+        },
+        "agents_defaults_always_skills": {
+          "label": "固定する Skills",
+          "help": "選択した Skill を Router と Worker のコンテキストに毎回含めます。次のターンから適用されます。無効または依存関係が不足する Skill は含まれません。"
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "固定するメモリファイル",
+          "help": "Agent Home からの相対パスを1行に1つ入力します（例: memory/research.md）。Router と Worker で共有します。MEMORY.md は自動のままです。読み込めないファイルはエラーになります。"
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "固定メモリファイルのトークン予算",
+          "help": "追加ファイルで共有する予算です。MEMORY.md の予算は別です。"
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "固定する Skills"
         }
       },
       "save": "変更を保存",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Agent プラグイン",
       "marketplaceResultsFor": "「{{query}}」の検索結果",
       "retryTrends": "推移を再取得",
-      "historyTab": "検証と履歴"
+      "historyTab": "検証と履歴",
+      "fixedUnavailable": "無効、利用不可、または未インストール",
+      "fixedDeclared": "この Skill が自動適用を指定しています"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "プロセス終了（{{code}}）",
     "terminalHint": "選択したサーバーの対話型シェルです。タブを閉じるとローカル接続が終了します。切り離されたリモートプロセスは継続する場合があります。",
     "addRecord": "認証情報を追加",
-    "vaultHint": "値はメモリーと分離して暗号化されます。完全バックアップには暗号鍵が含まれるため厳重に保管してください。認証情報ツールは値を返さずに記録を管理します。以前チャットに貼り付けた秘密は履歴に残ります。",
+    "vaultHint": "値はメモリとは別にディスク上で暗号化されます。完全バックアップには暗号鍵が含まれるため、非公開で保管してください。一覧はメタデータのみを表示し、credentials.read は Agent に公開された認証情報の値を読み取れます。チャットに貼り付けた秘密は履歴に残ります。",
     "label": "名前",
     "recordType": "種類",
     "secretValue": "機密の値",

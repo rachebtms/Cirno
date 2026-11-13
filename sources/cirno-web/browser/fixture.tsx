@@ -1,3 +1,4 @@
+import { CredentialVisibilityFixture } from "./credential-visibility-fixture";
 import { MobileEditingFixture } from "./mobile-editing-fixture";
 import { KeyboardViewportFixture } from "./keyboard-viewport-fixture";
 import { PreviewLifetimeFixture } from "./preview-lifetime-fixture";
@@ -283,7 +284,8 @@ installPreviewPreferences({
 await initializeI18n();
 await setAppLanguage(normalizeLocale(parameters.get("lang") ?? readOwnerPreferences().language));
 createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurface className="h-full w-full"><OperationNotices /><TooltipProvider>
-  {parameters.get("case") === "preview-lifetime" ? <PreviewLifetimeFixture />
+  {parameters.get("case") === "credential-visibility" ? <CredentialVisibilityFixture />
+    : parameters.get("case") === "preview-lifetime" ? <PreviewLifetimeFixture />
     : parameters.get("case") === "channel-instances"
     ? <ChannelInstancesFixture />
     : parameters.get("case") === "channel-fields"

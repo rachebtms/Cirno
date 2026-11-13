@@ -81,12 +81,15 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md"]
     _SKIPPABLE_DEFAULTS = {"AGENTS.md", "USER.md"}
 
-    def __init__(self, workspace: Path, timezone: str | None = None, disabled_skills: list[str] | None = None):
+    def __init__(self, workspace: Path, timezone: str | None = None, disabled_skills: list[str] | None = None, always_skills: list[str] | None = None):
         self.workspace = workspace
         self.timezone = timezone
         self.memory = MemoryStore(get_home_path())
-        self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills) if disabled_skills else None)
+        self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills or []), always_skills=set(always_skills or []))
         self.memory_context_tokens = 2000
+        self.memory_context_files: list[str] = []
+        self.memory_context_files_tokens = 2000
+        self.memory_files_loader: Callable[[], tuple[list[str], int]] | None = None
         self.checkpoint_context_tokens = 2000
         self.system_prompts = SystemPrompts()
         self.system_prompts_loader: Callable[[], SystemPrompts] | None = None
@@ -111,6 +114,8 @@ class ContextBuilder:
         root = workspace or self.workspace
         role = conversation_role(session_key)
         internal = is_internal_session(session_key or "")
+        if not internal and system_prompts is None:
+            system_prompts = self.current_system_prompts()
         profiles = ("SOUL.md", "WORKER.md") if internal else role.profile_files
         identity = (
             render_template("agent/maintenance_context.md", home_path=str(get_home_path().resolve()))
@@ -137,7 +142,7 @@ class ContextBuilder:
             )
 
         with self.skills.snapshot():
-            active_skills = self.skills.get_always_skills()
+            active_skills = self.skills.get_always_skills(include_configured=not internal)
             if active_skills:
                 active_content = self.skill_context.load_skills_for_context(active_skills)
                 if active_content:
@@ -348,13 +353,18 @@ class ContextBuilder:
         content = "## Current MEMORY.md snapshot\n" + (
             truncate_text_to_tokens(memory, self.memory_context_tokens) if memory else "(empty)"
         ) + "\n[/MEMORY.md snapshot]"
+        from cirno_core.memory.context_files import memory_files_context
+        files, tokens = self.memory_files_loader() if self.memory_files_loader else (self.memory_context_files, self.memory_context_files_tokens)
+        additional = memory_files_context(self.memory.workspace, files, tokens)
+        content += additional
+        content = "[Shared memory snapshot]\n" + content + "\n[/Shared memory snapshot]"
         for message in reversed(history):
             marker = message.get(RUNTIME_CONTEXT_HISTORY_META) or (message.get("_meta") or {}).get(RUNTIME_CONTEXT_MESSAGE_META)
             if not isinstance(marker, dict) or "memory_snapshot" not in marker.get("sources", []):
                 continue
             rendered = marker.get("suffix") or "\n\n".join(block.get("text", "") for block in marker.get("blocks", []))
             return None if content in rendered else RuntimeContextBlock(source="memory_snapshot", content=content)
-        return RuntimeContextBlock(source="memory_snapshot", content=content) if memory else None
+        return RuntimeContextBlock(source="memory_snapshot", content=content) if memory or additional else None
 
     def build_task_context(
         self, session_key: str | None, *, project_id: str | None = None, include_automatic: bool = True,

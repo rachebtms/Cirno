@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "컨텍스트 정리 생성 재시도 횟수",
           "help": "실패 후 추가 순차 시도 횟수(0–10). 0은 한 번만 시도합니다. 학습 실패로 저장된 요약을 다시 생성하지 않습니다. 네트워크 재시도는 별도 설정입니다."
+        },
+        "agents_defaults_always_skills": {
+          "label": "고정 Skills",
+          "help": "선택한 Skill을 Router와 Worker 컨텍스트에 항상 포함합니다. 다음 턴부터 적용됩니다. 비활성화되거나 의존성이 없는 Skill은 제외됩니다."
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "고정 메모리 파일",
+          "help": "Agent Home 기준 상대 경로를 한 줄에 하나씩 입력하세요(예: memory/research.md). Router와 Worker가 공유합니다. MEMORY.md는 계속 자동으로 포함됩니다. 읽을 수 없는 파일은 오류를 표시합니다."
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "고정 메모리 파일 토큰 예산",
+          "help": "추가 파일이 공유하는 예산입니다. MEMORY.md 예산은 별도입니다."
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "고정 Skills"
         }
       },
       "save": "변경 사항 저장",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Agent 플러그인",
       "marketplaceResultsFor": "“{{query}}” 검색 결과",
       "retryTrends": "추세 다시 불러오기",
-      "historyTab": "검증 및 이력"
+      "historyTab": "검증 및 이력",
+      "fixedUnavailable": "비활성화, 사용 불가 또는 미설치",
+      "fixedDeclared": "이 Skill이 자동 포함을 선언함"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "프로세스 종료 ({{code}})",
     "terminalHint": "선택한 서버의 대화형 셸입니다. 탭을 닫으면 로컬 연결이 종료됩니다. 분리된 원격 프로세스는 계속 실행될 수 있습니다.",
     "addRecord": "자격 증명 추가",
-    "vaultHint": "값은 메모리와 분리하여 암호화됩니다. 전체 백업에 암호화 키가 포함되므로 안전하게 보관하세요. 자격 증명 도구는 값을 반환하지 않고 기록을 관리합니다. 이전에 채팅에 붙여 넣은 비밀은 기록에 남습니다.",
+    "vaultHint": "값은 메모리와 별도로 디스크에 암호화됩니다. 전체 백업에는 암호화 키가 포함되므로 비공개로 보관하세요. 목록에는 메타데이터만 표시되며 credentials.read는 Agent에 공개된 자격 증명의 값을 읽을 수 있습니다. 채팅에 붙여 넣은 비밀은 해당 기록에 남습니다.",
     "label": "이름",
     "recordType": "유형",
     "secretValue": "민감한 값",

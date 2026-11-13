@@ -310,3 +310,19 @@ def test_setup_is_not_an_application_setting_or_saved_configuration(tmp_path):
     with pytest.raises(WebUISettingsError):
         update_runtime_config_settings({"tools.startup.components": ["presets.rachebtms"]}, config_path=path)
     assert path.read_bytes() == before
+
+
+def test_fixed_context_settings_are_saved_without_requiring_restart(tmp_path):
+    from cirno_core.config.loader import save_config, load_config
+    path = tmp_path / 'config.json'
+    save_config(Config(), path)
+    payload = update_runtime_config_settings({
+        'agents.defaults.always_skills': ['paper-review'],
+        'agents.defaults.memory.context_files': ['memory/research.md'],
+        'agents.defaults.memory.context_files_tokens': 3072,
+    }, config_path=path)
+    assert not payload['requires_restart']
+    config = load_config(path)
+    assert config.agents.defaults.always_skills == ['paper-review']
+    assert config.agents.defaults.memory.context_files == ['memory/research.md']
+    assert config.agents.defaults.memory.context_files_tokens == 3072

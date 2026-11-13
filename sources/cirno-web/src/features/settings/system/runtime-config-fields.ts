@@ -10,10 +10,11 @@ export interface RuntimeConfigField {
   step?: number | "any";
 }
 
-export type RuntimeConfigPage = "personality" | "approval" | "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "consolidation" | "memory-search" | "execution" | "shell" | "web-network";
+export type RuntimeConfigPage = "skills" | "personality" | "approval" | "heartbeat" | "coordination" | "regional" | "activity" | "memory" | "runtime" | "advanced" | "browser" | "network" | "tools" | "consolidation" | "memory-search" | "execution" | "shell" | "web-network";
 
 export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabledBy?: string }[] = [
   { id: "system-prompts", page: "personality" },
+  { id: "skills", page: "skills" },
   { id: "identity", page: "regional" },
   { id: "heartbeat", page: "heartbeat" },
   { id: "requests", page: "network" },
@@ -43,6 +44,9 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
 ];
 
 export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
+  { group: "skills", path: "agents.defaults.always_skills", kind: "list" },
+  { group: "memory", path: "agents.defaults.memory.context_files", kind: "list" },
+  { group: "memory", path: "agents.defaults.memory.context_files_tokens", kind: "number", min: 256, max: 16000 },
   { group: "consolidation", path: "agents.defaults.consolidation.learn", kind: "boolean" },
   { group: "consolidation", path: "agents.defaults.consolidation.max_updates", kind: "number", min: 1, max: 32, when: { path: "agents.defaults.consolidation.learn", value: true } },
   { group: "consolidation", path: "agents.defaults.consolidation.context_chars", kind: "number", min: 2000, max: 64000, when: { path: "agents.defaults.consolidation.learn", value: true } },

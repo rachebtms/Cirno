@@ -23,9 +23,12 @@ SYSTEM_PROMPT_PATHS = (
     "agents.defaults.system_prompts.router",
     "agents.defaults.system_prompts.worker",
 )
+LIVE_CONTEXT_PATHS = (*SYSTEM_PROMPT_PATHS, "agents.defaults.always_skills",
+                      "agents.defaults.memory.context_files", "agents.defaults.memory.context_files_tokens")
 
 RUNTIME_CONFIG_PATHS = (
     *SYSTEM_PROMPT_PATHS,
+    "agents.defaults.always_skills",
     "agents.defaults.workspace",
     "agents.defaults.approval.enabled",
     "agents.defaults.approval.model_override",
@@ -43,6 +46,8 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.consolidation.context_chars",
     "agents.defaults.memory.release_archived_runtime",
     "agents.defaults.memory.context_tokens",
+    "agents.defaults.memory.context_files",
+    "agents.defaults.memory.context_files_tokens",
     "agents.defaults.memory.checkpoint_tokens",
     "agents.defaults.memory.index_scan_batch",
     "agents.defaults.memory.embedding_enabled",
@@ -136,7 +141,7 @@ def runtime_restart_values(config: Config) -> dict[str, str]:
     """Compare restart-sensitive values without retaining plaintext secrets."""
     return {
         path: hashlib.sha256(json.dumps(getattr(parent, leaf), sort_keys=True).encode()).hexdigest()
-        for path in RUNTIME_CONFIG_PATHS if path not in SYSTEM_PROMPT_PATHS
+        for path in RUNTIME_CONFIG_PATHS if path not in LIVE_CONTEXT_PATHS
         for parent, leaf in [_parent(config, path)]
     }
 

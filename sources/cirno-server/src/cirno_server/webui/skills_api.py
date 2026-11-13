@@ -181,6 +181,7 @@ def _skill_payload(
         "enabled": name not in (disabled_skills or set()),
         "deletable": source == "home",
         "available": available,
+        "always": loader.get_runtime_metadata(name).always if available else False,
         "unavailable_reason": unavailable_reason,
     }
 

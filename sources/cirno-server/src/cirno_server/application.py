@@ -281,7 +281,11 @@ def _run_claimed_server(
     def _webui_refresh_runtime_config() -> None:
         recovery.resume_settings = config.agents.defaults.resume
         agent.refresh_runtime_config()
+        agent.context.skills.always_skills = set(config.agents.defaults.always_skills)
+        agent.subagents.tools.always_skills = set(config.agents.defaults.always_skills)
         agent.context.memory_context_tokens = config.agents.defaults.memory.context_tokens
+        agent.context.memory_context_files = list(config.agents.defaults.memory.context_files)
+        agent.context.memory_context_files_tokens = config.agents.defaults.memory.context_files_tokens
         agent.context.checkpoint_context_tokens = config.agents.defaults.memory.checkpoint_tokens
         agent.release_archived_runtime = config.agents.defaults.memory.release_archived_runtime
         agent.dream_max_iterations = config.agents.defaults.dream.max_tool_iterations

@@ -64,6 +64,16 @@ def test_single_anonymous_delta_continues_the_only_nonzero_slot():
     assert stream.response().tool_calls[0].arguments == {"name": "stss"}
 
 
+def test_changed_call_id_cannot_merge_arguments_into_an_occupied_index():
+    stream = ChatStreamAccumulator()
+    stream.consume(chunk("call_first", '{"content":"unfinished', name="user__message", index=0))
+    with pytest.raises(ValueError, match="different call ID; arguments were not combined"):
+        stream.consume(chunk("call_second", '{"content":"new message"}', name="user__message", index=0))
+    call = stream.response().tool_calls[0]
+    assert call.id == "call_first"
+    assert call.arguments == '{"content":"unfinished'
+
+
 def test_ambiguous_deltas_are_rejected_instead_of_joining_different_calls():
     stream = ChatStreamAccumulator()
     stream.consume(chunk("call_a", '{"name":', name="skills__validate", index=0))

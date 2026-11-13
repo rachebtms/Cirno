@@ -26,7 +26,7 @@ export function CredentialsTab({ client, active, onDirtyChange }: {
         <Alert.Content><Alert.Description>{vault.listError}</Alert.Description></Alert.Content>
         <Button size="sm" variant="ghost" isDisabled={vault.busy} onPress={() => { void vault.refresh(); }}>{t("common.retry")}</Button>
       </Alert>}
-      {vault.draft && <CredentialEditor draft={vault.draft} busy={vault.busy} update={vault.update} cancel={vault.clear} reveal={vault.reveal} save={vault.save} scan={vault.scan} fingerprints={vault.fingerprints} loadSSH={vault.loadSSH} />}
+      {vault.draft && <CredentialEditor visible={vault.secretVisible} toggleVisible={vault.toggleSecret} draft={vault.draft} busy={vault.busy} update={vault.update} cancel={vault.clear} reveal={vault.reveal} save={vault.save} scan={vault.scan} fingerprints={vault.fingerprints} loadSSH={vault.loadSSH} />}
       {vault.loading && !vault.records.length ? <Spinner aria-label={t("common.loading")} /> : vault.records.length ?
         <CredentialRecords records={vault.records} disabled={vault.busy || !!vault.draft?.modified} deleting={vault.deleting} confirm={vault.setDeleting} edit={vault.begin} remove={vault.remove} /> :
         !vault.listError && <p className="credential-empty">{t("workspace.noRecords")}</p>}

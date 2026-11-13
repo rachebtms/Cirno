@@ -15,7 +15,7 @@ from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.file_state import file_read_context
 from cirno_core.agent.tools.naming import implementation_name
 from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result, with_tool_error_hint
-from cirno_core.agent.tools.role_policy import RoleToolPolicy
+from cirno_core.agent.tools.role_policy import RoleToolPolicy, ToolPolicyDenied
 from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.runtime import (
     repeated_external_lookup_error,
@@ -166,10 +166,10 @@ async def _execute_tool_call(
     from cirno_core.agent.approval.service import operation_access
     try:
         if role_policy:
-            role_policy.remaining(tool_call.name)
+            role_policy.remaining(tool_call.name, params)
         async with (
             operation_access(tool, params, current_request_context()) as params,
-            role_policy.admit(tool_call.name) if role_policy else nullcontext(),
+            role_policy.admit(tool_call.name, params) if role_policy else nullcontext(),
         ):
             await hook.before_execute_tool(context, tool_call, tool, params)
             with (
@@ -208,6 +208,10 @@ async def _execute_tool_call(
                 "name": tool_call.name, "arguments": params, "error": "PTC program stopped.",
             })
         raise
+    except ToolPolicyDenied as exc:
+        payload = f"Tool policy denied ({exc.code}): {exc}"
+        await hook.on_execute_tool_error(context, tool_call, tool, params, payload)
+        return payload, {"name": tool_call.name, "status": "error", "detail": payload}
     except Exception as exc:
         await hook.on_execute_tool_error(context, tool_call, tool, params, exc)
         event = {

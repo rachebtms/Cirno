@@ -71,6 +71,8 @@ class ChatStreamAccumulator:
         identity = wire_field(value, "id") if not legacy else None
         index = self._tool_index(index, identity, fallback_index)
         buffer = self._tools.setdefault(index, _ToolBuffer())
+        if identity and buffer.id and buffer.id != str(identity):
+            raise ValueError("Tool-call delta reused an index for a different call ID; arguments were not combined")
         function = value if legacy else wire_field(value, "function")
         name = wire_field(function, "name") if function is not None else None
         arguments = wire_field(function, "arguments") if function is not None else None

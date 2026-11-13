@@ -56,6 +56,7 @@ class SubagentManager:
         tools_config: ToolsConfig | None = None,
         restrict_to_workspace: bool = False,
         disabled_skills: list[str] | None = None,
+        always_skills: list[str] | None = None,
         max_iterations: int | None = None,
         max_concurrent_subagents: int | None = None,
         *,
@@ -73,7 +74,7 @@ class SubagentManager:
         )
         self.tools = SubagentTools(
             workspace, tools_config or ToolsConfig(), network_config or NetworkConfig(),
-            restrict_to_workspace, set(disabled_skills or []),
+            restrict_to_workspace, set(disabled_skills or []), set(always_skills or []),
         )
         self.max_concurrent_subagents = (
             max_concurrent_subagents

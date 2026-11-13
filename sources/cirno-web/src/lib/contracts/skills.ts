@@ -7,6 +7,7 @@ export interface SkillSummary {
   enabled?: boolean;
   deletable?: boolean;
   available: boolean;
+  always?: boolean;
   unavailable_reason?: string;
 }
 

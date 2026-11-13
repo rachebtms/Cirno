@@ -257,6 +257,11 @@ class Tool(ABC):
         """Whether this tool should run alone even if concurrency is enabled."""
         return False
 
+    @property
+    def invalid_arguments_hint(self) -> str:
+        """Recovery guidance after rejecting malformed JSON without execution."""
+        return "Send exactly one JSON object matching the tool schema."
+
     # --- Plugin metadata ---
 
     config_key: str = ""

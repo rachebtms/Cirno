@@ -129,6 +129,8 @@ class MyTool(Tool):
     def description(self) -> str:
         base = (
             "Inspect runtime state with check: omit key for an overview or use a dot-path. "
+            "This inspects the runtime snapshot, not arbitrary configuration-file paths; "
+            "omit key first to discover the available fields. "
             "set changes runtime parameters or stores scratchpad keys across turns, not restarts. "
             "Use model_preset for session model/context switching; direct model and "
             "context_window_tokens writes are disabled during active sessions. "

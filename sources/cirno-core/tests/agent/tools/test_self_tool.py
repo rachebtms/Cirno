@@ -71,6 +71,35 @@ def _make_tool(loop=None):
     return MyTool(runtime_control=AgentRuntimeControl(loop))
 
 
+@pytest.mark.asyncio
+async def test_runtime_check_after_router_exhaustion_keeps_snapshot_access_rules():
+    from cirno_core.agent.hook import AgentHook, AgentHookContext
+    from cirno_core.agent.tools.execution import execute_tool_calls
+    from cirno_core.agent.tools.registry import ToolRegistry
+    from cirno_core.agent.tools.role_policy import RoleToolPolicy
+    from cirno_core.providers.tool_calls import ToolCallRequest
+    from cirno_core.session.roles import RouterConversation
+
+    tools = ToolRegistry()
+    tools.register(_make_tool())
+    policy = RoleToolPolicy(RouterConversation())
+    policy.calls = 9
+    policy.seconds = 10
+    calls = [ToolCallRequest(str(i), "runtime__check", {"key": key}) for i, key in enumerate([
+        "workspace", "web_config.search.api_key", "agents.defaults.heartbeat",
+    ])]
+    results, events = await execute_tool_calls(
+        tools, calls, concurrent=False, external_lookup_counts={}, workspace_violation_counts={},
+        hook=AgentHook(), context=AgentHookContext(iteration=1, messages=[]), role_policy=policy,
+    )
+    assert [event["status"] for event in events] == ["ok", "error", "error"]
+    assert "/tmp/workspace" in results[0]
+    assert "not accessible" in results[1] and "sk-secret-key-12345" not in results[1]
+    assert "not found" in results[2]
+    assert not any("router_budget_exhausted" in result for result in results)
+    assert policy.calls == 9 and policy.seconds == 10
+
+
 # ---------------------------------------------------------------------------
 # check — no key (summary)
 # ---------------------------------------------------------------------------

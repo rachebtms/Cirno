@@ -12,6 +12,8 @@ from typing import Any
 
 from cirno_core.agent.tools.base import Tool, ToolResult
 from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.agent.tools.role_policy import is_budget_exempt_tool
+from cirno_core.agent.tools.naming import definitions, implementation_name
 from cirno_core.utils.subprocess import kill_and_drain
 
 Dispatch = Callable[[str, dict[str, Any], int], Awaitable[tuple[Any, bool]]]
@@ -101,7 +103,6 @@ class RunCodeTool(Tool):
 class PtcToolRegistry(ToolRegistry):
     """Orchestrate ordinary tools; keep credential calls outside logged source."""
     def __init__(self, native: ToolRegistry):
-        from cirno_core.agent.tools.role_policy import is_coordination_tool
         super().__init__()
         self.native = ToolRegistry()
         self.register(RunCodeTool())
@@ -111,8 +112,18 @@ class PtcToolRegistry(ToolRegistry):
                 self.register(native.get(name))
             else:
                 self.native.register(native.get(name))
-                if is_coordination_tool(name):
+                if any(is_budget_exempt_tool(schema["function"]["name"]) for schema, _ in definitions(native.get(name))):
                     self.register(native.get(name))
+
+    def get_definitions(self) -> list[dict[str, Any]]:
+        schemas = super().get_definitions()
+        self._cached_definitions = [schema for schema in schemas if (
+            implementation_name(schema["function"]["name"]) in {"run_code", "credential"}
+            or is_budget_exempt_tool(schema["function"]["name"])
+        )]
+        names = {schema["function"]["name"] for schema in self._cached_definitions}
+        self._public_calls = {name: binding for name, binding in self._public_calls.items() if name in names}
+        return self._cached_definitions
 
     def model_instructions(self) -> str:
         declarations = [schema["function"] for schema in self.native.get_definitions()]
@@ -125,8 +136,10 @@ class PtcToolRegistry(ToolRegistry):
         return (
             "PTC Mode is enabled for this conversation. Use ptc__run to orchestrate ordinary tools. "
             "Credential tools, when provided, must be called directly, never from source code or printed output. "
-            "Coordination tools are also available directly. When the Router's ordinary work budget "
-            "is exhausted, reply or delegate using a direct coordination tool instead of another ptc__run. "
+            "Coordination tools, runtime__check and memory__checkpoint, when provided, are also available directly. "
+            "When the Router's ordinary work budget is exhausted, use these direct tools to inspect runtime state, "
+            "save task progress, reply or delegate instead of another ptc__run. Runtime changes and ordinary "
+            "read-only task work still use the ordinary execution budget. "
             "Call the tools below from Python as await tools.group.operation({...}) or named arguments. "
             "Tool results are parsed JSON when possible, otherwise strings. "
             "Use print/return to keep only relevant results. Catch ToolError to handle a rejected subcall. "

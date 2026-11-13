@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "Nouvelles tentatives de génération de consolidation",
           "help": "Tentatives supplémentaires en série après échec (0–10). Zéro signifie une seule tentative. Un échec d’apprentissage ne régénère pas un résumé enregistré. Les reprises réseau sont distinctes."
+        },
+        "agents_defaults_always_skills": {
+          "label": "Skills fixes",
+          "help": "Inclure ces Skills dans le contexte Router et Worker dès les prochains tours. Les Skills désactivés ou sans dépendances requises sont exclus."
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "Fichiers mémoire fixes",
+          "help": "Un chemin relatif à Agent Home par ligne, par exemple memory/research.md. Partagés avec Router et Worker ; MEMORY.md reste automatique. Les fichiers illisibles produisent une erreur."
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "Budget de tokens des fichiers fixes",
+          "help": "Budget partagé des fichiers supplémentaires, distinct de celui de MEMORY.md."
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "Skills fixes"
         }
       },
       "save": "Enregistrer les modifications",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Plugin Agent",
       "marketplaceResultsFor": "Résultats pour « {{query}} »",
       "retryTrends": "Réessayer les tendances",
-      "historyTab": "Validation et historique"
+      "historyTab": "Validation et historique",
+      "fixedUnavailable": "Désactivé, indisponible ou désinstallé",
+      "fixedDeclared": "Injection automatique déclarée par ce Skill"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "Processus terminé ({{code}})",
     "terminalHint": "Terminal interactif du serveur choisi. Fermer l’onglet coupe la connexion locale ; les processus distants détachés peuvent continuer.",
     "addRecord": "Ajouter un identifiant",
-    "vaultHint": "Les valeurs sont chiffrées séparément de la mémoire. Les sauvegardes complètes contiennent la clé : gardez-les privées. Les outils d’identifiants gèrent les fiches sans retourner les valeurs. Les secrets déjà collés dans un chat restent dans son historique.",
+    "vaultHint": "Les valeurs sont chiffrées sur disque, séparément de la mémoire. Les sauvegardes complètes incluent la clé : gardez-les privées. Les listes ne montrent que les métadonnées ; credentials.read peut lire les valeurs des identifiants visibles par l’Agent. Les secrets collés dans les discussions restent dans leur historique.",
     "label": "Nom",
     "recordType": "Type",
     "secretValue": "Valeur sensible",

@@ -1,7 +1,7 @@
 # API versions
 
 All Cirno service endpoints use a major-version prefix. The current prefix is
-`/v0/`. Cirno 0.2.13 still uses `/v0/`; a minor or patch release does not change
+`/v0/`. Cirno 0.2.14 still uses `/v0/`; a minor or patch release does not change
 that prefix. A future Cirno 1.x API will use `/v1/`.
 
 The v0 contract may change between releases. Update clients together with the
@@ -92,7 +92,7 @@ in returned settings.
 
 ## Skill catalog and detail
 
-`GET /v0/webui/skills` lists Skill availability separately from the saved enabled
+`GET /v0/webui/skills` includes the author-declared `always` boolean and lists Skill availability separately from the saved enabled
 state. Sources are `home`, `builtin` and `plugin`. Home Skills are independent of
 the conversation workspace.
 
@@ -101,3 +101,5 @@ and supported installation hints. Invalid runtime declarations return
 `available: false`, a specific `unavailable_reason` and `requirements: null`;
 they are not represented as a successful empty requirements list. Filesystem
 read failures remain request errors.
+
+Runtime settings also expose `agents.defaults.always_skills` (Skill names), `agents.defaults.memory.context_files` (Home-relative paths under `memory/`) and `agents.defaults.memory.context_files_tokens` (256–16000). These fields update through `settings.runtime_config.update` without requiring a restart. Availability and enabled flags remain independent of fixed selection.

@@ -114,6 +114,7 @@ class AgentDefaults(Base):
     api: ModelAPIConfig | None = None
     timezone: str = "UTC"  # Effective IANA timezone, e.g. "Asia/Shanghai"
     timezone_mode: Literal["auto", "manual"] = "auto"
+    always_skills: list[str] = Field(default_factory=list)
     disabled_skills: list[str] = Field(
         default_factory=list
     )  # Skill names to exclude from loading (e.g. ["summarize", "skill-creator"])

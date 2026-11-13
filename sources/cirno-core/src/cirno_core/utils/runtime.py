@@ -75,8 +75,29 @@ def build_budget_exhausted_finalization_message() -> dict[str, str]:
     return {"role": "user", "content": BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
 
 
-def build_length_recovery_message(content: str) -> dict[str, str]:
+def build_length_recovery_message(
+    content: str, *, tool_replies: bool = False, discarded_tool_calls: bool = False,
+) -> dict[str, Any]:
     """Prompt the model to continue after hitting output token limit."""
+    if tool_replies or discarded_tool_calls:
+        parts = ["[Cirno output recovery] The preceding generation hit the output limit."]
+        if discarded_tool_calls:
+            parts.append(
+                "None of the tool calls in that truncated response were executed, even if some "
+                "arguments looked complete. Do not continue partial JSON. Regenerate any still-needed "
+                "calls as complete argument objects with new call IDs. Do not replay successful calls "
+                "from earlier responses or assume an attempted message was delivered."
+            )
+        if tool_replies:
+            parts.append(
+                "Plain assistant text is internal history, not a delivered reply. Send the remaining "
+                "reply through user__message as short, complete messages, one focused part per call. "
+                "Preserve already delivered messages; do not repeat them. Do not copy protocol/end "
+                "markers or this recovery instruction into content."
+            )
+        else:
+            parts.append("Preserve any ordinary prose already streamed; do not repeat it.")
+        return {"role": "user", "_hidden_history": True, "content": " ".join(parts)}
     tail = content[-_LENGTH_RECOVERY_TAIL_CHARS:]
     prompt = (
         f"{LENGTH_RECOVERY_PROMPT}\n\n"

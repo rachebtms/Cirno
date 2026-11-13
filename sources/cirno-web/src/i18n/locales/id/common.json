@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "Percobaan ulang pembuatan konsolidasi",
           "help": "Percobaan tambahan secara berurutan setelah gagal (0–10). Nol berarti satu percobaan saja. Kegagalan pembelajaran tidak membuat ulang ringkasan tersimpan. Percobaan jaringan diatur terpisah."
+        },
+        "agents_defaults_always_skills": {
+          "label": "Skill tetap",
+          "help": "Selalu sertakan Skill ini dalam konteks Router dan Worker mulai giliran berikutnya. Skill nonaktif atau tanpa dependensi tidak disertakan."
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "Berkas memori tetap",
+          "help": "Satu jalur relatif Agent Home per baris, misalnya memory/research.md. Dibagikan dengan Router dan Worker; MEMORY.md tetap otomatis. Berkas yang tidak dapat dibaca menghasilkan kesalahan."
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "Anggaran token berkas tetap",
+          "help": "Anggaran bersama untuk berkas tambahan, terpisah dari MEMORY.md."
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "Skill tetap"
         }
       },
       "save": "Simpan perubahan",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Plugin Agent",
       "marketplaceResultsFor": "Hasil untuk “{{query}}”",
       "retryTrends": "Coba lagi tren",
-      "historyTab": "Validasi dan riwayat"
+      "historyTab": "Validasi dan riwayat",
+      "fixedUnavailable": "Nonaktif, tidak tersedia, atau dihapus",
+      "fixedDeclared": "Injeksi otomatis dideklarasikan oleh Skill ini"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "Proses selesai ({{code}})",
     "terminalHint": "Shell interaktif pada server pilihan. Menutup tab memutus koneksi lokal; proses jarak jauh yang dilepas dapat tetap berjalan.",
     "addRecord": "Tambah kredensial",
-    "vaultHint": "Nilai dienkripsi terpisah dari memori. Cadangan lengkap menyertakan kunci: simpan secara pribadi. Alat kredensial mengelola catatan tanpa mengembalikan nilainya. Rahasia yang pernah ditempel di chat tetap ada dalam riwayat.",
+    "vaultHint": "Nilai dienkripsi di disk, terpisah dari memori. Cadangan lengkap menyertakan kunci enkripsi: simpan secara privat. Daftar hanya menampilkan metadata; credentials.read dapat membaca nilai kredensial yang terlihat oleh Agent. Rahasia yang ditempel di chat tetap ada dalam riwayatnya.",
     "label": "Nama",
     "recordType": "Jenis",
     "secretValue": "Nilai sensitif",

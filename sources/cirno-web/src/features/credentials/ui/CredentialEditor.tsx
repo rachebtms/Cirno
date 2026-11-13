@@ -1,11 +1,12 @@
 import { Button, Card, Form, Input, Label, ListBox, Select, Switch, Description, TextArea, TextField } from "@heroui/react";
 import { Eye, Save, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { SecretInput } from "@/ui/fields/SecretInput";
 import { SSHCredentialFields } from "./SSHCredentialFields";
 import { credentialKinds, type CredentialDraft, type CredentialKind, type CredentialPatch } from "../model/contracts";
 
-export function CredentialEditor({ draft, busy, update, cancel, reveal, save, scan, fingerprints, loadSSH }: {
-  draft: CredentialDraft; busy: boolean;
+export function CredentialEditor({ draft, busy, update, cancel, reveal, save, scan, fingerprints, loadSSH, visible, toggleVisible }: {
+  draft: CredentialDraft; busy: boolean; visible: boolean; toggleVisible: () => void;
   update: (patch: CredentialPatch) => void;
   cancel: () => void; reveal: () => Promise<void>; save: () => Promise<void>; scan: () => Promise<void>; fingerprints: string; loadSSH: () => Promise<void>;
 }) {
@@ -28,10 +29,10 @@ export function CredentialEditor({ draft, busy, update, cancel, reveal, save, sc
       </TextField>}
       {draft.kind === "ssh" ? <>
         {!draft.sshLoaded && <Button variant="secondary" isDisabled={busy} onPress={() => { void loadSSH(); }}>{t("workspace.loadSSH")}</Button>}
-        <SSHCredentialFields draft={draft} disabled={busy || !draft.sshLoaded} update={update} scan={scan} fingerprints={fingerprints} />
+        <SSHCredentialFields visible={visible} toggleVisible={toggleVisible} draft={draft} disabled={busy || !draft.sshLoaded} update={update} scan={scan} fingerprints={fingerprints} />
       </> : <TextField isRequired={!draft.id} isDisabled={busy} value={draft.value} onChange={value => update({ value })}>
         <Label>{t("workspace.secretValue")}</Label>
-        {concealed ? <Input type="password" autoComplete="new-password" /> : <TextArea autoComplete="off" rows={6} />}
+        {concealed ? <SecretInput visible={visible} onToggle={toggleVisible} disabled={busy} /> : <TextArea autoComplete="off" rows={6} />}
         {draft.id && <Description>{t("workspace.keepSecret")}</Description>}
       </TextField>}
       <Switch isSelected={draft.agentVisible} isDisabled={busy} onChange={agentVisible => update({ agentVisible })}>

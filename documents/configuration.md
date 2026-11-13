@@ -59,7 +59,7 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Time & region: automatic or manually selected timezone.
 - Goals & execution: default workspace, continuation and execution limits.
 - AI approvals: independent review model, review timeout and the switch for automatic review.
-- Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management. Skills separates Installed, Discover and Validation & history. Marketplace and trend failures remain visible alongside usable results.
+- Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management. Skills includes **Always injected Skills**, followed by Installed, Discover and Validation & history. Marketplace and trend failures remain visible alongside usable results.
 - Web search and MCP: search services and external tool connections.
 - Nodes: enroll SSH credentials from Credentials, test connections, execute remote commands and manage persistent jobs. SSH authentication and Agent visibility are edited in Credentials.
 - Telegram: personal account binding and server-side notification preferences. Channel setup configures the Telegram bot token and Web transport.
@@ -105,6 +105,16 @@ Balance queries are disabled until configured. Set a complete balance endpoint a
 Runtime settings save automatically. Switching a settings category, leaving the page or closing its workbench tab waits for pending writes, including edits made before the autosave delay expires. A failed save keeps the page open with its draft and error so you can correct, retry or discard it. Restart prompts use the saved configuration: live prompt edits do not keep a restart pending, while rotating an embedding API key does.
 
 Settings → Memory library exposes the shared-memory injection budget and index scan batch alongside the Home memory file and index status. Settings → Tools & CLI Apps includes the CLI Apps master switch, so a disabled tool can be re-enabled from the interface. Idle consolidation trigger and retention percentages accept fractional values.
+
+## Fixed Skills and memory files
+
+Settings → Skills → **Always injected Skills** selects installed Skills whose complete instructions enter every Router and Worker system prompt, including transient Worker subagents. Availability and the saved enabled switch still apply: selecting a disabled Skill or one with missing requirements does not enable it. Skills declaring `metadata.cirno.always: true` remain automatically included. Their checked entries show the author declaration; edit that declaration to change it. Missing selections stay visible and can be removed. This selection is shared across conversations; internal consolidation and other maintenance do not receive owner-selected Skills.
+
+Settings → Memory library → **Fixed memory files** selects additional UTF-8 text files under Agent Home's `memory/`, for example `memory/workspace/STANDARDS.md`, one relative path per line. `memory/MEMORY.md` already has its own injection and is not added twice. **Fixed memory files budget** controls the combined extra excerpt budget, independently of the MEMORY.md budget, and divides it among selected files. A selected missing, unreadable or escaping symlink produces an explicit error; correct the setting or restore the file. Only select files you want shared with all Router and Worker conversations.
+
+These fields save automatically and apply to the next fresh conversation input without a restart. Unchanged selected Skills have deterministic ordering. Memory snapshots enter fresh input only when contents or selections change; existing messages and the system prefix remain intact. Long files are excerpted within the configured budget; the Agent can read their full contents through file tools. Editing Skill selections intentionally changes the system prefix on the next turn.
+
+The configuration keys are `agents.defaults.always_skills`, `agents.defaults.memory.context_files` and `agents.defaults.memory.context_files_tokens`.
 
 ## Context consolidation
 

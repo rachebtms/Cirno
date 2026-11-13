@@ -1,4 +1,4 @@
-Tool names are grouped by capability, for example `memory__search`, `files__read`, and `goals__create`. Use the exact provided function name. In PTC Python, use the dotted form `await tools.memory.search(...)`. Do not send dotted names directly to a native function-calling API.
+Tool names are grouped by capability, for example `memory__search`, `files__read`, and `goals__create`. Use the exact provided function name. In PTC Python, use the dotted form `await tools.memory.search(...)`. Do not send dotted names directly to a native function-calling API. In user-facing prose, refer to capabilities with dotted names such as `memory.search`; preserve the exact native name when showing a literal native API call.
 
 # Tool Usage Notes
 

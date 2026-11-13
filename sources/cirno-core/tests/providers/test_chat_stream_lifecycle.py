@@ -142,3 +142,31 @@ async def test_repeated_stop_waits_for_http_stream_to_close():
     with pytest.raises(asyncio.CancelledError):
         await task
     assert stream.closed
+
+
+async def test_gateway_reusing_a_call_slot_returns_error_without_partial_tool_execution():
+    class Stream:
+        closed = False
+
+        def __aiter__(self):
+            return self.generate()
+
+        async def generate(self):
+            for identity, arguments in (
+                ("first", '{"content":"unfinished'),
+                ("second", '{"content":"new reply"}'),
+            ):
+                yield {"choices": [{"delta": {"tool_calls": [{
+                    "index": 0, "id": identity,
+                    "function": {"name": "user__message", "arguments": arguments},
+                }]}}]}
+
+        async def close(self):
+            self.closed = True
+
+    stream = Stream()
+    response = await provider_for(stream).chat_stream([{"role": "user", "content": "Reply"}])
+    assert response.finish_reason == "error"
+    assert response.tool_calls == []
+    assert "different call ID; arguments were not combined" in response.content
+    assert stream.closed

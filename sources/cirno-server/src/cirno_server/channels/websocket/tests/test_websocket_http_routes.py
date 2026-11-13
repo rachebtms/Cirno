@@ -522,6 +522,7 @@ async def test_webui_skills_route_requires_token_and_hides_paths(
         workspace = body["skills"][0]
         assert workspace == {
             "name": "workspace-skill",
+            "always": False,
             "description": "Workspace skill.",
             "source": "home",
             "enabled": True,

@@ -164,6 +164,7 @@ class AgentLoop:
         hooks: list[AgentHook] | None = None,
         hook_factories: list[AgentTurnHookFactory] | None = None,
         disabled_skills: list[str] | None = None,
+        always_skills: list[str] | None = None,
         tools_config: ToolsConfig | None = None,
         network_config: NetworkConfig | None = None,
         provider_snapshot_loader: Callable[..., ProviderSnapshot] | None = None,
@@ -248,7 +249,7 @@ class AgentLoop:
         self._hook_factories: list[AgentTurnHookFactory] = hook_factories or []
 
         self.release_archived_runtime = False
-        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills)
+        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills, always_skills=always_skills)
         self.sessions = session_manager or SessionManager(workspace)
         self.models = ConversationModels(
             self.runtime_resolver, self.sessions, self.runtime_event_publisher,
@@ -294,6 +295,7 @@ class AgentLoop:
             max_tool_result_chars=self.max_tool_result_chars,
             restrict_to_workspace=restrict_to_workspace,
             disabled_skills=disabled_skills,
+            always_skills=always_skills,
             max_iterations=self.max_iterations,
             max_concurrent_subagents=max_concurrent_subagents,
             consolidator=self.consolidator,
@@ -416,6 +418,7 @@ class AgentLoop:
             channels_config=config.channels,
             timezone=defaults.timezone,
             disabled_skills=defaults.disabled_skills,
+            always_skills=defaults.always_skills,
             idle_compact_after_minutes=defaults.idle_compact_after_minutes,
             idle_compact_check_interval_seconds=defaults.idle_compact_check_interval_seconds,
             idle_compact_percent=defaults.idle_compact_percent,
@@ -435,13 +438,26 @@ class AgentLoop:
             **extra,
         )
         loop.context.memory_context_tokens = defaults.memory.context_tokens
+        loop.context.memory_context_files = list(defaults.memory.context_files)
+        loop.context.memory_context_files_tokens = defaults.memory.context_files_tokens
         loop.context.checkpoint_context_tokens = defaults.memory.checkpoint_tokens
         loop.context.system_prompts = defaults.system_prompts.model_copy(deep=True)
         loop.subagents.tools.system_prompts = defaults.system_prompts.model_copy(deep=True)
         if source_path := config.source_path:
             from cirno_core.config.loader import load_config
 
-            loop.context.system_prompts_loader = lambda: load_config(source_path).agents.defaults.system_prompts
+            def load_context_settings():
+                current = load_config(source_path).agents.defaults
+                loop.context.skills.always_skills = set(current.always_skills)
+                loop.subagents.tools.always_skills = set(current.always_skills)
+                return current.system_prompts
+
+            def load_memory_files():
+                memory = load_config(source_path).agents.defaults.memory
+                return list(memory.context_files), memory.context_files_tokens
+
+            loop.context.memory_files_loader = load_memory_files
+            loop.context.system_prompts_loader = load_context_settings
             loop.subagents.tools.system_prompts_loader = loop.context.current_system_prompts
         loop.dream_max_iterations = defaults.dream.max_tool_iterations
         loop.release_archived_runtime = defaults.memory.release_archived_runtime

@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "Consolidation generation retries",
           "help": "Additional serial attempts after generation fails (0–10). Zero means one attempt. Learning failures do not regenerate a saved checkpoint; provider network retries are configured separately."
+        },
+        "agents_defaults_always_skills": {
+          "label": "Fixed Skills",
+          "help": "Always include these Skills in Router and Worker context. Applies to subsequent turns. Disabled Skills or Skills with missing dependencies are not injected."
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "Fixed memory files",
+          "help": "One Agent Home relative path per line, for example memory/research.md. Contents are shared with Router and Workers; MEMORY.md remains automatic. Missing or unreadable files report an error."
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "Fixed memory files token budget",
+          "help": "Shared token budget for the additional files; the MEMORY.md budget is separate."
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "Fixed Skills"
         }
       },
       "save": "Save changes",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Agent Plugin",
       "marketplaceResultsFor": "Results for “{{query}}”",
       "retryTrends": "Retry trends",
-      "historyTab": "Validation & history"
+      "historyTab": "Validation & history",
+      "fixedUnavailable": "Disabled, unavailable or no longer installed",
+      "fixedDeclared": "Automatic injection declared by this Skill"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "Process exited ({{code}})",
     "terminalHint": "This is an interactive shell on the selected server. Closing this tab stops its local connection; detached remote processes may continue.",
     "addRecord": "Add record",
-    "vaultHint": "Values are encrypted on disk, separate from memory. The encryption key is included in full-instance backups: keep backups private. Credential tools manage records without returning their values. Secrets previously pasted in chats remain in that history.",
+    "vaultHint": "Values are encrypted on disk, separate from memory. Full-instance backups include the encryption key: keep backups private. Lists show metadata only; credentials.read can return values only for records visible to the Agent. Secrets previously pasted in chats remain in that history.",
     "label": "Label",
     "recordType": "Record type",
     "secretValue": "Sensitive value",

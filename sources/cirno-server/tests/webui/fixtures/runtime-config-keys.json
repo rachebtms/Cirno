@@ -85,5 +85,8 @@
   "tools.web.enable",
   "network.proxy",
   "tools.web.use_proxy",
-  "tools.web.user_agent"
+  "tools.web.user_agent",
+  "agents.defaults.always_skills",
+  "agents.defaults.memory.context_files",
+  "agents.defaults.memory.context_files_tokens"
 ]

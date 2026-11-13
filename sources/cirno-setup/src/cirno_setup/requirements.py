@@ -15,15 +15,17 @@ def _installed(req: Requirement, extra: str, seen: set[tuple[str, tuple[str, ...
     if req.marker and not req.marker.evaluate({"extra": extra}):
         return True
     key = (canonicalize_name(req.name), tuple(sorted(req.extras)))
-    if key in seen:
-        return True
-    seen.add(key)
     try:
         dist = lookup(req.name)
     except PackageNotFoundError:
         return False
     if req.specifier and not req.specifier.contains(dist.version, prereleases=True):
         return False
+    # Repeated paths may constrain the same package differently. Check each
+    # requirement before suppressing recursive expansion of its extras.
+    if key in seen:
+        return True
+    seen.add(key)
     for requested in req.extras:
         provided = {canonicalize_name(value) for value in cast(list[str], dist.metadata.get_all("Provides-Extra") or [])}
         if provided and canonicalize_name(requested) not in provided:

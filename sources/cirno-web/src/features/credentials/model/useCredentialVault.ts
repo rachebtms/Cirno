@@ -10,13 +10,14 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
   const [listError, setListError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [secretVisible, setSecretVisible] = useState(false);
   const [describing, setDescribing] = useState(false), [fingerprints, setFingerprints] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const epoch = useRef(0), listing = useRef(0), locked = useRef(false);
   const request = useCallback(<T,>(action: string, values = {}) =>
     client.requestMutation<T>("workbench.action", { action: `credentials.${action}`, values }), [client]);
   const fail = (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason));
-  const clear = useCallback(() => { epoch.current++; setDraft(null); setDescribing(false); setFingerprints(""); }, []);
+  const clear = useCallback(() => { epoch.current++; setSecretVisible(false); setDraft(null); setDescribing(false); setFingerprints(""); }, []);
   const refresh = useCallback(async () => {
     const revision = ++listing.current;
     setLoading(true);
@@ -30,14 +31,14 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
     clear(); setError(""); setRecords([]);
     return () => { listing.current++; epoch.current++; };
   }, [clear, request]);
-  useEffect(() => { if (active) void refresh(); }, [active, refresh]);
+  useEffect(() => { if (active) void refresh(); else setSecretVisible(false); }, [active, refresh]);
   useEffect(() => {
     onDirtyChange?.(!!draft?.modified);
     return () => onDirtyChange?.(false);
   }, [draft?.modified, onDirtyChange]);
   useEffect(() => { if (!active && draft?.id && !draft.modified) clear(); }, [active, draft, clear]);
   const begin = (record?: CredentialInfo) => {
-    epoch.current++; setError(""); setDeleting(null); setFingerprints(""); setDescribing(false);
+    epoch.current++; setSecretVisible(false); setError(""); setDeleting(null); setFingerprints(""); setDescribing(false);
     setDraft({ id: record?.id, label: record?.label ?? "", kind: record?.kind ?? "text", username: "", value: "", modified: false, agentVisible: record?.agent_visible ?? false,
       ssh: emptySSH(), sshLoaded: !record || record.kind !== "ssh", nodeEnabled: record?.node_enabled ?? false, session: sshSessionDraft() });
     if (record?.kind === "ssh") void loadSSH(record.id);
@@ -74,7 +75,7 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
   });
   const reveal = () => operate(async revision => {
     const body = await request<{ value: string; username?: string; ssh?: SSHResponse }>("reveal", { id: draft!.id });
-    if (epoch.current === revision) setDraft(old => old && (body.ssh ? { ...old, ssh: { ...old.ssh, password: body.ssh.password } } : { ...old, value: body.value, username: body.username ?? "" }));
+    if (epoch.current === revision) { setSecretVisible(true); setDraft(old => old && (body.ssh ? { ...old, ssh: { ...old.ssh, password: body.ssh.password } } : { ...old, value: body.value, username: body.username ?? "" })); }
   });
   const save = () => operate(async revision => {
     const { id, label, kind, value, username } = draft!;
@@ -94,5 +95,5 @@ export function useCredentialVault(client: CirnoClient, active: boolean, onDirty
     setDeleting(null);
     await refresh();
   });
-  return { records, draft, error, listError, loading, busy: busy || describing, fingerprints, loadSSH, scan, deleting, setDeleting, refresh, begin, update, clear, reveal, save, remove };
+  return { secretVisible, toggleSecret: () => setSecretVisible(value => !value), records, draft, error, listError, loading, busy: busy || describing, fingerprints, loadSSH, scan, deleting, setDeleting, refresh, begin, update, clear, reveal, save, remove };
 }

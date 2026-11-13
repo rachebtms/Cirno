@@ -459,6 +459,18 @@
         "agents_defaults_consolidation_max_retries": {
           "label": "Số lần thử lại tạo bản tổng hợp",
           "help": "Số lần thử bổ sung tuần tự sau lỗi (0–10). Không nghĩa là chỉ thử một lần. Lỗi học không tạo lại tóm tắt đã lưu. Thử lại mạng được cấu hình riêng."
+        },
+        "agents_defaults_always_skills": {
+          "label": "Skills cố định",
+          "help": "Luôn đưa các Skill này vào ngữ cảnh Router và Worker từ lượt tiếp theo. Skill bị tắt hoặc thiếu phụ thuộc sẽ không được đưa vào."
+        },
+        "agents_defaults_memory_context_files": {
+          "label": "Tệp bộ nhớ cố định",
+          "help": "Mỗi dòng một đường dẫn tương đối từ Agent Home, ví dụ memory/research.md. Chia sẻ với Router và Worker; MEMORY.md vẫn tự động. Tệp không đọc được sẽ báo lỗi."
+        },
+        "agents_defaults_memory_context_files_tokens": {
+          "label": "Ngân sách token tệp cố định",
+          "help": "Ngân sách chung cho các tệp bổ sung, tách biệt với MEMORY.md."
         }
       },
       "groups": {
@@ -573,6 +585,9 @@
         "consolidation": {
           "title": "Learning and idle consolidation",
           "help": "Active, manual and idle consolidation share one awaited flow; task execution resumes after persistence."
+        },
+        "skills": {
+          "title": "Skills cố định"
         }
       },
       "save": "Lưu thay đổi",
@@ -1680,7 +1695,9 @@
       "sourcePlugin": "Plugin Agent",
       "marketplaceResultsFor": "Kết quả cho “{{query}}”",
       "retryTrends": "Thử lại xu hướng",
-      "historyTab": "Xác thực và lịch sử"
+      "historyTab": "Xác thực và lịch sử",
+      "fixedUnavailable": "Đã tắt, không khả dụng hoặc đã gỡ",
+      "fixedDeclared": "Skill này đã khai báo tự động đưa vào"
     },
     "homeFiles": {
       "title": "Home files",
@@ -2740,7 +2757,7 @@
     "terminalExited": "Tiến trình đã thoát ({{code}})",
     "terminalHint": "Shell tương tác trên máy chủ đã chọn. Đóng thẻ sẽ ngắt kết nối cục bộ; tiến trình từ xa đã tách có thể tiếp tục.",
     "addRecord": "Thêm thông tin xác thực",
-    "vaultHint": "Giá trị được mã hóa riêng với bộ nhớ. Bản sao lưu đầy đủ chứa khóa: hãy giữ riêng tư. Công cụ xác thực quản lý bản ghi mà không trả về giá trị. Bí mật từng dán vào chat vẫn còn trong lịch sử đó.",
+    "vaultHint": "Các giá trị được mã hóa trên đĩa, tách khỏi bộ nhớ. Bản sao lưu đầy đủ có khóa mã hóa: hãy giữ riêng tư. Danh sách chỉ hiển thị siêu dữ liệu; credentials.read có thể đọc giá trị thông tin xác thực hiển thị với Agent. Bí mật đã dán vào trò chuyện vẫn còn trong lịch sử.",
     "label": "Tên",
     "recordType": "Loại",
     "secretValue": "Giá trị nhạy cảm",

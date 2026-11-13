@@ -429,7 +429,6 @@ async def test_length_finish_with_blank_content_routes_to_length_recovery():
     exhaustion.
     """
     from cirno_core.agent.runner.engine import AgentRunner
-    from cirno_core.utils.runtime import LENGTH_RECOVERY_PROMPT
 
     provider = MagicMock(spec=LLMProvider)
     # First call: truncated (length) with blank content and a dropped tool call.
@@ -458,8 +457,8 @@ async def test_length_finish_with_blank_content_routes_to_length_recovery():
     # The runner must have injected a length-recovery prompt and continued,
     # rather than exhausting empty-response retries into a generic apology.
     user_msgs = [m.get("content") or "" for m in result.messages if m.get("role") == "user"]
-    assert any(LENGTH_RECOVERY_PROMPT in c for c in user_msgs), (
-        "expected a length-recovery message to be appended for a "
-        "finish_reason='length' response with blank content"
-    )
+    assert any("Do not continue partial JSON" in content for content in user_msgs)
+    assert any("None of the tool calls" in content for content in user_msgs)
+    assert not any("already_delivered_tail" in content for content in user_msgs)
+    tools.execute.assert_not_called()
     assert result.final_content == "done"

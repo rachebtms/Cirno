@@ -53,7 +53,9 @@ def reset_message_delivery_segment() -> None:
 @tool_parameters(
     tool_parameters_schema(
         content=StringSchema(
-            "Message content."
+            "One focused, complete message. For a long reply, send several short messages "
+            "in order instead of one large argument. Include only user-facing text, not "
+            "tool syntax, protocol/end markers or repeated padding."
         ),
         channel=StringSchema(
             "Target channel; defaults to the current channel."
@@ -139,6 +141,15 @@ class MessageTool(Tool):
             "This tool is not available in regular conversations; "
             "normal final replies are delivered automatically. "
             "Omit channel and chat_id to reply to the current conversation."
+        )
+
+    @property
+    def invalid_arguments_hint(self) -> str:
+        return (
+            "No message was sent by this call. Regenerate exactly one complete JSON object; "
+            "do not continue the malformed argument string. Send a short, focused message first, "
+            "then use separate calls for remaining parts in order. Do not repeat parts already "
+            "delivered successfully or include protocol/end markers or repeated padding."
         )
 
     def _resolve_media(self, media: list[str]) -> list[str]:

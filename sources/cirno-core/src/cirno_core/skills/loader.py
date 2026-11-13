@@ -48,11 +48,13 @@ class SkillsLoader:
         workspace: Path,
         builtin_skills_dir: Path | None = None,
         disabled_skills: set[str] | None = None,
+        always_skills: set[str] | None = None,
     ):
         self.workspace = workspace
         self.home_skills = get_home_path() / "skills"
         self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
         self.disabled_skills = disabled_skills or set()
+        self.always_skills = always_skills or set()
         self._snapshot: ContextVar[_SkillSnapshot | None] = ContextVar(
             "skill_snapshot", default=None
         )
@@ -221,17 +223,17 @@ class SkillsLoader:
             snapshot.binaries[command] = available
         return available
 
-    def get_always_skills(self) -> list[str]:
+    def get_always_skills(self, *, include_configured: bool = True) -> list[str]:
         """Get skills marked as always=true that meet requirements."""
         with self.snapshot():
-            return self._get_always_skills()
+            return self._get_always_skills(include_configured=include_configured)
 
-    def _get_always_skills(self) -> list[str]:
-        return [
+    def _get_always_skills(self, *, include_configured: bool = True) -> list[str]:
+        return sorted(
             entry["name"]
             for entry in self.list_skills(filter_unavailable=True)
-            if self.get_runtime_metadata(entry["name"]).always
-        ]
+            if include_configured and entry["name"] in self.always_skills or self.get_runtime_metadata(entry["name"]).always
+        )
 
     def get_runtime_metadata(self, name: str) -> SkillRuntimeMetadata:
         """Return the shared validated runtime declaration for one Skill."""

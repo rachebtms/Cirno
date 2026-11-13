@@ -223,6 +223,23 @@ def test_prepare_call_rejects_malformed_json_string_arguments() -> None:
     assert "exactly one JSON object" in error
 
 
+def test_prepare_call_rejects_excessively_nested_json_without_aborting_the_turn(monkeypatch):
+    import json
+    from json.scanner import py_make_scanner
+    import sys
+    decoder = json.JSONDecoder()
+    decoder.scan_once = py_make_scanner(decoder)
+    monkeypatch.setattr("cirno_core.agent.tools.registry.json.loads", decoder.decode)
+    registry = ToolRegistry()
+    registry.register(_FakeTool("read_file"))
+    depth = sys.getrecursionlimit() + 100
+    arguments = '{"path":' + '[' * depth + '0' + ']' * depth + '}'
+    _, preserved, error = registry.prepare_call("read_file", arguments)
+    assert preserved == arguments
+    assert "Invalid JSON arguments" in error
+    assert "No tool was executed" in error
+
+
 @pytest.mark.parametrize("union", ["oneOf", "anyOf"])
 @pytest.mark.parametrize("branches", [
     [{"type": "object"}, {"type": "string"}],
