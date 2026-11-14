@@ -155,7 +155,7 @@ class CronTool(Tool):
             return self._set_job_enabled(job_id, enabled=action == "enable")
         elif action == "history":
             return self._job_history(job_id, limit)
-        return f"Unknown action: {action}"
+        return ToolResult.error(f"Unknown action: {action}")
 
     def _add_job(
         self,
@@ -369,13 +369,13 @@ class CronTool(Tool):
         if result == "protected":
             job = self._cron.get_job(job_id)
             if job and job.name == "dream":
-                return (
+                return ToolResult.error(
                     "Cannot remove job `dream`.\n"
                     "This is a system-managed Dream memory consolidation job for long-term memory.\n"
                     "It remains visible so you can inspect it, but it cannot be removed."
                 )
-            return (
+            return ToolResult.error(
                 f"Cannot remove job `{job_id}`.\n"
                 "This is a protected system-managed cron job."
             )
-        return f"Job {job_id} not found"
+        return ToolResult.error(f"Job {job_id} not found")

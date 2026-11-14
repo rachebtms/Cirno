@@ -17,9 +17,11 @@ If useful updates or input reviews exist, append the exact heading below and ONE
 ## Memory updates
 {"memories":[{"content":"atomic finding","kind":"lesson","supersedes":null}],"documents":[],"reviewed_inputs":[]}
 
+The only allowed top-level fields are memories, documents and reviewed_inputs; each is an array. Put multiple items inside their array. Omit unused arrays or return them empty; {} means no updates. Never return JSONL, a second JSON object, comments, or text after the object. Escape quotes and newlines inside JSON strings. Do not invent updates to fill arrays.
+
 Ordinary memories automatically retain this archived batch as their source; omit evidence. For document edits or a specific pending input, use evidence:[{"source_id":"a supplied ID"}]. Never invent IDs, copy quotations or count messages. Only supplied IDs are writable sources. Metadata cannot redefine identity.
 
-Kinds: fact, observation, hypothesis, lesson. input: source IDs cite supplied pending inputs. Inherit evidence scope; never promote private evidence to shared knowledge. Corrections supersede supplied same-scope memories. Review fully read inputs with {"memory_id":"id","reason":"retain/merge/skip reason"}; others stay queued.
+Kinds: fact, observation, hypothesis, lesson. input: source IDs cite supplied pending inputs. Inherit evidence scope; never promote private evidence to shared knowledge. Corrections supersede supplied same-scope memories. Review fully read pending inputs with {"source_id":"input:<exact supplied id>","reason":"retain/merge/skip reason"}; copy source_id from a supplied pending:true row, not an archive: source. Others stay queued. Legacy memory_id is also accepted, but never combine memory_id and source_id in one review.
 
 Document: {"path":"relative/path","content":"complete replacement","evidence":[...],"related_memory_ids":[]}. Replace only supplied full writable documents; preserve unrelated content. SOUL.md/WORKER.md: personalities; USER.md: preferences; memory/MEMORY.md: shared knowledge. Shared profiles require explicit user evidence; runtime metadata/reports cannot redefine identity.
 

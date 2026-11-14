@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
-from cirno_core.agent.tools.base import Tool, ToolResult
+from cirno_core.agent.tools.base import Schema, Tool, ToolResult
 from cirno_core.agent.tools.naming import definitions
 
 if TYPE_CHECKING:
@@ -185,6 +185,11 @@ class ToolRegistry:
             params = {**params, "action": binding[1]}
         cast_params = tool.cast_params(cast(dict[str, Any], params))
         errors = tool.validate_params(cast_params)
+        if binding and binding[1] is not None:
+            bound_params = {key: value for key, value in cast_params.items() if key != "action"}
+            errors = list(dict.fromkeys([
+                *errors, *Schema.validate_json_schema_value(bound_params, binding[2]),
+            ]))
         if errors:
             return tool, cast_params, (
                 ToolResult.error(f"Error: Invalid parameters for tool '{name}': " + "; ".join(errors))

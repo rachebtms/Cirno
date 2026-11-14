@@ -24,6 +24,8 @@ export function resolveModelRequestFailureCopy(
     titleKey = "errors.modelRequestFailed.rateLimitTitle";
   } else if (details.errorKind === "server") {
     titleKey = "errors.modelRequestFailed.serverTitle";
+  } else if (details.errorKind === "invalid_response") {
+    titleKey = "errors.modelRequestFailed.invalidResponseTitle";
   }
   const attempts = details.attempts;
   let bodyKey = "errors.modelRequestFailed.body";

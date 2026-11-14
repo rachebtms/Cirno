@@ -151,7 +151,7 @@ class CreateSessionTool(Tool):
 
 
 @tool_parameters(tool_parameters_schema(
-    state=StringSchema("Current work state; ready means a reviewable result, not Goal completion.", enum=("progress", "waiting", "ready", "blocked", "failed", "dropped")),
+    state=StringSchema("Current work state; ready means a reviewable result, not Goal completion, and may carry a human_action question awaiting review.", enum=("progress", "waiting", "ready", "blocked", "failed", "dropped")),
     summary=StringSchema("Concise facts, verification and next step. Do not claim unrun checks.", min_length=1, max_length=4000),
     artifacts=ArraySchema(StringSchema("Exact file path or URL.", min_length=1, max_length=2048), max_items=20),
     human_action=StringSchema("One concrete question requiring the user. Omit to retain it; empty string clears it. You may continue independent work.", max_length=2000, nullable=True),

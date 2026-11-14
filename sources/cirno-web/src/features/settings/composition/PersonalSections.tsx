@@ -1,6 +1,6 @@
 import { ProfileFiles } from "@/features/profile/ProfileFiles";
 import { MemorySettings } from "@/features/memory/MemorySettings";
-import { FixedSkillsSettings } from "../runtime/FixedSkillsSettings";
+import { skillInjectionSettings } from "../runtime/skill-injection";
 import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
 import { NotificationSettings } from "../notifications/NotificationSettings";
 import { AppearanceSettings, OverviewSettings } from "../overview/OverviewSettings";
@@ -52,7 +52,8 @@ export function createPersonalSections(bindings: SettingsComposition): SectionRe
   };
 
   const renderSkills: SectionRenderer = () => {
-    return <div className="settings-stack">{settings?.runtime_config && <FixedSkillsSettings skills={skills} state={controller.runtimeConfigState} loading={skillsLoading} />}<SkillsLibrary skills={skills} loading={skillsLoading} error={skillsError} /></div>;
+    return <SkillsLibrary skills={skills} loading={skillsLoading} error={skillsError}
+      injection={settings?.runtime_config ? skillInjectionSettings(controller.runtimeConfigState) : undefined} />;
   };
 
   return {

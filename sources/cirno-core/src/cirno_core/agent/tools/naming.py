@@ -51,6 +51,31 @@ CREDENTIAL_FIELDS = {
     "store": "id label kind username value ssh",
     "delete": "id",
 }
+OPERATION_FIELDS = {
+    "memory": MEMORY_FIELDS, "node": NODE_FIELDS, "project": PROJECT_FIELDS,
+    "credential": CREDENTIAL_FIELDS,
+    "subagent": {
+        "create": "task label temperature wait", "send": "task_id message",
+        "cancel": "task_id", "check": "task_id",
+    },
+    "inspect_skill": {"validate": "name", "history": "name"},
+    "my": {"check": "key", "set": "key value"},
+    "cron": {
+        "add": "name message every_seconds cron_expr tz at",
+        "list": "include_disabled", "remove": "job_id",
+        "update": "job_id name message every_seconds cron_expr tz at",
+        "enable": "job_id", "disable": "job_id", "history": "job_id limit",
+    },
+}
+_MEMORY_WRITE_PROPERTIES = {
+    "scope": {
+        "enum": ["session", "project", "user"],
+        "description": "Write visibility: session for this conversation, project only when it belongs to a Project, "
+        "or user for shared memory. 'all' is a search filter, never a write scope.",
+    },
+    "layer": {"enum": ["event", "knowledge"]},
+}
+OPERATION_OVERRIDES = {"memory": {name: _MEMORY_WRITE_PROPERTIES for name in ("save", "update")}}
 
 MEMORY_DESCRIPTIONS = {
     "search": "Recall source-grounded memory. BM25 by default; semantic/hybrid uses the configured local CPU or API embeddings. Knowledge is the default; use purpose=evidence to verify raw messages or exact values.",
@@ -58,12 +83,12 @@ MEMORY_DESCRIPTIONS = {
     "source": "Read original evidence behind a memory; continue with the returned line/character cursor.",
     "history": "Read the saved revision history of a memory.",
     "tags": "Discover available tags and counts; query is a tag prefix.",
-    "status": "Read memory index and Dream processing status.",
+    "status": "Read memory index and context consolidation processing status.",
     "link": "Link two memories with source-grounded supporting, conflicting or correcting evidence.",
     "checkpoint": "Save task progress in this conversation's single checkpoint: objective, completed work, blockers, next steps and exact artifact references. The first save may omit expected_revision; subsequent saves must use the revision returned by the latest read or successful checkpoint. On conflict, reconcile the returned current record and retry with its revision, not unchanged arguments.",
     "save": "Save an atomic observation, hypothesis, fact or lesson with a real source. Use based_on when deriving knowledge from existing evidence; never invent a source.",
     "update": "Update an event or knowledge record using its latest revision as expected_revision. On conflict, reconcile the returned current record and retry with its revision; never repeat unchanged arguments. Profiles and task checkpoints have dedicated writers.",
-    "confirm": "Confirm one Dream input with its revision, disposition and verified target IDs; restricted to the current evidence batch.",
+    "confirm": "Confirm one consolidation input with its revision, disposition and verified target IDs; restricted to the current evidence batch.",
 }
 
 
@@ -113,11 +138,16 @@ def definitions(tool):
             MEMORY_DESCRIPTIONS[action] if original == "memory" else f"{dotted}: {tool.description}"
         )
         params = fn["parameters"]
-        fields = {"memory": MEMORY_FIELDS, "node": NODE_FIELDS, "project": PROJECT_FIELDS,
-                  "credential": CREDENTIAL_FIELDS}.get(original, {}).get(action)
+        fields = OPERATION_FIELDS.get(original, {}).get(action)
         selected = set(fields.split()) if fields is not None else set(properties) - {"action"}
-        params["properties"] = {key: value for key, value in properties.items() if key in selected}
+        params["properties"] = deepcopy({key: value for key, value in properties.items() if key in selected})
+        overrides = OPERATION_OVERRIDES.get(original, {}).get(action, {})
+        for field in params["properties"].keys() & overrides.keys():
+            params["properties"][field].update(deepcopy(overrides[field]))
         required = {
+            "subagent": {"create": ["task"], "send": ["task_id", "message"], "cancel": ["task_id"]},
+            "my": {"set": ["key", "value"]},
+            "cron": {"add": ["message"], **{name: ["job_id"] for name in ("remove", "update", "enable", "disable", "history")}},
             "credential": {"read": ["id"], "delete": ["id"], "store": ["label"]},
             "project": {
                 "get": ["id"], "create": ["name"], "update": ["id"],
@@ -142,8 +172,9 @@ def definitions(tool):
                 "download": ["node_id", "local_path", "remote_path"],
             },
         }
-        params["required"] = required.get(original, {}).get(
+        operation_required = required.get(original, {}).get(
             action, [key for key in params.get("required", []) if key in selected]
         )
+        params["required"] = [key for key in operation_required if key in params["properties"]]
         params["additionalProperties"] = False
         yield item, action

@@ -51,6 +51,8 @@ Setup checks installed components and verifies each newly installed dependency b
 
 Browser readiness also honors `--timeout 0`: its Playwright launch check has no launch deadline in unlimited mode. Positive values retain the browser check's 30-second launch ceiling within the setup probe budget.
 
+Environment initialization and container-home ownership commands use the same command timeout policy, including unlimited mode. An initialization failure prevents service startup.
+
 Embedding downloads and readiness checks use the same pinned SHA-256 file list, including the model, tokenizer, README and LICENSE. A missing or corrupted file identifies the failed asset and causes setup to repair it before declaring the component ready. Verified files are reused.
 
 Outside Docker, set `CIRNO_SERVICE_PYTHON` to the application environment's Python if setup is installed separately with `uv tool`. This selects the target for service/channel extras and the server executable. Manual system-only installation uses `--phase system` as root, followed by `--phase user` as the normal user. `--serve` manages both phases itself and cannot be combined with `--phase`. The supplied system/binary recipes target Linux AMD64/ARM64; system groups use Ubuntu 24.04 packages.

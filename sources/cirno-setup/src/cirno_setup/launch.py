@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import pwd
-import subprocess
 
 from cirno_setup.context import Context
 
@@ -13,7 +12,7 @@ def prepare_home(context: Context) -> None:
     instance = context.home / ".cirno"
     (instance / "state/tools").mkdir(parents=True, exist_ok=True)
     (instance / "state/cli/cache").mkdir(parents=True, exist_ok=True)
-    subprocess.run(["/usr/bin/chown", "-R", "cirno:cirno", str(instance)], check=True)
+    context.run(["/usr/bin/chown", "-R", "cirno:cirno", str(instance)])
 
 
 def as_user(context: Context, arguments: list[str]) -> None:

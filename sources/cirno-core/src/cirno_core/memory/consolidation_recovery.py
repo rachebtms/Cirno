@@ -7,6 +7,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from cirno_core.memory.consolidation_evidence import needs_new_output
+from cirno_core.memory.consolidation_contract import output_error
 from cirno_core.memory.consolidation_receipts import PREFIX, _retry_one, receipt_path
 from cirno_core.memory.consolidation_result import learning_failure
 from cirno_core.memory.consolidation_retry_report import completed_report, empty_report
@@ -84,7 +85,7 @@ async def retry_session_learning(
                 mode="replay",
                 failure=learning_failure(
                     record["source"],
-                    str(error),
+                    output_error(error),
                     record.get("plan", {}),
                     record.get("saved_items", []),
                 ),
@@ -131,7 +132,7 @@ async def retry_session_learning(
         from cirno_core.memory.consolidation_receipts import write_receipt
         from cirno_core.utils.file_transactions import file_write_transaction
 
-        error_message = f"{type(error).__name__}: {error}"
+        error_message = output_error(error)
 
         def retain_error():
             path = receipt_path(repo, record["source"])

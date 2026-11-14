@@ -35,6 +35,7 @@ _FALLBACK_ERROR_KINDS = frozenset({
     "server_error",
     "rate_limit",
     "overloaded",
+    "invalid_response",
 })
 _AUTHENTICATION_ERROR_KINDS = frozenset({
     "oauth_auth_required",
@@ -502,10 +503,10 @@ class FallbackProvider(LLMProvider):
             primary_error = (response.content or primary_error)[:120]
 
             if has_streamed is not None and has_streamed[0]:
-                is_timeout = (response.error_kind or "").lower() == "timeout"
-                if is_timeout:
+                recoverable_stream = (response.error_kind or "").lower() in {"timeout", "invalid_response"}
+                if recoverable_stream:
                     logger.warning(
-                        "Primary model '{}' stream stalled after content was emitted; "
+                        "Primary model '{}' stream interrupted after content was emitted; "
                         "attempting failover anyway",
                         primary_model,
                     )
@@ -543,11 +544,11 @@ class FallbackProvider(LLMProvider):
         for idx, fallback in enumerate(self._fallback_presets):
             fallback_model = fallback.model
             if has_streamed is not None and has_streamed[0]:
-                is_timeout = (
+                recoverable_stream = (
                     last_response is not None
-                    and (last_response.error_kind or "").lower() == "timeout"
+                    and (last_response.error_kind or "").lower() in {"timeout", "invalid_response"}
                 )
-                if is_timeout and on_stream_recover:
+                if recoverable_stream and on_stream_recover:
                     logger.warning(
                         "Fallback model '{}' stream stalled after content was emitted; "
                         "starting a new stream segment and trying next fallback",

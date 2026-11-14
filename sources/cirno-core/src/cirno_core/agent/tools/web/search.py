@@ -115,12 +115,7 @@ class WebSearchTool(Tool):
     def _refresh_config(self) -> None:
         if self._config_loader is None:
             return
-        try:
-            self.config = self._config_loader()
-        except Exception:
-            logger.opt(exception=tool_log_content_allowed()).error(
-                "Failed to refresh web search config"
-            )
+        self.config = self._config_loader()
 
     def _effective_provider(self) -> str:
         """Resolve the backend that execute() will actually use."""
@@ -175,7 +170,12 @@ class WebSearchTool(Tool):
     @property
     def exclusive(self) -> bool:
         """DuckDuckGo searches are serialized because ddgs is not concurrency-safe."""
-        return self._effective_provider() == "duckduckgo"
+        try:
+            return self._effective_provider() == "duckduckgo"
+        except Exception:
+            # Admission is conservative; execute reports the configuration error
+            # instead of letting batch partitioning abort unrelated tools.
+            return True
 
     async def execute(
         self,
@@ -186,7 +186,11 @@ class WebSearchTool(Tool):
         query_rewrite: bool | None = None,
         **kwargs: Any,
     ) -> str:  # pyright: ignore[reportIncompatibleMethodOverride]
-        self._refresh_config()
+        try:
+            self._refresh_config()
+        except Exception as error:
+            logger.opt(exception=tool_log_content_allowed()).error("Failed to refresh web search config")
+            return ToolResult.error(f"Cannot load current web search configuration ({type(error).__name__}); check Settings and server diagnostics. No search was sent.")
         context = SearchContext(self.config.model_copy(deep=True), self.proxy, self.user_agent)
         provider = context.config.provider.strip().lower() or "duckduckgo"
         n = min(max(count or self.config.max_results, 1), 10)

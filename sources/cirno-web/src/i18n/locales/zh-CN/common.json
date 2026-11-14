@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "“{{query}}”的搜索结果",
       "retryTrends": "重试趋势查询",
       "historyTab": "验证与历史",
+      "fixedControl": "固定注入",
+      "fixedDescription": "在 Router 和 Worker 的后续轮次中自动注入此 Skill。已禁用或依赖缺失时不会注入。",
       "fixedUnavailable": "已禁用、不可用或已卸载",
       "fixedDeclared": "此 Skill 已声明自动注入"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "模型提供商请求超时",
       "rateLimitTitle": "模型提供商请求受限",
       "serverTitle": "模型提供商服务异常",
+      "invalidResponseTitle": "模型响应格式异常",
       "unknownTitle": "模型提供商请求失败",
       "bodyWithAttempt": "已尝试 {{attempts}} 次，仍未成功。可稍后继续或切换模型。",
       "body": "可稍后继续或切换模型。",

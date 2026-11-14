@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from cirno_core.memory.consolidation_contract import EvidenceRef, Finding, LearningPlan
+from cirno_core.memory.consolidation_contract import EvidenceRef, Finding, InputReview, LearningPlan
 from cirno_core.memory.consolidation_evidence import LearningEvidenceError
 from cirno_core.runtime.context import public_history_message
 
@@ -83,8 +83,17 @@ def bind_plan(plan: LearningPlan, sources: dict[str, dict]) -> LearningPlan:
             ]
         return finding.model_copy(update={"evidence": refs})
 
+    def bind_review(review: InputReview) -> InputReview:
+        if review.source_id is None:
+            return review
+        ref = bind(EvidenceRef(source_id=review.source_id))
+        if ref.memory_id is None:
+            raise LearningEvidenceError("Input reviews require a supplied pending input source_id")
+        return InputReview(memory_id=ref.memory_id, reason=review.reason)
+
     return plan.model_copy(
         update={
+            "reviewed_inputs": [bind_review(review) for review in plan.reviewed_inputs],
             "memories": [bind_finding(finding) for finding in plan.memories],
             "documents": [
                 edit.model_copy(update={"evidence": [bind(ref) for ref in edit.evidence]})

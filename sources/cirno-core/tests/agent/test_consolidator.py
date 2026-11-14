@@ -273,6 +273,33 @@ class TestTurnTranscriptSummary:
             "content": _ARCHIVE_TOOL_RESULT,
         }]
 
+    async def test_native_learning_format_retry_reuses_response_state_without_raw_history(
+        self, consolidator, mock_provider, runtime,
+    ):
+        from cirno_core.memory.consolidation_contract import MARKER
+
+        accepted = [{"role": "system", "content": "stable system"},
+                    {"role": "user", "content": "raw history must not be replayed"}]
+        state = _provider_state()
+        response_state = replace(state, payload={"items": [{"type": "message", "id": "bad-learning"}]})
+        mock_provider.can_resume_conversation_state.return_value = True
+        mock_provider.chat_stream_with_retry.side_effect = [
+            LLMResponse(content="replacement checkpoint" + MARKER + '{}{}', provider_state=response_state),
+            LLMResponse(content="replacement checkpoint" + MARKER + '{}'),
+        ]
+        result = await consolidator.summarize_provider_compaction(
+            state, accepted, "previous checkpoint", runtime=runtime, session_key="test:turn", tools=[],
+        )
+        assert result == "replacement checkpoint"
+        first, correction = mock_provider.chat_stream_with_retry.await_args_list
+        assert correction.kwargs["messages"][:len(first.kwargs["messages"])] == first.kwargs["messages"]
+        assert accepted[1] not in correction.kwargs["messages"]
+        context = correction.kwargs["provider_context"].conversation_state
+        assert context.payload == response_state.payload
+        assert len(context.pending_messages) == 1
+        assert context.pending_messages[0]["role"] == "user"
+        assert "JSONDecodeError" in context.pending_messages[0]["content"]
+
 
 class TestConsolidatorSummarize:
     def test_format_messages_keeps_media_only_user_turn(self):

@@ -27,6 +27,7 @@ from cirno_core.session.goal_state import (
     goal_state_raw,
     goal_state_runtime_lines,
     parse_goal_state,
+    resume_goal_state,
     sustained_goal_active,
 )
 from cirno_core.session.sqlite_store import SessionConflictError
@@ -399,8 +400,7 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
             else:
                 if status not in {"paused", "blocked", "stopped", "waiting"}:
                     return ToolResult.error("Only a paused or blocked goal can be resumed.")
-                blob = {**prior, "status": "active", "resumed_at": _iso_now()}
-                blob.pop("ended_at", None)
+                blob = resume_goal_state(prior, recap=recap)
             blob.pop("wake_at", None)
             await self._save_goal_state(sess, blob)
             return "Goal resumed." if normalized == "resume" else "Goal stopped." if normalized == "stop" else "Goal paused."

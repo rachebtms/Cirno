@@ -107,6 +107,7 @@ class _RecordingMCPProxy:
         elif method == "tools/list":
             result = {"tools": [{
                 "name": "echo", "description": "Echo over the selected route",
+                "annotations": {"readOnlyHint": True},
                 "inputSchema": {"type": "object", "properties": {}},
             }]}
         elif method == "tools/call":

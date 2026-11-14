@@ -6,16 +6,18 @@ Python execution, PTC, activity rendering and persisted calls use the same map.
 
 | Namespace | Operations |
 | --- | --- |
-| `files` | Read, write, edit, list, find, search, ripgrep, patch |
+| `files` | Read, view image, write, edit, list, find, search, ripgrep, patch |
 | `shell` | Execute, continue a process, list running processes |
 | `web` | Search and fetch |
 | `memory` | Search, read, original evidence, revisions, tags, save, update, link, checkpoint, status |
 | `goals` | Create, update, inspect; Router-only control of other conversations' Goals |
 | `conversations` | Create, title, search, read, send, report; Router-only stop and continue |
-| `user` | Asynchronous questions; Router-only visible messages |
+| `user` | Asynchronous questions and withdrawal; Router-only visible messages |
 | `agents` | Create, check, send, cancel subtasks |
 | `automations` | Add, list, update, enable, disable, remove, history |
 | `nodes` | SSH execution, file transfer and durable job control |
+| `projects` | Router-only catalog management and conversation assignment |
+| `credentials` | List metadata; explicitly read, store or delete Agent-visible credentials |
 | `skills` | Validate and read retained versions |
 | `runtime` | Inspect or change allowed runtime settings |
 | `apps` | Run installed CLI Apps |
@@ -28,7 +30,15 @@ MCP calls use provider-safe names. Names requiring character normalization recei
 
 Action-based implementations expose separate operations with their action
 bound by the registry. Memory and Node schemas contain only the relevant
-parameters. A caller cannot override the bound action. Context consolidation acknowledges only supplied, explicitly reviewed and unchanged pending input revisions. Ordinary turns do not receive `memory.confirm`.
+parameters. Skill inspection, subagent, automation and runtime operations also declare only their own inputs and per-operation required fields. The registry validates the public operation's schema after shared safe casts and before execution, in both native and PTC paths; a caller cannot override the bound action. Memory writes accept only session/project/user scope and event/knowledge layers; `all` remains a retrieval filter. Context consolidation acknowledges only supplied, explicitly reviewed and unchanged pending input revisions. Ordinary turns do not receive `memory.confirm`.
+
+Deleting a protected or missing automation is a tool error, not a successful removal. CLI App timeouts and MCP resource/prompt failures retain error status through execution hooks and activity rendering. A timed-out CLI may already have produced effects; inspect its output files before another run. A search configuration refresh failure is reported without sending the query to a stale provider. Conversation reads preserve code indentation and line breaks; search snippets remain compact excerpts.
+
+SSH host-key fingerprint calculation has a bounded subprocess lifetime. Cancelling or timing out that check terminates and drains its subprocess before returning, just like SSH execution cleanup.
+
+MCP tool calls are automatically replayed after transport interruptions only when their server declarations explicitly mark them read-only or idempotent. Missing annotations do not authorize replay. For other calls, a disconnect, SDK cancellation or timeout reports an unconfirmed outcome because remote effects may have completed. A terminated session may reconnect for a later explicit operation, but that does not repeat the uncertain call. MCP resource and prompt reads retain their bounded reconnect/retry behavior. External cancellation remains cancellation.
+
+Chat Completions choices are alternative answers. Complete and streamed responses select one choice; tools, reasoning and finish status from other choices are never mixed into the selected answer or executed as additional steps. Usage remains the provider's total for the response.
 
 Only the Router conversation receives `user.message`. Ordinary conversations
 reply through normal assistant output. The same selection is used for turns,
@@ -40,8 +50,9 @@ without delivery; the tool error asks for a complete replacement argument object
 not a continuation of the broken string. Earlier successful messages remain
 delivered and must not be replayed. The framework does not silently repair live
 arguments, trim repeated text or impose a separate reply-length cap. Chat stream
-slots cannot combine different call IDs into one argument string; an inconsistent
-gateway stream returns an error instead.
+slots cannot combine different call IDs into one argument string. Reused wire
+indices are separated by call ID when attribution is unambiguous; ambiguous
+continuations return a classified protocol error for the configured serial recovery.
 
 The Router receives ordinary execution tools plus coordination controls and
 `user.message`, but excludes transient `subagent` execution. Worker catalogs
@@ -148,4 +159,4 @@ attempted files are restored; any restoration failure names the affected files.
 
 Credential tools operate only on Agent-visible records. Agent writes mark a record visible; owner writes default to private. SSH enrollment belongs to the owner, and Node tools require both enrollment and visibility. Settings, credential tools, direct Node commands and terminals share the credential service instead of storing separate authentication copies.
 
-The `files.view_image` operation uses the shared `files.read` implementation for path authorization, bounded reads and visual content blocks. Model configurations record image/video input declarations separately from request API routing. Setup probes use the chosen endpoint with no fallback chain, so another model cannot produce a misleading capability result.
+The `files.view_image` operation uses the shared `files.read` implementation for path authorization, bounded reads and visual content blocks. Both entry points reject image injection when the selected model explicitly disables image input; ordinary text reads remain available. Model configurations record image/video input declarations separately from request API routing. Setup probes use the chosen endpoint with no fallback chain, so another model cannot produce a misleading capability result.

@@ -8,6 +8,7 @@ importing tool implementations.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Mapping, cast
 
 GOAL_STATE_KEY = "goal_state"
@@ -69,6 +70,22 @@ def parse_goal_state(blob: Any) -> dict[str, Any] | None:
         if isinstance(parsed, dict):
             return cast(dict[str, Any], parsed)
     raise ValueError("Stored Goal state must be an object")
+
+
+def resume_goal_state(goal: Mapping[str, Any], *, recap: str | None = None) -> dict[str, Any]:
+    """Reactivate saved work without presenting a runtime stop notice as progress."""
+    resumed = {**goal, "status": "active", "resumed_at": datetime.now(timezone.utc).isoformat()}
+    resumed.pop("wake_at", None)
+    resumed.pop("ended_at", None)
+    if recap is not None:
+        resumed["recap"] = recap.strip()
+    elif str(resumed.get("recap") or "").startswith((
+        "Execution stopped: ", "Execution failed (", "Automatic continuation limit reached.",
+    )):
+        # These notices were persisted in recap by earlier runtime failures.
+        # The failure report/recovery record remains the historical account.
+        resumed.pop("recap", None)
+    return resumed
 
 
 def goal_state_runtime_lines(metadata: Mapping[str, Any] | None) -> list[str]:

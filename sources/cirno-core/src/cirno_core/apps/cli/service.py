@@ -607,8 +607,11 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
                 [resolved, *clean_args], cwd=cwd, timeout=effective_timeout,
                 env=self.commands._subprocess_env(), cancel_event=cancel_event,
             )
-        except subprocess.TimeoutExpired:
-            return f"CLI app '{name}' timed out after {effective_timeout}s"
+        except subprocess.TimeoutExpired as error:
+            raise contracts.CliAppError(
+                f"CLI app '{name}' timed out after {effective_timeout}s; "
+                "earlier effects may have completed. Inspect them before retrying."
+            ) from error
         output = [
             f"CLI app '{name}' exited {result.returncode}.",
             f"Command: {entry} {' '.join(shlex.quote(arg) for arg in clean_args)}".rstrip(),

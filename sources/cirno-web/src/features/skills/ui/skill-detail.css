@@ -119,6 +119,10 @@
   gap: 0.5rem;
   padding-right: 2rem;
 }
+.skill-injection-description {
+  display: grid;
+  gap: 0.375rem;
+}
 .skill-detail-title .modal__heading {
   flex: 1;
   min-width: 0;

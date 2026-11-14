@@ -240,7 +240,8 @@ async def test_search_refresh_traceback_cannot_capture_private_call_arguments(
             )
     finally:
         logger.remove(sink)
-    assert results == ["synthetic result"]
+    assert len(results) == 1 and "No search was sent" in results[0]
+    duckduckgo.search.assert_not_awaited()
     assert "Failed to refresh web search config" in "\n".join(rendered)
     assert (_SECRET in "\n".join(rendered)) is log_content
 

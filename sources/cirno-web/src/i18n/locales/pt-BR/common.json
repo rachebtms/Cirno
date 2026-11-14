@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "Resultados para “{{query}}”",
       "retryTrends": "Tentar tendências novamente",
       "historyTab": "Validação e histórico",
+      "fixedControl": "Sempre incluir",
+      "fixedDescription": "Inclui este Skill no contexto do Router e Worker nos próximos turnos. Skills desativados ou sem dependências necessárias não são incluídos.",
       "fixedUnavailable": "Desativado, indisponível ou desinstalado",
       "fixedDeclared": "Injeção automática declarada por este Skill"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "A solicitação ao provedor do modelo expirou",
       "rateLimitTitle": "Limite de solicitações do provedor do modelo atingido",
       "serverTitle": "Erro no serviço do provedor do modelo",
+      "invalidResponseTitle": "Resposta inválida do modelo",
       "unknownTitle": "Falha na solicitação ao provedor do modelo",
       "bodyWithAttempt": "Interrompido após {{attempts}} tentativas. Tente mais tarde ou escolha outro modelo.",
       "body": "Tente mais tarde ou escolha outro modelo.",

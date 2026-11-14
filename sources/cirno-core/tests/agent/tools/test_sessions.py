@@ -65,6 +65,14 @@ def test_session_tools_are_discovered() -> None:
     assert {"ReadSessionTool", "SearchSessionsTool"} <= names
 
 
+async def test_read_preserves_code_indentation_and_multiline_evidence(manager):
+    content = '```python\ndef check():\n    return "CPU ready"\n```\n\n- first\n  - nested'
+    _save_session(manager, "websocket:source", title="Research", messages=[{"role": "assistant", "content": content}])
+    with _webui_request():
+        result = _decode(await ReadSessionTool(manager).execute(session_key="websocket:source"))
+    assert result["messages"][0]["content"] == content
+
+
 def test_session_tools_stay_visible_when_enabled(tmp_path) -> None:
     manager = SessionManager(tmp_path)
     registry = ToolRegistry()

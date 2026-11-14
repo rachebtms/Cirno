@@ -86,17 +86,49 @@ def test_is_session_terminated_recognizes_connection_closed_mcp_error():
 # ---------------------------------------------------------------------------
 
 
-def _make_tool_def(name="test_tool"):
+def _make_tool_def(name="test_tool", *, annotations=True):
     return SimpleNamespace(
         name=name,
         description="A test tool",
         inputSchema={"type": "object", "properties": {}},
+        annotations=mcp_types.ToolAnnotations(readOnlyHint=True) if annotations is True else annotations,
     )
 
 
 def _make_tool_result(text):
     """Build a mock tool result with proper MCP TextContent."""
     return SimpleNamespace(content=[mcp_types.TextContent(type="text", text=text)])
+
+
+@pytest.mark.parametrize("annotations, replayed", [
+    (None, False), (mcp_types.ToolAnnotations(readOnlyHint=False), False),
+    (mcp_types.ToolAnnotations(readOnlyHint=True), True),
+    (mcp_types.ToolAnnotations(readOnlyHint=False, idempotentHint=True), True),
+])
+async def test_only_declared_readonly_or_idempotent_operations_are_replayed(annotations, replayed):
+    session = SimpleNamespace(call_tool=AsyncMock(side_effect=[ConnectionResetError("lost response"), _make_tool_result("ok")]))
+    wrapper = MCPToolWrapper(session, "test", _make_tool_def(annotations=annotations))
+    with patch("cirno_core.agent.tools.mcp.wrappers.asyncio.sleep", new_callable=AsyncMock):
+        output = await wrapper.execute()
+    assert session.call_tool.await_count == (2 if replayed else 1)
+    if replayed:
+        assert output == "ok"
+    else:
+        assert is_tool_error_result(output) and "Outcome unconfirmed" in output
+
+
+async def test_unknown_operation_reconnects_without_repeating_remote_effects():
+    old = SimpleNamespace(call_tool=AsyncMock(side_effect=ConnectionResetError("lost")))
+    new = SimpleNamespace(call_tool=AsyncMock(return_value=_make_tool_result("explicit next operation")))
+    definition = _make_tool_def(annotations=None)
+    wrapper = MCPToolWrapper(old, "test", definition)
+    wrapper.set_reconnect_handler(AsyncMock(return_value=MCPToolWrapper(new, "test", definition)))
+    result = await wrapper.execute()
+    assert is_tool_error_result(result) and "not replayed" in result
+    old.call_tool.assert_awaited_once()
+    new.call_tool.assert_not_awaited()
+    assert await wrapper.execute() == "explicit next operation"
+    new.call_tool.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -614,7 +646,7 @@ async def test_request_error_logs_hide_content_and_prompt_retains_error_detail(k
     finally:
         logger.remove(sink)
     assert output == expected
-    assert is_tool_error_result(output) is (kind == "tool")
+    assert is_tool_error_result(output)
     error = next(record for record in records if record["level"].name == "ERROR")
     assert "[content hidden]" in error["message"]
     assert error["exception"] is None

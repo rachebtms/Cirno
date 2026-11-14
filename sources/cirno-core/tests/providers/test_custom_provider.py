@@ -47,6 +47,45 @@ def test_custom_provider_parse_accepts_dict_response() -> None:
     assert result.usage.total_tokens == 3
 
 
+@pytest.mark.parametrize("first_has_tool", [False, True])
+def test_complete_response_does_not_execute_or_mix_alternative_choices(first_has_tool):
+    response = {"choices": [
+        {"index": 0, "message": {"content": "Selected response", "tool_calls": [
+            {"id": "chosen", "function": {"name": "inspect", "arguments": '{"path":"a.txt"}'}}
+        ] if first_has_tool else []}, "finish_reason": "tool_calls" if first_has_tool else "stop"},
+        {"index": 1, "message": {"content": "Alternative response", "reasoning_content": "Alternative reasoning", "tool_calls": [
+            {"id": "alternative", "function": {"name": "delete", "arguments": '{"path":"b.txt"}'}}
+        ]}, "finish_reason": "tool_calls"},
+    ], "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}}
+    result = parse_response(response)
+    assert result.content == "Selected response"
+    assert result.reasoning_content is None
+    assert [call.id for call in result.tool_calls] == (["chosen"] if first_has_tool else [])
+    assert result.finish_reason == ("tool_calls" if first_has_tool else "stop")
+    assert result.usage.total_tokens == 30
+
+
+@pytest.mark.parametrize("as_sdk", [False, True])
+def test_stream_keeps_one_choice_when_alternative_chunks_arrive_separately(as_sdk):
+    chunks = [
+        {"choices": [{"index": 0, "delta": {"content": "Selected "}}]},
+        {"choices": [{"index": 1, "delta": {"content": "Alternative", "reasoning_content": "Unselected reasoning",
+            "tool_calls": [{"index": 0, "id": "other", "function": {"name": "delete", "arguments": "{}"}}]},
+            "finish_reason": "tool_calls"}]},
+        {"choices": [{"index": 0, "delta": {"content": "answer"}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}},
+    ]
+    if as_sdk:
+        chunks = [ChatCompletionChunk.model_validate({"id": "choice-fixture", "object": "chat.completion.chunk",
+            "model": "fixture", "created": 0, **chunk}) for chunk in chunks]
+    result = parse_chat_chunks(chunks)
+    assert result.content == "Selected answer"
+    assert not result.tool_calls
+    assert result.reasoning_content is None
+    assert result.finish_reason == "stop"
+    assert result.usage.total_tokens == 30
+
+
 def test_custom_provider_parse_normalizes_text_tool_call() -> None:
     with patch("cirno_core.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()

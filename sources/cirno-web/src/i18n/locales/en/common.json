@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "Results for “{{query}}”",
       "retryTrends": "Retry trends",
       "historyTab": "Validation & history",
+      "fixedControl": "Always inject",
+      "fixedDescription": "Include this Skill in Router and Worker context on subsequent turns. Disabled Skills or Skills with missing dependencies are not injected.",
       "fixedUnavailable": "Disabled, unavailable or no longer installed",
       "fixedDeclared": "Automatic injection declared by this Skill"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "Model provider request timed out",
       "rateLimitTitle": "Model provider rate limit reached",
       "serverTitle": "Model provider service error",
+      "invalidResponseTitle": "Invalid model response",
       "unknownTitle": "Model provider request failed",
       "bodyWithAttempt": "Stopped after {{attempts}} attempts. Try again later or choose another model.",
       "body": "Try again later or choose another model.",

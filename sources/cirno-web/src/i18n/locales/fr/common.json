@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "Résultats pour « {{query}} »",
       "retryTrends": "Réessayer les tendances",
       "historyTab": "Validation et historique",
+      "fixedControl": "Toujours inclure",
+      "fixedDescription": "Inclure ce Skill dans le contexte de Router et Worker lors des prochains tours. Les Skills désactivés ou aux dépendances manquantes ne sont pas inclus.",
       "fixedUnavailable": "Désactivé, indisponible ou désinstallé",
       "fixedDeclared": "Injection automatique déclarée par ce Skill"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "La requête au fournisseur du modèle a expiré",
       "rateLimitTitle": "Limite de requêtes du fournisseur du modèle atteinte",
       "serverTitle": "Erreur du service du fournisseur du modèle",
+      "invalidResponseTitle": "Réponse du modèle invalide",
       "unknownTitle": "Échec de la requête au fournisseur du modèle",
       "bodyWithAttempt": "Arrêt après {{attempts}} tentatives. Réessayez plus tard ou choisissez un autre modèle.",
       "body": "Réessayez plus tard ou choisissez un autre modèle.",

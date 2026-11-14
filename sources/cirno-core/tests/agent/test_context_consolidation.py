@@ -168,7 +168,7 @@ async def test_invalid_learning_plan_keeps_checkpoint_and_reports_deferred_learn
     repo = MemoryRepository(tmp_path)
     assert repo.search(session_key="worker:one", layer="source")["memories"]
     assert repo.search(session_key="worker:one", layer="task")["memories"]
-    runtime.provider.chat_stream_with_retry.assert_awaited_once()
+    assert runtime.provider.chat_stream_with_retry.await_count == runtime.compaction_max_retries + 1
 
 
 def test_old_settings_load_into_unified_configuration_and_old_scheduler_is_not_saved():

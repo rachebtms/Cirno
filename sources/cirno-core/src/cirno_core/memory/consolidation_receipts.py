@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cirno_memory.repository import MemoryRepository
+from cirno_core.memory.consolidation_contract import output_error, output_sections
 from cirno_core.memory.consolidation_result import learning_failure
 from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_core.utils.file_transactions import file_write_transaction
@@ -76,7 +77,7 @@ def retry_learning(repo: MemoryRepository) -> dict:
             try:
                 _retry_one(repo, failure)
             except Exception as exc:
-                error = f"{type(exc).__name__}: {exc}"
+                error = output_error(exc)
                 failures.append({"source": failure["source"], "error": error})
                 # Rotate failed attempts so an invalid batch cannot starve older
                 # recoverable work. Keep the original receipt for inspection.
@@ -175,10 +176,10 @@ def invalid_output(learning, evidence: dict, output: str, error: ValueError, *, 
             "max_updates": learning.max_updates,
             "context_chars": learning.context_chars,
             "raw_output": output,
-            "summary": summary if summary is not None else output.partition("\n## Memory updates\n")[0],
+            "summary": summary if summary is not None else output_sections(output)[0],
             "plan": {},
             "status": "failed",
-            "error": f"{type(error).__name__}: {error}",
+            "error": output_error(error),
         },
     )
 

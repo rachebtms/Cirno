@@ -32,7 +32,11 @@ TRANSIENT_ERROR_MARKERS = (
 
 RETRYABLE_STATUS_CODES = frozenset({408, 409, 429})
 
-TRANSIENT_ERROR_KINDS = frozenset({"timeout", "connection"})
+TRANSIENT_ERROR_KINDS = frozenset({"timeout", "connection", "invalid_response", "empty"})
+
+
+class ModelStreamProtocolError(ValueError):
+    """A response cannot be assembled without mixing distinct model outputs."""
 
 NON_RETRYABLE_429_ERROR_TOKENS = frozenset(
     {
@@ -96,7 +100,10 @@ def response_from_exception(exc: Exception) -> LLMResponse:
     error_names = tuple(cls.__name__.lower() for cls in type(exc).__mro__)
     error_kind: str | None = None
     error_should_retry: bool | None = None
-    if any("timeout" in name for name in error_names):
+    if isinstance(exc, ModelStreamProtocolError):
+        error_kind = "invalid_response"
+        error_should_retry = True
+    elif any("timeout" in name for name in error_names):
         error_kind = "timeout"
         error_should_retry = True
     elif any(
@@ -348,8 +355,10 @@ def public_error_kind(response: LLMResponse) -> str:
     # A plain 403 can be a policy or permission rejection, not bad credentials.
     if kind in {"authentication", "oauth_auth_required"} or response.error_status_code == 401:
         return "authentication"
-    if kind in {"configuration", "connection", "timeout"}:
+    if kind in {"configuration", "connection", "timeout", "invalid_response"}:
         return kind
+    if kind == "empty":
+        return "invalid_response"
     if response.error_status_code == 429:
         return "rate_limit"
     if response.error_status_code is not None and response.error_status_code >= 500:

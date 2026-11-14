@@ -108,6 +108,17 @@ def test_checkpoint_schema_explains_the_first_and_following_writes(memory):
     assert "expected_revision" in schemas["memory__update"]["parameters"]["required"]
 
 
+def test_memory_write_schemas_do_not_advertise_search_only_scopes_and_layers(memory):
+    _, registry = memory
+    schemas = {item["function"]["name"]: item["function"]["parameters"]["properties"] for item in registry.get_definitions()}
+    for name in ("memory__save", "memory__update"):
+        assert schemas[name]["scope"]["enum"] == ["session", "project", "user"]
+        assert schemas[name]["layer"]["enum"] == ["event", "knowledge"]
+        assert "belongs to a Project" in schemas[name]["scope"]["description"]
+    assert "all" in schemas["memory__search"]["scope"]["enum"]
+    assert "all" in schemas["memory__search"]["layer"]["enum"]
+
+
 async def execute(registry, name, arguments, hook):
     return await execute_tool_calls(
         registry, [ToolCallRequest("attempt", name, arguments)], concurrent=False,

@@ -41,7 +41,9 @@ async def _wake_goal(loop, key, now):
 
     report = metadata.get("work_report")
     report_error = None
-    if goal.get("report_to"):
+    # The executing turn owns its detailed failure/result report. Its Goal may
+    # already be blocked while persistence is still settling that same turn.
+    if goal.get("report_to") and key not in loop._pending_queues:
         try:
             report = await record_goal_report(loop.sessions, key, goal, metadata) or report
         except ValueError as error:

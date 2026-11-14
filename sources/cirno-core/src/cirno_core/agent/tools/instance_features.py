@@ -145,7 +145,7 @@ class NodeTool(Tool):
         input_revision=IntegerSchema(minimum=1),
         outcome=StringSchema(enum=["created", "merged", "skipped", "failed"]),
         target_ids=ArraySchema(StringSchema(), max_items=10),
-        reason=StringSchema("Dream per-input disposition and evidence explanation; required for confirmation."),
+        reason=StringSchema("Consolidation per-input disposition and evidence explanation; required for confirmation."),
         required=["action"],
     )
 )
@@ -178,7 +178,7 @@ class MemoryTool(Tool):
                 "Use history to inspect old versions and link(supersedes) for evidence-backed corrections. "
                 "Default search returns knowledge, task checkpoints and profiles. If empty, search purpose=evidence for recent unprocessed events or archived originals; use tags to discover tags, "
                 "and time_field=observed_at for event dates (unknown dates are excluded). Bounded neighbors show corrections. "
-                "Dream must confirm each input using its revision, outcome, target_ids and reason; normal execution cannot confirm Dream batches. "
+                "Context consolidation must confirm each input using its revision, outcome, target_ids and reason; normal execution cannot confirm maintenance batches. "
                 "MEMORY.md remains injected; searching is on demand, not automatic on every reply.")
 
     async def execute(self, action, content="", source="", scope=None, kind=None, query="",
@@ -202,7 +202,7 @@ class MemoryTool(Tool):
                 return repo.list_tags(prefix=query, limit=limit, offset=offset, **access)
             if action == "confirm":
                 if not self.maintenance or not self.batch_token or memory_id not in (self.evidence_ids or set()):
-                    raise ValueError("Confirmation is restricted to inputs of the current Dream batch")
+                    raise ValueError("Confirmation is restricted to inputs of the current consolidation batch")
                 return repo.confirm(self.batch_token, memory_id, input_revision, outcome, target_ids, reason, **access)
             if action == "read":
                 return repo.read(memory_id, revision=revision, **access)
@@ -214,7 +214,7 @@ class MemoryTool(Tool):
                 return repo.link(memory_id, target_id, relation, source, **access)
             if action == "checkpoint":
                 if self.maintenance:
-                    raise ValueError("Task checkpoints belong to the executing conversation, not Dream")
+                    raise ValueError("Task checkpoints belong to the executing conversation, not context consolidation")
                 return repo.checkpoint(request.session_key, content, source, project_id=access["project_id"], expected_revision=expected_revision)
             if action in {"save", "update"}:
                 if layer in {"source", "profile", "all", "task"}:
@@ -224,7 +224,7 @@ class MemoryTool(Tool):
                 if action == "update" and repo.read(memory_id, **access)["layer"] not in {"event", "knowledge"}:
                     raise ValueError("Use action=checkpoint with expected_revision for task state. Profiles and original evidence have dedicated writers.")
                 if self.maintenance and (not based_on or self.evidence_ids is not None and based_on not in self.evidence_ids):
-                    raise ValueError("Dream writes require based_on from the current queued evidence batch")
+                    raise ValueError("Consolidation writes require based_on from the current queued evidence batch")
                 return repo.save(content, source=source, scope=scope or "session", kind=kind, layer=layer,
                                  title=title, tags=tags, memory_id=memory_id, expected_revision=expected_revision,
                                  based_on=based_on, turn_id=request.turn_id, message_id=request.message_id,

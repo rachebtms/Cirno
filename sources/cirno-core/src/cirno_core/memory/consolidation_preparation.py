@@ -78,6 +78,11 @@ async def prepare_learning(
                 [*history, {"role": "user", "content": instruction}],
                 request_tools,
             )
+            if baseline > input_token_budget:
+                raise ValueError(
+                    "Learning instructions exceed the available input budget; "
+                    "task checkpoint generation continues without optional learning"
+                )
             learning.context_chars = min(
                 learning.context_chars, max(0, input_token_budget - baseline - 256)
             )

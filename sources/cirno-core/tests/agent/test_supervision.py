@@ -346,7 +346,12 @@ async def test_cirno_continue_uses_durable_recovery_path_after_model_failure(sup
                                                           {"role": "assistant", "content": "Saved partial result"}])
     await sessions.state.update_metadata("websocket:worker", {RECOVERY_METADATA_KEY: {
         "status": "awaiting_user", "recovery_id": "api-failure", "reason": "model_request_failed", "can_continue": True,
-    }})
+        "attempts": 0,
+    }, "goal_state": {"goal_id": "work", "status": "blocked", "objective": "Authorized task"}})
+    before = json.loads(await loop.tools.get("control_session").execute(to=handle, action="get"))
+    assert before["execution_status"] == "interrupted"
+    assert before["goal"]["status"] == "blocked"
+    assert before["recovery"]["attempts"] == 0
     result = json.loads(await loop.tools.get("control_session").execute(to=handle, action="continue"))
     assert result["continuation_queued"]
     message = await loop.bus.consume_inbound()
@@ -354,6 +359,10 @@ async def test_cirno_continue_uses_durable_recovery_path_after_model_failure(sup
     assert message.metadata[RECOVERY_INBOUND_METADATA_KEY] == "api-failure"
     restored = await sessions.state.read_header(message.session_key)
     assert restored.metadata[RECOVERY_METADATA_KEY]["status"] == "resuming"
+    queued = json.loads(await loop.tools.get("control_session").execute(to=handle, action="get"))
+    assert queued["execution_status"] == "queued"
+    assert queued["goal"]["status"] == "active"
+    assert queued["recovery"]["attempts"] == 1
     admitted.assert_not_awaited()  # No generic prompt or duplicate continuation.
     assert await loop.recovery_admission.admit(message)
     await loop.recovery_admission.turn_completed(message.session_key)

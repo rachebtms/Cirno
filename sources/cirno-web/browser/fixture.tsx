@@ -80,6 +80,7 @@ import { AttachmentLayoutFixture } from "./attachment-layout-fixture";
 import { LoadedSessionSearchFixture } from "./loaded-session-search-fixture";
 import { MessageActionsFixture } from "./message-actions-fixture";
 import { MessagePresentationFixture } from "./message-presentation-fixture";
+import { RouterActivityFixture } from "./router-activity-fixture";
 import { BackupFixture } from "./backup-fixture";
 import { AppearanceFixture } from "./appearance-fixture";
 import { installSubagentDockApi, SubagentDockFixture } from "./subagent-dock-fixture";
@@ -336,6 +337,8 @@ createRoot(document.getElementById("root")!).render(<InterfaceProvider><TabSurfa
     ? <UploadSettingsFixture />
     : parameters.get("case") === "message-presentation"
     ? <MessagePresentationFixture />
+    : parameters.get("case") === "router-activity"
+    ? <RouterActivityFixture />
     : parameters.get("case") === "message-actions"
     ? <MessageActionsFixture />
     : parameters.get("case") === "backup"

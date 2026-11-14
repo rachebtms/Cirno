@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from cirno_usage.types import LLMUsage
 from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.errors import ModelStreamProtocolError
 from cirno_core.providers.tool_calls import ToolCallRequest, parse_tool_arguments
 
 from .text import extract_text, extract_thinking
@@ -32,6 +33,13 @@ class _ToolBuffer:
     extra_content: dict[str, Any] | None = None
     provider_fields: dict[str, Any] | None = None
     function_fields: dict[str, Any] | None = None
+    _complete_arguments: bool | None = None
+
+    def has_complete_arguments(self) -> bool:
+        if self._complete_arguments is None:
+            arguments = self.arguments.getvalue()
+            self._complete_arguments = bool(arguments.strip()) and isinstance(parse_tool_arguments(arguments), dict)
+        return self._complete_arguments
 
 
 class ChatStreamAccumulator:
@@ -39,24 +47,54 @@ class ChatStreamAccumulator:
         self._content = StringIO()
         self._reasoning = StringIO()
         self._tools: dict[int, _ToolBuffer] = {}
+        self._wire_slots: dict[int, int] = {}
+        self._wire_owners: dict[int, set[int]] = {}
         self._finish_reason = "stop"
+        self._choice_index: int | None = None
         self._usage: LLMUsage | None = None
         self.completed = False
 
+    @property
+    def usage_received(self) -> bool:
+        return self._usage is not None
+
     def _tool_index(self, index: int | None, identity: str | None, fallback: int) -> int:
         if index is not None:
-            return index
+            # Some gateways restart the wire index at zero for each call. IDs
+            # own buffers; normalized indices own UI deltas and remain stable.
+            slot = self._wire_slots.get(index, index)
+            if index not in self._wire_slots and any(slot in owners for owners in self._wire_owners.values()):
+                slot = max(self._tools) + 1
+            existing = self._tools.get(slot)
+            identified = [other for other in self._wire_owners.get(index, set())
+                          if identity and self._tools[other].id == identity]
+            if len(identified) == 1:
+                slot = identified[0]
+            elif len(identified) > 1:
+                raise ModelStreamProtocolError("Tool-call delta has an ambiguous ID for its wire index")
+            elif identity and existing is not None and existing.id and existing.id != identity:
+                slot = max(self._tools) + 1
+            elif not identity:
+                owners = self._wire_owners.get(index, set())
+                for other in owners - {slot}:
+                    if not self._tools[other].has_complete_arguments():
+                        raise ModelStreamProtocolError(
+                            "Tool-call delta has no ID for a reused index with unfinished calls"
+                        )
+            self._wire_slots[index] = slot
+            self._wire_owners.setdefault(index, set()).add(slot)
+            return slot
         if not identity:
             if fallback or not self._tools:
                 return fallback
             if len(self._tools) == 1:
                 return next(iter(self._tools))
-            raise ValueError("Tool-call delta is missing both index and ID for multiple calls")
+            raise ModelStreamProtocolError("Tool-call delta is missing both index and ID for multiple calls")
         # Compatible gateways may omit index while identifying every delta by ID.
         # Keep those calls separate even when each chunk contains just one call.
         matches = [slot for slot, buffer in self._tools.items() if buffer.id == identity]
         if len(matches) > 1:
-            raise ValueError("Tool-call delta has an ambiguous ID and no index")
+            raise ModelStreamProtocolError("Tool-call delta has an ambiguous ID and no index")
         if matches:
             return matches[0]
         existing = self._tools.get(fallback)
@@ -71,8 +109,6 @@ class ChatStreamAccumulator:
         identity = wire_field(value, "id") if not legacy else None
         index = self._tool_index(index, identity, fallback_index)
         buffer = self._tools.setdefault(index, _ToolBuffer())
-        if identity and buffer.id and buffer.id != str(identity):
-            raise ValueError("Tool-call delta reused an index for a different call ID; arguments were not combined")
         function = value if legacy else wire_field(value, "function")
         name = wire_field(function, "name") if function is not None else None
         arguments = wire_field(function, "arguments") if function is not None else None
@@ -82,6 +118,7 @@ class ChatStreamAccumulator:
             buffer.name = str(name)
         if arguments:
             buffer.arguments.write(str(arguments))
+            buffer._complete_arguments = None
         if not legacy:
             extras, provider_fields, function_fields = extract_tool_extras(value)
             if extras:
@@ -103,7 +140,7 @@ class ChatStreamAccumulator:
             return StreamDelta(content=chunk)
         chunk_map = mapping(chunk)
         if chunk_map is None:
-            raise TypeError(f"Unsupported chat chunk type: {type(chunk).__name__}")
+            raise ModelStreamProtocolError(f"Unsupported chat chunk type: {type(chunk).__name__}")
         self._usage = extract_usage(chunk_map) or self._usage
         choices = cast(list[object], chunk_map.get("choices") or [])
         if not choices:
@@ -111,7 +148,12 @@ class ChatStreamAccumulator:
             if content:
                 self._content.write(content)
             return StreamDelta(content=content)
-        choice = mapping(choices[0]) or {}
+        if self._choice_index is None:
+            self._choice_index = wire_field(choices[0], "index") or 0
+        choice = next((mapping(item) or {} for item in choices
+                       if (wire_field(item, "index") or 0) == self._choice_index), {})
+        if not choice:
+            return StreamDelta()
         if choice.get("finish_reason"):
             self._finish_reason = str(choice["finish_reason"])
             self.completed = True

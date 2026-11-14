@@ -160,16 +160,7 @@ def test_parse_deduplicates_duplicate_tool_call_ids(as_sdk: bool) -> None:
                         "id": "call_same",
                         "type": "function",
                         "function": {"name": "read_file", "arguments": '{"path":"a.txt"}'},
-                    }],
-                },
-                "finish_reason": "tool_calls",
-            },
-            {
-                "index": 1,
-                "message": {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [{
+                    }, {
                         "id": "call_same",
                         "type": "function",
                         "function": {"name": "read_file", "arguments": '{"path":"b.txt"}'},

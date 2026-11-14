@@ -8,6 +8,7 @@ from threading import Event
 from typing import Any
 
 from cirno_core.agent.tools.base import ToolResult, tool_parameters
+from cirno_core.agent.tools.context import current_request_context
 from cirno_core.agent.tools.filesystem.base import FileTool
 from cirno_core.agent.tools.filesystem.text_page import read_text_page, text_encoding
 from cirno_core.agent.tools.filesystem.workers import run_file_operation
@@ -36,6 +37,13 @@ _BLOCKED_DEVICE_PATHS = frozenset(
         "/dev/fd/2",
     }
 )
+
+
+def image_input_error() -> ToolResult | None:
+    request = current_request_context()
+    if request and request.runtime and request.runtime.provider.media_capabilities.image is False:
+        return ToolResult.error("The selected model has image input disabled. Choose an image-capable model or update its capabilities in Settings.")
+    return None
 
 
 def _is_blocked_device(path: str | Path) -> bool:
@@ -195,6 +203,8 @@ class ReadFileTool(FileTool):
                 return f"(Empty file: {path})"
             mime = detect_image_mime(header) or mimetypes.guess_type(path)[0]
             if mime and mime.startswith("image/"):
+                if error := image_input_error():
+                    return error
                 if file_size > self._MAX_IMAGE_SIZE_BYTES:
                     return ToolResult.error(
                         "Image exceeds the 6 MiB inline read limit; resize it before reading."

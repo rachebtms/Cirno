@@ -1,4 +1,5 @@
 import { MarkdownText } from "@/components/MarkdownText";
+import { SystemMessage } from "@/features/messages/ui/SystemMessage";
 import { FileEditGroup, type FileEditSummary } from "@/components/thread/activity/FileEditRow";
 import { ReasoningRow } from "@/components/thread/activity/ReasoningRow";
 import type { FileEditDisplayMode } from "@/features/preferences/store";
@@ -23,6 +24,7 @@ export const ActivityMessageTimeline = memo(function ActivityMessageTimeline({
   fileEditsByMessage,
   fileEditDisplayMode,
   onOpenFilePreview,
+  afterInputMessage,
 }: {
   messages: UIMessage[];
   active: boolean;
@@ -31,10 +33,18 @@ export const ActivityMessageTimeline = memo(function ActivityMessageTimeline({
   fileEditsByMessage: Map<string, FileEditSummary[]>;
   fileEditDisplayMode: FileEditDisplayMode;
   onOpenFilePreview?: (path: string) => void;
+  afterInputMessage?: (message: UIMessage) => ReactNode;
 }) {
   const items: ReactNode[] = [];
 
   messages.forEach((message, index) => {
+    if (message.role === "user" && message.inputOrigin) {
+      items.push(<Fragment key={message.id}>
+        <SystemMessage message={message} onOpenFilePreview={onOpenFilePreview} />
+        {afterInputMessage?.(message)}
+      </Fragment>);
+      return;
+    }
     if (message.activityKind === "model") {
       items.push(
         <ActivityModelMessage

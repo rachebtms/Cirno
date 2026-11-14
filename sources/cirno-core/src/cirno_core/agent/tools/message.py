@@ -147,6 +147,7 @@ class MessageTool(Tool):
     def invalid_arguments_hint(self) -> str:
         return (
             "No message was sent by this call. Regenerate exactly one complete JSON object; "
+            "escape embedded double quotes, backslashes and newlines in strings; "
             "do not continue the malformed argument string. Send a short, focused message first, "
             "then use separate calls for remaining parts in order. Do not repeat parts already "
             "delivered successfully or include protocol/end markers or repeated padding."

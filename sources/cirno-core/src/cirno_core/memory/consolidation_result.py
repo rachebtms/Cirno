@@ -22,7 +22,7 @@ def plan_items(plan: dict) -> list[dict[str, str]]:
         ("input", "reviewed_inputs", "memory_id"),
     ):
         items.extend(
-            {"id": f"{kind}:{index}", "kind": kind, "label": str(item.get(label, ""))[:240]}
+            {"id": f"{kind}:{index}", "kind": kind, "label": str(item.get(label) or item.get("source_id", ""))[:240]}
             for index, item in enumerate(plan.get(field, []))
         )
     return items

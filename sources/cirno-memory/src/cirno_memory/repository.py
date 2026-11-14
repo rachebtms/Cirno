@@ -467,7 +467,7 @@ class MemoryRepository:
         from cirno_memory.evidence import write_evidence
 
         evidence = write_evidence(self.root / "sources", session_key, messages,
-                                  preserve_system=preserve_system)
+                                  preserve_system=preserve_system, project_id=project_id)
         identity, path = evidence.identity, evidence.path
         try:
             saved = self.read(identity, maintenance=True)

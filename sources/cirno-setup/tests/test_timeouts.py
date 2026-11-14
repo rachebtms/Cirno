@@ -46,6 +46,30 @@ def test_zero_timeout_still_reports_command_failures(tmp_path):
     assert not context.probe(command)
 
 
+@pytest.mark.parametrize("seconds", [0, 42])
+def test_environment_cleanup_and_home_ownership_use_setup_timeout(tmp_path, monkeypatch, seconds):
+    from cirno_setup.initialize import initialize
+    from cirno_setup.launch import prepare_home
+
+    context = Context(tmp_path, tmp_path, Policy(timeout_seconds=seconds))
+    context.python.parent.mkdir(parents=True)
+    (context.python.parent.parent / "pyvenv.cfg").touch()
+    monkeypatch.setenv("CIRNO_SERVICE_PYTHON", str(context.python))
+    calls = []
+
+    def run(arguments, **kwargs):
+        calls.append((arguments, kwargs["timeout"]))
+        return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    initialize(context)
+    prepare_home(context)
+    assert len(calls) == 3  # legacy-path cleanup, pip readiness, ownership
+    assert all(timeout == (seconds or None) for _, timeout in calls)
+    assert "cirno-bundled-tools.pth" in calls[0][0][2]
+    assert calls[-1][0][:3] == ["/usr/bin/chown", "-R", "cirno:cirno"]
+
+
 @pytest.mark.parametrize(("seconds", "launch_timeout"), [(0, 0), (1800, 30000)])
 def test_browser_readiness_does_not_reintroduce_a_timeout_when_unlimited(tmp_path, monkeypatch, seconds, launch_timeout):
     context = Context(tmp_path, tmp_path, Policy(timeout_seconds=seconds))

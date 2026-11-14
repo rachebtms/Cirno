@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "Hasil untuk “{{query}}”",
       "retryTrends": "Coba lagi tren",
       "historyTab": "Validasi dan riwayat",
+      "fixedControl": "Selalu sertakan",
+      "fixedDescription": "Sertakan Skill ini dalam konteks Router dan Worker pada giliran berikutnya. Skill yang dinonaktifkan atau kekurangan dependensi tidak disertakan.",
       "fixedUnavailable": "Nonaktif, tidak tersedia, atau dihapus",
       "fixedDeclared": "Injeksi otomatis dideklarasikan oleh Skill ini"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "Permintaan ke penyedia model kehabisan waktu",
       "rateLimitTitle": "Batas permintaan penyedia model tercapai",
       "serverTitle": "Kesalahan layanan penyedia model",
+      "invalidResponseTitle": "Respons model tidak valid",
       "unknownTitle": "Permintaan ke penyedia model gagal",
       "bodyWithAttempt": "Dihentikan setelah {{attempts}} percobaan. Coba lagi nanti atau pilih model lain.",
       "body": "Coba lagi nanti atau pilih model lain.",

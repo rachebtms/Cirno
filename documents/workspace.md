@@ -1,6 +1,6 @@
 # Tabbed workspace
 
-Cirno 0.2.16 uses one workspace for conversations and owner-operated tools. The Launcher appears on the left on desktop and along the bottom on narrow screens. On touch layouts, the top tab strip and Launcher temporarily hide while the software keyboard is open, then return when it closes. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
+Cirno 0.2.17 uses one workspace for conversations and owner-operated tools. The Launcher appears on the left on desktop and along the bottom on narrow screens. On touch layouts, the top tab strip and Launcher temporarily hide while the software keyboard is open, then return when it closes. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
 
 ## Tabs
 

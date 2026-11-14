@@ -722,7 +722,8 @@ async def test_execute_returns_timeout_message() -> None:
 
     result = await wrapper.execute()
 
-    assert result == "(MCP tool call timed out after 0.01s)"
+    assert result.startswith("(MCP tool call timed out after 0.01s)")
+    assert "Outcome unconfirmed" in result and "not replayed" in result
     assert is_tool_error_result(result)
 
 
@@ -735,7 +736,8 @@ async def test_execute_handles_server_cancelled_error() -> None:
 
     result = await wrapper.execute()
 
-    assert result == "(MCP tool call was cancelled)"
+    assert result.startswith("(MCP tool call was cancelled)")
+    assert "Outcome unconfirmed" in result and "not replayed" in result
     assert is_tool_error_result(result)
 
 
@@ -1958,6 +1960,7 @@ async def test_resource_wrapper_execute_handles_timeout() -> None:
     wrapper = _make_resource_wrapper(SimpleNamespace(read_resource=read_resource), timeout=0.01)
     result = await wrapper.execute()
     assert result == "(MCP resource read timed out after 0.01s)"
+    assert is_tool_error_result(result)
 
 
 @pytest.mark.asyncio
@@ -1968,6 +1971,7 @@ async def test_resource_wrapper_execute_handles_error() -> None:
     wrapper = _make_resource_wrapper(SimpleNamespace(read_resource=read_resource))
     result = await wrapper.execute()
     assert result == "(MCP resource read failed: RuntimeError)"
+    assert is_tool_error_result(result)
 
 
 # ---------------------------------------------------------------------------
@@ -2044,6 +2048,7 @@ async def test_prompt_wrapper_execute_handles_timeout() -> None:
     wrapper = _make_prompt_wrapper(SimpleNamespace(get_prompt=get_prompt), timeout=0.01)
     result = await wrapper.execute()
     assert result == "(MCP prompt call timed out after 0.01s)"
+    assert is_tool_error_result(result)
 
 
 @pytest.mark.asyncio
@@ -2057,6 +2062,7 @@ async def test_prompt_wrapper_execute_handles_mcp_error() -> None:
     result = await wrapper.execute()
     assert "invalid argument" in result
     assert "code 42" in result
+    assert is_tool_error_result(result)
 
 
 @pytest.mark.asyncio
@@ -2067,6 +2073,7 @@ async def test_prompt_wrapper_execute_handles_error() -> None:
     wrapper = _make_prompt_wrapper(SimpleNamespace(get_prompt=get_prompt))
     result = await wrapper.execute()
     assert result == "(MCP prompt call failed: RuntimeError)"
+    assert is_tool_error_result(result)
 
 
 # ---------------------------------------------------------------------------

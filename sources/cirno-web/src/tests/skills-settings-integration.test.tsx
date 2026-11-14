@@ -2,8 +2,21 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
 import { ClientProvider } from "@/providers/ClientProvider";
-import { installSettingsViewTestHooks, jsonResponse, renderSettingsView } from "./settings-test-utils";
+import { installSettingsViewTestHooks, jsonResponse, renderSettingsView, settingsPayload } from "./settings-test-utils";
 installSettingsViewTestHooks();
+it("shows the saved fixed injection preference in the Skill detail reached from Settings", async () => {
+  const skill = { name: "project-review", description: "Review projects", source: "home", available: true, enabled: true };
+  const settings = { ...settingsPayload(), runtime_config: { "agents.defaults.always_skills": [skill.name] } };
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(
+    String(input).endsWith('/skills/project-review') ? { ...skill, raw_markdown: "Review instructions",
+      requirements: { bins: [], env: [], missing_bins: [], missing_env: [] }, install_options: [] } : settings,
+  )));
+  renderSettingsView({ initialSection: "skills", showSidebar: false, skills: [skill],
+    initialSettings: settings });
+  expect(screen.queryByRole("heading", { name: "Fixed Skills" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Open details for project-review" }));
+  expect(await screen.findByRole("switch", { name: "Always inject" })).toBeChecked();
+});
 it("shows available skills while the unrelated settings snapshot is still pending", () => {
   vi.stubGlobal(
     "fetch",

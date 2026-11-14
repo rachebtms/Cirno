@@ -46,6 +46,20 @@ def test_duckduckgo_search_is_exclusive():
     assert tool.concurrency_safe is False
 
 
+async def test_failed_config_refresh_never_uses_the_previous_search_destination(monkeypatch):
+    from unittest.mock import AsyncMock
+    def invalid_config():
+        raise ValueError("private-config-value")
+    tool = WebSearchTool(config=WebSearchConfig(provider="duckduckgo"), config_loader=invalid_config)
+    search = AsyncMock(return_value="stale provider answered")
+    monkeypatch.setattr(duckduckgo, "search", search)
+    assert tool.exclusive is True
+    result = await tool.execute("confidential research query")
+    assert is_tool_error_result(result) and "No search was sent" in result
+    assert "private-config-value" not in result
+    search.assert_not_awaited()
+
+
 def test_brave_with_api_key_remains_concurrency_safe():
     tool = _tool(provider="brave", api_key="brave-key")
     assert tool.exclusive is False

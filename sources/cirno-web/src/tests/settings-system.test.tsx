@@ -7,13 +7,23 @@ describe("Settings navigation lifecycle", () => {
 
   it("exposes the memory context and scanning budgets in the actual library page", async () => {
     renderSettingsView({ initialSection: "memory", initialSettings: { ...settingsPayload(), runtime_config: {
-      "agents.defaults.memory.context_tokens": 2000, "agents.defaults.memory.index_scan_batch": 100,
+      "agents.defaults.memory.context_tokens": 2000, "agents.defaults.memory.context_files_tokens": 2000,
+      "agents.defaults.memory.index_scan_batch": 100,
     } } });
     expect(screen.getByRole("spinbutton", { name: "Shared memory budget (tokens)" })).toHaveValue(2000);
+    for (const label of ["Shared memory budget (tokens)", "Fixed memory files token budget"]) {
+      const budget = screen.getByRole("spinbutton", { name: label });
+      expect(budget).toHaveAttribute("max", "32768");
+      fireEvent.change(budget, { target: { value: "32768" } });
+    }
     const batch = screen.getByRole("spinbutton", { name: "Index scan batch" });
     fireEvent.change(batch, { target: { value: "250" } });
     await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith("settings.runtime_config.update", {
-      values: { "agents.defaults.memory.index_scan_batch": 250 },
+      values: {
+        "agents.defaults.memory.context_tokens": 32768,
+        "agents.defaults.memory.context_files_tokens": 32768,
+        "agents.defaults.memory.index_scan_batch": 250,
+      },
     }, 20_000));
   });
 

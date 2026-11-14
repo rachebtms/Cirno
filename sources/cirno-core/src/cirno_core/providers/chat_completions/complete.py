@@ -56,18 +56,11 @@ def parse_response(response: Any, *, spec: ProviderSpec | None = None) -> LLMRes
     # under the reasoning trace.
     if reasoning_content is None and getattr(spec, "extract_thinking_blocks", False):
         reasoning_content = extract_thinking(msg0.get("content"))
-    for ch in choices:
-        ch_map = mapping(ch) or {}
-        m = mapping(ch_map.get("message")) or {}
-        message_tool_calls = cast(object, m.get("tool_calls"))
-        if isinstance(message_tool_calls, list) and message_tool_calls:
-            raw_tool_calls.extend(cast(list[object], message_tool_calls))
-            if ch_map.get("finish_reason") in ("tool_calls", "stop"):
-                finish_reason = str(ch_map["finish_reason"])
-        if not content:
-            content = extract_text(m.get("content"))
-        if reasoning_content is None:
-            reasoning_content = m.get("reasoning_content")
+    # Choices are alternative answers, not sequential steps. Match the stream
+    # parser's selected choice instead of executing every alternative's tools.
+    message_tool_calls = cast(object, msg0.get("tool_calls"))
+    if isinstance(message_tool_calls, list):
+        raw_tool_calls.extend(cast(list[object], message_tool_calls))
 
     # Deduplicate tool call IDs (same pattern as streaming path)
     # Some providers reuse the same ID for parallel tool calls.

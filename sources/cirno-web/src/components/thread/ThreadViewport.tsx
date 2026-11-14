@@ -358,6 +358,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     messageProps={{
       defaultActivityCollapsed: conversationRole(conversationKey).toolReplies,
       assistantBubbles: conversationRole(conversationKey).toolReplies,
+      activityGrouping: conversationRole(conversationKey).toolReplies ? "conversation" : "turn",
       messages: visibleMessages,
       topInset: PROMPT_TOP_INSET_PX,
       temporary: temporary,

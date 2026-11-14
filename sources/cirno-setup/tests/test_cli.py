@@ -51,7 +51,7 @@ def test_initializer_does_not_delete_the_interpreter_running_setup(tmp_path, mon
     def run(arguments, **kwargs):
         assert Path(arguments[0]).is_file(), "setup deleted its active interpreter"
 
-    monkeypatch.setattr("cirno_setup.initialize.subprocess.run", run)
+    monkeypatch.setattr(context, "run", run)
     monkeypatch.setattr(context, "inspect", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "", ""))
     initialize(context)
     assert context.python.read_text() == "interpreter fixture"

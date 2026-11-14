@@ -6,7 +6,7 @@ The repository workflow `.github/workflows/container.yml` verifies, builds and p
 
 - Pull requests run frontend and backend checks and build AMD64 and ARM64 images on native runners for startup smoke tests. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.2.16` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.2.17` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
@@ -31,7 +31,7 @@ The example publishes only the Web UI port and persists the instance root. Model
 
 Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. Setup then offers theme selection and model provider/model configuration; model setup can be deferred to Settings. With a model connected, the Router starts a one-time introduction to learn its personality and how to address the owner. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.16`; otherwise track `latest`. Optional memory embeddings are disabled by default. The unified image installs optional tool and embedding components only when selected. Embedding inference stays disabled by default.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.17`; otherwise track `latest`. Optional memory embeddings are disabled by default. The unified image installs optional tool and embedding components only when selected. Embedding inference stays disabled by default.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
@@ -51,7 +51,7 @@ registrations and custom health checks to the [versioned endpoints](development/
 The browser entry stays at `/`.
 
 1. Stop the service and back up the entire mounted instance directory. Also back up workspaces mounted outside that directory.
-2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.16`. Preserve your volumes, ports, environment and reverse-proxy network configuration.
+2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.17`. Preserve your volumes, ports, environment and reverse-proxy network configuration.
 3. Pull and recreate the service:
 
    ```sh
@@ -62,7 +62,7 @@ The browser entry stays at `/`.
 
    If you use Compose overrides, pass the same `-f` files to each command. Optional tools are selected by Compose command-line arguments; there is no separate full/slim build or `-full` tag in the unified publishing workflow.
 
-4. Refresh the browser or installed Web app and check Settings → About for 0.2.16. Sign in with the existing account.
+4. Refresh the browser or installed Web app and check Settings → About for 0.2.17. Sign in with the existing account.
 
 Recreating the container interrupts its current process; do this between active operations. Saved progress remains in the instance volume. Packages and files written only into the old container's writable layer do not survive replacement. Selected setup components restore their required dependencies and reuse persistent tool packages and CLI configuration. Do not delete or replace the existing instance volume during an upgrade.
 

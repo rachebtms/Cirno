@@ -15,9 +15,9 @@ class MemoryConfig(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     release_archived_runtime: bool = True
-    context_tokens: int = Field(default=2000, ge=256, le=16000)
+    context_tokens: int = Field(default=2000, ge=256, le=32768)
     context_files: list[str] = Field(default_factory=list)
-    context_files_tokens: int = Field(default=2000, ge=256, le=16000)
+    context_files_tokens: int = Field(default=2000, ge=256, le=32768)
     checkpoint_tokens: int = Field(default=2000, ge=256, le=8000)
     index_scan_batch: int = Field(default=100, ge=10, le=1000)
     embedding_enabled: bool = False

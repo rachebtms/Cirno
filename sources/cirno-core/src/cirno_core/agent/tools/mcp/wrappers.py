@@ -48,7 +48,7 @@ class _MCPWrapperBase(Tool):
         if already_refreshed or not _is_session_terminated(exc) or self._reconnect is None:
             return False
         logger.warning(
-            "MCP {} '{}' session terminated; reconnecting server '{}' before retry",
+            "MCP {} '{}' session terminated; reconnecting server '{}'",
             capability_kind,
             self._name,
             self._server_name,
@@ -71,11 +71,18 @@ class _MCPWrapperBase(Tool):
         request: Callable[[], Awaitable[_MCPResultT]],
         timeout: float,
         capability_kind: Literal["tool", "resource", "prompt"],
+        *,
+        replay_safe: bool = True,
     ) -> _MCPResultT | ToolResult:
         """Recover requests only; rendering and reconnect/backoff failures stay outside replay."""
         from mcp.shared.exceptions import McpError
 
         operation = f"{capability_kind} {'read' if capability_kind == 'resource' else 'call'}"
+        uncertain = (
+            " Outcome unconfirmed: the remote operation may have completed. "
+            "Inspect its effects before explicitly retrying; this call was not replayed."
+            if not replay_safe else ""
+        )
         refreshed_session = False
         retried = False
         while True:
@@ -85,7 +92,7 @@ class _MCPWrapperBase(Tool):
                 logger.warning(
                     "MCP {} '{}' timed out after {}s", capability_kind, self._name, timeout
                 )
-                return ToolResult.error(f"(MCP {operation} timed out after {timeout}s)")
+                return ToolResult.error(f"(MCP {operation} timed out after {timeout}s)" + uncertain)
             except asyncio.CancelledError:
                 # MCP SDK cancel scopes can leak cancellation without cancelling our task.
                 if task_is_cancelling():
@@ -93,8 +100,20 @@ class _MCPWrapperBase(Tool):
                 logger.warning(
                     "MCP {} '{}' was cancelled by server/SDK", capability_kind, self._name
                 )
-                return ToolResult.error(f"(MCP {operation} was cancelled)")
+                return ToolResult.error(f"(MCP {operation} was cancelled)" + uncertain)
             except Exception as exc:
+                if not replay_safe and (_is_session_terminated(exc) or _is_transient(exc)):
+                    logger.opt(exception=exc if tool_log_content_allowed() else False).error(
+                        "MCP {} '{}' failed to confirm outcome: {}", capability_kind, self._name, type(exc).__name__,
+                    )
+                    # Reconnect for a later explicit operation, without repeating
+                    # a call whose remote effects cannot be determined locally.
+                    reconnect_error = ""
+                    try:
+                        await self._refresh_session_after_termination(exc, refreshed_session, capability_kind)
+                    except Exception as error:
+                        reconnect_error = f" Reconnection failed: {type(error).__name__}."
+                    return ToolResult.error(f"(MCP {operation} failed to confirm outcome: {type(exc).__name__})" + uncertain + reconnect_error)
                 if await self._refresh_session_after_termination(
                     exc, refreshed_session, capability_kind
                 ):
@@ -159,6 +178,10 @@ class MCPToolWrapper(_MCPWrapperBase):
         raw_schema = tool_def.inputSchema or {"type": "object", "properties": {}}
         self._parameters = _normalize_schema_for_openai(raw_schema)
         self._tool_timeout = tool_timeout
+        annotations = getattr(tool_def, "annotations", None)
+        self._replay_safe = annotations is not None and (
+            annotations.readOnlyHint is True or annotations.idempotentHint is True
+        )
 
     @property
     def name(self) -> str:
@@ -177,6 +200,7 @@ class MCPToolWrapper(_MCPWrapperBase):
             lambda: self._session.call_tool(self._original_name, arguments=kwargs),
             self._tool_timeout,
             "tool",
+            replay_safe=self._replay_safe,
         )
         if isinstance(result, ToolResult):
             return result
@@ -297,7 +321,7 @@ class MCPResourceWrapper(_MCPWrapperBase):
             "resource",
         )
         if isinstance(result, ToolResult):
-            return str(result)
+            return result
         parts: list[str] = []
         for block in result.contents:
             if isinstance(block, types.TextResourceContents):
@@ -372,7 +396,7 @@ class MCPPromptWrapper(_MCPWrapperBase):
             "prompt",
         )
         if isinstance(result, ToolResult):
-            return str(result)
+            return result
         parts: list[str] = []
         for message in result.messages:
             content = message.content

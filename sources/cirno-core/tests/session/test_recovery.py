@@ -686,8 +686,9 @@ async def test_dismiss_does_not_queue_work(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reply_preserved", [False, True])
+@pytest.mark.parametrize("error_kind", ["connection", "invalid_response"])
 async def test_model_failure_waits_across_restart_and_rejects_duplicate_continue(
-    tmp_path: Path, reply_preserved: bool,
+    tmp_path: Path, reply_preserved: bool, error_kind: str,
 ) -> None:
     coordinator, bus, sessions = _coordinator(tmp_path)
     session = sessions.get_or_create("websocket:chat")
@@ -696,17 +697,18 @@ async def test_model_failure_waits_across_restart_and_rejects_duplicate_continue
         session.messages.append({"role": "assistant", "content": "saved reply", "_interrupted": True})
     _persist(sessions, session)
 
-    await coordinator.turn_completed("websocket:chat", failure_kind="model", failure_error_kind="connection")
+    await coordinator.turn_completed("websocket:chat", failure_kind="model", failure_error_kind=error_kind)
     assert bus.inbound.empty()
     coordinator, bus, sessions = _coordinator(tmp_path)
     await coordinator.scan()
     assert bus.inbound.empty()
     state = sessions.get_or_create("websocket:chat").metadata[RECOVERY_METADATA_KEY]
-    assert state["failure_error_kind"] == "connection"
+    assert state["failure_error_kind"] == error_kind
     assert state.get("reply_preserved", False) is reply_preserved
     from cirno_core.session.recovery.state import recovery_state_from_metadata
     public_state = recovery_state_from_metadata({RECOVERY_METADATA_KEY: state})
     assert public_state is not None
+    assert public_state["failure_error_kind"] == error_kind
     assert public_state.get("reply_preserved", False) is reply_preserved
     assert state["status"] == "awaiting_user"
     payload = {"chat_id": "chat", "recovery_id": state["recovery_id"]}

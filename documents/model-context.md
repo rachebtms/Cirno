@@ -20,6 +20,12 @@ The saved transcript retains reasoning independently of request filtering. Chang
 
 The session also retains a content-free snapshot of the eight most recent completed provider requests, without waiting for the entire agent turn to finish. The context popover restores these input/output, cache and timing details after a page refresh, even when the relevant chat messages are outside the loaded history page. A request still generating has no final usage yet; its actual details become available when the provider returns. These snapshots are display metadata and are never added to model prompts.
 
+Heartbeat and other runtime-origin inputs retain their source in both live delivery and history replay. The chat displays them as labeled, collapsed system events rather than owner messages; redelivery of the same source does not create another row. This presentation does not change model request roles or the cached prompt prefix.
+
+In the Router chat, consecutive execution activity and runtime inputs between visible conversation messages share one Working / Worked disclosure. Expanding it retains each heartbeat, reasoning step and tool result in order. Durations add execution time across runs, excluding the idle gaps between heartbeats. Owner messages, delivered replies, incoming conversation messages and consolidation reports remain separate boundaries. This grouping changes presentation only.
+
+Deferred activity details load once per reference in the current conversation view. Partial success and newly arriving references do not automatically retry failed details; the failure indicator remains available for an explicit retry. Results from a previously opened conversation view cannot change the current view's loading state.
+
 Workers stream ordinary assistant updates between tool rounds. Their role prompt distinguishes these user-facing milestones from private reasoning and coordination reports. A complete response containing both prose and tool calls is also delivered before tool execution when a provider returns it without content deltas; already-streamed text is not repeated. Models still decide what content to generate, so this does not synthesize progress messages or force extra model requests.
 
 ## Checkpoints and compaction
@@ -76,7 +82,13 @@ New model setup tests image and native video input using small semantic samples.
 
 Context consolidation treats the task checkpoint as the continuation requirement. Optional memory/Skill learning can fail without preventing that checkpoint from being saved. The notice records which updates completed, which remain incomplete, their error and the immutable source ID. Memory can replay saved writes without an API request; `/consolidate retry [source-id]` explicitly retries one retained batch in the original conversation. It never replaces the current task checkpoint. All retries are serial.
 
-`agents.defaults.consolidation.max_retries` sets additional generation attempts (default 1, 0–10); zero disables extra attempts. Provider network retries are configured separately. Learning failures do not automatically regenerate a usable checkpoint.
+Archived transcript identities include their owning Project. Moving a conversation between Projects, or between a private conversation and a Project, cannot reuse a source record with the previous visibility scope. Repeated archival within the same scope remains stable; previously archived source IDs remain readable under their original access rules.
+
+`agents.defaults.consolidation.max_retries` sets one shared budget for additional generation attempts (default 1, 0–10); zero disables extra attempts. Request failures, unwanted tool calls and invalid learning JSON/schema consume that same budget. A format retry appends the rejected response and compact validation feedback after the unchanged request prefix; it does not guess repairs, merge JSON objects or apply unvalidated updates. If correction fails, the first generated checkpoint and original invalid output remain available. Provider network retries are configured separately. Storage or concurrent-edit failures replay the existing plan rather than regenerating it.
+
+Pending-input reviews use supplied `input:…` source IDs, just like learning evidence. The framework resolves them to the captured memory and revision; legacy `memory_id` reviews remain supported. Archive handles and unoffered/private inputs cannot settle the pending-input queue. Previously rejected `source_id` reviews can be replayed without a model request after upgrading. Malformed JSON needs regeneration in its original conversation with `/consolidate retry [source-id]`; Memory's save-retry action only replays stored output and never silently starts an API call. Validation messages show field paths without repeating input values or Pydantic help URLs.
+
+If optional learning instructions do not fit the available context, consolidation falls back to checkpoint-only instructions and retains a deferred-learning notice/source. Optional instructions must not force a task checkpoint that otherwise fits to become a raw fallback.
 
 The system/developer prefix stays unchanged during compaction; the checkpoint is a subsequent history message. The replaced history naturally loses its old exact-prefix cache match, while stable policy remains reusable. Compare provider-reported cache hits and misses to assess real cost; structural prefix tests alone cannot measure a proxy's billing behavior.
 
@@ -86,6 +98,6 @@ Ordinary findings always have batch provenance when no specific input-memory sou
 
 ## Owner-selected context
 
-Settings → Skills can pin installed, enabled and available Skills for full injection in Router/Worker prompts. This also covers transient Worker subagents, but excludes owner pins from maintenance contracts. Existing author-declared `always` Skills retain their behavior. Skill names are sorted before injection, avoiding cache changes caused by selection order.
+Settings → Skills → Installed → a Skill's details contains **Always inject**, an automatically saved switch for full injection in Router/Worker prompts. This also covers transient Worker subagents, but excludes owner pins from maintenance contracts. The enabled/availability rules and existing selections remain unchanged. Existing author-declared `always` Skills retain their behavior. Skill names are sorted before injection, avoiding cache changes caused by selection order.
 
 Settings → Memory library can pin extra `memory/` text files with a separate shared token budget. The MEMORY.md snapshot and those excerpts form one versioned input snapshot: identical content adds nothing; edits or removing a selection append a fresh snapshot without modifying old messages. Settings are reread before fresh-input preparation, so the first turn after saving receives the new selection. System prompt changes remain explicit owner actions; ordinary memory edits preserve that prefix.

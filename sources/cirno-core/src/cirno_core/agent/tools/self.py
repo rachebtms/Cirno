@@ -256,7 +256,7 @@ class MyTool(Tool):
             return ToolResult.error("Error: set is disabled (tools.my.allow_set is false)")
         if action in ("modify", "set"):
             return await self._modify(key, value)
-        return f"Unknown action: {action}"
+        return ToolResult.error(f"Unknown action: {action}")
 
     # -- inspect --
 

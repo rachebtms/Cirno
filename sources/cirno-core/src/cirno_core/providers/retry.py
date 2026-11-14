@@ -160,17 +160,20 @@ class ProviderRetryExecutor:
 
         while True:
             if should_retry_guard is not None and not should_retry_guard():
-                is_timeout = (response.error_kind or "").lower() == "timeout"
-                if is_timeout:
+                recoverable_stream = (
+                    (response.error_kind or "").lower() in {"timeout", "invalid_response"}
+                    and is_transient_response(response)
+                )
+                if recoverable_stream:
                     if on_stream_recover:
                         logger.warning(
-                            "LLM stream stalled after content was emitted; "
+                            "LLM stream interrupted after content was emitted; "
                             "starting a new stream segment and retrying"
                         )
                         await on_stream_recover()
                     else:
                         logger.warning(
-                            "LLM stream stalled after content was emitted; "
+                            "LLM stream interrupted after content was emitted; "
                             "suppressing delta callbacks and retrying"
                         )
                         kw["on_content_delta"] = None

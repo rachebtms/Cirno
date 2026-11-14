@@ -149,7 +149,7 @@ class ConversationControl:
     def _execution_metadata(self, key: str, metadata: dict) -> dict[str, Any]:
         recovery = recovery_state_from_metadata(metadata)
         state = ("running" if key in self.loop._executing_sessions else
-                 "queued" if self.loop.dispatch.is_running(key) else
+                 "queued" if self.loop.dispatch.is_running(key) or recovery and recovery["status"] == "resuming" else
                  "interrupted" if recovery and recovery["status"] in {"awaiting_user", "failed"} else "idle")
         return {"execution_status": state, "recovery": recovery,
                 "goal": parse_goal_state(goal_state_raw(metadata))}

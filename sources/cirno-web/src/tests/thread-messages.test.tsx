@@ -75,11 +75,14 @@ describe("ThreadMessages", () => {
     // Happy DOM follows native links; verify the event without accessing the network.
     const navigation = (window as unknown as HappyWindow).happyDOM.settings.navigation;
     const previous = navigation.disableMainFrameNavigation;
+    const previousChildPage = navigation.disableChildPageNavigation;
     navigation.disableMainFrameNavigation = true;
+    navigation.disableChildPageNavigation = true;
     try {
       expect(fireEvent.click(link, { ctrlKey: true })).toBe(true);
     } finally {
       navigation.disableMainFrameNavigation = previous;
+      navigation.disableChildPageNavigation = previousChildPage;
     }
   });
 

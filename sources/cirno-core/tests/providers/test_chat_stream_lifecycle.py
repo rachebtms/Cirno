@@ -144,7 +144,7 @@ async def test_repeated_stop_waits_for_http_stream_to_close():
     assert stream.closed
 
 
-async def test_gateway_reusing_a_call_slot_returns_error_without_partial_tool_execution():
+async def test_ambiguous_gateway_deltas_return_retryable_error_without_partial_tools():
     class Stream:
         closed = False
 
@@ -160,6 +160,9 @@ async def test_gateway_reusing_a_call_slot_returns_error_without_partial_tool_ex
                     "index": 0, "id": identity,
                     "function": {"name": "user__message", "arguments": arguments},
                 }]}}]}
+            yield {"choices": [{"delta": {"tool_calls": [{
+                "index": 0, "function": {"arguments": "}"},
+            }]}}]}
 
         async def close(self):
             self.closed = True
@@ -168,5 +171,6 @@ async def test_gateway_reusing_a_call_slot_returns_error_without_partial_tool_ex
     response = await provider_for(stream).chat_stream([{"role": "user", "content": "Reply"}])
     assert response.finish_reason == "error"
     assert response.tool_calls == []
-    assert "different call ID; arguments were not combined" in response.content
+    assert "no ID for a reused index" in response.content
+    assert response.error_kind == "invalid_response"
     assert stream.closed

@@ -9,7 +9,7 @@ import { ThreadMessageCache } from "@/lib/thread-message-cache";
 import type { CirnoClient, StreamError } from "@/lib/cirno-client";
 import type { ConnectionStatus } from "@/lib/contracts/transport";
 import type { InboundEvent } from "@/lib/contracts/events";
-import type { UIMediaAttachment, UIMessage } from "@/lib/contracts/messages";
+import type { UIInputOrigin, UIMediaAttachment, UIMessage } from "@/lib/contracts/messages";
 import { ClientProvider } from "@/providers/ClientProvider";
 import projectionFixture from "./fixtures/live-replay-event-projection.json";
 import { createStreamClient } from "./stream-client";
@@ -39,6 +39,8 @@ const SEMANTIC_MESSAGE_FIELDS = [
   "cliApps",
   "mcpPresets",
   "sessionMentions",
+  "inputOrigin",
+  "sessionMessage",
   "reasoning",
   "latencyMs",
   "source",
@@ -2553,6 +2555,45 @@ describe("useCirnoStream", () => {
     ]);
     expect(result.current.isStreaming).toBe(true);
     expect(result.current.runStartedAt).toBe(1_700_000_000);
+  });
+
+  it.each<UIInputOrigin["kind"]>([
+    "heartbeat", "scheduled_task", "trigger", "continuation", "system", "subagent", "supervision",
+  ])("retains %s provenance in live inputs and deduplicates redelivery", (kind) => {
+    const fake = fakeClient();
+    const { result } = renderHook(
+      () => useCirnoStream("chat-background", EMPTY_MESSAGES),
+      { wrapper: wrap(fake.client) },
+    );
+    const origin: UIInputOrigin = { kind, label: "Background input", id: "system-input:one" };
+    const event: Extract<InboundEvent, { event: "user_message" }> = {
+      event: "user_message", chat_id: "chat-background", text: "Internal instructions",
+      turn_id: "background-turn", turn_seq: 0, starts_turn: true,
+      created_at_ms: 1_700_000_000_123,
+      provenance: {
+        input_origin: origin,
+        ...(kind === "supervision" ? { session_message: {
+          message_id: "control-one", session: { id: "router-id", name: "cirno" },
+        } } : {}),
+      },
+    };
+    act(() => {
+      fake.emit("chat-background", event);
+      fake.emit("chat-background", event);
+      fake.emit("chat-background", { ...event, turn_id: "redelivered-turn" });
+    });
+    expect(result.current.messages).toEqual([expect.objectContaining({
+      content: event.text, inputOrigin: origin, turnId: "background-turn",
+      createdAt: event.created_at_ms,
+      ...(event.provenance?.session_message ? { sessionMessage: event.provenance.session_message } : {}),
+    })]);
+    act(() => {
+      fake.emit("chat-background", { ...event, turn_id: "next-background-turn",
+        provenance: { input_origin: { ...origin, id: "system-input:two" } } });
+    });
+    expect(result.current.messages.map(message => message.inputOrigin?.id)).toEqual([
+      "system-input:one", "system-input:two",
+    ]);
   });
 
   it("projects a cross-session input with its public handle exactly once", () => {

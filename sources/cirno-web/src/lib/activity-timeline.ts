@@ -11,6 +11,8 @@ export type TurnUnit =
       sourceMessageCount: number;
       turnLatencyMs?: number;
       startedAtMs?: number;
+      /** Completed execution time before the latest run; excludes idle gaps. */
+      elapsedBeforeActiveMs?: number;
     }
   | {
       type: "message";

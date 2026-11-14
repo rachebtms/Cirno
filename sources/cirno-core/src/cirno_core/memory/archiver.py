@@ -11,7 +11,7 @@ from cirno_core.utils.cancellation import shield_and_drain
 
 from cirno_core.memory.checkpoint_prompt import with_working_notes
 from cirno_core.memory.checkpoint_generation import generate_checkpoint
-from cirno_core.memory.consolidation_contract import MARKER, LearningPlan, split_result
+from cirno_core.memory.consolidation_contract import LearningPlan, output_error, output_sections, split_result
 from cirno_core.memory.consolidation_result import ConsolidationCheckpoint, learning_failure
 from cirno_core.memory.consolidation_preparation import prepare_learning
 from cirno_core.memory.learning_commit import stage_learning
@@ -255,7 +255,9 @@ class MemoryArchiver:
             response = await generate_checkpoint(runtime=runtime, history=history,
                 request_messages=request_messages, call_tools=call_tools,
                 provider_context=provider_context, state_controller=state_controller,
-                state_messages=state_messages, on_model_request=on_model_request)
+                state_messages=state_messages, on_model_request=on_model_request,
+                validate_output=(lambda text: split_result(text, learning_only=learning_only))
+                if learning is not None else None)
         if response is None:
             return await raw_fallback()
         if response.finish_reason in {"error", "length"}:
@@ -273,24 +275,21 @@ class MemoryArchiver:
             return await raw_fallback()
         warning = preparation_failure or (learning.deferred_failure if learning is not None else None)
         try:
-            if learning_only and MARKER not in summary:
-                # A heading at the beginning also has to follow the delimiter contract.
-                if summary.startswith("## Memory updates\n"):
-                    summary = "\n" + summary
-                else:
-                    raise ValueError("Learning retry did not return structured memory updates")
-            summary, learning_plan = split_result(summary)
+            summary, learning_plan = split_result(summary, learning_only=learning_only)
         except ValueError as error:
             if learning is not None and evidence is not None:
-                warning = learning_failure(evidence["id"], f"{type(error).__name__}: {error}", {}, [])
+                warning = learning_failure(evidence["id"], output_error(error), {}, [])
                 try:
-                    await shield_and_drain(asyncio.to_thread(invalid_output, learning, evidence, summary, error))
+                    await shield_and_drain(asyncio.to_thread(
+                        invalid_output, learning, evidence, summary, error,
+                        summary=checkpoint_text if learning_only else output_sections(summary)[0],
+                    ))
                 except Exception as receipt_error:
                     warning["error"] += f"; could not save the failed plan: {receipt_error}"
                     logger.warning("Could not retain invalid learning output for {}: {}", session_key, receipt_error)
             else:
-                warning = learning_failure(evidence["id"] if evidence else "", f"{type(error).__name__}: {error}", {}, [])
-            summary = summary.partition(MARKER)[0]
+                warning = learning_failure(evidence["id"] if evidence else "", output_error(error), {}, [])
+            summary = output_sections(summary)[0]
             learning_plan = LearningPlan()
         summary = self.store.journal.normalize_entry(summary)
         if learning_only and checkpoint_text:

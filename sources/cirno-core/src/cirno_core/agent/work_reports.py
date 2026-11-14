@@ -40,8 +40,6 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
     question = human_action.strip() if human_action else None
     if question and len(question) > 2000:
         raise ValueError("The question must not exceed 2000 characters")
-    if state == "ready" and question:
-        raise ValueError("A ready report cannot include an unresolved question; use progress while continuing work")
     if key == ROUTER_SESSION_KEY:
         raise ValueError("Cirno presents results with user__message; work reports belong to execution conversations")
     session = await sessions.state.read_header(key)
@@ -57,7 +55,7 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
         nonlocal report
         previous = metadata.get(WORK_REPORT_KEY) or {}
         current_question = question
-        if human_action is None and state != "ready":
+        if human_action is None:
             current_question = previous.get("human_action")
         goal = parse_goal_state(goal_state_raw(metadata)) or {}
         if expected_goal is not None and goal != expected_goal:

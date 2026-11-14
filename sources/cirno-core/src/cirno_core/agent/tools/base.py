@@ -260,7 +260,10 @@ class Tool(ABC):
     @property
     def invalid_arguments_hint(self) -> str:
         """Recovery guidance after rejecting malformed JSON without execution."""
-        return "Send exactly one JSON object matching the tool schema."
+        return (
+            "Send exactly one JSON object matching the tool schema. Escape embedded double quotes, "
+            "backslashes and newlines inside string values; do not concatenate separate calls."
+        )
 
     # --- Plugin metadata ---
 

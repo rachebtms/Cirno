@@ -218,7 +218,10 @@ async def test_codex_title_failure_logs_request_purpose_and_safe_upstream_detail
     persisted = await sessions.state.read(session.key)
     assert persisted is not None
     assert "title" not in persisted.metadata
-    log, outside_log = sink.getvalue().splitlines()
+    log, failure_log, outside_log = sink.getvalue().splitlines()
+    assert "Model request failed:" in failure_log
+    assert "http_status=400" in failure_log
+    assert "PRIVATE" not in failure_log
     assert "purpose=webui_title" not in outside_log
     assert f"session={session.key}" not in outside_log
     for field in (

@@ -1,5 +1,5 @@
 from cirno_core.providers.chat_completions.errors import error_response
-from cirno_core.providers.errors import is_billing_error
+from cirno_core.providers.errors import ModelStreamProtocolError, is_billing_error, is_transient_response, public_error_kind
 from types import SimpleNamespace
 
 import pytest
@@ -52,6 +52,25 @@ def test_openai_handle_error_marks_timeout_kind() -> None:
 
     assert response.finish_reason == "error"
     assert response.error_kind == "timeout"
+
+
+@pytest.mark.parametrize("error", [
+    ModelStreamProtocolError("ambiguous tool delta"),
+    ConnectionError("stream ended early"),
+])
+def test_openai_handle_error_retains_recoverable_stream_classification(error):
+    response = error_response(error)
+    expected = "invalid_response" if isinstance(error, ModelStreamProtocolError) else "connection"
+    assert public_error_kind(response) == expected
+    assert is_transient_response(response)
+
+
+def test_empty_choices_is_a_retryable_invalid_response():
+    from cirno_core.providers.chat_completions.complete import parse_response
+
+    response = parse_response({"choices": []})
+    assert is_transient_response(response)
+    assert public_error_kind(response) == "invalid_response"
 
 
 def test_anthropic_handle_error_extracts_structured_metadata() -> None:

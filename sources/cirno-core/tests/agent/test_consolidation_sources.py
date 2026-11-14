@@ -206,3 +206,40 @@ def test_pending_input_still_requires_its_exact_revision_and_quote(tmp_path, sco
     with pytest.raises(LearningEvidenceError, match="does not match its memory"):
         learning.apply(plan, evidence, "checkpoint")
     assert not learning.repo.search(session_key=ROUTER_SESSION_KEY, layer="knowledge")["memories"]
+
+
+def test_pending_input_source_review_replays_previously_invalid_output_without_model(tmp_path):
+    from cirno_core.memory.consolidation_contract import MARKER
+    from cirno_core.memory.consolidation_receipts import invalid_output
+    from cirno_memory.repository import MemoryRepository
+
+    repo = MemoryRepository(tmp_path)
+    pending = repo.save("Retain the measured result", source="test:input", session_key="worker:a")
+    outside = repo.save("Other task input", source="test:input", session_key="worker:b")
+    learning, evidence, _ = make_learning(tmp_path, [{"role": "user", "content": "Review findings"}])
+    raw = "checkpoint" + MARKER + json.dumps({"reviewed_inputs": [
+        {"source_id": "input:" + pending["id"], "reason": "retain"},
+    ]})
+    invalid_output(learning, evidence, raw, ValueError("Legacy schema required memory_id"))
+    assert retry_learning(repo) == {"retried": 1}
+    assert repo.consolidation_inputs("worker:a") == []
+    assert repo.consolidation_inputs("worker:b")[0]["id"] == outside["id"]
+
+
+@pytest.mark.parametrize("source_id", ["input:unoffered", "archive:0"])
+def test_input_review_cannot_settle_unoffered_or_archive_sources(tmp_path, source_id):
+    learning, evidence, _ = make_learning(tmp_path, [{"role": "user", "content": "Review findings"}])
+    plan = LearningPlan.model_validate({"reviewed_inputs": [{"source_id": source_id, "reason": "retain"}]})
+    with pytest.raises(LearningEvidenceError):
+        learning.apply(plan, evidence, "checkpoint")
+
+
+def test_learning_schema_errors_do_not_echo_input_values_or_help_urls():
+    from pydantic import ValidationError
+    from cirno_core.memory.consolidation_contract import output_error
+
+    with pytest.raises(ValidationError) as captured:
+        LearningPlan.model_validate({"reviewed_inputs": [{"source_id": "input:one", "reason": {"secret": "PRIVATE"}}]})
+    detail = output_error(captured.value)
+    assert "reviewed_inputs.0.reason" in detail
+    assert "PRIVATE" not in detail and "https://" not in detail

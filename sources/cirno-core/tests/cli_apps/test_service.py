@@ -990,6 +990,18 @@ def test_run_installed_cli_uses_argv_without_shell(
     assert "['--json', 'project', 'list']" in result
 
 
+def test_run_timeout_is_an_error_and_does_not_report_success(tmp_path, monkeypatch):
+    manager = _manager(tmp_path)
+    _seed_catalog(manager)
+    manager.installed.replace({"gimp": {"entry_point": "cli-anything-gimp"}})
+    monkeypatch.setattr(cli_service.shutil, "which", lambda _entry: "/fake/gimp")
+    def timed_out(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+    monkeypatch.setattr(cli_service, "run_cli", timed_out)
+    with pytest.raises(CliAppError, match="timed out.*earlier effects may have completed"):
+        manager.run("gimp", ["export"])
+
+
 def test_run_reports_created_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "「{{query}}」の検索結果",
       "retryTrends": "推移を再取得",
       "historyTab": "検証と履歴",
+      "fixedControl": "常に注入",
+      "fixedDescription": "以降のターンでこの Skill を Router と Worker のコンテキストに含めます。無効な場合や依存関係が不足している場合は注入されません。",
       "fixedUnavailable": "無効、利用不可、または未インストール",
       "fixedDeclared": "この Skill が自動適用を指定しています"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "モデルプロバイダーへのリクエストがタイムアウトしました",
       "rateLimitTitle": "モデルプロバイダーのリクエスト上限に達しました",
       "serverTitle": "モデルプロバイダーでサービスエラーが発生しました",
+      "invalidResponseTitle": "モデル応答の形式エラー",
       "unknownTitle": "モデルプロバイダーへのリクエストに失敗しました",
       "bodyWithAttempt": "{{attempts}} 回試行して停止しました。後でもう一度試すか、別のモデルを選んでください。",
       "body": "後でもう一度試すか、別のモデルを選んでください。",

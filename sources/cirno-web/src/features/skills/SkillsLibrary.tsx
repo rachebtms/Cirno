@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillSummary } from "@/lib/contracts/skills";
 import { useClient } from "@/providers/ClientProvider";
+import type { SkillInjectionSettings } from "./model/injection";
 import { SkillHistory } from "./SkillHistory";
 import { SkillsMarketplace } from "./SkillsMarketplace";
 import { InstalledSkills } from "./ui/InstalledSkills";
@@ -12,10 +13,12 @@ export function SkillsLibrary({
   skills,
   loading = false,
   error = false,
+  injection,
 }: {
   skills: SkillSummary[];
   loading?: boolean;
   error?: boolean;
+  injection?: SkillInjectionSettings;
 }) {
   const { t } = useTranslation(),
     { client } = useClient();
@@ -50,6 +53,7 @@ export function SkillsLibrary({
         <SkillDetailDialog
           key={`${selected.skill.source}:${selected.skill.name}`}
           skill={selected.skill}
+          injection={injection}
           onClose={() => setSelected(null)}
         />
       )}

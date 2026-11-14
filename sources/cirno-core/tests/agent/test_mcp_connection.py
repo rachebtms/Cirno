@@ -582,6 +582,7 @@ async def test_mcp_tool_reconnects_after_session_terminated(
             tool_def = SimpleNamespace(
                 name="quote",
                 description="quote tool",
+                annotations=mcp_types.ToolAnnotations(readOnlyHint=True),
                 inputSchema={"type": "object", "properties": {}},
             )
             registry.register(MCPToolWrapper(session, name, tool_def, tool_timeout=5))
@@ -638,6 +639,7 @@ async def test_mcp_reconnect_handler_uses_sanitized_server_prefix(
             tool_def = SimpleNamespace(
                 name="quote",
                 description="quote tool",
+                annotations=mcp_types.ToolAnnotations(readOnlyHint=True),
                 inputSchema={"type": "object", "properties": {}},
             )
             registry.register(MCPToolWrapper(_FakeSession(connect_count), name, tool_def))
@@ -758,6 +760,7 @@ async def test_shared_proxy_snapshot_survives_reconnect_and_reloads_only_opted_i
             sessions[name] = Session()
             registry.register(MCPToolWrapper(sessions[name], name, SimpleNamespace(
                 name="echo", description="echo", inputSchema={"type": "object"},
+                annotations=mcp_types.ToolAnnotations(readOnlyHint=True),
             )))
             stack = AsyncExitStack()
             await stack.__aenter__()

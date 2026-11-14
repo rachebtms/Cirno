@@ -43,6 +43,20 @@ async def test_maintenance_rejects_continue_before_changing_recovery_state(recov
     assert bus.outbound.empty()
 
 
+async def test_continue_reactivates_goal_without_stale_failure_recap(recovery):
+    owner, sessions, bus, payload = recovery
+    await sessions.state.update_metadata("websocket:worker", {"goal_state": {
+        "goal_id": "research", "status": "blocked", "objective": "Review papers",
+        "recap": "Execution stopped: error", "ended_at": "2026-01-01T00:00:00Z",
+    }})
+    state = await owner.handle_action("continue", payload)
+    metadata = (await sessions.state.read_metadata("websocket:worker"))["metadata"]
+    assert metadata["goal_state"]["status"] == "active"
+    assert "recap" not in metadata["goal_state"] and "ended_at" not in metadata["goal_state"]
+    assert state["status"] == "resuming" and state["attempts"] == 1
+    assert bus.inbound_size == 1
+
+
 async def test_cancelled_control_finishes_queue_handoff_before_returning(recovery, monkeypatch):
     owner, sessions, bus, payload = recovery
     entered = asyncio.Event()
@@ -149,6 +163,8 @@ async def test_continue_reactivates_saved_goal_without_losing_progress_or_budget
     metadata = (await sessions.state.read_metadata("websocket:worker"))["metadata"]
     expected = {key: value for key, value in saved_goal.items() if key != "wake_at"}
     expected["status"] = "active"
+    expected["resumed_at"] = metadata["goal_state"]["resumed_at"]
+    assert datetime.fromisoformat(expected["resumed_at"]).tzinfo is not None
     assert metadata["goal_state"] == expected
     assert metadata["_sustained_goal_continuation_rounds"] == 4
     assert bus.inbound_size == 1

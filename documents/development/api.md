@@ -1,7 +1,7 @@
 # API versions
 
 All Cirno service endpoints use a major-version prefix. The current prefix is
-`/v0/`. Cirno 0.2.16 still uses `/v0/`; a minor or patch release does not change
+`/v0/`. Cirno 0.2.17 still uses `/v0/`; a minor or patch release does not change
 that prefix. A future Cirno 1.x API will use `/v1/`.
 
 The v0 contract may change between releases. Update clients together with the
@@ -102,4 +102,4 @@ and supported installation hints. Invalid runtime declarations return
 they are not represented as a successful empty requirements list. Filesystem
 read failures remain request errors.
 
-Runtime settings also expose `agents.defaults.always_skills` (Skill names), `agents.defaults.memory.context_files` (Home-relative paths under `memory/`) and `agents.defaults.memory.context_files_tokens` (256–16000). These fields update through `settings.runtime_config.update` without requiring a restart. Availability and enabled flags remain independent of fixed selection.
+Runtime settings also expose `agents.defaults.always_skills` (Skill names), `agents.defaults.memory.context_files` (Home-relative paths under `memory/`) and `agents.defaults.memory.context_files_tokens` (256–32768). The separate shared-memory budget, `agents.defaults.memory.context_tokens`, also accepts 256–32768 tokens. These fields update through `settings.runtime_config.update` without requiring a restart. Availability and enabled flags remain independent of fixed selection.

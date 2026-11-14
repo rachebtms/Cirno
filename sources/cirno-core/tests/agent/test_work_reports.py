@@ -96,6 +96,49 @@ async def test_ready_retains_artifacts_but_only_goal_tool_finishes_goal(setup):
     assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]["report_delivered"]
 
 
+async def test_reviewable_result_can_carry_a_decision_question_without_completing_goal(setup):
+    _, manager, bus = setup
+    with worker_context():
+        tool = ReportWorkTool(manager, bus)
+        result = await tool.execute(state="ready", summary="Two validated options are ready",
+                                    artifacts=["/tmp/comparison.md"], human_action="Which option should proceed?")
+        assert json.loads(result)["delivery_status"] == "queued"
+        incoming = await bus.consume_inbound()
+        assert incoming.metadata["_work_report"]["state"] == "ready"
+        assert incoming.metadata["_work_report"]["human_action"] == "Which option should proceed?"
+        await tool.execute(state="ready", summary="Additional verification complete")
+        current = (await manager.state.read_metadata("websocket:worker"))["metadata"]
+        assert current["work_report"]["human_action"] == "Which option should proceed?"
+        assert current["goal_state"]["status"] == "active"
+        await tool.execute(state="ready", summary="Owner chose option A", human_action="")
+        assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report"]["human_action"] is None
+
+
+async def test_scheduler_waits_for_running_turn_to_publish_its_detailed_failure(setup):
+    from cirno_core.agent.work_reports import record_execution_report
+    _, manager, bus = setup
+    goal = (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]
+    await manager.state.update_metadata("websocket:worker", {"goal_state": {
+        **goal, "status": "blocked", "recap": "Execution stopped: error",
+    }})
+    registry = ToolRegistry()
+    registry.register(SendSessionMessageTool(sessions=manager, bus=bus))
+    loop = SimpleNamespace(sessions=manager, tools=registry, _pending_queues={"websocket:worker": object()},
+                           _discarding_sessions=set(), goal_continuation_limit=0)
+    await wake_due_goals(loop)
+    assert bus.inbound_size == 0
+    assert "work_report" not in (await manager.state.read_metadata("websocket:worker"))["metadata"]
+    failure = await record_execution_report(manager, "websocket:worker", turn_id="failed-turn",
+                                            stop_reason="error", failure_error_kind="invalid_response")
+    loop._pending_queues.clear()
+    await wake_due_goals(loop)
+    message = await bus.consume_inbound()
+    assert message.metadata["_work_report"]["id"] == failure["id"]
+    assert message.metadata["_work_report"]["state"] == "failed"
+    await wake_due_goals(loop)
+    assert bus.inbound_size == 0
+
+
 async def test_failed_delivery_is_visible_and_retried_with_same_report_id(setup):
     _, manager, bus = setup
     report = await save_work_report(manager, "websocket:worker", state="failed", summary="Provider unavailable")

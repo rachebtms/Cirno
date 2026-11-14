@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import math
 import os
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -32,6 +33,7 @@ from cirno_core.providers.endpoints import (
     uses_opencode_affinity,
     uses_openrouter_attribution,
 )
+from cirno_core.providers.errors import is_transient_response
 from cirno_core.providers.images import prepare_inline_images
 from cirno_core.providers.messages import (
     sanitize_empty_content,
@@ -730,6 +732,17 @@ class OpenAICompatProvider(LLMProvider):
                         )
                     except StopAsyncIteration:
                         break
+                    except Exception as stream_error:
+                        # Chat Completions sends usage after finish_reason.
+                        # Losing that optional trailer must not discard an
+                        # already completed answer or repeat completed calls.
+                        if not accumulator.completed or not is_transient_response(error_response(stream_error)):
+                            raise
+                        logger.warning(
+                            "Model stream transport failed after finish_reason; retaining completed response ({})",
+                            type(stream_error).__name__,
+                        )
+                        break
                     delta = accumulator.consume(chunk)
                     if delta.content and on_content_delta:
                         await on_content_delta(delta.content)
@@ -738,13 +751,25 @@ class OpenAICompatProvider(LLMProvider):
                     if on_tool_call_delta:
                         for call in delta.tool_calls:
                             await on_tool_call_delta(call)
+                    if accumulator.completed and accumulator.usage_received:
+                        break
                 if not accumulator.completed:
                     raise ConnectionError("Model stream ended before a finish reason was received")
                 return accumulator.response()
             finally:
+                pending_error = sys.exception()
                 close = getattr(chat_stream, "close", None) or getattr(chat_stream, "aclose", None)
                 if close is not None:
-                    await shield_and_drain(close())
+                    try:
+                        await shield_and_drain(close())
+                    except Exception as close_error:
+                        if pending_error is None and not accumulator.completed:
+                            raise
+                        logger.warning(
+                            "Model HTTP stream cleanup failed; retaining {} ({})",
+                            "original error" if pending_error is not None else "completed response",
+                            type(close_error).__name__,
+                        )
         except asyncio.TimeoutError:
             return LLMResponse(
                 content=(

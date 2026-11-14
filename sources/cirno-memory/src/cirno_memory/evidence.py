@@ -32,10 +32,15 @@ def write_evidence(
     messages: Iterable[Mapping[str, Any]],
     *,
     preserve_system: bool,
+    project_id: str | None = None,
 ) -> EvidenceFile:
     directory.mkdir(parents=True, exist_ok=True)
     temporary = directory / (uuid4().hex + ".tmp")
     digest = hashlib.sha256(session_key.encode())
+    if project_id is not None:
+        # Identical transcripts in a moved conversation belong to distinct
+        # visibility scopes. Session-only IDs retain their existing format.
+        digest.update(b"\0" + json.dumps(["project", project_id], ensure_ascii=False).encode())
     recent: deque[str] = deque(maxlen=8)
     count = 0
     try:

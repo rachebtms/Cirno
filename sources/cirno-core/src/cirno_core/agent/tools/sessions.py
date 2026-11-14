@@ -33,8 +33,8 @@ def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     return {"session_mentions": mentions} if isinstance(mentions, list) and mentions else {}
 
 
-def _excerpt(text: str, needle: str, limit: int) -> str:
-    compact = " ".join(text.split())
+def _excerpt(text: str, needle: str, limit: int, *, compact_whitespace: bool = True) -> str:
+    compact = " ".join(text.split()) if compact_whitespace else text
     if len(compact) <= limit:
         return compact
     index = compact.casefold().find(needle)
@@ -212,7 +212,7 @@ class ReadSessionTool(_SessionTool):
             "updated_at": match["updated_at"],
             "query": query_text or None,
             "messages": [
-                {**message, "content": _excerpt(message["content"], needle, _READ_MESSAGE_CHARS)}
+                {**message, "content": _excerpt(message["content"], needle, _READ_MESSAGE_CHARS, compact_whitespace=False)}
                 for message in match["messages"]
             ],
         }

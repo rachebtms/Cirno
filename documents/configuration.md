@@ -44,6 +44,10 @@ Replace the endpoint and model with values accepted by your provider. Set refere
 
 Settings → Network & retries exposes request timeout, stream idle timeout and retry count. The configured defaults are 120 seconds for both timeouts and three retries. Proxy settings determine whether a provider uses the configured shared proxy. Restart the server to apply service-level settings when requested by the interface.
 
+Model failures distinguish server HTTP errors, connection failures, timeouts and invalid model responses. Chat Completions tool streams use call IDs to keep arguments separate, including compatible gateways that reuse a wire index. A reused index without enough identity information to distinguish unfinished calls is rejected before tools execute. Invalid responses and empty choices use the configured serial retry policy; no extra parallel request is started and completed tools are not replayed. Request messages and their stable cache prefix remain unchanged during these retries.
+
+A received finish reason completes the Chat Completions answer. Cirno still collects the following usage packet, including cache-hit counts, but a transport failure in that optional tail or an HTTP stream cleanup error does not replace the completed answer with a model failure. Failures before the finish reason remain errors. If retries exhaust, saved history can contain `[Assistant reply unavailable due to model error.]`; this marks an unsuccessful model request, not a successful reply removed by the framework. Server logs record the provider, model, error category and available HTTP status for failed physical requests even without an open Trace tab. Trace error responses also retain structured error metadata.
+
 ## Settings pages
 
 Overview shows model and web-search status, plus shortcuts to Memory library, Context consolidation, Goals & execution, Personality, Telegram, Nodes, MCP and Tools & CLI Apps.
@@ -59,7 +63,7 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Time & region: automatic or manually selected timezone.
 - Goals & execution: default workspace, continuation and execution limits.
 - AI approvals: independent review model, review timeout and the switch for automatic review.
-- Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management. Skills includes **Always injected Skills**, followed by Installed, Discover and Validation & history. Marketplace and trend failures remain visible alongside usable results.
+- Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management. Skills includes Installed, Discover and Validation & history; each installed Skill's details contain its **Always inject** switch. Marketplace and trend failures remain visible alongside usable results.
 - Web search and MCP: search services and external tool connections.
 - Nodes: enroll SSH credentials from Credentials, test connections, execute remote commands and manage persistent jobs. SSH authentication and Agent visibility are edited in Credentials.
 - Telegram: personal account binding and server-side notification preferences. Channel setup configures the Telegram bot token and Web transport.
@@ -108,13 +112,13 @@ Settings → Memory library exposes the shared-memory injection budget and index
 
 ## Fixed Skills and memory files
 
-Settings → Skills → **Always injected Skills** selects installed Skills whose complete instructions enter every Router and Worker system prompt, including transient Worker subagents. Availability and the saved enabled switch still apply: selecting a disabled Skill or one with missing requirements does not enable it. Skills declaring `metadata.cirno.always: true` remain automatically included. Their checked entries show the author declaration; edit that declaration to change it. Missing selections stay visible and can be removed. This selection is shared across conversations; internal consolidation and other maintenance do not receive owner-selected Skills.
+Settings → Skills → Installed → open a Skill's details → **Always inject** includes its complete instructions in Router and Worker system prompts, including transient Worker subagents. The switch saves automatically and applies on subsequent turns. Existing selections are retained. Availability and the separate **Use skill** switch still apply: fixed injection does not enable a disabled Skill or install missing requirements. A selected but unavailable Skill can be unselected in its details. Skills declaring `metadata.cirno.always: true` remain automatically included when enabled and available; the injection switch then shows the author declaration and cannot override it. This selection is shared across conversations; internal consolidation and other maintenance do not receive owner-selected Skills.
 
 Settings → Memory library → **Fixed memory files** selects additional UTF-8 text files under Agent Home's `memory/`, for example `memory/workspace/STANDARDS.md`, one relative path per line. `memory/MEMORY.md` already has its own injection and is not added twice. **Fixed memory files budget** controls the combined extra excerpt budget, independently of the MEMORY.md budget, and divides it among selected files. A selected missing, unreadable or escaping symlink produces an explicit error; correct the setting or restore the file. Only select files you want shared with all Router and Worker conversations.
 
 These fields save automatically and apply to the next fresh conversation input without a restart. Unchanged selected Skills have deterministic ordering. Memory snapshots enter fresh input only when contents or selections change; existing messages and the system prefix remain intact. Long files are excerpted within the configured budget; the Agent can read their full contents through file tools. Editing Skill selections intentionally changes the system prefix on the next turn.
 
-The configuration keys are `agents.defaults.always_skills`, `agents.defaults.memory.context_files` and `agents.defaults.memory.context_files_tokens`.
+The configuration keys are `agents.defaults.always_skills`, `agents.defaults.memory.context_files` and `agents.defaults.memory.context_files_tokens`. Both the shared-memory budget (`agents.defaults.memory.context_tokens`) and the fixed memory files budget accept 256–32768 tokens; each defaults to 2000.
 
 ## Context consolidation
 
@@ -228,4 +232,4 @@ preserve the current name.
 
 Trace’s download action saves a snapshot of the whole recording as ZIP, including events outside the current page and filters, API input messages, tool definitions and responses. Recording continues during export. The archive contains a manifest, event/request JSONL indexes and content-addressed JSON blobs, so repeated long-context prefixes are stored once. The inspector’s copy action copies the JSON currently displayed in its selected tab; load more messages first when copying a paged message list. Clearing or closing a recording does not delete a downloaded archive.
 
-Context consolidation exposes `max_retries` (JSON alias `maxRetries`) in Settings, with default 1 and range 0–10. This is the number of additional serial generation attempts; 0 means one attempt only. It does not control provider-level network retries. Optional learning failures retain their plans and original batches, display incomplete updates and do not veto task-checkpoint persistence. Use `/consolidate retry [source-id]` for explicit recovery.
+Context consolidation exposes `max_retries` (JSON alias `maxRetries`) in Settings, with default 1 and range 0–10. This is the shared number of additional serial generation attempts, including invalid learning JSON/schema and unwanted tool-call recovery; 0 means one attempt only. It does not control provider-level network retries. Optional learning failures retain their plans and original batches, display incomplete updates and do not veto task-checkpoint persistence. Use `/consolidate retry [source-id]` for explicit recovery, including regeneration of malformed output. Memory's save-retry action replays stored results without making an API request.

@@ -9,42 +9,67 @@ interface DeferredActivityDetails {
   load?: (refs: string[]) => void | Promise<void>;
 }
 
+interface DetailScope {
+  scope: string | null;
+  attempted: Set<string>;
+  pending: Set<string>;
+}
+
+interface FailedDetails {
+  owner: DetailScope;
+  refs: Set<string>;
+}
+
 /** Immutable trace references are fetched once per scope; failures need an explicit retry. */
 export function useDeferredActivityDetails({ messages, scope, expanded, load }: DeferredActivityDetails) {
   const encodedRefs = JSON.stringify(Array.from(new Set(messages.flatMap((message) =>
     message.traceDetail?.ref ? [message.traceDetail.ref] : [],
   ))));
   const refs = useMemo(() => JSON.parse(encodedRefs) as string[], [encodedRefs]);
-  const key = JSON.stringify([scope, refs]);
-  const currentKey = useRef(key);
-  currentKey.current = key;
-  const attempted = useRef<string | null>(null);
-  const pending = useRef(new Set<string>());
+  const scopeRef = useRef<DetailScope>({ scope, attempted: new Set(), pending: new Set() });
+  if (scopeRef.current.scope !== scope) {
+    scopeRef.current = { scope, attempted: new Set(), pending: new Set() };
+  }
+  const owner = scopeRef.current;
   const mounted = useRef(true);
-  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [failure, setFailure] = useState<FailedDetails | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
 
-  const retry = useCallback(async () => {
-    if (!load || !refs.length || pending.current.has(key)) return;
-    attempted.current = key;
-    pending.current.add(key);
-    setFailedKey(null);
-    try {
-      await load(refs);
-    } catch {
-      if (mounted.current && currentKey.current === key) setFailedKey(key);
-    } finally {
-      pending.current.delete(key);
+  const request = useCallback(async (selected: string[]) => {
+    const wanted = selected.filter(ref => !owner.pending.has(ref));
+    if (!load || !wanted.length || scopeRef.current !== owner) return;
+    for (const ref of wanted) {
+      owner.attempted.add(ref);
+      owner.pending.add(ref);
     }
-  }, [key, load, refs]);
+    const requested = new Set(wanted);
+    setFailure(current => {
+      if (current?.owner !== owner) return current;
+      const remaining = new Set([...current.refs].filter(ref => !requested.has(ref)));
+      return remaining.size ? { owner, refs: remaining } : null;
+    });
+    try {
+      await load(wanted);
+    } catch {
+      if (mounted.current && scopeRef.current === owner) {
+        setFailure(current => ({ owner, refs: new Set([
+          ...(current?.owner === owner ? current.refs : []), ...wanted,
+        ]) }));
+      }
+    } finally {
+      for (const ref of wanted) owner.pending.delete(ref);
+    }
+  }, [load, owner]);
+
+  const retry = useCallback(() => request(refs), [refs, request]);
 
   useEffect(() => {
-    if (expanded && attempted.current !== key) void retry();
-  }, [expanded, key, retry]);
+    if (expanded) void request(refs.filter(ref => !owner.attempted.has(ref)));
+  }, [expanded, owner, refs, request]);
 
-  return { failed: failedKey === key, retry };
+  return { failed: failure?.owner === owner && refs.some(ref => failure.refs.has(ref)), retry };
 }

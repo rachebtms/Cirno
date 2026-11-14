@@ -1696,6 +1696,8 @@
       "marketplaceResultsFor": "Kết quả cho “{{query}}”",
       "retryTrends": "Thử lại xu hướng",
       "historyTab": "Xác thực và lịch sử",
+      "fixedControl": "Luôn đưa vào",
+      "fixedDescription": "Đưa Skill này vào ngữ cảnh Router và Worker ở các lượt tiếp theo. Skill bị tắt hoặc thiếu phụ thuộc sẽ không được đưa vào.",
       "fixedUnavailable": "Đã tắt, không khả dụng hoặc đã gỡ",
       "fixedDeclared": "Skill này đã khai báo tự động đưa vào"
     },
@@ -2695,6 +2697,7 @@
       "timeoutTitle": "Yêu cầu tới nhà cung cấp mô hình đã hết thời gian chờ",
       "rateLimitTitle": "Đã đạt giới hạn yêu cầu của nhà cung cấp mô hình",
       "serverTitle": "Lỗi dịch vụ nhà cung cấp mô hình",
+      "invalidResponseTitle": "Phản hồi mô hình không hợp lệ",
       "unknownTitle": "Yêu cầu tới nhà cung cấp mô hình không thành công",
       "bodyWithAttempt": "Đã dừng sau {{attempts}} lần thử. Hãy thử lại sau hoặc chọn mô hình khác.",
       "body": "Hãy thử lại sau hoặc chọn mô hình khác.",

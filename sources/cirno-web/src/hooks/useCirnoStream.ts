@@ -530,6 +530,11 @@ export function useCirnoStream(
         return;
       }
       if (ev.event === "user_message") {
+        if (ev.provenance?.input_origin) {
+          flushPendingStreamEvents();
+          applyProjectionEvent(ev);
+          return;
+        }
         if (ev.provenance?.session_message) {
           flushPendingStreamEvents();
           closeActiveAssistantStream();

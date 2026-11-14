@@ -1,6 +1,5 @@
 """Maintain the persistent Agent environment without changing service packages."""
 
-import subprocess
 from importlib.resources import files
 from pathlib import Path
 
@@ -16,9 +15,9 @@ def initialize(context: Context) -> None:
         context.run(venv_command(context.service_python, environment))
     # Remove only the prototype's path injection. Standard packages installed
     # in this virtual environment stay owned by uv and retain their entrypoints.
-    subprocess.run([str(context.python), "-c",
+    context.run([str(context.python), "-c",
         "import sysconfig; from pathlib import Path; "
-        "(Path(sysconfig.get_path('purelib'))/'cirno-bundled-tools.pth').unlink(missing_ok=True)"], check=True)
+        "(Path(sysconfig.get_path('purelib'))/'cirno-bundled-tools.pth').unlink(missing_ok=True)"])
     if context.inspect([str(context.python), "-c", "import pip"]).returncode:
         wheels = Path("/usr/share/python-wheels")
         if not wheels.is_dir():

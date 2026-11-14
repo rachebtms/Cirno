@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from cirno_usage.types import LLMUsage
 from cirno_core.providers.contracts import LLMCallObserver, LLMResponse
+from cirno_core.providers.errors import public_error_kind
 from cirno_core.utils.cancellation import shield_and_drain
 from loguru import logger
 
@@ -78,6 +79,14 @@ class ProviderUsageRecorder:
         started_at_ns: int,
         stream: bool,
     ) -> LLMResponse:
+        if response.finish_reason == "error":
+            logger.warning(
+                "Model request failed: provider={} model={} kind={} http_status={}",
+                self.provider.provider_name,
+                kwargs.get("model") or self.provider.get_default_model(),
+                public_error_kind(response),
+                response.error_status_code,
+            )
         observer = self.observer
         if observer is None:
             return response

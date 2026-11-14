@@ -49,6 +49,7 @@ def recovery_state_from_metadata(metadata: Mapping[str, Any] | None) -> dict[str
         "timeout",
         "rate_limit",
         "server",
+        "invalid_response",
         "unknown",
     }:
         payload["failure_error_kind"] = failure_error_kind

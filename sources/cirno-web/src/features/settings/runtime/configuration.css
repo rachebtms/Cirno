@@ -12,6 +12,3 @@
 .configuration-help { margin-bottom: 1rem; }
 .configuration-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
 @container cirno-tab (max-width: 480px) { .configuration-columns { grid-template-columns: minmax(0,1fr); } }
-
-.fixed-skills { display: grid; gap: 0.75rem; }
-.fixed-skills-list { display: grid; gap: 0.65rem; max-height: 18rem; overflow: auto; padding: 0.35rem; }

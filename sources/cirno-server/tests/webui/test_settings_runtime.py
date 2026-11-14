@@ -326,3 +326,16 @@ def test_fixed_context_settings_are_saved_without_requiring_restart(tmp_path):
     assert config.agents.defaults.always_skills == ['paper-review']
     assert config.agents.defaults.memory.context_files == ['memory/research.md']
     assert config.agents.defaults.memory.context_files_tokens == 3072
+
+
+@pytest.mark.parametrize("field", ["context_tokens", "context_files_tokens"])
+def test_memory_injection_budget_limit_roundtrip(tmp_path, field):
+    path = tmp_path / "config.json"
+    save_config(Config(), path)
+    key = f"agents.defaults.memory.{field}"
+    payload = update_runtime_config_settings({key: 32768}, config_path=path)
+    assert payload["runtime_config"][key] == 32768
+    assert getattr(load_config(path).agents.defaults.memory, field) == 32768
+    with pytest.raises(WebUISettingsError):
+        update_runtime_config_settings({key: 32769}, config_path=path)
+    assert getattr(load_config(path).agents.defaults.memory, field) == 32768

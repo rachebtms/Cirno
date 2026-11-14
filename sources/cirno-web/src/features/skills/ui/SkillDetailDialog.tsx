@@ -7,13 +7,16 @@ import { InlineError } from "@/ui/feedback/InlineError";
 import { SkeletonStatus } from "@/ui/feedback/SkeletonStatus";
 import { ToggleField } from "@/ui/fields/ToggleField";
 import { skillSourceLabel, skillStatus } from "../model/presentation";
+import type { SkillInjectionSettings } from "../model/injection";
 import { useSkillService } from "../model/service";
 import { useSkillDetail } from "../model/useSkillDetail";
 import { SkillActionDialog } from "./SkillActionDialog";
 import { SkillDescription } from "./SkillDescription";
 import { SkillRequirements } from "./SkillRequirements";
 
-export function SkillDetailDialog({ skill, onClose }: { skill: SkillSummary; onClose: () => void }) {
+export function SkillDetailDialog({ skill, onClose, injection }: {
+  skill: SkillSummary; onClose: () => void; injection?: SkillInjectionSettings;
+}) {
   const { t } = useTranslation(),
     service = useSkillService();
   const state = useSkillDetail(service, skill, onClose),
@@ -21,15 +24,18 @@ export function SkillDetailDialog({ skill, onClose }: { skill: SkillSummary; onC
   const detail = read.value,
     active = detail ?? skill,
     status = skillStatus(active, t),
-    busy = mutation.busy || read.loading;
+    saving = mutation.busy || injection?.saving === true,
+    busy = saving || read.loading,
+    selected = injection?.names.includes(active.name) ?? false,
+    declared = active.always && active.available && active.enabled !== false;
   return (
     <>
       <Modal.Backdrop
         isOpen
-        isDismissable={!mutation.busy}
-        isKeyboardDismissDisabled={mutation.busy}
+        isDismissable={!saving}
+        isKeyboardDismissDisabled={saving}
         onOpenChange={(open) => {
-          if (!open && !mutation.busy) onClose();
+          if (!open && !saving) onClose();
         }}
       >
         <Modal.Container size="lg">
@@ -50,7 +56,7 @@ export function SkillDetailDialog({ skill, onClose }: { skill: SkillSummary; onC
                   <RefreshCw size={16} />
                 </Button>
               </div>
-              <Modal.CloseTrigger isDisabled={mutation.busy} />
+              <Modal.CloseTrigger isDisabled={saving} />
               <p className="skill-detail-meta">
                 {skillSourceLabel(active.source, t)} · <status.Icon size={14} />
                 {status.label}
@@ -77,6 +83,16 @@ export function SkillDetailDialog({ skill, onClose }: { skill: SkillSummary; onC
                       void state.toggle();
                     }}
                   />
+                  {injection && <ToggleField
+                    label={t("settings.skills.fixedControl")}
+                    description={<span className="skill-injection-description">
+                      <span>{t("settings.skills.fixedDescription")}</span>
+                      {declared && <span>{t("settings.skills.fixedDeclared")}</span>}
+                    </span>}
+                    selected={selected || !!declared}
+                    disabled={busy || !!declared || (!active.available || active.enabled === false) && !selected}
+                    onChange={next => injection.setSelected(active.name, next)}
+                  />}
                   {detail.enabled !== false && (
                     <SkillRequirements
                       detail={detail}
@@ -116,16 +132,17 @@ export function SkillDetailDialog({ skill, onClose }: { skill: SkillSummary; onC
                 </>
               )}
             </Modal.Body>
-            {(read.error || (mutation.error && !state.deleting)) && (
+            {(read.error || injection?.error || (mutation.error && !state.deleting)) && (
               <Modal.Footer className="skill-action-footer">
-                <InlineError message={read.error ?? mutation.error} />
-                {read.error && (
+                <InlineError message={read.error || injection?.error || mutation.error} />
+                {(read.error || injection?.error) && (
                   <Button
                     variant="secondary"
                     size="sm"
                     isDisabled={busy}
                     onPress={() => {
-                      void state.refresh();
+                      if (read.error) void state.refresh();
+                      else injection?.retry();
                     }}
                   >
                     <RefreshCw size={15} />

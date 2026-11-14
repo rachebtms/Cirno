@@ -29,12 +29,14 @@ export function FoldedAgentActivity({
   hasBodyBelow,
   turnLatencyMs,
   startedAtMs,
+  elapsedBeforeActiveMs = 0,
   retryStatus = null,
   cliApps = EMPTY_CLI_APPS,
   mcpPresets = EMPTY_MCP_PRESETS,
   traceDetailScope = null,
   onLoadTraceDetails,
   onOpenFilePreview,
+  afterInputMessage,
   defaultCollapsed = false,
   expanded,
   onExpandedChange,
@@ -92,9 +94,10 @@ export function FoldedAgentActivity({
     messages, scope: traceDetailScope, expanded: outerExpanded, load: onLoadTraceDetails,
   });
 
-  const hasVisibleActivity = reasoningSteps > 0 || toolCalls > 0 || modelSegments > 0 || cliCount > 0 || mcpCount > 0 || fileCount > 0;
+  const hasVisibleActivity = reasoningSteps > 0 || toolCalls > 0 || modelSegments > 0 || cliCount > 0 || mcpCount > 0 || fileCount > 0
+    || activityMessages.some(message => !!message.inputOrigin);
   const hasOnlyFileActivity = fileCount > 0 && activityMessages.every(messageHasOnlyFileActivity);
-  const durationMs = activityDurationMs(
+  const durationMs = (isTurnStreaming ? elapsedBeforeActiveMs : 0) + activityDurationMs(
     activityMessages,
     isTurnStreaming,
     now,
@@ -214,6 +217,7 @@ export function FoldedAgentActivity({
         ) : null}
         <ActivityMessageTimeline
           messages={activityMessages}
+          afterInputMessage={afterInputMessage}
           active={isTurnStreaming}
           cliAppsByName={cliAppsByName}
           mcpPresetsByName={mcpPresetsByName}

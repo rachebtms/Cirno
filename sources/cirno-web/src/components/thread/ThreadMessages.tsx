@@ -6,6 +6,7 @@ import { AgentActivityCluster } from "@/components/thread/AgentActivityCluster";
 import { AssistantSelectionAction } from "@/components/thread/AssistantSelectionAction";
 import { usePreferences } from "@/hooks/usePreferences";
 import { projectActivityTimeline, type TurnUnit } from "@/lib/activity-timeline";
+import { groupRouterActivity } from "@/lib/router-activity-timeline";
 import { cn } from "@/lib/utils";
 import type { CliAppInfo } from "@/lib/contracts/apps";
 import type { McpPresetInfo } from "@/lib/contracts/mcp";
@@ -21,6 +22,7 @@ interface ThreadMessagesProps {
   messageEditor?: MessageEditorSlot;
   defaultActivityCollapsed?: boolean;
   assistantBubbles?: boolean;
+  activityGrouping?: "turn" | "conversation";
   messages: UIMessage[];
   beforeMessages?: ReactNode;
   beforeUnit?: { key: string; content: ReactNode };
@@ -85,6 +87,7 @@ export function ThreadMessages({
   messageEditor,
   defaultActivityCollapsed = false,
   assistantBubbles = false,
+  activityGrouping = "turn",
   messages,
   beforeMessages,
   beforeUnit,
@@ -113,10 +116,13 @@ export function ThreadMessages({
   const { activityMode } = usePreferences();
   const messageListRef = useRef<HTMLDivElement>(null);
   const units = useMemo(
-    () => buildDisplayUnits(defaultActivityCollapsed ? messages : messages.map(message =>
-      message.activityKind === "model" && message.content.trim()
-        ? { ...message, activityKind: undefined, turnPhase: "answer" as const } : message), assistantBubbles),
-    [assistantBubbles, defaultActivityCollapsed, messages],
+    () => {
+      const projected = buildDisplayUnits(defaultActivityCollapsed ? messages : messages.map(message =>
+        message.activityKind === "model" && message.content.trim()
+          ? { ...message, activityKind: undefined, turnPhase: "answer" as const } : message), assistantBubbles);
+      return activityGrouping === "conversation" ? groupRouterActivity(projected) : projected;
+    },
+    [activityGrouping, assistantBubbles, defaultActivityCollapsed, messages],
   );
   const forkBoundaryAfterUnitIndex = useMemo(
     () => unitIndexAfterMessageCount(units, forkBoundaryMessageCount),
@@ -232,6 +238,7 @@ export function ThreadMessages({
           unit.type === "message"
           && isModelInput(unit.message)
         ) nextUserIndex += 1;
+        if (unit.type === "activity") nextUserIndex += unit.messages.filter(isModelInput).length;
 
         const prefix = beforeUnit?.key === unitKeys[index] ? beforeUnit.content : null;
         const prelude = index === preludeIndex ? renderPrelude(prefix, marginTop) : null;
@@ -273,6 +280,7 @@ export function ThreadMessages({
             editor={unit.type === "message" && unit.message.id === messageEditor?.messageId ? messageEditor.content : undefined}
             onEditMessage={isStreaming ? undefined : onEditMessage}
             onActivityExpandedChange={setActivityExpanded}
+            afterInputMessage={afterUserMessage}
           />
           {unit.type === "message" && unit.message.role === "user" ? (
             afterUserMessage?.(unit.message)
@@ -345,6 +353,7 @@ function pendingTurnProjection(
 }
 
 interface ThreadDisplayUnitProps {
+  afterInputMessage?: (message: UIMessage) => ReactNode;
   editor?: ReactNode;
   unitKey: string;
   unit: DisplayUnit;
@@ -406,6 +415,7 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
   onForkFromMessage,
   onEditMessage,
   onActivityExpandedChange,
+  afterInputMessage,
 }: ThreadDisplayUnitProps) {
   const elementRef = useRef<HTMLDivElement>(null);
   const activityDetailsId = useId();
@@ -467,6 +477,9 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
         data-message-context-block={contextBlockKey}
         onFocusCapture={() => setInteracted(true)}
       >
+        {unit.type === "activity" ? unit.messages.filter(message => message.role === "user").map(message => (
+          <span key={message.id} data-user-prompt-id={message.id} aria-hidden className="pointer-events-none absolute top-0 h-0 w-0" />
+        )) : null}
         {retainContent ? unit.type === "activity" ? (
           suppressActivity ? null : (
             <AgentActivityCluster
@@ -477,6 +490,8 @@ const ThreadDisplayUnit = memo(function ThreadDisplayUnit({
               hasBodyBelow={hasBodyBelow}
               turnLatencyMs={unit.turnLatencyMs}
               startedAtMs={unit.startedAtMs}
+              elapsedBeforeActiveMs={unit.elapsedBeforeActiveMs}
+              afterInputMessage={afterInputMessage}
               cliApps={cliApps}
               mcpPresets={mcpPresets}
               traceDetailScope={traceDetailScope}
@@ -532,6 +547,7 @@ function threadDisplayUnitPropsEqual(
 ): boolean {
   return (
     previous.editor === next.editor
+    && previous.afterInputMessage === next.afterInputMessage
     && displayUnitsEqual(previous.unit, next.unit)
     && previous.marginTop === next.marginTop
     && previous.userPromptId === next.userPromptId
@@ -596,6 +612,7 @@ function displayUnitsEqual(previous: DisplayUnit, next: DisplayUnit): boolean {
     previous.sourceMessageCount === next.sourceMessageCount
     && previous.turnLatencyMs === next.turnLatencyMs
     && previous.startedAtMs === next.startedAtMs
+    && previous.elapsedBeforeActiveMs === next.elapsedBeforeActiveMs
     && previous.messages.length === next.messages.length
     && previous.messages.every((message, index) =>
       shallowMessageEqual(message, next.messages[index]))

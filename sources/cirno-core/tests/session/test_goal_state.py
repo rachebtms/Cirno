@@ -11,8 +11,24 @@ from cirno_core.session.goal_state import (
     goal_state_runtime_lines,
     goal_state_ws_blob,
     parse_goal_state,
+    resume_goal_state,
     sustained_goal_active,
 )
+
+
+@pytest.mark.parametrize("recap", [
+    "Execution stopped: error", "Execution failed (connection): request interrupted",
+    "Automatic continuation limit reached.", "Verified 170 papers; next: review methods",
+])
+def test_resume_removes_runtime_stop_recap_but_keeps_verified_progress(recap):
+    goal = {"status": "blocked", "objective": "Read papers", "recap": recap,
+            "wake_at": "2030-01-01T00:00:00Z", "ended_at": "2029-01-01T00:00:00Z"}
+    resumed = resume_goal_state(goal)
+    assert resumed["status"] == "active" and resumed["resumed_at"]
+    assert "wake_at" not in resumed and "ended_at" not in resumed
+    assert resumed.get("recap") == (recap if recap.startswith("Verified") else None)
+    assert goal["status"] == "blocked" and goal["recap"] == recap
+    assert resume_goal_state(goal, recap="Resume from the checked artifacts")["recap"] == "Resume from the checked artifacts"
 
 
 def test_runtime_lines_empty_when_no_metadata():

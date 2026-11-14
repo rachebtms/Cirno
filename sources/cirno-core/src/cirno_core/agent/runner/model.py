@@ -266,6 +266,12 @@ class ModelRequests:
                 "reasoning_content": response.reasoning_content,
                 "tool_calls": [call.to_openai_tool_call() for call in response.tool_calls],
                 "finish_reason": response.finish_reason,
+                **({
+                    "error_kind": response.error_kind,
+                    "error_status_code": response.error_status_code,
+                    "error_type": response.error_type,
+                    "error_code": response.error_code,
+                } if response.finish_reason == "error" else {}),
             }, "error" if response.finish_reason == "error" else "completed")
         _pause_generation()
         await _close_native_reasoning()

@@ -11,7 +11,7 @@ describe("model request failure copy", () => {
     expect(copy.body).not.toContain("attempts");
   });
   it("maps every sanitized provider error category to a specific cause", () => {
-    const titles = ["authentication", "billing", "connection", "timeout", "rate_limit", "server", "unknown"].map(
+    const titles = ["authentication", "billing", "connection", "timeout", "rate_limit", "server", "invalid_response", "unknown"].map(
       (errorKind) => resolveModelRequestFailureCopy({ errorKind }, i18n.t).title,
     );
 
@@ -22,6 +22,7 @@ describe("model request failure copy", () => {
       "Model provider request timed out",
       "Model provider rate limit reached",
       "Model provider service error",
+      "Invalid model response",
       "Model provider request failed",
     ]);
   });

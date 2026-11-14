@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 MARKER = "\n## Memory updates\n"
 
@@ -46,8 +46,15 @@ class DocumentEdit(BaseModel):
 
 class InputReview(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    memory_id: str
+    source_id: str | None = Field(default=None, min_length=1, max_length=160)
+    memory_id: str | None = Field(default=None, min_length=1)
     reason: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def one_input(self):
+        if (self.source_id is None) == (self.memory_id is None):
+            raise ValueError("Input review requires exactly one source_id or legacy memory_id")
+        return self
 
 
 class LearningPlan(BaseModel):
@@ -62,16 +69,36 @@ class LearningPlan(BaseModel):
         return len(self.memories) + len(self.documents)
 
 
-def split_result(text: str) -> tuple[str, LearningPlan]:
+def output_sections(text: str) -> tuple[str, str, str]:
+    if text.startswith("## Memory updates\n"):
+        text = "\n" + text
+    return text.partition(MARKER)
+
+
+def split_result(text: str, *, learning_only: bool = False) -> tuple[str, LearningPlan]:
     """No update section means there was no useful durable learning.
 
     Once the model supplies a section it must be valid; malformed plans are
     never repaired, executed as tools, or replayed as task instructions.
     """
-    summary, marker, payload = text.partition(MARKER)
+    summary, marker, payload = output_sections(text)
     if not marker:
+        if learning_only:
+            raise ValueError("Learning retry must return ## Memory updates followed by one JSON object")
         return summary, LearningPlan()
     payload = payload.strip()
     if payload.startswith("```json\n") and payload.endswith("```"):
         payload = payload[8:-3].strip()
     return summary, LearningPlan.model_validate(json.loads(payload))
+
+
+def output_error(error: Exception) -> str:
+    """Show schema locations without dumping user data or Pydantic help URLs."""
+    if isinstance(error, ValidationError):
+        details = "; ".join(
+            f"{'.'.join(map(str, item['loc'])) or 'plan'}: {item['msg']}"
+            for item in error.errors(include_input=False, include_url=False)[:8]
+        )
+    else:
+        details = str(error)
+    return f"{type(error).__name__}: {details}"[:1000]

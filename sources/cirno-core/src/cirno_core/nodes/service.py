@@ -179,8 +179,14 @@ class Nodes:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE,
+            start_new_session=os.name == "posix",
         )
-        out, error = await process.communicate(key.encode())
+        try:
+            async with asyncio.timeout(15):
+                out, error = await process.communicate(key.encode())
+        except BaseException:
+            await kill_and_drain(process, process_group=os.name == "posix")
+            raise
         if process.returncode:
             raise RuntimeError(error.decode(errors="replace"))
         return {"host_key": key, "fingerprints": out.decode()}

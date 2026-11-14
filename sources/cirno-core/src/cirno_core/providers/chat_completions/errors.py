@@ -7,6 +7,7 @@ from cirno_core.providers.errors import (
     extract_error_type_code,
     retry_after_headers,
     retry_after_text,
+    response_from_exception,
 )
 from cirno_core.providers.catalog.contracts import ProviderSpec
 
@@ -38,16 +39,11 @@ def extract_error_metadata(e: Exception) -> dict[str, Any]:
             elif lowered == "false":
                 should_retry = False
 
-    error_kind: str | None = None
-    error_name = e.__class__.__name__.lower()
-    if "timeout" in error_name:
-        error_kind = "timeout"
-    elif "connection" in error_name:
-        error_kind = "connection"
+    classified = response_from_exception(e)
 
     return {
         "error_status_code": int(status_code) if status_code is not None else None,
-        "error_kind": error_kind,
+        "error_kind": classified.error_kind,
         "error_type": error_type,
         "error_code": error_code,
         "error_retry_after_s": retry_after_headers(headers),

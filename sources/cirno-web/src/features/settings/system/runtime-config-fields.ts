@@ -46,7 +46,7 @@ export const RUNTIME_CONFIG_GROUPS: { id: string; page: RuntimeConfigPage; enabl
 export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "skills", path: "agents.defaults.always_skills", kind: "list" },
   { group: "memory", path: "agents.defaults.memory.context_files", kind: "list" },
-  { group: "memory", path: "agents.defaults.memory.context_files_tokens", kind: "number", min: 256, max: 16000 },
+  { group: "memory", path: "agents.defaults.memory.context_files_tokens", kind: "number", min: 256, max: 32768 },
   { group: "consolidation", path: "agents.defaults.consolidation.learn", kind: "boolean" },
   { group: "consolidation", path: "agents.defaults.consolidation.max_updates", kind: "number", min: 1, max: 32, when: { path: "agents.defaults.consolidation.learn", value: true } },
   { group: "consolidation", path: "agents.defaults.consolidation.context_chars", kind: "number", min: 2000, max: 64000, when: { path: "agents.defaults.consolidation.learn", value: true } },
@@ -72,7 +72,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "approval", path: "agents.defaults.approval.model_override", kind: "preset" },
   { group: "approval", path: "agents.defaults.approval.timeout_seconds", kind: "number", min: 1, max: 300 },
   {group: "consolidation", path: "agents.defaults.memory.release_archived_runtime", kind: "boolean"},
-  {"group": "memory", "path": "agents.defaults.memory.context_tokens", "kind": "number", "min": 256, "max": 16000},
+  {"group": "memory", "path": "agents.defaults.memory.context_tokens", "kind": "number", "min": 256, "max": 32768},
   {"group": "consolidation", "path": "agents.defaults.memory.checkpoint_tokens", "kind": "number", "min": 256, "max": 8000},
   {"group": "memory", "path": "agents.defaults.memory.index_scan_batch", "kind": "number", "min": 10, "max": 1000},
   {"group": "embedding", "path": "agents.defaults.memory.embedding_enabled", "kind": "boolean"},

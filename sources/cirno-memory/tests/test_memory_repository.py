@@ -112,6 +112,33 @@ def test_arbitrary_source_does_not_bypass_file_tool_scope(repo):
     assert "private token" not in json.dumps(repo.read_source(row["id"], session_key="websocket:a"))
 
 
+def test_archived_evidence_follows_project_moves_without_reusing_another_scope(repo):
+    messages = [{"role": "user", "content": "Preserve this exact input"}]
+    captures = [repo.archive_messages(messages, "websocket:a", project) for project in (None, "p1", "p2")]
+    assert len({capture["id"] for capture in captures}) == 3
+    for project, capture in zip((None, "p1", "p2"), captures):
+        assert capture["project_id"] == project
+        assert repo.archive_messages(messages, "websocket:a", project)["id"] == capture["id"]
+        page = repo.read_source(capture["id"], session_key="websocket:a", project_id=project)
+        assert json.loads(page["lines"][0]["text"]) == messages[0]
+    with pytest.raises(PermissionError):
+        repo.read_source(captures[1]["id"], session_key="websocket:a", project_id="p2")
+
+
+def test_legacy_project_sources_remain_readable_after_scoped_archival(repo):
+    from cirno_memory.evidence import write_evidence
+
+    messages = [{"role": "user", "content": "Legacy project source"}]
+    legacy = write_evidence(repo.root / "sources", "websocket:a", messages, preserve_system=False)
+    repo.save(legacy.preview, source=str(legacy.path.relative_to(repo.home)), session_key="websocket:a",
+              project_id="p1", scope="project", layer="source", kind="source", memory_id=legacy.identity, enqueue=False)
+    scoped = repo.archive_messages(messages, "websocket:a", "p2")
+    assert scoped["id"] != legacy.identity
+    for identity, project in ((legacy.identity, "p1"), (scoped["id"], "p2")):
+        page = repo.read_source(identity, session_key="websocket:a", project_id=project)
+        assert json.loads(page["lines"][0]["text"]) == messages[0]
+
+
 def test_task_checkpoint_restores_without_dream_or_model_search(repo):
     row = repo.checkpoint("websocket:a", "Done: A. Next: B. Artifact node://x/123", "tool-result:123")
     restored = MemoryRepository(repo.home)

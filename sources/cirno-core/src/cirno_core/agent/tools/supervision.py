@@ -41,7 +41,7 @@ class ControlSessionTool(_SupervisionTool):
 
     @property
     def description(self):
-        return "Router only: list running/queued/interrupted conversations and idle workers with unfinished Goals (including waiting/wake_at), plus the concurrency limit, inspect/configure workers, or stop/continue them after API failures. Use action=list without to. Configuration requires an idle conversation. Control only user-authorized work; preserve history and files."
+        return "Router only: list running/queued/interrupted conversations and idle workers with unfinished Goals (including waiting/wake_at), plus the concurrency limit, inspect/configure workers, or stop/continue them after API failures. Use action=list without to. Configuration requires an idle conversation. Execution status describes current activity; Goal status describes the task; a failed turn can leave a blocked Goal awaiting continuation. recovery.attempts counts explicit continuations, not provider retries; awaiting_user can be resolved by authorized Router continue. Control only user-authorized work; preserve history and files."
 
 
 @tool_parameters(tool_parameters_schema(

@@ -122,6 +122,7 @@ async def test_invalid_learning_and_checkpoint_commit_retry_keep_identical_summa
     tmp_path, monkeypatch
 ):
     archiver, runtime = setup(tmp_path, CHECKPOINT + MARKER + '{"memories": broken}')
+    runtime = replace(runtime, compaction_max_retries=0)
     append = archiver.store.journal.append_history
     monkeypatch.setattr(
         archiver.store.journal,
@@ -137,7 +138,7 @@ async def test_invalid_learning_and_checkpoint_commit_retry_keep_identical_summa
 
 
 @pytest.mark.parametrize("retries", [0, 2])
-async def test_generation_retry_count_is_bounded_serial_and_does_not_apply_to_learning(
+async def test_generation_retry_count_is_bounded_and_serial(
     tmp_path, retries
 ):
     archiver, runtime = setup(tmp_path, CHECKPOINT)
@@ -261,6 +262,89 @@ async def test_over_budget_archive_retains_source_for_later_learning(tmp_path):
     recovered = await retry_session_learning(archiver, session, runtime)
     assert recovered["retried"] == 1
     runtime.provider.chat_stream_with_retry.assert_awaited_once()
+
+
+@pytest.mark.parametrize(("broken", "error_type"), [
+    ('{"memories":[]}\n{}', "JSONDecodeError"),
+    ('{"memories":[] "documents":[]}', "JSONDecodeError"),
+    ('{"reviewed_inputs":[{"source_id":"input:one","memory_id":"one","reason":"retain"}]}', "ValidationError"),
+])
+async def test_learning_json_repair_shares_retry_budget_and_keeps_cache_prefix(tmp_path, broken, error_type):
+    archiver, runtime = setup(tmp_path, CHECKPOINT + MARKER + broken)
+    valid = CHECKPOINT + MARKER + json.dumps({"memories": [{"kind": "lesson", "content": "Verified result"}]})
+    seen = []
+    active = 0
+
+    async def generate(**kwargs):
+        nonlocal active
+        active += 1
+        assert active == 1
+        try:
+            seen.append(deepcopy(kwargs["messages"]))
+            await asyncio.sleep(0)
+            return LLMResponse(content=CHECKPOINT + MARKER + broken if len(seen) == 1 else valid)
+        finally:
+            active -= 1
+
+    runtime.provider.chat_stream_with_retry.side_effect = generate
+    result = await archive(archiver, runtime)
+    assert result == CHECKPOINT and getattr(result, "learning_failure", None) is None
+    assert len(seen) == 2
+    assert seen[1][:-2] == seen[0]
+    assert seen[1][-2]["role"] == "assistant"
+    assert error_type in seen[1][-1]["content"]
+    assert "Do not call tools" in seen[1][-1]["content"]
+    saved = MemoryRepository(tmp_path).search(session_key=ROUTER_SESSION_KEY, layer="knowledge")["memories"]
+    assert len(saved) == 1
+
+
+@pytest.mark.parametrize("retries", [0, 1, 2])
+async def test_invalid_learning_budget_exhaustion_retains_original_output_and_checkpoint(tmp_path, retries):
+    from cirno_core.memory.consolidation_receipts import receipt_path
+
+    output = CHECKPOINT + MARKER + '{"memories":[]}\n{}'
+    archiver, runtime = setup(tmp_path, output)
+    runtime = replace(runtime, compaction_max_retries=retries)
+    result = await archive(archiver, runtime)
+    assert result == CHECKPOINT and "Extra data" in result.learning_failure["error"]
+    assert runtime.provider.chat_stream_with_retry.await_count == retries + 1
+    repo = MemoryRepository(tmp_path)
+    record = json.loads(receipt_path(repo, result.learning_failure["source"]).read_text())
+    assert record["raw_output"] == output and record["status"] == "failed"
+    assert not repo.search(session_key=ROUTER_SESSION_KEY, layer="knowledge")["memories"]
+
+
+async def test_failed_learning_repair_does_not_discard_previous_checkpoint(tmp_path):
+    archiver, runtime = setup(tmp_path, CHECKPOINT)
+    runtime.provider.chat_stream_with_retry.side_effect = [
+        LLMResponse(content=CHECKPOINT + MARKER + '{"memories":[]}\n{}'),
+        LLMResponse(content="503 unavailable", finish_reason="error"),
+    ]
+    result = await archive(archiver, runtime)
+    assert result == CHECKPOINT
+    assert "JSONDecodeError" in result.learning_failure["error"]
+    assert runtime.provider.chat_stream_with_retry.await_count == 2
+
+
+async def test_repeated_explicit_learning_retry_keeps_original_task_checkpoint(tmp_path):
+    from cirno_core.memory.consolidation_receipts import receipt_path
+
+    archiver, runtime = setup(tmp_path, CHECKPOINT + MARKER + '{"memories":[]}\n{}')
+    runtime = replace(runtime, compaction_max_retries=0)
+    first = await archive(archiver, runtime)
+    runtime.provider.chat_stream_with_retry.return_value = LLMResponse(content='## Memory updates\n{"memories":[]}\n{}')
+    session = Session(key=ROUTER_SESSION_KEY)
+    failed_retry = await retry_session_learning(archiver, session, runtime)
+    assert failed_retry["retried"] == 0
+    repo = MemoryRepository(tmp_path)
+    record = json.loads(receipt_path(repo, first.learning_failure["source"]).read_text())
+    assert record["summary"] == CHECKPOINT
+    assert record["raw_output"].startswith("## Memory updates\n")
+    runtime.provider.chat_stream_with_retry.return_value = LLMResponse(content="## Memory updates\n{}")
+    completed = await retry_session_learning(archiver, session, runtime)
+    assert completed["retried"] == 1
+    record = json.loads(receipt_path(repo, first.learning_failure["source"]).read_text())
+    assert record["summary"] == CHECKPOINT and record["status"] == "completed"
 
 
 async def test_committed_generated_checkpoint_is_reused_even_with_zero_input_budget(tmp_path):

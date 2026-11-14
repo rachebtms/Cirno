@@ -3,10 +3,43 @@
 import asyncio
 import sys
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from cirno_core.nodes.service import Nodes
+
+
+async def test_cancelled_host_key_fingerprint_reaps_its_process(monkeypatch):
+    create = asyncio.create_subprocess_exec
+    spawned = asyncio.Event()
+    processes = []
+
+    async def spawn(*args, **kwargs):
+        process = await create(sys.executable, "-c", "import time; time.sleep(60)", **kwargs)
+        processes.append(process)
+        spawned.set()
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    nodes = Nodes.__new__(Nodes)
+    nodes._run = AsyncMock(return_value="public host key fixture")
+    task = asyncio.create_task(nodes.scan_host_key("example.invalid"))
+    try:
+        await asyncio.wait_for(spawned.wait(), 3)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(task), 3)
+        assert processes[0].returncode is not None
+        assert processes[0].stdout.at_eof() and processes[0].stderr.at_eof()
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        for process in processes:
+            if process.returncode is None:
+                process.kill()
+            await process.communicate()
 
 
 @pytest.mark.parametrize("fd", [1, 2])

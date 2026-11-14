@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { CredentialsTab } from "@/features/credentials/CredentialsTab";
-import { FixedSkillsSettings } from "@/features/settings/runtime/FixedSkillsSettings";
+import { SkillsLibrary } from "@/features/skills/SkillsLibrary";
+import { skillInjectionSettings } from "@/features/settings/runtime/skill-injection";
 import { useRuntimeConfigSettings } from "@/features/settings/runtime/useRuntimeConfiguration";
 import { RuntimeConfiguration } from "@/features/settings/runtime/RuntimeConfiguration";
 import { useTheme } from "@/hooks/useTheme";
 import { CirnoClient } from "@/lib/cirno-client";
 import type { SettingsPayload } from "@/lib/contracts/settings";
+import { ClientProvider } from "@/providers/ClientProvider";
 
 const client = new CirnoClient({ url: "ws://localhost:1", reconnect: false });
 const kind = new URLSearchParams(location.search).get("kind") ?? "token";
@@ -28,12 +30,12 @@ export function CredentialVisibilityFixture() {
   } } as unknown as SettingsPayload);
   const state = useRuntimeConfigSettings(settings, client, setSettings);
   return <main className="mx-auto max-w-3xl px-4 py-6" style={{ overflowY: "auto", height: "100%" }}>
-    {new URLSearchParams(location.search).has("context") ? <>
-      <FixedSkillsSettings skills={[
+    {new URLSearchParams(location.search).has("context") ? <ClientProvider client={client} token="fixture">
+      <SkillsLibrary skills={[
         { name: "paper-reading", description: "Read scientific papers", source: "home", available: true },
         { name: "research-review", description: "Review results", source: "home", available: true, always: true },
-      ]} state={state} loading={false} />
+      ]} injection={skillInjectionSettings(state)} />
       <RuntimeConfiguration page="memory" settings={settings} state={state} isRestarting={false} />
-    </> : <CredentialsTab client={client} active />}
+    </ClientProvider> : <CredentialsTab client={client} active />}
   </main>;
 }
