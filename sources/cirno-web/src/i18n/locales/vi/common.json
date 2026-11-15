@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "Ngân sách token tệp cố định",
           "help": "Ngân sách chung cho các tệp bổ sung, tách biệt với MEMORY.md."
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "Bảo vệ đầu ra lặp lại",
+          "help": "Phát hiện câu hoặc khối văn bản giống nhau liên tiếp, trừ khối mã. Đóng luồng hiện tại trước khi sửa tuần tự, không tăng số tác vụ đồng thời. Áp dụng cho Router và Worker từ lượt chạy tiếp theo."
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "Số khối giống nhau liên tiếp",
+          "help": "Ngắt khi đạt số khối giống nhau này (3–20; mặc định: 4). Đầu vào mới của người dùng đặt lại lịch sử đầu ra gần đây."
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "Số lần sửa tối đa",
+          "help": "Giới hạn số thông điệp hướng dẫn tuần tự (1–10; mặc định: 2). Nếu vẫn lặp lại, tạm dừng lượt chạy và Goal đang hoạt động."
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "Thông điệp hướng dẫn sửa lặp lại",
+          "help": "Được thêm dưới dạng thông báo hệ thống sau khi ngắt. Không cấp quyền người dùng mới hay viết lại tiền tố prompt ổn định."
         }
       },
       "groups": {

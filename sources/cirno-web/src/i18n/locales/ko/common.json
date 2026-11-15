@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "고정 메모리 파일 토큰 예산",
           "help": "추가 파일이 공유하는 예산입니다. MEMORY.md 예산은 별도입니다."
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "반복 출력 방지",
+          "help": "연속해서 반복되는 문장이나 텍스트 블록을 감지하며 코드 블록은 제외합니다. 현재 스트림을 닫은 후 순차적으로 교정하므로 동시 실행 수가 늘지 않습니다. 다음 실행부터 Router와 Worker에 적용됩니다."
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "연속 동일 블록 수",
+          "help": "동일한 블록이 이 횟수만큼 연속되면 중단합니다(3–20, 기본값 4). 새 사용자 입력은 최근 출력 기록을 초기화합니다."
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "최대 교정 횟수",
+          "help": "교정 메시지를 순차적으로 보내는 최대 횟수입니다(1–10, 기본값 2). 반복이 계속되면 실행과 활성 Goal을 일시 정지합니다."
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "반복 출력 교정 메시지",
+          "help": "중단 후 시스템 알림으로 추가됩니다. 새 사용자 권한을 부여하거나 안정적인 프롬프트 접두부를 변경하지 않습니다."
         }
       },
       "groups": {

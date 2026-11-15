@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "Orçamento de tokens dos arquivos fixos",
           "help": "Orçamento compartilhado dos arquivos adicionais, separado de MEMORY.md."
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "Proteção contra saída repetida",
+          "help": "Detecta frases ou blocos iguais consecutivos, exceto blocos de código. Encerra o fluxo atual antes de corrigir sequencialmente, sem aumentar a concorrência. Vale para Router e Worker na próxima execução."
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "Blocos iguais consecutivos",
+          "help": "Interrompe ao atingir esta quantidade de blocos iguais (3–20; padrão: 4). Uma nova entrada do usuário reinicia o histórico recente de saída."
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "Máximo de correções",
+          "help": "Limite de mensagens de orientação sequenciais (1–10; padrão: 2). Se a repetição continuar, pausa a execução e seu Goal ativo."
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "Mensagem de correção de repetição",
+          "help": "Adicionada como aviso do sistema após a interrupção. Não concede novas permissões de usuário nem reescreve o prefixo estável do prompt."
         }
       },
       "groups": {

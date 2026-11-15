@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "固定記憶檔案 Token 預算",
           "help": "額外檔案共用此預算，MEMORY.md 的預算分別計算。"
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "重複輸出保護",
+          "help": "偵測連續重複的句子或文字塊，排除程式碼區塊；先關閉目前串流再串行糾偏，不增加並發。Router 與 Worker 共用，下一輪生效。"
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "連續重複塊數",
+          "help": "連續相同文字塊達到此數量時中斷（3–20），預設 4。新的使用者輸入會重設近期輸出記錄。"
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "最多糾偏次數",
+          "help": "串行傳送引導訊息的次數上限（1–10），預設 2。仍然重複則暫停執行及其作用中的 Goal。"
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "重複輸出引導訊息",
+          "help": "在中斷後作為系統通知附加，不會授予新的使用者權限，也不會改寫穩定的提示詞前綴。"
         }
       },
       "groups": {

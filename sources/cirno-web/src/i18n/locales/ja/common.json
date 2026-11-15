@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "固定メモリファイルのトークン予算",
           "help": "追加ファイルで共有する予算です。MEMORY.md の予算は別です。"
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "繰り返し出力の保護",
+          "help": "連続する同じ文やテキストブロックを検出します。コードブロックは除外し、現在のストリームを閉じてから順番に修正します。同時実行数は増やしません。Router と Worker に次の実行から適用します。"
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "連続する同一ブロック数",
+          "help": "この数の同一ブロックが続くと中断します（3～20、既定値 4）。新しいユーザー入力で直近の出力記録をリセットします。"
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "修正回数の上限",
+          "help": "修正メッセージを順番に送信する上限です（1～10、既定値 2）。繰り返しが続くと実行とアクティブな Goal を一時停止します。"
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "繰り返し出力への修正メッセージ",
+          "help": "中断後にシステム通知として追加します。新しいユーザー権限を付与せず、安定したプロンプトの先頭部分も書き換えません。"
         }
       },
       "groups": {

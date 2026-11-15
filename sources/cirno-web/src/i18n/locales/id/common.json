@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "Anggaran token berkas tetap",
           "help": "Anggaran bersama untuk berkas tambahan, terpisah dari MEMORY.md."
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "Perlindungan keluaran berulang",
+          "help": "Mendeteksi kalimat atau blok teks identik yang berurutan, kecuali blok kode. Menutup aliran saat ini sebelum koreksi berurutan, tanpa menambah konkurensi. Berlaku untuk Router dan Worker pada eksekusi berikutnya."
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "Blok identik berurutan",
+          "help": "Menghentikan aliran setelah jumlah blok identik ini tercapai (3–20; bawaan: 4). Masukan pengguna baru mereset riwayat keluaran terbaru."
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "Koreksi maksimum",
+          "help": "Batas pesan panduan berurutan (1–10; bawaan: 2). Jika pengulangan berlanjut, eksekusi dan Goal aktifnya dijeda."
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "Pesan panduan pengulangan",
+          "help": "Ditambahkan sebagai pemberitahuan sistem setelah interupsi. Tidak memberikan izin pengguna baru atau menulis ulang awalan prompt yang stabil."
         }
       },
       "groups": {
