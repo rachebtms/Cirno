@@ -194,6 +194,9 @@ async function requestOlder(page: Page, backend: Backend, body: Locator, before:
 }
 
 async function expectBefore(body: Locator, first: string, second: string) {
+  // Sending a socket frame acknowledges delivery, not React's next paint.
+  await expect(body).toContainText(first);
+  await expect(body).toContainText(second);
   const text = await body.innerText();
   expect(text.indexOf(first), `${first} must be in the rendered body`).toBeGreaterThanOrEqual(0);
   expect(text.indexOf(second), `${second} must follow ${first}`).toBeGreaterThan(text.indexOf(first));
