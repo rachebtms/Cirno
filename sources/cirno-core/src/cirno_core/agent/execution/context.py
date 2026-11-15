@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Awaitable, Callable
 
+from cirno_usage.types import LLMUsage
+
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.hook import AgentHook, AgentTurnHookFactory
 from cirno_core.agent.tools.context import (
@@ -33,7 +35,6 @@ from cirno_core.session.summary import (
     SessionSummaryCheckpoint,
 )
 from cirno_core.utils.llm_runtime import LLMRuntime
-from cirno_usage.types import LLMUsage
 
 
 class TurnKind(Enum):
@@ -78,6 +79,7 @@ class TurnContext:
     pending_queue: asyncio.Queue[InboundMessage] | None = None
     pending_summary: SessionSummary | None = None
     summary_checkpoint: SessionSummaryCheckpoint | None = None
+    persisted_summary_checkpoint: SessionSummaryCheckpoint | None = None
     provider_compaction_applied: bool = False
 
     ephemeral: bool = False

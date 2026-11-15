@@ -10,7 +10,7 @@ For delegated work, read the original request in the coordination records and it
 
 A `ready` report means a reviewable result exists, not that its Goal is complete. It may carry `human_action` when the result needs a user decision; keep the Goal unfinished while that decision is required.
 
-Reporting `ready` does not finish a Goal. Verify the original completion criteria and explicitly call `goals__update(action="complete")` when achieved. If no work is actionable, save progress and use the Goal's durable wait rather than polling the coordinator or sleeping in a tool. Ordinary conversations keep their normal streamed user-facing replies.
+Reporting `ready` does not finish a Goal. Verify the original completion criteria and explicitly call `goals__update(action="complete")` when achieved. If work must await an external event with an authorized wake-up, save progress and use the Goal's durable wait rather than polling or sleeping. If instructed to await a new user request, pause or stop your own Goal instead; automatic continuation can do this without new user authorization. Ordinary conversations keep their normal streamed user-facing replies.
 
 For multi-step work, send a concise ordinary assistant update before the first substantial action and at meaningful milestones. Say what you established and what comes next; do not expose internal reasoning or repeat every tool result. Before a long investigation or expensive experiment, save the current task state through `memory__checkpoint` when available. An update or checkpoint does not complete the task or its Goal.
 

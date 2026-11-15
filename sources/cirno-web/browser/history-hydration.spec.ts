@@ -13,6 +13,37 @@ const STARTED_AT = Date.parse("2026-10-21T00:00:00Z") / 1000;
 const LIVE = "Live answer from the controlled wire";
 const EARLY = "Independent closed segment before the live answer.";
 
+for (const width of [390, 1440]) test(`foreground return keeps one identified reply at ${width}px`, async ({ page }) => {
+  const { backend, body } = await openFixture(page, width);
+  const question = "Inspect the server";
+  const prompt = input(TURN, question);
+  const reply: ThreadProjectionEvent = { ...at(TURN, 1, "answer"), event: "message", text: "Server inspection complete." };
+  await backend.release(await backend.read(), history([prompt], { active: TURN }));
+  await expect(body.getByText(question, { exact: true })).toBeVisible();
+  await backend.send(reply);
+  await expect(body.getByText(reply.text, { exact: true })).toHaveCount(1);
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await backend.send(reply);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const refresh = await backend.read(A, null, 1);
+  // Keep HTTP pending: it must not be needed to repair a duplicated live reply.
+  await backend.send(reply);
+  await expect(body.getByText(reply.text, { exact: true })).toHaveCount(1);
+  await backend.release(refresh, history([prompt, reply], { active: TURN }));
+  await backend.send(reply);
+  await expect(body.getByText(reply.text, { exact: true })).toHaveCount(1);
+  await backend.send({ ...reply, turn_seq: 2 });
+  await expect(body.getByText(reply.text, { exact: true })).toHaveCount(2);
+  backend.healthy();
+});
+
 function at(turn: string, sequence: number, phase: UITurnPhase, chatId = A) {
   return { chat_id: chatId, turn_id: turn, turn_seq: sequence, turn_phase: phase };
 }
@@ -347,5 +378,35 @@ test("synthetic same-text independent segments in the active turn both appear be
   await expect(body.getByText(`${foreground} continues`, { exact: true })).toHaveCount(1);
   await expect(body.getByText(repeated, { exact: true })).toHaveCount(2);
   expect(backend.reads).toHaveLength(1);
+  backend.healthy();
+});
+
+for (const width of [390, 1440]) test(`stopped Goal and passive Router notes keep the send button idle at ${width}px`, async ({ page }) => {
+  const { backend } = await openFixture(page, width);
+  await backend.release(await backend.read(), history([]));
+  const stop = page.getByRole("button", { name: "Stop response", exact: true });
+  const send = page.locator(".composer-primary-action");
+  await expect(send).toBeVisible();
+  await expect(send).not.toHaveAttribute("aria-label", "Stop response");
+  const note: InboundEvent = { event: "user_message", chat_id: A, text: "Goal stopped; verified progress retained.",
+    created_at_ms: STARTED_AT * 1000, starts_turn: false,
+    provenance: { session_message: { message_id: "router-stop-notice", session: { id: "router-id", name: "cirno" } },
+      input_origin: { kind: "supervision", label: "@cirno", id: "stop-audit" } } };
+  await backend.send(note);
+  await expect(stop).toHaveCount(0);
+  await expect(send).toBeVisible();
+  await expect(send).not.toHaveAttribute("aria-label", "Stop response");
+  await backend.send(input(TURN, "Read within the authorized window"));
+  await expect(stop).toBeVisible();
+  await backend.send({ event: "goal_state", chat_id: A, goal_state: { active: false, status: "stopped" } });
+  await expect(stop).toBeVisible(); // Goal state alone does not prove the model finished.
+  await backend.send({ ...at(TURN, 1, "complete"), event: "turn_end", outcome: "completed" });
+  await backend.send({ event: "goal_status", chat_id: A, turn_id: TURN, status: "idle" });
+  await backend.send({ ...note, text: "Stopped Goal confirmed by Router.", provenance: {
+    ...note.provenance, session_message: { message_id: "router-confirmation", session: { id: "router-id", name: "cirno" } },
+  } });
+  await expect(stop).toHaveCount(0);
+  await expect(send).toBeVisible();
+  await expect(send).not.toHaveAttribute("aria-label", "Stop response");
   backend.healthy();
 });

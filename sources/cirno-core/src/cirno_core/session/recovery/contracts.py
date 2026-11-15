@@ -48,7 +48,7 @@ UNCERTAIN_TOOL_PHASES = frozenset({"awaiting_tools"})
 
 
 KNOWN_CHECKPOINT_PHASES = frozenset(
-    {"final_response", "tools_completed", "awaiting_tools", "error"}
+    {"final_response", "awaiting_model", "tools_completed", "awaiting_tools", "error"}
 )
 
 

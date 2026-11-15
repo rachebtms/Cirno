@@ -14,6 +14,8 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING, Any, cast
 
+from loguru import logger
+
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.chat_completions.complete import parse_response
 from cirno_core.providers.chat_completions.errors import error_response
@@ -49,11 +51,11 @@ from cirno_core.providers.openai_responses import ResponsesBackend, responses_st
 from cirno_core.providers.reasoning_history import prepare_reasoning_history
 from cirno_core.providers.request_bodies import merge_responses_extra_body
 from cirno_core.utils.cancellation import shield_and_drain
-from loguru import logger
 
 if TYPE_CHECKING:
-    from cirno_core.providers.catalog.contracts import ProviderSpec
     from openai import AsyncOpenAI as AsyncOpenAIType
+
+    from cirno_core.providers.catalog.contracts import ProviderSpec
 
 # Module-level placeholder — set lazily by _ensure_client on first real
 # use, or replaced by tests via ``patch(...)``.  Kept as a plain name so
@@ -80,6 +82,9 @@ _DEFAULT_OPENROUTER_HEADERS = {
     "X-OpenRouter-Categories": "cli-agent,personal-agent",
 }
 _OPENAI_COMPAT_REQUEST_TIMEOUT_S = 120.0
+# Usage is an optional trailer after Chat Completions has finished generating.
+# A missing trailer must not hold a completed turn for the generation timeout.
+_CHAT_USAGE_TRAILER_TIMEOUT_S = 5.0
 
 
 def _openai_compat_timeout_s() -> float:
@@ -724,13 +729,26 @@ class OpenAICompatProvider(LLMProvider):
             )
             accumulator = ChatStreamAccumulator()
             stream_iter: AsyncIterator[Any] = chat_stream.__aiter__()
+            loop = asyncio.get_running_loop()
+            usage_deadline: float | None = None
             try:
                 while True:
                     try:
+                        wait_s = idle_timeout_s
+                        if usage_deadline is not None:
+                            wait_s = min(wait_s, max(0.0, usage_deadline - loop.time()))
                         chunk = await asyncio.wait_for(
-                            stream_iter.__anext__(), timeout=idle_timeout_s
+                            stream_iter.__anext__(), timeout=wait_s
                         )
                     except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        if not accumulator.completed:
+                            raise
+                        logger.warning(
+                            "Model generation completed but its usage trailer timed out; "
+                            "retaining completed response without final usage"
+                        )
                         break
                     except Exception as stream_error:
                         # Chat Completions sends usage after finish_reason.
@@ -753,6 +771,8 @@ class OpenAICompatProvider(LLMProvider):
                             await on_tool_call_delta(call)
                     if accumulator.completed and accumulator.usage_received:
                         break
+                    if accumulator.completed and usage_deadline is None:
+                        usage_deadline = loop.time() + _CHAT_USAGE_TRAILER_TIMEOUT_S
                 if not accumulator.completed:
                     raise ConnectionError("Model stream ended before a finish reason was received")
                 return accumulator.response()

@@ -7,6 +7,8 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
+from loguru import logger
+
 from cirno_core.agent.execution.context import TurnContext, TurnKind
 from cirno_core.bus.events import (
     INBOUND_META_TURN_ID,
@@ -22,7 +24,11 @@ from cirno_core.session.goal_state import (
     parse_goal_state,
 )
 from cirno_core.session.model import Session
-from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY, PENDING_USER_TURN_KEY, RUNTIME_CHECKPOINT_KEY
+from cirno_core.session.recovery.contracts import (
+    PENDING_FOLLOWUP_ID_KEY,
+    PENDING_USER_TURN_KEY,
+    RUNTIME_CHECKPOINT_KEY,
+)
 from cirno_core.session.summary import (
     SessionSummaryCheckpoint,
 )
@@ -30,7 +36,6 @@ from cirno_core.utils.model_messages import image_placeholder_text
 from cirno_core.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
 )
-from loguru import logger
 
 if TYPE_CHECKING:
     from cirno_core.agent.loop import AgentLoop
@@ -81,6 +86,7 @@ class TurnPersistence:
         )
         ctx.turn_latency_ms = max(0, int((time.time() - latency_started_at) * 1000))
         ctx.delivery.record_latency(ctx.turn_latency_ms)
+        checkpointed = ctx.save_skip > 0
         turn_continuation.prepare_save_boundary(ctx)
         if ctx.usage is not None and not ctx.ephemeral:
             session.metadata["_last_usage"] = ctx.usage.to_dict()
@@ -95,9 +101,19 @@ class TurnPersistence:
             ctx.all_messages,
             ctx.save_skip,
             turn_latency_ms=ctx.turn_latency_ms,
-            summary_checkpoint=None if ctx.ephemeral else ctx.summary_checkpoint,
+            summary_checkpoint=(
+                ctx.summary_checkpoint if not ctx.ephemeral
+                and ctx.summary_checkpoint != ctx.persisted_summary_checkpoint else None
+            ),
             input_persisted_early=ctx.input_persisted_early,
         )
+        if checkpointed and ctx.turn_latency_ms is not None:
+            # The terminal assistant may already have been committed by its
+            # checkpoint, so there need not be a new row in the final suffix.
+            for message in reversed(session.messages):
+                if message.get("role") == "assistant":
+                    message["latency_ms"] = int(ctx.turn_latency_ms)
+                    break
         followup_id = ctx.msg.metadata.get(PENDING_FOLLOWUP_ID_KEY)
         if isinstance(followup_id, str) and followup_id:
             session.consumed_followup_ids |= {followup_id}
@@ -115,16 +131,16 @@ class TurnPersistence:
             if ctx.stop_reason not in {"completed", "max_iterations", "empty_final_response"}:
                 current = await self.agent.sessions.state.read_metadata(ctx.session_key)
                 goal = parse_goal_state(goal_state_raw((current or {}).get("metadata"))) or {}
-                if goal.get("status") == "active":
+                repeated_output = ctx.stop_reason == "repetition_limit"
+                if goal.get("status") == "active" or (repeated_output and goal.get("status") == "waiting"):
+                    stopped_goal = {**goal, "status": "paused" if repeated_output else "blocked"}
+                    if repeated_output:
+                        stopped_goal["pause_reason"] = "repeated_output"
+                        stopped_goal.pop("wake_at", None)
+                    else:
+                        stopped_goal["recap"] = f"Execution stopped: {ctx.stop_reason}"
                     await self.agent.sessions.state.update_metadata(
-                        ctx.session_key,
-                        {
-                            "goal_state": {
-                                **goal,
-                                "status": "blocked",
-                                "recap": f"Execution stopped: {ctx.stop_reason}",
-                            }
-                        },
+                        ctx.session_key, {"goal_state": stopped_goal},
                     )
             await self.agent.sessions.state.finish_turn(session)
             if not ctx.ephemeral and session.policy.log_content:
@@ -148,6 +164,7 @@ class TurnPersistence:
         turn_latency_ms: int | None = None,
         summary_checkpoint: SessionSummaryCheckpoint | None = None,
         input_persisted_early: bool = False,
+        message_positions: dict[int, int] | None = None,
     ) -> None:
         """Commit new-turn messages and an optional summary boundary."""
         declared_tool_call_ids = {
@@ -183,6 +200,8 @@ class TurnPersistence:
             )
 
         for message_index, message in enumerate(messages[skip:], start=skip):
+            if message_positions is not None:
+                message_positions[message_index] = len(session.messages)
             # Insert against the raw transcript index before filtering the
             # message so persistence cleanup cannot shift the H/Δ boundary.
             if summary_checkpoint is not None and checkpoint_boundary == message_index:
@@ -261,6 +280,8 @@ class TurnPersistence:
                 )
         if summary_checkpoint is not None and checkpoint_boundary == len(messages):
             session.commit_summary_checkpoint(summary_checkpoint.summary)
+        if message_positions is not None:
+            message_positions[len(messages)] = len(session.messages)
         if turn_latency_ms is not None and last_assistant_idx is not None:
             session.messages[last_assistant_idx]["latency_ms"] = int(turn_latency_ms)
         session.consumed_followup_ids |= saved_followup_ids
@@ -345,10 +366,34 @@ class TurnPersistence:
         self,
         session: Session,
         payload: dict[str, Any],
+        *,
+        messages: list[dict[str, Any]] | None = None,
+        skip: int = 0,
+        summary_checkpoint: SessionSummaryCheckpoint | None = None,
+        message_positions: dict[int, int] | None = None,
     ) -> None:
         """Persist the latest in-flight turn state without blocking the event loop."""
         session.metadata[RUNTIME_CHECKPOINT_KEY] = payload
-        await self.agent.sessions.state.checkpoint_view(session, payload)
+        if messages is None:
+            await self.agent.sessions.state.checkpoint_view(session, payload)
+            return
+        self.save_messages(
+            session, messages, skip, message_positions=message_positions,
+        )
+        if summary_checkpoint is not None:
+            boundary = summary_checkpoint.transcript_boundary
+            if message_positions is None or boundary not in message_positions:
+                raise ValueError("Checkpoint summary does not belong to the persisted transcript")
+            position = message_positions[boundary]
+            session.commit_summary_checkpoint(summary_checkpoint.summary, insert_at=position)
+            # Future summaries can cover an earlier durable boundary. Keep its
+            # exact position as hidden summary markers are inserted before it.
+            for raw_index, saved_position in message_positions.items():
+                if saved_position >= position:
+                    message_positions[raw_index] = saved_position + 1
+        # History suffix and the uncertainty marker share one existing SQLite
+        # transaction. Never clear pending input until the whole turn finishes.
+        await self.agent.sessions.state.prepare_input(session)
 
     def mark_pending(self, session: Session) -> None:
         session.metadata[PENDING_USER_TURN_KEY] = True

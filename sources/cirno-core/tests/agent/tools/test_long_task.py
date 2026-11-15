@@ -528,3 +528,29 @@ async def test_goal_can_pause_resume_and_delete_without_affecting_another_chat(t
     assert GOAL_STATE_KEY not in (await sm.state.read_metadata(ctx.session_key))["metadata"]
     assert (await sm.state.read_metadata(other.session_key))["metadata"][GOAL_STATE_KEY]["objective"] == "Finish B"
     await sm.state.aclose()
+
+
+@pytest.mark.parametrize('action', ['pause', 'stop'])
+@pytest.mark.parametrize('status', ['active', 'waiting'])
+async def test_automatic_worker_can_end_own_goal_without_authorizing_new_work(tmp_path, action, status):
+    from cirno_core.agent.goals.permission import GoalInputScope
+    from cirno_core.bus.events import InboundMessage
+    sm = SessionManager(tmp_path)
+    create, update, ctx = _tools(sm)
+    await _execute(create, ctx, objective='Read within the authorized window')
+    original = (await sm.state.read_metadata(ctx.session_key))['metadata'][GOAL_STATE_KEY]
+    await sm.state.update_metadata(ctx.session_key, {GOAL_STATE_KEY: {**original, 'status':status, 'wake_at':'2099-01-01T00:00:00+00:00'}})
+    automatic = InboundMessage(channel='system', sender_id='subagent', chat_id='c1', content='Continue', metadata={'_internal_continuation':True})
+    with GoalInputScope(automatic), request_context(ctx):
+        assert not goal_mutation_allowed()
+        output = await update.execute(action=action)
+        assert 'Goal '+('paused' if action=='pause' else 'stopped') in output
+        assert 'already' in await update.execute(action=action)
+        assert 'current user request' in str(await update.execute(action='resume'))
+        assert 'current user request' in str(await update.execute(action='delete'))
+        assert 'current user request' in str(await update.execute(action='update', continuation_limit=999))
+    goal = (await sm.state.read_metadata(ctx.session_key))['metadata'][GOAL_STATE_KEY]
+    assert goal['status'] == ('paused' if action=='pause' else 'stopped')
+    assert goal['goal_id'] == original['goal_id']
+    assert 'wake_at' not in goal
+    await sm.state.aclose()

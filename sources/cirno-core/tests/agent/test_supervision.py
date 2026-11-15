@@ -6,7 +6,6 @@ from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import RequestContext, request_context
 from cirno_core.agent.tools.selection import conversation_tools
@@ -261,7 +260,8 @@ async def test_continue_reactivates_goal_and_keeps_original_authorization(superv
     assert (await sessions.state.read_metadata(message.session_key))["metadata"]["_sustained_goal_continuation_rounds"] == 4
     loop._pending_queues[message.session_key] = asyncio.Queue()
     again = json.loads(await loop.tools.get("control_session").execute(to=handle, action="continue"))
-    assert again["status"] == "already_running"
+    assert again["status"] == "already_queued"
+    assert again["execution_status"] == "queued" and not again["continuation_queued"]
     assert admitted.await_count == 1
 
 
@@ -299,6 +299,88 @@ async def test_goal_controls_reuse_worker_state_and_preserve_limits(supervision)
     assert await goal(sessions) is None
 
 
+@pytest.mark.parametrize("status", ["paused", "stopped", "waiting", "blocked", "active"])
+@pytest.mark.parametrize("tool_name,action", [("control_goal", "resume"), ("control_session", "continue")])
+async def test_goal_resume_and_conversation_continue_share_recovery(supervision, status, tool_name, action):
+    from cirno_core.session.recovery.contracts import (
+        RECOVERY_INBOUND_METADATA_KEY,
+        RECOVERY_METADATA_KEY,
+    )
+    from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+
+    loop, sessions, handle, admitted, _ = supervision
+    loop.recovery_admission = RecoveryCoordinator(sessions, loop.bus)
+    key = "websocket:worker"
+    await sessions.state.update_metadata(key, {
+        "goal_state": {"goal_id": "original-goal", "status": status, "objective": "Authorized research", "recap": "Verified first half", "continuation_limit": 5},
+        "_sustained_goal_continuation_rounds": 3,
+        RECOVERY_METADATA_KEY: {"recovery_id": "stopped-turn", "status": "awaiting_user", "reason": "user_stopped", "attempts": 0},
+    })
+    # The old dispatcher can still own its inbox while stop cleanup settles.
+    loop._pending_queues[key] = asyncio.Queue()
+    tool = loop.tools.get(tool_name)
+    result = json.loads(await tool.execute(to=handle, action=action))
+    assert result["status"] == "resuming" and result["continuation_queued"]
+    assert result["goal"]["status"] == "active"
+    assert result["goal"]["goal_id"] == "original-goal"
+    assert result["recovery"]["attempts"] == 1
+    message = loop.bus.inbound.get_nowait()
+    assert message.metadata[RECOVERY_INBOUND_METADATA_KEY] == "stopped-turn"
+    assert (await goal(sessions))["recap"] == "Verified first half"
+    assert (await sessions.state.read_header(key)).metadata["_sustained_goal_continuation_rounds"] == 3
+    again = json.loads(await tool.execute(to=handle, action=action))
+    assert again["status"] == "resuming" and not again["continuation_queued"]
+    assert again["recovery"]["attempts"] == 1 and loop.bus.inbound.empty()
+    admitted.assert_not_awaited()
+    loop._pending_queues.pop(key)
+
+
+async def test_goal_resume_does_not_bypass_unavailable_recovery_context(supervision):
+    from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY, RecoveryActionError
+    from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+
+    loop, sessions, handle, admitted, _ = supervision
+    loop.recovery_admission = RecoveryCoordinator(sessions, loop.bus)
+    original = {"goal_id": "original", "status": "stopped", "objective": "Keep safe"}
+    await sessions.state.update_metadata("websocket:worker", {"goal_state": original,
+        RECOVERY_METADATA_KEY: {"recovery_id": "bad-context", "status": "awaiting_user", "can_continue": False}})
+    with pytest.raises(RecoveryActionError, match="context is unavailable"):
+        await loop.tools.get("control_goal").execute(to=handle, action="resume")
+    assert await goal(sessions) == original
+    assert loop.bus.inbound.empty()
+    admitted.assert_not_awaited()
+
+
+async def test_recovery_resume_applies_goal_settings_before_admission(supervision):
+    from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY
+    from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+
+    loop, sessions, handle, _, _ = supervision
+    loop.recovery_admission = RecoveryCoordinator(sessions, loop.bus)
+    await sessions.state.update_metadata("websocket:worker", {
+        "goal_state": {"goal_id": "same-goal", "status": "stopped", "objective": "Read papers", "continuation_limit": 3},
+        "_sustained_goal_continuation_rounds": 2,
+        RECOVERY_METADATA_KEY: {"recovery_id": "stopped", "status": "awaiting_user"},
+    })
+    result = json.loads(await loop.tools.get("control_goal").execute(to=handle, action="resume",
+                                                                    continuation_limit=0, recap="Resume from paper 3"))
+    assert result["goal"]["status"] == "active" and result["goal"]["goal_id"] == "same-goal"
+    assert result["goal"]["continuation_limit"] == 0 and result["goal"]["recap"] == "Resume from paper 3"
+    assert (await sessions.state.read_header("websocket:worker")).metadata["_sustained_goal_continuation_rounds"] == 2
+    message = loop.bus.inbound.get_nowait()
+    assert await loop.recovery_admission.admit(message)
+
+
+@pytest.mark.parametrize("status", ["completed", "cancelled"])
+async def test_goal_resume_rejection_identifies_the_actual_terminal_goal(supervision, status):
+    loop, sessions, handle, admitted, _ = supervision
+    await sessions.state.update_metadata("websocket:worker", {"goal_state": {
+        "goal_id": "terminal-goal", "status": status, "objective": "Already settled"}})
+    result = await loop.tools.get("control_goal").execute(to=handle, action="resume")
+    assert result.is_error and status in result and "terminal-goal" in result
+    admitted.assert_not_awaited()
+
+
 async def test_new_input_waits_until_target_control_settles(supervision):
     loop, _, handle, admitted, _ = supervision
     entered, release = asyncio.Event(), asyncio.Event()
@@ -319,8 +401,8 @@ async def test_new_input_waits_until_target_control_settles(supervision):
 
 
 async def test_fork_after_supervisory_display_does_not_shift_model_input_boundary(supervision):
-    from cirno_core.session.presentation_history import fact_from_record
     from cirno_core.session.model import SessionPolicy
+    from cirno_core.session.presentation_history import fact_from_record
     loop, sessions, handle, _, _ = supervision
     key = "websocket:worker"
     await sessions.state.import_messages(key, [{"role": "user", "content": "First task"}, {"role": "assistant", "content": "First answer"}])
@@ -338,8 +420,11 @@ async def test_fork_after_supervisory_display_does_not_shift_model_input_boundar
 
 
 async def test_cirno_continue_uses_durable_recovery_path_after_model_failure(supervision):
+    from cirno_core.session.recovery.contracts import (
+        RECOVERY_INBOUND_METADATA_KEY,
+        RECOVERY_METADATA_KEY,
+    )
     from cirno_core.session.recovery.coordinator import RecoveryCoordinator
-    from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY, RECOVERY_INBOUND_METADATA_KEY
     loop, sessions, handle, admitted, _ = supervision
     loop.recovery_admission = RecoveryCoordinator(sessions, loop.bus)
     await sessions.state.import_messages("websocket:worker", [{"role": "user", "content": "Authorized task"},

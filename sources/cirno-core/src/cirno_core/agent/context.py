@@ -22,8 +22,8 @@ from cirno_core.runtime.context import (
 )
 from cirno_core.security.workspace_access import WorkspaceScopeResolver
 from cirno_core.session.keys import is_internal_session
-from cirno_core.session.roles import conversation_role
 from cirno_core.session.model import Session
+from cirno_core.session.roles import conversation_role
 from cirno_core.session.summary import SessionSummary, summary_context_message
 from cirno_core.skills.context import SkillContext
 from cirno_core.skills.loader import SkillsLoader
@@ -68,6 +68,7 @@ class TranscriptInput:
     current_role: str = "user"
     session_summary: SessionSummary | None = None
     runtime_context_blocks: Sequence[RuntimeContextBlock] | None = None
+    current_message_internal: bool = False
 
     @property
     def message_count(self) -> int:
@@ -340,6 +341,8 @@ class ContextBuilder:
                 current_role=transcript.current_role,
                 runtime_context_blocks=blocks,
             )
+            if transcript.current_message_internal:
+                current["_hidden_history"] = {"kind": "internal_continuation"}
             messages.append(current)
             return messages
 

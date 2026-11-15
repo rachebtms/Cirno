@@ -6,15 +6,24 @@ import hashlib
 import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from typing import Any, Mapping
+
+from loguru import logger
 
 from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
 from cirno_core.session.keys import ROUTER_SESSION_KEY
 from cirno_core.session.session_handles import SessionHandleResolver
 from cirno_core.session.sqlite_store import SessionConflictError
-from loguru import logger
 
 WORK_REPORT_KEY = "work_report"
 REPORT_STATES = ("progress", "waiting", "ready", "blocked", "failed", "dropped")
+
+
+def _retry_health(report: Mapping[str, Any]) -> bool:
+    execution = report.get("execution") or {}
+    return (report.get("state") in {"waiting", "progress"}
+            and execution.get("origin") == "runtime"
+            and execution.get("retry_status") in {"waiting", "recovered"})
 
 
 def _supersedes_retry(current, previous):
@@ -83,7 +92,8 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
             report["notification_pending"] = True
         # Routine progress and ordinary waiting are facts, not model turns.
         new_question = current_question and (current_question != previous.get("human_action") or previous.get("delivery_status") == "pending")
-        report["delivery_status"] = "pending" if new_question or state in {"ready", "blocked", "failed", "dropped"} or execution and execution.get("retry_status") in {"waiting", "recovered"} else "recorded"
+        needs_attention = new_question or state in {"ready", "blocked", "failed", "dropped"}
+        report["delivery_status"] = "pending" if needs_attention and not _retry_health(report) else "recorded"
         if report["delivery_status"] == "pending":
             pending = metadata.get("work_report_pending", [])
             if execution and execution.get("origin") == "runtime":
@@ -154,6 +164,20 @@ async def deliver_work_report(sessions, sender, key, report):
             metadata["work_report_pending"] = [item for item in metadata.get("work_report_pending", []) if item["id"] != report["id"]]
         await sessions.state.mutate_metadata(key, retire, expected_generation=session.generation)
         return "superseded"
+    if _retry_health(report):
+        # Also retire queued-for-delivery health from an older version. Keep
+        # its state inspectable, but do not wake another model for each retry.
+        if report.get("delivery_status") != "recorded" or any(
+            item["id"] == report["id"] for item in session.metadata.get("work_report_pending", [])
+        ):
+            def record_health(metadata):
+                current = metadata.get(WORK_REPORT_KEY) or {}
+                if current.get("id") == report["id"]:
+                    metadata[WORK_REPORT_KEY] = {**current, "delivery_status": "recorded"}
+                metadata["work_report_pending"] = [item for item in metadata.get("work_report_pending", [])
+                                                   if item["id"] != report["id"]]
+            await sessions.state.mutate_metadata(key, record_health, expected_generation=session.generation)
+        return "recorded"
     report = await publish_report_notification(sessions, key, report)
     if report.get("delivery_status") != "pending":
         return report["delivery_status"]
@@ -264,6 +288,8 @@ async def record_execution_report(sessions, key, *, turn_id, stop_reason, output
     )
     if failed:
         state = "failed"
+    elif stop_reason == "repetition_limit":
+        state = "blocked"
     elif recovered and (continuation_pending or goal.get("status") in {"active", "waiting", "paused"}):
         state = "progress"
     elif continuation_pending:
@@ -296,7 +322,7 @@ async def record_execution_report(sessions, key, *, turn_id, stop_reason, output
 
 
 async def record_retry_report(sessions, key, *, turn_id, event, episode, model=None, model_preset=None, expected_generation=None):
-    """A retry episode wakes the coordinator without blocking the running Goal."""
+    """Keep the latest retry health inspectable without waking the coordinator."""
     if key == ROUTER_SESSION_KEY:
         return None
     session = await sessions.state.read_header(key)

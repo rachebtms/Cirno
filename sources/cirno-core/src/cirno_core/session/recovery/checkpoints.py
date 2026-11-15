@@ -100,12 +100,22 @@ def runtime_checkpoint_is_well_formed(checkpoint: Mapping[str, Any]) -> bool:
             and not completed_ids
             and not pending_ids
         )
+    if phase == "awaiting_model":
+        content = cast(object, assistant.get("content"))
+        reasoning = cast(object, assistant.get("reasoning_content"))
+        thinking = cast(object, assistant.get("thinking_blocks"))
+        return (
+            (isinstance(content, str) and bool(content.strip())
+             or isinstance(reasoning, str) and bool(reasoning.strip())
+             or isinstance(thinking, list) and bool(thinking))
+            and not assistant_call_ids and not completed_ids and not pending_ids
+        )
     if phase == "awaiting_tools":
         return (
             bool(assistant_call_ids)
-            and not completed_ids
-            and len(assistant_call_ids) == len(pending_ids)
-            and set(assistant_call_ids) == set(pending_ids)
+            and not set(completed_ids).intersection(pending_ids)
+            and len(assistant_call_ids) == len(pending_ids) + len(completed_ids)
+            and set(assistant_call_ids) == set(pending_ids) | set(completed_ids)
         )
     if phase == "tools_completed":
         return (
@@ -192,7 +202,7 @@ def restore_runtime_checkpoint(session: Session) -> bool:
     )
     phase = data.get("phase")
     exact_final = (
-        phase == "final_response"
+        phase in {"final_response", "awaiting_model"}
         and assistant_data is not None
         and assistant_data.get("role") == "assistant"
         and not data.get("completed_tool_results")

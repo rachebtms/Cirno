@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from cirno_usage.context import (
+    LLMUsageSource,
+)
+from cirno_usage.types import LLMUsage
+
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.governance import (
     HistoryConsolidator,
@@ -16,15 +21,12 @@ from cirno_core.agent.governance import (
 from cirno_core.agent.hook import AgentHook
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.bus.agent_events import NO_EVENTS, EventSink
+from cirno_core.config.repetition import OutputRepetitionConfig
 from cirno_core.providers.contracts import (
     ProviderConversationState,
 )
 from cirno_core.session.summary import SessionSummaryCheckpoint
 from cirno_core.utils.llm_runtime import LLMRuntime
-from cirno_usage.context import (
-    LLMUsageSource,
-)
-from cirno_usage.types import LLMUsage
 
 DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
 
@@ -55,6 +57,7 @@ class AgentRunSpec:
     workspace: Path | None = None
     session_key: str | None = None
     provider_retry_mode: str = "standard"
+    output_repetition: OutputRepetitionConfig = field(default_factory=OutputRepetitionConfig)
     checkpoint_callback: CheckpointCallback | None = None
     request_usage_callback: Callable[[LLMUsage], Awaitable[None]] | None = None
     consolidate_history: HistoryConsolidator | None = None
@@ -90,3 +93,6 @@ class AgentRunResult:
     provider_state: ProviderConversationState | None = field(default=None, repr=False)
     summary_checkpoint: SessionSummaryCheckpoint | None = field(default=None, repr=False)
     provider_compaction_applied: bool = field(default=False, repr=False)
+    # Raw transcript prefix already committed through runtime checkpoints.
+    persisted_message_count: int = field(default=0, repr=False)
+    persisted_summary_checkpoint: SessionSummaryCheckpoint | None = field(default=None, repr=False)

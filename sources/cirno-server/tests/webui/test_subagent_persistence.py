@@ -120,7 +120,7 @@ async def test_child_thread_reads_real_session_through_parent_without_new_persis
     (workspace / "config.txt").write_text("configured value", encoding="utf-8")
     manager, sessions, runtime = manager_with_storage(workspace, root)
     entered, release = asyncio.Event(), asyncio.Event()
-    final_text = ("## Findings\n\n" + "Verified configuration.\n" * 1000).rstrip()
+    final_text = ("## Findings\n\n" + "".join(f"Verified configuration {index}.\n" for index in range(1000))).rstrip()
     calls = 0
 
     async def respond(**_kwargs):

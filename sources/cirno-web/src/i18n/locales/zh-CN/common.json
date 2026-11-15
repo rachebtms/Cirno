@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "固定记忆文件 Token 预算",
           "help": "额外文件共用此预算，MEMORY.md 的预算单独计算。"
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "重复输出保护",
+          "help": "检查正文、思考及回复工具中的连续相同句子或行，达到阈值即打断；不检查代码围栏中的内容。Router 和 Worker 共用，下一轮生效。"
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "连续重复块数",
+          "help": "连续相同文本块达到此数量时打断（3–20），默认 4。新的用户输入会重置近期输出记录。"
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "最多纠偏次数",
+          "help": "串行发送引导消息的次数上限（1–10），默认 2。仍然重复则暂停执行及其活动中的 Goal。"
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "重复输出引导消息",
+          "help": "在打断后作为系统通知追加，不会授予新的用户权限，也不会改写稳定的提示词前缀。"
         }
       },
       "groups": {

@@ -44,15 +44,19 @@ async def test_continuation_injects_text_without_exceeding_budget(run_spec, max_
     run_spec.max_iterations = max_iterations
     run_spec.finalize_on_max_iterations = finalize
     run_spec.continuation_callback = AsyncMock(side_effect=lambda: continuation)
+    provider = run_spec.runtime.provider
+    provider.chat_stream_with_retry.side_effect = lambda **kwargs: LLMResponse(
+        content=f"Verified progress {provider.chat_stream_with_retry.await_count}."
+    )
 
     result = await AgentRunner().run(run_spec)
 
     assert result.stop_reason == "max_iterations"
     requests = run_spec.runtime.provider.chat_stream_with_retry.await_args_list
     assert len(requests) == max_iterations + int(finalize)
-    assert {"role": "user", "content": continuation} in result.messages
+    assert {"role": "user", "content": continuation, "_hidden_history": {"kind": "goal_continuation"}} in result.messages
     if max_iterations > 1:
-        assert {"role": "user", "content": continuation} in requests[1].kwargs["messages"]
+        assert {"role": "user", "content": continuation, "_hidden_history": {"kind": "goal_continuation"}} in requests[1].kwargs["messages"]
     if finalize:
         assert not requests[-1].kwargs.get("tools")
 
@@ -81,7 +85,7 @@ async def test_runner_reads_continuation_state_after_each_response(run_spec):
         if calls == 1:
             continuation = "Write the article draft."
             return LLMResponse(content="The goal is now active.")
-        assert {"role": "user", "content": continuation} in kwargs["messages"]
+        assert {"role": "user", "content": continuation, "_hidden_history": {"kind": "goal_continuation"}} in kwargs["messages"]
         continuation = None
         return LLMResponse(content="The draft is complete.")
 

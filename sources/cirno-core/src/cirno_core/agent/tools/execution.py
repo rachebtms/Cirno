@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import nullcontext
 from dataclasses import replace
 from functools import cache
 from typing import Any, cast
+
+from loguru import logger
 
 from cirno_core.agent.hook import AgentHook, AgentHookContext
 from cirno_core.agent.ptc.registry import PtcCallGate, PtcToolRegistry, RunCodeTool
@@ -17,11 +19,11 @@ from cirno_core.agent.tools.naming import implementation_name
 from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result, with_tool_error_hint
 from cirno_core.agent.tools.role_policy import RoleToolPolicy, ToolPolicyDenied
 from cirno_core.providers.tool_calls import ToolCallRequest
+from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.runtime import (
     repeated_external_lookup_error,
     repeated_workspace_violation_error,
 )
-from loguru import logger
 
 # SSRF is a hard security block at the tool boundary, but the agent turn
 # should recover conversationally instead of aborting the runtime.
@@ -61,6 +63,7 @@ async def execute_tool_calls(
     model_messages: list[dict[str, Any]] | None = None,
     compacted_tool_results: set[str] | None = None,
     role_policy: RoleToolPolicy | None = None,
+    on_result: Callable[[ToolCallRequest, Any], Awaitable[None]] | None = None,
 ) -> tuple[list[Any], list[dict[str, str]]]:
     """Execute one model response's tool calls in stable result order."""
     @cache
@@ -75,34 +78,31 @@ async def execute_tool_calls(
             and message["tool_call_id"] not in (compacted_tool_results or ())
         }
     tool_results: list[tuple[Any, dict[str, str]]] = []
+    async def execute(tool_call: ToolCallRequest) -> tuple[Any, dict[str, str]]:
+        result = await _execute_tool_call(
+            tools, tool_call, external_lookup_counts, workspace_violation_counts,
+            hook, context, read_results, role_policy,
+        )
+        if on_result is not None:
+            # A sibling may still be running when shutdown arrives. Preserve
+            # this already completed observation before propagating cancellation.
+            await shield_and_drain(on_result(tool_call, result[0]))
+        return result
+
     for batch in _partition_tool_batches(tools, tool_calls, concurrent=concurrent):
         if concurrent and len(batch) > 1:
-            batch_results = await asyncio.gather(*(
-                _execute_tool_call(
-                    tools,
-                    tool_call,
-                    external_lookup_counts,
-                    workspace_violation_counts,
-                    hook,
-                    context,
-                    read_results,
-                    role_policy,
-                )
-                for tool_call in batch
-            ))
+            tasks = [asyncio.create_task(execute(tool_call)) for tool_call in batch]
+            try:
+                batch_results = await asyncio.gather(*tasks)
+            except BaseException:
+                for task in tasks:
+                    task.cancel()
+                await shield_and_drain(asyncio.gather(*tasks, return_exceptions=True))
+                raise
             tool_results.extend(batch_results)
         else:
             for tool_call in batch:
-                result = await _execute_tool_call(
-                    tools,
-                    tool_call,
-                    external_lookup_counts,
-                    workspace_violation_counts,
-                    hook,
-                    context,
-                    read_results,
-                    role_policy,
-                )
+                result = await execute(tool_call)
                 tool_results.append(result)
 
     results = [result for result, _event in tool_results]
@@ -162,8 +162,8 @@ async def _execute_tool_call(
             return handled
         return payload, event
 
-    from cirno_core.agent.tools.context import current_request_context
     from cirno_core.agent.approval.service import operation_access
+    from cirno_core.agent.tools.context import current_request_context
     try:
         if role_policy:
             role_policy.remaining(tool_call.name, params)

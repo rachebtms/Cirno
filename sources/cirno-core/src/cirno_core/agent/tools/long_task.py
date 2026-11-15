@@ -24,6 +24,7 @@ from cirno_core.session.goal_state import (
     GOAL_STATE_KEY,
     MAX_GOAL_OBJECTIVE_CHARS,
     explicit_goal_requested,
+    goal_resume_error,
     goal_state_raw,
     goal_state_runtime_lines,
     parse_goal_state,
@@ -36,8 +37,8 @@ from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
-    from cirno_core.session.model import Session
     from cirno_core.session.manager import SessionManager
+    from cirno_core.session.model import Session
 
 
 _GOAL_ACTIONS = ("complete", "cancel", "block", "replace", "pause", "resume", "stop", "wait", "continue", "update", "delete")
@@ -331,8 +332,9 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
             "Update the active sustained goal. Use action='complete' only after the objective "
             "is actually achieved and verified. Use action='cancel' when the user cancels, "
             "action='block' when progress is genuinely blocked, and action='replace' only when "
-            "the requested objective changes. Use pause, resume, or delete when the user requests "
-            "those changes. Pausing prevents further automatic continuation; it does not interrupt "
+            "the requested objective changes. You may pause or stop your own existing Goal, including "
+            "during automatic continuation, when no actionable work remains until new user input. "
+            "Resume and delete require a current user request. Pausing prevents further automatic continuation; it does not interrupt "
             "the current tool call. Use wait with wake_after_seconds to persist a timed wait; use stop to stop the Goal without deleting it."
         )
 
@@ -387,19 +389,22 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
             await self._save_goal_state(sess, {**prior, "recap": (recap or "").strip()})
             return "Progress saved; continue working."
         if normalized in {"pause", "resume", "stop", "delete"}:
-            if not self._goal_mutation_allowed():
+            if normalized in {"resume", "delete"} and not self._goal_mutation_allowed():
                 return ToolResult.error("Error: this goal change requires a current user request.")
             status = prior.get("status")
             if normalized == "delete":
                 await self._save_goal_state(sess, None, reset_continuation=True)
                 return "Goal deleted."
             if normalized in {"pause", "stop"}:
-                if status not in {"active", "waiting"}:
-                    return ToolResult.error("Only an active goal can be paused.")
+                if status == "stopped" or normalized == "pause" and status == "paused":
+                    return "Goal already stopped." if status == "stopped" else "Goal already paused."
+                if status not in {"active", "waiting", "paused"}:
+                    return ToolResult.error("Only an active, waiting or paused Goal can be paused or stopped.")
                 blob = {**prior, "status": "stopped" if normalized == "stop" else "paused", "paused_at": _iso_now()}
             else:
-                if status not in {"paused", "blocked", "stopped", "waiting"}:
-                    return ToolResult.error("Only a paused or blocked goal can be resumed.")
+                error = goal_resume_error(prior)
+                if error:
+                    return ToolResult.error(error)
                 blob = resume_goal_state(prior, recap=recap)
             blob.pop("wake_at", None)
             await self._save_goal_state(sess, blob)

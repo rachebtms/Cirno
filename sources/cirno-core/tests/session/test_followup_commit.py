@@ -5,19 +5,18 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.bus.events import INBOUND_META_TURN_ID, InboundMessage
 from cirno_core.bus.queue import MessageBus
-from cirno_core.providers.generation import GenerationSettings
 from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.generation import GenerationSettings
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
-from cirno_core.session.recovery.pending import pending_followups
 from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+from cirno_core.session.recovery.pending import pending_followups
 
 
 def _loop(sessions):
@@ -164,7 +163,7 @@ async def test_injected_inputs_keep_their_own_identity_through_runner_and_commit
                 turn_id="active-run", runtime=runtime,
             ),
         )
-        loop.persistence.save_messages(draft, result.messages, skip=2)
+        loop.persistence.save_messages(draft, result.messages, skip=max(2, result.persisted_message_count))
         await loop.sessions.state.finish_turn(draft)
         stored = await loop.sessions.state.get(draft.key)
         injected = [row for row in stored.messages if row.get("role") == "user"][1:]

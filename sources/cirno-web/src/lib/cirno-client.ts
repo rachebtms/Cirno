@@ -139,9 +139,8 @@ function runObservation(event: InboundEvent): RunObservation | null {
     case "message_accepted":
     case "user_message": {
       const activeTurnId = event.active_turn_id ?? (event.starts_turn ? event.turn_id : undefined);
-      if (event.event === "user_message" && event.provenance?.session_message && !activeTurnId) {
-        return { ...base, kind: "activity" };
-      }
+      // Receiving a Router note is input, not evidence of executing it.
+      // Only explicit admission ownership or actual run activity starts work.
       return {
         ...base,
         kind: event.event === "message_accepted" ? "admission" : "input",

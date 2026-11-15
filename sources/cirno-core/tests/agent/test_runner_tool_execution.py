@@ -148,6 +148,36 @@ class _LegacyErrorPluginTool(Tool):
         return "Error: legacy plugin failed"
 
 
+async def test_failed_result_checkpoint_drains_running_batch_before_propagating(monkeypatch):
+    started, closed = asyncio.Event(), asyncio.Event()
+    tools = ToolRegistry()
+    fast = _DelayTool("fast", delay=0, read_only=True, shared_events=[])
+    pending = _DelayTool("pending", delay=0, read_only=True, shared_events=[])
+
+    async def waiting(**_kwargs):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            closed.set()
+
+    async def checkpoint(_call, _result):
+        await started.wait()
+        raise OSError("Checkpoint could not be committed")
+
+    monkeypatch.setattr(pending, "execute", waiting)
+    tools.register(fast)
+    tools.register(pending)
+    with pytest.raises(OSError, match="Checkpoint could not be committed"):
+        await asyncio.wait_for(execute_tool_calls(
+            tools, [ToolCallRequest("a", "fast", {}), ToolCallRequest("b", "pending", {})],
+            concurrent=True, external_lookup_counts={}, workspace_violation_counts={},
+            hook=AgentHook(), context=AgentHookContext(iteration=0, messages=[]), on_result=checkpoint,
+        ), 2)
+    assert closed.is_set(), "a failed turn must not leave its sibling executing in the background"
+
+
 class _StructuredSuccessPluginTool(Tool):
     @property
     def name(self) -> str:

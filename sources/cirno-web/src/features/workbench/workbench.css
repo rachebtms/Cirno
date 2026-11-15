@@ -10,7 +10,7 @@
 .workbench-launcher-action[aria-pressed=true] { color: var(--accent); }
 .workbench-unread { position: absolute; right: 0.125rem; top: 0.125rem; min-width: 1rem; padding: 0 0.2rem; border-radius: 1rem; background: var(--accent); color: var(--accent-foreground); font-size: 0.625rem; font-weight: 600; line-height: 1rem; }
 .workbench-tabs { min-width: 0; flex-shrink: 0; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
-.workbench-tabs-viewport { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.workbench-tabs-viewport { min-width: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior: none; touch-action: pan-x pinch-zoom; scrollbar-width: none; }
 .workbench-tab-list { width: max-content; min-width: 100%; justify-content: start; gap: 0.25rem; min-height: 3rem; padding: 0 0.5rem; }
 .workbench-tab { display: flex; width: auto; flex-shrink: 0; gap: 0.5rem; min-width: 7rem; max-width: 16rem; height: 3rem; padding: 0 0.5rem 0 0.75rem; font-size: 0.8125rem; font-weight: 500; }
 .workbench-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

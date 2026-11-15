@@ -12,8 +12,11 @@ from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.session.model import Session
+from cirno_core.session.recovery.checkpoints import (
+    restore_runtime_checkpoint,
+    runtime_checkpoint_is_well_formed,
+)
 from cirno_core.session.recovery.contracts import RUNTIME_CHECKPOINT_KEY
-from cirno_core.session.recovery.checkpoints import restore_runtime_checkpoint, runtime_checkpoint_is_well_formed
 from cirno_core.utils.tool_results import maybe_persist_tool_result
 from cirno_usage.types import LLMUsage
 
@@ -101,7 +104,9 @@ async def test_storage_failure_preserves_raw_completed_result_for_one_time_recov
     saved = checkpoints[-1]
     assert saved["phase"] == "tools_completed"
     assert saved["pending_tool_calls"] == []
-    assert [message["content"] for message in saved["completed_tool_results"]] == outputs
+    saved_contents = [message["content"] for message in saved["completed_tool_results"]]
+    assert [output_path(content).read_text() if "Full output saved to workspace path: " in content else content
+            for content in saved_contents] == outputs
     assert saved["provider_state"] is None
     assert runtime_checkpoint_is_well_formed(saved)
     session = Session(

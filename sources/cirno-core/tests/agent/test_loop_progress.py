@@ -677,8 +677,11 @@ class TestToolEventProgress:
         provider = MagicMock()
         provider.get_default_model.return_value = "test-model"
 
+        requests = 0
         async def chat_stream_with_retry(*, on_content_delta=None, **kwargs):
-            if on_content_delta is None:
+            nonlocal requests
+            requests += 1
+            if requests > 1:
                 return LLMResponse(content="summary", finish_reason="stop")
             await on_content_delta("partial")
             return LLMResponse(content="partial", finish_reason="length")

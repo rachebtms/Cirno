@@ -7,6 +7,8 @@ import time
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, TypeVar, cast
 
+from loguru import logger
+
 from cirno_core.agent.execution.context import TurnContext, TurnKind
 from cirno_core.agent.hook import AgentHook, AgentTurnHookFactory
 from cirno_core.agent.tools.message import capture_message_deliveries
@@ -19,6 +21,7 @@ from cirno_core.bus.events import (
     InboundMessage,
     OutboundMessage,
 )
+from cirno_core.bus.input_origin import input_origin
 from cirno_core.bus.outbound_events import (
     StreamDeltaEvent,
     StreamedResponseEvent,
@@ -30,11 +33,9 @@ from cirno_core.session.goal_state import (
     parse_goal_state,
 )
 from cirno_core.session.model import Session
-from cirno_core.bus.input_origin import input_origin
 from cirno_core.session.roles import conversation_role
 from cirno_core.utils.llm_runtime import LLMRuntime
 from cirno_core.utils.progress_events import output_events
-from loguru import logger
 
 from .diagnostics import content_logging_allowed
 
@@ -144,6 +145,9 @@ class TurnProcessor:
                 if event.state == "waiting" and not retry_active:
                     retry_active = True
                     retry_episode += 1
+                elif event.state == "cleared":
+                    retry_active = False
+                    return
                 elif event.state != "recovered" or not retry_active:
                     return
                 else:
@@ -314,11 +318,19 @@ class TurnProcessor:
                     and ((ctx.msg.is_user_input and input_origin(ctx.msg) is None)
                          or ctx.msg.metadata.get("_awakening") is True)
                 ),
+                checkpoint_start=turn_continuation.save_skip_for_turn(
+                    message_metadata=ctx.msg.metadata,
+                    initial_message_count=ctx.transcript_input.message_count,
+                    input_persisted_early=ctx.input_persisted_early,
+                ),
+                input_persisted_early=ctx.input_persisted_early,
                 events=ctx.events,
             )
         ctx.final_content = result.final_content
         ctx.all_messages = result.messages
         ctx.summary_checkpoint = result.summary_checkpoint
+        ctx.save_skip = result.persisted_message_count
+        ctx.persisted_summary_checkpoint = result.persisted_summary_checkpoint
         ctx.provider_compaction_applied = result.provider_compaction_applied
         ctx.stop_reason = result.stop_reason
         ctx.failure_error_kind = result.failure_error_kind

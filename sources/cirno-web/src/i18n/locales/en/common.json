@@ -471,6 +471,22 @@
         "agents_defaults_memory_context_files_tokens": {
           "label": "Fixed memory files token budget",
           "help": "Shared token budget for the additional files; the MEMORY.md budget is separate."
+        },
+        "agents_defaults_output_repetition_enabled": {
+          "label": "Repeated-output protection",
+          "help": "Interrupt consecutive identical sentences or lines in answers, reasoning and reply-tool content. Code fences are excluded. Applies to Router and Workers on the next turn."
+        },
+        "agents_defaults_output_repetition_repeat_count": {
+          "label": "Consecutive repeated blocks",
+          "help": "Interrupt at this many adjacent equal text blocks (3–20); default 4. New user input resets recent output history."
+        },
+        "agents_defaults_output_repetition_max_interventions": {
+          "label": "Maximum corrective messages",
+          "help": "Send guidance sequentially, up to this limit (1–10); default 2. If repetition continues, pause execution and its active Goal."
+        },
+        "agents_defaults_output_repetition_guidance": {
+          "label": "Repeated-output guidance",
+          "help": "Appended as a system notice after an interruption. It does not grant new user authorization or rewrite the stable prompt prefix."
         }
       },
       "groups": {

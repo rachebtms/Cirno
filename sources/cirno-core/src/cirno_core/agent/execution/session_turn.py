@@ -5,13 +5,13 @@ import asyncio
 from contextlib import nullcontext
 from typing import TYPE_CHECKING
 
-from cirno_core.command.router import command_text
+from loguru import logger
+
 from cirno_core.session import turn_continuation
 from cirno_core.session.goal_state import goal_state_raw, parse_goal_state, sustained_goal_active
 from cirno_core.session.keys import ROUTER_SESSION_KEY
-from cirno_core.session.recovery.contracts import RECOVERY_INBOUND_METADATA_KEY
 from cirno_core.session.recovery.checkpoints import restore_runtime_checkpoint
-from loguru import logger
+from cirno_core.session.recovery.contracts import RECOVERY_INBOUND_METADATA_KEY
 
 from .diagnostics import content_logging_allowed
 
@@ -53,6 +53,11 @@ class SessionTurn:
                 self.agent._executing_sessions.add(key)
                 stage = "guard"
                 if not await self.current_goal(msg, key):
+                    # The preceding segment or WebSocket admission may already
+                    # have opened this turn. Skipping obsolete work still ends it.
+                    lifecycle_active = True
+                    await delivery.complete(None, publish_completion=True)
+                    completion_published = True
                     return
                 lifecycle_active = True
                 stage = "route"
@@ -69,7 +74,8 @@ class SessionTurn:
             if executing:
                 delivery.continuation_pending = False
                 await self.cancel(key, delivery)
-            if not completion_published and self.agent.commands.requires_session_queue(command_text(msg)):
+            if not completion_published:
+                lifecycle_active = True
                 await delivery.complete(None, publish_completion=True)
             raise
         except Exception as error:

@@ -6,6 +6,8 @@ import asyncio
 import dataclasses
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from cirno_core.bus.events import (
     INBOUND_META_RUNTIME_CONTROL,
     RUNTIME_CONTROL_SESSION_DISCARD,
@@ -16,7 +18,7 @@ from cirno_core.session import turn_continuation
 from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
 from cirno_core.session.keys import session_key_for_channel
 from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
-from loguru import logger
+from cirno_core.session.transport_metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY
 
 from .diagnostics import content_logging_allowed
 
@@ -203,6 +205,7 @@ class SessionDispatcher:
         pending: asyncio.Queue[InboundMessage],
     ) -> None:
         """Run the sole worker for a session until its inbox is empty."""
+        settled_owner: str | None = None
         try:
             while self.agent._pending_queues.get(session_key) is pending:
                 try:
@@ -221,6 +224,9 @@ class SessionDispatcher:
                     log_content = content_logging_allowed(self.agent.sessions, session_key)
                     await self.execute(msg, pending)
                 except asyncio.CancelledError as exc:
+                    owner = msg.metadata.get(WEBSOCKET_TURN_OWNER_METADATA_KEY)
+                    if isinstance(owner, str):
+                        settled_owner = owner
                     for coordinator in self.agent._automation_turn_coordinators:
                         coordinator.complete(msg, error=exc)
                     raise
@@ -230,7 +236,7 @@ class SessionDispatcher:
                         session_key, type(error).__name__,
                     )
         except asyncio.CancelledError as exc:
-            await self.cancel_pending(session_key, pending, exc)
+            await self.cancel_pending(session_key, pending, exc, settled_owner=settled_owner)
             raise
         finally:
             owns_queue = self.agent._pending_queues.get(session_key) is pending
@@ -243,19 +249,28 @@ class SessionDispatcher:
         session_key: str,
         pending: asyncio.Queue[InboundMessage],
         error: asyncio.CancelledError,
+        *,
+        settled_owner: str | None = None,
     ) -> None:
         """Complete queued independent turns after their session worker stops."""
+        settled: set[str] = {settled_owner} if settled_owner is not None else set()
         for msg in self.agent._deferred_automation_turns.pop(session_key, []):
             pending.put_nowait(msg)
         while not pending.empty():
             msg = pending.get_nowait()
             for coordinator in self.agent._automation_turn_coordinators:
                 coordinator.complete(msg, error=error)
-            if msg.channel != "system" and self.agent.commands.requires_session_queue(
-                command_text(msg)
-            ):
+            owner = msg.metadata.get(WEBSOCKET_TURN_OWNER_METADATA_KEY)
+            if isinstance(owner, str) and owner in settled:
+                continue  # An automatic handoff shares its parent's visible turn.
+            if msg.channel != "system":
                 delivery = self.agent.turn_delivery_factory.unrouted(msg, session_key)
-                await delivery.complete(None, publish_completion=True)
+                try:
+                    await delivery.complete(None, publish_completion=True)
+                finally:
+                    await delivery.idle()
+                if isinstance(owner, str):
+                    settled.add(owner)
 
     async def execute(self, msg: InboundMessage, pending: asyncio.Queue[InboundMessage]) -> None:
         return await self.turn.execute(msg, pending)

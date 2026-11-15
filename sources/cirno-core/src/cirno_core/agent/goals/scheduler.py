@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from cirno_core.notifications.service_errors import report_service_error
+from loguru import logger
 
 from cirno_core.bus.events import InboundMessage
+from cirno_core.notifications.service_errors import report_service_error
 from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
+from cirno_core.session.recovery.state import recovery_state_from_metadata
 from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.session.turn_continuation import _goal_continuation_prompt
-from loguru import logger
 
 
 async def wake_due_goals(loop) -> None:
@@ -36,8 +37,8 @@ async def _wake_goal(loop, key, now):
         return
     metadata = session.metadata
     goal = parse_goal_state(goal_state_raw(metadata)) or {}
-    from cirno_core.agent.work_reports import deliver_work_report, record_goal_report
     from cirno_core.agent.tools.session_messages import SessionMessageError
+    from cirno_core.agent.work_reports import deliver_work_report, record_goal_report
 
     report = metadata.get("work_report")
     report_error = None
@@ -79,6 +80,13 @@ async def _wake_goal(loop, key, now):
         raise report_error
     if key in loop._pending_queues:
         return
+    # Restart recovery owns admission until an explicit Continue is committed.
+    # Do not wake, pause at a round limit, or consume a continuation meanwhile.
+    if metadata.get("runtime_checkpoint") or metadata.get("pending_user_turn"):
+        return
+    recovery = recovery_state_from_metadata(metadata)
+    if recovery and recovery["status"] in {"awaiting_user", "failed", "resuming"}:
+        return
     if goal.get("status") not in {"active", "waiting"}:
         return
     if goal.get("status") == "waiting":
@@ -98,9 +106,6 @@ async def _wake_goal(loop, key, now):
                 }
 
         await loop.sessions.state.mutate_metadata(key, pause_at_limit, expected_generation=session.generation)
-        return
-    # Uncertain side effects are recovered by the existing recovery flow.
-    if metadata.get("runtime_checkpoint") or metadata.get("pending_user_turn"):
         return
     admitted = False
 

@@ -1456,7 +1456,10 @@ async def test_stop_after_continuation_queued_ends_visible_run(
     monkeypatch.setattr(loop.sessions.state, "finish_turn", hold_first_save)
     msg = InboundMessage(
         channel="websocket", sender_id="u1", chat_id="c-stop-continuation",
-        content=content, metadata={"webui": True},
+        content=content, metadata={"webui": True,
+            # A real WebSocket admission reserves one owner, shared by its
+            # not-yet-admitted automatic handoff.
+            "_websocket_turn_owner": "stop-continuation-owner"},
     )
     await loop.dispatch.enqueue(msg)
     try:

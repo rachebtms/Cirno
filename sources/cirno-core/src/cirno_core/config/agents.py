@@ -5,14 +5,16 @@ from __future__ import annotations
 from typing import Literal, cast
 
 from cirno_memory.config import MemoryConfig
+from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic.alias_generators import to_snake
+
 from cirno_core.config.base import Base
 from cirno_core.config.home import get_default_workspace
 from cirno_core.config.models import ConsolidationConfig, FallbackCandidate, ModelAPIConfig
 from cirno_core.config.prompts import SystemPrompts
+from cirno_core.config.repetition import OutputRepetitionConfig
 from cirno_core.config.timezone import detect_system_timezone
 from cirno_core.cron.types import CronSchedule
-from pydantic import AliasChoices, Field, field_validator, model_validator
-from pydantic.alias_generators import to_snake
 
 
 class DreamConfig(Base):
@@ -95,6 +97,7 @@ class AgentDefaults(Base):
     fallback_models: list[FallbackCandidate] = Field(default_factory=list)
     goal_continuation_limit: int = Field(default=0, ge=0)
     resume: ResumeConfig = Field(default_factory=ResumeConfig)
+    output_repetition: OutputRepetitionConfig = Field(default_factory=OutputRepetitionConfig)
     approval: ApprovalConfig = Field(default_factory=ApprovalConfig)
     max_tool_iterations: int = 200
     max_concurrent_subagents: int = Field(default=4, ge=1)

@@ -13,6 +13,7 @@ from typing import Any, Mapping, cast
 
 GOAL_STATE_KEY = "goal_state"
 GOAL_COMMAND = "/goal"
+RESUMABLE_GOAL_STATUSES = frozenset({"paused", "stopped", "waiting", "blocked"})
 MAX_GOAL_OBJECTIVE_CHARS = 4000
 _MAX_OBJECTIVE_WS = 600
 GOAL_COMPLETION_INSTRUCTION = (
@@ -77,6 +78,7 @@ def resume_goal_state(goal: Mapping[str, Any], *, recap: str | None = None) -> d
     resumed = {**goal, "status": "active", "resumed_at": datetime.now(timezone.utc).isoformat()}
     resumed.pop("wake_at", None)
     resumed.pop("ended_at", None)
+    resumed.pop("pause_reason", None)
     if recap is not None:
         resumed["recap"] = recap.strip()
     elif str(resumed.get("recap") or "").startswith((
@@ -86,6 +88,16 @@ def resume_goal_state(goal: Mapping[str, Any], *, recap: str | None = None) -> d
         # The failure report/recovery record remains the historical account.
         resumed.pop("recap", None)
     return resumed
+
+
+def goal_resume_error(goal: Mapping[str, Any]) -> str | None:
+    """Use the same resumable states and current-state diagnosis at every entry."""
+    if goal.get("status") in RESUMABLE_GOAL_STATUSES:
+        return None
+    return (
+        "Only a paused, stopped, waiting or blocked Goal can be resumed. "
+        f"Current Goal id={goal.get('goal_id', '(none)')}, status={goal.get('status', '(none)')}."
+    )
 
 
 def goal_state_runtime_lines(metadata: Mapping[str, Any] | None) -> list[str]:

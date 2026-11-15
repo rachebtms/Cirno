@@ -5,7 +5,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import replace
 from typing import Any, ParamSpec, TypeVar
+
+from cirno_usage.context import (
+    bind_llm_usage_source,
+    reset_llm_usage_source,
+    source_from_session_key,
+)
+from cirno_usage.types import LLMUsage
+from loguru import logger
 
 from cirno_core.agent.governance import (
     ContextCompactionState,
@@ -18,6 +27,7 @@ from cirno_core.agent.runner.contracts import DEFAULT_ERROR_MESSAGE, AgentRunRes
 from cirno_core.agent.runner.history import (
     append_final_message,
     append_model_error_placeholder,
+    checkpoint_reply,
     emit_checkpoint,
     initial_transcript_and_compaction,
     restore_outer_whitespace,
@@ -26,24 +36,26 @@ from cirno_core.agent.runner.inputs import (
     try_drain_injections,
 )
 from cirno_core.agent.runner.model import ModelRequests
-from cirno_core.agent.runner.reply_contract import ToolReplyContract
 from cirno_core.agent.runner.recovery import (
     max_iterations_fallback,
 )
-from cirno_core.agent.runner.tool_results import commit_completed_tools
+from cirno_core.agent.runner.repetition import REPETITION_PAUSED_NOTICE
+from cirno_core.agent.runner.repetition_recovery import recover_repetition
+from cirno_core.agent.runner.reply_contract import ToolReplyContract
+from cirno_core.agent.runner.tool_results import ToolResultCheckpoints, commit_completed_tools
 from cirno_core.agent.runner.usage import (
     merge_usage,
     record_request_usage,
 )
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.execution import execute_tool_calls
-from cirno_core.agent.tools.role_policy import RoleToolPolicy
-from cirno_core.session.roles import conversation_role
 from cirno_core.agent.tools.message import (
     current_conversation_has_delivery,
 )
+from cirno_core.agent.tools.role_policy import RoleToolPolicy
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.providers.errors import is_billing_error, public_error_kind
+from cirno_core.session.roles import conversation_role
 from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.model_messages import build_assistant_message
 from cirno_core.utils.reasoning import extract_reasoning
@@ -52,13 +64,6 @@ from cirno_core.utils.runtime import (
     build_length_recovery_message,
     is_blank_text,
 )
-from cirno_usage.context import (
-    bind_llm_usage_source,
-    reset_llm_usage_source,
-    source_from_session_key,
-)
-from cirno_usage.types import LLMUsage
-from loguru import logger
 
 _ARREARAGE_ERROR_MESSAGE = (
     "The AI provider rejected the request because the API key is out of quota or the "
@@ -167,6 +172,19 @@ class AgentRunner:
         messages: list[dict[str, Any]],
         compaction: ContextCompactionState,
     ) -> AgentRunResult:
+        checkpoint_callback = spec.checkpoint_callback
+        if checkpoint_callback is not None:
+            async def checkpoint(payload: dict[str, Any]) -> None:
+                # Raw transcript stays append-only even when the model's accepted
+                # prefix is consolidated. Pass a borrowed view, never put prompts
+                # or the entire accumulated transcript in checkpoint metadata.
+                await checkpoint_callback({
+                    **payload,
+                    "_transcript": messages,
+                    "_summary_checkpoint": compaction.summary_checkpoint,
+                })
+
+            spec = replace(spec, checkpoint_callback=checkpoint)
         final_content: str | None = None
         tools_used: list[str] = []
         usage: LLMUsage | None = None
@@ -287,6 +305,15 @@ class AgentRunner:
             round_usages.append(raw_usage)
             context.usage = raw_usage
             usage = merge_usage(usage, raw_usage)
+            if response.finish_reason == "repetition":
+                exhausted, notice = await recover_repetition(
+                    spec, messages, response, hook, context,
+                    conversation_state.checkpoint(messages),
+                )
+                if exhausted:
+                    stop_reason, final_content = "repetition_limit", notice
+                    break
+                continue
             if reasoning_text and not context.streamed_reasoning:
                 await hook.emit_reasoning(reasoning_text)
                 await hook.emit_reasoning_end()
@@ -331,6 +358,10 @@ class AgentRunner:
                 )
 
                 await hook.before_execute_tools(context)
+                tool_checkpoints = ToolResultCheckpoints(
+                    spec, request_state, response, assistant_message, iteration,
+                    self.context_governor.preparation,
+                )
 
                 results, new_events = await execute_tool_calls(
                     spec.tools,
@@ -343,6 +374,7 @@ class AgentRunner:
                     model_messages=messages_for_model,
                     compacted_tool_results=request_state.compacted_tool_results,
                     role_policy=role_policy,
+                    on_result=tool_checkpoints.record,
                 )
                 tool_events.extend(new_events)
                 tools_used.extend(
@@ -421,6 +453,16 @@ class AgentRunner:
                 original_content = response.content
                 reasoning_text, cleaned_retry = extract_reasoning(response.reasoning_content, response.thinking_blocks, response.content)
                 clean = hook.finalize_content(context, cleaned_retry)
+                if response.finish_reason == "repetition":
+                    stop_reason = "repetition_limit"
+                    final_content = REPETITION_PAUSED_NOTICE
+                    messages.append(build_assistant_message(final_content))
+                    await checkpoint_reply(spec, messages[-1], iteration,
+                                           conversation_state.checkpoint(messages), final=True)
+                    context.stop_reason = stop_reason
+                    context.final_content = final_content
+                    await hook.after_iteration(context)
+                    break
                 if reasoning_text:
                     await hook.emit_reasoning(reasoning_text)
                     await hook.emit_reasoning_end()
@@ -445,6 +487,8 @@ class AgentRunner:
                         ),
                         response,
                     ))
+                    await checkpoint_reply(spec, messages[-1], iteration,
+                                           conversation_state.checkpoint(messages), final=False)
                     # The next input snapshot decides whether to continue this
                     # answer or close its stream before answering a new question.
                     pending_length_segment = (context, clean or "")
@@ -474,6 +518,8 @@ class AgentRunner:
                     messages.append(conversation_state.project_response_message(
                         build_assistant_message(clean, reasoning_content=response.reasoning_content, thinking_blocks=response.thinking_blocks), response,
                     ))
+                    await checkpoint_reply(spec, messages[-1], iteration,
+                                           conversation_state.checkpoint(messages), final=False)
                     messages.append(reminder)
                     if hook.wants_streaming():
                         await hook.on_stream_end(context, resuming=True)
@@ -600,18 +646,8 @@ class AgentRunner:
                     response,
                 )
             )
-            await emit_checkpoint(
-                spec,
-                {
-                    "phase": "final_response",
-                    "iteration": iteration,
-                    "model": spec.runtime.model,
-                    "assistant_message": messages[-1],
-                    "completed_tool_results": [],
-                    "pending_tool_calls": [],
-                    "provider_state": conversation_state.checkpoint(messages),
-                },
-            )
+            await checkpoint_reply(spec, messages[-1], iteration,
+                                   conversation_state.checkpoint(messages), final=True)
             if length_recovery_parts:
                 final_content = (
                     "".join(length_recovery_parts)
@@ -626,9 +662,10 @@ class AgentRunner:
         else:
             stop_reason = "max_iterations"
             terminal_content = None
+            repeated = False
             await end_length_segment(interrupted=False)
             if spec.finalize_on_max_iterations:
-                terminal_content, usage = await self.model_requests.try_finalize_after_max_iterations(
+                terminal_content, usage, repeated = await self.model_requests.try_finalize_after_max_iterations(
                     spec,
                     hook,
                     messages,
@@ -636,6 +673,8 @@ class AgentRunner:
                     request_state=request_state,
                     round_usages=round_usages,
                 )
+            if spec.finalize_on_max_iterations and repeated:
+                stop_reason = "repetition_limit"
             if terminal_content is None:
                 terminal_content = max_iterations_fallback(spec)
             if length_recovery_parts:

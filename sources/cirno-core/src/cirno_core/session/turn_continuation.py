@@ -10,6 +10,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping
 
+from loguru import logger
+
 from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
 from cirno_core.session.goal_state import (
     GOAL_COMPLETION_INSTRUCTION,
@@ -20,7 +22,6 @@ from cirno_core.session.goal_state import (
     sustained_goal_turn,
 )
 from cirno_core.session.recovery.contracts import REQUEST_ORIGIN_METADATA_KEY
-from loguru import logger
 
 if TYPE_CHECKING:
     from cirno_core.agent.execution.context import TurnContext
@@ -197,11 +198,11 @@ def prepare_save_boundary(ctx: TurnContext) -> None:
         clear_internal_continuation_state(ctx.session.metadata)
 
     assert ctx.transcript_input is not None
-    ctx.save_skip = _save_skip_for_turn(
+    ctx.save_skip = max(ctx.save_skip, save_skip_for_turn(
         message_metadata=ctx.msg.metadata,
         initial_message_count=ctx.transcript_input.message_count,
         input_persisted_early=ctx.input_persisted_early,
-    )
+    ))
 
 
 def _continuation_available(
@@ -230,7 +231,7 @@ def reset_goal_continuation_rounds(metadata: MutableMapping[str, Any]) -> None:
     metadata.pop(_GOAL_CONTINUATION_ROUNDS_KEY, None)
 
 
-def _save_skip_for_turn(
+def save_skip_for_turn(
     *,
     message_metadata: Mapping[str, Any] | None,
     initial_message_count: int,

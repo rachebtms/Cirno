@@ -8,7 +8,12 @@ from typing import Any, cast
 from weakref import WeakValueDictionary
 
 from cirno_core.bus.queue import MessageBus
-from cirno_core.session.goal_state import goal_state_raw, parse_goal_state, resume_goal_state
+from cirno_core.session.goal_state import (
+    RESUMABLE_GOAL_STATUSES,
+    goal_state_raw,
+    parse_goal_state,
+    resume_goal_state,
+)
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_identity import webui_session_key
 from cirno_core.utils.cancellation import shield_and_drain
@@ -85,7 +90,7 @@ class RecoveryActions:
         if state.get("can_continue") is False:
             raise RecoveryActionError("recovery context is unavailable", status=409)
         goal = parse_goal_state(goal_state_raw(session.metadata))
-        if goal and goal.get("status") in {"stopped", "paused", "blocked", "waiting"}:
+        if goal and goal.get("status") in RESUMABLE_GOAL_STATUSES:
             session.metadata["goal_state"] = resume_goal_state(goal)
         next_state = set_recovery_state(
             session,

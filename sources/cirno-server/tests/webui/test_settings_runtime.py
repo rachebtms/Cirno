@@ -339,3 +339,21 @@ def test_memory_injection_budget_limit_roundtrip(tmp_path, field):
     with pytest.raises(WebUISettingsError):
         update_runtime_config_settings({key: 32769}, config_path=path)
     assert getattr(load_config(path).agents.defaults.memory, field) == 32768
+
+
+def test_repeated_output_settings_are_live_validated_and_persisted(tmp_path):
+    path = tmp_path / 'config.json'
+    save_config(Config(), path)
+    prefix = 'agents.defaults.output_repetition.'
+    values = {prefix+'enabled':False, prefix+'repeat_count':6,
+              prefix+'max_interventions':3, prefix+'guidance':'Review progress and stop the Goal.'}
+    result = update_runtime_config_settings(values, config_path=path)
+    assert result['requires_restart'] is False
+    assert all(result['runtime_config'][key] == value for key, value in values.items())
+    settings = load_config(path).agents.defaults.output_repetition
+    assert not settings.enabled and settings.repeat_count == 6 and settings.max_interventions == 3
+    before = path.read_bytes()
+    for invalid in ({'repeat_count':2}, {'max_interventions':0}, {'guidance':'  '}):
+        with pytest.raises(WebUISettingsError):
+            update_runtime_config_settings({prefix+key:value for key,value in invalid.items()}, config_path=path)
+        assert path.read_bytes() == before

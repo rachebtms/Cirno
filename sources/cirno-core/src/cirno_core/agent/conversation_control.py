@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from cirno_core.agent.goals.permission import goal_mutation_permission
 from cirno_core.agent.tools.base import ToolResult
-from cirno_core.agent.tools.context import current_request_context, request_context
+from cirno_core.agent.tools.context import RequestContext, current_request_context, request_context
 from cirno_core.agent.tools.long_task import CreateGoalTool, GetGoalTool, UpdateGoalTool
 from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.outbound_events import (
@@ -19,14 +19,25 @@ from cirno_core.bus.outbound_events import (
     outbound_message_for_event,
 )
 from cirno_core.bus.runtime_events import GoalStateChanged, RuntimeEventContext
-from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
+from cirno_core.security.workspace_access import (
+    WORKSPACE_SCOPE_METADATA_KEY,
+    validate_workspace_scope_payload,
+)
+from cirno_core.session.goal_state import (
+    RESUMABLE_GOAL_STATUSES,
+    goal_resume_error,
+    goal_state_raw,
+    parse_goal_state,
+)
 from cirno_core.session.keys import ROUTER_SESSION_KEY
-from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY, model_preset_from_metadata
-from cirno_core.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY, validate_workspace_scope_payload
-from cirno_core.session.session_identity import is_webui_session_key
-from cirno_core.session.session_handles import SessionHandleResolver
-from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.model_selection import (
+    SESSION_MODEL_PRESET_METADATA_KEY,
+    model_preset_from_metadata,
+)
 from cirno_core.session.recovery.state import recovery_state_from_metadata
+from cirno_core.session.session_handles import SessionHandleResolver
+from cirno_core.session.session_identity import is_webui_session_key
+from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.session.transcript import append_session_message_input
 from cirno_core.session.turn_continuation import INTERNAL_CONTINUATION_META, SKIP_USER_PERSIST_META
 from cirno_core.utils.cancellation import shield_and_drain
@@ -86,25 +97,22 @@ class ConversationControl:
             if goal and action == "get":
                 with request_context(dataclasses.replace(request, session_key=key, session_generation=session.generation)):
                     return await GetGoalTool(self.loop.sessions).execute()
-            if not goal and action == "continue" and self.loop.dispatch.is_running(key):
-                return json.dumps({"to": "@" + target.name, "status": "already_running",
-                                   **self._execution(session)})
             recovery = recovery_state_from_metadata(session.metadata)
-            if not goal and action == "continue" and recovery and recovery["status"] in {"awaiting_user", "failed"}:
-                coordinator = self.loop.recovery_admission
-                if coordinator is None:
-                    return ToolResult.error("Recovery is unavailable; inspect the saved interruption before continuing.")
-                # Share the owner's Continue path, including checkpoint safety,
-                # pending input restoration and duplicate/stale action checks.
-                await coordinator.resume_session(key)
-                await self._audit(session, target, "continue", {}, uuid4().hex)
-                return json.dumps({"to": "@" + target.name, "action": "continue",
-                                   "continuation_queued": True, "recovery_id": recovery["recovery_id"]})
             prior = parse_goal_state(goal_state_raw(session.metadata))
             if goal:
-                error = self._validate_goal(action, prior, values)
+                # An already active Goal can still own an interrupted model
+                # turn. Recovery and repeated admissions are not Goal resets.
+                active_resume = action == "resume" and (prior or {}).get("status") == "active" and (
+                    recovery is not None and recovery["status"] in {"awaiting_user", "failed", "resuming"}
+                    or self.loop.dispatch.is_running(key)
+                )
+                error = self._validate_goal("update" if active_resume else action, prior, values)
                 if error:
                     return ToolResult.error(error)
+            if (not goal and action == "continue") or (goal and action == "resume"):
+                result = await self._resume_existing(session, target, goal, values, request)
+                if result is not None:
+                    return result
             # Stop only the target's workers, child agents and owned shell sessions.
             cancelled = await self.loop.cancel_session_work(key, stop_goal=not goal and action == "stop")
             async with self.loop._get_session_lock(key):
@@ -120,9 +128,11 @@ class ConversationControl:
                     result = "Conversation stopped." if action == "stop" else "Continuation queued from saved context."
                     if action == "continue":
                         prior = parse_goal_state(goal_state_raw(session.metadata))
-                        if prior and prior.get("status") in {"stopped", "paused", "waiting", "blocked"}:
+                        if prior and prior.get("status") in RESUMABLE_GOAL_STATUSES:
                             with request_context(dataclasses.replace(request, channel="websocket", chat_id=key.split(":", 1)[1], session_key=key, session_generation=session.generation)), goal_mutation_permission(True):
-                                await UpdateGoalTool(self.loop.sessions, self.loop.bus).execute(action="resume")
+                                resumed = await UpdateGoalTool(self.loop.sessions, self.loop.bus).execute(action="resume")
+                                if isinstance(resumed, ToolResult) and resumed.is_error:
+                                    return resumed
                 event_id = uuid4().hex
                 await self._audit(session, target, ("goal." if goal else "") + action, values, event_id)
             should_continue = (not goal and action == "continue" or goal and (action in {"create", "set", "resume"} or action == "update" and (prior or {}).get("status") == "active"))
@@ -142,6 +152,46 @@ class ConversationControl:
             return json.dumps({"to": "@" + target.name, "action": ("goal." if goal else "") + action,
                                "result": str(result), "cancelled_tasks": cancelled,
                                "continuation_queued": should_continue}, ensure_ascii=False)
+
+    async def _resume_existing(
+        self, session: Session, target: SessionHandle, goal: bool,
+        values: dict[str, Any], request: RequestContext,
+    ) -> str | None:
+        """Resume interrupted work once through the same owner recovery action."""
+        key = session.key
+        action = "goal.resume" if goal else "continue"
+        recovery = recovery_state_from_metadata(session.metadata)
+        if recovery and recovery["status"] in {"awaiting_user", "failed"}:
+            coordinator = self.loop.recovery_admission
+            if coordinator is None:
+                return ToolResult.error("Recovery is unavailable; inspect the saved interruption before continuing.")
+            if goal and recovery.get("can_continue") is not False:
+                # Apply requested settings before admitting the model request;
+                # preserve its identity, progress, and continuation counter.
+                result = await self._goal_action(session, "update", values, request)
+                if isinstance(result, ToolResult) and result.is_error:
+                    return result
+            await coordinator.resume_session(key)
+            await self._audit(session, target, action, values, uuid4().hex)
+            fresh = await self.loop.sessions.state.read_header(key)
+            if fresh is None or fresh.generation != session.generation:
+                raise SessionConflictError("The target was deleted or replaced during recovery.")
+            execution = self._execution(fresh)
+            current_recovery = execution["recovery"] or {}
+            status = "resuming" if current_recovery.get("status") == "resuming" else execution["execution_status"]
+            return json.dumps({"to": "@" + target.name, "action": action,
+                               "status": status, "continuation_queued": True,
+                               "recovery_id": recovery["recovery_id"], **execution}, ensure_ascii=False)
+        prior = parse_goal_state(goal_state_raw(session.metadata)) or {}
+        resuming = recovery is not None and recovery["status"] == "resuming"
+        running = self.loop.dispatch.is_running(key) and prior.get("status") not in RESUMABLE_GOAL_STATUSES
+        if resuming or running:
+            if values:
+                return ToolResult.error("Work is already admitted; use Goal update to change its settings.")
+            status = "resuming" if resuming else "already_running" if key in self.loop._executing_sessions else "already_queued"
+            return json.dumps({"to": "@" + target.name, "action": action, "status": status,
+                               "continuation_queued": False, **self._execution(session)}, ensure_ascii=False)
+        return None
 
     def _execution(self, session: Session) -> dict[str, Any]:
         return self._execution_metadata(session.key, session.metadata)
@@ -256,8 +306,8 @@ class ConversationControl:
         status = (prior or {}).get("status")
         if action in {"stop", "pause", "wait"} and status not in {"active", "waiting"}:
             return "Only an active or waiting Goal can be stopped, paused or put to sleep."
-        if action == "resume" and status not in {"paused", "stopped", "waiting", "blocked"}:
-            return "Only a paused, stopped, waiting or blocked Goal can be resumed."
+        if action == "resume":
+            return goal_resume_error(prior or {})
         if action == "wait" and status != "active":
             return "Only an active Goal can wait."
         if action == "wait" and (values.get("wake_after_seconds") or 0) < 1:

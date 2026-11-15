@@ -1,5 +1,6 @@
 import { useStripReorder } from "./useStripReorder";
 import { useSelectedTabVisibility } from "./useSelectedTabVisibility";
+import { useHorizontalStripScroll } from "./useHorizontalStripScroll";
 import { Button, Spinner, Tabs } from "@heroui/react";
 import { Columns2, ArrowLeftRight, X, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -21,6 +22,7 @@ export function TabBar({ model, title, icon, runningChatIds, split, group, tabs,
     else split.transfer(id, nextGroup, before);
   } : undefined);
   const viewport = useSelectedTabVisibility(selected, model.active === selected ? model.focusRevision : null);
+  useHorizontalStripScroll(viewport);
   return <div className="workbench-group-bar" data-tab-group={group} style={{ gridColumn: group === 1 ? 3 : 1, gridRow: 1 }}
     onPointerDownCapture={() => split.focus(group)} onFocusCapture={() => split.focus(group)}>
     <Tabs className="workbench-tabs" variant="secondary" selectedKey={selected ?? ""}

@@ -280,6 +280,8 @@ def _run_claimed_server(
 
     def _webui_refresh_runtime_config() -> None:
         recovery.resume_settings = config.agents.defaults.resume
+        agent.output_repetition = config.agents.defaults.output_repetition.model_copy(deep=True)
+        agent.subagents.limits.output_repetition = agent.output_repetition.model_copy(deep=True)
         agent.refresh_runtime_config()
         agent.context.skills.always_skills = set(config.agents.defaults.always_skills)
         agent.subagents.tools.always_skills = set(config.agents.defaults.always_skills)

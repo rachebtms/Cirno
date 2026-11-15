@@ -35,6 +35,7 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.18](releases/0.2.18.md): durable in-flight context, Goal lifecycle recovery, configurable repeated-output protection, foreground reply reconciliation and horizontal tab scrolling.
 - [0.2.17](releases/0.2.17.md): gateway stream recovery, safer tool contracts, independent learning recovery, per-Skill context injection and grouped Router activity.
 
 - [0.2.16](releases/0.2.16.md): complete command discovery and compatibility, expanded memory cloud, waiting Worker supervision, compact Goal reminders and correlated execution reports.

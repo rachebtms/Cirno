@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from loguru import logger
+
 from cirno_core.agent.runner.contracts import AgentRunSpec
 from cirno_core.agent.runner.history import (
     emit_checkpoint,
@@ -14,7 +16,6 @@ from cirno_core.agent.tools.message import (
 )
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.session.history_visibility import is_hidden_history_message
-from loguru import logger
 
 
 def append_injected_messages(
@@ -60,7 +61,7 @@ async def try_drain_injections(
         messages.append(assistant_message)
         if iteration is not None:
             checkpoint: dict[str, Any] = {
-                "phase": "final_response",
+                "phase": "awaiting_model",
                 "iteration": iteration,
                 "model": spec.runtime.model,
                 "assistant_message": assistant_message,
@@ -95,7 +96,7 @@ async def try_drain_injections(
     return True, injection_cycles
 
 
-async def build_continuation_message(spec: AgentRunSpec) -> dict[str, str] | None:
+async def build_continuation_message(spec: AgentRunSpec) -> dict[str, Any] | None:
     callback = spec.continuation_callback
     if callback is None:
         return None
@@ -106,7 +107,7 @@ async def build_continuation_message(spec: AgentRunSpec) -> dict[str, str] | Non
         raise
     if content is None or not content.strip():
         return None
-    return {"role": "user", "content": content}
+    return {"role": "user", "content": content, "_hidden_history": {"kind": "goal_continuation"}}
 
 
 async def drain_injections(

@@ -11,9 +11,10 @@ from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.config.schema import Config
+from pydantic import BaseModel, TypeAdapter, ValidationError
+
 from cirno_server.webui.settings.contracts import WebUISettingsError
 from cirno_server.webui.settings.requests import redact_request_secrets
-from pydantic import BaseModel, TypeAdapter, ValidationError
 
 # Only these leaves may be read or patched through this surface. Model/provider,
 # and channel configuration keep dedicated mutation contracts. The embedding API
@@ -23,7 +24,11 @@ SYSTEM_PROMPT_PATHS = (
     "agents.defaults.system_prompts.router",
     "agents.defaults.system_prompts.worker",
 )
-LIVE_CONTEXT_PATHS = (*SYSTEM_PROMPT_PATHS, "agents.defaults.always_skills",
+OUTPUT_REPETITION_PATHS = tuple(
+    "agents.defaults.output_repetition." + name
+    for name in ("enabled", "repeat_count", "max_interventions", "guidance")
+)
+LIVE_CONTEXT_PATHS = (*SYSTEM_PROMPT_PATHS, *OUTPUT_REPETITION_PATHS, "agents.defaults.always_skills",
                       "agents.defaults.memory.context_files", "agents.defaults.memory.context_files_tokens")
 
 RUNTIME_CONFIG_PATHS = (
@@ -81,6 +86,10 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.max_tool_iterations",
     "agents.defaults.goal_continuation_limit",
     "agents.defaults.resume.message",
+    "agents.defaults.output_repetition.enabled",
+    "agents.defaults.output_repetition.repeat_count",
+    "agents.defaults.output_repetition.max_interventions",
+    "agents.defaults.output_repetition.guidance",
     "agents.defaults.resume.show_message",
     "agents.defaults.max_concurrent_subagents",
     "agents.defaults.max_tool_result_chars",

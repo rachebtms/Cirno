@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, NotRequired, TypedDict
 
 from cirno_usage.context import LLMUsageSource
+
+from cirno_core.config.repetition import OutputRepetitionConfig
 
 
 class SubagentOrigin(TypedDict):
@@ -40,3 +42,4 @@ class SubagentOutcome:
 class SubagentLimits:
     max_iterations: int
     max_tool_result_chars: int
+    output_repetition: OutputRepetitionConfig = field(default_factory=OutputRepetitionConfig)

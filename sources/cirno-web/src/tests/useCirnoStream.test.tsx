@@ -2631,7 +2631,11 @@ describe("useCirnoStream", () => {
       createdAt: 1_700_000_000_123,
       sessionMessage: event.provenance?.session_message,
     })]);
+    expect(result.current.isStreaming).toBe(false);
+    act(() => fake.emit("chat-target", { event: "goal_status", chat_id: "chat-target",
+      turn_id: "executing-review", status: "running", started_at: 1_700_000_100 }));
     expect(result.current.isStreaming).toBe(true);
+    expect(result.current.runStartedAt).toBe(1_700_000_100);
   });
 
   it("marks only the optimistic turn named by a correlated rejection as failed", () => {

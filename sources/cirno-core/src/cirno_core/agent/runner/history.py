@@ -8,6 +8,7 @@ from cirno_core.agent.governance import (
     ContextCompactionState,
 )
 from cirno_core.agent.runner.contracts import AgentRunSpec
+from cirno_core.providers.contracts import ProviderConversationState
 from cirno_core.utils.model_messages import build_assistant_message
 from cirno_core.utils.runtime import (
     is_blank_text,
@@ -62,6 +63,19 @@ async def emit_checkpoint(
     callback = spec.checkpoint_callback
     if callback is not None:
         await callback(payload)
+
+
+async def checkpoint_reply(
+    spec: AgentRunSpec, assistant: dict[str, Any], iteration: int,
+    provider_state: ProviderConversationState | None, *, final: bool,
+) -> None:
+    """Distinguish a finished answer from a complete segment needing another request."""
+    await emit_checkpoint(spec, {
+        "phase": "final_response" if final else "awaiting_model",
+        "iteration": iteration, "model": spec.runtime.model,
+        "assistant_message": assistant, "completed_tool_results": [],
+        "pending_tool_calls": [], "provider_state": provider_state,
+    })
 
 
 def append_final_message(messages: list[dict[str, Any]], content: str | None) -> None:

@@ -153,6 +153,7 @@ class SubagentExecution:
                     runtime=runtime,
                     max_iterations=self.limits.max_iterations,
                     max_tool_result_chars=self.limits.max_tool_result_chars,
+                    output_repetition=self.limits.output_repetition.model_copy(deep=True),
                     hook=hook,
                     max_iterations_message="Task stopped at its iteration limit before producing a final response.",
                     finalize_on_max_iterations=False,
@@ -189,7 +190,7 @@ class SubagentExecution:
         if result.stop_reason in {"error", "empty_final_response"}:
             final_result = result.error or "Error: subagent execution failed."
             return SubagentOutcome("error", final_result, result.stop_reason, result.error)
-        if result.stop_reason == "max_iterations":
+        if result.stop_reason in {"max_iterations", "repetition_limit"}:
             return SubagentOutcome(
                 "incomplete", result.final_content or "Iteration limit reached.", result.stop_reason
             )

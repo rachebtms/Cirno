@@ -241,7 +241,13 @@ export class ThreadTranscript {
 
   represented(event: ThreadProjectionEvent): boolean {
     if (event.turn_id && event.turn_seq !== undefined && contains(this.installed.get(event.turn_id), event.turn_seq)) return true;
-    const { text } = this.describe(event);
+    const { source, members, text } = this.describe(event);
+    const received = this.bySource.get(source);
+    // A live delivery can be repeated before any history refresh acknowledges
+    // it. Use its existing source receipts, never equality of reply text.
+    if (received && (members.size > 0 && Array.from(members).every(([turn, ranges]) =>
+      ranges.every(([first, last]) => received.members.get(turn)?.some(([a, b]) => a <= first && b >= last)))
+      || source.startsWith("replay:") && !!event.projection_id)) return true;
     return text !== null && this.textCoverage.some((certificate) => coversText(certificate, text));
   }
 

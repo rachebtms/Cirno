@@ -23,10 +23,18 @@ export function useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisi
   const threadVisibleRef = useRef(threadVisible);
   threadVisibleRef.current = threadVisible;
   const pendingStreamEventsRef = useRef<PendingStreamEvent[]>([]);
+  const pendingSequencesRef = useRef(new Map<string, Set<number>>());
   const streamFrameRef = useRef<number | null>(null);
   const streamTimerRef = useRef<number | null>(null);
   const lastStreamFlushRef = useRef(0);
 
+
+  const takePendingStreamEvents = useCallback(() => {
+    const events = pendingStreamEventsRef.current;
+    pendingStreamEventsRef.current = [];
+    pendingSequencesRef.current.clear();
+    return events;
+  }, []);
 
   const clearPendingStreamWork = useCallback(() => {
     if (streamFrameRef.current !== null) {
@@ -37,9 +45,9 @@ export function useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisi
       window.clearTimeout(streamTimerRef.current);
       streamTimerRef.current = null;
     }
-    pendingStreamEventsRef.current = [];
+    takePendingStreamEvents();
     lastStreamFlushRef.current = 0;
-  }, []);
+  }, [takePendingStreamEvents]);
 
   const applyPendingStreamEvents = useCallback(
     (prev: UIMessage[], events: PendingStreamEvent[]): UIMessage[] => {
@@ -112,9 +120,8 @@ export function useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisi
       window.clearTimeout(streamTimerRef.current);
       streamTimerRef.current = null;
     }
-    const events = pendingStreamEventsRef.current;
+    const events = takePendingStreamEvents();
     if (events.length === 0 && !end) return;
-    pendingStreamEventsRef.current = [];
     setMessages((prev) => {
       const nextMessages = events.length > 0 ? applyPendingStreamEvents(prev, events) : prev;
       transcriptRef.current.projection = { ...transcriptRef.current.projection, messages: nextMessages };
@@ -123,16 +130,15 @@ export function useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisi
       });
       return transcriptRef.current.messages;
     });
-  }, [applyPendingStreamEvents, setMessages, transcriptRef]);
+  }, [applyPendingStreamEvents, setMessages, takePendingStreamEvents, transcriptRef]);
 
   const schedulePendingStreamFlush = useCallback(function schedule() {
     if (streamFrameRef.current !== null || streamTimerRef.current !== null) return;
     if (document.visibilityState === "hidden" || !threadVisibleRef.current) {
       streamTimerRef.current = window.setTimeout(() => {
         streamTimerRef.current = null;
-        const events = pendingStreamEventsRef.current;
+        const events = takePendingStreamEvents();
         if (events.length === 0) return;
-        pendingStreamEventsRef.current = [];
         setMessages((prev) => applyPendingStreamEvents(prev, events));
       }, BACKGROUND_STREAM_FLUSH_INTERVAL_MS);
       return;
@@ -148,13 +154,12 @@ export function useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisi
     }
     streamFrameRef.current = window.requestAnimationFrame(() => {
       streamFrameRef.current = null;
-      const events = pendingStreamEventsRef.current;
+      const events = takePendingStreamEvents();
       if (events.length === 0) return;
-      pendingStreamEventsRef.current = [];
       lastStreamFlushRef.current = performance.now();
       setMessages((prev) => applyPendingStreamEvents(prev, events));
     });
-  }, [applyPendingStreamEvents, setMessages, transcriptRef]);
+  }, [applyPendingStreamEvents, setMessages, takePendingStreamEvents, transcriptRef]);
 
   useEffect(() => {
     if (threadVisible) {
@@ -190,11 +195,19 @@ export function useStreamBuffer({ chatId, transcriptRef, setMessages, threadVisi
   }, [flushPendingStreamEvents, schedulePendingStreamFlush, onForeground]);
 
   const enqueue = useCallback((event: PendingStreamEvent) => {
+    const { turnId, turnSeq } = event.turn;
+    if (turnId && turnSeq !== undefined) {
+      const pending = pendingSequencesRef.current.get(turnId) ?? new Set<number>();
+      if (pending.has(turnSeq)) return;
+      pending.add(turnSeq);
+      pendingSequencesRef.current.set(turnId, pending);
+    }
     pendingStreamEventsRef.current.push(event);
     schedulePendingStreamFlush();
   }, [schedulePendingStreamFlush]);
   const discardTurn = useCallback((turnId: string) => {
     pendingStreamEventsRef.current = pendingStreamEventsRef.current.filter(event => event.turn.turnId !== turnId);
+    pendingSequencesRef.current.delete(turnId);
   }, []);
   const snapshot = useCallback((messages: UIMessage[]) => pendingStreamEventsRef.current.length > 0
     ? applyPendingStreamEvents(messages, pendingStreamEventsRef.current) : messages, [applyPendingStreamEvents]);

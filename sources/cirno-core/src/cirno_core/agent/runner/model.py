@@ -7,6 +7,9 @@ import time
 from dataclasses import replace
 from typing import Any
 
+from cirno_usage.types import LLMUsage
+from loguru import logger
+
 from cirno_core.agent.governance import (
     ContextGovernor,
     ModelRequestState,
@@ -19,6 +22,12 @@ from cirno_core.agent.runner.recovery import (
     drop_malformed_tool_calls,
     finalization_retry_messages,
     malformed_tool_call_retry_messages,
+)
+from cirno_core.agent.runner.repetition import (
+    REPETITION_PAUSED_NOTICE,
+    OutputRepetitionGuard,
+    RepeatedOutputDetected,
+    message_tool_text,
 )
 from cirno_core.agent.runner.usage import (
     merge_usage,
@@ -39,8 +48,6 @@ from cirno_core.utils.reasoning import strip_reasoning_tags
 from cirno_core.utils.runtime import (
     is_blank_text,
 )
-from cirno_usage.types import LLMUsage
-from loguru import logger
 
 
 def _raise_if_cancelling() -> None:
@@ -123,6 +130,7 @@ class ModelRequests:
             )
         _raise_if_cancelling()
         wants_streaming = hook.wants_streaming()
+        repetition = OutputRepetitionGuard(spec.output_repetition, transcript or messages)
 
         active_hosted_tools: dict[str, dict[str, Any]] = {}
         native_reasoning_open = False
@@ -132,6 +140,7 @@ class ModelRequests:
         generation_started_at: float | None = None
         generation_elapsed_s = 0.0
         stream_buf = ""
+        thinking_buf = ""
 
         def _end_stream_segment() -> None:
             nonlocal stream_buf
@@ -198,10 +207,9 @@ class ModelRequests:
                 active_hosted_tools.pop(call_id, None)
 
         if wants_streaming:
-            thinking_buf = ""
-
             async def _stream(delta: str) -> None:
                 nonlocal stream_buf
+                repetition.check(delta)
                 stream_buf += delta
                 _generation_delta(delta)
                 if delta:
@@ -214,6 +222,7 @@ class ModelRequests:
                 nonlocal native_reasoning_open, thinking_buf
                 if not delta:
                     return
+                repetition.check(delta, reasoning=True)
                 _generation_delta(delta)
                 prev_clean = strip_reasoning_tags(thinking_buf)
                 thinking_buf += delta
@@ -236,6 +245,8 @@ class ModelRequests:
                 on_tool_call_delta=_provider_tool_event,
                 on_stream_recover=_stream_recover,
             )
+        else:
+            kwargs.update(repetition.stream_callbacks())
         from cirno_core.agent.tools.context import current_request_context
         from cirno_core.observability.recordings import current_recordings
         from cirno_core.observability.requests import begin_request, end_request
@@ -254,6 +265,21 @@ class ModelRequests:
         try:
             response = await coro
             _raise_if_cancelling()
+            completed_guard = OutputRepetitionGuard(spec.output_repetition, transcript or messages)
+            completed_guard.check(response.content or "", final=True)
+            completed_guard.check(response.reasoning_content or "", reasoning=True, final=True)
+            for call in response.tool_calls:
+                text = message_tool_text(call.name, call.arguments)
+                if text:
+                    completed_guard.check(text, final=True)
+        except RepeatedOutputDetected:
+            # Raising from a delta closes the HTTP stream; do not cancel the
+            # execution task or enter provider network/fallback retries.
+            response = LLMResponse(
+                content="".join(context.streamed_content_parts) + stream_buf,
+                reasoning_content=thinking_buf or None,
+                finish_reason="repetition",
+            )
         except BaseException as error:
             _pause_generation()
             await _close_native_reasoning()
@@ -272,7 +298,7 @@ class ModelRequests:
                     "error_type": response.error_type,
                     "error_code": response.error_code,
                 } if response.finish_reason == "error" else {}),
-            }, "error" if response.finish_reason == "error" else "completed")
+            }, "interrupted" if response.finish_reason == "repetition" else "error" if response.finish_reason == "error" else "completed")
         _pause_generation()
         await _close_native_reasoning()
         _end_stream_segment()
@@ -289,14 +315,14 @@ class ModelRequests:
         round_usage = await record_request_usage(self.context_governor, spec, request_state, response)
         # chat_stream_with_retry may recover internally, so only fail unfinished
         # hosted calls after the provider returns its final error response.
-        if response.finish_reason == "error":
+        if response.finish_reason in {"error", "repetition"}:
             for event in list(active_hosted_tools.values()):
                 await _provider_tool_event({
                     **event,
                     "phase": "error",
                     "result": None,
                     "error": response.content
-                    or "Model request failed before the provider-hosted tool completed.",
+                    or "Model request interrupted before the provider-hosted tool completed.",
                 })
         dropped, all_dropped, original_finish_reason = (
             drop_malformed_tool_calls(response)
@@ -377,7 +403,7 @@ class ModelRequests:
         *,
         request_state: ModelRequestState,
         round_usages: list[LLMUsage],
-    ) -> tuple[str | None, LLMUsage | None]:
+    ) -> tuple[str | None, LLMUsage | None, bool]:
         compaction = request_state.compaction
         request_messages = await self.context_governor.preparation.run(compaction.request_messages, messages)
         retry_messages = budget_exhausted_finalization_messages(request_messages)
@@ -393,11 +419,13 @@ class ModelRequests:
                 "Budget-exhausted finalization failed for {}; using fallback",
                 spec.session_key or "default",
             )
-            return None, usage
+            return None, usage, False
 
         raw_usage = await record_request_usage(self.context_governor, spec, request_state, response)
         round_usages.append(raw_usage)
         usage = merge_usage(usage, raw_usage)
+        if response.finish_reason == "repetition":
+            return REPETITION_PAUSED_NOTICE, usage, True
         if response.finish_reason == "error" or response.has_tool_calls:
             logger.warning(
                 "Budget-exhausted finalization returned finish_reason='{}' "
@@ -406,7 +434,7 @@ class ModelRequests:
                 len(response.tool_calls),
                 spec.session_key or "default",
             )
-            return None, usage
+            return None, usage, False
 
         context = AgentHookContext(
             iteration=spec.max_iterations,
@@ -419,8 +447,8 @@ class ModelRequests:
         if response.reasoning_content or response.thinking_blocks:
             messages.append(build_assistant_message(clean, reasoning_content=response.reasoning_content, thinking_blocks=response.thinking_blocks))
         if is_blank_text(clean):
-            return None, usage
-        return clean, usage
+            return None, usage, False
+        return clean, usage, False
 
 
     async def request_no_tools(
@@ -451,8 +479,16 @@ class ModelRequests:
         if history_tools:
             kwargs["tool_choice"] = "none"
         _raise_if_cancelling()
-        response = await spec.runtime.provider.chat_stream_with_retry(**kwargs)
-        _raise_if_cancelling()
+        guard = OutputRepetitionGuard(spec.output_repetition, transcript or messages)
+        kwargs.update(guard.stream_callbacks())
+        try:
+            response = await spec.runtime.provider.chat_stream_with_retry(**kwargs)
+            _raise_if_cancelling()
+            completed_guard = OutputRepetitionGuard(spec.output_repetition, transcript or messages)
+            completed_guard.check(response.content or "", final=True)
+            completed_guard.check(response.reasoning_content or "", reasoning=True, final=True)
+        except RepeatedOutputDetected:
+            response = LLMResponse(content=REPETITION_PAUSED_NOTICE, finish_reason="repetition")
         await self.context_governor.compaction.summarize_provider_compaction(
             request_state,
             response,

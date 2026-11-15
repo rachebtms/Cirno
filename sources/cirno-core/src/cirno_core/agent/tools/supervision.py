@@ -2,7 +2,12 @@
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import current_request_context
-from cirno_core.agent.tools.schema import BooleanSchema, IntegerSchema, StringSchema, tool_parameters_schema
+from cirno_core.agent.tools.schema import (
+    BooleanSchema,
+    IntegerSchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 from cirno_core.session.goal_state import MAX_GOAL_OBJECTIVE_CHARS
 from cirno_core.session.keys import ROUTER_SESSION_KEY
 
@@ -46,7 +51,7 @@ class ControlSessionTool(_SupervisionTool):
 
 @tool_parameters(tool_parameters_schema(
     to=StringSchema("Target stable conversation id (preferred) or current @name.", min_length=1),
-    action=StringSchema("get reads the Goal. create creates one; set explicitly replaces its objective. update edits recap, summary or continuation limit without resetting status/count. stop/pause/wait suspend work; resume restarts it; delete removes the Goal. Only the executing conversation declares completion.", enum=("get", "create", "set", "update", "stop", "pause", "resume", "delete", "wait")),
+    action=StringSchema("get reads the Goal. create creates one; set explicitly replaces its objective. update edits recap, summary or continuation limit without resetting status/count. stop/pause/wait suspend work; resume restores paused/stopped/waiting/blocked Goals, sharing conversation Continue recovery checks; repeated admitted resumes do not queue again; delete removes the Goal. Only the executing conversation declares completion.", enum=("get", "create", "set", "update", "stop", "pause", "resume", "delete", "wait")),
     objective=StringSchema("Required for create/set; authorized objective with completion criteria.", max_length=MAX_GOAL_OBJECTIVE_CHARS),
     ui_summary=StringSchema("Short Goal display label.", max_length=120),
     recap=StringSchema("Saved progress and next step.", max_length=4000),
@@ -61,4 +66,4 @@ class ControlGoalTool(_SupervisionTool):
 
     @property
     def description(self):
-        return "Router only: inspect, create, set, update, stop, pause, resume, wait or delete another conversation's Goal. Mutations stop its current worker first. Create/set/resume queue execution; update continues a previously active Goal. Suspended Goals remain suspended. Completion remains the worker's responsibility."
+        return "Router only: inspect, create, set, update, stop, pause, resume, wait or delete another conversation's Goal. Mutations settle current work first. Create/set/resume queue execution; interrupted resume shares the owner Continue path, preserving Goal ID/progress/counts. Repeated resuming/queued/running requests are idempotent. stopped is resumable; completed/cancelled are terminal. update continues a previously active Goal. Suspended Goals remain suspended until explicitly resumed. Completion remains the worker's responsibility."

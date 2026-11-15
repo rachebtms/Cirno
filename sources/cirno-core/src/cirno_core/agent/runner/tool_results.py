@@ -12,6 +12,47 @@ from cirno_core.agent.governance.results import apply_tool_result_budget
 from cirno_core.agent.runner.contracts import AgentRunSpec
 from cirno_core.agent.runner.history import emit_checkpoint
 from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
+from cirno_core.providers.tool_calls import ToolCallRequest
+
+
+class ToolResultCheckpoints:
+    """Keep a partial batch's completed observations while its siblings run."""
+
+    def __init__(self, spec: AgentRunSpec, state: ModelRequestState,
+                 response: LLMResponse, assistant: dict[str, Any], iteration: int,
+                 preparation: PromptPreparation) -> None:
+        self.spec, self.state, self.response = spec, state, response
+        self.assistant, self.iteration, self.preparation = assistant, iteration, preparation
+        self.completed: dict[str, dict[str, Any]] = {}
+        self.lock = asyncio.Lock()
+
+    async def record(self, call: ToolCallRequest, result: Any) -> None:
+        if self.spec.checkpoint_callback is None:
+            return
+        async with self.lock:
+            raw = {
+                "role": "tool", "tool_call_id": call.id, "name": call.name, "content": result,
+            }
+            self.completed[call.id] = raw
+            try:
+                rows = await self.preparation.run(apply_tool_result_budget, self.state.config, [raw])
+            except (Exception, asyncio.CancelledError):
+                await self.publish()
+                raise
+            self.completed[call.id] = rows[0]
+            await self.publish()
+
+    async def publish(self) -> None:
+        await emit_checkpoint(self.spec, {
+            "phase": "tools_completed" if len(self.completed) == len(self.response.tool_calls) else "awaiting_tools",
+            "iteration": self.iteration,
+            "model": self.spec.runtime.model, "assistant_message": self.assistant,
+            "completed_tool_results": [self.completed[item.id] for item in self.response.tool_calls
+                                       if item.id in self.completed],
+            "pending_tool_calls": [item.to_openai_tool_call() for item in self.response.tool_calls
+                                   if item.id not in self.completed],
+            "provider_state": None,
+        })
 
 
 async def commit_completed_tools(

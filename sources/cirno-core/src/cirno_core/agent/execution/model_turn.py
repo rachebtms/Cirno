@@ -8,6 +8,10 @@ from contextlib import AbstractContextManager, ExitStack
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from cirno_usage.context import source_from_request
+from cirno_usage.types import LLMUsage
+from loguru import logger
+
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.goals.permission import GoalInputScope
 from cirno_core.agent.hook import AgentHook, AgentTurnHookFactory
@@ -37,12 +41,9 @@ from cirno_core.security.workspace_access import (
 from cirno_core.session import turn_continuation
 from cirno_core.session.model import Session
 from cirno_core.session.request_usage import append_request_usage
-from cirno_core.session.recovery.contracts import PROVIDER_STATE_CHECKPOINT_VERSION, PROVIDER_STATE_CHECKPOINT_VERSION_KEY
 from cirno_core.utils.llm_runtime import LLMRuntime
-from cirno_usage.context import source_from_request
-from cirno_usage.types import LLMUsage
-from loguru import logger
 
+from .checkpoints import RuntimeCheckpointWriter
 from .injection import PendingInputInjector
 from .scope import _prompt_scope_metadata
 
@@ -72,6 +73,8 @@ class ModelTurnExecutor:
         request_context: RequestContext | None = None,
         provider_state: ProviderConversationState | None = None,
         require_visible_reply: bool = False,
+        checkpoint_start: int | None = None,
+        input_persisted_early: bool = False,
     ) -> AgentRunResult:
         """Run the agent iteration loop.
 
@@ -85,6 +88,11 @@ class ModelTurnExecutor:
         self.agent._sync_subagent_runtime_limits()
 
         ephemeral = ephemeral or (session is not None and not session.policy.persist)
+        checkpoints = RuntimeCheckpointWriter(
+            self.agent.persistence, session,
+            start=transcript_input.message_count if checkpoint_start is None else checkpoint_start,
+            input_persisted_early=input_persisted_early,
+        ) if session is not None and not ephemeral else None
 
         async def _request_usage(usage: LLMUsage) -> None:
             if session is None or ephemeral:
@@ -94,21 +102,6 @@ class ModelTurnExecutor:
                 partial(append_request_usage, usage=usage),
                 expected_generation=session.generation,
             )
-
-        async def _checkpoint(payload: dict[str, Any]) -> None:
-            if session is None or ephemeral:
-                return
-            public_payload = dict(payload)
-            private_state = public_payload.pop("provider_state", None)
-            public_payload.pop(PROVIDER_STATE_CHECKPOINT_VERSION_KEY, None)
-            if "provider_state" in payload and (
-                private_state is None or isinstance(private_state, ProviderConversationState)
-            ):
-                session.provider_state = private_state
-                public_payload[PROVIDER_STATE_CHECKPOINT_VERSION_KEY] = (
-                    PROVIDER_STATE_CHECKPOINT_VERSION
-                )
-            await self.agent.persistence.checkpoint(session, public_payload)
 
         request_ctx = request_context or RequestContext(
             channel="cli",
@@ -249,7 +242,8 @@ class ModelTurnExecutor:
                     session_key=session.key if session else None,
                     require_visible_reply=require_visible_reply,
                     provider_retry_mode=self.agent.provider_retry_mode,
-                    checkpoint_callback=_checkpoint,
+                    output_repetition=self.agent.output_repetition.model_copy(deep=True),
+                    checkpoint_callback=checkpoints,
                     request_usage_callback=_request_usage,
                     consolidate_history=partial(
                         self.agent.consolidator.summarize_transcript,
@@ -287,8 +281,12 @@ class ModelTurnExecutor:
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
             reset_file_states(file_state_token)
-        if session is not None and not ephemeral:
+        if session is not None and checkpoints is not None:
             session.provider_state = result.provider_state
+            result = dataclasses.replace(
+                result, persisted_message_count=checkpoints.persisted_count,
+                persisted_summary_checkpoint=checkpoints.summary,
+            )
         if result.stop_reason == "max_iterations":
             logger.warning("Max iterations ({}) reached", self.agent.max_iterations)
             should_stream = turn_continuation.should_stream_budget_response(

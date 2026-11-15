@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from weakref import WeakSet
 
+import cirno_core.providers.openai_compat_provider as compat
 import pytest
-
 from cirno_core.providers.model_api import ModelAPICapabilities
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
@@ -19,6 +19,73 @@ def provider_for(stream):
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=stream))))
     provider._ensure_client = AsyncMock(return_value=client)
     return provider
+
+
+@pytest.mark.parametrize("reason", ["stop", "tool_calls"])
+@pytest.mark.parametrize("keepalive", [False, True])
+async def test_finished_generation_does_not_wait_for_missing_usage(monkeypatch, reason, keepalive):
+    monkeypatch.setattr(compat, "_CHAT_USAGE_TRAILER_TIMEOUT_S", 0.01)
+
+    class Stream:
+        closed = False
+
+        async def __aiter__(self):
+            delta = {"content": "Verified answer"} if reason == "stop" else {"tool_calls": [{
+                "index": 0, "id": "checkpoint", "function": {
+                    "name": "memory__checkpoint", "arguments": '{"content":"Verified work"}',
+                },
+            }]}
+            yield {"choices": [{"delta": delta, "finish_reason": reason}]}
+            while True:
+                if not keepalive:
+                    await asyncio.Event().wait()
+                await asyncio.sleep(0.001)
+                yield {"choices": []}
+
+        async def close(self):
+            self.closed = True
+
+    stream = Stream()
+    provider = provider_for(stream)
+    provider.stream_idle_timeout_s = 180
+    result = await asyncio.wait_for(provider.chat_stream_with_retry(
+        [{"role": "user", "content": "Continue"}],
+    ), 0.5)
+    assert result.finish_reason == reason
+    assert result.usage is None
+    if reason == "stop":
+        assert result.content == "Verified answer"
+    else:
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].arguments == {"content": "Verified work"}
+    client = await provider._ensure_client()
+    client.chat.completions.create.assert_awaited_once()
+    assert stream.closed
+
+
+async def test_finished_stream_still_collects_delayed_usage_within_grace(monkeypatch):
+    monkeypatch.setattr(compat, "_CHAT_USAGE_TRAILER_TIMEOUT_S", 0.5)
+
+    class Stream:
+        closed = False
+
+        async def __aiter__(self):
+            yield {"choices": [{"delta": {"content": "Done"}, "finish_reason": "stop"}]}
+            await asyncio.sleep(0.01)
+            yield {"choices": [], "usage": {"prompt_tokens": 100, "completion_tokens": 5,
+                                           "prompt_cache_hit_tokens": 90}}
+            raise AssertionError("Do not wait for EOF after finish and usage")
+
+        async def close(self):
+            self.closed = True
+
+    stream = Stream()
+    result = await provider_for(stream).chat_stream([{"role": "user", "content": "Continue"}])
+    assert result.content == "Done"
+    assert result.usage.input_tokens == 100
+    assert result.usage.output_tokens == 5
+    assert result.usage.cache_read_tokens == 90
+    assert stream.closed
 
 
 async def test_long_stream_does_not_retain_sdk_chunks_and_preserves_final_usage():
@@ -174,3 +241,31 @@ async def test_ambiguous_gateway_deltas_return_retryable_error_without_partial_t
     assert "no ID for a reused index" in response.content
     assert response.error_kind == "invalid_response"
     assert stream.closed
+
+
+async def test_repetition_interrupt_closes_http_stream_without_provider_retry():
+    from cirno_core.agent.runner.repetition import OutputRepetitionGuard, RepeatedOutputDetected
+    from cirno_core.config.repetition import OutputRepetitionConfig
+
+    class Stream:
+        closed = False
+        async def __aiter__(self):
+            for _ in range(1000):
+                yield {'choices':[{'delta':{'content':'停住。'}, 'finish_reason':None}]}
+        async def close(self):
+            self.closed = True
+
+    stream = Stream()
+    provider = provider_for(stream)
+    guard = OutputRepetitionGuard(OutputRepetitionConfig(), [])
+    async def check(delta):
+        guard.check(delta)
+    try:
+        with pytest.raises(RepeatedOutputDetected):
+            await provider.chat_stream_with_retry([{'role':'user','content':'work'}], on_content_delta=check)
+        assert stream.closed
+        client = await provider._ensure_client()
+        assert client.chat.completions.create.await_count == 1
+        assert not asyncio.current_task().cancelling()
+    finally:
+        await provider.aclose()

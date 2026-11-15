@@ -109,6 +109,7 @@ class TurnInputs:
             history=ctx.history,
             current_message=ctx.msg.content,
             current_role=ctx.msg.input_role or "user",
+            current_message_internal=turn_continuation.internal_continuation_inbound(ctx.msg.metadata),
             media=ctx.msg.media if ctx.kind is TurnKind.USER and ctx.msg.media else None,
             session_summary=ctx.pending_summary,
             runtime_context_blocks=ctx.runtime_context_blocks,

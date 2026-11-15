@@ -32,6 +32,7 @@ from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import RuntimeEventContext, SubagentTaskChanged
 from cirno_core.config.agents import AgentDefaults
 from cirno_core.config.network import NetworkConfig
+from cirno_core.config.repetition import OutputRepetitionConfig
 from cirno_core.config.tools import ToolsConfig
 from cirno_core.security.workspace_access import (
     WorkspaceScope,
@@ -63,6 +64,7 @@ class SubagentManager:
         consolidator: Consolidator,
         network_config: NetworkConfig | None = None,
         session_manager: SessionManager | None = None,
+        output_repetition: OutputRepetitionConfig | None = None,
     ):
         if cast(object, consolidator) is None:
             raise TypeError("SubagentManager requires a consolidator")
@@ -71,6 +73,7 @@ class SubagentManager:
         self.limits = SubagentLimits(
             max_iterations if max_iterations is not None else defaults.max_tool_iterations,
             max_tool_result_chars,
+            (output_repetition or defaults.output_repetition).model_copy(deep=True),
         )
         self.tools = SubagentTools(
             workspace, tools_config or ToolsConfig(), network_config or NetworkConfig(),

@@ -56,6 +56,7 @@ from cirno_core.command import CommandRouter, register_builtin_commands
 from cirno_core.config.agents import AgentDefaults
 from cirno_core.config.models import ModelPresetConfig
 from cirno_core.config.network import NetworkConfig
+from cirno_core.config.repetition import OutputRepetitionConfig
 from cirno_core.memory.consolidation import Consolidator
 from cirno_core.processes.sessions import ExecSessionManager
 from cirno_core.providers.base import LLMProvider
@@ -69,8 +70,8 @@ from cirno_core.security.workspace_access import (
 from cirno_core.session import turn_continuation
 from cirno_core.session.manager import SESSION_CACHE_MAX_SIZE, SessionManager
 from cirno_core.session.model import Session, SessionPolicy
-from cirno_core.session.request_usage import RECENT_REQUEST_USAGE_KEY
 from cirno_core.session.recovery.contracts import RecoveryAdmission
+from cirno_core.session.request_usage import RECENT_REQUEST_USAGE_KEY
 from cirno_core.triggers.local_turns import LocalTriggerTurnCoordinator
 from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.llm_runtime import LLMRuntime
@@ -154,6 +155,7 @@ class AgentLoop:
         context_window_tokens: int | None = None,
         max_tool_result_chars: int | None = None,
         provider_retry_mode: str = "standard",
+        output_repetition: OutputRepetitionConfig | None = None,
         cron_service: CronService | None = None,
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
@@ -233,6 +235,7 @@ class AgentLoop:
             else defaults.max_tool_result_chars
         )
         self.provider_retry_mode = provider_retry_mode
+        self.output_repetition = (output_repetition or OutputRepetitionConfig()).model_copy(deep=True)
         self.tools_config = _tc
         self.network_config = network_config or NetworkConfig()
         self.web_config = _tc.web
@@ -293,6 +296,7 @@ class AgentLoop:
             tools_config=_tc,
             network_config=self.network_config,
             max_tool_result_chars=self.max_tool_result_chars,
+            output_repetition=self.output_repetition,
             restrict_to_workspace=restrict_to_workspace,
             disabled_skills=disabled_skills,
             always_skills=always_skills,
@@ -414,6 +418,7 @@ class AgentLoop:
             context_window_tokens=context_window_tokens,
             max_tool_result_chars=defaults.max_tool_result_chars,
             provider_retry_mode=defaults.provider_retry_mode,
+            output_repetition=defaults.output_repetition,
             restrict_to_workspace=config.tools.restrict_to_workspace,
             channels_config=config.channels,
             timezone=defaults.timezone,

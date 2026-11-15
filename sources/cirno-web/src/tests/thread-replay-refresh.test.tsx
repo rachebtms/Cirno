@@ -22,6 +22,70 @@ function response(content: string) {
 
 afterEach(() => { vi.unstubAllGlobals(); webuiThreadCache.clear(); });
 
+it.each(["visibility", "pageshow"] as const)("keeps one reply across a %s foreground refresh and repeated delivery", async (resume) => {
+  const { client, receive } = createStreamClient();
+  const latest = deferred();
+  const fetch = vi.fn().mockResolvedValueOnce(response("Question")).mockReturnValueOnce(latest.promise);
+  vi.stubGlobal("fetch", fetch);
+  let visible: DocumentVisibilityState = "visible";
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
+  const view = renderHook(() => useCirnoStream("foreground", undefined, false, undefined, undefined, [], {
+    key: "websocket:foreground",
+  }), { wrapper: ({ children }: { children: ReactNode }) => <ClientProvider client={client} token="fixture">{children}</ClientProvider> });
+  const reply = { event: "message" as const, chat_id: "foreground", turn_id: "turn", turn_seq: 1, text: "Inspection complete." };
+  try {
+    await waitFor(() => expect(view.result.current.history.loading).toBe(false));
+    act(() => receive(reply));
+    act(() => {
+      visible = "hidden";
+      document.dispatchEvent(new Event("visibilitychange"));
+      visible = "visible";
+      if (resume === "visibility") document.dispatchEvent(new Event("visibilitychange"));
+      else {
+        const event = new Event("pageshow");
+        Object.defineProperty(event, "persisted", { value: true });
+        window.dispatchEvent(event);
+      }
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    act(() => receive(reply));
+    expect(view.result.current.messages.filter(row => row.role === "assistant").map(row => row.content)).toEqual([reply.text]);
+    await act(async () => { latest.resolve(new Response(JSON.stringify(canonicalThreadPayload({ schemaVersion: 1,
+      messages: [
+        { id: "prompt", role: "user", content: "Question", turnId: "turn", turnSeq: 0, createdAt: 1 },
+        { id: "reply", role: "assistant", content: reply.text, turnId: "turn", turnSeq: 1, createdAt: 2 },
+      ],
+    })), { status: 200 })); });
+    act(() => receive(reply));
+    expect(view.result.current.messages.filter(row => row.role === "assistant")).toHaveLength(1);
+    act(() => receive({ ...reply, turn_seq: 2 }));
+    expect(view.result.current.messages.filter(row => row.role === "assistant").map(row => row.content)).toEqual([reply.text, reply.text]);
+  } finally {
+    view.unmount();
+    visibility.mockRestore();
+  }
+});
+
+it("does not concatenate a repeated delta inside one background paint batch", async () => {
+  const { client, receive } = createStreamClient();
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+  const view = renderHook(() => useCirnoStream("buffered"), {
+    wrapper: ({ children }: { children: ReactNode }) => <ClientProvider client={client} token="fixture">{children}</ClientProvider>,
+  });
+  try {
+    act(() => {
+      const delta = { event: "delta" as const, chat_id: "buffered", turn_id: "turn", turn_seq: 1, text: "Reply" };
+      receive(delta);
+      receive(delta);
+      receive({ event: "stream_end", chat_id: "buffered", turn_id: "turn", turn_seq: 2 });
+    });
+    expect(view.result.current.messages.map(row => row.content)).toEqual(["Reply"]);
+  } finally {
+    view.unmount();
+    visibility.mockRestore();
+  }
+});
+
 it("lets slow history finish under repeated turn notifications and coalesces the next refresh", async () => {
   const { client, receive } = createStreamClient();
   const first = deferred(), next = deferred();

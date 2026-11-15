@@ -1,19 +1,16 @@
-from __future__ import annotations
-
-from cirno_core.agent.runner.history import initial_transcript_and_compaction
-from cirno_core.agent.runner.usage import usage_or_estimate
-
 """Tests for core AgentRunner behavior: message passing, iteration limits,
 empty-response handling, usage accumulation, and config passthrough."""
 
+from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.agent.governance import ContextWindowExceededError
+from cirno_core.agent.runner.history import initial_transcript_and_compaction
+from cirno_core.agent.runner.usage import usage_or_estimate
 from cirno_core.config.agents import AgentDefaults
-from cirno_usage.types import LLMUsage
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import (
     LLMResponse,
@@ -21,6 +18,7 @@ from cirno_core.providers.contracts import (
     ProviderConversationState,
 )
 from cirno_core.providers.tool_calls import ToolCallRequest
+from cirno_usage.types import LLMUsage
 
 from sources.development.testing.runtime import make_run_spec
 
@@ -356,15 +354,15 @@ async def test_runner_replays_provider_state_without_chat_projection_duplicates(
     assert result.provider_state.pending_messages == []
     assert checkpoints[0]["phase"] == "awaiting_tools"
     assert "provider_state" not in checkpoints[0]
-    assert checkpoints[1]["phase"] == "tools_completed"
-    assert checkpoints[1]["provider_state"].pending_messages == [{
+    completed = next(item for item in reversed(checkpoints) if item["phase"] == "tools_completed")
+    assert completed["provider_state"].pending_messages == [{
         "role": "tool",
         "tool_call_id": "call_1|fc_1",
         "name": "list_dir",
         "content": "tool result",
     }]
-    assert checkpoints[2]["phase"] == "final_response"
-    assert checkpoints[2]["provider_state"].payload == second_state.payload
+    assert checkpoints[-1]["phase"] == "final_response"
+    assert checkpoints[-1]["provider_state"].payload == second_state.payload
 
 
 @pytest.mark.asyncio
@@ -427,7 +425,7 @@ async def test_runner_preserves_tool_result_before_rejecting_unfit_followup():
     assert calls == 1
     completed_checkpoint = next(
         checkpoint
-        for checkpoint in checkpoints
+        for checkpoint in reversed(checkpoints)
         if checkpoint["phase"] == "tools_completed"
     )
     checkpoint_pending = completed_checkpoint["provider_state"].pending_messages
@@ -710,7 +708,7 @@ async def test_runner_accounts_for_malformed_retry_and_no_tools_recovery():
         {"role": "assistant", "content": "recovered answer"},
     ]
     assert [item["tools"] for item in calls] == [definitions, definitions, None]
-    assert ["on_content_delta" in item for item in calls] == [True, True, False]
+    assert ["on_content_delta" in item for item in calls] == [True, True, True]
     assert [item["provider_context"].response_preset for item in calls] == ["", "", ""]
     assert calls[1]["messages"][-1]["content"].startswith(calls[0]["messages"][-1]["content"])
     assert "attempt 1" in calls[1]["messages"][-1]["content"]

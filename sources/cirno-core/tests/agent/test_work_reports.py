@@ -232,8 +232,8 @@ async def test_cirno_and_ptc_share_worker_tools_but_only_cirno_can_message_user(
 
 async def test_live_and_late_duplicate_messages_run_once(setup):
     from cirno_core.agent.loop import AgentLoop
-    from cirno_core.providers.generation import GenerationSettings
     from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.generation import GenerationSettings
     home, manager, bus = setup
     sender = SendSessionMessageTool(sessions=manager, bus=bus)
     await sender.enqueue(source_session_key="websocket:worker", target_handle="Cirno", content="One report", expect_reply=False, message_id="live-duplicate")
@@ -309,8 +309,8 @@ async def test_full_worker_report_to_cirno_user_message_pipeline(setup):
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.agent.turn_delivery import TurnDeliveryFactory
     from cirno_core.bus.events import InboundMessage
-    from cirno_core.providers.generation import GenerationSettings
     from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.generation import GenerationSettings
     from cirno_core.providers.tool_calls import ToolCallRequest
     from cirno_core.session.webui_turns.routing import WebuiTurnRoutePolicy
 
@@ -462,8 +462,8 @@ async def test_execution_reporting_respects_goal_segments_and_ordinary_chats(set
 async def test_loop_automatically_delivers_llm_failure_to_cirno(setup, raises):
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.events import InboundMessage
-    from cirno_core.providers.generation import GenerationSettings
     from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.generation import GenerationSettings
     home, manager, bus = setup
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
@@ -497,12 +497,12 @@ async def test_loop_automatically_delivers_llm_failure_to_cirno(setup, raises):
 
 
 @pytest.mark.parametrize("recovery_event", ["recovered", "cleared"])
-async def test_retry_notice_arrives_while_worker_is_running_and_recovers_once(setup, recovery_event):
+async def test_retry_health_is_inspectable_without_waking_the_coordinator(setup, recovery_event):
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.agent_events import RetryStatusEvent
     from cirno_core.bus.events import InboundMessage
-    from cirno_core.providers.generation import GenerationSettings
     from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.generation import GenerationSettings
     home, manager, bus = setup
     provider = MagicMock(aclose=AsyncMock())
     provider.get_default_model.return_value = "test-model"
@@ -525,17 +525,17 @@ async def test_retry_notice_arrives_while_worker_is_running_and_recovers_once(se
     task = asyncio.create_task(loop.processing.process(InboundMessage(channel="websocket", chat_id="worker", sender_id="user", content="Continue")))
     try:
         await asyncio.wait_for(waiting.wait(), 5)
-        assert not task.done() and bus.inbound_size == 1
-        notice = await bus.consume_inbound()
-        assert notice.metadata["_work_report"]["state"] == "waiting"
-        assert notice.metadata["_work_report"]["execution"]["failure_error_kind"] == "timeout"
+        assert not task.done() and bus.inbound_size == 0
+        notice = (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report"]
+        assert notice["state"] == "waiting"
+        assert notice["execution"]["failure_error_kind"] == "timeout"
         assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]["status"] == "active"
         proceed.set()
         await asyncio.wait_for(task, 5)
-        assert bus.inbound_size == 1
-        recovery = await bus.consume_inbound()
-        assert recovery.metadata["_work_report"]["state"] == "progress"
-        assert recovery.metadata["_work_report"]["execution"]["retry_status"] == "recovered"
+        assert bus.inbound_size == 0
+        recovery = (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report"]
+        assert recovery["state"] == "progress"
+        assert recovery["execution"]["retry_status"] == "recovered"
         assert (await manager.state.read_metadata("websocket:worker"))["metadata"]["goal_state"]["status"] == "waiting"
     finally:
         proceed.set()
@@ -554,7 +554,51 @@ async def test_undelivered_retry_health_coalesces_without_losing_results(setup):
         latest = await record_retry_report(manager, "websocket:worker", turn_id="same-turn", episode=episode,
                                            event=RetryStatusEvent("waiting" if episode % 2 == 0 else "recovered", 1, None, "connection"))
     pending = (await manager.state.read_metadata("websocket:worker"))["metadata"]["work_report_pending"]
-    assert [report["id"] for report in pending] == [result["id"], latest["id"]]
+    assert [report["id"] for report in pending] == [result["id"]]
+    assert latest["delivery_status"] == "recorded"
+
+
+async def test_four_retry_episodes_stay_quiet_and_terminal_failure_is_delivered_once(setup):
+    from cirno_core.agent.work_reports import record_execution_report, record_retry_report
+    from cirno_core.bus.agent_events import RetryStatusEvent
+
+    _, manager, bus = setup
+    sender = SendSessionMessageTool(sessions=manager, bus=bus)
+    for episode in range(1, 5):
+        for state in ("waiting", "recovered"):
+            report = await record_retry_report(manager, "websocket:worker", turn_id="one-turn", episode=episode,
+                                               event=RetryStatusEvent(state, 1, 4, "timeout"))
+            assert await deliver_work_report(manager, sender, "websocket:worker", report) == "recorded"
+            assert bus.inbound.empty()
+    latest = (await manager.state.read_header("websocket:worker")).metadata["work_report"]
+    assert latest["execution"]["retry_episode"] == 4
+    for _ in range(2):
+        failed = await record_execution_report(manager, "websocket:worker", turn_id="one-turn", stop_reason="error",
+                                               failure_error_kind="timeout", output="Retries exhausted")
+        await deliver_work_report(manager, sender, "websocket:worker", failed)
+    assert bus.inbound_size == 1
+    assert bus.inbound.get_nowait().metadata["_work_report"]["state"] == "failed"
+
+
+async def test_retry_health_does_not_discard_a_pending_question_or_redeliver_old_health(setup):
+    from cirno_core.agent.work_reports import record_retry_report
+    from cirno_core.bus.agent_events import RetryStatusEvent
+
+    _, manager, bus = setup
+    sender = SendSessionMessageTool(sessions=manager, bus=bus)
+    question = await save_work_report(manager, "websocket:worker", state="waiting", summary="Choose a dataset",
+                                      human_action="Which dataset should I use?")
+    health = await record_retry_report(manager, "websocket:worker", turn_id="one-turn", episode=1,
+                                      event=RetryStatusEvent("waiting", 1, 4, "timeout"))
+    assert await deliver_work_report(manager, sender, "websocket:worker", health) == "recorded"
+    assert await deliver_work_report(manager, sender, "websocket:worker", question) == "queued"
+    assert bus.inbound_size == 1
+    # An upgrade can leave an old pending health record in the delivery journal.
+    health = {**health, "delivery_status": "pending"}
+    await manager.state.update_metadata("websocket:worker", {"work_report": health, "work_report_pending": [health]})
+    assert await deliver_work_report(manager, sender, "websocket:worker", health) == "recorded"
+    assert bus.inbound_size == 1
+    assert not (await manager.state.read_header("websocket:worker")).metadata["work_report_pending"]
 
 
 async def test_terminal_execution_retires_stale_retry_delivery_and_keeps_other_results(setup):
@@ -647,8 +691,8 @@ async def test_inbox_failure_preserves_success_and_retries_without_rerunning_wor
     from cirno_core.agent.loop import AgentLoop
     from cirno_core.bus.events import InboundMessage
     from cirno_core.notifications.inbox import NotificationInbox
-    from cirno_core.providers.generation import GenerationSettings
     from cirno_core.providers.contracts import LLMResponse
+    from cirno_core.providers.generation import GenerationSettings
     home, manager, bus = setup
     await manager.state.update_metadata("websocket:worker", {"goal_state": {}})
     provider = MagicMock(aclose=AsyncMock())

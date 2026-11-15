@@ -6,7 +6,6 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.bus.events import InboundMessage
 from cirno_core.session.goal_state import (
@@ -19,9 +18,9 @@ from cirno_core.session.turn_continuation import (
     INTERNAL_CONTINUATION_KIND_META,
     INTERNAL_CONTINUATION_META,
     INTERNAL_CONTINUATION_RUN_STARTED_AT_META,
-    _save_skip_for_turn,
     internal_continuation_run_started_at,
     maybe_continue_turn,
+    save_skip_for_turn,
     should_finalize_on_max_iterations,
     should_stream_budget_response,
     sustained_goal_continuation_inbound,
@@ -154,12 +153,12 @@ def test_internal_continuation_requires_budget_boundary_and_queue():
 
 def test_save_skip_unchanged_for_standalone_current_message():
     # [system, history user, current user] with the current user already saved.
-    assert _save_skip_for_turn(
+    assert save_skip_for_turn(
         message_metadata=None,
         initial_message_count=3,
         input_persisted_early=True,
     ) == 3
-    assert _save_skip_for_turn(
+    assert save_skip_for_turn(
         message_metadata=None,
         initial_message_count=3,
         input_persisted_early=False,

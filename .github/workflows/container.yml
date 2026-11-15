@@ -43,6 +43,13 @@ jobs:
           npm run lint
           npm test
           npm run build
+      - name: Verify affected browser flows in Chromium and WebKit
+        working-directory: sources/cirno-web
+        run: |
+          npx playwright install --with-deps chromium webkit
+          npx tsc -p tsconfig.browser.json
+          npx playwright test browser/history-hydration.spec.ts browser/tab-scroll.spec.ts browser/tab-visibility.spec.ts browser/settings-rebuild.spec.ts --workers=2
+          npx playwright test browser/history-hydration.spec.ts browser/tab-scroll.spec.ts browser/tab-visibility.spec.ts browser/settings-rebuild.spec.ts --browser=webkit --workers=2
       - name: Install backend and channel test dependencies
         env:
           CIRNO_SKIP_WEBUI_BUILD: '1'
