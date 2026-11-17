@@ -601,6 +601,26 @@ async def test_retry_health_does_not_discard_a_pending_question_or_redeliver_old
     assert not (await manager.state.read_header("websocket:worker")).metadata["work_report_pending"]
 
 
+@pytest.mark.parametrize("question_turn", ["previous-turn", "current-turn"])
+async def test_runtime_reports_inherit_questions_only_from_their_own_turn(setup, question_turn):
+    from cirno_core.agent.work_reports import record_execution_report, record_retry_report
+    from cirno_core.bus.agent_events import RetryStatusEvent
+
+    _, manager, _ = setup
+    question = await save_work_report(manager, "websocket:worker", state="waiting",
+        summary="Question from an earlier report", human_action="Which document?", turn_id=question_turn)
+    health = await record_retry_report(manager, "websocket:worker", turn_id="current-turn", episode=1,
+        event=RetryStatusEvent("waiting", 1, 4, "timeout"))
+    failed = await record_execution_report(manager, "websocket:worker", turn_id="current-turn",
+        stop_reason="error", output="Checkpoint boundary failed", stage="run")
+    expected = "Which document?" if question_turn == "current-turn" else None
+    assert health["human_action"] == failed["human_action"] == expected
+    pending = (await manager.state.read_header("websocket:worker")).metadata["work_report_pending"]
+    original = next(row for row in pending if row["id"] == question["id"])
+    assert original["human_action"] == "Which document?"
+    assert original["turn_id"] == question_turn
+
+
 async def test_terminal_execution_retires_stale_retry_delivery_and_keeps_other_results(setup):
     from cirno_core.agent.work_reports import record_execution_report, record_retry_report
     from cirno_core.bus.agent_events import RetryStatusEvent

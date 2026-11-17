@@ -17,6 +17,7 @@ from .persistence import TurnPersistence
 
 class RuntimeCheckpointWriter:
     def __init__(self, persistence: TurnPersistence, session: Session, *, start: int,
+                 history_boundary: int,
                  input_persisted_early: bool) -> None:
         self.persistence, self.session = persistence, session
         self.cursor = start
@@ -25,8 +26,9 @@ class RuntimeCheckpointWriter:
         # Raw prompt indices differ from persisted positions (system context,
         # filtered rows and hidden consolidation markers are not one-to-one).
         self.positions = {start: len(session.messages)}
-        if input_persisted_early:
-            self.positions[start - 1] = len(session.messages) - 1
+        # Pre-request consolidation covers accepted history, excluding the fresh
+        # input even when a continuation deliberately does not persist that input.
+        self.positions[history_boundary] = len(session.messages) - int(input_persisted_early)
 
     async def __call__(self, payload: dict[str, Any]) -> None:
         public = dict(payload)

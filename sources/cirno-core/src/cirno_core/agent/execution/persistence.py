@@ -373,6 +373,12 @@ class TurnPersistence:
         message_positions: dict[int, int] | None = None,
     ) -> None:
         """Persist the latest in-flight turn state without blocking the event loop."""
+        if messages is not None and summary_checkpoint is not None:
+            boundary = summary_checkpoint.transcript_boundary
+            if message_positions is None or (
+                boundary not in message_positions and not skip <= boundary <= len(messages)
+            ):
+                raise ValueError("Checkpoint summary does not belong to the persisted transcript")
         session.metadata[RUNTIME_CHECKPOINT_KEY] = payload
         if messages is None:
             await self.agent.sessions.state.checkpoint_view(session, payload)
@@ -382,8 +388,7 @@ class TurnPersistence:
         )
         if summary_checkpoint is not None:
             boundary = summary_checkpoint.transcript_boundary
-            if message_positions is None or boundary not in message_positions:
-                raise ValueError("Checkpoint summary does not belong to the persisted transcript")
+            assert message_positions is not None
             position = message_positions[boundary]
             session.commit_summary_checkpoint(summary_checkpoint.summary, insert_at=position)
             # Future summaries can cover an earlier durable boundary. Keep its

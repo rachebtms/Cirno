@@ -106,7 +106,7 @@ Balance queries are disabled until configured. Set a complete balance endpoint a
 
 ## Saving settings
 
-Runtime settings save automatically. Switching a settings category, leaving the page or closing its workbench tab waits for pending writes, including edits made before the autosave delay expires. A failed save keeps the page open with its draft and error so you can correct, retry or discard it. Restart prompts use the saved configuration: live prompt edits do not keep a restart pending, while rotating an embedding API key does.
+Runtime settings save automatically. Switching a settings category, leaving the page or closing its workbench tab waits for pending writes, including edits made before the autosave delay expires. A failed save keeps the page open with its draft and error so you can correct, retry or discard it. Switching workbench tabs and browser Back/Forward do not ask whether to restart. Settings keeps its saved-change notice and manual Restart action until the restart requirement is resolved. Restart requirements use the saved configuration: live prompt edits do not keep a restart pending, while rotating an embedding API key does.
 
 Settings → Memory library exposes the shared-memory injection budget and index scan batch alongside the Home memory file and index status. Settings → Tools & CLI Apps includes the CLI Apps master switch, so a disabled tool can be re-enabled from the interface. Idle consolidation trigger and retention percentages accept fractional values.
 
@@ -182,7 +182,7 @@ Settings → Account shows the registered owner and changes the browser-login pa
 
 ## Conversation controls and access review
 
-Settings → Goals & execution configures the default workspace, continuation text and its visibility. The workspace setting (`agents.defaults.workspace`) accepts an absolute server path, including `~/…`. Restart when prompted to apply it to new conversations. Saving this setting does not move existing files or change existing conversations' working directories; projects can still supply their own default directory. A saved conversation continues to show its working directory as a locked selector. Conversation storage is instance-wide and remains available after changing the default workspace and restarting.
+Settings → Goals & execution configures the default workspace, continuation text and its visibility. The workspace setting (`agents.defaults.workspace`) accepts an absolute server path, including `~/…`. Use the Restart action in Settings to apply it to new conversations. Saving this setting does not move existing files or change existing conversations' working directories; projects can still supply their own default directory. A saved conversation continues to show its working directory as a locked selector. Conversation storage is instance-wide and remains available after changing the default workspace and restarting.
 
 Server restart preserves completed model segments and tool observations from all rounds of the in-flight turn, including finished calls in a partly completed batch. They are appended with the recovery checkpoint in the same session transaction. A call still in progress is marked interrupted; its external outcome may need inspection. A model stream interrupted before completion cannot resume its hidden inference state. After restart, Continue resumes from the saved execution boundary; active/waiting Goals respect this recovery state and do not wake or consume continuation rounds before confirmation.
 

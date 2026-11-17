@@ -50,3 +50,32 @@ it("a Goal status or passive notice cannot settle genuine execution before its t
   expect(client.getRunState("worker").active).toBe(true);
   expect(client.getRunTurnId("worker")).toBe("next");
 });
+
+it("quiet heartbeat and Worker-report turns settle without a visible reply", () => {
+  const { client, socket } = connection();
+  for (const turnId of ["heartbeat-1", "worker-report-1", "heartbeat-2"]) {
+    socket.fakeMessage({ event: "goal_status", chat_id: "router", turn_id: turnId, status: "running", started_at: 100 });
+    socket.fakeMessage({ event: "reasoning_delta", chat_id: "router", turn_id: turnId, text: "No update needed." });
+    expect(client.getRunState("router").active).toBe(true);
+    socket.fakeMessage({ event: "turn_end", chat_id: "router", turn_id: turnId });
+    socket.fakeMessage({ event: "goal_status", chat_id: "router", turn_id: turnId, status: "idle" });
+    expect(client.getRunState("router").active).toBe(false);
+    expect(client.hasUnsettledRun("router")).toBe(false);
+    // A delayed tail from this closed request must not restart Working.
+    socket.fakeMessage({ event: "stream_end", chat_id: "router", turn_id: turnId });
+    expect(client.getRunState("router").active).toBe(false);
+  }
+});
+
+it("automatic slices retain one run until its final completion", () => {
+  const { client, socket } = connection();
+  for (let slice = 0; slice < 4; slice++) {
+    socket.fakeMessage({ event: "goal_status", chat_id: "worker", turn_id: "goal-turn", status: "running", started_at: 100 });
+    socket.fakeMessage({ event: "stream_end", chat_id: "worker", turn_id: "goal-turn" });
+    expect(client.getRunState("worker").active).toBe(true);
+  }
+  socket.fakeMessage({ event: "turn_end", chat_id: "worker", turn_id: "goal-turn" });
+  socket.fakeMessage({ event: "goal_status", chat_id: "worker", turn_id: "goal-turn", status: "idle" });
+  expect(client.getRunState("worker").active).toBe(false);
+  expect(client.hasUnsettledRun("worker")).toBe(false);
+});

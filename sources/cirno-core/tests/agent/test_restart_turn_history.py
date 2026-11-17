@@ -139,7 +139,7 @@ async def test_checkpoint_summary_can_cover_an_earlier_already_committed_boundar
     from cirno_core.agent.execution.persistence import TurnPersistence
 
     writer = RuntimeCheckpointWriter(TurnPersistence(SimpleNamespace(sessions=sessions)), session,
-                                     start=2, input_persisted_early=True)
+                                     start=2, history_boundary=1, input_persisted_early=True)
     messages = [{"role": "system", "content": "Fixed prefix"}, {"role": "user", "content": "Research"}]
 
     async def save(summary=None):

@@ -36,7 +36,7 @@ export function useSplitLayout(model: WorkbenchModel) {
     const tab = model.tabs.find(tab => tab.id === id);
     if (!tab) return;
     // The model commits selection after the current page's exit guard accepts it.
-    // Keep that page (and its restart/save dialog) visible until then.
+    // Keep that page and its save state visible until then.
     model.activate(tab);
   };
   const enabled = state.enabled || groupTabs[1].length > 0;

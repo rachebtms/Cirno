@@ -5,6 +5,7 @@ import {
   connectSpy,
   createChatSpy,
   requestMutationSpy,
+  sendSystemCommandSpy,
   statusHandlers,
   setNavigatorPlatform,
   mockFetchRoutes,
@@ -25,7 +26,7 @@ import App from "@/App";
 describe("App navigation", () => {
   installAppTestLifecycle();
 
-  it("switches to a conversation tab after deferring a required settings restart", async () => {
+  it("switches repeatedly between Settings and chat without prompting for a saved restart", async () => {
     const payload = { ...baseSettingsPayload(), requires_restart: true };
     mockFetchRoutes({ "/v0/settings": payload });
     render(<App />);
@@ -34,22 +35,35 @@ describe("App navigation", () => {
     await user.click(screen.getByRole("button", { name: "Open Settings" }));
     await screen.findByRole("navigation", { name: "Settings sections" });
     const chat = screen.getAllByRole("tab").find(tab => tab.getAttribute("aria-selected") !== "true")!;
-    await user.click(chat);
-    await screen.findByRole("dialog", { name: "Restart before leaving?" });
-    await user.keyboard("{Escape}");
-    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
-    expect(window.location.hash).toBe("#/settings");
-    await user.click(chat);
-    const dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
-    await user.click(within(dialog).getByRole("button", { name: "Restart later" }));
-    await waitFor(() => expect(window.location.hash).toBe("#/new"));
-    expect(chat).toHaveAttribute("aria-selected", "true");
-    expect(await screen.findByRole("textbox", { name: "Message input" })).toBeVisible();
-    await user.click(screen.getByRole("tab", { name: "Settings" }));
-    expect(await screen.findByText("Saved. Restart to apply changes.")).toBeVisible();
+    for (let visit = 0; visit < 3; visit++) {
+      await user.click(chat);
+      await waitFor(() => expect(window.location.hash).toBe("#/new"));
+      expect(chat).toHaveAttribute("aria-selected", "true");
+      expect(await screen.findByRole("textbox", { name: "Message input" })).toBeVisible();
+      expect(screen.queryByRole("dialog", { name: "Restart before leaving?" })).not.toBeInTheDocument();
+      await user.click(screen.getByRole("tab", { name: "Settings" }));
+      expect(await screen.findByText("Saved. Restart to apply changes.")).toBeVisible();
+    }
+    expect(sendSystemCommandSpy).not.toHaveBeenCalled();
   });
 
-  it("flushes a pending runtime edit before a tab switch and uses its new restart status", async () => {
+  it("switches Launcher pages and closes Settings without repeating the restart question", async () => {
+    mockFetchRoutes({ "/v0/settings": { ...baseSettingsPayload(), requires_restart: true } });
+    render(<App />);
+    await screen.findByRole("textbox", { name: "Message input" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    await screen.findByRole("navigation", { name: "Settings sections" });
+    await openAppCatalog();
+    expect(screen.queryByRole("dialog", { name: "Restart before leaving?" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(await screen.findByText("Saved. Restart to apply changes.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close Settings" }));
+    await waitFor(() => expect(screen.queryByRole("tab", { name: "Settings" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("dialog", { name: "Restart before leaving?" })).not.toBeInTheDocument();
+    expect(sendSystemCommandSpy).not.toHaveBeenCalled();
+  });
+
+  it("flushes a pending runtime edit before switching tabs without a restart prompt", async () => {
     const payload = { ...baseSettingsPayload(), runtime_config: { "agents.defaults.max_tool_iterations": 200 } };
     mockFetchRoutes({ "/v0/settings": payload });
     render(<App />);
@@ -61,10 +75,26 @@ describe("App navigation", () => {
     requestMutationSpy.mockResolvedValue({ ...payload, requires_restart: true, runtime_config: { "agents.defaults.max_tool_iterations": 37 } });
     fireEvent.change(field, { target: { value: "37" } });
     fireEvent.click(screen.getAllByRole("tab").find(tab => tab.getAttribute("aria-selected") !== "true")!);
-    const dialog = await screen.findByRole("dialog", { name: "Restart before leaving?" });
-    expect(requestMutationSpy).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.max_tool_iterations": 37 } }, 20_000);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Restart later" }));
     await waitFor(() => expect(window.location.hash).toBe("#/new"));
+    expect(requestMutationSpy).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.max_tool_iterations": 37 } }, 20_000);
+    expect(screen.queryByRole("dialog", { name: "Restart before leaving?" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(await screen.findByText("Saved. Restart to apply changes.")).toBeVisible();
+  });
+
+  it.each(["hashchange", "popstate"])("navigates via %s without asking to restart saved settings", async event => {
+    mockFetchRoutes({ "/v0/settings": { ...baseSettingsPayload(), requires_restart: true } });
+    render(<App />);
+    await screen.findByRole("textbox", { name: "Message input" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    await screen.findByRole("navigation", { name: "Settings sections" });
+    act(() => {
+      window.history.replaceState({}, "", "#/new");
+      window.dispatchEvent(new Event(event));
+    });
+    expect(await screen.findByRole("textbox", { name: "Message input" })).toBeVisible();
+    expect(window.location.hash).toBe("#/new");
+    expect(screen.queryByRole("dialog", { name: "Restart before leaving?" })).not.toBeInTheDocument();
   });
 
   it("keeps a just-created topic route while the session list catches up", async () => {

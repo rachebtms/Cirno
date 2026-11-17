@@ -91,6 +91,7 @@ class ModelTurnExecutor:
         checkpoints = RuntimeCheckpointWriter(
             self.agent.persistence, session,
             start=transcript_input.message_count if checkpoint_start is None else checkpoint_start,
+            history_boundary=transcript_input.message_count - (transcript_input.current_message is not None),
             input_persisted_early=input_persisted_early,
         ) if session is not None and not ephemeral else None
 

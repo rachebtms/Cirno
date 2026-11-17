@@ -88,7 +88,9 @@ export function useConversationProjection({
         settingsExitGuardRef.current
       ) {
         settingsExitGuardRef.current(leave, {
-          promptRestart: current.view !== route.view,
+          // Writes must settle before navigation; a saved restart requirement
+          // stays in Settings and must not block ordinary tab switches.
+          promptRestart: false,
         });
       } else leave();
     },
@@ -115,7 +117,7 @@ export function useConversationProjection({
             if (route.view === "chat" && !route.activeKey)
               setDraftWorkspaceScope(null);
           },
-          { promptRestart: current.view !== route.view },
+          { promptRestart: false },
         );
         return;
       }

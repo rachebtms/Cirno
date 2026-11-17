@@ -22,6 +22,10 @@ from cirno_core.session.goal_state import (
     sustained_goal_turn,
 )
 from cirno_core.session.recovery.contracts import REQUEST_ORIGIN_METADATA_KEY
+from cirno_core.session.transport_metadata import (
+    WEBSOCKET_TURN_OWNER_METADATA_KEY,
+    WEBUI_TURN_METADATA_KEY,
+)
 
 if TYPE_CHECKING:
     from cirno_core.agent.execution.context import TurnContext
@@ -165,6 +169,11 @@ async def maybe_continue_turn(
     )
     request = ctx.request_context
     assert request is not None and request.turn_id is not None
+    # A system input has no transport identity until its display route is
+    # admitted. Request metadata contains that route; the original input does not.
+    for key in (WEBUI_TURN_METADATA_KEY, WEBSOCKET_TURN_OWNER_METADATA_KEY):
+        if key in request.metadata:
+            metadata[key] = request.metadata[key]
     metadata[REQUEST_ORIGIN_METADATA_KEY] = {
         "message_id": request.message_id,
         "turn_id": request.turn_id,

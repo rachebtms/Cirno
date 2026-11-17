@@ -64,7 +64,14 @@ async def save_work_report(sessions, key, *, state, summary, artifacts=(), human
         nonlocal report
         previous = metadata.get(WORK_REPORT_KEY) or {}
         current_question = question
-        if human_action is None:
+        # Explicit reports may retain a question until the Agent clears it.
+        # Runtime health/failure reports must not relabel another turn's question
+        # as a new blocker. Its original report and delivery receipt stay intact.
+        inherit_question = (
+            not execution or execution.get("origin") != "runtime"
+            or turn_id is not None and previous.get("turn_id") == turn_id
+        )
+        if human_action is None and inherit_question:
             current_question = previous.get("human_action")
         goal = parse_goal_state(goal_state_raw(metadata)) or {}
         if expected_goal is not None and goal != expected_goal:

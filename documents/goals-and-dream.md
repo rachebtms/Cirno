@@ -32,6 +32,8 @@ Only the Router receives `conversations.control` and `goals.control`. `conversat
 
 `conversations.control(action="get", to="@handle")` reads a worker's workspace, PTC mode and selected model preset, including the available preset IDs. `action="configure"` changes any combination of `workspace`, `ptc_mode` and `model_preset` on an idle conversation. Stop active work first, configure it, then continue when ready. Workspace must be an existing absolute server directory; `~/` is accepted. The `model_preset` value uses a stable model ID from the configured catalog; `default` restores the instance's active model. Changes are persisted together and broadcast to the Web UI. Configuration does not restart work, move files, clear history, alter the Goal or Project membership, or switch its Default/AI review/Full Access mode. Ordinary conversations do not receive this supervisory capability.
 
+Runtime retry/failure reports inherit a human-action question only from the same execution turn. A question from an older turn stays in its original report and delivery record instead of being presented as a new execution failure's blocker. Explicit Agent reports retain their existing omit-to-keep, empty-to-clear question contract.
+
 `conversations.set_title` lets the model set a concise title in the user's language. Automatic title generation is also available; manual titles and the Router's identity are preserved.
 
 ## Delegated execution results and failures

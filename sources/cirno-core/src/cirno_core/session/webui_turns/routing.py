@@ -10,6 +10,7 @@ from cirno_core.bus.events import InboundMessage
 from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno_core.session.keys import ROUTER_CHAT_ID, ROUTER_SESSION_KEY
 from cirno_core.session.manager import SessionManager
+from cirno_core.session.turn_continuation import internal_continuation_inbound
 from cirno_core.session.session_identity import webui_session_key
 from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.session.transport_metadata import (
@@ -35,6 +36,7 @@ class WebuiTurnRoutePolicy:
     ) -> TurnRoute:
         """Make an independently dispatched agent turn visible in WebUI."""
         routed = route
+        continuation = internal_continuation_inbound(msg.metadata)
         if msg.channel == "telegram" and session_key == ROUTER_SESSION_KEY:
             # Telegram is another private entrance to the same personal agent.
             # Keep model activity on Cirno; only explicit replies go back to Telegram.
@@ -57,9 +59,10 @@ class WebuiTurnRoutePolicy:
                 and msg.metadata.get("injected_event") == "subagent_result"
             )
             or internal_user_input
+            or (msg.channel == "system" and bool(msg.metadata.get("_work_report")))
             or msg.metadata.get("_heartbeat") is True
             or msg.metadata.get("_awakening") is True
-            or msg.metadata.get("_internal_continuation") is True
+            or continuation
         ) and route.channel == "websocket":
             visible = session_key == ROUTER_SESSION_KEY
             if not visible:
@@ -72,12 +75,20 @@ class WebuiTurnRoutePolicy:
                 )
             if visible:
                 metadata = dict(route.metadata)
+                # Automatic slices continue the same visible execution. The
+                # original route identity was stored on their server-owned input.
+                if continuation:
+                    for key in (WEBUI_TURN_METADATA_KEY, WEBSOCKET_TURN_OWNER_METADATA_KEY):
+                        if key in msg.metadata:
+                            metadata[key] = msg.metadata[key]
                 turn_prefix = "session-input" if internal_user_input else "subagent"
                 metadata.update(
                     {
                         WEBUI_SESSION_METADATA_KEY: True,
                         "_wants_stream": True,
-                        WEBUI_TURN_METADATA_KEY: f"{turn_prefix}:{uuid4().hex}",
+                        WEBUI_TURN_METADATA_KEY: (
+                            metadata.get(WEBUI_TURN_METADATA_KEY) if continuation else None
+                        ) or f"{turn_prefix}:{uuid4().hex}",
                     }
                 )
                 routed = replace(route, metadata=metadata, publish_lifecycle=True)
@@ -90,10 +101,10 @@ class WebuiTurnRoutePolicy:
             owner = (
                 queued_owner
                 if (
-                    msg.channel == "websocket"
+                    (msg.channel == "websocket" or continuation)
                     and isinstance(queued_owner, str)
                     and websocket_turn_owner_is_registered(
-                        str(msg.chat_id),
+                        routed.chat_id,
                         queued_owner,
                         current_turn_id,
                     )
@@ -102,9 +113,6 @@ class WebuiTurnRoutePolicy:
             )
             metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY] = owner
             routed = replace(routed, metadata=metadata, turn_id=current_turn_id)
-            # Direct websocket turns publish their final idle transition from
-            # the original input message. Carry the same server-owned identity
-            # there, overwriting any untrusted client-supplied value.
             if msg.channel == "websocket":
                 msg.metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY] = owner
 

@@ -35,6 +35,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.19](releases/0.2.19.md): long-context checkpoint boundaries, background execution ownership and reconnect state, current-turn report questions and nonblocking settings navigation.
+
 - [0.2.18](releases/0.2.18.md): durable in-flight context, Goal lifecycle recovery, configurable repeated-output protection, foreground reply reconciliation and horizontal tab scrolling.
 - [0.2.17](releases/0.2.17.md): gateway stream recovery, safer tool contracts, independent learning recovery, per-Skill context injection and grouped Router activity.
 

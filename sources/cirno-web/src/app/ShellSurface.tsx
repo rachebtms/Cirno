@@ -129,7 +129,7 @@ export function ShellSurface(surface: ShellSurfaceProps) {
                   onRouteVisibleChange={setWorkspaceRouteVisible}
                   beforeActivate={(action) => {
                     if (view !== "chat" && settingsExitGuardRef.current)
-                      settingsExitGuardRef.current(action);
+                      settingsExitGuardRef.current(action, { promptRestart: false });
                     else action();
                   }}
                   renderRoute={(route, visible, focused) => <WorkbenchRoute {...{ route, visible, focused, surface }} />}
