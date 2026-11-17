@@ -100,6 +100,7 @@ class AgentDefaults(Base):
     output_repetition: OutputRepetitionConfig = Field(default_factory=OutputRepetitionConfig)
     approval: ApprovalConfig = Field(default_factory=ApprovalConfig)
     max_tool_iterations: int = 200
+    router_tool_timeout_seconds: int = Field(default=60, ge=1, le=3600)
     max_concurrent_subagents: int = Field(default=4, ge=1)
     max_tool_result_chars: int = 16_000
     provider_retry_mode: Literal["standard", "persistent"] = "standard"

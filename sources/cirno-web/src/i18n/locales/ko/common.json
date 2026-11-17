@@ -472,6 +472,10 @@
           "label": "고정 메모리 파일 토큰 예산",
           "help": "추가 파일이 공유하는 예산입니다. MEMORY.md 예산은 별도입니다."
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Router 도구 시간 예산(초)",
+          "help": "Router 실행당 일반 도구의 누적 실행 시간(1–3600초, 기본 60). 모델 및 승인 대기는 제외합니다. 일반 호출은 최대 9회이며 중대형 작업은 Worker에 위임합니다. 재시작 후 적용됩니다."
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "반복 출력 방지",
           "help": "연속해서 반복되는 문장이나 텍스트 블록을 감지하며 코드 블록은 제외합니다. 현재 스트림을 닫은 후 순차적으로 교정하므로 동시 실행 수가 늘지 않습니다. 다음 실행부터 Router와 Worker에 적용됩니다."

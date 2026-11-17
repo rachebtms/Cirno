@@ -91,6 +91,28 @@ def test_loop_from_config_uses_caller_owned_registry(tmp_path: Path) -> None:
     assert loop.tools.has("read_file")
 
 
+@pytest.mark.parametrize("seconds", [10, 60, 120])
+async def test_configured_router_timeout_is_shared_by_prompt_and_run_spec(tmp_path, seconds):
+    from cirno_core.session.keys import ROUTER_SESSION_KEY
+
+    config = _config_for_loop(tmp_path)
+    config.agents.defaults.router_tool_timeout_seconds = seconds
+    provider = _provider_for_loop()
+    provider.aclose = AsyncMock()
+    provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse("done"))
+    loop = AgentLoop.from_config(config, tool_registry=ToolRegistry(), provider=provider)
+    loop.runner.run = AsyncMock(wraps=loop.runner.run)
+    try:
+        prompt = loop.context.build_system_prompt(session_key=ROUTER_SESSION_KEY)
+        assert f"{seconds} seconds of total tool execution" in prompt
+        await loop.process_direct("hello", session_key="cli:timeout-test")
+        spec = loop.runner.run.call_args.args[0]
+        assert spec.router_tool_timeout_seconds == seconds
+        assert loop.context.build_system_prompt(session_key=ROUTER_SESSION_KEY) == prompt
+    finally:
+        await loop.aclose()
+
+
 
 
 @pytest.mark.asyncio

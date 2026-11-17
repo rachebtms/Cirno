@@ -69,6 +69,19 @@ def test_runtime_patch_persists_and_preserves_other_domains(tmp_path):
     assert "PRIVATE_API_KEY" not in json.dumps(runtime_config_payload(saved))
 
 
+@pytest.mark.parametrize("seconds", [1, 60, 120, 3600])
+def test_router_time_budget_roundtrip_requires_restart(tmp_path, seconds):
+    path = tmp_path / "config.json"
+    save_config(Config(), path)
+    key = "agents.defaults.router_tool_timeout_seconds"
+    assert runtime_config_payload(load_config(path))[key] == 60
+    payload = update_runtime_config_settings({key: seconds}, config_path=path)
+    assert payload["runtime_config"][key] == seconds
+    assert load_config(path).agents.defaults.router_tool_timeout_seconds == seconds
+    if seconds != 60:
+        assert payload["requires_restart"]
+
+
 @pytest.mark.parametrize("values", [
     {"channels.telegram.token": "bad"},
     {"agents.defaults.workspace": "relative-directory"},
@@ -76,6 +89,10 @@ def test_runtime_patch_persists_and_preserves_other_domains(tmp_path):
     {"tools.exec": {"enable": False}},
     {"agents.defaults.max_concurrent_subagents": 0},
     {"agents.defaults.max_tool_iterations": True},
+    {"agents.defaults.router_tool_timeout_seconds": 0},
+    {"agents.defaults.router_tool_timeout_seconds": 3601},
+    {"agents.defaults.router_tool_timeout_seconds": True},
+    {"agents.defaults.router_tool_timeout_seconds": 1.5},
     {"agents.defaults.idle_compact_after_minutes": -1},
     {"agents.defaults.idle_compact_min_tokens": -1},
     {"agents.defaults.idle_compact_keep_recent_tokens": -1},

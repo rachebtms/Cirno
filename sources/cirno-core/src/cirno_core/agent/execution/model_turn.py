@@ -244,6 +244,7 @@ class ModelTurnExecutor:
                     require_visible_reply=require_visible_reply,
                     provider_retry_mode=self.agent.provider_retry_mode,
                     output_repetition=self.agent.output_repetition.model_copy(deep=True),
+                    router_tool_timeout_seconds=self.agent.context.router_tool_timeout_seconds,
                     checkpoint_callback=checkpoints,
                     request_usage_callback=_request_usage,
                     consolidate_history=partial(

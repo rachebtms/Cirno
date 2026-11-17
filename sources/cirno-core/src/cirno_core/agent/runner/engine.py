@@ -204,7 +204,9 @@ class AgentRunner:
         had_injections = False
         injection_cycles = 0
         reply_contract = ToolReplyContract(spec.require_visible_reply)
-        role_policy = RoleToolPolicy(conversation_role(spec.session_key)) if spec.session_key else None
+        role_policy = RoleToolPolicy(conversation_role(
+            spec.session_key, router_tool_timeout_seconds=spec.router_tool_timeout_seconds,
+        )) if spec.session_key else None
         pending_stream_content: str | None = None
         conversation_state = ProviderConversationStateController(
             provider=spec.runtime.provider,

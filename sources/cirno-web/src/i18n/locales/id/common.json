@@ -472,6 +472,10 @@
           "label": "Anggaran token berkas tetap",
           "help": "Anggaran bersama untuk berkas tambahan, terpisah dari MEMORY.md."
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Anggaran waktu alat Router (detik)",
+          "help": "Waktu kumulatif alat biasa per eksekusi Router (1–3600 detik; bawaan 60), tanpa waktu tunggu model dan persetujuan. Maksimal sembilan panggilan; tugas sedang dan besar tetap didelegasikan ke Worker. Perlu mulai ulang."
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "Perlindungan keluaran berulang",
           "help": "Mendeteksi kalimat atau blok teks identik yang berurutan, kecuali blok kode. Menutup aliran saat ini sebelum koreksi berurutan, tanpa menambah konkurensi. Berlaku untuk Router dan Worker pada eksekusi berikutnya."

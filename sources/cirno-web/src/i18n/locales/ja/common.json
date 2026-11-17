@@ -472,6 +472,10 @@
           "label": "固定メモリファイルのトークン予算",
           "help": "追加ファイルで共有する予算です。MEMORY.md の予算は別です。"
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Router のツール時間予算（秒）",
+          "help": "Router の各実行で通常ツールに使える累計時間（1–3600 秒、既定 60）。モデルと承認の待機時間を除外。通常呼び出しは最大9回。中・大規模タスクは Worker に委任。再起動後に適用。"
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "繰り返し出力の保護",
           "help": "連続する同じ文やテキストブロックを検出します。コードブロックは除外し、現在のストリームを閉じてから順番に修正します。同時実行数は増やしません。Router と Worker に次の実行から適用します。"

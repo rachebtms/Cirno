@@ -84,6 +84,7 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.timezone_mode",
     "agents.defaults.idle_compact_after_minutes",
     "agents.defaults.max_tool_iterations",
+    "agents.defaults.router_tool_timeout_seconds",
     "agents.defaults.goal_continuation_limit",
     "agents.defaults.resume.message",
     "agents.defaults.output_repetition.enabled",

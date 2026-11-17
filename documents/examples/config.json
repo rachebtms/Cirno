@@ -3,7 +3,8 @@
   "agents": {
     "defaults": {
       "provider": "local-api",
-      "model": "your-model"
+      "model": "your-model",
+      "routerToolTimeoutSeconds": 60
     }
   },
   "providers": {

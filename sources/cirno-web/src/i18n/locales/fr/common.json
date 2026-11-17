@@ -472,6 +472,10 @@
           "label": "Budget de tokens des fichiers fixes",
           "help": "Budget partagé des fichiers supplémentaires, distinct de celui de MEMORY.md."
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Budget des outils du Router (secondes)",
+          "help": "Temps cumulé des outils ordinaires par exécution du Router (1–3600 s, 60 par défaut), hors attente du modèle et des approbations. Neuf appels au maximum ; déléguer les tâches moyennes et grandes aux Workers. Redémarrage requis."
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "Protection contre les sorties répétées",
           "help": "Détecte les phrases ou blocs identiques consécutifs, hors blocs de code. Ferme le flux actuel avant une correction séquentielle, sans concurrence supplémentaire. Applicable à Router et Worker dès la prochaine exécution."

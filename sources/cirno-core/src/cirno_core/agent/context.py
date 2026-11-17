@@ -93,6 +93,7 @@ class ContextBuilder:
         self.memory_files_loader: Callable[[], tuple[list[str], int]] | None = None
         self.checkpoint_context_tokens = 2000
         self.system_prompts = SystemPrompts()
+        self.router_tool_timeout_seconds = 60
         self.system_prompts_loader: Callable[[], SystemPrompts] | None = None
 
     def current_system_prompts(self) -> SystemPrompts:
@@ -113,7 +114,7 @@ class ContextBuilder:
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         root = workspace or self.workspace
-        role = conversation_role(session_key)
+        role = conversation_role(session_key, router_tool_timeout_seconds=self.router_tool_timeout_seconds)
         internal = is_internal_session(session_key or "")
         if not internal and system_prompts is None:
             system_prompts = self.current_system_prompts()

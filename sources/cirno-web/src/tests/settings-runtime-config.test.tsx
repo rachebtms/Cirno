@@ -18,6 +18,7 @@ function payload() {
     "agents.defaults.idle_compact_keep_percent": 5, "tools.exec.enable": true, "tools.exec.max_runtime": 60,
     "tools.exec.allowed_env_keys": ["TERM"], "tools.exec.sandbox": "", "network.proxy": "http://localhost:8080",
     "agents.defaults.workspace": "/workspace", "agents.defaults.max_tool_iterations": 200,
+    "agents.defaults.router_tool_timeout_seconds": 60,
   } } satisfies SettingsPayload;
 }
 const client = { requestMutation: mutation } as unknown as CirnoClient;
@@ -41,6 +42,16 @@ function expectSave(values: Record<string, unknown>) {
 }
 
 describe("Runtime configuration", () => {
+  it("automatically saves the configurable Router tool time budget", async () => {
+    render(<Harness page="execution" />);
+    const field = screen.getByRole("spinbutton", { name: "Router tool time budget (seconds)" });
+    expect(field).toHaveValue(60);
+    expect(field).toHaveAttribute("min", "1");
+    expect(field).toHaveAttribute("max", "3600");
+    fireEvent.change(field, { target: { value: "120" } });
+    await expectSave({ "agents.defaults.router_tool_timeout_seconds": 120 });
+    expect(field).toHaveValue(120);
+  });
   it("flushes an edit before the debounce when closing settings", async () => {
     render(<Harness page="execution" canClose />);
     fireEvent.change(screen.getByRole("textbox", { name: "Default workspace" }), { target: { value: "/research" } });

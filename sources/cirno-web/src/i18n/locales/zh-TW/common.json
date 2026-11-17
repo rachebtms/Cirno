@@ -472,6 +472,10 @@
           "label": "固定記憶檔案 Token 預算",
           "help": "額外檔案共用此預算，MEMORY.md 的預算分別計算。"
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Router 工具執行時間預算（秒）",
+          "help": "每輪 Router 一般工具執行的累計時間（1–3600 秒，預設 60），不計模型及審批等待。一般呼叫最多 9 次，中、大任務仍交給 Worker。重新啟動後生效。"
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "重複輸出保護",
           "help": "偵測連續重複的句子或文字塊，排除程式碼區塊；先關閉目前串流再串行糾偏，不增加並發。Router 與 Worker 共用，下一輪生效。"

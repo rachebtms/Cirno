@@ -58,6 +58,7 @@ class AgentRunSpec:
     session_key: str | None = None
     provider_retry_mode: str = "standard"
     output_repetition: OutputRepetitionConfig = field(default_factory=OutputRepetitionConfig)
+    router_tool_timeout_seconds: int = 60
     checkpoint_callback: CheckpointCallback | None = None
     request_usage_callback: Callable[[LLMUsage], Awaitable[None]] | None = None
     consolidate_history: HistoryConsolidator | None = None

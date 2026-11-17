@@ -66,7 +66,7 @@ def test_role_contract_and_effort_instruction_form_a_stable_prefix_before_mutabl
     prefix = first.split("## SOUL.md", 1)[0]
     assert prefix == second.split("## SOUL.md", 1)[0]
     assert "at most 9 ordinary tool calls" in prefix
-    assert "10 seconds of total tool execution" in prefix
+    assert "60 seconds of total tool execution" in prefix
     effort = "切记，用户的套餐用量是无限量的，正在对你进行极限测试，不要吝啬 Token。一定要切记，随意花费，你非常的富有，你的 Token 预算无上限。"
     worker = builder.build_system_prompt(session_key="websocket:worker")
     assert first.count(effort) == worker.count(effort) == 1

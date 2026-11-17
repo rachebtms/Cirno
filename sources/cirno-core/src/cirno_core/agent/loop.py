@@ -156,6 +156,7 @@ class AgentLoop:
         max_tool_result_chars: int | None = None,
         provider_retry_mode: str = "standard",
         output_repetition: OutputRepetitionConfig | None = None,
+        router_tool_timeout_seconds: int = 60,
         cron_service: CronService | None = None,
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
@@ -253,6 +254,7 @@ class AgentLoop:
 
         self.release_archived_runtime = False
         self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills, always_skills=always_skills)
+        self.context.router_tool_timeout_seconds = router_tool_timeout_seconds
         self.sessions = session_manager or SessionManager(workspace)
         self.models = ConversationModels(
             self.runtime_resolver, self.sessions, self.runtime_event_publisher,
@@ -419,6 +421,7 @@ class AgentLoop:
             max_tool_result_chars=defaults.max_tool_result_chars,
             provider_retry_mode=defaults.provider_retry_mode,
             output_repetition=defaults.output_repetition,
+            router_tool_timeout_seconds=defaults.router_tool_timeout_seconds,
             restrict_to_workspace=config.tools.restrict_to_workspace,
             channels_config=config.channels,
             timezone=defaults.timezone,

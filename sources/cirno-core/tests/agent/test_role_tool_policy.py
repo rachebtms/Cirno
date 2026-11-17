@@ -23,6 +23,36 @@ from cirno_core.session.roles import ConversationRole, DirectExecutionLimits, Ro
 from sources.development.testing.runtime import make_run_spec
 
 
+@pytest.mark.parametrize("seconds", [1, 10, 60, 120, 3600])
+async def test_configured_router_time_budget_reaches_runner_and_shared_ptc_policy(monkeypatch, seconds):
+    from cirno_core.session.roles import conversation_role
+
+    captured = []
+
+    class CapturePolicy(RoleToolPolicy):
+        def __init__(self, role):
+            super().__init__(role)
+            captured.append(self)
+
+    monkeypatch.setattr("cirno_core.agent.runner.engine.RoleToolPolicy", CapturePolicy)
+    provider = MagicMock(spec=LLMProvider)
+    provider.chat_stream_with_retry = AsyncMock(return_value=LLMResponse("done"))
+    spec = make_run_spec(provider, tools=catalog("exec"), model="test", max_iterations=1,
+                         max_tool_result_chars=2000, initial_messages=[{"role": "user", "content": "check"}],
+                         session_key=ROUTER_SESSION_KEY, router_tool_timeout_seconds=seconds)
+    await AgentRunner().run(spec)
+    policy, = captured
+    assert policy.role.direct_execution.max_seconds == seconds
+    assert policy.role.direct_execution.max_calls == 9
+    policy.seconds = seconds - 0.5
+    assert policy.remaining("shell__exec") == policy.remaining("ptc__run") == 0.5
+    policy.seconds = seconds
+    with pytest.raises(ToolPolicyDenied):
+        policy.remaining("ptc__run")
+    assert policy.remaining("conversations__create") is None
+    assert conversation_role("websocket:worker", router_tool_timeout_seconds=seconds).direct_execution is None
+
+
 class Counter(Tool):
     name = "exec"
     description = "Count an actual operation"
@@ -159,9 +189,9 @@ async def test_ptc_programs_share_cumulative_time_and_coordination_stays_callabl
         async with policy.admit("shell__exec"):
             clock[0] = 6.0
     assert policy.seconds == 6 and policy.calls == 1
-    assert policy.remaining("ptc__run") == 4
+    assert policy.remaining("ptc__run") == 54
     async with policy.admit("ptc__run"):
-        clock[0] = 11.0
+        clock[0] = 61.0
     with pytest.raises(ToolPolicyDenied, match="budget exhausted"):
         policy.remaining("ptc__run")
     tools = PtcToolRegistry(catalog("exec", "create_session", "message"))
@@ -230,7 +260,7 @@ async def test_supervision_survives_exhaustion_without_exempting_runtime_writes_
     tools = PtcToolRegistry(native) if ptc else native
     definitions = tools.get_definitions()
     policy = RoleToolPolicy(RouterConversation())
-    setattr(policy, exhaustion, 10)
+    setattr(policy, exhaustion, 60)
     for call in (
         ToolCallRequest("check", "runtime__check", {}),
         ToolCallRequest("checkpoint", "memory__checkpoint", {"content": "progress", "source": "user request"}),

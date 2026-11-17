@@ -472,6 +472,10 @@
           "label": "Fixed memory files token budget",
           "help": "Shared token budget for the additional files; the MEMORY.md budget is separate."
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Router tool time budget (seconds)",
+          "help": "Cumulative ordinary tool execution per Router run (1–3600 seconds; default 60), excluding model and approval waiting. At most nine ordinary calls; delegate medium and large tasks to Workers. Requires restart."
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "Repeated-output protection",
           "help": "Interrupt consecutive identical sentences or lines in answers, reasoning and reply-tool content. Code fences are excluded. Applies to Router and Workers on the next turn."

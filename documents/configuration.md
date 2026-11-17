@@ -61,7 +61,7 @@ Overview shows model and web-search status, plus shortcuts to Memory library, Co
 - Agent heartbeat: periodic checks of `HEARTBEAT.md` and wakeups in the Router, separate from service health checks.
 - Conversation coordination: concurrent subagents and the per-source outgoing cross-conversation message limit.
 - Time & region: automatic or manually selected timezone.
-- Goals & execution: default workspace, continuation and execution limits. Repeated-output protection is shared by Router and Workers and applies on the next admitted turn without a restart.
+- Goals & execution: default workspace, continuation and execution limits. Router tool time budget is configurable from 1 to 3600 seconds (default 60) and applies after restart. It counts cumulative ordinary tool execution per run, excluding model/approval waiting, with at most nine ordinary calls; medium and large tasks still require Workers. The prompt and native/PTC enforcement share the same configured value; remaining budget does not rewrite prompts between rounds. Repeated-output protection is shared by Router and Workers and applies on the next admitted turn without a restart.
 - AI approvals: independent review model, review timeout and the switch for automatic review.
 - Tools & CLI Apps, Shell execution, Skills: tool availability, shell settings and skill management. Skills includes Installed, Discover and Validation & history; each installed Skill's details contain its **Always inject** switch. Marketplace and trend failures remain visible alongside usable results.
 - Web search and MCP: search services and external tool connections.

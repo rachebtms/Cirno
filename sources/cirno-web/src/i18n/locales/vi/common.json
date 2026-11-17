@@ -472,6 +472,10 @@
           "label": "Ngân sách token tệp cố định",
           "help": "Ngân sách chung cho các tệp bổ sung, tách biệt với MEMORY.md."
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Ngân sách thời gian công cụ Router (giây)",
+          "help": "Tổng thời gian công cụ thông thường mỗi lượt Router (1–3600 giây; mặc định 60), không tính chờ mô hình và phê duyệt. Tối đa chín lần gọi; giao tác vụ vừa và lớn cho Worker. Cần khởi động lại."
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "Bảo vệ đầu ra lặp lại",
           "help": "Phát hiện câu hoặc khối văn bản giống nhau liên tiếp, trừ khối mã. Đóng luồng hiện tại trước khi sửa tuần tự, không tăng số tác vụ đồng thời. Áp dụng cho Router và Worker từ lượt chạy tiếp theo."

@@ -12,7 +12,7 @@ _ROUTER_TOOLS = frozenset({"message", "control_session", "control_goal", "projec
 @dataclass(frozen=True)
 class DirectExecutionLimits:
     max_calls: int = 9
-    max_seconds: float = 10
+    max_seconds: float = 60
 
 
 @dataclass(frozen=True)
@@ -30,11 +30,11 @@ class ConversationRole(ABC):
 
 
 class RouterConversation(ConversationRole):
-    def __init__(self):
+    def __init__(self, tool_timeout_seconds: int = 60):
         # Durable Workers own substantial work; transient subagents must not
         # become another execution path around that responsibility.
         super().__init__("router", ("SOUL.md",), "agent/router_conversation.md", False, True,
-                         frozenset({"subagent"}), DirectExecutionLimits())
+                         frozenset({"subagent"}), DirectExecutionLimits(max_seconds=tool_timeout_seconds))
 
 
 class WorkerConversation(ConversationRole):
@@ -47,5 +47,7 @@ _ROUTER = RouterConversation()
 _WORKER = WorkerConversation()
 
 
-def conversation_role(key: str | None) -> ConversationRole:
-    return _ROUTER if key == ROUTER_SESSION_KEY else _WORKER
+def conversation_role(key: str | None, *, router_tool_timeout_seconds: int = 60) -> ConversationRole:
+    if key == ROUTER_SESSION_KEY:
+        return _ROUTER if router_tool_timeout_seconds == 60 else RouterConversation(router_tool_timeout_seconds)
+    return _WORKER

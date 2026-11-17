@@ -21,6 +21,7 @@
   "agents.defaults.idle_compact_percent",
   "agents.defaults.max_concurrent_subagents",
   "agents.defaults.max_tool_iterations",
+  "agents.defaults.router_tool_timeout_seconds",
   "agents.defaults.max_tool_result_chars",
   "agents.defaults.memory.checkpoint_tokens",
   "agents.defaults.memory.context_files",

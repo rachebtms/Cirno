@@ -472,6 +472,10 @@
           "label": "Orçamento de tokens dos arquivos fixos",
           "help": "Orçamento compartilhado dos arquivos adicionais, separado de MEMORY.md."
         },
+        "agents_defaults_router_tool_timeout_seconds": {
+          "label": "Tempo das ferramentas do Router (segundos)",
+          "help": "Tempo acumulado de ferramentas comuns por execução do Router (1–3600 s; padrão 60), excluindo espera do modelo e aprovações. Até nove chamadas; delegue tarefas médias e grandes aos Workers. Requer reinício."
+        },
         "agents_defaults_output_repetition_enabled": {
           "label": "Proteção contra saída repetida",
           "help": "Detecta frases ou blocos iguais consecutivos, exceto blocos de código. Encerra o fluxo atual antes de corrigir sequencialmente, sem aumentar a concorrência. Vale para Router e Worker na próxima execução."

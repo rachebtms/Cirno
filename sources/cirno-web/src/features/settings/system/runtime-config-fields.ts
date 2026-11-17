@@ -104,6 +104,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "resume", path: "agents.defaults.resume.message", kind: "multiline" },
   { group: "resume", path: "agents.defaults.resume.show_message", kind: "boolean" },
   { group: "execution", path: "agents.defaults.max_tool_iterations", kind: "number", min: 1 },
+  { group: "execution", path: "agents.defaults.router_tool_timeout_seconds", kind: "number", min: 1, max: 3600 },
   { group: "coordination", path: "agents.defaults.max_concurrent_subagents", kind: "number", min: 1 },
   { group: "execution", path: "agents.defaults.max_tool_result_chars", kind: "number", min: 1 },
   { group: "activity", path: "agents.defaults.tool_status_summary_max_chars", kind: "number", min: 20, max: 500 },
