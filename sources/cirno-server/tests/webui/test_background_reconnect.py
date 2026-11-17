@@ -22,6 +22,17 @@ from cirno_server.webui.outbound_delivery import WebUIOutboundDelivery
 from cirno_server.webui.session_projection import WebUISessionProjection
 
 
+@pytest.fixture(autouse=True)
+def isolated_activity(monkeypatch):
+    # Session stores are per-test; in-process activity must belong to that same
+    # instance. Other lifecycle fixtures can use the fixed Router chat ID too.
+    for name in (
+        "_WEBSOCKET_TURN_WALL_STARTED_AT", "_WEBSOCKET_TURN_IDS",
+        "_WEBSOCKET_TURN_OWNERS", "_WEBSOCKET_ACTIVE_TURNS",
+    ):
+        monkeypatch.setattr(activity, name, {})
+
+
 @pytest.mark.parametrize("subscribed", [False, True])
 @pytest.mark.parametrize("kind", ["heartbeat", "worker-report", "worker-goal"])
 async def test_reconnect_does_not_resurrect_completed_background_work(tmp_path, kind, subscribed):
