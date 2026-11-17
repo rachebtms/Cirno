@@ -9,6 +9,7 @@ from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import current_request_context
 from cirno_core.agent.turn_delivery import TurnDeliveryFactory
 from cirno_core.bus.events import InboundMessage
+from cirno_core.bus.outbound_events import UserInputEvent
 from cirno_core.bus.queue import MessageBus
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import LLMResponse
@@ -191,10 +192,20 @@ async def test_failure_report_drives_router_continue_while_worker_capacity_is_fu
             write.assert_awaited_once()
             assert len(provider.worker_requests) == 3
             visible = []
+            report_inputs = []
             while bus.outbound_size:
                 message = await bus.consume_outbound()
                 if message.chat_id == ROUTER_SESSION_KEY.split(":", 1)[1] and message.content:
-                    visible.append(message.content)
+                    if isinstance(message.event, UserInputEvent):
+                        report_inputs.append(message.event)
+                    elif message.event is None:
+                        visible.append(message.content)
+            assert len(report_inputs) == 2
+            assert all(
+                event.provenance["input_origin"]["kind"] != "conversation"
+                and event.content.startswith("Work report (")
+                for event in report_inputs
+            )
             assert visible == [
                 "Recovering the interrupted worker",
                 "Recovery complete; the file was written once",
