@@ -13,10 +13,13 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS python-build-tools
 # One base for every deployment. Optional tools are selected through cirno-setup.
 FROM ubuntu:24.04 AS runtime
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Bootstrap HTTPS using the existing official Python stage; Ubuntu's own
+# ca-certificates package takes over during the first normal APT install.
+COPY --from=python-build-tools /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN sed -i -E 's#http://((archive|security|ports)\.ubuntu\.com/)#https://\1#g' /etc/apt/sources.list.d/ubuntu.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git bubblewrap openssh-client libmagic1 libatomic1 util-linux \
     python3.12 python3.12-venv && \
-    sed -i -E 's#http://((archive|security|ports)\.ubuntu\.com/)#https://\1#g' /etc/apt/sources.list.d/ubuntu.sources && \
     rm -rf /var/lib/apt/lists/* && \
     userdel ubuntu && useradd -m -u 1000 -s /bin/bash cirno && \
     mkdir -p /home/linuxbrew/.linuxbrew /opt/cirno/bin /opt/cirno/setup && \
