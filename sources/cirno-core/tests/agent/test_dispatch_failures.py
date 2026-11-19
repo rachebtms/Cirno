@@ -52,7 +52,7 @@ async def test_setup_failure_finishes_its_turn_reports_to_router_and_keeps_fifo(
         loop._concurrency_gate = Gate()
     elif failure_at == "goal":
         metadata["_goal_id"] = "goal-id"
-        monkeypatch.setattr(loop.sessions.state, "get_header", AsyncMock(side_effect=problem))
+        monkeypatch.setattr(loop.dispatch.turn, "current_goal", AsyncMock(side_effect=[problem, True]))
     else:
         create = loop.turn_delivery_factory.create
         async def create_once(*args, **kwargs):

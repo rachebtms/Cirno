@@ -33,6 +33,8 @@ from cirno_core.bus.agent_events import ContextCompactionEvent, EventSink
 from cirno_core.config.agents import AgentDefaults
 from cirno_core.config.models import ModelPresetConfig
 from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.retry import ProviderRetryPolicy
+from cirno_core.providers.timeouts import ProviderTimeouts
 from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
 from cirno_core.providers.conversation_state import ProviderConversationStateController
 from cirno_core.providers.fallback_provider import FallbackProvider
@@ -1039,6 +1041,8 @@ async def test_reported_input_adds_new_messages_before_pressure_and_output_budge
 
 async def test_runner_does_not_compact_primary_request_from_fallback_usage(monkeypatch):
     primary = MagicMock(spec=LLMProvider)
+    primary.retry_policy = ProviderRetryPolicy()
+    primary.timeouts = ProviderTimeouts()
     primary.provider_name = "primary"
     primary.generation = GenerationSettings(max_tokens=100)
     primary.supports_native_compaction.return_value = False

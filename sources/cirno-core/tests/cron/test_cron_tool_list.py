@@ -173,14 +173,15 @@ def test_list_every_job_shows_human_interval(tmp_path, every_ms, expected) -> No
 
 def test_list_at_job_shows_iso_timestamp(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0)
     tool._cron.add_job(
         name="One-shot",
-        schedule=CronSchedule(kind="at", at_ms=1773684000000),
+        schedule=CronSchedule(kind="at", at_ms=int(future.timestamp() * 1000)),
         message="fire",
         **_bound_chat(),
     )
     result = tool._list_jobs()
-    assert "at 2026-" in result
+    assert future.astimezone(ZoneInfo("Asia/Shanghai")).isoformat() in result
     assert "Asia/Shanghai" in result
 
 

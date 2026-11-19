@@ -1018,10 +1018,11 @@ class TestFallbackOnPrimaryError:
             logger.remove(sink_id)
 
         assert any(
-            "Primary model 'primary-model' failed: primary overloaded; trying fallback 'fallback-a'"
+            "Primary model 'primary-model' failed: server; trying fallback 'fallback-a'"
             in line
             for line in logs
         )
+        assert all("primary overloaded" not in line for line in logs)
 
 
 class TestNoFallbackWhenContentStreamed:

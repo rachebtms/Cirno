@@ -796,7 +796,7 @@ def test_uninstall_removes_installed_state_and_generated_skill(
     from cirno_core.apps.cli.paths import cli_app_skill_path
     skill_dir = cli_app_skill_path("gimp").parent
     skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("# GIMP\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\ncirno_cli_app: gimp\n---\n# GIMP\n", encoding="utf-8")
     monkeypatch.setattr(
         manager.commands,
         "_run_argv",

@@ -54,6 +54,8 @@ async def test_restart_recovers_all_tool_rounds_without_repeating_completed_work
     coordinator = WebuiTurnCoordinator(bus, sessions, loop.schedule_background, recovery=recovery)
     request = InboundMessage(channel="websocket", sender_id="user", chat_id="research",
                              content="Inspect all three sources", metadata={"webui": True, "webui_turn_id": "research-turn"})
+    await sessions.state.get(request.session_key)
+    await sessions.state.update_metadata(request.session_key, {"title": "Research"})
     try:
         with coordinator.connected():
             await loop.dispatch.receive(request)

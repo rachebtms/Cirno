@@ -246,7 +246,7 @@ class CliCommands:
             env["VIRTUAL_ENV"] = venv
             env["PATH"] = str(Path(venv) / ("Scripts" if sys.platform == "win32" else "bin")) + os.pathsep + env["PATH"]
         # Desktop CLIs use this directory to locate the running application.
-        if "XDG_RUNTIME_DIR" in os.environ:
+        if sys.platform != "win32" and "XDG_RUNTIME_DIR" in os.environ:
             env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
         return python_environment(env)
 

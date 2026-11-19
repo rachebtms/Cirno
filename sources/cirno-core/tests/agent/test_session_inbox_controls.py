@@ -548,6 +548,9 @@ async def test_ingress_sources_share_one_session_worker(loop, bus_running):
         assert handled == ["first", "second", "/compact", "cron", "trigger"]
         assert len(set(workers)) == 1
         assert loop.bus.inbound_size == 0
+        async with asyncio.timeout(3):
+            while key in loop._pending_queues:
+                await asyncio.sleep(0)
         assert key not in loop._pending_queues
         assert key not in loop._deferred_automation_turns
     finally:

@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import httpx
 import pytest
-from openai import AsyncOpenAI
 
 from cirno_core.providers.azure_openai_provider import (
     AzureOpenAIProvider,
@@ -104,10 +103,10 @@ async def azure_wire_requests(monkeypatch):
         })
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        def create_client(**kwargs):
-            return AsyncOpenAI(http_client=http_client, **kwargs)
-
-        monkeypatch.setattr("cirno_core.providers.azure_openai_provider.AsyncOpenAI", create_client)
+        monkeypatch.setattr(
+            "cirno_core.providers.azure_openai_provider.DefaultAsyncHttpxClient",
+            lambda **kwargs: http_client,
+        )
         yield requests
 
 

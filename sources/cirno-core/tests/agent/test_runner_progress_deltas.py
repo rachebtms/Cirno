@@ -7,6 +7,7 @@ import pytest
 from cirno_core.agent.hooks import FileEditActivityHook
 from cirno_core.agent.progress_hook import AgentProgressHook
 from cirno_core.agent.runner.engine import AgentRunner
+from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.agent.tools.apply_patch import ApplyPatchTool
 from cirno_core.agent.tools.filesystem import EditFileTool, WriteFileTool
 from cirno_core.config.agents import AgentDefaults
@@ -193,12 +194,6 @@ async def test_runner_emits_write_file_diff_from_tool_execution_snapshots(tmp_pa
     align = MagicMock(wraps=Indel.opcodes)
     monkeypatch.setattr(Indel, "opcodes", align)
 
-    class Tools:
-        def get_definitions(self):
-            return [{"type": "function", "function": {"name": "write_file"}}]
-
-        def prepare_call(self, name, params):
-            return tool, params, None
 
     async def chat_stream_with_retry(**kwargs):
         nonlocal call_count
@@ -218,7 +213,8 @@ async def test_runner_emits_write_file_diff_from_tool_execution_snapshots(tmp_pa
         return LLMResponse(content="done", tool_calls=[], usage=None)
 
     provider.chat_stream_with_retry = chat_stream_with_retry
-    tools = Tools()
+    tools = ToolRegistry()
+    tools.register(tool)
 
     runner = AgentRunner()
     result = await runner.run(make_run_spec(provider,
@@ -274,12 +270,6 @@ async def test_runner_reuses_edit_diff_for_summary_and_progress(tmp_path, monkey
     align = MagicMock(wraps=Indel.opcodes)
     monkeypatch.setattr(Indel, "opcodes", align)
 
-    class Tools:
-        def get_definitions(self):
-            return [{"type": "function", "function": {"name": tool_name}}]
-
-        def prepare_call(self, name, params):
-            return tool, params, None
 
     async def chat_stream_with_retry(**kwargs):
         nonlocal call_count
@@ -299,7 +289,8 @@ async def test_runner_reuses_edit_diff_for_summary_and_progress(tmp_path, monkey
         return LLMResponse(content="done", tool_calls=[], usage=None)
 
     provider.chat_stream_with_retry = chat_stream_with_retry
-    tools = Tools()
+    tools = ToolRegistry()
+    tools.register(tool)
 
     runner = AgentRunner()
     result = await runner.run(make_run_spec(provider,
@@ -329,7 +320,7 @@ async def test_runner_reuses_edit_diff_for_summary_and_progress(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_runner_marks_file_edit_activity_failed_when_tool_errors(tmp_path):
+async def test_runner_marks_file_edit_activity_failed_when_tool_errors(tmp_path, monkeypatch):
     provider = MagicMock()
     call_count = 0
     progress_events: list[dict] = []
@@ -339,13 +330,7 @@ async def test_runner_marks_file_edit_activity_failed_when_tool_errors(tmp_path)
             progress_events.extend(file_edit_events)
 
     tool = WriteFileTool(workspace=tmp_path)
-
-    class Tools:
-        def get_definitions(self):
-            return [{"type": "function", "function": {"name": "write_file"}}]
-
-        def prepare_call(self, name, params):
-            return tool, params, None
+    monkeypatch.setattr(tool, "execute", AsyncMock(side_effect=OSError("Injected write failure")))
 
     async def chat_stream_with_retry(**kwargs):
         nonlocal call_count
@@ -357,7 +342,7 @@ async def test_runner_marks_file_edit_activity_failed_when_tool_errors(tmp_path)
                     ToolCallRequest(
                         id="call-write",
                         name="write_file",
-                        arguments={"path": "aborted.txt"},
+                        arguments={"path": "aborted.txt", "content": "new\n"},
                     )
                 ],
                 usage=None,
@@ -365,7 +350,8 @@ async def test_runner_marks_file_edit_activity_failed_when_tool_errors(tmp_path)
         return LLMResponse(content="done", tool_calls=[], usage=None)
 
     provider.chat_stream_with_retry = chat_stream_with_retry
-    tools = Tools()
+    tools = ToolRegistry()
+    tools.register(tool)
 
     runner = AgentRunner()
     result = await runner.run(make_run_spec(provider,
@@ -404,12 +390,6 @@ async def test_runner_marks_file_edit_activity_failed_when_cancelled(tmp_path):
 
     tool = SlowWriteTool(workspace=tmp_path)
 
-    class Tools:
-        def get_definitions(self):
-            return [{"type": "function", "function": {"name": "write_file"}}]
-
-        def prepare_call(self, name, params):
-            return tool, params, None
 
     async def chat_stream_with_retry(**kwargs):
         return LLMResponse(
@@ -425,7 +405,8 @@ async def test_runner_marks_file_edit_activity_failed_when_cancelled(tmp_path):
         )
 
     provider.chat_stream_with_retry = chat_stream_with_retry
-    tools = Tools()
+    tools = ToolRegistry()
+    tools.register(tool)
 
     runner = AgentRunner()
     task = asyncio.create_task(runner.run(make_run_spec(provider,

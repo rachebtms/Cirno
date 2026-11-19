@@ -72,6 +72,7 @@ def test_python_install_and_import_verification_accept_unlimited(context, monkey
             installs.append(arguments)
             (interpreter.parent / "demo-cli").parent.mkdir(parents=True, exist_ok=True)
             (interpreter.parent / "demo-cli").touch()
+            (interpreter.parent / "demo-cli").chmod(0o755)
             output = ""
         elif arguments[0] == str(interpreter):
             if arguments[-2:] == ["cirno-memory", "embedding"]:
@@ -101,9 +102,10 @@ def test_npm_install_and_metadata_verification_accept_unlimited(context, monkeyp
         calls.append(arguments)
         metadata = context.root / "npm/lib/node_modules/demo-npm/package.json"
         metadata.parent.mkdir(parents=True)
-        metadata.write_text('{"version":"1.0"}')
+        metadata.write_text('{"name":"demo-npm","version":"1.0"}')
         (context.root / "npm/bin").mkdir()
         (context.root / "npm/bin/demo-npm").touch()
+        (context.root / "npm/bin/demo-npm").chmod(0o755)
         return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
@@ -125,11 +127,13 @@ def test_homebrew_bootstrap_formula_and_repair_accept_unlimited(context, monkeyp
             command = prefix / "Homebrew/bin/brew"
             command.parent.mkdir(parents=True)
             command.touch()
+            command.chmod(0o755)
         elif arguments[:2] in ([str(prefix / "bin/brew"), "install"], [str(prefix / "bin/brew"), "reinstall"]):
             receipt = prefix / "Cellar/tea/1.0/INSTALL_RECEIPT.json"
             receipt.parent.mkdir(parents=True, exist_ok=True)
             receipt.write_text("{}")
             (prefix / "bin/tea").touch()
+            (prefix / "bin/tea").chmod(0o755)
         else:
             pytest.fail(f"Unexpected subprocess: {arguments}")
         return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")

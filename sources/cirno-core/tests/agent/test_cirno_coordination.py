@@ -192,6 +192,7 @@ async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_
     provider.estimate_prompt_tokens.return_value = (100, "test")
     from cirno_core.providers.tool_calls import ToolCallRequest
     direct_router = not background and session_key == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
+    heartbeat = background and session_key == "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb"
     provider.chat_stream_with_retry = AsyncMock(side_effect=[
         LLMResponse(content=None, tool_calls=[ToolCallRequest(id="reply", name="user__message", arguments={"content": "Hello"})]),
         LLMResponse(content=""),
@@ -201,12 +202,12 @@ async def test_reply_protocol_is_in_system_prompt_for_cirno_only(setup, session_
         await ensure_router_session(loop.sessions)
         await loop.processing.process(InboundMessage(
             channel="system" if background else "websocket",
-            sender_id="heartbeat" if background else "user",
+            sender_id="heartbeat" if heartbeat else "system" if background else "user",
             chat_id=session_key.split(":", 1)[1],
             content="Check active work" if background else "你好",
             input_role="system" if background else "user",
             session_key_override=session_key,
-            metadata={"_heartbeat": True} if background else {},
+            metadata={"_heartbeat": True} if heartbeat else {},
         ))
         messages = provider.chat_stream_with_retry.call_args.kwargs["messages"]
         system = messages[0]["content"]
@@ -418,7 +419,7 @@ async def test_reset_keeps_cirno_identity_but_discards_old_goal_and_reports(setu
     await sessions.state.reset(key)
     after = await sessions.state.read_header(key)
     assert after.generation != before.generation
-    assert after.metadata == identity
+    assert after.metadata == {**identity, "child_session_generation_required": True}
 
 
 async def test_goal_continuation_enables_webui_execution_stream(setup):

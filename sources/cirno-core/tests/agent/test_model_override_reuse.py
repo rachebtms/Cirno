@@ -10,6 +10,8 @@ from cirno_core.config.schema import Config
 from cirno_core.config.models import ModelPresetConfig
 from cirno_core.providers import factory
 from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.retry import ProviderRetryPolicy
+from cirno_core.providers.timeouts import ProviderTimeouts
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.utils.llm_runtime import runtime_from_provider_snapshot
 
@@ -30,6 +32,8 @@ def configured_override(monkeypatch):
     def construct(owned, *, preset, model=None):
         factory.validate_provider_setup(owned, preset=preset, model=model)
         provider = MagicMock(spec=LLMProvider)
+        provider.retry_policy = ProviderRetryPolicy()
+        provider.timeouts = ProviderTimeouts()
         provider.generation = preset.to_generation_settings()
         provider.provider_name = owned.get_provider_name(preset=preset)
         provider.get_default_model.return_value = model or preset.model

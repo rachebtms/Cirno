@@ -224,7 +224,8 @@ async def test_mcp_provider_closes_connections_independently_from_agent_loop(
 
 
 @pytest.mark.asyncio
-async def test_close_server_ignores_server_cancelled_error(tmp_path):
+async def test_close_server_reports_server_cancelled_error(tmp_path):
+    from cirno_core.agent.tools.mcp.connections import close_mcp_connection
     provider, _registry = _make_provider()
 
     class _ServerCancelledStack:
@@ -233,8 +234,9 @@ async def test_close_server_ignores_server_cancelled_error(tmp_path):
 
     provider._connections = {"test": _ServerCancelledStack()}
 
-    await provider._close_server("test")
+    error = await close_mcp_connection("test", provider._connections.pop("test"))
 
+    assert isinstance(error, RuntimeError)
     assert provider.connected_server_names == set()
 
 
@@ -310,7 +312,8 @@ async def test_mcp_cleanup_re_raises_external_cancellation(tmp_path, close_all: 
     if close_all:
         task = asyncio.create_task(provider.aclose())
     else:
-        task = asyncio.create_task(provider._close_server("test"))
+        from cirno_core.agent.tools.mcp.connections import close_mcp_connection
+        task = asyncio.create_task(close_mcp_connection("test", provider._connections.pop("test")))
     await asyncio.wait_for(started.wait(), timeout=1)
     task.cancel()
 
