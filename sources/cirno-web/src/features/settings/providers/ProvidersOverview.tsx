@@ -31,10 +31,13 @@ export function ProvidersOverview({
     const row = [
       ...(region.current?.querySelectorAll<HTMLButtonElement>("[data-provider-id]") ?? []),
     ].find((button) => button.dataset.providerId === restoreFocus);
-    if (row) {
+    if (!row) return;
+    const frame = requestAnimationFrame(() => {
+      if (!row.isConnected) return;
       row.focus({ preventScroll: true });
       onFocusRestored?.();
-    }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [restoreFocus, providers, onFocusRestored]);
   const configured = providers.filter((provider) => provider.configured);
   return (

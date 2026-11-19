@@ -86,7 +86,11 @@ export function useSettingsComposition(props: SettingsPageProps) {
       entry={providerPanel}
       onClose={() => { setProviderPanel(null); providerAddedCallback.current = null; }}
       onProviderAdded={(provider) => {
-        if (activeSection === "providers") setProviderFocus(provider);
+        if (activeSection === "providers") {
+          // A newly created connection takes priority over its Add button.
+          providerReturnFocus.current = null;
+          setProviderFocus(provider);
+        }
         providerAddedCallback.current?.(provider);
       }}
       settings={settings}
