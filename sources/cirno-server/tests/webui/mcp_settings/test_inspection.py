@@ -18,7 +18,7 @@ def test_test_mcp_preset_reports_missing_dependency(
 ) -> None:
     _use_config(tmp_path, monkeypatch)
     mcp_presets_action("enable", {"name": ["playwright"]})
-    monkeypatch.setattr("cirno_server.webui.mcp.fields.shutil.which", lambda _command: None)
+    monkeypatch.setattr("cirno_server.webui.mcp.fields.shutil.which", lambda _command, *, path=None: None)
 
     payload = asyncio.run(mcp_presets_test_action({"name": ["playwright"]}))
 

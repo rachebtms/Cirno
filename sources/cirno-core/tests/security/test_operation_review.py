@@ -291,7 +291,7 @@ async def test_disabled_ai_review_queues_owner_approval_without_model_call(revie
     from cirno_core.config.schema import Config
     config = Config()
     config.agents.defaults.approval.enabled = False
-    monkeypatch.setattr("cirno_core.agent.approval.service.load_config", lambda: config)
+    monkeypatch.setattr("cirno_core.agent.approval.service.load_config", lambda _path=None: config)
     service, request, response, target, *_ = review
     tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
     with pytest.raises(PermissionError, match="pending"):
@@ -307,7 +307,7 @@ async def test_independent_review_uses_selected_preset_and_timeout(review, monke
     config = Config()
     config.agents.defaults.approval.model_override = "review-only"
     config.agents.defaults.approval.timeout_seconds = 73
-    monkeypatch.setattr("cirno_core.agent.approval.service.load_config", lambda: config)
+    monkeypatch.setattr("cirno_core.agent.approval.service.load_config", lambda _path=None: config)
     service, request, response, target, *_ = review
     selected = object()
     service.model_resolver = SimpleNamespace(resolve_preset=lambda name: selected if name == "review-only" else None)

@@ -211,4 +211,4 @@ async def test_session_authority_stays_on_the_http_event_loop(tmp_path, media_cl
     async with client.get(url) as response:
         assert response.status == 200
         assert await response.read() == b"research"
-    assert calls == [True]
+    assert calls == [True, True]

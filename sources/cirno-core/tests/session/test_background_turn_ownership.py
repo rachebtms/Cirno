@@ -95,6 +95,8 @@ async def test_background_router_execution_publishes_terminal_events(tmp_path, k
     disconnect = coordinator.subscribe()
     metadata = {"_heartbeat": True} if kind == "heartbeat" else {"_work_report": {"id": "report-1"}}
     try:
+        from cirno_core.session.router_session import ensure_router_session
+        await ensure_router_session(loop.sessions)
         await run_session(loop, InboundMessage(
             channel="system", sender_id=kind, chat_id=ROUTER_SESSION_KEY,
             session_key_override=ROUTER_SESSION_KEY,

@@ -26,7 +26,7 @@ async def test_credentials_retain_their_original_owner_after_global_selection_ch
     first, second = tmp_path / "first", tmp_path / "second"
     select(first)
     row = Credentials(InstanceData(first / "state")).save(label="Fixture", value="owned-fixture", agent_visible=True)
-    monkeypatch.setattr("cirno_server.webui.workbench_api.Terminals", lambda: SimpleNamespace())
+    monkeypatch.setattr("cirno_server.webui.workbench_api.Terminals", lambda *, state_dir=None: SimpleNamespace())
     ctx = ToolContext(config=ToolsConfig(), workspace=str(tmp_path))
     owner = WorkbenchAPI(None, None) if entry == "workbench" else CredentialTool()
     select(second)
@@ -86,7 +86,7 @@ async def test_cancelling_credentials_waits_for_accepted_initialization_and_stor
         pending = CredentialTool().execute(action, **values)
     else:
         monkeypatch.setattr("cirno_server.webui.workbench_api.Credentials", create)
-        monkeypatch.setattr("cirno_server.webui.workbench_api.Terminals", lambda: SimpleNamespace())
+        monkeypatch.setattr("cirno_server.webui.workbench_api.Terminals", lambda *, state_dir=None: SimpleNamespace())
         pending = WorkbenchAPI(None, None).action({"action": "credentials." + action, "values": values})
     task = asyncio.create_task(pending)
     try:

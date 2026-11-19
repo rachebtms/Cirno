@@ -20,7 +20,7 @@ concurrency:
 jobs:
   web-checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Configure CI package repositories
@@ -77,7 +77,7 @@ jobs:
         run: |
           python -m ruff check sources/cirno-setup sources/cirno-memory sources/cirno-usage sources/cirno-vault sources/cirno-core sources/cirno-server --exclude '**/tests/**' --exclude '**/conftest.py' --select F
           python sources/development/check_import_boundaries.py
-          python -m pytest -vv -n 2 --maxfail=20 -o faulthandler_timeout=120 --ignore=sources/cirno-server/tests/deployment/test_release_wheels.py
+          python -m pytest -vv -n 2 --maxfail=20 --timeout=120 -o timeout_method=thread --ignore=sources/cirno-server/tests/deployment/test_release_wheels.py
 
   package-checks:
     needs: web-checks

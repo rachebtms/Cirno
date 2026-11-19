@@ -23,7 +23,7 @@ async def test_cancelled_settings_route_settles_the_entire_edit(tmp_path, monkey
     save_config(Config(), path)
     refreshed = []
     router = WebUISettingsRouter(
-        settings=WebUISettingsServices.create(path, refresh_runtime_config=lambda: refreshed.append(True)),
+        settings=WebUISettingsServices.create(path, home_path=tmp_path / "home", refresh_runtime_config=lambda: refreshed.append(True)),
         bus=MessageBus(), logger=MagicMock(), check_api_token=lambda _: True,
         parse_query=lambda value: parse_qs(urlsplit(value).query),
         json_response=lambda payload: payload,
@@ -58,14 +58,14 @@ async def test_cancelled_settings_route_settles_the_entire_edit(tmp_path, monkey
     else:
         original = profiles.update_profile
 
-        def update(*args):
-            saved = original(*args)
+        def update(*args, **kwargs):
+            saved = original(*args, **kwargs)
             wait_after_commit()
             return saved
 
         monkeypatch.setattr(profiles, "update_profile", update)
         route = "/v0/settings/profile/update"
-        payload = {"name": "soul", "content": "Saved owner instructions", "revision": profiles.profile_payload("soul")["revision"]}
+        payload = {"name": "soul", "content": "Saved owner instructions", "revision": profiles.profile_payload("soul", home_path=tmp_path / "home")["revision"]}
     request = SimpleNamespace(path=route, headers={})
     request._cirno_webui_mutation_request = True
     request._cirno_webui_mutation_payload = payload
@@ -89,7 +89,7 @@ async def test_cancelled_settings_route_settles_the_entire_edit(tmp_path, monkey
         with pytest.raises(asyncio.CancelledError):
             await task
         if kind == "profile":
-            assert profiles.profile_payload("soul")["content"] == "Saved owner instructions"
+            assert profiles.profile_payload("soul", home_path=tmp_path / "home")["content"] == "Saved owner instructions"
         else:
             assert load_config(path).network.request_timeout_s == 121
             assert router._with_restart_state({"requires_restart": False})["requires_restart"] is True

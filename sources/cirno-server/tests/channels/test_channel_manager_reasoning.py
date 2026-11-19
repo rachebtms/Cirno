@@ -78,7 +78,7 @@ def manager(tmp_path) -> ChannelManager:
 def test_websocket_gateway_uses_configured_workspace_restriction(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "cirno_server.webui.workspaces.read_webui_default_access_mode",
-        lambda: "default",
+        lambda *, state_dir=None: "default",
     )
     config = Config.model_validate(
         {

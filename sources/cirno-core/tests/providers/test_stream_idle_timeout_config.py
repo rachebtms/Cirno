@@ -126,9 +126,10 @@ async def test_codex_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> Non
             text='data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
         )
 
-    def fake_client(*, timeout: float, verify: bool) -> httpx.AsyncClient:
+    def fake_client(*, timeout: httpx.Timeout, verify: bool, trust_env: bool) -> httpx.AsyncClient:
+        assert trust_env is False
         seen["timeout"] = timeout.read
-        return original_client(transport=httpx.MockTransport(handler), timeout=timeout)
+        return original_client(transport=httpx.MockTransport(handler), timeout=timeout, trust_env=trust_env)
 
     monkeypatch.setattr(codex_provider.httpx, "AsyncClient", fake_client)
 

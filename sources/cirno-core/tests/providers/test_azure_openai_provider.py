@@ -147,7 +147,7 @@ async def test_aad_token_provider_sends_rotating_bearer_tokens_on_chat_requests(
     bodies = [json.loads(request.content) for request in azure_wire_requests]
     assert [body["model"] for body in bodies] == ["gpt-4o-deployment", "gpt-4o-deployment"]
     assert [body["input"][0]["content"][0]["text"] for body in bodies] == ["turn 1", "turn 2"]
-    credential_factory.assert_called_once_with()
+    credential_factory.assert_called_once_with(use_env_settings=False, proxies=None)
     assert credential_instance.get_token.await_args_list == [
         call("https://cognitiveservices.azure.com/.default"),
         call("https://cognitiveservices.azure.com/.default"),

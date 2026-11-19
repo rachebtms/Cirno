@@ -117,6 +117,9 @@ class TestExtractText:
             def __init__(self, *_args, **_kwargs):
                 self.pages = [_Page() for _ in range(250)]
 
+            def close(self):
+                pass
+
         monkeypatch.setattr("pypdf.PdfReader", _Reader)
 
         source = open_document_line_source(pdf_file, pages="101-200")

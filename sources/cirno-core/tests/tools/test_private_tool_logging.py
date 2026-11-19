@@ -175,7 +175,7 @@ async def test_web_private_diagnostics_keep_error_category_not_content(
             result = await WebFetchTool()._fetch_readability(url, "text", 100)
             assert url in result
         elif kind == "jina":
-            tool = WebSearchTool(config=WebSearchConfig(provider="jina", api_key="synthetic"))
+            tool = WebSearchTool(config=WebSearchConfig(provider="jina", api_key="fixture-api-key"))
             monkeypatch.setattr("httpx.AsyncClient", MagicMock(side_effect=error))
             monkeypatch.setattr(duckduckgo, "search", AsyncMock(return_value="fallback"))
             assert await tool.execute(_SECRET, count=1) == "fallback"
@@ -193,6 +193,7 @@ async def test_web_private_diagnostics_keep_error_category_not_content(
             assert result is not None and url in result[0]
     assert diagnostic_records
     assert (_SECRET in str([r["message"] for r in diagnostic_records])) is log_content
+    assert "fixture-api-key" not in str([r["message"] for r in diagnostic_records])
 
 
 async def test_private_logging_policy_is_task_local_and_restored():

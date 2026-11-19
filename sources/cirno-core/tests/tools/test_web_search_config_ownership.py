@@ -111,16 +111,20 @@ def test_default_tool_context_carries_the_source_without_creating_clients(tmp_pa
     monkeypatch.setattr("cirno_core.agent.approval.service.OperationApproval", Mock())
     monkeypatch.setattr("cirno_core.agent.conversation_control.ConversationControl", Mock())
     monkeypatch.setattr("cirno_core.agent.tools.loader.ToolLoader.load", lambda _self, ctx, _registry: captured.append(ctx) or [])
+    source = tmp_path / "owner" / "config.json"
     agent = SimpleNamespace(
         sessions=Mock(), bus=MessageBus(), runtime_resolver=Mock(), goal_continuation_limit=0,
         tools_config=ToolsConfig(), network_config=NetworkConfig(), workspace=tmp_path,
         subagents=Mock(), cron_service=None, _exec_session_manager=Mock(),
-        context=SimpleNamespace(timezone="UTC"), workspace_scopes=SimpleNamespace(sandbox_status=None),
+        context=SimpleNamespace(timezone="UTC", memory=SimpleNamespace(
+            workspace=tmp_path, dream=SimpleNamespace(source_config_path=source),
+        )), workspace_scopes=SimpleNamespace(sandbox_status=None),
         tools=ToolRegistry(), register_runtime_context_provider=Mock(),
     )
-    source = tmp_path / "owner" / "config.json"
     AgentLoop._register_default_tools(agent, provider_snapshot_loader=None, source_config_path=source)
     assert captured[0].source_config_path == source
+    assert captured[0].instance_config_path == source
+    assert captured[0].home_path == tmp_path
 
 
 async def test_config_reload_wait_is_inside_the_search_deadline(monkeypatch):
