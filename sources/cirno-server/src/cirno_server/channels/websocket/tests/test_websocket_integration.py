@@ -52,7 +52,15 @@ def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
 @pytest.fixture()
 def bus() -> MagicMock:
     b = MagicMock()
-    b.publish_inbound = AsyncMock()
+    received = asyncio.Queue()
+    b.publish_inbound = AsyncMock(side_effect=received.put_nowait)
+
+    async def wait_inbound(count=1):
+        async with asyncio.timeout(5):
+            for _ in range(count):
+                await received.get()
+
+    b.wait_inbound = wait_inbound
     return b
 
 
@@ -111,7 +119,7 @@ async def test_plain_text(bus: MagicMock) -> None:
         async with WsTestClient("ws://127.0.0.1:29904/v0/ws", client_id="p") as c:
             await c.recv_ready()
             await c.send_text("hello world")
-            await asyncio.sleep(0.1)
+            await bus.wait_inbound(1)
             inbound = bus.publish_inbound.call_args[0][0]
             assert inbound.content == "hello world"
             assert inbound.sender_id == "p"
@@ -128,7 +136,7 @@ async def test_json_content_field(bus: MagicMock) -> None:
         async with WsTestClient("ws://127.0.0.1:29905/v0/ws", client_id="j") as c:
             ready = await c.recv_ready()
             await c.send_json({"type": "message", "chat_id": ready.chat_id, "content": "structured"})
-            await asyncio.sleep(0.1)
+            await bus.wait_inbound(1)
             assert bus.publish_inbound.call_args[0][0].content == "structured"
     finally:
         await ch.stop()
@@ -160,7 +168,7 @@ async def test_messages_preserve_order(bus: MagicMock) -> None:
             await c.recv_ready()
             for i in range(5):
                 await c.send_text(f"msg-{i}")
-            await asyncio.sleep(0.2)
+            await bus.wait_inbound(5)
             contents = [call[0][0].content for call in bus.publish_inbound.call_args_list]
             assert contents == [f"msg-{i}" for i in range(5)]
     finally:
@@ -520,7 +528,7 @@ async def test_large_message(bus: MagicMock) -> None:
             await c.recv_ready()
             big = "x" * 64_000
             await c.send_text(big)
-            await asyncio.sleep(0.2)
+            await bus.wait_inbound(1)
             assert bus.publish_inbound.call_args[0][0].content == big
     finally:
         await ch.stop()
@@ -536,7 +544,7 @@ async def test_unicode_roundtrip(bus: MagicMock) -> None:
             ready = await c.recv_ready()
             text = "你好世界 🌍 日本語テスト"
             await c.send_text(text)
-            await asyncio.sleep(0.1)
+            await bus.wait_inbound(1)
             assert bus.publish_inbound.call_args[0][0].content == text
             await ch.send(OutboundMessage(
                 channel="websocket", chat_id=ready.chat_id, content=text,
@@ -556,7 +564,7 @@ async def test_rapid_fire(bus: MagicMock) -> None:
             ready = await c.recv_ready()
             for i in range(50):
                 await c.send_text(f"in-{i}")
-            await asyncio.sleep(0.5)
+            await bus.wait_inbound(50)
             assert bus.publish_inbound.await_count == 50
             for i in range(50):
                 await ch.send(OutboundMessage(
@@ -577,7 +585,7 @@ async def test_invalid_json_as_plain_text(bus: MagicMock) -> None:
         async with WsTestClient("ws://127.0.0.1:29924/v0/ws", client_id="j") as c:
             await c.recv_ready()
             await c.send_text("{broken json")
-            await asyncio.sleep(0.1)
+            await bus.wait_inbound(1)
             assert bus.publish_inbound.call_args[0][0].content == "{broken json"
     finally:
         await ch.stop()
