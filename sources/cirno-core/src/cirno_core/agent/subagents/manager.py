@@ -305,7 +305,15 @@ class SubagentManager:
         decided = record.decide(SubagentOutcome("cancelled", "Task cancelled.", "cancelled"))
         try:
             if decided:
-                await self._save_status(record.status)
+                try:
+                    await self._save_status(record.status)
+                except SubagentSessionError:
+                    # Deleting/replacing a parent revokes its children. Shutdown
+                    # must still drain those tasks without recreating their rows.
+                    if not suppress_notice or self.sessions is None or self.sessions.contains(
+                        task_id, record.status.owner, child_generation=record.status.child_generation,
+                    ):
+                        raise
         finally:
             if decided and task is not None and record.begun and not task.done():
                 task.cancel()

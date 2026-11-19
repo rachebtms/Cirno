@@ -22,8 +22,8 @@ def test_recent_project_cannot_overwrite_a_concurrent_setting(tmp_path, monkeypa
     roles = {}
     read = workspaces.read_webui_workspace_state
 
-    def delayed_read():
-        state = read()
+    def delayed_read(**kwargs):
+        state = read(**kwargs)
         if roles.get(threading.get_ident()) == "first" and not first_read.is_set():
             first_read.set()
             assert release_first.wait(3), "Test did not release the preference reader"

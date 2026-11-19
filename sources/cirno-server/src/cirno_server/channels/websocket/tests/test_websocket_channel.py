@@ -93,9 +93,9 @@ _PORT = 0
 
 
 async def _register_running_turn(
-    chat_id: str, started_at: float, *, owner: str | None = None,
+    chat_id: str, started_at: float, *, owner: str | None = None, turn_id: str | None = None,
 ) -> None:
-    metadata = {}
+    metadata = {WEBUI_TURN_METADATA_KEY: turn_id} if turn_id else {}
     if owner:
         metadata[WEBSOCKET_TURN_OWNER_METADATA_KEY] = owner
     await wth_activity.publish_turn_run_status(
@@ -968,7 +968,7 @@ async def test_trusted_webui_shell_preserves_display_text_and_hides_dispatch_com
 
 
     channel = _ch(bus, session_manager=history.sessions)
-    conn = MagicMock()
+    conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
     channel._webui_connections.add(conn)
 
@@ -1619,7 +1619,7 @@ async def test_webui_automation_intent_is_hidden_and_not_inherited_by_cron(histo
     )
 
     channel = _ch(bus, session_manager=history.sessions)
-    conn = MagicMock()
+    conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 43210)
     channel._webui_connections.add(conn)
     original = "每天八点提醒我喝水"
@@ -1841,7 +1841,7 @@ async def test_new_chat_without_message_does_not_create_session(
 
 
 @pytest.mark.asyncio
-async def test_failed_first_message_does_not_persist_draft_session(
+async def test_failed_dispatch_retains_already_journaled_first_message(
     bus: MagicMock,
     tmp_path,
 ) -> None:
@@ -1880,7 +1880,14 @@ async def test_failed_first_message_does_not_persist_draft_session(
             },
         )
 
-    assert sessions.list_sessions() == []
+    # The input journal commits before dispatch, so transport failure must not
+    # erase that accepted disk record or leave an in-process Working owner.
+    key = f"websocket:{chat_id}"
+    assert [row["key"] for row in sessions.list_sessions()] == [key]
+    facts = await sessions.state.project_history(key, lambda reader: reader.read_entries(0))
+    assert len(facts) == 1
+    assert facts[0][1].content["text"] == "hello"
+    assert wth_activity.websocket_turn_snapshot(chat_id)[0] is None
 
 
 @pytest.mark.asyncio
@@ -2483,6 +2490,7 @@ async def test_send_stages_external_media_as_signed_url(monkeypatch, tmp_path) -
 
     monkeypatch.setattr("cirno_server.webui.media_gateway.get_media_dir", fake_media_dir)
     channel = WebSocketChannel({"enabled": True, "allowFrom": ["*"]}, bus, gateway=_basic_handler(bus))
+    monkeypatch.setattr(channel.gateway.media, "_media_dir", fake_media_dir)
     mock_ws = AsyncMock()
     channel._attach(mock_ws, "chat-1")
 
@@ -4062,11 +4070,12 @@ async def test_hydrate_noop_without_session_manager() -> None:
 
 
 @pytest.mark.asyncio
-async def test_hydrate_skips_when_no_goal_on_disk() -> None:
+async def test_hydrate_clears_stale_goal_when_no_goal_on_disk() -> None:
     bus = MagicMock()
     sm = MagicMock()
     sm.state.read_metadata = AsyncMock()
     sm.state.read_metadata.return_value = None
+    sm.state.project_history = AsyncMock(return_value=None)
     channel = WebSocketChannel(
         {"enabled": True, "allowFrom": ["*"]},
         bus,
@@ -4075,7 +4084,9 @@ async def test_hydrate_skips_when_no_goal_on_disk() -> None:
     mock_ws = AsyncMock()
     channel._attach(mock_ws, "chat-1")
     await channel._outbound.hydrate("chat-1")
-    mock_ws.send.assert_not_called()
+    body = json.loads(mock_ws.send.await_args.args[0])
+    assert body["event"] == "goal_state"
+    assert body["goal_state"]["active"] is False
 
 
 @pytest.mark.asyncio
@@ -4093,6 +4104,7 @@ async def test_hydrate_notifies_when_goal_active_on_disk() -> None:
         },
         "messages": [],
     }
+    sm.state.project_history = AsyncMock(return_value=None)
     channel = WebSocketChannel(
         {"enabled": True, "allowFrom": ["*"]},
         bus,
@@ -4125,6 +4137,7 @@ async def test_hydrate_restores_blocked_attention_on_disk() -> None:
         },
         "messages": [],
     }
+    sm.state.project_history = AsyncMock(return_value=None)
     channel = WebSocketChannel(
         {"enabled": True, "allowFrom": ["*"]},
         bus,
@@ -5459,14 +5472,7 @@ async def test_handle_webui_thread_get_reports_registered_turn_as_pending(histor
 
 
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr(
-        'cirno_core.session.webui_turns.activity.websocket_turn_wall_started_at',
-        lambda chat_id: 1_700_000_000.0 if chat_id == "running" else None,
-    )
-    monkeypatch.setattr(
-        'cirno_core.session.webui_turns.activity.websocket_turn_id',
-        lambda chat_id: "turn-running" if chat_id == "running" else None,
-    )
+    await _register_running_turn("running", 1_700_000_000.0, turn_id="turn-running")
     key = "websocket:running"
     history.append(
         key,
@@ -5704,14 +5710,7 @@ async def test_handle_webui_thread_get_reconciles_registered_turn_with_turn_end(
 
 
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr(
-        'cirno_core.session.webui_turns.activity.websocket_turn_wall_started_at',
-        lambda chat_id: 1_700_000_000.0 if chat_id == "running" else None,
-    )
-    monkeypatch.setattr(
-        'cirno_core.session.webui_turns.activity.websocket_turn_id',
-        lambda chat_id: active_turn_id if chat_id == "running" else None,
-    )
+    await _register_running_turn("running", 1_700_000_000.0, turn_id=active_turn_id)
     key = "websocket:running"
     history.append(
         key,

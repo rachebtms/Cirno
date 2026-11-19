@@ -111,7 +111,7 @@ def test_sign_media_path_rejects_paths_outside_media_root(
     media = tmp_path / "media"
     media.mkdir()
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         assert _sign_media_path(channel, outside) is None
         # Traversal via the media root is also rejected — the resolve() step
         # normalises ``..`` out before the relative_to check.
@@ -126,7 +126,7 @@ def test_sign_media_path_round_trips_via_hmac(
     media.mkdir()
     (media / "a.png").write_bytes(_PNG_BYTES)
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url = _sign_media_path(channel, media / "a.png")
     assert url is not None
     assert url.startswith("/v0/media/")
@@ -149,7 +149,7 @@ def test_local_markdown_image_is_staged_and_rewritten(
     media = tmp_path / "media"
     channel = _ch(bus, workspace_path=workspace, port=0)
 
-    with patch("cirno_server.webui.media_gateway.get_media_dir", side_effect=_fake_media_dir(media)):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         first = channel.gateway.media.rewrite_local_markdown_images(
             "The result:\n![Cloud Architecture Diagram](demo_arch.png)"
         )
@@ -176,7 +176,7 @@ def test_modified_local_markdown_image_gets_a_new_immutable_url(
     channel = _ch(bus, workspace_path=workspace, port=0)
     markdown = "![Cloud Architecture Diagram](demo_arch.png)"
 
-    with patch("cirno_server.webui.media_gateway.get_media_dir", side_effect=_fake_media_dir(media)):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         first = channel.gateway.media.rewrite_local_markdown_images(markdown)
         source.write_bytes(_PNG_BYTES + b"updated")
         second = channel.gateway.media.rewrite_local_markdown_images(markdown)
@@ -196,7 +196,7 @@ def test_local_markdown_video_is_staged_and_rewritten(
     media = tmp_path / "media"
     channel = _ch(bus, workspace_path=workspace, port=0)
 
-    with patch("cirno_server.webui.media_gateway.get_media_dir", side_effect=_fake_media_dir(media)):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         rewritten = channel.gateway.media.rewrite_local_markdown_images(
             "The result:\n![cirno-intro.mp4](cirno-intro.mp4)"
         )
@@ -219,10 +219,10 @@ def test_local_markdown_image_rejects_workspace_escape(
     channel = _ch(bus, workspace_path=workspace, port=0)
     text = "![nope](../outside.png)"
 
-    with patch("cirno_server.webui.media_gateway.get_media_dir", side_effect=_fake_media_dir(media)):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         assert channel.gateway.media.rewrite_local_markdown_images(text) == text
 
-    assert list((media / "websocket").iterdir()) == []
+    assert list((media / "websocket").glob("*")) == []
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ async def test_media_route_serves_signed_file(
     target.write_bytes(_PNG_BYTES)
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url_path = _sign_media_path(channel, target)
         assert url_path is not None
         port, _ = await start_listener(channel)
@@ -269,7 +269,7 @@ async def test_media_route_serves_video_byte_ranges(
     target.write_bytes(b"0123456789")
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url_path = _sign_media_path(channel, target)
         assert url_path is not None
         port, _ = await start_listener(channel)
@@ -296,7 +296,7 @@ async def test_media_route_serves_suffix_video_byte_ranges(
     target.write_bytes(b"0123456789")
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url_path = _sign_media_path(channel, target)
         assert url_path is not None
         port, _ = await start_listener(channel)
@@ -320,7 +320,7 @@ async def test_media_route_rejects_unsatisfiable_byte_range(
     target.write_bytes(b"0123456789")
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url_path = _sign_media_path(channel, target)
         assert url_path is not None
         port, _ = await start_listener(channel)
@@ -348,7 +348,7 @@ async def test_media_route_rejects_bad_signature(
     (media / "f.png").write_bytes(_PNG_BYTES)
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         good = _sign_media_path(channel, media / "f.png")
         assert good is not None
         _, payload = good[len("/v0/media/"):].split("/", 1)
@@ -386,7 +386,7 @@ async def test_media_route_rejects_path_traversal_payload(
     ).digest()[:16]
     url = f"/v0/media/{b64url_encode(mac)}/{payload}"
 
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         port, _ = await start_listener(channel)
         resp = await _http_get(f"http://127.0.0.1:{port}{url}")
     assert resp.status_code == 404
@@ -405,7 +405,7 @@ async def test_media_route_404s_missing_file(
     target.write_bytes(_PNG_BYTES)
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url_path = _sign_media_path(channel, target)
         assert url_path is not None
         target.unlink()  # the file vanishes between signing and fetching
@@ -428,7 +428,7 @@ async def test_media_route_degrades_non_image_to_octet_stream(
     (media / "scary.html").write_bytes(b"<script>alert(1)</script>")
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         payload = b64url_encode(b"scary.html")
         mac = hmac.new(
             channel.gateway.media.secret, payload.encode("ascii"), hashlib.sha256
@@ -454,7 +454,7 @@ async def test_media_route_serves_svg_with_strict_csp(
     target.write_text("<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>")
 
     channel = _ch(bus, port=0)
-    with patch("cirno_server.webui.media_gateway.get_media_dir", return_value=media):
+    with patch.object(channel.gateway.media, "_media_dir", _fake_media_dir(media)):
         url_path = _sign_media_path(channel, target)
         assert url_path is not None
         port, _ = await start_listener(channel)

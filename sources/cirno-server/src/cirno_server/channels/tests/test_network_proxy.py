@@ -33,7 +33,7 @@ def test_setup_refuses_proxy_opt_in_without_shared_address(name, monkeypatch) ->
     assert result["can_enable"] is False
     proxy_check = next(check for check in result["checks"] if check["id"] == "network_proxy")
     assert proxy_check["status"] == "fail"
-    assert "Advanced" in proxy_check["message"]
+    assert "Network & retries" in proxy_check["message"]
 
 
 @pytest.mark.parametrize(

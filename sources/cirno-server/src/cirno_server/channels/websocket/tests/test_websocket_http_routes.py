@@ -9,7 +9,7 @@ from contextlib import suppress
 from pathlib import Path
 from threading import Event, Timer
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -631,6 +631,7 @@ async def test_webui_skill_management_routes(
         enabled: bool,
         disabled_skills: set[str],
         config_path: Path | None = None,
+        home_path: Path | None = None,
     ) -> dict[str, Any]:
         assert workspace == tmp_path
         assert name == "custom-skill"
@@ -644,6 +645,7 @@ async def test_webui_skill_management_routes(
         *,
         disabled_skills: set[str],
         config_path: Path | None = None,
+        home_path: Path | None = None,
     ) -> dict[str, Any]:
         assert workspace == tmp_path
         assert name == "custom-skill"
@@ -743,7 +745,11 @@ async def test_webui_skills_marketplace_routes_search_and_install(
         *,
         provider: str,
         version: str,
+        home_path: Path,
+        config_path: Path,
     ) -> dict[str, Any]:
+        assert home_path == tmp_path / "home"
+        assert config_path == tmp_path / "config.json"
         assert source == "acme/agent-skills"
         assert skill_id == "react-testing"
         assert workspace == tmp_path
@@ -785,7 +791,7 @@ async def test_webui_skills_marketplace_routes_search_and_install(
         )
         assert search_response.status_code == 200
         assert search_response.json()["skills"][0]["skill_id"] == "react-testing"
-        search.assert_awaited_once_with("react", tmp_path, provider="all")
+        search.assert_awaited_once_with("react", tmp_path, provider="all", home_path=tmp_path / "home", config_path=tmp_path / "config.json")
 
         trending_response = await _http_get(
             f"http://127.0.0.1:{port}/v0/webui/skills/trending",
@@ -793,7 +799,7 @@ async def test_webui_skills_marketplace_routes_search_and_install(
         )
         assert trending_response.status_code == 200
         assert trending_response.json()["period"] == "24h"
-        trending.assert_awaited_once_with(tmp_path, provider="all")
+        trending.assert_awaited_once_with(tmp_path, provider="all", home_path=tmp_path / "home", config_path=tmp_path / "config.json")
 
         trends_response = await _http_get(
             f"http://127.0.0.1:{port}/v0/webui/skills/trends"
@@ -844,7 +850,11 @@ async def test_webui_skill_install_rejects_overlapping_requests(
         *,
         provider: str,
         version: str,
+        home_path: Path,
+        config_path: Path,
     ) -> dict[str, Any]:
+        assert home_path == tmp_path / "home"
+        assert config_path == tmp_path / "config.json"
         started.set()
         await finish.wait()
         skill_dir = workspace / "home" / "skills" / skill_id
@@ -870,7 +880,7 @@ async def test_webui_skill_install_rejects_overlapping_requests(
             {"source": "acme/agent-skills", "skill": "react-testing"},
         )
     )
-    await started.wait()
+    await asyncio.wait_for(started.wait(), 3)
     overlapping = await _webui_mutate(
         channel,
         "skill.install",
@@ -925,7 +935,11 @@ async def test_authenticated_remote_webui_can_install_skill(
         *,
         provider: str,
         version: str,
+        home_path: Path,
+        config_path: Path,
     ) -> dict[str, Any]:
+        assert home_path == tmp_path / "home"
+        assert config_path == tmp_path / "config.json"
         skill_dir = workspace / "home" / "skills" / skill_id
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
@@ -2235,15 +2249,16 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
         origin_channel="weixin",
         origin_chat_id="wx-chat",
     )
-    past_one_shot_job = cron.add_job(
-        name="Past one-shot",
-        schedule=CronSchedule(kind="at", at_ms=1),
-        message="Old one-shot message",
-        session_key="websocket:abc",
-        origin_channel="websocket",
-        origin_chat_id="abc",
-        delete_after_run=True,
-    )
+    with patch("cirno_core.cron.service._now_ms", return_value=0):
+        past_one_shot_job = cron.add_job(
+            name="Past one-shot",
+            schedule=CronSchedule(kind="at", at_ms=1),
+            message="Old one-shot message",
+            session_key="websocket:abc",
+            origin_channel="websocket",
+            origin_chat_id="abc",
+            delete_after_run=True,
+        )
     cron.register_system_job(
         CronJob(
             id="heartbeat",
@@ -2724,7 +2739,7 @@ async def test_webui_thread_resigns_assistant_media_urls(history,
 
 
     monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path)
-    media_root = tmp_path / "media"
+    media_root = tmp_path / "state" / "media"
     websocket_media = media_root / "websocket"
     websocket_media.mkdir(parents=True)
     external = tmp_path / "clip.mp4"
