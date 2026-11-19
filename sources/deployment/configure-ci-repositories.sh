@@ -18,8 +18,9 @@ for path in [Path('/etc/apt/sources.list'), *sources.glob('*.sources'), *sources
     previous = path.read_text()
     updated = re.sub(
         r'https?://(?:[a-z0-9-]+\.)*ec2\.archive\.ubuntu\.com/ubuntu/?',
-        'http://archive.ubuntu.com/ubuntu/', previous,
+        'https://archive.ubuntu.com/ubuntu/', previous,
     )
+    updated = re.sub(r'http://((?:archive|security|ports)\.ubuntu\.com/)', r'https://\1', updated)
     if previous != updated:
         path.write_text(updated)
         print(f'Using the Ubuntu archive in {path}')
