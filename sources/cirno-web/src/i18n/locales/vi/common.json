@@ -1040,6 +1040,7 @@
       "installing": "Đang cài các gói cần thiết…"
     },
     "models": {
+      "createdOrderFailed": "Đã tạo cấu hình sẵn nhưng không cập nhật được thứ tự gọi. Hãy bật cấu hình đó trong danh sách để thử lại. {{error}}",
       "requestOverridesHint": "Để trống để dùng thiết lập nhà cung cấp. Đổi nhà cung cấp sẽ xóa các giá trị này.",
       "otherPresets": "Cấu hình dự phòng",
       "catalogAuthRequired": "Quyền truy cập đã hết hạn. Vui lòng đăng nhập lại.",

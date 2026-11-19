@@ -167,6 +167,8 @@ describe("SessionAutomations", () => {
     expect(
       screen.queryByRole("button", { name: /Morning check/ }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Session details" }));
     expect(
       screen.getByRole("status", { name: "Loading automations..." }),
     ).toBeVisible();

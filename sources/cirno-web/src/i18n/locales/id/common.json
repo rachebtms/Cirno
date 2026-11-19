@@ -1040,6 +1040,7 @@
       "installing": "Memasang paket yang diperlukan…"
     },
     "models": {
+      "createdOrderFailed": "Preset berhasil dibuat, tetapi urutan pemanggilannya gagal diperbarui. Aktifkan dari daftar preset untuk mencoba lagi. {{error}}",
       "requestOverridesHint": "Kosongkan untuk memakai pengaturan penyedia. Mengganti penyedia menghapus nilai ini.",
       "otherPresets": "Preset cadangan",
       "catalogAuthRequired": "Otorisasi kedaluwarsa. Silakan masuk lagi.",

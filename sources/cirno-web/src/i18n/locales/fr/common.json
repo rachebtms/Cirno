@@ -1040,6 +1040,7 @@
       "installing": "Installation des dépendances…"
     },
     "models": {
+      "createdOrderFailed": "Le préréglage a été créé, mais la mise à jour de son ordre d’appel a échoué. Activez-le dans la liste des préréglages pour réessayer. {{error}}",
       "requestOverridesHint": "Laissez les champs vides pour utiliser les réglages du fournisseur. Changer de fournisseur efface ces valeurs.",
       "otherPresets": "Préréglages de secours",
       "catalogAuthRequired": "L’autorisation a expiré. Veuillez vous reconnecter.",

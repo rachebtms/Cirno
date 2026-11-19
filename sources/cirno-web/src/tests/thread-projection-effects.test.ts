@@ -53,7 +53,7 @@ describe("thread projection content effects", () => {
     });
     expect(reasoning.effects.bodyWrites).toEqual(new Set(["shared"]));
 
-    const reasoningEnd = project({ ...turn, event: "reasoning_end", text: "." });
+    const reasoningEnd = project({ ...turn, event: "reasoning_end", text: "First thought." });
     expect(reasoningEnd.effects.bodyWrites).toEqual(new Set(["shared"]));
     expect(reasoningEnd.state.messages[0].reasoning).toBe("First thought.");
 

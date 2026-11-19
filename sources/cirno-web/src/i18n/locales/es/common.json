@@ -1040,6 +1040,7 @@
       "installing": "Instalando dependencias…"
     },
     "models": {
+      "createdOrderFailed": "Se creó el preajuste, pero no se pudo actualizar su orden de llamada. Actívalo desde la lista de preajustes para reintentar. {{error}}",
       "requestOverridesHint": "Deja los campos vacíos para usar los ajustes del proveedor. Cambiar de proveedor borra estos valores.",
       "otherPresets": "Preajustes alternativos",
       "catalogAuthRequired": "La autorización ha caducado. Inicia sesión de nuevo.",

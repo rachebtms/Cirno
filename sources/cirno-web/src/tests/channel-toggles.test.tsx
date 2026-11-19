@@ -189,17 +189,18 @@ describe("optimistic channel switches", () => {
     requestMutationMock.mockReturnValue(installation.promise);
     const channel = { ...feature(false), installed: false, requires_dependencies: true };
     renderChannel(channel);
-    fireEvent.click(await screen.findByRole("button", { name: "Install Test Chat" }));
+    const install = await screen.findByRole("button", { name: "Install Test Chat" });
+    fireEvent.click(install);
     expect(requestMutationMock).toHaveBeenCalledWith(
       "settings.feature.enable", { name: "test-chat", install_only: true }, 150_000,
     );
 
     channel.installed = true;
     await act(async () => { fireEvent(window, new Event("focus")); });
-    const toggle = await screen.findByRole("switch", { name: "Test Chat channel" });
-    expect(toggle).not.toBeChecked();
-    expect(toggle).toBeDisabled();
+    expect(install).toBeDisabled();
+    expect(screen.queryByRole("switch", { name: "Test Chat channel" })).not.toBeInTheDocument();
     await act(async () => installation.resolve(payload(channel)));
+    const toggle = await screen.findByRole("switch", { name: "Test Chat channel" });
     expect(toggle).not.toBeChecked();
     expect(toggle).toBeEnabled();
   });

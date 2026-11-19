@@ -721,6 +721,7 @@
       "apps": "Aplicativos"
     },
     "models": {
+      "createdOrderFailed": "A predefinição foi criada, mas a atualização da ordem de chamada falhou. Ative-a na lista de predefinições para tentar novamente. {{error}}",
       "requestOverridesHint": "Deixe os campos vazios para usar os ajustes do provedor. Trocar de provedor apaga estes valores.",
       "otherPresets": "Presets alternativos",
       "catalogAuthRequired": "A autorização expirou. Entre novamente.",
