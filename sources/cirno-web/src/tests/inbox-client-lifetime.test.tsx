@@ -71,7 +71,7 @@ it("rejects a retired mark-read receipt after connection A-B-A", async () => {
   const second = connection("second");
   const view = mount(first.client, useInbox);
   await waitFor(() => expect(view.result.current.snapshot.items[0]?.body).toBe("first"));
-  let marking!: Promise<void>;
+  let marking!: ReturnType<ReturnType<typeof useInbox>["markRead"]>;
   act(() => { marking = view.result.current.markRead(); });
   view.replace(second.client);
   await waitFor(() => expect(view.result.current.snapshot.items[0]?.body).toBe("second"));

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import { ModelCapabilityFields } from "@/features/settings/models/ui/ModelCapabilityFields";
-import { agentDraftFromPayload } from "@/features/settings/models/modelDraft";
+import { agentDraftFromPayload, type AgentSettingsDraft } from "@/features/settings/models/modelDraft";
 import { ClientProvider } from "@/providers/ClientProvider";
 import type { CirnoClient } from "@/lib/cirno-client";
 import type { CapabilityResults } from "@/features/settings/models/probeModelCapabilities";
@@ -22,7 +22,7 @@ function setup() {
   const busy = vi.fn();
   const client = { requestMutation } as unknown as CirnoClient;
   function Harness({ visible, preset = "first" }: { visible: boolean; preset?: string }) {
-    const [form, setForm] = useState(() => ({ ...agentDraftFromPayload(settingsPayload()), imageInput: null, videoInput: null }));
+    const [form, setForm] = useState<AgentSettingsDraft>(() => ({ ...agentDraftFromPayload(settingsPayload()), imageInput: null, videoInput: null }));
     return <ClientProvider client={client} token="fixture">
       <output data-testid="image">{String(form.imageInput)}</output>
       {visible && <ModelCapabilityFields key={preset} presetId={preset} form={form} setForm={setForm} disabled={false} onBusyChange={busy} />}

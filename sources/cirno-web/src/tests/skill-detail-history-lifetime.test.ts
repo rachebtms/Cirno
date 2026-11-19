@@ -5,6 +5,7 @@ import { useSkillHistory } from "@/features/skills/model/useSkillHistory";
 import type { SkillService } from "@/features/skills/model/service";
 import type { SkillDetail } from "@/lib/contracts/skills";
 import type { WebUIMutationTransport } from "@/lib/api";
+type HistoryResult = NonNullable<ReturnType<typeof useSkillHistory>["result"]>;
 const skill: SkillDetail = { name: "first", source: "home", description: "Fixture", available: true, enabled: true, raw_markdown: "Instructions", requirements: null };
 function service(): SkillService {
   return { read: vi.fn(async name => ({ ...skill, name })), update: vi.fn(), remove: vi.fn(async () => ({ skills: [], last_action: { name: "first", deleted: true, enabled: false } })), popular: vi.fn(), search: vi.fn(), trends: vi.fn(), install: vi.fn() };
@@ -15,7 +16,7 @@ function detail() {
   return { ...view, api, close };
 }
 function historyClient() {
-  const requestMutation = vi.fn(async () => ({ validation: { valid: true, errors: [] }, versions: [] }));
+  const requestMutation = vi.fn(async (): Promise<HistoryResult> => ({ validation: { valid: true, errors: [] }, versions: [] }));
   return { client: { requestMutation } as unknown as WebUIMutationTransport, requestMutation };
 }
 it("does not carry a deletion confirmation into another Skill's detail", async () => {
@@ -106,7 +107,7 @@ it("does not validate a name from an earlier rendered draft", async () => {
   expect(first.requestMutation).not.toHaveBeenCalled();
 });
 it("does not restore an old validation after the draft changes away and back", async () => {
-  let finish!: (value: { validation: { valid: boolean; errors: string[] }; versions: [] }) => void;
+  let finish!: (value: HistoryResult) => void;
   const first = historyClient();
   first.requestMutation.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   const view = renderHook(useSkillHistory, { initialProps: first.client });
@@ -119,7 +120,7 @@ it("does not restore an old validation after the draft changes away and back", a
   expect(view.result.current.result).toBeNull();
 });
 it("settles an accepted history validation before allowing another draft to be validated", async () => {
-  let finish!: (value: { validation: { valid: boolean; errors: string[] }; versions: [] }) => void;
+  let finish!: (value: HistoryResult) => void;
   const first = historyClient();
   first.requestMutation.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
   const view = renderHook(useSkillHistory, { initialProps: first.client });

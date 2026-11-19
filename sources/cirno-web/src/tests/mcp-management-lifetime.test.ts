@@ -49,11 +49,11 @@ it("preserves an intentional wildcard grant from the explicit all-tools control"
   expect(props.onToolsChange).toHaveBeenCalledWith("fixture", ["*"]);
 });
 
-it.each([
+it.each<{ transport: "streamableHttp" | "stdio"; values: Record<string, string>; expected: Record<string, string> }>([
   { transport: "streamableHttp", values: { token: "replacement" }, expected: { token: "replacement", use_proxy: "false" } },
   { transport: "streamableHttp", values: { token: "replacement", use_proxy: "true" }, expected: { token: "replacement", use_proxy: "true" } },
   { transport: "stdio", values: { token: "replacement" }, expected: { token: "replacement" } },
-] as const)("saves edited connection fields through the persistence action ($transport, $values)", ({ transport, values, expected }) => {
+])("saves edited connection fields through the persistence action ($transport, $values)", ({ transport, values, expected }) => {
   const props = options();
   props.preset = { ...props.preset, transport, required_fields: [{ name: "token", label: "Token", secret: true, required: true, configured: true, placeholder: "" }] };
   props.values = values;
