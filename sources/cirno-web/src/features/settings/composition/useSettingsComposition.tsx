@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SettingsPageProps } from "./contracts";
 import type { SessionAutomationJob } from "@/lib/contracts/automations";
 import { AdvancedSettings } from "../capabilities/SecuritySettings";
@@ -17,11 +17,24 @@ export function useSettingsComposition(props: SettingsPageProps) {
   const [providerFocus, setProviderFocus] = useState<string | null>(null);
   const [proxySetupOpen, setProxySetupOpen] = useState(false);
   const providerAddedCallback = useRef<((provider: string) => void) | null>(null);
+  const providerReturnFocus = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (providerPanel || !providerReturnFocus.current) return;
+    const trigger = providerReturnFocus.current;
+    providerReturnFocus.current = null;
+    // Let the nested modal's focus scope restore its parent first, then return
+    // to the exact control that opened it (including direct activation).
+    const frame = requestAnimationFrame(() => {
+      if (trigger.isConnected) trigger.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [providerPanel]);
   const openProviderPanel = (
     entry: ProviderSettingsEntry,
     trigger: HTMLButtonElement | null,
     onAdded?: (provider: string) => void,
   ) => {
+    providerReturnFocus.current = trigger;
     trigger?.focus({ preventScroll: true });
     providerAddedCallback.current = onAdded ?? null;
     setProviderPanel(entry);
