@@ -37,6 +37,8 @@ Historical reviews, benchmark runs and earlier implementations are local archive
 
 ## Release notes
 
+- [0.2.21](releases/0.2.21.md): shared Shell/Node command duration, non-destructive Goal continuation, queued-message deduplication and safer remote-command reconnects.
+
 - [0.2.20](releases/0.2.20.md): shared cancellation and persistence boundaries, settings and browser resource ownership, tool/provider reliability, and Markdown notification bodies.
 
 - [0.2.19](releases/0.2.19.md): long-context checkpoint boundaries, background execution ownership and reconnect state, current-turn report questions and nonblocking settings navigation.

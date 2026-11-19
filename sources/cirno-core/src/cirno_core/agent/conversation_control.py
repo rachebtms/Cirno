@@ -35,6 +35,8 @@ from cirno_core.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
     model_preset_from_metadata,
 )
+from cirno_core.session.recovery.contracts import PENDING_FOLLOWUPS_KEY
+from cirno_core.session.recovery.pending import pending_followups
 from cirno_core.session.recovery.state import recovery_state_from_metadata
 from cirno_core.session.session_handles import SessionHandleResolver
 from cirno_core.session.session_identity import is_webui_session_key
@@ -105,17 +107,21 @@ class ConversationControl:
                 # turn. Recovery and repeated admissions are not Goal resets.
                 active_resume = action == "resume" and (prior or {}).get("status") == "active" and (
                     recovery is not None and recovery["status"] in {"awaiting_user", "failed", "resuming"}
-                    or self.loop.dispatch.is_running(key)
+                    or self._execution(session)["execution_status"] in {"running", "queued"}
                 )
                 error = self._validate_goal("update" if active_resume else action, prior, values)
                 if error:
                     return ToolResult.error(error)
-            if (not goal and action == "continue") or (goal and action == "resume"):
+            continuing = (not goal and action == "continue") or (goal and action == "resume")
+            if continuing:
                 result = await self._resume_existing(session, target, goal, values, request)
                 if result is not None:
                     return result
-            # Stop only the target's workers, child agents and owned shell sessions.
-            cancelled = await self.loop.cancel_session_work(key, stop_goal=not goal and action == "stop")
+            # Continuation is admission, never cancellation. Preserve accepted
+            # messages, child agents and shell work even when the Goal stopped.
+            cancelled = 0
+            if not continuing:
+                cancelled = await self.loop.cancel_session_work(key, stop_goal=not goal and action == "stop")
             async with self.loop._get_session_lock(key):
                 fresh = await self.loop.sessions.state.read_header(key)
                 if fresh is None or fresh.generation != session.generation:
@@ -162,7 +168,14 @@ class ConversationControl:
         key = session.key
         action = "goal.resume" if goal else "continue"
         recovery = recovery_state_from_metadata(session.metadata)
-        if recovery and recovery["status"] in {"awaiting_user", "failed"}:
+        pending = self.loop._pending_queues.get(key)
+        # Session-to-session Send journals before notifying the global bus.
+        # Those messages already own the next turn even before dispatch has
+        # created its per-session queue; do not add a synthetic continuation.
+        queued_input = (pending is not None and not pending.empty()) or bool(pending_followups(session))
+        if recovery and recovery["status"] in {"awaiting_user", "failed"} and (
+            not queued_input or recovery.get("can_continue") is False
+        ):
             coordinator = self.loop.recovery_admission
             if coordinator is None:
                 return ToolResult.error("Recovery is unavailable; inspect the saved interruption before continuing.")
@@ -185,13 +198,23 @@ class ConversationControl:
                                "recovery_id": recovery["recovery_id"], **execution}, ensure_ascii=False)
         prior = parse_goal_state(goal_state_raw(session.metadata)) or {}
         resuming = recovery is not None and recovery["status"] == "resuming"
-        running = self.loop.dispatch.is_running(key) and prior.get("status") not in RESUMABLE_GOAL_STATUSES
+        running = queued_input or self.loop.dispatch.is_running(key) or key in self.loop._executing_sessions
         if resuming or running:
-            if values:
+            if values and prior.get("status") not in RESUMABLE_GOAL_STATUSES:
                 return ToolResult.error("Work is already admitted; use Goal update to change its settings.")
+            if prior.get("status") in RESUMABLE_GOAL_STATUSES:
+                result = await self._goal_action(session, "resume", values if goal else {}, request)
+                if isinstance(result, ToolResult) and result.is_error:
+                    return result
+                await self._audit(session, target, action, values, uuid4().hex)
+                fresh = await self.loop.sessions.state.read_header(key)
+                if fresh is None or fresh.generation != session.generation:
+                    raise SessionConflictError("The target was deleted or replaced during continuation.")
+                session = fresh
             status = "resuming" if resuming else "already_running" if key in self.loop._executing_sessions else "already_queued"
             return json.dumps({"to": "@" + target.name, "action": action, "status": status,
-                               "continuation_queued": False, **self._execution(session)}, ensure_ascii=False)
+                               "continuation_queued": False, "cancelled_tasks": 0,
+                               **self._execution(session)}, ensure_ascii=False)
         return None
 
     def _execution(self, session: Session) -> dict[str, Any]:
@@ -199,8 +222,10 @@ class ConversationControl:
 
     def _execution_metadata(self, key: str, metadata: dict) -> dict[str, Any]:
         recovery = recovery_state_from_metadata(metadata)
+        queued = self.loop.dispatch.is_running(key) or bool(metadata.get(PENDING_FOLLOWUPS_KEY))
+        resuming = recovery is not None and recovery["status"] == "resuming"
         state = ("running" if key in self.loop._executing_sessions else
-                 "queued" if self.loop.dispatch.is_running(key) or recovery and recovery["status"] == "resuming" else
+                 "queued" if queued or resuming else
                  "interrupted" if recovery and recovery["status"] in {"awaiting_user", "failed"} else "idle")
         return {"execution_status": state, "recovery": recovery,
                 "goal": parse_goal_state(goal_state_raw(metadata))}

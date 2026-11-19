@@ -9,34 +9,18 @@ from cirno_core.agent.tools.schema import (
     tool_parameters_schema,
 )
 from cirno_core.agent.tools.shell_config import ExecToolConfig
+from cirno_core.agent.tools.command_runtime import command_runtime_parameters
 from cirno_core.processes import platform
 from cirno_core.processes.sessions.contracts import MAX_OUTPUT_CHARS, MAX_YIELD_MS
 
 
 def exec_parameters(config: ExecToolConfig) -> dict[str, Any]:
-    limit_note = (
-        f"Explicit requests must not exceed {config.max_runtime_limit}s. "
-        if config.max_runtime_limit else "Explicit requests have no upper limit; 0 means unlimited. "
-    )
     return tool_parameters_schema(
         command=StringSchema("The shell command to execute"),
         cmd=StringSchema("Compatibility alias for command"),
         working_dir=StringSchema("Optional working directory for the command"),
         workdir=StringSchema("Compatibility alias for working_dir"),
-        max_runtime=IntegerSchema(
-            description=(
-                "Hard runtime budget in seconds. Omit for the configured default "
-                f"({'unlimited' if config.max_runtime == 0 else str(config.max_runtime) + 's'}). "
-                f"{limit_note}Output does not extend the budget."
-            ),
-            minimum=1 if config.max_runtime_limit else 0,
-            maximum=config.max_runtime_limit or None,
-        ),
-        timeout=IntegerSchema(
-            description="Compatibility alias for max_runtime; cannot be combined with it.",
-            minimum=1 if config.max_runtime_limit else 0,
-            maximum=config.max_runtime_limit or None,
-        ),
+        **command_runtime_parameters(config),
         shell=StringSchema(
             (
                 "Shell override; omit for PowerShell, or pass 'cmd' for cmd.exe."

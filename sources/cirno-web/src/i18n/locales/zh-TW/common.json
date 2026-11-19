@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "執行上限",
-          "help": "命令輸出或繼續等待都不會延長此上限。選擇「不限時」可取消執行時限。"
+          "help": "shell.exec / nodes.execute: 命令輸出或繼續等待都不會延長此上限。選擇「不限時」可取消執行時限。"
         },
         "server_health_host": {
           "label": "閘道器地址",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "命令靜默逾時（秒）",
-          "help": "命令無輸出達此時間後執行下列動作。0 關閉偵測。不是會話閒置計時。"
+          "help": "shell.exec: 命令無輸出達此時間後執行下列動作。0 關閉偵測。不是會話閒置計時。"
         },
         "tools_exec_idle_action": {
           "label": "命令靜默後的動作",
-          "help": "「回報並繼續」保持命令執行；「終止命令」將其停止。無輸出的研究工作通常應繼續執行。"
+          "help": "shell.exec: 「回報並繼續」保持命令執行；「終止命令」將其停止。無輸出的研究工作通常應繼續執行。"
         },
         "tools_exec_max_runtime_limit": {
           "label": "可要求的最長命令時限（秒）",
-          "help": "模型可要求的單次命令最長時限。0 表示取消此上限；預設命令時限另行設定。"
+          "help": "shell.exec / nodes.execute: 模型可要求的單次命令最長時限。0 表示取消此上限；預設命令時限另行設定。"
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API 基礎位址",

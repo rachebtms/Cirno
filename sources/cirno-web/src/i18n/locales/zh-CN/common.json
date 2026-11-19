@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "运行上限",
-          "help": "命令输出或继续等待都不会延长此上限。选择“不限时”可取消运行时限。"
+          "help": "本地 Shell 与 nodes.execute 共用的默认运行时间；输出和等待不会延长它。选择“不限制时间”可取消限制。修改后需重启 Cirno。"
         },
         "server_health_host": {
           "label": "健康检查监听地址",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "命令静默超时（秒）",
-          "help": "命令在此时间内没有输出时，执行下面选择的操作。0 关闭检测。这不是会话的空闲计时。"
+          "help": "shell.exec: 命令在此时间内没有输出时，执行下面选择的操作。0 关闭检测。这不是会话的空闲计时。"
         },
         "tools_exec_idle_action": {
           "label": "命令静默后的操作",
-          "help": "“报告并继续”会保持命令运行；“终止命令”会将其停止。无输出的科研任务通常应选择报告并继续。"
+          "help": "shell.exec: “报告并继续”会保持命令运行；“终止命令”会将其停止。无输出的科研任务通常应选择报告并继续。"
         },
         "tools_exec_max_runtime_limit": {
           "label": "可请求的最长命令时限（秒）",
-          "help": "模型可请求的单次命令最长时限。0 表示取消此上限；默认命令时限另行设置。"
+          "help": "shell.exec 与 nodes.execute 单次指定运行时间的共用上限。0 表示取消上限，并允许单次指定 0 为不限时。默认运行时间单独设置。"
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API 基础地址",

@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "コマンドの実行時間",
-          "help": "出力や待機によって上限は延長されません。「時間制限なし」を選ぶと実行時間の上限がなくなります。"
+          "help": "shell.exec / nodes.execute: 出力や待機によって上限は延長されません。「時間制限なし」を選ぶと実行時間の上限がなくなります。"
         },
         "server_health_host": {
           "label": "Cirno サーバーアドレス",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "コマンド無出力タイムアウト（秒）",
-          "help": "この時間出力がない場合に下の動作を行います。0 は検出を無効にします。会話の待機時間とは別です。"
+          "help": "shell.exec: この時間出力がない場合に下の動作を行います。0 は検出を無効にします。会話の待機時間とは別です。"
         },
         "tools_exec_idle_action": {
           "label": "出力がない場合の動作",
-          "help": "報告では実行を続け、終了では停止します。出力の少ない研究ジョブには通常、報告を使います。"
+          "help": "shell.exec: 報告では実行を続け、終了では停止します。出力の少ない研究ジョブには通常、報告を使います。"
         },
         "tools_exec_max_runtime_limit": {
           "label": "要求可能なコマンド最長時間（秒）",
-          "help": "モデルが指定できるコマンド実行時間の上限です。0で上限なし。既定の実行時間は別に設定します。"
+          "help": "shell.exec / nodes.execute: モデルが指定できるコマンド実行時間の上限です。0で上限なし。既定の実行時間は別に設定します。"
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API ベース URL",

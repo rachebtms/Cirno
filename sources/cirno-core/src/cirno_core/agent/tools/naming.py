@@ -30,7 +30,7 @@ MEMORY_FIELDS = {
 }
 NODE_FIELDS = {
     "list": "",
-    "execute": "node_id command",
+    "execute": "node_id command max_runtime timeout",
     "start": "node_id command",
     "status": "job_id",
     "stop": "job_id",

@@ -2,10 +2,40 @@
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+import pytest
 
 from cirno_core.nodes.commands import CommandResult
 from cirno_core.storage.instance import InstanceData
 from cirno_server.webui.instance_api import instance_action
+
+
+@pytest.mark.parametrize(("values", "expected"), [({}, 600), ({"timeout": 700}, 700), ({"max_runtime": 800}, 800), ({"max_runtime": 0}, None)])
+async def test_node_dialog_uses_its_own_instance_shell_runtime(tmp_path, monkeypatch, values, expected):
+    from cirno_core.config.loader import save_config
+    from cirno_core.config.schema import Config
+
+    path = tmp_path / "instance" / "config.json"
+    save_config(Config.model_validate({"tools": {"exec": {"max_runtime": 600, "max_runtime_limit": 0}}}), path)
+    execute = AsyncMock(return_value=CommandResult("done", "", 0))
+    monkeypatch.setattr("cirno_server.webui.instance_api.Nodes", lambda data: SimpleNamespace(execute_command=execute))
+    await instance_action({"action": "nodes.execute", "values": {"id": "gpu", "command": "run-once", **values}},
+                          sessions=None, bus=None, config_path=path)
+    execute.assert_awaited_once_with("gpu", "run-once", timeout=expected)
+
+
+@pytest.mark.parametrize("values", [{"timeout": 601}, {"max_runtime": 0}, {"timeout": True}, {"timeout": "600"}, {"timeout": 10, "max_runtime": 20}])
+async def test_invalid_node_dialog_runtime_never_runs_the_command(tmp_path, monkeypatch, values):
+    from cirno_core.config.loader import save_config
+    from cirno_core.config.schema import Config
+
+    path = tmp_path / "config.json"
+    save_config(Config.model_validate({"tools": {"exec": {"max_runtime_limit": 600}}}), path)
+    execute = AsyncMock()
+    monkeypatch.setattr("cirno_server.webui.instance_api.Nodes", lambda data: SimpleNamespace(execute_command=execute))
+    with pytest.raises(ValueError):
+        await instance_action({"action": "nodes.execute", "values": {"id": "gpu", "command": "write", **values}},
+                              sessions=None, bus=None, config_path=path)
+    execute.assert_not_awaited()
 
 
 async def test_nonzero_command_exit_is_structured_and_keeps_the_legacy_output(tmp_path, monkeypatch):

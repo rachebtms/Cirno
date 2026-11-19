@@ -29,7 +29,7 @@ export function useNodes(client: CirnoClient) {
     setNodes([]); setJobs([]); setDraft(null); setTarget(null); setCommand(""); setOutput(null); setExitCode(null); setNotice(""); setError(""); setLoading(true);
   }
   const request = useCallback(<T,>(action: string, values: object = {}) => client.requestMutation<T>(
-    "instance.action", { action, values }, ["nodes.execute", "nodes.test", "nodes.job", "nodes.stop"].includes(action) ? 130_000 : 30_000), [client]);
+    "instance.action", { action, values }, action === "nodes.execute" ? 0 : ["nodes.test", "nodes.job", "nodes.stop"].includes(action) ? 130_000 : 30_000), [client]);
   const refresh = useCallback(async (quiet = false) => {
     if (!current() || refreshing.current === client) return;
     refreshing.current = client;

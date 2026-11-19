@@ -5,8 +5,9 @@ type MutationResponse = Extract<InboundEvent, { event: "webui_response" }>;
 interface PendingMutation {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer: ReturnType<typeof setTimeout> | undefined;
   frame: string;
+  replayable: boolean;
 }
 
 class WebUIMutationError extends Error {
@@ -25,6 +26,7 @@ export class ClientMutations {
     private byteLimit: () => number | undefined,
   ) {}
 
+  /** A zero deadline waits for the server result. Direct Node commands never replay. */
   request<T>(action: string, payload: Record<string, unknown>, timeoutMs: number): Promise<T> {
     const socket = this.socket();
     if (!socket || socket.readyState !== 1) {
@@ -43,11 +45,12 @@ export class ClientMutations {
       return Promise.reject(new WebUIMutationError(413, "WebUI mutation payload is too large"));
     }
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const timer = timeoutMs === 0 ? undefined : setTimeout(() => {
         this.pending.delete(id);
         reject(new WebUIMutationError(504, `WebUI request timed out after ${timeoutMs}ms`));
       }, timeoutMs);
-      this.pending.set(id, { resolve: value => resolve(value as T), reject, timer, frame });
+      this.pending.set(id, { resolve: value => resolve(value as T), reject, timer, frame,
+        replayable: !(action === "instance.action" && payload.action === "nodes.execute") });
       try {
         socket.send(frame);
       } catch (error) {
@@ -75,6 +78,7 @@ export class ClientMutations {
 
   replay(): void {
     for (const request of this.pending.values()) {
+      if (!request.replayable) continue;
       const socket = this.socket();
       if (!socket) return;
       try {
@@ -87,11 +91,13 @@ export class ClientMutations {
   }
 
   disconnected(willReconnect: boolean): void {
-    if (willReconnect) return;
-    for (const request of this.pending.values()) {
+    for (const [id, request] of this.pending) {
+      if (willReconnect && request.replayable) continue;
       clearTimeout(request.timer);
-      request.reject(new WebUIMutationError(503, "Socket closed before WebUI response"));
+      request.reject(new WebUIMutationError(503, request.replayable
+        ? "Socket closed before WebUI response"
+        : "Node command outcome is unconfirmed after disconnect. It may still be running or completed; inspect the remote effects before retrying."));
+      this.pending.delete(id);
     }
-    this.pending.clear();
   }
 }

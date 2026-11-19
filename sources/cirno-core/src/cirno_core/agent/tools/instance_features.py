@@ -8,6 +8,8 @@ from cirno_memory.errors import MemoryRevisionConflict
 from cirno_memory.repository import MemoryRepository
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
+from cirno_core.agent.tools.command_runtime import command_runtime_parameters, resolve_command_runtime
+from cirno_core.agent.tools.shell_config import ExecToolConfig
 from cirno_core.agent.tools.context import current_request_context
 from cirno_core.agent.tools.schema import (
     ArraySchema,
@@ -27,23 +29,11 @@ from cirno_core.storage.instance import InstanceData
 from cirno_core.utils.cancellation import shield_and_drain
 
 
-@tool_parameters(
-    tool_parameters_schema(
-        action=StringSchema(
-            enum=["list", "execute", "upload", "download", "start", "status", "stop"]
-        ),
-        node_id=StringSchema("Configured Node ID."),
-        command=StringSchema("Remote shell command."),
-        job_id=StringSchema("Saved remote job ID."),
-        local_path=StringSchema("Local file path."),
-        remote_path=StringSchema("Remote file path."),
-        required=["action"],
-    )
-)
 class NodeTool(Tool):
-    def __init__(self, *, source_config_path: Path | None = None):
+    def __init__(self, *, source_config_path: Path | None = None, exec_config: ExecToolConfig | None = None):
         config_path = source_config_path if source_config_path is not None else get_config_path()
         self.state_dir = Path(config_path).expanduser().resolve(strict=False).parent / "state"
+        self.exec_config = (exec_config or ExecToolConfig()).model_copy(deep=True)
 
     @classmethod
     def enabled(cls, ctx):
@@ -51,7 +41,20 @@ class NodeTool(Tool):
 
     @classmethod
     def create(cls, ctx):
-        return cls(source_config_path=ctx.source_config_path or ctx.instance_config_path)
+        return cls(source_config_path=ctx.source_config_path or ctx.instance_config_path, exec_config=ctx.config.exec)
+
+    @property
+    def parameters(self):
+        return tool_parameters_schema(
+            action=StringSchema(enum=["list", "execute", "upload", "download", "start", "status", "stop"]),
+            node_id=StringSchema("Configured Node ID."),
+            command=StringSchema("Remote shell command. Runtime overrides apply only to execute."),
+            job_id=StringSchema("Saved remote job ID."),
+            local_path=StringSchema("Local file path."),
+            remote_path=StringSchema("Remote file path."),
+            **command_runtime_parameters(self.exec_config),
+            required=["action"],
+        )
 
     @property
     def name(self):
@@ -59,7 +62,7 @@ class NodeTool(Tool):
 
     @property
     def description(self):
-        return "Use configured Nodes by ID through SSH only. Listing returns connection and job-status metadata, never authentication secrets, environment values or historical job output. Configured SSH credentials and environment values are applied internally. Remote operations require AI approval or Full Access; Default permits listing saved records only. Execute short commands; read stdout, stderr and exit_code (nonzero is a remote command result, not a transport failure). If execute returns execution_unknown, inspect remote effects before retrying; the command may have run. A connection_warning alongside an exit_code means completion was confirmed despite a later disconnect. Transfer files or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. If start returns submission_unknown, retain its id and call status with job_id; never start a replacement while its outcome is unconfirmed."
+        return "Use configured Nodes by ID through SSH only. Listing returns connection and job-status metadata, never authentication secrets, environment values or historical job output. Configured SSH credentials and environment values are applied internally. Remote operations require AI approval or Full Access; Default permits listing saved records only. Direct execute shares the Shell execution default runtime and request ceiling; max_runtime (or timeout) overrides it for one execute call only. Read stdout, stderr and exit_code (nonzero is a remote command result, not a transport failure). If execute returns execution_unknown, inspect remote effects before retrying; the command may have run. A connection_warning alongside an exit_code means completion was confirmed despite a later disconnect. Transfer files or start/status/stop durable remote jobs. Use start for long work; disconnecting SSH is not stopping a job. If start returns submission_unknown, retain its id and call status with job_id; never start a replacement while its outcome is unconfirmed."
 
     def approval_reason(self, params):
         if params.get("action") != "list":
@@ -74,12 +77,19 @@ class NodeTool(Tool):
         job_id=None,
         local_path=None,
         remote_path=None,
+        max_runtime=None,
+        timeout=None,
         **kwargs,
     ):
         scope = current_workspace_scope()
         if action != "list" and scope and scope.access_mode != "full":
             return ToolResult.error("SSH operations require AI approval or Full Access. No remote operation was executed.")
         try:
+            if timeout is not None and max_runtime is not None:
+                raise ValueError("timeout and max_runtime are mutually exclusive")
+            if action != "execute" and (max_runtime is not None or timeout is not None):
+                raise ValueError("Runtime overrides apply only to nodes.execute")
+            runtime = resolve_command_runtime(self.exec_config, max_runtime if max_runtime is not None else timeout)
             nodes = await shield_and_drain(asyncio.to_thread(lambda: Nodes(data=InstanceData(self.state_dir), actor="agent")))
             if action == "list":
                 result = await asyncio.to_thread(nodes.catalog)
@@ -87,7 +97,7 @@ class NodeTool(Tool):
                 if not node_id or not command:
                     raise ValueError("node_id and command are required")
                 result = (
-                    (await nodes.execute_command(node_id, command)).to_dict()
+                    (await nodes.execute_command(node_id, command, timeout=runtime)).to_dict()
                     if action == "execute"
                     else await nodes.start_job(node_id, command)
                 )

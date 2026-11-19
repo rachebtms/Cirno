@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "명령 실행 시간",
-          "help": "출력이나 대기로 이 제한이 늘어나지 않습니다. ‘시간 제한 없음’을 선택하면 실행 시간 제한이 해제됩니다."
+          "help": "shell.exec / nodes.execute: 출력이나 대기로 이 제한이 늘어나지 않습니다. ‘시간 제한 없음’을 선택하면 실행 시간 제한이 해제됩니다."
         },
         "server_health_host": {
           "label": "Cirno 서버 주소",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "명령 무출력 제한 (초)",
-          "help": "이 시간 동안 출력이 없으면 아래 동작을 수행합니다. 0은 감지를 끕니다. 대화 유휴 시간과는 다릅니다."
+          "help": "shell.exec: 이 시간 동안 출력이 없으면 아래 동작을 수행합니다. 0은 감지를 끕니다. 대화 유휴 시간과는 다릅니다."
         },
         "tools_exec_idle_action": {
           "label": "명령 무출력 시 동작",
-          "help": "보고는 명령을 계속 실행하고 종료는 중지합니다. 조용한 연구 작업은 일반적으로 보고를 사용하세요."
+          "help": "shell.exec: 보고는 명령을 계속 실행하고 종료는 중지합니다. 조용한 연구 작업은 일반적으로 보고를 사용하세요."
         },
         "tools_exec_max_runtime_limit": {
           "label": "요청 가능한 명령 최대 시간 (초)",
-          "help": "모델이 요청할 수 있는 명령 실행 시간의 상한입니다. 0은 상한 없음이며 기본 실행 시간은 별도로 설정합니다."
+          "help": "shell.exec / nodes.execute: 모델이 요청할 수 있는 명령 실행 시간의 상한입니다. 0은 상한 없음이며 기본 실행 시간은 별도로 설정합니다."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API 기본 URL",

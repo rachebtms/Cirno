@@ -8,7 +8,7 @@ from cirno_core.config.base import Base
 
 
 class ExecToolConfig(Base):
-    """Shell exec tool configuration."""
+    """Shared local/SSH runtime and local Shell environment configuration."""
     enable: bool = True
     max_runtime: int = Field(
         default=3600, ge=0,

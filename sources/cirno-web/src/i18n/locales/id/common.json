@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "Durasi perintah",
-          "help": "Keluaran dan waktu tunggu tidak memperpanjang batas ini. Pilih Tanpa batas waktu untuk menghapus batas durasi."
+          "help": "shell.exec / nodes.execute: Keluaran dan waktu tunggu tidak memperpanjang batas ini. Pilih Tanpa batas waktu untuk menghapus batas durasi."
         },
         "server_health_host": {
           "label": "Alamat Cirno server",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "Batas tanpa keluaran (detik)",
-          "help": "Setelah tidak ada keluaran selama waktu ini, terapkan tindakan berikut. 0 mematikan deteksi. Berbeda dari waktu menganggur percakapan."
+          "help": "shell.exec: Setelah tidak ada keluaran selama waktu ini, terapkan tindakan berikut. 0 mematikan deteksi. Berbeda dari waktu menganggur percakapan."
         },
         "tools_exec_idle_action": {
           "label": "Tindakan setelah hening",
-          "help": "Laporkan membiarkan perintah berjalan; hentikan mengakhirinya. Untuk riset tanpa keluaran, biasanya gunakan Laporkan."
+          "help": "shell.exec: Laporkan membiarkan perintah berjalan; hentikan mengakhirinya. Untuk riset tanpa keluaran, biasanya gunakan Laporkan."
         },
         "tools_exec_max_runtime_limit": {
           "label": "Durasi maksimum yang diminta (detik)",
-          "help": "Durasi maksimum yang dapat diminta model per perintah. 0 menghapus batas ini; durasi bawaan diatur terpisah."
+          "help": "shell.exec / nodes.execute: Durasi maksimum yang dapat diminta model per perintah. 0 menghapus batas ini; durasi bawaan diatur terpisah."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL dasar API",

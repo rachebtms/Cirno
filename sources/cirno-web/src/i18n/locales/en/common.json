@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "Command runtime",
-          "help": "Output and waiting do not extend it. Choose No time limit to remove this limit."
+          "help": "Shared by local Shell commands and nodes.execute. Output and waiting do not extend it. Choose No time limit to remove this limit. Restart Cirno after changing it."
         },
         "server_health_host": {
           "label": "Health endpoint bind address",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "Command silence timeout (seconds)",
-          "help": "Time without command output before applying the action below. 0 disables silence detection. This is not the conversation idle timer."
+          "help": "shell.exec: Time without command output before applying the action below. 0 disables silence detection. This is not the conversation idle timer."
         },
         "tools_exec_idle_action": {
           "label": "After command silence",
-          "help": "Report keeps the command running; terminate stops it. Quiet research jobs should normally use Report."
+          "help": "shell.exec: Report keeps the command running; terminate stops it. Quiet research jobs should normally use Report."
         },
         "tools_exec_max_runtime_limit": {
           "label": "Maximum requested command duration (seconds)",
-          "help": "Largest duration the model may request for one command. 0 removes this ceiling. The default command duration remains separate."
+          "help": "Shared ceiling for explicit shell.exec and nodes.execute durations. 0 removes the ceiling and allows an explicit 0 for no time limit. The default duration is separate."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "API base URL",

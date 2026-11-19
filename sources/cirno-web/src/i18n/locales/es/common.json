@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "Duración de los comandos",
-          "help": "La salida y la espera no amplían este límite. Elige Sin límite de tiempo para eliminar el límite de duración."
+          "help": "shell.exec / nodes.execute: La salida y la espera no amplían este límite. Elige Sin límite de tiempo para eliminar el límite de duración."
         },
         "server_health_host": {
           "label": "Dirección de la puerta de enlace",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "Tiempo sin salida del comando (segundos)",
-          "help": "Tras este tiempo sin salida se aplica la acción siguiente. 0 desactiva la detección. No es el tiempo de inactividad de la conversación."
+          "help": "shell.exec: Tras este tiempo sin salida se aplica la acción siguiente. 0 desactiva la detección. No es el tiempo de inactividad de la conversación."
         },
         "tools_exec_idle_action": {
           "label": "Acción ante silencio",
-          "help": "Informar mantiene el comando en ejecución; terminar lo detiene. Para tareas de investigación silenciosas, use normalmente Informar."
+          "help": "shell.exec: Informar mantiene el comando en ejecución; terminar lo detiene. Para tareas de investigación silenciosas, use normalmente Informar."
         },
         "tools_exec_max_runtime_limit": {
           "label": "Duración máxima solicitada (segundos)",
-          "help": "Duración máxima que el modelo puede solicitar por comando. 0 elimina este límite; la duración predeterminada se configura por separado."
+          "help": "shell.exec / nodes.execute: Duración máxima que el modelo puede solicitar por comando. 0 elimina este límite; la duración predeterminada se configura por separado."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL base de la API",

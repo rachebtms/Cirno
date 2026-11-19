@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "Thời gian chạy lệnh",
-          "help": "Đầu ra và việc chờ đợi không kéo dài giới hạn này. Chọn Không giới hạn thời gian để bỏ giới hạn thời gian chạy."
+          "help": "shell.exec / nodes.execute: Đầu ra và việc chờ đợi không kéo dài giới hạn này. Chọn Không giới hạn thời gian để bỏ giới hạn thời gian chạy."
         },
         "server_health_host": {
           "label": "Địa chỉ Cirno server",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "Thời gian lệnh không có đầu ra (giây)",
-          "help": "Sau thời gian không có đầu ra này, áp dụng hành động bên dưới. 0 tắt phát hiện. Khác với thời gian rảnh của cuộc trò chuyện."
+          "help": "shell.exec: Sau thời gian không có đầu ra này, áp dụng hành động bên dưới. 0 tắt phát hiện. Khác với thời gian rảnh của cuộc trò chuyện."
         },
         "tools_exec_idle_action": {
           "label": "Hành động khi lệnh im lặng",
-          "help": "Báo cáo giữ lệnh chạy; dừng sẽ kết thúc lệnh. Tác vụ nghiên cứu ít đầu ra thường nên dùng Báo cáo."
+          "help": "shell.exec: Báo cáo giữ lệnh chạy; dừng sẽ kết thúc lệnh. Tác vụ nghiên cứu ít đầu ra thường nên dùng Báo cáo."
         },
         "tools_exec_max_runtime_limit": {
           "label": "Thời hạn lệnh tối đa được yêu cầu (giây)",
-          "help": "Thời gian tối đa mô hình có thể yêu cầu cho mỗi lệnh. 0 bỏ giới hạn này; thời gian mặc định được đặt riêng."
+          "help": "shell.exec / nodes.execute: Thời gian tối đa mô hình có thể yêu cầu cho mỗi lệnh. 0 bỏ giới hạn này; thời gian mặc định được đặt riêng."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL cơ sở API",

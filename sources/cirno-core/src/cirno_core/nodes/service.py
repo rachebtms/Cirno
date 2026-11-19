@@ -133,7 +133,7 @@ class Nodes:
         return result.output if include_stderr else result.stdout
 
     async def _run_result(
-        self, args: list[str], timeout: int = 120, *, password: str | None = None,
+        self, args: list[str], timeout: int | None = 120, *, password: str | None = None,
     ) -> CommandResult:
         environment = await asyncio.to_thread(self.environment, password) if password is not None else None
         process = await asyncio.create_subprocess_exec(
@@ -150,7 +150,7 @@ class Nodes:
                     del buffer[:-limit]
 
         try:
-            async with asyncio.timeout(timeout):
+            async with asyncio.timeout(None if timeout == 0 else timeout):
                 await asyncio.gather(
                     tail(process.stdout, output_buffer, 64000), tail(process.stderr, error_buffer, 16000)
                 )

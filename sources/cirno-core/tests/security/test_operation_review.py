@@ -346,7 +346,7 @@ async def test_nodes_execute_obeys_access_and_review(review, monkeypatch, mode):
             assert result.is_error
             execute.assert_not_awaited()
         else:
-            execute.assert_awaited_once_with(node['id'], 'printf hello')
+            execute.assert_awaited_once_with(node['id'], 'printf hello', timeout=3600)
             assert json.loads(result) == {"stdout": "remote result", "stderr": "", "exit_code": 0}
         assert response.await_count == (1 if mode == 'review' else 0)
         if mode == 'review':

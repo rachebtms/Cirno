@@ -3,6 +3,7 @@
 import asyncio
 import json
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,6 +11,7 @@ from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.tools.context import RequestContext, request_context
 from cirno_core.agent.tools.selection import conversation_tools
 from cirno_core.bus.input_origin import input_origin
+from cirno_core.bus.events import InboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.config.home import set_instance_path
 from cirno_core.providers.generation import GenerationSettings
@@ -277,6 +279,126 @@ async def test_continue_reactivates_goal_and_keeps_original_authorization(superv
     assert again["status"] == "already_queued"
     assert again["execution_status"] == "queued" and not again["continuation_queued"]
     assert admitted.await_count == 1
+
+
+@pytest.mark.parametrize("status", ["stopped", "paused", "waiting", "blocked"])
+@pytest.mark.parametrize("recovering", [False, True])
+async def test_resume_preserves_queued_input_fifo_without_duplicate_execution(supervision, status, recovering):
+    from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY
+
+    loop, sessions, handle, admitted, _ = supervision
+    key = "websocket:worker"
+    metadata = {"goal_state": {"goal_id": "original", "status": status, "objective": "Finish work"}}
+    if recovering:
+        metadata[RECOVERY_METADATA_KEY] = {"recovery_id": "old-turn", "status": "awaiting_user", "attempts": 0}
+    await sessions.state.update_metadata(key, metadata)
+    generation = (await sessions.state.read_header(key)).generation
+    messages = [InboundMessage(channel="websocket", sender_id="user", chat_id="worker", content=text,
+                               session_generation=generation) for text in ("First accepted input", "Second accepted input")]
+    pending = asyncio.Queue()
+    for message in messages:
+        pending.put_nowait(message)
+    loop._pending_queues[key] = pending
+    cancel = loop.cancel_session_work = AsyncMock()
+    loop.recovery_admission = SimpleNamespace(resume_session=AsyncMock())
+    executed = []
+
+    async def execute(message, owned_queue):
+        assert owned_queue is pending
+        assert (await goal(sessions))["status"] == "active"
+        executed.append(message)
+
+    loop.dispatch.execute = execute
+    # The current request can still hold the execution lock. Resume must only
+    # change Goal metadata, leaving that execution and its FIFO owner intact.
+    async with loop._get_session_lock(key):
+        results = await asyncio.wait_for(asyncio.gather(
+            loop.tools.get("control_goal").execute(to=handle, action="resume"),
+            loop.tools.get("control_session").execute(to=handle, action="continue"),
+        ), 2)
+    assert all(json.loads(result)["continuation_queued"] is False for result in results)
+    assert loop._pending_queues[key] is pending and pending.qsize() == 2
+    cancel.assert_not_awaited()
+    admitted.assert_not_awaited()
+    loop.recovery_admission.resume_session.assert_not_awaited()
+    assert loop.bus.inbound.empty()
+    await loop.dispatch.run_queue(key, pending)
+    assert executed == messages
+    assert key not in loop._pending_queues
+
+
+@pytest.mark.parametrize(("tool_name", "action"), [("control_goal", "resume"), ("control_session", "continue")])
+async def test_idle_resume_admits_once_without_cancelling_owned_work(supervision, tool_name, action):
+    loop, sessions, handle, admitted, _ = supervision
+    key = "websocket:worker"
+    await sessions.state.update_metadata(key, {"goal_state": {"goal_id": "original", "status": "stopped", "objective": "Finish work"}})
+    cancel = loop.cancel_session_work = AsyncMock()
+
+    async def queue(message):
+        pending = loop._pending_queues.setdefault(key, asyncio.Queue())
+        pending.put_nowait(message)
+
+    admitted.side_effect = queue
+    tool = loop.tools.get(tool_name)
+    results = await asyncio.gather(tool.execute(to=handle, action=action), tool.execute(to=handle, action=action))
+    assert sorted(json.loads(result)["continuation_queued"] for result in results) == [False, True]
+    admitted.assert_awaited_once()
+    cancel.assert_not_awaited()
+    pending = loop._pending_queues.pop(key)
+    assert pending.qsize() == 1
+    assert (await goal(sessions))["status"] == "active"
+
+
+@pytest.mark.parametrize(("tool_name", "action"), [("control_goal", "resume"), ("control_session", "continue")])
+@pytest.mark.parametrize("recovering", [False, True])
+async def test_send_then_resume_retains_bus_message_and_its_durable_receipt(supervision, tool_name, action, recovering):
+    from cirno_core.agent.tools.session_messages import SendSessionMessageTool
+    from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY, PENDING_FOLLOWUP_ID_KEY
+    from cirno_core.session.recovery.pending import pending_followups
+
+    loop, sessions, handle, admitted, _ = supervision
+    key = "websocket:worker"
+    metadata = {"goal_state": {"goal_id": "g", "status": "stopped", "objective": "Finish work"}}
+    if recovering:
+        metadata[RECOVERY_METADATA_KEY] = {"recovery_id": "old", "status": "awaiting_user", "attempts": 0}
+    await sessions.state.update_metadata(key, metadata)
+    sender = SendSessionMessageTool(sessions=sessions, bus=loop.bus)
+    sent = await sender.execute(to=handle, content="Read the next paper", expect_reply=False)
+    assert not getattr(sent, "is_error", False), sent
+    original = pending_followups(await sessions.state.read_header(key))
+    assert len(original) == 1 and loop.bus.inbound_size == 1
+    cancel = loop.cancel_session_work = AsyncMock()
+    loop.recovery_admission = SimpleNamespace(resume_session=AsyncMock())
+    result = json.loads(await loop.tools.get(tool_name).execute(to=handle, action=action))
+    assert result["status"] == "already_queued" and not result["continuation_queued"]
+    assert result["execution_status"] == "queued"
+    again = json.loads(await loop.tools.get(tool_name).execute(to=handle, action=action))
+    assert again["status"] == "already_queued" and not again["continuation_queued"]
+    admitted.assert_not_awaited()
+    cancel.assert_not_awaited()
+    loop.recovery_admission.resume_session.assert_not_awaited()
+    received = loop.bus.inbound.get_nowait()
+    assert received.content == original[0].content
+    assert received.metadata[PENDING_FOLLOWUP_ID_KEY] == original[0].metadata[PENDING_FOLLOWUP_ID_KEY]
+    assert pending_followups(await sessions.state.read_header(key))[0].metadata == original[0].metadata
+    assert loop.bus.inbound.empty()
+    observed = []
+
+    async def consume(message, pending):
+        observed.append(message.content)
+        await sessions.state.acknowledge_followups(
+            key, (message.metadata[PENDING_FOLLOWUP_ID_KEY],), expected_generation=message.session_generation,
+        )
+
+    loop.dispatch.execute = consume
+    # Exercise the real dispatcher and durable receipt check, including a
+    # delayed duplicate delivery after the original queue has fully retired.
+    await type(loop.dispatch).enqueue_locked(loop.dispatch, received)
+    await asyncio.gather(*tuple(loop._active_tasks.get(key, ())))
+    await type(loop.dispatch).enqueue_locked(loop.dispatch, received)
+    assert observed == ["Read the next paper"]
+    assert pending_followups(await sessions.state.read_header(key)) == []
+    assert key not in loop._pending_queues
 
 
 async def test_goal_controls_reuse_worker_state_and_preserve_limits(supervision):

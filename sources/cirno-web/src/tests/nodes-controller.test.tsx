@@ -112,7 +112,7 @@ describe("Node operations", () => {
     failed = false;
     await act(async () => view.result.current.execute());
     expect(view.result.current.output).toBe("");
-    expect(request).toHaveBeenCalledWith("instance.action", { action: "nodes.execute", values: { id: node.id, command: "uname -a" } }, 130_000);
+    expect(request).toHaveBeenCalledWith("instance.action", { action: "nodes.execute", values: { id: node.id, command: "uname -a" } }, 0);
     act(() => view.result.current.startCommand({ ...node, id: "other-node" }));
     expect(view.result.current.command).toBe(""); expect(view.result.current.output).toBeNull();
     expect(request.mock.calls.some(([, payload]) => payload.action === "nodes.start_job")).toBe(false);

@@ -7,6 +7,7 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
+from cirno_core.agent.tools.command_runtime import resolve_command_runtime
 from cirno_core.agent.tools.base import ToolResult
 from cirno_core.agent.tools.sandbox import wrap_command
 from cirno_core.agent.tools.shell.policy import WORKSPACE_BOUNDARY_NOTE, CommandPolicy
@@ -50,19 +51,7 @@ class CommandPreparation:
 
     def resolve_timeout(self, timeout: object) -> int | None:
         """Resolve a hard budget without changing the caller's requested duration."""
-        if timeout is not None:
-            if isinstance(timeout, bool) or not isinstance(timeout, int):
-                raise ValueError("max_runtime must be an integer number of seconds")
-            if self.config.max_runtime_limit == 0:
-                if timeout < 0:
-                    raise ValueError("max_runtime must be nonnegative; 0 means no time limit")
-                return timeout or None
-            if not 1 <= timeout <= self.config.max_runtime_limit:
-                raise ValueError(
-                    f"max_runtime must be between 1 and {self.config.max_runtime_limit} seconds"
-                )
-            return timeout
-        return self.config.max_runtime or None
+        return resolve_command_runtime(self.config, timeout)
 
     def prepare(
         self,

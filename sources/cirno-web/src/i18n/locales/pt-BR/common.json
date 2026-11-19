@@ -314,7 +314,7 @@
         },
         "tools_exec_max_runtime": {
           "label": "Duração dos comandos",
-          "help": "A saída e a espera não prolongam esse limite. Escolha Sem limite de tempo para remover o limite de duração."
+          "help": "shell.exec / nodes.execute: A saída e a espera não prolongam esse limite. Escolha Sem limite de tempo para remover o limite de duração."
         },
         "server_health_host": {
           "label": "Endereço do Cirno server",
@@ -378,15 +378,15 @@
         },
         "tools_exec_idle_timeout": {
           "label": "Tempo sem saída do comando (segundos)",
-          "help": "Após esse tempo sem saída, aplica a ação abaixo. 0 desativa a detecção. Não é a inatividade da conversa."
+          "help": "shell.exec: Após esse tempo sem saída, aplica a ação abaixo. 0 desativa a detecção. Não é a inatividade da conversa."
         },
         "tools_exec_idle_action": {
           "label": "Ação após silêncio",
-          "help": "Relatar mantém a execução; encerrar interrompe. Para pesquisas sem saída, normalmente use Relatar."
+          "help": "shell.exec: Relatar mantém a execução; encerrar interrompe. Para pesquisas sem saída, normalmente use Relatar."
         },
         "tools_exec_max_runtime_limit": {
           "label": "Duração máxima solicitada (segundos)",
-          "help": "Duração máxima que o modelo pode solicitar por comando. 0 remove esse limite; a duração padrão é configurada separadamente."
+          "help": "shell.exec / nodes.execute: Duração máxima que o modelo pode solicitar por comando. 0 remove esse limite; a duração padrão é configurada separadamente."
         },
         "agents_defaults_memory_embedding_api_base": {
           "label": "URL base da API",

@@ -6,7 +6,8 @@ import asyncio
 from pathlib import Path
 
 from cirno_core.config.home import get_home_path
-from cirno_core.config.loader import get_config_path
+from cirno_core.config.loader import get_config_path, load_config
+from cirno_core.agent.tools.command_runtime import resolve_command_runtime
 from cirno_core.nodes.service import Nodes
 from cirno_core.session.router_session import ensure_router_session
 from cirno_core.skills.history import inspect_skill
@@ -120,9 +121,10 @@ async def instance_action(
         command = str(values.get("command", "")).strip()
         if not command:
             raise ValueError("A command is required")
-        timeout = int(values.get("timeout", 120))
-        if not 1 <= timeout <= 3600:
-            raise ValueError("Command timeout must be between 1 and 3600 seconds")
+        if values.get("timeout") is not None and values.get("max_runtime") is not None:
+            raise ValueError("timeout and max_runtime are mutually exclusive")
+        config = await asyncio.to_thread(load_config, source_config_path)
+        timeout = resolve_command_runtime(config.tools.exec, values["max_runtime"] if values.get("max_runtime") is not None else values.get("timeout"))
         result = await nodes.execute_command(values["id"], command, timeout=timeout)
         return {**result.to_dict(), "output": "\n".join(part for part in (result.output, result.connection_warning) if part)}
     if action == "nodes.test":
