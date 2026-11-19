@@ -10,9 +10,10 @@ from cirno_core.config.models import InlineFallbackConfig, ModelPresetConfig, Re
 from cirno_core.config.providers import ProviderConfig
 from cirno_core.config.schema import Config
 from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.catalog.contracts import ProviderSpec
 from cirno_core.providers.fallback_provider import FallbackProvider
 from cirno_core.providers.generation import GenerationSettings
-from cirno_core.providers.catalog.contracts import ProviderSpec
+from cirno_core.providers.media_capabilities import MediaCapabilities
 from cirno_core.providers.registry import find_by_name
 from cirno_core.providers.request_overrides import apply_request_overrides
 from cirno_core.providers.routing import resolve_automatic_model_api as resolve_automatic_model_api
@@ -63,6 +64,18 @@ def _provider_extra_headers(
     return headers or None
 
 
+def _configure_provider_runtime(
+    provider: LLMProvider, config: Config, preset: ModelPresetConfig,
+) -> None:
+    """Apply saved settings equally to configured and setup-only runtimes."""
+    provider.stream_idle_timeout_s = config.network.stream_idle_timeout_s
+    provider.retry_policy.configure_retries(config.network.provider_max_retries)
+    provider.request_timeout_s = config.network.request_timeout_s
+    provider.generation = preset.to_generation_settings()
+    provider.media_capabilities = MediaCapabilities(preset.image_input, preset.video_input)
+    provider.reasoning_history = preset.reasoning_history
+
+
 def _make_provider_core(
     config: Config,
     *,
@@ -109,6 +122,7 @@ def _make_provider_core(
             api_key=p.api_key or "",
             api_base=p.api_base,
             default_model=model,
+            proxy=proxy,
             provider_name=provider_name,
         )
     elif backend == "github_copilot":
@@ -117,6 +131,7 @@ def _make_provider_core(
         provider = GitHubCopilotProvider(
             default_model=model, provider_name=provider_name,
             model_api=setup.model_api,
+            proxy=proxy,
         )
     elif backend == "anthropic":
         from cirno_core.providers.anthropic_provider import AnthropicProvider
@@ -164,13 +179,7 @@ def _make_provider_core(
             provider_name=provider_name,
         )
 
-    provider.stream_idle_timeout_s = config.network.stream_idle_timeout_s
-    provider.retry_policy.delays = tuple(min(2 ** attempt, 60) for attempt in range(config.network.provider_max_retries))
-    provider.request_timeout_s = config.network.request_timeout_s
-    provider.generation = preset.to_generation_settings()
-    from cirno_core.providers.media_capabilities import MediaCapabilities
-    provider.media_capabilities = MediaCapabilities(preset.image_input, preset.video_input)
-    provider.reasoning_history = preset.reasoning_history
+    _configure_provider_runtime(provider, config, preset)
     return provider
 
 
@@ -246,13 +255,7 @@ def build_unconfigured_provider_snapshot(config: Config, setup_error: str) -> Pr
 
     preset = config.resolve_preset()
     provider = UnconfiguredProvider(preset.model)
-    provider.stream_idle_timeout_s = config.network.stream_idle_timeout_s
-    provider.retry_policy.delays = tuple(min(2 ** attempt, 60) for attempt in range(config.network.provider_max_retries))
-    provider.request_timeout_s = config.network.request_timeout_s
-    provider.generation = preset.to_generation_settings()
-    from cirno_core.providers.media_capabilities import MediaCapabilities
-    provider.media_capabilities = MediaCapabilities(preset.image_input, preset.video_input)
-    provider.reasoning_history = preset.reasoning_history
+    _configure_provider_runtime(provider, config, preset)
     return ProviderSnapshot(
         provider=provider,
         model=preset.model,

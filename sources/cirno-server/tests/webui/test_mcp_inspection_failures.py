@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 from cirno_core.config.errors import ConfigLoadError
 from cirno_core.config.loader import save_config
 from cirno_core.config.schema import Config
@@ -43,7 +42,7 @@ async def test_inspection_reports_cleanup_failure_and_closes_remaining_connectio
         return {"custom-docs": broken, "another": healthy}
 
     monkeypatch.setattr(
-        "cirno_server.webui.mcp.inspection.command_available", lambda _command: True
+        "cirno_server.webui.mcp.inspection.command_available", lambda _command, **_context: True
     )
     monkeypatch.setattr("cirno_core.agent.tools.mcp.connector.connect_mcp_servers", connect)
     payload = await mcp_presets_test_action({"name": ["custom-docs"]}, config_path=path)

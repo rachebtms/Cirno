@@ -25,6 +25,7 @@ from cirno_server.channels.telegram.config import TelegramConfig
 from cirno_server.channels.telegram.formatting import (
     markdown_to_telegram_html,
     split_telegram_markdown,
+    telegram_html_text_length,
 )
 from cirno_server.channels.telegram.limits import (
     TELEGRAM_MAX_MESSAGE_LEN,
@@ -1578,14 +1579,7 @@ async def test_send_delta_stream_end_splits_oversized_reply(telegram_owner) -> N
 
 @pytest.mark.asyncio
 async def test_send_delta_stream_end_html_expansion_does_not_overflow(telegram_owner) -> None:
-    """Markdown that expands when converted to HTML is still split correctly.
-
-    This is the actual bug from issue #3315: markdown like **bold** expands to
-    <b>bold</b>, adding ~33% characters. A 3600-char message with heavy markdown
-    could become 4800+ chars after HTML conversion, exceeding 4096 limit.
-    The fix converts to HTML first, THEN splits by 4096.
-    """
-    from cirno_server.channels.telegram.formatting import markdown_to_telegram_html
+    """Formatting tags do not consume the post-entity-parse character budget."""
 
     channel = TelegramChannel(
         TelegramConfig(enabled=True, token="123:abc"),
@@ -1596,7 +1590,6 @@ async def test_send_delta_stream_end_html_expansion_does_not_overflow(telegram_o
     channel.connection.app.bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=99))
 
     markdown_text = "**bold** " * 400  # 3600 chars raw, expands ~33% to 4800 HTML
-    raw_len = len(markdown_text)
     html_len = len(markdown_to_telegram_html(markdown_text))
     assert html_len > 4096, f"Test precondition failed: HTML should exceed 4096 (was {html_len})"
 
@@ -1606,12 +1599,10 @@ async def test_send_delta_stream_end_html_expansion_does_not_overflow(telegram_o
 
     channel.connection.app.bot.edit_message_text.assert_called_once()
     edit_text = channel.connection.app.bot.edit_message_text.call_args.kwargs.get("text", "")
-    assert len(edit_text) <= 4096, (
-        f"HTML text length {len(edit_text)} exceeds Telegram's 4096 limit. "
-        f"Raw was {raw_len}, HTML was {html_len}."
-    )
+    assert telegram_html_text_length(edit_text) <= 4096
+    assert edit_text == markdown_to_telegram_html(markdown_text)
 
-    channel.connection.app.bot.send_message.assert_called_once()
+    channel.connection.app.bot.send_message.assert_not_called()
     assert "123" not in channel.streams.buffers
 
 
@@ -1641,7 +1632,7 @@ async def test_send_delta_stream_end_splits_long_code_block_before_html_renderin
     ]
     assert len(html_chunks) > 1
     for html in html_chunks:
-        assert len(html) <= 4096
+        assert telegram_html_text_length(html) <= 4096
         assert html.count("<pre><code>") == html.count("</code></pre>")
         if 'print("line")' in html:
             assert html.startswith("<pre><code>")
@@ -1752,7 +1743,7 @@ async def test_send_delta_incremental_html_expansion_does_not_overflow(telegram_
     ]
     assert len(payloads) > 1
     assert all(payload["parse_mode"] == "HTML" for payload in payloads)
-    assert all(len(payload["text"]) <= TELEGRAM_HTML_MAX_LEN for payload in payloads)
+    assert all(telegram_html_text_length(payload["text"]) <= TELEGRAM_HTML_MAX_LEN for payload in payloads)
 
     buf = channel.streams.buffers["123"]
     assert payloads[-1]["text"] == markdown_to_telegram_html(buf.text)
@@ -2081,15 +2072,12 @@ async def test_download_message_media_returns_path_when_download_succeeds(
     """_download_message_media returns (paths, content_parts) when bot.get_file and download succeed."""
     media_dir = tmp_path / "media" / "telegram"
     media_dir.mkdir(parents=True)
-    monkeypatch.setattr(
-        "cirno_server.channels.telegram.runtime.get_media_dir",
-        lambda channel=None: media_dir if channel else tmp_path / "media",
-    )
 
     channel = TelegramChannel(
         TelegramConfig(enabled=True, token="123:abc"),
         MessageBus(),
     )
+    channel.media_dir = media_dir
     _install_ready_app(channel)
     channel.connection.app.bot.get_file = AsyncMock(
         return_value=SimpleNamespace(download_to_drive=AsyncMock(return_value=None))
@@ -2117,10 +2105,6 @@ async def test_download_message_media_uses_file_unique_id_when_available(
 ) -> None:
     media_dir = tmp_path / "media" / "telegram"
     media_dir.mkdir(parents=True)
-    monkeypatch.setattr(
-        "cirno_server.channels.telegram.runtime.get_media_dir",
-        lambda channel=None: media_dir if channel else tmp_path / "media",
-    )
 
     downloaded: dict[str, str] = {}
 
@@ -2131,6 +2115,7 @@ async def test_download_message_media_uses_file_unique_id_when_available(
         TelegramConfig(enabled=True, token="123:abc"),
         MessageBus(),
     )
+    channel.media_dir = media_dir
     app = _FakeApp(lambda: None)
     app.bot.get_file = AsyncMock(
         return_value=SimpleNamespace(download_to_drive=_download_to_drive)
@@ -2166,15 +2151,12 @@ async def test_on_message_attaches_reply_to_media_when_available(monkeypatch, tm
     """When user replies to a message with media, that media is downloaded and attached to the turn."""
     media_dir = tmp_path / "media" / "telegram"
     media_dir.mkdir(parents=True)
-    monkeypatch.setattr(
-        "cirno_server.channels.telegram.runtime.get_media_dir",
-        lambda channel=None: media_dir if channel else tmp_path / "media",
-    )
 
     channel = TelegramChannel(
         TelegramConfig(enabled=True, token="123:abc"),
         MessageBus(),
     )
+    channel.media_dir = media_dir
     app = _FakeApp(lambda: None)
     app.bot.get_file = AsyncMock(
         return_value=SimpleNamespace(download_to_drive=AsyncMock(return_value=None))
@@ -2249,15 +2231,12 @@ async def test_on_message_reply_to_caption_and_media(monkeypatch, tmp_path, pers
     """When replying to a message with caption + photo, both text context and media are included."""
     media_dir = tmp_path / "media" / "telegram"
     media_dir.mkdir(parents=True)
-    monkeypatch.setattr(
-        "cirno_server.channels.telegram.runtime.get_media_dir",
-        lambda channel=None: media_dir if channel else tmp_path / "media",
-    )
 
     channel = TelegramChannel(
         TelegramConfig(enabled=True, token="123:abc"),
         MessageBus(),
     )
+    channel.media_dir = media_dir
     app = _FakeApp(lambda: None)
     app.bot.get_file = AsyncMock(
         return_value=SimpleNamespace(download_to_drive=AsyncMock(return_value=None))

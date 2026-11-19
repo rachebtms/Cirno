@@ -6,11 +6,13 @@ import asyncio
 from typing import Any, cast
 
 import httpx
+from loguru import logger
+
 from cirno_core.agent.tools.base import ToolResult
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.web.content import _format_results, _normalize, _strip_tags
 from cirno_core.agent.tools.web.context import SearchContext
-from loguru import logger
+from cirno_core.agent.tools.web.safety import _redact_search_error
 
 _DEEPSEEK_SEARCH_API_URL = "https://api.deepseek.com/v1/tools/search"
 
@@ -40,7 +42,7 @@ def _deepseek_text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def _deepseek_error_detail(response: httpx.Response) -> str:
+def _deepseek_error_detail(response: httpx.Response, context: SearchContext) -> str:
     """Read ``error.message`` from the OpenAI-compatible error envelope.
 
     Returns plain text: the message is tag-stripped and whitespace-collapsed
@@ -59,7 +61,13 @@ def _deepseek_error_detail(response: httpx.Response) -> str:
     message: object = cast(dict[str, object], error).get("message")
     if not isinstance(message, str):
         return ""
-    return _normalize(_strip_tags(message))[:_DEEPSEEK_ERROR_DETAIL_MAX_CHARS]
+    # Redact the intact diagnostic before markup cleanup or truncation can
+    # turn a known credential into an unrecognizable fragment.
+    safe = _redact_search_error(
+        message, api_key=context.config.api_key, proxy=context.proxy,
+        base_url=context.config.base_url,
+    )
+    return _normalize(_strip_tags(safe))[:_DEEPSEEK_ERROR_DETAIL_MAX_CHARS]
 
 
 async def search(context: SearchContext, query: str, n: int) -> str:
@@ -136,7 +144,7 @@ async def search(context: SearchContext, query: str, n: int) -> str:
             if not r.is_success:
                 # Matches raise_for_status() semantics used by the other
                 # providers: non-2xx, including 3xx, is a failure.
-                detail = _deepseek_error_detail(r)
+                detail = _deepseek_error_detail(r, context)
                 suffix = f": {detail}" if detail else ""
                 return ToolResult.error(f"Error: DeepSeek search failed ({r.status_code}){suffix}")
         try:
@@ -182,6 +190,8 @@ async def search(context: SearchContext, query: str, n: int) -> str:
     except Exception as e:
         logger.warning(
             "DeepSeek search failed: {}",
-            e if tool_log_content_allowed() else type(e).__name__,
+            _redact_search_error(
+                str(e), api_key=api_key, proxy=context.proxy, base_url=context.config.base_url,
+            ) if tool_log_content_allowed() else type(e).__name__,
         )
         return ToolResult.error(f"Error: DeepSeek search failed: {type(e).__name__}")

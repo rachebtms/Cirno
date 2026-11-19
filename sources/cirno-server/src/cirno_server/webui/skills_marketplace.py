@@ -17,9 +17,13 @@ from urllib.parse import quote, urlparse
 
 import httpx
 from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import get_config_path
 from cirno_core.security.network import PinnedDNSAsyncTransport
 from cirno_core.security.workspace_policy import WorkspaceBoundaryError, require_path_within
 from cirno_core.skills.loader import SkillsLoader
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.subprocess import kill_and_drain
+
 from cirno_server.webui.marketplace_feedback import (
     marketplace_failure_message,
     marketplace_warnings,
@@ -60,10 +64,23 @@ _weekly_cache: dict[tuple[str, str], list[int]] = {}
 _weekly_cache_expires_at = 0.0
 
 
-def _response_json_object(response: httpx.Response) -> dict[str, Any] | None:
+def _response_json_object(response: httpx.Response) -> dict[str, Any]:
     """Narrow an untyped HTTP JSON response at the external-data boundary."""
     payload = cast(object, response.json())
-    return cast(dict[str, Any], payload) if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        raise ValueError("marketplace response must be a JSON object")
+    return cast(dict[str, Any], payload)
+
+
+def _response_rows(response: httpx.Response, key: str) -> list[object]:
+    rows = _response_json_object(response).get(key, [])
+    if not isinstance(rows, list):
+        raise ValueError(f"marketplace field {key!r} must be a list")
+    return cast(list[object], rows)
+
+
+def _nonnegative_count(value: object) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
 class SkillsMarketplaceError(Exception):
@@ -85,17 +102,21 @@ async def trending_marketplace_skills(
     *,
     limit: int = 8,
     provider: str = _PROVIDER_ALL,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return provider-aware marketplace rankings without mixing metric semantics."""
+    home_path = (home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+    config_path = (config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
     selected = _valid_provider(provider)
     if selected == _PROVIDER_SKILLHUB:
-        return await _trending_skillhub_skills(workspace_path, limit=limit)
+        return await _trending_skillhub_skills(workspace_path, limit=limit, home_path=home_path, config_path=config_path)
     if selected == _PROVIDER_SKILLS_SH:
-        return await _trending_skills_sh_skills(workspace_path, limit=limit)
+        return await _trending_skills_sh_skills(workspace_path, limit=limit, home_path=home_path, config_path=config_path)
 
     results = await asyncio.gather(
-        _trending_skills_sh_skills(workspace_path, limit=limit),
-        _trending_skillhub_skills(workspace_path, limit=limit),
+        _trending_skills_sh_skills(workspace_path, limit=limit, home_path=home_path, config_path=config_path),
+        _trending_skillhub_skills(workspace_path, limit=limit, home_path=home_path, config_path=config_path),
         return_exceptions=True,
     )
     warnings = marketplace_warnings(results)
@@ -123,21 +144,22 @@ async def _trending_skills_sh_skills(
     workspace_path: Path,
     *,
     limit: int,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return a source-diverse snapshot of skills.sh's real 24-hour leaderboard."""
     try:
         async with _skills_client() as client:
             response = await client.get(_TRENDING_URL)
             response.raise_for_status()
-            payload = _response_json_object(response) or {}
+            rows = _response_rows(response, "skills")
     except (httpx.HTTPError, ValueError) as exc:
         raise SkillsMarketplaceError(
             "skills.sh trending skills are temporarily unavailable",
             status=502,
         ) from exc
 
-    installed = _installed_skill_names(workspace_path)
-    rows = payload.get("skills", [])
+    installed = _installed_skill_names(workspace_path, home_path=home_path, config_path=config_path)
     skills: list[dict[str, Any]] = []
     seen_sources: set[str] = set()
     for rank, row in enumerate(rows, start=1):
@@ -169,8 +191,12 @@ async def search_marketplace_skills(
     *,
     limit: int = 20,
     provider: str = _PROVIDER_ALL,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Search one or all catalogs and annotate locally installed results."""
+    home_path = (home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+    config_path = (config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
     normalized = " ".join(query.split())
     if len(normalized) < 2:
         raise SkillsMarketplaceError("search query must contain at least 2 characters")
@@ -179,13 +205,13 @@ async def search_marketplace_skills(
 
     selected = _valid_provider(provider)
     if selected == _PROVIDER_SKILLHUB:
-        return await _search_skillhub_skills(normalized, workspace_path, limit=limit)
+        return await _search_skillhub_skills(normalized, workspace_path, limit=limit, home_path=home_path, config_path=config_path)
     if selected == _PROVIDER_SKILLS_SH:
-        return await _search_skills_sh_skills(normalized, workspace_path, limit=limit)
+        return await _search_skills_sh_skills(normalized, workspace_path, limit=limit, home_path=home_path, config_path=config_path)
 
     results = await asyncio.gather(
-        _search_skills_sh_skills(normalized, workspace_path, limit=limit),
-        _search_skillhub_skills(normalized, workspace_path, limit=limit),
+        _search_skills_sh_skills(normalized, workspace_path, limit=limit, home_path=home_path, config_path=config_path),
+        _search_skillhub_skills(normalized, workspace_path, limit=limit, home_path=home_path, config_path=config_path),
         return_exceptions=True,
     )
     warnings = marketplace_warnings(results)
@@ -214,6 +240,8 @@ async def _search_skills_sh_skills(
     workspace_path: Path,
     *,
     limit: int,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
         async with _skills_client() as client:
@@ -222,15 +250,14 @@ async def _search_skills_sh_skills(
                 params={"q": normalized, "limit": min(max(limit, 1), 50)},
             )
             response.raise_for_status()
-            payload = _response_json_object(response) or {}
+            rows = _response_rows(response, "skills")
     except (httpx.HTTPError, ValueError) as exc:
         raise SkillsMarketplaceError(
             "skills.sh search is temporarily unavailable",
             status=502,
         ) from exc
 
-    installed = _installed_skill_names(workspace_path)
-    rows = payload.get("skills", [])
+    installed = _installed_skill_names(workspace_path, home_path=home_path, config_path=config_path)
     skills: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -252,6 +279,8 @@ async def _search_skillhub_skills(
     workspace_path: Path,
     *,
     limit: int,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
         async with _skillhub_client() as client:
@@ -260,15 +289,14 @@ async def _search_skillhub_skills(
                 params={"q": normalized, "limit": min(max(limit, 1), 50)},
             )
             response.raise_for_status()
-            payload = _response_json_object(response) or {}
+            rows = _response_rows(response, "results")
     except (httpx.HTTPError, ValueError) as exc:
         raise SkillsMarketplaceError(
             "SkillHub search is temporarily unavailable",
             status=502,
         ) from exc
 
-    installed = _installed_skill_names(workspace_path)
-    rows = payload.get("results", [])
+    installed = _installed_skill_names(workspace_path, home_path=home_path, config_path=config_path)
     skills = [
         skill
         for row in rows
@@ -287,20 +315,21 @@ async def _trending_skillhub_skills(
     workspace_path: Path,
     *,
     limit: int,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     try:
         async with _skillhub_client() as client:
             response = await client.get(_SKILLHUB_TRENDING_URL)
             response.raise_for_status()
-            payload = _response_json_object(response) or {}
+            rows = _response_rows(response, "skills")
     except (httpx.HTTPError, ValueError) as exc:
         raise SkillsMarketplaceError(
             "SkillHub trending skills are temporarily unavailable",
             status=502,
         ) from exc
 
-    installed = _installed_skill_names(workspace_path)
-    rows = payload.get("skills", [])
+    installed = _installed_skill_names(workspace_path, home_path=home_path, config_path=config_path)
     skills: list[dict[str, Any]] = []
     for rank, row in enumerate(rows, start=1):
         if not isinstance(row, dict):
@@ -346,34 +375,40 @@ async def install_marketplace_skill(
     *,
     provider: str = _PROVIDER_SKILLS_SH,
     version: str = "",
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Install one normalized marketplace result into ``<home>/skills``."""
+    config_path = (config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
     selected = _valid_provider(provider, allow_all=False)
     if selected == _PROVIDER_SKILLHUB:
-        return await _install_skillhub_skill(skill_id, version, workspace_path)
-    return await _install_skills_sh_skill(source, skill_id, workspace_path)
+        return await _install_skillhub_skill(skill_id, version, workspace_path, home_path=home_path, config_path=config_path)
+    return await _install_skills_sh_skill(source, skill_id, workspace_path, home_path=home_path, config_path=config_path)
 
 
 async def _install_skills_sh_skill(
     source: str,
     skill_id: str,
     workspace_path: Path,
+    *,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     if not _SOURCE_RE.fullmatch(source):
         raise SkillsMarketplaceError("invalid skill source")
     if not _valid_skill_id(skill_id):
         raise SkillsMarketplaceError("invalid skill name")
 
-    loader = SkillsLoader(workspace_path)
+    loader = SkillsLoader(workspace_path, home=home_path, config_path=config_path)
     existing = {entry["name"]: entry for entry in loader.list_skills(filter_unavailable=False)}
     if skill_id in existing:
         return {"installed": True, "already_installed": True, "name": skill_id}
 
-    workspace = get_home_path().resolve()
+    workspace = loader.home_skills.parent
     workspace.mkdir(parents=True, exist_ok=True)
     try:
         require_path_within(
-            get_home_path() / "skills",
+            loader.home_skills,
             workspace,
             message="skills directory must stay inside Cirno Home",
         )
@@ -409,16 +444,18 @@ async def _install_skills_sh_skill(
         env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
+        start_new_session=os.name == "posix",
     )
     try:
         output, _ = await asyncio.wait_for(
             process.communicate(),
             timeout=_INSTALL_TIMEOUT_SECONDS,
         )
-    except TimeoutError as exc:
-        process.kill()
-        await process.communicate()
-        raise SkillsMarketplaceError("skill installation timed out", status=504) from exc
+    except BaseException as exc:
+        await kill_and_drain(process, process_group=os.name == "posix")
+        if isinstance(exc, TimeoutError):
+            raise SkillsMarketplaceError("skill installation timed out", status=504) from exc
+        raise
 
     if process.returncode != 0:
         detail = _safe_output_tail(output)
@@ -447,13 +484,16 @@ async def _install_skillhub_skill(
     skill_id: str,
     requested_version: str,
     workspace_path: Path,
+    *,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     if not _valid_skill_id(skill_id):
         raise SkillsMarketplaceError("invalid SkillHub skill name")
     if requested_version and _VERSION_RE.fullmatch(requested_version) is None:
         raise SkillsMarketplaceError("invalid SkillHub skill version")
 
-    loader = SkillsLoader(workspace_path)
+    loader = SkillsLoader(workspace_path, home=home_path, config_path=config_path)
     existing = {entry["name"]: entry for entry in loader.list_skills(filter_unavailable=False)}
     if skill_id in existing:
         return {
@@ -463,11 +503,11 @@ async def _install_skillhub_skill(
             "provider": _PROVIDER_SKILLHUB,
         }
 
-    workspace = get_home_path().resolve()
+    workspace = loader.home_skills.parent
     workspace.mkdir(parents=True, exist_ok=True)
     try:
         skills_root = require_path_within(
-            get_home_path() / "skills",
+            loader.home_skills,
             workspace,
             message="skills directory must stay inside Cirno Home",
         )
@@ -475,6 +515,11 @@ async def _install_skillhub_skill(
         raise SkillsMarketplaceError(str(exc), status=403) from exc
     skills_root.mkdir(parents=True, exist_ok=True)
     target = skills_root / skill_id
+    if target.exists() or target.is_symlink():
+        raise SkillsMarketplaceError(
+            "Skill installation target already exists; inspect it before installing",
+            status=409,
+        )
 
     try:
         async with _skillhub_client() as client:
@@ -503,24 +548,16 @@ async def _install_skillhub_skill(
                     version,
                     archive_path,
                 )
-                actual_hash = _validate_skillhub_archive(archive_path)
-                if actual_hash.lower() != expected_hash.lower():
-                    raise SkillsMarketplaceError(
-                        "SkillHub package fingerprint did not match",
-                        status=502,
-                    )
-                _extract_skillhub_archive(archive_path, stage_path)
-                if target.exists():
-                    return {
-                        "installed": True,
-                        "already_installed": True,
-                        "name": skill_id,
-                        "provider": _PROVIDER_SKILLHUB,
-                    }
-                os.replace(stage_path, target)
+                # Archive processing can expand to 100 MB. Keep it off the loop,
+                # and retain its temporary directory until an accepted commit
+                # has settled even if the requesting connection disappears.
+                await shield_and_drain(asyncio.to_thread(
+                    _publish_skillhub_archive,
+                    archive_path, stage_path, target, expected_hash,
+                ))
     except SkillsMarketplaceError:
         raise
-    except (httpx.HTTPError, OSError, zipfile.BadZipFile) as exc:
+    except (httpx.HTTPError, OSError, ValueError, zipfile.BadZipFile) as exc:
         raise SkillsMarketplaceError(
             "SkillHub skill installation failed",
             status=502,
@@ -548,12 +585,30 @@ async def _install_skillhub_skill(
     }
 
 
+def _publish_skillhub_archive(
+    archive_path: Path,
+    stage_path: Path,
+    target: Path,
+    expected_hash: str,
+) -> None:
+    actual_hash = _validate_skillhub_archive(archive_path)
+    if actual_hash.lower() != expected_hash.lower():
+        raise SkillsMarketplaceError("SkillHub package fingerprint did not match", status=502)
+    _extract_skillhub_archive(archive_path, stage_path)
+    if target.exists() or target.is_symlink():
+        raise SkillsMarketplaceError(
+            "Skill installation target already exists; inspect it before installing",
+            status=409,
+        )
+    os.replace(stage_path, target)
+
+
 async def _skillhub_latest_version(client: httpx.AsyncClient, skill_id: str) -> str:
     response = await client.get(
         f"{_SKILLHUB_API_BASE_URL}/api/v1/skills/{quote(skill_id, safe='')}"
     )
     response.raise_for_status()
-    payload = _response_json_object(response) or {}
+    payload = _response_json_object(response)
     raw_latest = payload.get("latestVersion", {})
     latest = cast(dict[str, Any], raw_latest) if isinstance(raw_latest, dict) else {}
     version = latest.get("version")
@@ -575,12 +630,13 @@ async def _skillhub_signature(
         f"{quote(skill_id, safe='')}/versions/{quote(version, safe='')}/signature"
     )
     response.raise_for_status()
-    payload = _response_json_object(response)
-    if payload is None:
+    try:
+        payload = _response_json_object(response)
+    except ValueError as exc:
         raise SkillsMarketplaceError(
             "SkillHub returned an invalid package fingerprint",
             status=502,
-        )
+        ) from exc
     return payload
 
 
@@ -748,10 +804,10 @@ def _skillhub_client() -> httpx.AsyncClient:
     )
 
 
-def _installed_skill_names(workspace_path: Path) -> set[str]:
+def _installed_skill_names(workspace_path: Path, *, home_path: Path | None = None, config_path: Path | None = None) -> set[str]:
     return {
         entry["name"]
-        for entry in SkillsLoader(workspace_path).list_skills(filter_unavailable=False)
+        for entry in SkillsLoader(workspace_path, home=home_path, config_path=config_path).list_skills(filter_unavailable=False)
     }
 
 
@@ -777,7 +833,7 @@ def _marketplace_skill(
         "name": display_name.strip(),
         "source": source,
         "provider": _PROVIDER_SKILLS_SH,
-        "installs": installs if isinstance(installs, int) and installs >= 0 else 0,
+        "installs": _nonnegative_count(installs),
         "url": f"https://skills.sh/{source}/{skill_id}",
         "installed": skill_id in installed,
         "install_supported": skills_install_supported(),
@@ -827,8 +883,8 @@ def _skillhub_skill(
         "name": display_name.strip(),
         "source": source,
         "provider": _PROVIDER_SKILLHUB,
-        "installs": installs if isinstance(installs, int) and installs >= 0 else 0,
-        "downloads": downloads if isinstance(downloads, int) and downloads >= 0 else 0,
+        "installs": _nonnegative_count(installs),
+        "downloads": _nonnegative_count(downloads),
         "url": f"{_SKILLHUB_PAGE_BASE_URL}/skills/{quote(handle.strip(), safe='')}/"
         f"{quote(skill_id, safe='')}",
         "installed": skill_id in installed,
@@ -863,11 +919,10 @@ async def _load_weekly_installs(
             continue
         try:
             response.raise_for_status()
-            payload = _response_json_object(response) or {}
+            rows = _response_rows(response, "skills")
         except (httpx.HTTPError, ValueError):
             continue
         successful = True
-        rows = payload.get("skills", [])
         for row in rows:
             if not isinstance(row, dict):
                 continue

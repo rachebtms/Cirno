@@ -2,10 +2,9 @@
 
 from unittest.mock import MagicMock
 
+import cirno_core.providers.openai_compat_provider as openai_compat_provider
 import httpx
 import pytest
-
-import cirno_core.providers.openai_compat_provider as openai_compat_provider
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
 
@@ -37,7 +36,7 @@ class TestLocalEndpointProxyDisabled:
 
 
 class TestCloudEndpointProxyEnabled:
-    """Cloud endpoints must respect proxy env vars for corporate/VPN proxies."""
+    """Cloud endpoints use the explicitly selected shared proxy."""
 
     async def test_cloud_uses_explicit_network_config(self):
         spec = _make_spec(is_local=False)
@@ -70,7 +69,7 @@ class TestCloudEndpointProxyEnabled:
             spec=spec,
             proxy=proxy,
         )
-        provider._build_client()
+        await provider._build_client()
 
         async_client.assert_called_once_with(
             timeout=120.0,

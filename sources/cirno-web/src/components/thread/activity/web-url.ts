@@ -25,7 +25,7 @@ export function formatCompactWebUrl(url: URL): string {
 }
 
 function isPrivateHostname(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const host = hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "").toLowerCase();
   if (
     !host
     || host === "localhost"
@@ -49,12 +49,11 @@ function isPrivateHostname(hostname: string): boolean {
     );
   }
 
+  if (!host.includes(":")) return false;
   return (
     host === "::"
     || host === "::1"
     || host.startsWith("::ffff:")
-    || host.startsWith("fc")
-    || host.startsWith("fd")
-    || host.startsWith("fe80:")
+    || /^(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f]):/.test(host)
   );
 }

@@ -20,6 +20,28 @@ def test_append_and_read_roundtrip(history, tmp_path, monkeypatch) -> None:
     assert lines[0]["text"] == "hello"
 
 
+async def test_existing_empty_thread_exposes_a_stable_generation_that_changes_on_reset(history):
+    key = 'websocket:generation'
+    assert history.build(key) is None
+    header = await history.sessions.state.get_header(key)
+    empty = history.build(key)
+    assert empty is not None and empty['events'] == []
+    assert empty['has_pending_tool_calls'] is False
+    generation = empty['history_generation']
+    assert isinstance(generation, str) and generation
+    await history.sessions.state.append_history(key, [fact_from_record({
+        'event': 'user', 'chat_id': 'generation', 'text': 'Question',
+    })], expected_generation=header.generation)
+    assert history.build(key)['history_generation'] == generation
+    await history.sessions.state.update_metadata(key, {'title': 'Renamed'})
+    assert history.build(key)['history_generation'] == generation
+    await history.sessions.state.reset(key)
+    replaced = history.build(key)
+    assert replaced is not None and replaced['events'] == []
+    assert replaced['has_pending_tool_calls'] is False
+    assert replaced['history_generation'] != generation
+
+
 @pytest.mark.parametrize("event", ["stream_end", "reasoning_end"])
 def test_history_preserves_phase_qualified_stream_identity(history, event) -> None:
     key = "websocket:stream-identity"

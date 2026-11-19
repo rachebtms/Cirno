@@ -7,12 +7,19 @@ from typing import TYPE_CHECKING, Any
 
 from cirno_core.bus.outbound_events import SessionUpdatedEvent, outbound_message_for_event
 from cirno_core.session.keys import ROUTER_CHAT_ID, ROUTER_SESSION_KEY
+from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.storage.instance import InstanceData
 from cirno_core.utils.cancellation import shield_and_drain
 
 if TYPE_CHECKING:
     from cirno_core.bus.queue import MessageBus
     from cirno_core.session.manager import SessionManager
+
+
+def _project_id(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Project ID must be nonempty text or null where allowed")
+    return value
 
 
 class Projects:
@@ -32,8 +39,7 @@ class Projects:
     async def _open_conversation(self, key: str, metadata: dict[str, Any], project_id: str | None) -> None:
         async with self._lock:
             if project_id is not None:
-                if not isinstance(project_id, str) or not project_id.strip():
-                    raise ValueError("Project ID must be nonempty text or null")
+                project_id = _project_id(project_id)
                 if key == ROUTER_SESSION_KEY:
                     raise ValueError("The Router conversation cannot belong to a Project")
                 try:
@@ -47,7 +53,7 @@ class Projects:
             if action == "list":
                 return {"projects": await asyncio.to_thread(self.data.list, "projects")}
             if action == "get":
-                project = await asyncio.to_thread(self.data.get, "projects", values["id"])
+                project = await asyncio.to_thread(self.data.get, "projects", _project_id(values["id"]))
                 rows = await self.sessions.state.list_metadata()
                 return {"project": project, "conversations": [
                     {"session_key": row["key"], "title": row["metadata"].get("title", ""),
@@ -74,6 +80,8 @@ class Projects:
 
     async def _save(self, action: str, values: dict) -> dict:
         identifier = values.get("id")
+        if identifier is not None:
+            identifier = _project_id(identifier)
         if action == "update" and not identifier:
             raise ValueError("A Project ID is required to update a Project")
         if action == "create" and identifier:
@@ -90,8 +98,11 @@ class Projects:
         return await asyncio.to_thread(self.data.save, "projects", record)
 
     async def _assign(self, values: dict) -> None:
-        identifier = values.get("project_id")
-        if identifier:
+        if "project_id" not in values:
+            raise ValueError("project_id is required; pass null to remove Project membership")
+        identifier = values["project_id"]
+        if identifier is not None:
+            identifier = _project_id(identifier)
             await asyncio.to_thread(self.data.get, "projects", identifier)
         key = values["session_key"]
         if key == ROUTER_SESSION_KEY:
@@ -100,13 +111,28 @@ class Projects:
         if header is None:
             raise KeyError("Conversation not found")
         await self.sessions.state.mutate_metadata(
-            key, lambda metadata: metadata.update(project_id=identifier or None),
+            key, lambda metadata: metadata.update(project_id=identifier),
             expected_generation=header.generation,
         )
 
     async def _delete(self, identifier: str) -> None:
+        identifier = _project_id(identifier)
         await asyncio.to_thread(self.data.get, "projects", identifier)
         for row in await self.sessions.state.list_metadata():
             if row["metadata"].get("project_id") == identifier:
-                await self._assign({"session_key": row["key"], "project_id": None})
+                await self._detach_project(row["key"], identifier)
         await asyncio.to_thread(self.data.delete, "projects", identifier)
+
+    async def _detach_project(self, key: str, identifier: str) -> None:
+        def detach(metadata: dict) -> None:
+            if metadata.get("project_id") == identifier:
+                metadata["project_id"] = None
+
+        try:
+            # A reset can retain membership in a new generation. Check the
+            # current Project in the transaction instead of a stale header.
+            await self.sessions.state.mutate_metadata(key, detach)
+        except SessionConflictError:
+            # With no expected generation this means the conversation was
+            # removed. Cleanup must not recreate it or abort Project deletion.
+            pass

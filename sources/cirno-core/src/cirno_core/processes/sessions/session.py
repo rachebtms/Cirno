@@ -8,16 +8,17 @@ import time
 from contextlib import suppress
 from typing import Literal
 
+from loguru import logger
+
 from cirno_core.processes import lifecycle as process_lifecycle
 from cirno_core.processes.output import ShellOutputFilter
-from cirno_core.processes.sessions.buffer import BoundedOutputBuffer, truncate_output
+from cirno_core.processes.sessions.buffer import BoundedOutputBuffer, truncate_output_with_gaps
 from cirno_core.processes.sessions.contracts import (
     MAX_OUTPUT_CHARS,
     MAX_YIELD_MS,
     FinishReason,
     SessionPoll,
 )
-from loguru import logger
 
 
 class ExecSession:
@@ -59,6 +60,8 @@ class ExecSession:
         self._execution_error: str | None = None
         self._stdout = BoundedOutputBuffer(MAX_OUTPUT_CHARS)
         self._stderr = BoundedOutputBuffer(MAX_OUTPUT_CHARS)
+        self._returned_output = BoundedOutputBuffer(MAX_OUTPUT_CHARS)
+        self._returned_truncated = 0
         self._lock = asyncio.Lock()
         self._kill_task: asyncio.Task[None] | None = None
         self._stdout_task = asyncio.create_task(self._read_stream(process.stdout, self._stdout))
@@ -215,6 +218,14 @@ class ExecSession:
             await self.process.stdin.wait_closed()
         return None
 
+    async def return_output(self, output: str, truncated_chars: int, *, output_gaps: tuple[int, ...] = ()) -> None:
+        """Put an interrupted observer's consumed text ahead of later output."""
+        async with self._lock:
+            pending, dropped, pending_gaps = self._returned_output.drain_with_gaps()
+            self._returned_output.append(output, gaps=output_gaps)
+            self._returned_output.append(pending, gaps=pending_gaps)
+            self._returned_truncated += truncated_chars + dropped
+
     async def poll(
         self,
         yield_time_ms: int,
@@ -233,14 +244,19 @@ class ExecSession:
             raise RuntimeError(f"session {self.session_id} cleanup failed: {self.cleanup_error}")
 
         async with self._lock:
-            stdout, stdout_truncated = self._stdout.drain()
-            stderr, stderr_truncated = self._stderr.drain()
+            returned, returned_truncated, returned_gaps = self._returned_output.drain_with_gaps()
+            returned_truncated += self._returned_truncated
+            self._returned_truncated = 0
+            stdout, stdout_truncated, stdout_gaps = self._stdout.drain_with_gaps()
+            stderr, stderr_truncated, stderr_gaps = self._stderr.drain_with_gaps()
 
-        output_parts = [stdout] if stdout else []
+        output = returned + stdout
+        gaps = (*returned_gaps, *(len(returned) + gap for gap in stdout_gaps))
         if stderr:
-            output_parts.append(f"STDERR:\n{stderr}")
-        output = "\n".join(output_parts)
-        output, response_truncated = truncate_output(output, max_output_chars)
+            prefix = ("\n" if output else "") + "STDERR:\n"
+            gaps = (*gaps, *(len(output) + len(prefix) + gap for gap in stderr_gaps))
+            output += prefix + stderr
+        output, response_truncated, gaps = truncate_output_with_gaps(output, max_output_chars, gaps)
         now = time.monotonic()
         return SessionPoll(
             output=output,
@@ -253,9 +269,10 @@ class ExecSession:
             idle_timeout=self.idle_timeout,
             remaining_s=self.remaining_s(now),
             stdin_closed=stdin_closed,
-            truncated_chars=stdout_truncated + stderr_truncated + response_truncated,
+            truncated_chars=returned_truncated + stdout_truncated + stderr_truncated + response_truncated,
             output_incomplete=self._output_incomplete,
             execution_error=self._execution_error,
+            output_gaps=gaps,
         )
 
     async def kill(self, reason: FinishReason = "cancelled") -> None:

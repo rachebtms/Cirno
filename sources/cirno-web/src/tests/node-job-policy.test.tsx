@@ -24,3 +24,40 @@ it("autosaves zero values, keeps a failed draft and never renders a Save button"
   expect(save).toHaveBeenCalledWith({ retention_days: 0 });
   expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
 });
+
+it("retires a failed autosave draft when switching connected servers", async () => {
+  const first = { jobSettings: { poll_interval_seconds: 60, retention_days: 30 },
+    saveJobSettings: vi.fn().mockRejectedValue(new Error("Old settings failed")) } as unknown as NodesController;
+  const next = { jobSettings: { poll_interval_seconds: 120, retention_days: 14 }, saveJobSettings: vi.fn() } as unknown as NodesController;
+  const view = render(<NodeJobSettings nodes={first} client={{} as CirnoClient} />);
+  const name = "Finished record retention (days)";
+  fireEvent.change(screen.getByRole("spinbutton", { name }), { target: { value: "99" } });
+  fireEvent.blur(screen.getByRole("spinbutton", { name }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Old settings failed");
+  view.rerender(<NodeJobSettings nodes={next} client={{} as CirnoClient} />);
+  expect(screen.getByRole("spinbutton", { name })).toHaveValue(14);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  await act(async () => fireEvent.blur(screen.getByRole("spinbutton", { name })));
+  expect(next.saveJobSettings).not.toHaveBeenCalled();
+});
+it("releases a retired autosave busy state without letting it unlock a current save", async () => {
+  let finishOld!: () => void, finishNew!: () => void;
+  const first = { jobSettings: { poll_interval_seconds: 60, retention_days: 30 },
+    saveJobSettings: vi.fn(() => new Promise<void>(resolve => { finishOld = resolve; })) } as unknown as NodesController;
+  const next = { jobSettings: { poll_interval_seconds: 120, retention_days: 14 },
+    saveJobSettings: vi.fn(() => new Promise<void>(resolve => { finishNew = resolve; })) } as unknown as NodesController;
+  const view = render(<NodeJobSettings nodes={first} client={{} as CirnoClient} />);
+  const name = "Finished record retention (days)";
+  fireEvent.change(screen.getByRole("spinbutton", { name }), { target: { value: "99" } });
+  fireEvent.blur(screen.getByRole("spinbutton", { name }));
+  expect(screen.getByRole("spinbutton", { name })).toBeDisabled();
+  view.rerender(<NodeJobSettings nodes={next} client={{} as CirnoClient} />);
+  expect(screen.getByRole("spinbutton", { name })).toBeEnabled();
+  fireEvent.change(screen.getByRole("spinbutton", { name }), { target: { value: "7" } });
+  fireEvent.blur(screen.getByRole("spinbutton", { name }));
+  expect(next.saveJobSettings).toHaveBeenCalledWith({ retention_days: 7 });
+  await act(async () => finishOld());
+  expect(screen.getByRole("spinbutton", { name })).toBeDisabled();
+  await act(async () => finishNew());
+  expect(screen.getByRole("spinbutton", { name })).toBeEnabled();
+});

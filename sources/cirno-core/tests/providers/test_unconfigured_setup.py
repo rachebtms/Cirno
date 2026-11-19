@@ -8,6 +8,24 @@ from cirno_core.providers.errors import public_error_kind
 from cirno_core.providers.factory import build_unconfigured_provider_snapshot, validate_provider_setup
 
 
+def test_setup_only_runtime_receives_the_same_saved_generation_and_network_policy():
+    config = Config.model_validate({
+        "network": {"requestTimeoutS": 480, "streamIdleTimeoutS": 150, "providerMaxRetries": 5},
+        "agents": {"defaults": {"modelPreset": "fixture"}},
+        "modelPresets": {"fixture": {"model": "fixture", "maxTokens": 12345,
+                                     "temperature": 0.2, "imageInput": False,
+                                     "videoInput": False, "reasoningHistory": "omit"}},
+    })
+    provider = build_unconfigured_provider_snapshot(config, "Missing credentials").provider
+    assert provider.request_timeout_s == 480
+    assert provider.stream_idle_timeout_s == 150
+    assert provider.retry_policy.delays == (1, 2, 4, 8, 16)
+    assert provider.generation == config.resolve_preset().to_generation_settings()
+    assert provider.reasoning_history == "omit"
+    assert provider.media_capabilities.image is False
+    assert provider.media_capabilities.video is False
+
+
 def test_fresh_install_has_no_invented_model_and_uses_keyless_search():
     config = Config()
     assert config.agents.defaults.model == ""

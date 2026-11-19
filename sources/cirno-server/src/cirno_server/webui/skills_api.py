@@ -27,9 +27,11 @@ def webui_skills_payload(
     workspace_path: Path,
     *,
     disabled_skills: set[str] | None = None,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return the Skill catalog with availability and activation state."""
-    loader = SkillsLoader(workspace_path)
+    loader = SkillsLoader(workspace_path, home=home_path, config_path=config_path)
     with loader.snapshot():
         entries = sorted(
             loader.list_skills(filter_unavailable=False),
@@ -48,9 +50,11 @@ def webui_skill_detail_payload(
     name: str,
     *,
     disabled_skills: set[str] | None = None,
+    home_path: Path | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any] | None:
     """Return Skill instructions, runtime requirements and setup hints."""
-    loader = SkillsLoader(workspace_path)
+    loader = SkillsLoader(workspace_path, home=home_path, config_path=config_path)
     with loader.snapshot():
         entries = loader.list_skills(filter_unavailable=False)
         entry = next((item for item in entries if item["name"] == name), None)
@@ -65,11 +69,16 @@ def webui_skill_detail_payload(
             summary.update(available=False, unavailable_reason=str(error))
             requirements = None
             install_options = []
+        try:
+            raw_markdown = loader.load_skill(name) or ""
+        except (OSError, UnicodeError) as error:
+            summary.update(available=False, unavailable_reason=f"SKILL.md: {error}")
+            raw_markdown = ""
         return {
             **summary,
             "requirements": requirements,
             "install_options": install_options,
-            "raw_markdown": loader.load_skill(name) or "",
+            "raw_markdown": raw_markdown,
         }
 
 
@@ -80,9 +89,10 @@ def set_webui_skill_enabled(
     enabled: bool,
     disabled_skills: set[str],
     config_path: Path | None = None,
+    home_path: Path | None = None,
 ) -> dict[str, Any]:
     """Persist and apply one skill's enabled state."""
-    _require_skill_entry(workspace_path, name)
+    _require_skill_entry(workspace_path, name, home_path=home_path, config_path=config_path)
     config = load_config(config_path)
     next_disabled = set(config.agents.defaults.disabled_skills)
     if enabled:
@@ -103,16 +113,18 @@ def delete_webui_skill(
     *,
     disabled_skills: set[str],
     config_path: Path | None = None,
+    home_path: Path | None = None,
 ) -> dict[str, Any]:
     """Delete one Home skill and remove its disabled-state entry."""
-    entry = _require_skill_entry(workspace_path, name)
+    home = (home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+    entry = _require_skill_entry(workspace_path, name, home_path=home, config_path=config_path)
     if entry.get("source") != "home":
         raise SkillManagementError("Only Home Skills can be deleted here", status=403)
 
-    workspace = get_home_path().resolve()
+    workspace = home
     try:
         skills_root = require_path_within(
-            get_home_path() / "skills",
+            home / "skills",
             workspace,
             message="skills directory must stay inside Cirno Home",
         )
@@ -125,7 +137,7 @@ def delete_webui_skill(
         raise SkillManagementError("skill directory was not found", status=404)
 
     from cirno_core.skills.history import snapshot_skill
-    snapshot_skill(target)
+    snapshot_skill(target, home=home)
     config = load_config(config_path)
     original_disabled = list(config.agents.defaults.disabled_skills)
     next_disabled = set(original_disabled)
@@ -147,13 +159,13 @@ def delete_webui_skill(
     return {"name": name, "enabled": False, "deleted": True}
 
 
-def _require_skill_entry(workspace_path: Path, name: str) -> dict[str, str]:
+def _require_skill_entry(workspace_path: Path, name: str, *, home_path: Path | None = None, config_path: Path | None = None) -> dict[str, str]:
     if not name or "/" in name or "\\" in name:
         raise SkillManagementError("invalid skill name")
     entry = next(
         (
             item
-            for item in SkillsLoader(workspace_path).list_skills(filter_unavailable=False)
+            for item in SkillsLoader(workspace_path, home=home_path, config_path=config_path).list_skills(filter_unavailable=False)
             if item["name"] == name
         ),
         None,

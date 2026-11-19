@@ -107,3 +107,31 @@ it("settles a pending instance operation without updating an unmounted panel", a
   await act(async () => pending.resolve(payload));
   expect(view.onUpdate).not.toHaveBeenCalled();
 });
+
+it("publishes a failed live toggle and exposes its reason until a successful retry", async () => {
+  const failed: CirnoFeaturesPayload = {
+    ...payload,
+    last_action: { ok: false, message: "The saved disable request could not stop the adapter." },
+  };
+  let attempt = 0;
+  const view = harness(() => ++attempt === 1 ? failed : payload);
+  await act(async () => { await view.result.current.toggle(instance, false); });
+  expect(view.onUpdate).toHaveBeenCalledWith(failed);
+  expect(view.result.current.error).toBe(failed.last_action!.message);
+  await act(async () => { await view.result.current.toggle(instance, false); });
+  expect(view.result.current.error).toBeNull();
+  expect(view.requestMutation).toHaveBeenCalledTimes(2);
+});
+
+it("returns a persisted save receipt while still exposing a failed live reconfiguration", async () => {
+  const features: CirnoFeaturesPayload = {
+    ...payload, last_action: { ok: false, message: "Credentials saved; live reload failed." },
+  };
+  const receipt = { name: "cluster", saved: true, cirno_features: features };
+  const view = harness(() => receipt);
+  let saved: unknown;
+  await act(async () => { saved = await view.result.current.save(instance, { token: "new-token" }); });
+  expect(saved).toBe(receipt);
+  expect(view.onUpdate).toHaveBeenCalledWith(features);
+  expect(view.result.current.error).toBe(features.last_action!.message);
+});

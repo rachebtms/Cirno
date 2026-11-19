@@ -26,6 +26,10 @@ export function WebSettings(options: WebSettingsProps) {
       {state.showKey && <div className="web-fields"><ProviderSecretField value={form.apiKey ?? ""} onChange={value => state.change("apiKey", value)}
         hint={state.hint} onEdit={options.onToggleKeyEditing} visible={options.keyVisible} onToggle={options.onToggleKey} />
         <p className="web-help">{t("settings.byok.webSearch.apiKeyHelp")}</p>
+        {state.provider?.credential === "optional_api_key" && state.hasExistingSecret && <Button variant="secondary" data-edit-action
+          onPress={() => { state.edits.complete(); if (!options.keyEditing) options.onToggleKeyEditing(); state.change("apiKey", ""); }}>
+          {t("settings.actions.delete")}
+        </Button>}
       </div>}
       {state.provider?.credential === "base_url" && <TextField value={form.baseUrl ?? ""} onChange={value => state.change("baseUrl", value)}>
         <Label>{t("settings.byok.webSearch.baseUrl")}</Label><Description>{t("settings.byok.webSearch.baseUrlHelp")}</Description><Input placeholder={t("settings.byok.webSearch.baseUrlPlaceholder")} autoComplete="off" spellCheck={false} />

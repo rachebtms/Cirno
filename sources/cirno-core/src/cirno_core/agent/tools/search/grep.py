@@ -4,13 +4,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import stat
 import threading
 import time
 from typing import Any, Iterable, Iterator
 
 from cirno_core.agent.tools.base import ToolResult
+from cirno_core.agent.tools.filesystem.workers import run_file_operation
 from cirno_core.agent.tools.search.base import SearchTool
 from cirno_core.agent.tools.search.budget import (
     SearchBudget,
@@ -74,10 +74,8 @@ class GrepTool(SearchTool):
         offset: int = 0,
         **kwargs: Any,
     ) -> str:
-        cancelled = threading.Event()
-        try:
-            return await asyncio.to_thread(
-                self._execute_sync,
+        return await run_file_operation(
+            lambda cancelled: self._execute_sync(
                 pattern=pattern,
                 path=path,
                 glob=glob,
@@ -94,9 +92,7 @@ class GrepTool(SearchTool):
                 offset=offset,
                 cancelled=cancelled,
             )
-        except asyncio.CancelledError:
-            cancelled.set()
-            raise
+        )
 
     def _execute_sync(
         self,
@@ -231,6 +227,9 @@ class GrepTool(SearchTool):
                             )
                         return ToolResult.error(f"Error searching document {display_path}: {e!s}")
                     document_error_count += 1
+                    # A failed document has no result row. Do not count matches
+                    # from its readable prefix in the successful-file total.
+                    counts.pop(display_path, None)
                     if first_document_error is None:
                         first_document_error = f"{display_path}: {e!s}"
                     continue

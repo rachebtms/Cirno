@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from cirno_core.bus.outbound_events import (
     UserInputEvent,
 )
 from cirno_core.bus.runtime_events import SubagentTaskChanged
+from cirno_core.security.workspace_access import WorkspaceScopeError
 from cirno_core.session.outbound_wire import (
     FileEditWirePayload,
     GoalStateWirePayload,
@@ -52,14 +54,22 @@ from cirno_core.session.transport_metadata import (
     WEBUI_SYSTEM_COMMAND_TURN_PREFIX,
     WEBUI_TURN_METADATA_KEY,
 )
-from cirno_core.session.webui_turns.activity import clear_websocket_turn_if_current, mark_websocket_turn_transcript_persistence_failed, websocket_turn_transcript_persistence_failed
+from cirno_core.session.webui_turns.activity import (
+    clear_websocket_turn_if_current,
+    mark_websocket_turn_transcript_persistence_failed,
+    websocket_turn_transcript_persistence_failed,
+)
+from cirno_core.utils.cancellation import shield_and_drain
+from loguru import logger
+
 from cirno_server.webui.media_gateway import WebUIMediaServer
 from cirno_server.webui.session_projection import WebUISessionProjection
 from cirno_server.webui.temporary_chats import WebUITemporaryChats
-from loguru import logger
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
+
+    from cirno_server.webui.workspaces import WebUIWorkspaceController
 
 
 @dataclass(frozen=True)
@@ -68,6 +78,7 @@ class ChatAudience:
 
 
 WebUIAudience: TypeAlias = ChatAudience | Literal["all_connections", "authenticated_webui"]
+_StreamKey: TypeAlias = tuple[str, tuple[str, str] | None, str]
 
 
 class WebUIOutboundTransport(Protocol):
@@ -91,22 +102,33 @@ class WebUIOutboundDelivery:
         transcripts: WebUITranscriptRecorder,
         temporary_chats: WebUITemporaryChats,
         session_projection: WebUISessionProjection,
+        workspaces: WebUIWorkspaceController | None = None,
     ) -> None:
         self._transport = transport
         self._media = media
         self._transcripts = transcripts
         self._temporary_chats = temporary_chats
         self._session_projection = session_projection
-        self._stream_text_buffers: dict[tuple[str, str], list[str]] = {}
-        self._reasoning_text_buffers: dict[tuple[str, str], list[str]] = {}
+        self._workspaces = workspaces
+        self._stream_text_buffers: dict[_StreamKey, list[str]] = {}
+        self._reasoning_text_buffers: dict[_StreamKey, list[str]] = {}
 
 
 
-    def discard(self, chat_id: str) -> None:
+    @staticmethod
+    def _stream_scope(metadata: Mapping[str, Any] | None) -> tuple[str, str] | None:
+        for name in (WEBSOCKET_TURN_OWNER_METADATA_KEY, WEBUI_TURN_METADATA_KEY):
+            value = (metadata or {}).get(name)
+            if isinstance(value, str) and value:
+                return name, value
+        return None
+
+    def discard(self, chat_id: str, *, metadata: Mapping[str, Any] | None = None) -> None:
         """Forget unclosed streams when a turn ends or its chat is discarded."""
+        scope = self._stream_scope(metadata)
         for buffers in (self._stream_text_buffers, self._reasoning_text_buffers):
             for key in tuple(buffers):
-                if key[0] == chat_id:
+                if key[0] == chat_id and (scope is None or key[1] == scope):
                     buffers.pop(key, None)
 
     async def hydrate(self, chat_id: str) -> None:
@@ -290,13 +312,31 @@ class WebUIOutboundDelivery:
             chat_id, persisted=persisted, metadata=metadata, phase=phase,
         )
 
+    async def _rewrite_markdown_media(self, chat_id: str, text: str) -> str:
+        if "![" not in text:
+            return text
+        try:
+            scope = (
+                await self._workspaces.async_scope_for_session_key(webui_session_key(chat_id))
+                if self._workspaces is not None else None
+            )
+            return await shield_and_drain(asyncio.to_thread(
+                self._media.rewrite_local_markdown_images,
+                text,
+                workspace_path=scope.project_path if scope is not None else self._media.workspace_path,
+            ))
+        except (WorkspaceScopeError, OSError):
+            # Invalid policy or unavailable optional media must not lose the
+            # textual reply, nor authorize the default workspace as a fallback.
+            return text
+
     async def _send_message(self, msg: OutboundMessage, progress: ProgressEvent | None) -> None:
         recipients = self._transport.webui_recipients(ChatAudience(msg.chat_id))
         text = msg.content
         user_shell = msg.metadata.get(INBOUND_META_USER_SHELL) is True
         payload: MessageWirePayload = {
             "event": "message", "chat_id": msg.chat_id,
-            "text": text if user_shell else self._media.rewrite_local_markdown_images(text),
+            "text": text if user_shell else await self._rewrite_markdown_media(msg.chat_id, text),
         }
         if user_shell:
             payload["render_as"] = "text"
@@ -342,7 +382,8 @@ class WebUIOutboundDelivery:
         payload: StreamWirePayload = {"event": "reasoning_delta", "chat_id": chat_id, "text": delta}
         if stream_id is not None:
             payload["stream_id"] = stream_id
-        self._reasoning_text_buffers.setdefault((chat_id, str(stream_id or "")), []).append(delta)
+        key = (chat_id, self._stream_scope(metadata), str(stream_id or ""))
+        self._reasoning_text_buffers.setdefault(key, []).append(delta)
         body: dict[str, Any] = dict(payload)
         await self._persist_turn_stream_event(
             chat_id, body, completed_text=None, metadata=metadata or {}, phase="reasoning",
@@ -357,7 +398,8 @@ class WebUIOutboundDelivery:
         payload: StreamWirePayload = {"event": "reasoning_end", "chat_id": chat_id}
         if stream_id is not None:
             payload["stream_id"] = stream_id
-        text = "".join(self._reasoning_text_buffers.pop((chat_id, str(stream_id or "")), []))
+        key = (chat_id, self._stream_scope(metadata), str(stream_id or ""))
+        text = "".join(self._reasoning_text_buffers.pop(key, []))
         body: dict[str, Any] = dict(payload)
         await self._persist_turn_stream_event(
             chat_id, body, completed_text=text or None, metadata=metadata or {}, phase="reasoning",
@@ -385,7 +427,7 @@ class WebUIOutboundDelivery:
         merge_next: bool = False,
     ) -> None:
         recipients = self._transport.webui_recipients(ChatAudience(chat_id))
-        stream_key = (chat_id, str(stream_id or ""))
+        stream_key = (chat_id, self._stream_scope(metadata), str(stream_id or ""))
         completed_text: str | None = None
         payload: StreamWirePayload
         if stream_end:
@@ -397,8 +439,10 @@ class WebUIOutboundDelivery:
             if delta:
                 buffered.append(delta)
             full_text = "".join(buffered)
-            rewritten = self._media.rewrite_local_markdown_images(full_text)
-            completed_text = rewritten
+            rewritten = await self._rewrite_markdown_media(chat_id, full_text)
+            # Signed URLs use an instance secret. Keep the original paths in
+            # durable history so replay can sign them again after a restart.
+            completed_text = full_text
             if delta or rewritten != full_text:
                 payload["text"] = rewritten
         else:
@@ -442,7 +486,7 @@ class WebUIOutboundDelivery:
             if persisted:
                 # A durable incomplete marker allows HTTP recovery after restart.
                 clear_websocket_turn_if_current(chat_id, turn_owner)
-            self.discard(chat_id)
+            self.discard(chat_id, metadata=metadata)
         await self._fanout(recipients, body, label=f" {body['event']} ")
 
     async def _send_goal_state(self, chat_id: str, blob: dict[str, Any]) -> None:

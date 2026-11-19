@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.bus.events import InboundMessage
@@ -15,6 +16,7 @@ from cirno_core.bus.outbound_events import (
 )
 from cirno_core.bus.queue import MessageBus
 from cirno_core.config.agents import ResumeConfig
+from cirno_core.config.home import get_home_path
 from cirno_core.session import turn_continuation
 from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno_core.session.manager import SessionManager
@@ -35,6 +37,7 @@ class RecoveryDelivery:
     sessions: SessionManager
     bus: MessageBus
     resume_settings: ResumeConfig
+    home_path: Path = dataclasses.field(default_factory=get_home_path, kw_only=True)
 
     async def publish(
         self,
@@ -111,10 +114,12 @@ class RecoveryDelivery:
         for message in pending_followups(session):
             if (session.key == ROUTER_SESSION_KEY and message.sender_id == "system:awakening"
                 and message.metadata.get("_awakening") is True
-                and not await asyncio.to_thread(awakening_prompt)):
+                and not await asyncio.to_thread(awakening_prompt, home=self.home_path)):
                 # Older releases retained this journal after completing introductions.
                 identifier = await self.sessions.state.queue_followup(session.key, message)
                 if identifier is not None:
-                    await self.sessions.state.acknowledge_followups(session.key, [identifier])
+                    await self.sessions.state.acknowledge_followups(
+                        session.key, [identifier], expected_generation=session.generation,
+                    )
                 continue
             await self.bus.publish_inbound(message)

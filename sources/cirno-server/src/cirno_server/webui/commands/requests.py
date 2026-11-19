@@ -143,6 +143,7 @@ class WebUIRequests:
                     path,
                     scope=scope,
                     limits=self._uploads.store.limits,
+                    media_root=self._uploads.store.media_root,
                 )
             except (TemporaryChatError, WorkspaceScopeError, WebUIFilePreviewError) as exc:
                 await self.respond(
@@ -193,6 +194,7 @@ class WebUIRequests:
                     scope=policy.workspace_scope,
                     metadata_only=metadata_only,
                     probe=probe,
+                    media_root=self._media.media_root,
                     media_url=lambda target: self._media.workspace_media_url(
                         str(target),
                         scope=policy.workspace_scope,

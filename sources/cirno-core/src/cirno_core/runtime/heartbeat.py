@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from cirno_core.bus.events import InboundMessage
 from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY, PENDING_FOLLOWUPS_KEY
 from cirno_core.session.router_session import ensure_router_session
+from cirno_core.session.sqlite_store import SessionConflictError
 
 if TYPE_CHECKING:
     from cirno_core.bus.queue import MessageBus
@@ -16,13 +17,12 @@ if TYPE_CHECKING:
 
 async def enqueue_heartbeat(sessions: SessionManager, bus: MessageBus, content: str) -> bool:
     key = await ensure_router_session(sessions)
-    header = await sessions.state.read_metadata(key)
-    assert header is not None, "The Router must exist after session admission"
-    if header["metadata"].get("heartbeat_paused", False):
+    header = await sessions.state.read_header(key)
+    if header is None or header.metadata.get("heartbeat_paused", False):
         return False
     if any(
         row.get("metadata", {}).get("_heartbeat")
-        for row in header["metadata"].get(PENDING_FOLLOWUPS_KEY, [])
+        for row in header.metadata.get(PENDING_FOLLOWUPS_KEY, [])
     ):
         return False
     message = InboundMessage(
@@ -32,11 +32,17 @@ async def enqueue_heartbeat(sessions: SessionManager, bus: MessageBus, content: 
         session_key_override=key,
         input_role="system",
         require_existing_session=True,
+        session_generation=header.generation,
         content="Heartbeat: review these periodic instructions and relevant active work. Use user__message only if the user needs an update.\n\n"
         + content,
         metadata={"_heartbeat": True},
     )
-    identifier = await sessions.state.queue_followup(key, message)
+    try:
+        identifier = await sessions.state.queue_followup(key, message)
+    except SessionConflictError:
+        return False  # A cleared or removed Router no longer owns this tick.
+    if identifier is None:
+        return False
     message = replace(message, metadata={**message.metadata, PENDING_FOLLOWUP_ID_KEY: identifier})
     await bus.publish_inbound(message)
     return True
@@ -50,11 +56,23 @@ async def heartbeat_paused(sessions: SessionManager) -> bool:
 
 async def discard_paused_heartbeat(sessions: SessionManager, message: InboundMessage) -> bool:
     """Retire queued heartbeats without touching user turns or other follow-ups."""
-    if not message.metadata.get("_heartbeat") or not await heartbeat_paused(sessions):
+    if not message.metadata.get("_heartbeat"):
+        return False
+    header = await sessions.state.read_header(message.session_key)
+    if header is None or (
+        message.session_generation is not None and message.session_generation != header.generation
+    ):
+        return True
+    if not header.metadata.get("heartbeat_paused"):
         return False
     identifier = message.metadata.get(PENDING_FOLLOWUP_ID_KEY)
     if isinstance(identifier, str) and identifier:
-        await sessions.state.acknowledge_followups(message.session_key, [identifier])
+        try:
+            await sessions.state.acknowledge_followups(
+                message.session_key, [identifier], expected_generation=header.generation,
+            )
+        except SessionConflictError:
+            pass  # A later reset has already retired this tick's journal.
     return True
 
 

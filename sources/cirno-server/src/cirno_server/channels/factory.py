@@ -30,6 +30,8 @@ class ChannelFactory:
             kwargs["network"] = config.network
         if cls.name == "websocket":
             kwargs["gateway"] = self.webui.services(config, section, self.bus)
+        if cls.name == "telegram":
+            kwargs["state_dir"] = self.webui.config_path.parent / "state"
         channel = cls(section, self.bus, **kwargs)
         channel.tool_status_summary_max_chars = config.agents.defaults.tool_status_summary_max_chars
         if runtime_name and runtime_name != channel.name:

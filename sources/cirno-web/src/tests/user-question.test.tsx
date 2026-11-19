@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { QuestionReplyProvider, UserQuestionCard, UserQuestionQueue } from "@/components/thread/UserQuestionCard";
 import { ThreadMessages } from "@/components/thread/ThreadMessages";
@@ -45,6 +45,15 @@ it("restores accepted answers from history and only answers the matching questio
   expect(screen.getByText("Your answer", { selector: "p" })).toBeVisible();
   expect(screen.getAllByRole("button", { name: "JSON" })).toHaveLength(1);
   expect(screen.getAllByRole("textbox")).toHaveLength(1);
+});
+
+it.each(["", "  \n\t"])("keeps a quoted question pending when the answer body is blank (%j)", answer => {
+  render(<QuestionReplyProvider messages={[
+    questionMessage(question),
+    { id: "quote-only", role: "user", createdAt: 2, content: formatQuestionAnswer(question, answer) },
+  ]} send={vi.fn()}><UserQuestionQueue><textarea aria-label="Message" /></UserQuestionQueue></QuestionReplyProvider>);
+  expect(screen.getByRole("button", { name: "CSV" })).toBeEnabled();
+  expect(screen.getByRole("status")).toHaveTextContent("1 question remaining");
 });
 
 it("sends an option immediately and retains a free-text answer after failure", async () => {
@@ -138,6 +147,36 @@ it("reopens a question when editing history removes a previously confirmed answe
   expect(screen.getByLabelText("Message")).toBeVisible();
   view.rerender(ui([questionMessage(question)]));
   expect(screen.getByRole("button", { name: "CSV" })).toBeVisible();
+});
+
+it("forgets local answer acknowledgements after a history reset without remounting the composer", async () => {
+  const first = {}, secondOwner = {}, send = vi.fn().mockResolvedValue(true);
+  const ui = (owner: object) => <QuestionReplyProvider owner={owner} messages={[questionMessage(question)]} send={send}>
+    <UserQuestionQueue><textarea aria-label="Message" defaultValue="Unsent main message" /></UserQuestionQueue>
+  </QuestionReplyProvider>;
+  const view = render(ui(first));
+  const composer = screen.getByLabelText("Message");
+  fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "CSV" })).toBeNull());
+  view.rerender(ui(secondOwner));
+  expect(screen.getByRole("button", { name: "CSV" })).toBeEnabled();
+  expect(screen.getByLabelText("Message")).toBe(composer);
+  expect(composer).toHaveValue("Unsent main message");
+});
+
+it("ignores an answer acknowledgement that belongs to the history before a reset", async () => {
+  let resolve!: (sent: boolean) => void;
+  const send = vi.fn(() => new Promise<boolean>(done => { resolve = done; }));
+  const first = {}, secondOwner = {};
+  const ui = (owner: object) => <QuestionReplyProvider owner={owner} messages={[questionMessage(question)]} send={send}>
+    <UserQuestionQueue><textarea aria-label="Message" /></UserQuestionQueue>
+  </QuestionReplyProvider>;
+  const view = render(ui(first));
+  fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+  view.rerender(ui(secondOwner));
+  await act(async () => resolve(true));
+  expect(screen.getByRole("button", { name: "CSV" })).toBeEnabled();
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 
 it("withdraws a pending question during work and on replay without adding a duplicate chat bubble", () => {

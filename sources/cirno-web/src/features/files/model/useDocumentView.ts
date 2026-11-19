@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CirnoClient } from "@/lib/cirno-client";
 import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 import { documentDirty, useFileDocument } from "../documents";
+import { useLifetime } from "@/ui/resources/useLifetime";
 
 export interface DocumentViewProps {
   client: CirnoClient; path: string; sessionKey: string | null; scope?: WorkspaceScopePayload | null;
@@ -12,10 +13,19 @@ export interface DocumentViewProps {
 }
 export function useDocumentView(props: DocumentViewProps) {
   const { document, state } = useFileDocument(props.client, props.path, props.sessionKey, props.scope, !!props.preview);
+  const current = useLifetime(document);
+  const [owner, setOwner] = useState(document);
   const [editing, setEditing] = useState((props.initialEditing ?? true) && !props.preview);
   const [imageOpen, setImageOpen] = useState(false);
   const [mediaError, setMediaError] = useState("");
   const [pending, setPending] = useState<(() => void) | null>(null);
+  if (owner !== document) {
+    setOwner(document);
+    setEditing((props.initialEditing ?? true) && !props.preview);
+    setImageOpen(false);
+    setMediaError("");
+    setPending(null);
+  }
   const dirty = documentDirty(state);
   const ownsDraft = dirty && !props.preview;
   const draft = useDeferredValue(state.draft);
@@ -35,8 +45,9 @@ export function useDocumentView(props: DocumentViewProps) {
       if (saving && document.snapshot().error) throw new Error(document.snapshot().error);
     });
   }, [document, props.onRegisterClose]);
-  const guard = (action: () => void) => { if (ownsDraft) setPending(() => action); else action(); };
-  const discard = () => { document.discard(); pending?.(); setPending(null); };
+  // Preview reloads replace the same document that an editor may be changing.
+  const guard = (action: () => void) => { if (!current()) return; if (dirty) setPending(() => action); else action(); };
+  const discard = () => { if (!current()) return; document.discard(); pending?.(); setPending(null); };
   return { document, state, dirty, editing, setEditing, imageOpen, setImageOpen, mediaError, setMediaError, pending, setPending, payload, guard, discard };
 }
 export type DocumentViewModel = ReturnType<typeof useDocumentView>;

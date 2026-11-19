@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import secrets
 from urllib.parse import unquote
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, WeakValueDictionary
 
 from aiohttp import web
-from cirno_server.channels.websocket.attachment_store import AttachmentStore, AttachmentUploadError
 from websockets.asyncio.server import ServerConnection
+
+from cirno_server.channels.websocket.attachment_store import AttachmentStore, AttachmentUploadError
 
 UPLOAD_PATH = "/v0/attachments"
 
@@ -16,13 +17,15 @@ class AttachmentHTTP:
     def __init__(self, store: AttachmentStore) -> None:
         self.store = store
         self._owners: WeakKeyDictionary[ServerConnection, str] = WeakKeyDictionary()
-        self._tokens: set[str] = set()
+        # Both lookup directions expire with the connection, even when an
+        # exceptional exit missed the explicit revoke callback.
+        self._tokens: WeakValueDictionary[str, ServerConnection] = WeakValueDictionary()
 
     def issue(self, connection: ServerConnection) -> dict[str, str]:
         self.revoke(connection)
         token = secrets.token_urlsafe(32)
         self._owners[connection] = token
-        self._tokens.add(token)
+        self._tokens[token] = connection
         return {"path": UPLOAD_PATH, "token": token}
 
     def owner(self, connection: ServerConnection) -> str:
@@ -30,7 +33,7 @@ class AttachmentHTTP:
 
     def revoke(self, connection: ServerConnection) -> None:
         owner = self._owners.pop(connection, "")
-        self._tokens.discard(owner)
+        self._tokens.pop(owner, None)
         if owner:
             self.store.discard_owner(owner)
 

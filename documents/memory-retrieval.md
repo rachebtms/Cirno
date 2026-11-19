@@ -22,16 +22,44 @@ The design was informed by QwenPaw's `MemoryGraphView.tsx` and `GET /{agentId}/m
 
 ## Local CPU embeddings
 
-Enable Semantic retrieval and choose Local CPU model. Select an ONNX model and matching tokenizer. The full image supplies matching BGE weights; inference remains disabled until enabled. Local inference runs in a disposable CPU worker, with a configurable RSS limit and one time budget shared by query embedding and all incremental indexing batches. Pipe writes, partial responses and model startup remain subject to that budget, so a stalled child cannot keep the embedding slot indefinitely. The default worker budget remains 200 MiB, but it is no longer a maximum allowed setting. Set the peak worker memory budget to 512, 1024 or a larger value appropriate to your model and host. Model loading, tokenizer and runtime allocations count toward the budget, so a 207.8 MiB peak cannot run under a 200 MiB budget. Limit violations report both the measured peak and configured limit and fall back to BM25. The minimum is 50 MiB; raising the limit does not change the actual model footprint. The main service does not keep the model loaded. Long records use overlapping token chunks, indexed incrementally and stored in `vectors.sqlite3`.
+Enable Semantic retrieval and choose Local CPU model. Select an ONNX model and matching tokenizer. For the bundled BGE runtime and matching weights, add `+memory.bge_small_zh` to the Docker setup arguments; `+presets.rachebtms` also includes it. The base image does not preinstall them. Installation leaves inference disabled until you enable it. Local inference runs in a disposable CPU worker, with a configurable RSS limit and one time budget shared by query embedding and all incremental indexing batches. Pipe writes, partial responses and model startup remain subject to that budget, so a stalled child cannot keep the embedding slot indefinitely. The default worker budget remains 200 MiB, but it is no longer a maximum allowed setting. Set the peak worker memory budget to 512, 1024 or a larger value appropriate to your model and host. Model loading, tokenizer and runtime allocations count toward the budget, so a 207.8 MiB peak cannot run under a 200 MiB budget. Limit violations report both the measured peak and configured limit and fall back to BM25. The minimum is 50 MiB; raising the limit does not change the actual model footprint. The main service does not keep the model loaded. Long records use overlapping token chunks, indexed incrementally and stored in `vectors.sqlite3`.
 
 ## External embedding API
 
-Choose External API and enter an OpenAI-compatible API base URL, model and optional API key. For example, `https://embedding.example/v1` sends requests to `https://embedding.example/v1/embeddings`. A complete `/embeddings` endpoint is also accepted. Local HTTP services are supported; URLs must not contain credentials or secret query parameters. The API key is stored in the instance configuration and masked in settings responses. It can be replaced or cleared without revealing the existing value.
+Choose External API and enter an OpenAI-compatible API base URL, model and optional API key. For example, `https://embedding.example/v1` sends requests to `https://embedding.example/v1/embeddings`. A complete `/embeddings` endpoint is also accepted. Local HTTP and IPv6 services are supported. URLs require a valid port and must not contain embedded credentials, query or fragment, including empty `?` or `#` delimiters. Invalid addresses are rejected before settings are saved. The API key is stored in the instance configuration and masked in settings responses. It can be replaced or cleared without revealing the existing value.
 
 The service must accept `model`, an array of input strings and `encoding_format: "float"`, then return an indexed `data` array of finite numeric embedding vectors. See the [embedding API format](https://developers.openai.com/api/reference/resources/embeddings/methods/create). Output order is normalized by index. Vectors are normalized before cosine similarity; dimensions must stay consistent within a search.
+
+Agent and Memory-page searches resolve `${ENV_VAR}` configuration references at
+runtime, including the embedding API address, key and model, without replacing those references
+on disk. The Memory page uses the server's selected configuration file. Vector
+normalization scales finite nonzero inputs before squaring, so extreme magnitudes
+do not overflow or underflow. Nonrepresentable numbers, booleans and zero vectors
+produce a visible BM25 fallback rather than an uncaught numeric exception.
+
+Complete address references and composed templates such as
+`https://${EMBEDDING_HOST}/v1` are accepted. The resolved address is validated
+before vector indexing or HTTP client creation; invalid resolved addresses use
+the visible BM25 fallback. Missing variables report a configuration error for
+the selected instance. Existing valid address fingerprints stay compatible with
+their vector indexes.
 
 API mode sends the query and selected memory chunks to that service. It loads no local embedding model. Adjust the character chunk size for the model's input limit; chunks overlap by 25%. Each search indexes at most 32 chunks in batches of at most eight, and later searches resume unfinished indexing. Endpoint, model, chunk size and vector dimensions identify the index, so incompatible vectors are never mixed. Index identity excludes the secret key; rotating credentials does not rebuild the same model's index.
 
 Both modes use the same scope filters, disk vector storage, bounded ranking and BM25/vector fusion. API errors, timeouts and malformed vectors produce a visible warning and fall back to BM25. Requests do not silently follow redirects with credentials. There is no default API endpoint, automatic model download or background per-reply embedding call.
 
+An unreadable, corrupted or read-only optional vector database also produces a
+visible BM25 fallback. Search does not delete or rewrite that database to hide
+the failure. If the initial memory-catalog or lexical lookup fails, search still
+reports that failure instead of claiming a successful optional-cache fallback.
+
 Embedding API searches use the same whole-search time budget and pass its remaining time to each network request. The browser allows up to 150 seconds for explicit vector/hybrid searches, covering the maximum configured 120-second inference budget plus teardown and BM25 fallback. Lexical reads retain their normal short request deadline.
+
+Local model fingerprint reads check that budget between file chunks. Child RSS
+monitoring receives only the remaining time, and pipe waits recompute it after
+monitoring, so setup and monitoring cannot each start a separate timeout window.
+
+Index rebuilds and saved-learning retries run batches serially. Cancelling a
+server request waits for accepted local storage work to settle. If a later batch
+fails, the page refreshes already-saved counts and outcomes once and preserves
+the original action error, even when the status refresh also fails.

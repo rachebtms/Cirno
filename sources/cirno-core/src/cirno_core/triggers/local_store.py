@@ -14,17 +14,20 @@ from typing import Any, cast
 from filelock import FileLock
 from loguru import logger
 
-from cirno_core.storage.records import read_records
+from cirno_core.session.automation_metadata import automation_origin_metadata
+from cirno_core.storage.records import RecordStoreError, decode_record, read_records
 from cirno_core.triggers.local_types import LocalTrigger, TriggerDelivery, TriggerRunRecord
-from cirno_core.utils.atomic_file import atomic_write_text
-from cirno_core.utils.text import truncate_text
+from cirno_core.utils.atomic_file import atomic_write_text, read_atomic_bytes
+from cirno_core.utils.run_records import safe_run_record_name
 from cirno_core.utils.run_records import write_run_record as write_automation_run_record
+from cirno_core.utils.text import truncate_text
 
 _TRIGGER_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 _MAX_RUN_HISTORY = 20
 _MAX_DELIVERY_ATTEMPTS = 10
 _RUN_RECORD_TEXT_MAX_CHARS = 4000
 _PROCESSING_RECOVERY_ERROR = "delivery was recovered from interrupted processing"
+UNCONFIRMED_DELIVERY_ERROR = "delivery outcome is unconfirmed; inspect its session before resubmitting"
 
 
 class TriggerStoreError(RuntimeError):
@@ -83,7 +86,7 @@ class LocalTriggerStore:
                 chat_id=chat_id,
                 session_key=session_key,
                 sender_id=sender_id.strip() or "trigger",
-                origin_metadata=dict(origin_metadata or {}),
+                origin_metadata=automation_origin_metadata(origin_metadata),
                 created_at_ms=now,
                 updated_at_ms=now,
             )
@@ -223,6 +226,7 @@ class LocalTriggerStore:
         """Requeue deliveries left in processing by an interrupted gateway."""
         self._ensure_dirs()
         recovered = 0
+        uncertain: list[TriggerDelivery] = []
         with self._lock:
             for path in sorted(self.processing_dir.glob("*.json")):
                 try:
@@ -235,8 +239,22 @@ class LocalTriggerStore:
                     logger.exception("Trigger: failed to parse processing delivery {}", path)
                     self._move_bad_delivery_unlocked(path)
                     continue
-                if self._retry_delivery_unlocked(delivery, _PROCESSING_RECOVERY_ERROR):
+                record = self.read_delivery_run_record(delivery)
+                if record and record.get("status") in {"ok", "error"}:
+                    # This is storage settlement, not another execution attempt.
+                    os.replace(path, self.inbox_dir / path.name)
                     recovered += 1
+                elif record and record.get("status") == "processing":
+                    self._retry_delivery_unlocked(delivery, UNCONFIRMED_DELIVERY_ERROR, retry=False)
+                    uncertain.append(delivery)
+                elif self._retry_delivery_unlocked(delivery, _PROCESSING_RECOVERY_ERROR):
+                    recovered += 1
+        for delivery in uncertain:
+            self.record_delivery(
+                delivery.trigger_id, status="error", error=UNCONFIRMED_DELIVERY_ERROR,
+                run_at_ms=delivery.created_at_ms, delivery_id=delivery.id,
+            )
+            logger.warning("Trigger: {} ({})", UNCONFIRMED_DELIVERY_ERROR, delivery.id)
         return recovered
 
     def complete_delivery(self, delivery: TriggerDelivery) -> None:
@@ -255,6 +273,14 @@ class LocalTriggerStore:
         with self._lock:
             return self._retry_delivery_unlocked(delivery, error)
 
+    def fail_delivery(self, delivery: TriggerDelivery, error: str) -> None:
+        """Retain an uncertain completed execution without automatically replaying it."""
+        if delivery.path is None:
+            return
+        self._ensure_dirs()
+        with self._lock:
+            self._retry_delivery_unlocked(delivery, error, retry=False)
+
     def record_delivery(
         self,
         trigger_id: str,
@@ -262,24 +288,35 @@ class LocalTriggerStore:
         status: str,
         error: str | None = None,
         run_at_ms: int | None = None,
+        delivery_id: str | None = None,
     ) -> None:
         """Record the latest delivery status on a trigger."""
         self._ensure_dirs()
-        run_at_ms = run_at_ms or _now_ms()
+        run_at_ms = _now_ms() if run_at_ms is None else run_at_ms
         with self._lock:
             triggers = self._load_triggers_unlocked()
             trigger = self._find_unlocked(triggers, trigger_id)
             if trigger is None:
                 return
+            last_error = None if status == "ok" else (error or "delivery failed")
+            if delivery_id:
+                previous = [record for record in trigger.run_history if record.delivery_id == delivery_id]
+                if len(previous) == 1 and (
+                    previous[0].status == status and previous[0].run_at_ms == run_at_ms
+                    and previous[0].error == last_error
+                ):
+                    return
+                trigger.run_history = [record for record in trigger.run_history if record.delivery_id != delivery_id]
             trigger.last_run_at_ms = run_at_ms
             trigger.last_status = "ok" if status == "ok" else "error"
-            trigger.last_error = None if status == "ok" else (error or "delivery failed")
+            trigger.last_error = last_error
             trigger.updated_at_ms = _now_ms()
             trigger.run_history.append(
                 TriggerRunRecord(
                     run_at_ms=run_at_ms,
                     status=trigger.last_status,
                     error=trigger.last_error,
+                    delivery_id=delivery_id,
                 )
             )
             trigger.run_history = trigger.run_history[-_MAX_RUN_HISTORY:]
@@ -310,6 +347,41 @@ class LocalTriggerStore:
             record["response"] = _run_record_text(response)
         return self.write_run_record(delivery.id, record)
 
+    def read_delivery_run_record(self, delivery: TriggerDelivery) -> dict[str, Any] | None:
+        """Read a bounded receipt, failing closed on corruption or mismatched identity."""
+        path = self.runs_dir / f"{safe_run_record_name(delivery.id)}.json"
+        if path.is_symlink() or path.resolve().parent != self.runs_dir.resolve():
+            raise RecordStoreError(f"Trigger receipt is outside its run store: {path.name}")
+        try:
+            raw = read_atomic_bytes(path, max_bytes=2 * 1024 * 1024 + 1)
+        except FileNotFoundError:
+            return None
+        try:
+            if len(raw) > 2 * 1024 * 1024:
+                raise ValueError("receipt exceeds 2 MiB")
+            record = decode_record(raw.decode("utf-8"))
+            if (
+                record.get("run_id") != delivery.id
+                or record.get("delivery_id") != delivery.id
+                or record.get("trigger_id") != delivery.trigger_id
+                or record.get("created_at_ms") != delivery.created_at_ms
+                or record.get("kind") != "local_trigger"
+            ):
+                raise ValueError("receipt does not belong to this delivery")
+            status = record.get("status")
+            if not isinstance(status, str) or status not in {
+                "queued", "processing", "retrying", "interrupted", "ok", "error",
+            }:
+                raise ValueError("receipt has an invalid status")
+            if any(
+                record.get(field) is not None and not isinstance(record[field], str)
+                for field in ("response", "error")
+            ):
+                raise ValueError("receipt result must contain text")
+            return record
+        except (ValueError, UnicodeError) as error:
+            raise RecordStoreError(f"Cannot read trigger receipt {path.name}: {error}") from error
+
     def _ensure_dirs(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         self.inbox_dir.mkdir(parents=True, exist_ok=True)
@@ -339,10 +411,12 @@ class LocalTriggerStore:
         with suppress(OSError):
             os.replace(path, target)
 
-    def _retry_delivery_unlocked(self, delivery: TriggerDelivery, error: str) -> bool:
+    def _retry_delivery_unlocked(
+        self, delivery: TriggerDelivery, error: str, *, retry: bool = True,
+    ) -> bool:
         if delivery.path is None:
             return False
-        if delivery.attempts + 1 >= _MAX_DELIVERY_ATTEMPTS:
+        if not retry or delivery.attempts + 1 >= _MAX_DELIVERY_ATTEMPTS:
             delivery.attempts += 1
             delivery.last_error = error
             failed = self.failed_dir / delivery.path.name

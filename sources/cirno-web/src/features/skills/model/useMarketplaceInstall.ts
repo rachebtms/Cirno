@@ -1,36 +1,53 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { MarketplaceSkillSummary } from "@/lib/contracts/skills";
 import { notifySkillsChanged } from "@/lib/skill-events";
 import { useMutation } from "@/ui/resources/useMutation";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import type { SkillService } from "./service";
 export function useMarketplaceInstall(service: SkillService) {
-  const operation = useMutation(service);
+  const owner = useMemo(() => ({
+    service, choice: null as { skill: MarketplaceSkillSummary } | null, installing: false,
+  }), [service]);
+  const isCurrent = useLifetime(owner);
+  const operation = useMutation(owner);
   const [selection, setSelection] = useState<{
-    service: SkillService;
-    skill: MarketplaceSkillSummary;
+    owner: typeof owner;
+    choice: NonNullable<typeof owner.choice>;
   } | null>(null);
-  const selected = selection?.service === service ? selection.skill : null;
+  const choice = selection?.owner === owner ? selection.choice : null;
+  const selected = choice?.skill ?? null;
   return {
     operation,
     selected,
     select: (skill: MarketplaceSkillSummary) => {
+      if (!isCurrent() || owner.installing) return;
       operation.clear();
-      setSelection({ service, skill });
+      owner.choice = { skill };
+      setSelection({ owner, choice: owner.choice });
     },
     close: () => {
-      if (!operation.busy) {
+      if (isCurrent() && !owner.installing && owner.choice === choice) {
         operation.clear();
+        owner.choice = null;
         setSelection(null);
       }
     },
-    install: () =>
-      selected &&
-      operation.run(
-        () => service.install(selected),
-        (payload) => {
-          notifySkillsChanged(payload);
-          setSelection(null);
-        },
-      ),
+    install: async () => {
+      if (!isCurrent() || !choice || owner.choice !== choice || owner.installing) return;
+      owner.installing = true;
+      try {
+        return await operation.run(
+          () => service.install(choice.skill),
+          (payload) => {
+            notifySkillsChanged(payload);
+            if (!isCurrent() || owner.choice !== choice) return;
+            owner.choice = null;
+            setSelection(null);
+          },
+        );
+      } finally {
+        owner.installing = false;
+      }
+    },
   };
 }

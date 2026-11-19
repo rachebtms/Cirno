@@ -92,6 +92,51 @@ def test_invalid_metadata_remains_visible_without_inventing_empty_requirements(t
     assert summary["unavailable_reason"] == detail["unavailable_reason"]
 
 
+def test_invalid_utf8_skill_stays_manageable_without_breaking_settings(tmp_path):
+    from cirno_core.skills.history import skill_versions
+
+    directory = _write_skill(tmp_path, 'broken')
+    _write_skill(tmp_path, 'healthy')
+    original = b'\xff\xfe invalid instructions'
+    (directory / 'SKILL.md').write_bytes(original)
+    rows = {row['name']: row for row in webui_skills_payload(tmp_path)['skills']}
+    assert rows['healthy']['available']
+    assert not rows['broken']['available']
+    assert 'decode' in rows['broken']['unavailable_reason']
+    detail = webui_skill_detail_payload(tmp_path, 'broken')
+    assert detail is not None and not detail['available']
+    assert 'decode' in detail['unavailable_reason']
+    assert detail['raw_markdown'] == '' and detail['requirements'] is None
+    config_path = tmp_path / 'config.json'
+    save_config(Config(), config_path)
+    delete_webui_skill(tmp_path, 'broken', disabled_skills=set(), config_path=config_path)
+    versions = skill_versions('broken')
+    assert not directory.exists() and len(versions) == 1
+    assert not versions[0]['validation']['valid']
+    assert (Path(versions[0]['path']) / 'SKILL.md').read_bytes() == original
+
+
+@pytest.mark.parametrize('failure', [PermissionError, FileNotFoundError])
+def test_unreadable_or_disappearing_skill_does_not_break_the_settings_catalog(tmp_path, monkeypatch, failure):
+    directory = _write_skill(tmp_path, 'broken')
+    _write_skill(tmp_path, 'healthy')
+    original = Path.read_text
+
+    def read(path, *args, **kwargs):
+        if path == directory / 'SKILL.md':
+            raise failure('Skill document unavailable')
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'read_text', read)
+    rows = {row['name']: row for row in webui_skills_payload(tmp_path)['skills']}
+    assert rows['healthy']['available']
+    assert not rows['broken']['available']
+    assert 'Skill document unavailable' in rows['broken']['unavailable_reason']
+    detail = webui_skill_detail_payload(tmp_path, 'broken')
+    assert detail is not None and not detail['available'] and detail['raw_markdown'] == ''
+    assert 'Skill document unavailable' in detail['unavailable_reason']
+
+
 def test_deleting_invalid_skill_preserves_its_readable_history(tmp_path):
     from cirno_core.skills.history import skill_versions
 
@@ -115,6 +160,7 @@ def test_skill_payload_verifies_plugins_once_per_request(
     detail: bool,
 ) -> None:
     monkeypatch.setattr(agent_plugins, "get_config_path", lambda: tmp_path / "config.json")
+    monkeypatch.setattr("cirno_core.config.loader._current_config_path", tmp_path / "config.json")
     workspace_skill = _write_skill(tmp_path, "custom-skill") / "SKILL.md"
     plugin = tmp_path / "plugins" / "demo"
     _write_skill(plugin, "plugin-skill", home_skill=False)

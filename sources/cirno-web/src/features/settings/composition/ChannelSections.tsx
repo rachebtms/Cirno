@@ -23,9 +23,10 @@ export function createChannelSections(bindings: SettingsComposition): SectionRen
         error={systemState.cirnoFeaturesError}
         requiresRestartPending={pendingRestartSections.runtime}
         onAction={systemActions.handleCirnoFeatureAction}
-        onFeaturesUpdate={systemState.setCirnoFeatures}
+        onFeaturesUpdate={systemState.publishCirnoFeatures}
         onDismissStatus={() => {
           systemState.setCirnoFeaturesError(null);
+          systemState.setCirnoFeaturesReadError(null);
         }}
         onRestart={restartViaSettingsSurface}
         isRestarting={restartInProgress}

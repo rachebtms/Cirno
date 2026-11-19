@@ -12,6 +12,7 @@ from cirno_core.agent.tools.base import ToolResult, tool_parameters
 from cirno_core.agent.tools.filesystem.base import FileTool
 from cirno_core.agent.tools.filesystem.edit_io import (
     MAX_EDIT_BYTES,
+    EditText,
     PreparedEdit,
     check_edit_size,
     read_edit_snapshot,
@@ -131,8 +132,13 @@ class EditFileTool(FileTool):
                 )
             )
             if isinstance(prepared, PreparedEdit):
-                await run_file_operation(prepared.commit)
-                self._file_states.record_write(prepared.path)
+                accepted_edit = prepared
+
+                def commit(cancelled: Event) -> None:
+                    accepted_edit.commit(cancelled)
+                    self._finish_writes([accepted_edit.path])
+
+                await run_file_operation(commit)
                 return prepared.result
             return prepared
         except PermissionError as exc:
@@ -178,6 +184,17 @@ class EditFileTool(FileTool):
                 return ToolResult.error("Error: line_hint must be >= 1.")
             if expected_replacements is not None and expected_replacements < 1:
                 return ToolResult.error("Error: expected_replacements must be >= 1.")
+            if replace_all and occurrence is not None:
+                return ToolResult.error("Error: occurrence cannot be used with replace_all=true.")
+            if replace_all and line_hint is not None:
+                return ToolResult.error("Error: line_hint cannot be used with replace_all=true.")
+            if occurrence is not None and line_hint is not None:
+                return ToolResult.error("Error: line_hint cannot be used with occurrence.")
+            if old_text == "":
+                if occurrence is not None or line_hint is not None:
+                    return ToolResult.error("Error: occurrence and line_hint require non-empty old_text.")
+                if expected_replacements is not None and expected_replacements != 1:
+                    return ToolResult.error("Error: creating a file requires expected_replacements=1.")
 
             fp = self._resolve_write(path)
             check_edit_size(new_text, fp)
@@ -202,8 +219,8 @@ class EditFileTool(FileTool):
                     )
                 return self._prepared(fp, content, new_text)
 
-            uses_crlf = "\r\n" in original
-            content = original.replace("\r\n", "\n")
+            snapshot = EditText(original)
+            content = snapshot.text
             norm_old = old_text.replace("\r\n", "\n")
             selection = select_matches(
                 _find_matches(content, norm_old),
@@ -214,12 +231,6 @@ class EditFileTool(FileTool):
             count = selection.count
             if not count:
                 return self._not_found_msg(old_text, content, path)
-            if replace_all and occurrence is not None:
-                return ToolResult.error("Error: occurrence cannot be used with replace_all=true.")
-            if replace_all and line_hint is not None:
-                return ToolResult.error("Error: line_hint cannot be used with replace_all=true.")
-            if occurrence is not None and line_hint is not None:
-                return ToolResult.error("Error: line_hint cannot be used with occurrence.")
             if occurrence is not None and occurrence > count:
                 return ToolResult.error(
                     f"Error: occurrence {occurrence} is out of range; "
@@ -230,7 +241,7 @@ class EditFileTool(FileTool):
                 if count > 3:
                     preview += ", ..."
                 location_hint = f" at {preview}" if preview else ""
-                return (
+                return ToolResult.error(
                     f"Warning: old_text appears {count} times{location_hint}. "
                     "Provide more context, set occurrence to choose one match, "
                     "or set replace_all=true."
@@ -306,15 +317,13 @@ class EditFileTool(FileTool):
                 ):
                     end += 1
 
-                output.write(content[cursor : match.start])
-                output.write(replacement)
+                output.write(snapshot.slice(cursor, match.start))
+                output.write(snapshot.replacement(replacement, match.start))
                 if output.tell() > MAX_EDIT_BYTES:
                     raise ValueError("Edited content exceeds the 2 MiB limit; split the edit.")
                 cursor = end
-            output.write(content[cursor:])
+            output.write(snapshot.slice(cursor))
             new_content = output.getvalue()
-            if uses_crlf:
-                new_content = new_content.replace("\n", "\r\n")
 
             check_edit_size(new_content, fp)
             return self._prepared(fp, original, new_content)

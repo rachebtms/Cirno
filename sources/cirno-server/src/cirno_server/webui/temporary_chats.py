@@ -17,6 +17,8 @@ from cirno_core.command.builtin.registration import register_builtin_commands
 from cirno_core.command.router import CommandRouter
 from cirno_core.security.workspace_access import WorkspaceScope
 from cirno_core.session.manager import SessionManager
+from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.webui.workspaces import WebUIWorkspaceController
 
 _TEMPORARY_CHAT_DISABLED_TOOLS = frozenset({
@@ -189,29 +191,36 @@ class WebUITemporaryChats:
 
     async def discard(self, owner: object, chat_id: str) -> None:
         """Forget one owned chat and cancel any active work through the message bus."""
+        session_key = self._session_key(chat_id)
+        identity = self._sessions.state.peek_identity(session_key) if self._sessions is not None else None
         if (
-            not self._cached_session_is_transient(chat_id)
-            or self._owners.get(chat_id) is not owner
+            self._owners.get(chat_id) is not owner
+            or chat_id not in self._known_transient_chat_ids
+            or (identity is not None and identity.policy.persist)
         ):
             raise TemporaryChatError("temporary_chat_unavailable")
 
-        session_key = self._session_key(chat_id)
-        self._forget_owner(owner, chat_id)
-        self._discard_media(chat_id)
-        if self._sessions is not None:
-            await self._sessions.state.discard(session_key)
-        await self._bus.publish_inbound(
-            InboundMessage(
-                channel=self._channel_name,
-                sender_id="webui",
-                chat_id=chat_id,
-                content="",
-                metadata={
-                    INBOUND_META_RUNTIME_CONTROL: RUNTIME_CONTROL_SESSION_DISCARD,
-                },
-                session_key_override=session_key,
+        async def settle() -> None:
+            if self._sessions is not None:
+                await self._sessions.state.discard(session_key)
+            await self._bus.publish_inbound(
+                InboundMessage(
+                    channel=self._channel_name,
+                    sender_id="webui",
+                    chat_id=chat_id,
+                    content="",
+                    metadata={
+                        INBOUND_META_RUNTIME_CONTROL: RUNTIME_CONTROL_SESSION_DISCARD,
+                    },
+                    session_key_override=session_key,
+                )
             )
-        )
+            # Keep the original owner and attachments available for retry if
+            # either retirement or cancellation admission fails.
+            self._forget_owner(owner, chat_id)
+            self._discard_media(chat_id)
+
+        await shield_and_drain(settle())
 
     def close(self) -> None:
         """Release process-local resources during gateway shutdown."""

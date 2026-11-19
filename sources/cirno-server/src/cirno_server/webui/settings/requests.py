@@ -7,9 +7,13 @@ import re
 from typing import Any, cast
 
 from cirno_core.config.providers import ProviderConfig
+
 from cirno_server.webui.settings.contracts import QueryParams, WebUISettingsError, query_first_alias
 
 _REDACTED_PROVIDER_SECRET = "••••••••"
+_MISSING_SAVED_SECRET_MESSAGE = (
+    "No saved secret matches this mask. Enter the actual value or remove the entry."
+)
 _PROVIDER_STRUCTURED_FIELDS = ("extra_headers", "extra_body", "extra_query")
 _PROVIDER_SECRET_KEYS = frozenset({
     "auth",
@@ -86,16 +90,22 @@ def restore_request_secrets(
     current: Any,
     *,
     secret: bool = False,
+    case_insensitive_keys: bool = False,
 ) -> Any:
+    """Restore masks; only an HTTP header map opts into folded top-level keys."""
     if secret and submitted == _REDACTED_PROVIDER_SECRET:
+        if current is None or current == "":
+            raise WebUISettingsError(_MISSING_SAVED_SECRET_MESSAGE)
         return current
     if isinstance(submitted, dict):
         submitted_mapping = cast(dict[str, Any], submitted)
         current_mapping = cast(dict[str, Any], current) if isinstance(current, dict) else {}
+        if case_insensitive_keys:
+            current_mapping = {key.lower(): item for key, item in current_mapping.items()}
         return {
             key: restore_request_secrets(
                 item,
-                current_mapping.get(key),
+                current_mapping.get(key.lower() if case_insensitive_keys else key),
                 secret=_provider_setting_key_is_secret(key),
             )
             for key, item in submitted_mapping.items()
@@ -120,16 +130,22 @@ def validate_request_config(
 ) -> ProviderConfig:
     config_type = type(provider_config) if provider_config is not None else ProviderConfig
     values = provider_config.model_dump(mode="python") if provider_config is not None else {}
-    if provider_config is not None:
-        for field in _PROVIDER_STRUCTURED_FIELDS:
-            if field in updates:
-                updates[field] = restore_request_secrets(
-                    updates[field],
-                    getattr(provider_config, field),
-                )
-    if provider_config is not None and "balance" in updates:
+    for field in _PROVIDER_STRUCTURED_FIELDS:
+        if field in updates:
+            updates[field] = restore_request_secrets(
+                updates[field],
+                getattr(provider_config, field) if provider_config is not None else None,
+                case_insensitive_keys=field == "extra_headers",
+            )
+    if "balance" in updates:
+        balance = provider_config.balance if provider_config is not None else None
+        # Both spellings are accepted by the balance DTO and refer to one saved key.
+        current_balance = {
+            **balance.model_dump(mode="python"),
+            **balance.model_dump(mode="python", by_alias=True),
+        } if balance is not None else None
         updates["balance"] = restore_request_secrets(
-            updates["balance"], provider_config.balance.model_dump(mode="python") if provider_config.balance else None,
+            updates["balance"], current_balance,
         )
     values.update(updates)
     try:

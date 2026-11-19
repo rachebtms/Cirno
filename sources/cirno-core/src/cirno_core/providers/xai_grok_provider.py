@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import json
 import re
 import uuid
@@ -12,12 +11,16 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 import httpx
-from cirno_core import __version__
 from cirno_usage.types import LLMUsage
+from loguru import logger
+
+from cirno_core import __version__
 from cirno_core.providers.base import LLMProvider
+from cirno_core.providers.catalog.contracts import ProviderModelSpec
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.errors import (
     RETRYABLE_STATUS_CODES,
+    ModelStreamProtocolError,
     extract_error_type_code,
     is_retryable_rate_limit,
     retry_after_headers,
@@ -26,9 +29,10 @@ from cirno_core.providers.oauth_catalog_cache import (
     OAuthCatalogAuthRequiredError,
     OAuthModelCatalog,
     OAuthModelCatalogSnapshot,
+    oauth_catalog_identity,
 )
 from cirno_core.providers.openai_responses import ResponsesBackend
-from cirno_core.providers.catalog.contracts import ProviderModelSpec
+from cirno_core.providers.openai_responses.errors import ResponsesAPIError
 from cirno_core.providers.registry import find_by_name
 from cirno_core.providers.timeouts import ProviderTimeouts
 from cirno_core.providers.tool_calls import ToolCallRequest
@@ -39,7 +43,7 @@ from cirno_core.providers.xai_oauth import (
     get_xai_oauth_storage_path,
     get_xai_oauth_token,
 )
-from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain
 
 DEFAULT_XAI_GROK_MODEL = "xai-grok/grok-4.6"
 DEFAULT_XAI_GROK_URL = "https://cli-chat-proxy.grok.com/v1/responses"
@@ -93,10 +97,10 @@ class XAIGrokProvider(LLMProvider):
         await self._responses.aclose()
 
     async def _supports_backend_search(self, model: str) -> bool:
-        catalog = await asyncio.to_thread(
+        catalog = await shield_and_drain(asyncio.to_thread(
             get_xai_grok_model_catalog,
             self.proxy,
-        )
+        ))
         if catalog.message:
             logger.warning(
                 "xAI model catalog unavailable; hosted X Search disabled unless cached: {}",
@@ -128,7 +132,7 @@ class XAIGrokProvider(LLMProvider):
 
         stage = "oauth_token"
         try:
-            token = await asyncio.to_thread(get_xai_oauth_token, proxy=self.proxy)
+            token = await shield_and_drain(asyncio.to_thread(get_xai_oauth_token, proxy=self.proxy))
             configured_tools = self._extra_body.get("tools")
             tools_are_explicit = "tools" in self._extra_body
             configured_hosted_search = isinstance(configured_tools, list) and any(
@@ -197,11 +201,11 @@ class XAIGrokProvider(LLMProvider):
                         raise
                     auth_retried = True
                     stage = "oauth_refresh"
-                    token = await asyncio.to_thread(
+                    token = await shield_and_drain(asyncio.to_thread(
                         get_xai_oauth_token,
                         proxy=self.proxy,
                         force_refresh=True,
-                    )
+                    ))
                     headers = _build_headers(token.access, wire_model)
                     stage = "xai_request_after_oauth_refresh"
                 except _XAIIncompleteHostedToolError as exc:
@@ -233,14 +237,13 @@ class XAIGrokProvider(LLMProvider):
             response = _xai_error_response(exc)
             logger.warning(
                 "xAI subscription request failed: stage={} type={} retryable={} status={} "
-                "error_type={} error_code={} response_body={}",
+                "error_type={} error_code={}",
                 stage,
                 type(exc).__name__,
                 response.error_should_retry,
                 response.error_status_code,
                 response.error_type,
                 response.error_code,
-                getattr(exc, "response_body", None),
             )
             return response
 
@@ -596,6 +599,8 @@ def _friendly_error(status_code: int, response_body: str | None = None) -> str:
 
 
 def _xai_error_response(exc: Exception) -> LLMResponse:
+    if isinstance(exc, ResponsesAPIError):
+        return exc.to_response()
     if isinstance(exc, XAIOAuthReauthRequiredError):
         return LLMResponse(
             content="xAI authorization expired. Please sign in again.",
@@ -606,7 +611,10 @@ def _xai_error_response(exc: Exception) -> LLMResponse:
     status_code = getattr(exc, "status_code", None)
     should_retry = getattr(exc, "should_retry", None)
     error_kind: str | None = None
-    if isinstance(exc, (httpx.TimeoutException, asyncio.TimeoutError)):
+    if isinstance(exc, ModelStreamProtocolError):
+        error_kind = "invalid_response"
+        should_retry = True
+    elif isinstance(exc, (httpx.TimeoutException, asyncio.TimeoutError)):
         error_kind = "timeout"
         should_retry = True if should_retry is None else should_retry
     elif isinstance(exc, (ConnectionError, httpx.NetworkError, httpx.TransportError)):
@@ -663,7 +671,7 @@ def get_xai_grok_model_catalog(
     proxy: str | None = None, *, refresh: bool = False,
 ) -> OAuthModelCatalogSnapshot:
     token = get_xai_oauth_login_status()
-    account_key = _catalog_account_key(getattr(token, "account_id", None))
+    account_key = oauth_catalog_identity(token)
     cache_key = f"{get_xai_oauth_storage_path()}\0{account_key}\0{proxy or ''}"
     return _XAI_GROK_MODEL_CATALOG.get(cache_key=cache_key, proxy=proxy, refresh=refresh)
 
@@ -677,7 +685,7 @@ def _fetch_xai_grok_models(proxy: str | None) -> tuple[ProviderModelSpec, ...]:
         token = get_xai_oauth_token(proxy=proxy)
     except XAIOAuthReauthRequiredError:
         raise OAuthCatalogAuthRequiredError() from None
-    client_kwargs: dict[str, Any] = {"timeout": 10.0, "follow_redirects": False}
+    client_kwargs: dict[str, Any] = {"timeout": 10.0, "follow_redirects": False, "trust_env": False}
     if proxy:
         client_kwargs.update(proxy=proxy, trust_env=False)
     with httpx.Client(**client_kwargs) as client:
@@ -812,11 +820,6 @@ def _oauth_fallback_models(provider_name: str) -> tuple[ProviderModelSpec, ...]:
     spec = find_by_name(provider_name)
     assert spec is not None
     return spec.builtin_models
-
-
-def _catalog_account_key(account_id: object) -> str:
-    value = account_id if isinstance(account_id, str) else ""
-    return hashlib.sha256(value.encode()).hexdigest()[:16] if value else "anonymous"
 
 
 def _catalog_mapping(value: Any) -> dict[str, Any]:

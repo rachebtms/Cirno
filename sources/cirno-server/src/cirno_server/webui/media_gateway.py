@@ -10,23 +10,31 @@ from typing import Any
 from cirno_core.config.paths import get_media_dir
 from cirno_core.security.workspace_access import WorkspaceScope
 from cirno_core.session.transcript import rewrite_local_markdown_images
-from cirno_server.webui.media.signing import (
-    media_attachment_kind,
-    sign_local_attachment,
-    sign_workspace_attachment,
-    sign_media_path,
-    sign_or_stage_media_path,
-    signed_media_attachments,
-)
+
 from cirno_server.webui.media.resources import (
     MediaReference,
     MediaResource,
     authorize_media_reference,
 )
+from cirno_server.webui.media.signing import (
+    media_attachment_kind,
+    sign_local_attachment,
+    sign_media_path,
+    sign_or_stage_media_path,
+    sign_workspace_attachment,
+    signed_media_attachments,
+)
 
 
-def _default_media_dir(channel: str | None) -> Path:
-    return get_media_dir(channel)
+def _default_media_dir() -> Callable[[str | None], Path]:
+    root = get_media_dir(None)
+
+    def owned_media_dir(channel: str | None) -> Path:
+        path = root / channel if channel else root
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    return owned_media_dir
 
 
 class WebUIMediaServer:
@@ -42,8 +50,13 @@ class WebUIMediaServer:
     ) -> None:
         self.workspace_path = workspace_path
         self.logger = logger
-        self._media_dir: Callable[[str | None], Path] = media_dir or _default_media_dir
+        self._media_dir: Callable[[str | None], Path] = media_dir if media_dir is not None else _default_media_dir()
         self.secret = secret or secrets.token_bytes(32)
+
+    @property
+    def media_root(self) -> Path:
+        """The owning gateway's media exception for workspace file checks."""
+        return self._media_dir(None)
 
     def resolve_signed_media(
         self,

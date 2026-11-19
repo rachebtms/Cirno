@@ -105,6 +105,7 @@ async def test_rg_forwards_native_arguments_and_exec_options(monkeypatch):
     execute.assert_awaited_once_with(
         command=["rg", *arguments], working_dir="project", timeout=12,
         yield_time_ms=25, max_output_chars=1500,
+        stdin="closed",
     )
     assert RgTool().read_only is False
 

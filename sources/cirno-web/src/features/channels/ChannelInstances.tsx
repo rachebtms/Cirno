@@ -44,7 +44,7 @@ export function ChannelInstances({
       </div>
       <ChannelRuntimeError message={feature.runtime_error} />
       <InlineError
-        message={state.mutation.error ?? state.selection.mutation.error}
+        message={state.error ?? state.selection.mutation.error}
       />
       {(feature.instances ?? []).map((instance) => {
         const expanded = state.selection.selected?.name === instance.id,
@@ -92,7 +92,7 @@ export function ChannelInstances({
                       disabled={
                         state.mutation.busy ||
                         state.selection.mutation.busy ||
-                        !instance.configured
+                        (!instance.configured && !channelToggleChecked(instance))
                       }
                       onChange={(checked) => {
                         void state.toggle(instance, checked);

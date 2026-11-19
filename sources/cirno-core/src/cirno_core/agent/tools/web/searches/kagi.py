@@ -23,7 +23,7 @@ async def search(context: SearchContext, query: str, n: int) -> str:
                 "https://kagi.com/api/v1/search",
                 json={"query": query, "limit": n},
                 headers={"Authorization": f"Bearer {api_key}", "User-Agent": context.user_agent},
-                timeout=10.0,
+                timeout=float(context.config.timeout),
             )
             r.raise_for_status()
         items = [

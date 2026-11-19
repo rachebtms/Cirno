@@ -1,6 +1,7 @@
 """Session storage location and synchronous administrative operations."""
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 
@@ -39,6 +40,9 @@ class SessionManager:
         self.types = SessionTypes()
         self._state: SessionState | None = None
         self._projects: Projects | None = None
+        # Runtime review and HTTP owner decisions share one short local writer.
+        # Model review happens outside this lock.
+        self.approval_settlement_lock = asyncio.Lock()
 
     @property
     def projects(self) -> Projects:

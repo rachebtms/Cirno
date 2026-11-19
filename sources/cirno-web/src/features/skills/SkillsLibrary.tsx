@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillSummary } from "@/lib/contracts/skills";
 import { useClient } from "@/providers/ClientProvider";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import type { SkillInjectionSettings } from "./model/injection";
 import { SkillHistory } from "./SkillHistory";
 import { SkillsMarketplace } from "./SkillsMarketplace";
@@ -22,7 +23,8 @@ export function SkillsLibrary({
 }) {
   const { t } = useTranslation(),
     { client } = useClient();
-  const [selected, setSelected] = useState<{ client: typeof client; skill: SkillSummary } | null>(null);
+  const isCurrent = useLifetime(client);
+  const [selected, setSelected] = useState<{ lifetime: typeof isCurrent; skill: SkillSummary } | null>(null);
   return (
     <section className="skills-library">
       <Tabs defaultSelectedKey="installed">
@@ -39,7 +41,9 @@ export function SkillsLibrary({
             skills={skills}
             loading={loading}
             error={error}
-            onSelect={(skill) => setSelected({ client, skill })}
+            onSelect={(skill) => {
+              if (isCurrent()) setSelected({ lifetime: isCurrent, skill });
+            }}
           />
         </Tabs.Panel>
         <Tabs.Panel id="discover">
@@ -49,12 +53,14 @@ export function SkillsLibrary({
           <SkillHistory client={client} />
         </Tabs.Panel>
       </Tabs>
-      {selected?.client === client && (
+      {selected?.lifetime === isCurrent && (
         <SkillDetailDialog
           key={`${selected.skill.source}:${selected.skill.name}`}
           skill={selected.skill}
           injection={injection}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            if (isCurrent()) setSelected(current => current === selected ? null : current);
+          }}
         />
       )}
     </section>

@@ -6,13 +6,14 @@ import re
 from pathlib import Path
 from typing import Any, cast, overload
 
+from pydantic import BaseModel, ValidationError
+from pydantic_settings import SettingsError
+
 from cirno_core.config.errors import ConfigIssue, ConfigLoadError, validation_issues
 from cirno_core.config.home import get_instance_path
 from cirno_core.config.network import NetworkConfig
 from cirno_core.config.schema import Config
 from cirno_core.utils.atomic_file import atomic_write_text
-from pydantic import BaseModel, ValidationError
-from pydantic_settings import SettingsError
 
 # Global variable to store current config path (for multi-instance support)
 _current_config_path: Path | None = None
@@ -208,14 +209,14 @@ def resolve_config_env_vars(
 
 
 @overload
-def resolve_env_refs(value: str) -> str: ...
+def resolve_env_refs(value: str, *, strict: bool = False) -> str: ...
 
 
 @overload
-def resolve_env_refs(value: object) -> object: ...
+def resolve_env_refs(value: object, *, strict: bool = False) -> object: ...
 
 
-def resolve_env_refs(value: object) -> object:
+def resolve_env_refs(value: object, *, strict: bool = False) -> object:
     """Resolve ``${VAR}`` references in a single string, leniently.
 
     Unlike :func:`resolve_config_env_vars` (which walks a whole ``Config`` and
@@ -224,11 +225,15 @@ def resolve_env_refs(value: object) -> object:
     fields — e.g. a provider's ``api_key`` or ``api_base`` — so a
     missing variable degrades to "not configured" instead of producing a partial
     value. Non-string input is returned unchanged.
+    With ``strict=True``, an unset reference raises ValueError; an explicitly
+    set empty variable remains a valid empty value.
     """
     if not isinstance(value, str):
         return value
     names = _ENV_REF_PATTERN.findall(value)
     if any(name not in os.environ for name in names):
+        if strict:
+            raise ValueError("A required environment variable is not set")
         return ""
     return _ENV_REF_PATTERN.sub(lambda m: os.environ[m.group(1)], value)
 

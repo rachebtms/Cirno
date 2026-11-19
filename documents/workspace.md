@@ -1,21 +1,58 @@
 # Tabbed workspace
 
-Cirno 0.2.19 uses one workspace for conversations and owner-operated tools. The Launcher appears on the left on desktop and along the bottom on narrow screens. On touch layouts, the top tab strip and Launcher temporarily hide while the software keyboard is open, then return when it closes. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
+Cirno 0.2.20 uses one workspace for conversations and owner-operated tools. The Launcher appears on the left on desktop and along the bottom on narrow screens. On touch layouts, the top tab strip and Launcher temporarily hide while the software keyboard is open, then return when it closes. Both layouts offer the same destinations; scroll the Launcher when space is limited. Settings and New conversation stay within reach at its end.
 
 ## Tabs
 
 - Selecting a conversation opens or selects its tab. Several conversations can stay open while their runs continue on the server. Desktop split groups each have their own tab bar; narrow screens display one selected page.
-- Conversations opens a separate catalog of ordinary conversations and explicit Projects. It supports search, project assignment, creation, renaming, pinning, archiving and deletion. Sort by recent updates, creation time, title or saved order. Select conversations across Projects for a single archive or delete action; Shift-click selects a range. On narrow screens, project assignment is available in each conversation’s actions menu so the title keeps its space. Conversation actions are always visible and also open on right-click. Renaming returns keyboard focus to the row after confirmation. The Router and utility pages are excluded. Deleting a Project keeps its conversations and files. The Router can use `projects.*` tools to manage the same catalog.
+- Conversations opens a separate catalog of ordinary conversations and explicit Projects. It supports search, project assignment, creation, renaming, pinning, archiving and deletion. Sort by recent updates, creation time, title or saved order. Select conversations across Projects for a single archive or delete action; Shift-click selects a range. Batch selections and confirmations belong to the current connection: changing it clears them, and an old delete decision cannot clear a new selection. Refreshing the same connection's catalog keeps its selection. On narrow screens, project assignment is available in each conversation’s actions menu so the title keeps its space. Conversation actions are always visible and also open on right-click. Renaming returns keyboard focus to the row after confirmation. The Router and utility pages are excluded. Deleting a Project keeps its conversations and files. The Router can use `projects.*` tools to manage the same catalog.
 - Files opens an independent directory browser. Opening a file creates a separate editor or viewer tab, retaining the browser's directory. Text and Markdown are editable; images and supported browser video formats have dedicated viewers. Open preview tab shows Markdown from the editor's current draft, including unsaved edits. Saving checks the file revision and reports conflicts. Closing an unsaved editor asks whether to discard its changes. Preview rendering is extensible through the file-preview registry.
+
+File documents and their requests remain bound to their connected client and
+workspace context. Switching that context resets directory navigation and
+filters; old reads, saves and creation results cannot replace the new view.
+Editor and preview tabs in the same context continue sharing one draft and read.
+New-file dialogs close when their target context changes. Creation accepts one
+outstanding submission, keeps the entered name on failure, and allows retry.
+Discard confirmations belong to their original document. Reloading a video
+retries its media element even when its signed path URL is unchanged; a new file
+or successful media load clears the previous playback error.
+
 - Terminal opens an interactive local shell or an OpenSSH connection to a configured Node. Choose the server, then Connect. Each terminal is independent; multiple terminal tabs are supported. Closing a connected terminal stops the local shell or SSH connection. After refreshing the browser, Connect in the restored tab reattaches its existing terminal while the server is still running; its bounded recent output is replayed. Detached remote processes can survive that connection. Terminals require a POSIX server (Linux or macOS), and running shells end when that server restarts.
+
+Terminal connections and host choices belong to their connected server. Changing
+the server, Node, working directory or tab identity retires the previous view and
+requires Connect again; the new connection waits for the previous close to settle.
+Switching servers also resets the selected host to Local server and clears the
+previous server's host catalog and errors while loading its replacement.
+Late retry/input/output results cannot change the replacement view. Palette or
+close-registration callback changes preserve the current terminal. Already queued
+input is submitted in order before the close request. An exited terminal stops
+polling, including when the browser becomes visible again.
+
+Remote terminal credentials and SSH helper files use that server's captured
+instance directory. Accepted creation and close operations settle before request
+cancellation releases their admission lock. Shutdown waits for an in-flight
+creation, closes it with the other terminals, and rejects new or queued admissions
+from that shutdown window. A cancelled creation retains its tab identity for a
+later retry. Setup failures after process creation close and reap that process.
+
 - Browser embeds an HTTP(S) page in a sandbox. Some sites forbid framing or require browser capabilities that the sandbox does not provide. The address bar has an external-open action for these sites. This is not a browser automation session or a server-side browsing proxy.
 - Settings keeps all categories inside its tab. Selecting Settings reuses its existing tab. Leaving a modified settings surface follows its save/discard guard.
 - Trace starts a temporary developer recording across conversations: user and model messages, reasoning, tool calls, compaction, file changes, lifecycle events and provider requests. Credentials manages encrypted personal records. Both have Launcher buttons on desktop and mobile.
 
 Conversations, Credentials, Inbox, Automations and Settings each use one tab.
 Terminal, Files, Browser and Trace allow independent tabs. Reopening the same file
-selects its existing editor; a preview uses its own tab. Feature modules declare
-this policy through the workspace registry.
+within the same conversation and workspace permissions selects its existing
+editor; a preview uses its own tab. Another conversation or permission context
+keeps a separate document tab. Feature modules declare this policy through the
+workspace registry. Invalid saved paths, scopes or duplicate tab IDs fall back to
+the current route with a restoration error before mounting feature views.
+
+Closing tabs updates their ownership before a subsequent open or activation.
+A delayed navigation confirmation uses the destination's current group and does
+nothing if that destination was closed while the confirmation was pending.
+Failed resource disposal keeps the tab open with its error so closing can be retried.
 
 Selecting a destination reveals its tab if it is clipped or offscreen. A fully visible tab does not move the strip, and each split group scrolls independently.
 
@@ -33,7 +70,43 @@ their editors, terminals or chat composers.
 
 Closing a conversation tab does not stop or delete its conversation. Closing a file tab discards only unsaved browser edits after confirmation; it does not undo previously saved files. Closing a browser tab releases its embedded page. Inactive custom tabs are loaded only after they are selected for the first time. Tab destinations are saved in this browser; unsaved editor text and terminal output are not stored in that tab list. Temporary conversation destinations are excluded from browser tab persistence.
 
+Cancelling a confirmed conversation deletion waits for its accepted automation
+removal, runtime stop and history cleanup to settle. Permission and bound
+automation confirmation checks happen before that cleanup begins. A storage
+failure can still interrupt the sequence and is reported as an error.
+
+Browser deletion confirmations belong to their connected server and the latest
+selected request. Superseded automation lookups, confirmations and cancellation
+callbacks cannot replace a newer choice. A successful deletion receipt is
+required before clearing local drafts or preview state. Partial batch failures
+retain the remaining items for retry. Switching connections lets an already
+submitted deletion settle, then stops that old batch and leaves the new view alone.
+
+Conversation catalogs and their pending create, fork, delete and automation
+lookups follow the connected server. Old results cannot enter its replacement
+view or clear its caches. Ordinary token renewal retains the hot catalog; later
+reads use the renewed token. A list query begun before a successful catalog
+mutation is discarded and revalidated serially, so it cannot restore deleted rows.
+
 Signed attachment downloads stream in 64 KiB chunks on the Web UI listener, including full-file and range requests. Each download retains its opened file snapshot; atomic file replacement does not mix old and new content. Local attachment URLs recheck the conversation’s current workspace permissions on each request.
+
+Conversation preview caches follow their connected server, conversation,
+workspace permissions and temporary/ordinary request context. A changed context
+retires old loaders and responses; pending confirmation actions also belong to
+their original pane. Unchanged permissions and routine token renewal keep hot
+previews cached, and later revalidation uses the current token. Admitting a
+temporary conversation preserves its pane and unsaved-change confirmation.
+Failed availability requests leave the cache so a subsequent lookup can retry.
+
+Upload capabilities expire with their live WebSocket connection. Rejected
+capabilities do not consume the file body; a connection lost during upload
+cannot leave a usable staged reference. Opening, writing and flushing an upload
+run off the event loop. Cancellation and the total upload deadline wait for
+accepted disk operations to settle before removing partial files and releasing
+capacity. The deadline also covers preparation and flush/close. Cleanup preserves
+files owned by active uploads or unexpired staged references; old crash markers
+remain eligible for pruning. Service shutdown waits for these accepted request
+handlers before disposing the upload store.
 
 A working-directory refresh failure keeps the last loaded directories and displays the error with Retry. Reconnecting refreshes that catalog without letting an older request replace a newer result.
 
@@ -68,6 +141,16 @@ Use `nodes.start` for long jobs. Its saved ID and remote directory identify one 
 Settings → Nodes also provides automatically saved job-monitoring and retention settings. The server checks active and unconfirmed jobs every **60 seconds** by default, including when the page is closed, without calling an LLM. The interval is configurable; **0 disables automatic SSH checks**. Jobs on the same Node share bounded, serial status queries rather than opening a connection for every job. Automatic checks read status only; use **Read status** to fetch the complete available output. The visible page quietly refreshes its local catalog every five seconds and pauses these browser reads while hidden.
 
 The list shows the last confirmed state, its check time and any check failure. A failed connection preserves the last known state instead of declaring completion or failure. A late background response or delayed launch acknowledgement cannot undo a newer terminal state. Monitoring stops with the Cirno server and resumes on its next launch; stopping the monitor does not stop remote jobs.
+
+Nodes settings, editors, command dialogs and autosave drafts belong to their
+connected server. Changing that connection clears the previous view and retires
+its actions; old callbacks cannot submit remote commands or settings changes to
+either server. A pending old autosave cannot keep the replacement form disabled
+or clear a newer save's busy state. Same-server failures retain their drafts for retry.
+
+The job monitor uses the instance directory selected by the server's startup
+configuration. Cancellation waits for already accepted retention and check-error
+database writes to settle; it does not start another SSH check.
 
 Finished local records and their cached output are retained for **30 days** by default, measured from the first confirmation of completion/failure/stopping rather than submission. This duration is editable; **0 retains records indefinitely**. Running, submitting and unconfirmed jobs are never expired, and remote files, logs and experiment results are not removed. Existing finished records without a completion timestamp begin their retention window when maintenance first observes them. Cleanup runs at most once per minute. Both settings persist in `state/instance.sqlite3` and apply without a restart; no additional persistent volume is required.
 

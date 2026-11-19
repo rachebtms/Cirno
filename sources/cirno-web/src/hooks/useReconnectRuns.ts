@@ -27,19 +27,53 @@ export function useReconnectRuns(client: CirnoClient, getToken: () => string): v
       }));
       const recover = async ({ chatId, generation, turnId }: typeof jobs[number]) => {
         const key = `websocket:${chatId}`;
+        const cachedAtRead = webuiThreadCache.get(key);
         const body = await fetchLatestWebuiThread(client, getToken(), key, signal);
         if (!body || signal.aborted) return;
         const { completedTurnIds, snapshot } = persistedCanonicalRunState(body);
+        const historyGeneration = body.history_generation;
+        if (historyGeneration && client.isHistoryGenerationRetired(chatId, historyGeneration)) return;
+        const currentCached = webuiThreadCache.get(key);
+        if (currentCached !== cachedAtRead && currentCached?.history_generation
+          && historyGeneration && currentCached.history_generation !== historyGeneration) return;
+        const previousGeneration = cachedAtRead?.history_generation;
+        if (historyGeneration && previousGeneration && historyGeneration !== previousGeneration) {
+          const currentTurn = client.getRunTurnId(chatId);
+          if (client.getRunGeneration(chatId) !== generation && currentTurn
+            && currentTurn !== snapshot.activeTurnId && !snapshot.observedTurnIds.includes(currentTurn)) return;
+          client.rememberHistoryGeneration(chatId, previousGeneration);
+          client.rememberHistoryGeneration(chatId, historyGeneration);
+          webuiThreadCache.set(key, body);
+          client.replaceHistoryRuns(chatId, snapshot, completedTurnIds);
+          client.fenceCanonicalCompletedTurns(chatId, completedTurnIds);
+          return;
+        }
+        if (historyGeneration) client.rememberHistoryGeneration(chatId, historyGeneration);
+        const fenceCompleted = () => {
+          if (completedTurnIds.length) client.fenceCanonicalCompletedTurns(chatId, completedTurnIds);
+        };
         const explicitlyCompleted = turnId !== null && completedTurnIds.includes(turnId);
-        if (turnId && !explicitlyCompleted && client.isRunCompleted(chatId, turnId)) return;
+        if (turnId && !explicitlyCompleted && client.isRunCompleted(chatId, turnId)) {
+          fenceCompleted();
+          return;
+        }
         if (!explicitlyCompleted && (snapshot.hasPendingToolCalls || snapshot.activeTurnId)) {
           // Refresh active traces only for the run that this read actually belongs to.
           if (turnId && snapshot.activeTurnId === turnId && client.getRunGeneration(chatId) === generation
             && client.getRunTurnId(chatId) === turnId) webuiThreadCache.set(key, body);
+          // Completed identities remain authoritative while a newer run is active.
+          // Cache eligible results first, then retire only their completed owners.
+          fenceCompleted();
           return;
         }
-        if (turnId && !explicitlyCompleted && !snapshot.observedTurnIds.includes(turnId)) return;
-        if (!client.canReconcileCanonicalCompletion(chatId, generation, completedTurnIds, snapshot)) return;
+        if (turnId && !explicitlyCompleted && !snapshot.observedTurnIds.includes(turnId)) {
+          fenceCompleted();
+          return;
+        }
+        if (!client.canReconcileCanonicalCompletion(chatId, generation, completedTurnIds, snapshot)) {
+          fenceCompleted();
+          return;
+        }
         // Preserve the result before completion fences prune queued fragments.
         // Returning to an inactive chat can hydrate from this canonical page.
         webuiThreadCache.set(key, body);

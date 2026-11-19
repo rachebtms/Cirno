@@ -9,6 +9,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from loguru import logger
+
 from cirno_core.bus.agent_events import (
     ResponseSource,
     ResponseSourceEvent,
@@ -27,7 +29,6 @@ from cirno_core.providers.errors import (
     retry_after_response,
 )
 from cirno_core.providers.requests import retry_without_images
-from loguru import logger
 
 if TYPE_CHECKING:
     from cirno_core.providers.base import LLMProvider
@@ -41,6 +42,10 @@ class ProviderRetryPolicy:
     persistent_max_delay: float = 60
     identical_error_limit: int = 10
     heartbeat_seconds: float = 30
+
+    def configure_retries(self, count: int) -> None:
+        """Apply the configured capped exponential schedule to this instance."""
+        self.delays = tuple(min(2 ** attempt, 60) for attempt in range(count))
 
 
 class ProviderRetryExecutor:
@@ -226,7 +231,7 @@ class ProviderRetryExecutor:
                 attempt,
                 "+" if persistent and attempt > len(delays) else f"/{len(delays)}",
                 int(round(delay)),
-                (response.content or "")[:120].lower(),
+                public_error_kind(response),
             )
             await self.wait(
                 delay,
@@ -247,7 +252,7 @@ class ProviderRetryExecutor:
             logger.warning(
                 "Stopping persistent retry after {} identical transient errors: {}",
                 identical_error_count,
-                (response.content or "")[:120].lower(),
+                public_error_kind(response),
             )
             exhausted_message = (
                 f"Persistent retry stopped after {identical_error_count} identical errors."
@@ -256,7 +261,7 @@ class ProviderRetryExecutor:
             logger.warning(
                 "LLM request failed after {} attempts, giving up: {}",
                 attempt,
-                (response.content or "")[:120].lower(),
+                public_error_kind(response),
             )
             exhausted_message = f"Model request failed after {attempt} attempts, giving up."
         if on_retry_exhausted:

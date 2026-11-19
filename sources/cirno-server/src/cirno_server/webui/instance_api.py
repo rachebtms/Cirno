@@ -6,16 +6,20 @@ import asyncio
 from pathlib import Path
 
 from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import get_config_path
 from cirno_core.nodes.service import Nodes
 from cirno_core.session.router_session import ensure_router_session
 from cirno_core.skills.history import inspect_skill
 from cirno_core.storage.instance import InstanceData
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 async def instance_action(
-    payload: dict, *, sessions, bus, config_path: Path | None = None
+    payload: dict, *, sessions, bus, config_path: Path | None = None, home_path: Path | None = None
 ) -> dict:
-    data = await asyncio.to_thread(InstanceData)
+    home_path = (home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+    source_config_path = (config_path or get_config_path()).expanduser().resolve(strict=False)
+    data = await shield_and_drain(asyncio.to_thread(InstanceData, source_config_path.parent / "state"))
     action = payload.get("action", "")
     values = payload.get("values") or {}
     if action == "models.probe":
@@ -23,29 +27,43 @@ async def instance_action(
         return await probe_model_capabilities(values, config_path=config_path)
     if action.startswith("telegram."):
         from cirno_server.webui.telegram_api import telegram_action
-        return await telegram_action(action, values)
+        return await telegram_action(action, values, config_path=source_config_path)
     if action == "approvals.decide":
         from cirno_core.agent.approval.service import OperationApproval
-        from cirno_core.utils.cancellation import shield_and_drain
-        return await shield_and_drain(OperationApproval(sessions, bus).decide(values.get("id"), values.get("approved")))
+        return await shield_and_drain(OperationApproval(sessions, bus, source_config_path=source_config_path).decide(values.get("id"), values.get("approved")))
     if action.startswith("inbox."):
         from cirno_core.notifications.inbox import NotificationInbox
-        inbox = NotificationInbox()
+        inbox = NotificationInbox(data.state_dir)
         if action == "inbox.list":
             return await asyncio.to_thread(
                 inbox.list, category=values.get("category"), before=values.get("before"),
                 after=values.get("after"), limit=values.get("limit", 50),
             )
         if action == "inbox.read":
-            await asyncio.to_thread(inbox.read, identifiers=values.get("ids"), category=values.get("category"))
-            return {"ok": True}
+            receipt = await shield_and_drain(asyncio.to_thread(inbox.read, identifiers=values.get("ids"), category=values.get("category")))
+            return {"ok": True, **receipt}
         if action == "inbox.open":
             item = await asyncio.to_thread(inbox.get, values["id"])
             key = item.get("session_key")
             session = await sessions.state.read_header(key) if key else None
             generation = item["data"].get("session_generation")
-            if session is None or not session.policy.persist or generation and session.generation != generation:
-                await asyncio.to_thread(inbox.unavailable, item["id"])
+            valid_source = True
+            if item["kind"] == "approval" and not generation:
+                # Older approval notices did not retain their source generation.
+                # Resolve it from the durable approval, never the current chat.
+                from cirno_core.security.approval.store import ApprovalStore
+                identifier = item["data"].get("approval_id")
+                valid_source = isinstance(identifier, str) and item["id"] == "approval:" + identifier
+                if valid_source:
+                    try:
+                        approval = await asyncio.to_thread(ApprovalStore(data.state_dir / "security" / "approvals.sqlite3").get, identifier)
+                    except ValueError:
+                        valid_source = False
+                    else:
+                        generation = approval["generation"]
+                        valid_source = approval["session_key"] == key
+            if not valid_source or session is None or not session.policy.persist or generation and session.generation != generation:
+                await shield_and_drain(asyncio.to_thread(inbox.unavailable, item["id"]))
                 return {"session_key": None}
             return {"session_key": key}
         raise ValueError("Unknown inbox action")
@@ -55,7 +73,6 @@ async def instance_action(
             UserInputEvent,
             outbound_message_for_event,
         )
-        from cirno_core.utils.cancellation import shield_and_drain
         async def edit_and_queue():
             with bus.admission.activity():
                 message = await sessions.state.edit_user_input(values["session_key"], values["turn_id"], values["content"])
@@ -83,20 +100,22 @@ async def instance_action(
         return await router_heartbeat_action(action, values, sessions=sessions, bus=bus, config_path=config_path)
     if action.startswith("projects."):
         return await sessions.projects.action(action.removeprefix("projects."), values, bus=bus)
+    if action in {"nodes.list", "nodes.save", "nodes.delete", "nodes.scan", "nodes.execute", "nodes.test", "nodes.job", "nodes.stop"}:
+        nodes = await shield_and_drain(asyncio.to_thread(Nodes, data))
     if action == "nodes.list":
-        return await asyncio.to_thread(Nodes(data).catalog)
+        return await asyncio.to_thread(nodes.catalog)
     if action == "nodes.settings.save":
         from cirno_core.nodes.policy import save_policy
-        policy = await asyncio.to_thread(save_policy, data, values)
+        policy = await shield_and_drain(asyncio.to_thread(save_policy, data, values))
         return {"job_settings": policy.model_dump()}
     if action == "nodes.save":
-        node = await asyncio.to_thread(Nodes(data).save_node, values)
-        return {"node": node, "nodes": await asyncio.to_thread(Nodes(data).list_nodes)}
+        node = await shield_and_drain(asyncio.to_thread(nodes.save_node, values))
+        return {"node": node, "nodes": await asyncio.to_thread(nodes.list_nodes)}
     if action == "nodes.delete":
-        await asyncio.to_thread(Nodes(data).remove_node, values["id"])
-        return {"nodes": await asyncio.to_thread(Nodes(data).list_nodes)}
+        await shield_and_drain(asyncio.to_thread(nodes.remove_node, values["id"]))
+        return {"nodes": await asyncio.to_thread(nodes.list_nodes)}
     if action == "nodes.scan":
-        return await Nodes(data).scan_host_key(values["host"], int(values.get("port", 22)))
+        return await nodes.scan_host_key(values["host"], int(values.get("port", 22)))
     if action == "nodes.execute":
         command = str(values.get("command", "")).strip()
         if not command:
@@ -104,22 +123,27 @@ async def instance_action(
         timeout = int(values.get("timeout", 120))
         if not 1 <= timeout <= 3600:
             raise ValueError("Command timeout must be between 1 and 3600 seconds")
-        result = await Nodes(data).execute_command(values["id"], command, timeout=timeout)
+        result = await nodes.execute_command(values["id"], command, timeout=timeout)
         return {**result.to_dict(), "output": "\n".join(part for part in (result.output, result.connection_warning) if part)}
     if action == "nodes.test":
-        return {"output": await Nodes(data).execute(values["id"], 'printf "SSH connection ready"')}
+        return {"output": await nodes.execute(values["id"], 'printf "SSH connection ready"')}
     if action in {"nodes.job", "nodes.stop"}:
-        return {"job": await Nodes(data).inspect_job(values["id"], stop=action == "nodes.stop")}
+        return {"job": await nodes.inspect_job(values["id"], stop=action == "nodes.stop")}
     if action in {"skills.validate", "skills.history"}:
-        return await asyncio.to_thread(inspect_skill, values["name"], action.split(".")[1])
+        return await shield_and_drain(asyncio.to_thread(inspect_skill, values["name"], action.split(".")[1], home_path))
     if action.startswith("memory."):
         from cirno_memory.repository import MemoryRepository
         def memory_action():
-            repo = MemoryRepository(get_home_path())
+            repo = MemoryRepository(home_path)
             repo.sync_profiles()
             if action in {"memory.list", "memory.graph"}:
-                from cirno_core.config.loader import load_config
-                from cirno_memory.graph import DEFAULT_GRAPH_NODES, graph_ids, graph_node_limit, memory_graph
+                from cirno_core.config.loader import load_config, resolve_config_env_vars
+                from cirno_memory.graph import (
+                    DEFAULT_GRAPH_NODES,
+                    graph_ids,
+                    graph_node_limit,
+                    memory_graph,
+                )
                 from cirno_memory.search import search
                 max_nodes = graph_node_limit(values.get("max_nodes", DEFAULT_GRAPH_NODES)) if action == "memory.graph" else DEFAULT_GRAPH_NODES
                 ids = graph_ids(values.get("ids", []), max_nodes=max_nodes) if action == "memory.graph" else []
@@ -128,7 +152,7 @@ async def instance_action(
                     if len(ids) == max_nodes:
                         raise ValueError("Graph is full; narrow the filters to explore other memories")
                     limit = min(limit, max_nodes - len(ids))
-                config = load_config()
+                config = resolve_config_env_vars(load_config(source_config_path), config_path=source_config_path)
                 result = search(repo, str(values.get("query", "")), config.agents.defaults.memory,
                                    mode=str(values.get("mode", "bm25")), maintenance=True,
                                    scope=values.get("scope"), layer=values.get("layer"), tags=values.get("tags"),
@@ -157,7 +181,7 @@ async def instance_action(
                 from cirno_core.memory.consolidation_receipts import retry_learning
                 return retry_learning(repo)
             raise ValueError("Unknown memory action")
-        result = await asyncio.to_thread(memory_action)
+        result = await shield_and_drain(asyncio.to_thread(memory_action))
         if action in {"memory.list", "memory.graph"} and sessions is not None:
             titles = {}
             projects = {}

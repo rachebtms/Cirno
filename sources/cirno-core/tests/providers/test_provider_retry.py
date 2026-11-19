@@ -400,12 +400,13 @@ async def test_chat_stream_with_retry_retries_timeout_in_new_stream_segment(
 
 
 @pytest.mark.asyncio
-async def test_chat_with_retry_uses_provider_generation_defaults() -> None:
+@pytest.mark.parametrize("entry", ["chat_with_retry", "chat_stream_with_retry"])
+async def test_chat_with_retry_uses_provider_generation_defaults(entry) -> None:
     """When callers omit generation params, provider.generation defaults are used."""
     provider = ScriptedProvider([LLMResponse(content="ok")])
     provider.generation = GenerationSettings(temperature=0.2, max_tokens=321, reasoning_effort="high")
 
-    await provider.chat_with_retry(messages=[{"role": "user", "content": "hello"}])
+    await getattr(provider, entry)(messages=[{"role": "user", "content": "hello"}])
 
     assert provider.last_kwargs["temperature"] == 0.2
     assert provider.last_kwargs["max_tokens"] == 321
@@ -413,12 +414,13 @@ async def test_chat_with_retry_uses_provider_generation_defaults() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_with_retry_explicit_override_beats_defaults() -> None:
+@pytest.mark.parametrize("entry", ["chat_with_retry", "chat_stream_with_retry"])
+async def test_chat_with_retry_explicit_override_beats_defaults(entry) -> None:
     """Explicit kwargs should override provider.generation defaults."""
     provider = ScriptedProvider([LLMResponse(content="ok")])
     provider.generation = GenerationSettings(temperature=0.2, max_tokens=321, reasoning_effort="high")
 
-    await provider.chat_with_retry(
+    await getattr(provider, entry)(
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.9,
         max_tokens=9999,
@@ -428,6 +430,19 @@ async def test_chat_with_retry_explicit_override_beats_defaults() -> None:
     assert provider.last_kwargs["temperature"] == 0.9
     assert provider.last_kwargs["max_tokens"] == 9999
     assert provider.last_kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.parametrize("entry", ["chat_with_retry", "chat_stream_with_retry"])
+async def test_generation_override_preserves_zero_temperature_and_explicit_reasoning_none(entry):
+    provider = ScriptedProvider([LLMResponse(content="ok")])
+    provider.generation = GenerationSettings(temperature=0.8, max_tokens=321, reasoning_effort="high")
+    messages = [{"role": "user", "content": "Keep this prompt unchanged"}]
+    original = copy.deepcopy(messages)
+    await getattr(provider, entry)(messages=messages, temperature=0, reasoning_effort=None)
+    assert provider.last_kwargs["temperature"] == 0
+    assert provider.last_kwargs["max_tokens"] == 321
+    assert provider.last_kwargs["reasoning_effort"] is None
+    assert messages == original
 
 
 # ---------------------------------------------------------------------------

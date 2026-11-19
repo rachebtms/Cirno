@@ -6,12 +6,20 @@ import asyncio
 import html
 import json
 from collections.abc import Awaitable, Callable, Mapping
+from pathlib import Path
 from typing import Any, cast
+
+from cirno_core.agent.tools.mcp_oauth import MCP_OAUTH_CALLBACK_PATH
+from cirno_core.bus.queue import MessageBus
+from cirno_core.config.loader import load_config
+from cirno_core.config.network import NetworkConfig
+from cirno_core.config.tools import MCPServerConfig
+from cirno_core.utils.cancellation import shield_and_drain
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
 
 import cirno_server.webui.settings.connection_contracts as connection_contracts
 import cirno_server.webui.settings.connections as connection_settings
-from cirno_core.agent.tools.mcp_oauth import MCP_OAUTH_CALLBACK_PATH
-from cirno_core.bus.queue import MessageBus
 from cirno_server.channels.registry import load_channel_plugin
 from cirno_server.channels.validation import validate_channel_config
 from cirno_server.webui.cirno_features_api import (
@@ -25,7 +33,7 @@ from cirno_server.webui.mcp.actions import mcp_presets_settings_action
 from cirno_server.webui.mcp.catalog import custom_mcp_config_payload
 from cirno_server.webui.mcp.configuration import ensure_mcp_oauth_server
 from cirno_server.webui.mcp.contracts import McpPresetError
-from cirno_server.webui.mcp.oauth_api import McpOAuthManager
+from cirno_server.webui.mcp.oauth_api import McpOAuthManager, prepare_mcp_oauth_redirect_uri
 from cirno_server.webui.settings import capabilities as capability_domain
 from cirno_server.webui.settings import contracts as contracts
 from cirno_server.webui.settings import system as system_domain
@@ -56,14 +64,13 @@ from cirno_server.webui.settings.contracts import (
 )
 from cirno_server.webui.settings.runtime import runtime_restart_values
 from cirno_server.webui.settings.services import WebUISettingsServices
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 _WEBUI_MUTATION_PAYLOAD_ATTR = "_cirno_webui_mutation_payload"
 _WEBUI_MUTATION_REQUEST_ATTR = "_cirno_webui_mutation_request"
 _CHANNEL_CONNECT_ACTIONS = frozenset({"start", "poll", "cancel"})
 _MCP_OAUTH_CALLBACK_URL_MAX_BYTES = 8 * 1024
 _MCP_RELOAD_TIMEOUT_SECONDS = 15.0
+_MCP_OAUTH_RESTART_REASON = "mcp-oauth-materialization"
 _query_first = contracts.query_first
 
 
@@ -218,10 +225,11 @@ class WebUISettingsRouter:
         self._mcp_runtime_status = mcp_runtime_status
         self._mcp_reload = mcp_reload
         self._mcp_oauth_redirect_uri = mcp_oauth_redirect_uri
-        self._mcp_oauth = McpOAuthManager(bus.admission)
+        self._mcp_oauth = McpOAuthManager(bus.admission, config_path=settings.config.path)
         self._restart_sections: set[str] = set()
         self._restart_baselines: dict[str, dict[str, Any]] = {}
         self._restart_changes: dict[str, str] = {}
+        self._mcp_oauth_config_generation = 0
         self._connections = connection_settings.ConnectionSettingsHandler(
             settings, logger, bus.admission
         )
@@ -284,13 +292,15 @@ class WebUISettingsRouter:
             name = contracts.query_first(query, "name") or "soul"
             try:
                 if route[1] == "read":
-                    payload = await asyncio.to_thread(profile_payload, name)
+                    payload = await asyncio.to_thread(profile_payload, name, home_path=self.settings.home_path)
                 else:
                     content = contracts.query_first(query, "content")
                     revision = contracts.query_first(query, "revision")
                     if content is None or revision is None:
                         raise contracts.WebUISettingsError("Content and revision are required")
-                    payload = await asyncio.to_thread(update_profile, name, content, revision)
+                    payload = await shield_and_drain(asyncio.to_thread(
+                        update_profile, name, content, revision, home_path=self.settings.home_path,
+                    ))
                 return self._json_response(payload)
             except contracts.WebUISettingsError as exc:
                 return self._error_response(exc.status, exc.message)
@@ -299,10 +309,23 @@ class WebUISettingsRouter:
         if route == ("root", "usage"):
             return await asyncio.to_thread(self._handle_settings_usage)
 
+        if (
+            route[0] == "capabilities"
+            or (route[0] == "system" and route[1] in system_domain.SETTLED_SYSTEM_ACTIONS)
+            or (route[0] == "models" and route[1] in connection_contracts.CONNECTION_CONFIG_MUTATIONS)
+        ):
+            # A worker can publish disk settings after its caller disconnects.
+            # Retain result/restart bookkeeping as well as the worker itself.
+            return await shield_and_drain(self._dispatch_domain(request, path, route))
+        return await self._dispatch_domain(request, path, route)
+
+    async def _dispatch_domain(
+        self, request: WsRequest, path: str, route: tuple[str, str],
+    ) -> Response:
         domain, action = route
         restart_before = (
             await asyncio.to_thread(self._restart_values, action)
-            if action in {"runtime-config-update", "web-search-update"}
+            if action in {"runtime-config-update", "web-search-update", "network-update"}
             else None
         )
         domain_request = self._domain_request(request)
@@ -327,12 +350,16 @@ class WebUISettingsRouter:
                 channel_name=(channel_connect[0] if channel_connect else None),
                 connect_action=(channel_connect[1] if channel_connect else None),
             )
-        if restart_before is not None and result.error is None and result.payload is not None:
+        if restart_before is not None:
             restart_after = await asyncio.to_thread(self._restart_values, action)
             if result.clear_restart_section:
                 self._restart_baselines.pop(action, None)
                 self._restart_changes.pop(action, None)
-            elif result.payload.get("requires_restart") or action in self._restart_changes:
+            elif (
+                bool(result.payload and result.payload.get("requires_restart"))
+                or action in self._restart_changes
+                or restart_after != restart_before
+            ):
                 baseline = self._restart_baselines.setdefault(action, {})
                 for key, value in restart_before.items():
                     if restart_after.get(key) != value:
@@ -343,10 +370,13 @@ class WebUISettingsRouter:
                 if not baseline:
                     self._restart_baselines.pop(action, None)
                     self._restart_changes.pop(action, None)
-                elif result.restart_section:
-                    self._restart_changes[action] = result.restart_section
+                else:
+                    self._restart_changes[action] = result.restart_section or (
+                        "browser" if action == "web-search-update" else "runtime"
+                    )
                 # Reversible changes are tracked separately from installation and reload failures.
-                result.payload["requires_restart"] = False
+                if result.payload is not None:
+                    result.payload["requires_restart"] = False
         response = self._render_result(result)
         return response
 
@@ -354,6 +384,8 @@ class WebUISettingsRouter:
         config = self.settings.config.load()
         if action == "runtime-config-update":
             return runtime_restart_values(config)
+        if action == "network-update":
+            return {"allow_local_service_access": config.tools.webui_allow_local_service_access}
         return {"use_jina_reader": config.tools.web.fetch.use_jina_reader}
 
     @staticmethod
@@ -501,10 +533,18 @@ class WebUISettingsRouter:
                 "requires_restart": True,
             }
         try:
-            return await asyncio.wait_for(
+            generation = self._mcp_oauth_config_generation
+            result = await asyncio.wait_for(
                 self._mcp_reload(),
                 timeout=_MCP_RELOAD_TIMEOUT_SECONDS,
             )
+            if (
+                result.get("ok")
+                and not result.get("requires_restart")
+                and generation == self._mcp_oauth_config_generation
+            ):
+                self._restart_changes.pop(_MCP_OAUTH_RESTART_REASON, None)
+            return result
         except asyncio.TimeoutError:
             return {
                 "ok": False,
@@ -529,15 +569,40 @@ class WebUISettingsRouter:
         raw_values: dict[str, Any],
         instance_id: str = "default",
     ) -> list[str]:
-        return self.settings.config.update(
-            lambda config: system_domain.save_channel_config_values(
-                config,
-                name,
-                raw_values,
-                instance_id,
-                load_channel_plugin=load_channel_plugin,
-            )
+        return system_domain.update_channel_config_values(
+            self.settings.config, name, raw_values, instance_id,
+            load_channel_plugin=load_channel_plugin,
         )
+
+    async def _prepare_mcp_oauth_start(
+        self, query: QueryParams,
+    ) -> tuple[str, MCPServerConfig, NetworkConfig]:
+        async def settle() -> tuple[str, MCPServerConfig, NetworkConfig]:
+            changed = False
+
+            def materialize(*, config_path: Path) -> tuple[str, MCPServerConfig, NetworkConfig]:
+                nonlocal changed
+                name = (_query_first(query, "name") or "").strip()
+                before = load_config(config_path).tools.mcp_servers.get(name)
+                try:
+                    return ensure_mcp_oauth_server(query, config_path=config_path)
+                finally:
+                    # A save can raise after atomic replacement. Observe the disk
+                    # under the same config lock before settling restart bookkeeping.
+                    try:
+                        changed = load_config(config_path).tools.mcp_servers.get(name) != before
+                    except Exception:
+                        changed = True
+                        self.logger.warning("Could not verify MCP OAuth config after preparation")
+
+            try:
+                return await asyncio.to_thread(self.settings.mutate, materialize)
+            finally:
+                if changed:
+                    self._mcp_oauth_config_generation += 1
+                    self._restart_changes[_MCP_OAUTH_RESTART_REASON] = "runtime"
+
+        return await shield_and_drain(settle())
 
     async def _handle_mcp_oauth_start(self, request: WsRequest) -> Response:
         if not self._authorized(request):
@@ -546,12 +611,11 @@ class WebUISettingsRouter:
             return self._error_response(500, "MCP OAuth callback is not configured")
         query = self._parse_mcp_settings_query(request)
         try:
-            name, cfg, network = await asyncio.to_thread(
-                self.settings.mutate,
-                ensure_mcp_oauth_server,
-                query,
-            )
             redirect_uri = self._mcp_oauth_redirect_uri(request)
+            # Validate before writing, but keep the original URI so the manager
+            # can still identify remote HTTP callbacks that require manual paste.
+            prepare_mcp_oauth_redirect_uri(redirect_uri)
+            name, cfg, network = await self._prepare_mcp_oauth_start(query)
             reset = (_query_first(query, "reset") or "").lower() in {"1", "true", "yes"}
             payload = await self._mcp_oauth.start(
                 name,
@@ -563,7 +627,7 @@ class WebUISettingsRouter:
             )
         except Exception as exc:
             return self._mcp_oauth_error_response(exc, action="start")
-        return self._json_response(payload)
+        return self._json_response(self._with_restart_state(payload))
 
     async def _handle_mcp_oauth_status(self, request: WsRequest) -> Response:
         if not self._authorized(request):

@@ -39,6 +39,7 @@ async def probe_visual_inputs(provider: LLMProvider, *, model: str, video_transp
     from importlib.resources import files
 
     from cirno_core.providers.requests import ProviderRequestExecutor
+    from cirno_core.utils.cancellation import shield_and_drain
 
     async def probe(kind: str) -> dict[str, Any]:
         colors = tuple(secrets.SystemRandom().sample(list(_COLORS), 3))
@@ -60,8 +61,21 @@ async def probe_visual_inputs(provider: LLMProvider, *, model: str, video_transp
         understood = seen == colors
         return {"supported": True if understood else None, "detail": "Visual sample recognized" if understood else "The reply did not identify the visual sample; capability remains unverified."}
 
-    results = await asyncio.gather(*(probe(kind) for kind, enabled in (("image", image), ("video", video)) if enabled))
-    return dict(zip((kind for kind, enabled in (("image", image), ("video", video)) if enabled), results))
+    kinds = [kind for kind, enabled in (("image", image), ("video", video)) if enabled]
+    tasks = [asyncio.create_task(probe(kind)) for kind in kinds]
+    joined = asyncio.gather(*tasks)
+    try:
+        results = await asyncio.shield(joined)
+    except BaseException:
+        # Retire every accepted request before the caller closes the provider.
+        # Shield the join so repeated caller cancellation cannot cancel a peer's
+        # transport cleanup a second time.
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await shield_and_drain(asyncio.gather(joined, *tasks, return_exceptions=True))
+        raise
+    return dict(zip(kinds, results))
 
 
 def media_input_error(provider: LLMProvider, messages: list[dict[str, Any]]) -> LLMResponse | None:

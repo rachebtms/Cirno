@@ -10,6 +10,7 @@ from loguru import logger
 
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model import Session
+from cirno_core.session.sqlite_store import SessionConflictError
 
 from .checkpoints import (
     discard_runtime_checkpoint,
@@ -53,10 +54,14 @@ class RecoveryRestart:
             unfinished = await has_unfinished_transcript(self.sessions, key)
             if not needs_recovery(metadata) and not unfinished:
                 continue
-            session = await self.sessions.state.get(key)
+            session = await self.sessions.state.read(key)
+            if session is None:
+                continue
             try:
                 await self.recover(session, route[1])
                 await self.delivery.requeue_pending_followups(session)
+            except SessionConflictError:
+                logger.info("Skipped obsolete recovery for session {}", key)
             except Exception as error:
                 logger.opt(exception=session.policy.log_content).error(
                     "Recovery {} failed: {}",
@@ -72,7 +77,11 @@ class RecoveryRestart:
                     reason="recovery_failed",
                     can_continue=False,
                 )
-                await self.sessions.state.restore_interruption(session)
+                try:
+                    await self.sessions.state.restore_interruption(session)
+                except SessionConflictError:
+                    logger.info("Skipped obsolete recovery failure for session {}", key)
+                    continue
                 await self.delivery.publish(route[1], failed, generation=session.generation)
 
     async def _recovery_candidates(self) -> list[str]:
@@ -150,7 +159,9 @@ class RecoveryRestart:
         recovery_id = uuid4().hex
         phase = checkpoint.get("phase") if checkpoint is not None else None
         pending_calls = checkpoint.get("pending_tool_calls") if checkpoint is not None else None
-        if checkpoint is not None and phase not in KNOWN_CHECKPOINT_PHASES:
+        if checkpoint is not None and (
+            not isinstance(phase, str) or phase not in KNOWN_CHECKPOINT_PHASES
+        ):
             discard_runtime_checkpoint(session)
             restore_pending_interruption(session)
             waiting = set_recovery_state(

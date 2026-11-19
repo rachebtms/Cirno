@@ -80,6 +80,23 @@ export function attachProjectedReasoning(
     options.effects?.bodyWrites.add(target.id);
     return;
   }
+  if (event.event === "reasoning_end") {
+    // Legacy streams can omit IDs. Their final snapshot still replaces the
+    // current reasoning, even after the same row has started its answer.
+    for (let index = state.messages.length - 1; index >= 0; index--) {
+      const target = state.messages[index];
+      if (!target.reasoningStreaming || !matchesTurn(target, turn)
+        || (event.stream_id && target.reasoningStreamId)) continue;
+      state.messages = replaceMessageAt(state.messages, index, {
+        ...target,
+        reasoning: text,
+        ...(event.stream_id ? { reasoningStreamId: event.stream_id } : {}),
+      });
+      options.effects?.bodyWrites.add(target.id);
+      return;
+    }
+    if (!text) return;
+  }
   const activeAssistantBeforeContinuation = state.activeAssistantId;
   const continuationIndex = state.mergeReasoning
     ? activeAssistantIndex(state, turn)

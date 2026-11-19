@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
@@ -183,16 +183,19 @@ class CronTool(Tool):
         if isinstance(schedule, str):
             return schedule
 
-        job = self._cron.add_job(
-            name=name or message[:30],
-            schedule=schedule,
-            message=message,
-            delete_after_run=schedule.kind == "at",
-            session_key=session_key,
-            origin_channel=origin_channel,
-            origin_chat_id=origin_chat_id,
-            origin_metadata=origin_metadata,
-        )
+        try:
+            job = self._cron.add_job(
+                name=name or message[:30],
+                schedule=schedule,
+                message=message,
+                delete_after_run=schedule.kind == "at",
+                session_key=session_key,
+                origin_channel=origin_channel,
+                origin_chat_id=origin_chat_id,
+                origin_metadata=origin_metadata,
+            )
+        except ValueError as exc:
+            return ToolResult.error(f"Error: {exc}")
         return f"Created job '{job.name}' (id: {job.id})"
 
     def _parse_schedule(
@@ -230,6 +233,12 @@ class CronTool(Tool):
                 if err := self._validate_timezone(self._default_timezone):
                     return err
                 dt = dt.replace(tzinfo=ZoneInfo(self._default_timezone))
+                roundtrip = dt.astimezone(timezone.utc).astimezone(dt.tzinfo)
+                if roundtrip.replace(tzinfo=None) != dt.replace(tzinfo=None):
+                    return ToolResult.error(
+                        f"Error: local time '{at}' does not exist in {self._default_timezone}. "
+                        "Choose a valid local time or supply an explicit UTC offset."
+                    )
             at_ms = int(dt.timestamp() * 1000)
             if at_ms <= int(time.time() * 1000):
                 return ToolResult.error(
@@ -340,7 +349,10 @@ class CronTool(Tool):
             return ToolResult.error("Error: system-managed cron jobs are protected; change their configuration instead")
         if enabled and not is_bound_cron_job(job):
             return ToolResult.error("Error: job has no linked chat; recreate it from a chat session")
-        self._cron.enable_job(job_id, enabled=enabled)
+        try:
+            self._cron.enable_job(job_id, enabled=enabled)
+        except ValueError as exc:
+            return ToolResult.error(f"Error: {exc}")
         return f"{'Enabled' if enabled else 'Disabled'} job {job_id}"
 
     def _job_history(self, job_id: str | None, limit: int) -> str:

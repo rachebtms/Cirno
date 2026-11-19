@@ -13,6 +13,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from cirno_core.session.session_identity import webui_chat_id, webui_session_key
 from cirno_core.session.sqlite_store import SqliteSessionStore
+
 from cirno_server.maintenance.migrations.plan import MigrationPlan, copy_path
 
 STORE = re.compile(r"^(?:instance|[0-9a-f]{32})$")
@@ -37,15 +38,33 @@ def source_tables(db: sqlite3.Connection) -> set[str]:
     return {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
-def fingerprint(db: sqlite3.Connection, key: str, tables: set[str]) -> str:
+def fingerprint(db: sqlite3.Connection, key: str, tables: set[str], source: Path) -> str:
+    """Compare framed records and their released evidence, not just SQL paths."""
     digest = hashlib.sha256()
     for table, owner in TABLES.items():
         if table not in tables:
             continue
+        archive_path = None
+        if table == "runtime_archives":
+            columns = [row[1] for row in db.execute(f'PRAGMA table_info("{table}")')]
+            archive_path = columns.index("path")
         for row in db.execute(f'SELECT * FROM "{table}" WHERE "{owner}"=? ORDER BY rowid', (key,)):
+            digest.update(table.encode() + b"\0")
+            digest.update(len(row).to_bytes(8, "big"))
             for value in row:
-                digest.update(str(value).encode())
-                digest.update(b"\0")
+                encoded = value if isinstance(value, bytes) else str(value).encode()
+                digest.update(type(value).__name__.encode() + b"\0")
+                digest.update(len(encoded).to_bytes(8, "big"))
+                digest.update(encoded)
+            if archive_path is not None:
+                evidence = source / row[archive_path]
+                if evidence.is_file():
+                    digest.update(b"archive-present\0")
+                    with evidence.open("rb") as stream:
+                        digest.update(hashlib.file_digest(stream, "sha256").digest())
+                else:
+                    # Missing old evidence is retained as missing, not regenerated.
+                    digest.update(b"archive-missing\0")
     return digest.hexdigest()
 
 
@@ -123,7 +142,7 @@ def stage_sessions(stores: list[Path], instance: Path, workspace: Path, plan: Mi
             tables = source_tables(src)
             mapping, imports = {}, []
             for (key,) in src.execute("SELECT key FROM sessions ORDER BY key"):
-                signature = (key, fingerprint(src, key, tables))
+                signature = (key, fingerprint(src, key, tables, source))
                 if signature in known:
                     mapping[key] = known[signature]
                     continue

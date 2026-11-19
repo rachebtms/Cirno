@@ -2,6 +2,7 @@ import { Button, Description, FieldError, Label, TextArea, TextField } from "@he
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/lib/api";
+import { useMutation } from "@/ui/resources/useMutation";
 import { parseProviderObject } from "../providerForm";
 
 export function RequestParameterField({
@@ -29,8 +30,9 @@ export function RequestParameterField({
 }) {
   const { t } = useTranslation();
   const [text, setText] = useState(value);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const mutation = useMutation(undefined);
+  const saving = mutation.busy;
+  const error = mutation.error ?? "";
   useEffect(() => setText(value), [value]);
   const parsed = parseProviderObject(text);
   const invalid = !parsed
@@ -39,31 +41,26 @@ export function RequestParameterField({
       ? t("settings.providers.stringValuesRequired")
       : "";
   async function save() {
-    setSaving(true);
-    setError("");
-    try {
-      await onSave?.(text);
-    } catch (reason) {
-      const missingMask =
-        stringsOnly &&
-        reason instanceof ApiError &&
-        reason.status === 400 &&
-        parsed &&
-        Object.entries(parsed).some(
-          ([key, item]) =>
-            item === "••••••••" &&
-            reason.message === `${field}.${key}: Input should be a valid string`,
-        );
-      setError(
-        missingMask
-          ? t("settings.providers.maskedSecretMissing")
-          : reason instanceof Error
-            ? reason.message
-            : String(reason),
-      );
-    } finally {
-      setSaving(false);
-    }
+    if (!onSave || disabled || invalid || text === value) return;
+    await mutation.run(async () => {
+      try {
+        await onSave(text);
+      } catch (reason) {
+        const missingMask =
+          reason instanceof ApiError &&
+          reason.status === 400 &&
+          (
+            reason.message === "No saved secret matches this mask. Enter the actual value or remove the entry."
+            || (stringsOnly && parsed && Object.entries(parsed).some(
+              ([key, item]) =>
+                item === "••••••••" &&
+                reason.message === `${field}.${key}: Input should be a valid string`,
+            ))
+          );
+        if (missingMask) throw new Error(t("settings.providers.maskedSecretMissing"), { cause: reason });
+        throw reason;
+      }
+    }, () => {});
   }
   return (
     <div role="group" aria-label={title} className="provider-parameter-field">
@@ -74,7 +71,7 @@ export function RequestParameterField({
         value={text}
         onChange={(next) => {
           setText(next);
-          setError("");
+          mutation.clear();
           if (!onSave) onChange(next);
         }}
       >
@@ -101,7 +98,7 @@ export function RequestParameterField({
         <Button
           variant="secondary"
           isPending={saving}
-          isDisabled={disabled || Boolean(invalid) || text === value}
+          isDisabled={disabled || saving || Boolean(invalid) || text === value}
           onPress={() => void save()}
         >
           {t(draft ? "settings.providers.applyToDraft" : "settings.actions.save")}

@@ -14,6 +14,17 @@ The instance continuation limit is configured under Settings → Goals & executi
 
 A running Goal continues between execution segments until it completes, waits, blocks or is paused/stopped. `wait` saves progress and a `wake_after_seconds` deadline. Due work resumes through its conversation queue; incoming conversation input also wakes a waiting Goal. Deadlines require the server to run; overdue work is handled after restart. Interrupted tools follow the existing recovery process rather than being blindly repeated.
 
+Waiting requires a positive integer delay that fits the supported UTC date
+range. Router controls reject an unrepresentable delay before stopping the
+Worker. On `wait` and `continue`, omitting `recap` preserves the saved progress;
+an explicit empty string clears it. These operations retain the Goal ID and
+continuation count.
+
+Goal status notifications carry the committed conversation generation.
+Notifications for cleared or deleted conversations are discarded. Before
+publishing, the WebUI reads the current saved Goal, so a delayed event from an
+earlier status cannot replace a newer status in the same conversation.
+
 Pause prevents automatic continuation. The conversation Stop control cancels active execution and stops its Goal until resumed. The model's `stop` operation stops continuation without interrupting a tool already executing. Session controls, `/stop` and session removal share one cancellation owner. Accepted stops wait for settlement before returning caller cancellation. Worker cleanup errors are reported instead of returning a successful stop. Creation, replacement, limit changes, resuming and deletion require fresh user input. Automatic continuation can save progress, wait, block, complete, pause or stop its own existing objective. When instructed to await a new user request, pause/stop instead of creating a timed wait or repeatedly claiming to have stopped. These operations preserve the Goal ID and progress and clear its wake-up deadline; they grant no permission to resume it. Repeated pause/stop requests are idempotent.
 
 `stopped` is a resumable suspension, like `paused`, `waiting` and `blocked`; `completed` and `cancelled` are terminal Goal states. Explicit owner or authorized Router `resume`/`continue` can reactivate a stopped Goal while preserving its ID, objective, recap and continuation count. Automatic scheduling cannot do so. For interrupted work, `goals.control(action="resume")` and `conversations.control(action="continue")` use the same recovery checks and queue one continuation. Repeated calls while recovery is `resuming` do not enqueue again. Results distinguish `resuming`, `already_queued` and `already_running`; rejected Goal resumes include the actual current Goal ID and state.

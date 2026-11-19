@@ -2,14 +2,15 @@
 
 from typing import Any
 
+from cirno_core.providers.catalog.contracts import ProviderSpec
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.errors import (
     extract_error_type_code,
+    response_from_exception,
     retry_after_headers,
     retry_after_text,
-    response_from_exception,
 )
-from cirno_core.providers.catalog.contracts import ProviderSpec
+from cirno_core.providers.openai_responses.errors import ResponsesAPIError
 
 
 def extract_error_metadata(e: Exception) -> dict[str, Any]:
@@ -57,6 +58,8 @@ def error_response(
     spec: ProviderSpec | None = None,
     api_base: str | None = None,
 ) -> LLMResponse:
+    if isinstance(e, ResponsesAPIError):
+        return e.to_response()
     body = (
         getattr(e, "doc", None)
         or getattr(e, "body", None)

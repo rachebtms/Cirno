@@ -12,7 +12,7 @@ from cirno_core.config.schema import Config
 def test_proxy_opt_in_does_not_fall_back_when_unconfigured():
     network = NetworkConfig()
     assert network.resolve_proxy(False) is None
-    with pytest.raises(ValueError, match="Advanced"):
+    with pytest.raises(ValueError, match="Network & retries"):
         network.resolve_proxy(True)
 
 

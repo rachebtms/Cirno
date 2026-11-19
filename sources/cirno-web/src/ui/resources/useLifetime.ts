@@ -1,16 +1,6 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useResourceScope } from "./useResourceScope";
 
-const INACTIVE = Symbol("inactive resource owner");
-
-/** A callback belongs to this mounted owner, including before effect cleanup. */
+/** A callback belongs to this committed owner, including before passive cleanup. */
 export function useLifetime(owner: unknown) {
-  const current = useRef(owner);
-  current.current = owner;
-  useEffect(() => {
-    current.current = owner;
-    return () => {
-      if (current.current === owner) current.current = INACTIVE;
-    };
-  }, [owner]);
-  return useCallback(() => current.current === owner, [owner]);
+  return useResourceScope(owner).isCurrent;
 }

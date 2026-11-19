@@ -9,12 +9,15 @@ from dataclasses import replace
 from functools import cache
 from typing import Any, cast
 
+from cirno_vault.redaction import tool_result
 from loguru import logger
 
 from cirno_core.agent.hook import AgentHook, AgentHookContext
 from cirno_core.agent.ptc.registry import PtcCallGate, PtcToolRegistry, RunCodeTool
+from cirno_core.agent.tools.base import ToolResult
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.file_state import file_read_context
+from cirno_core.agent.tools.mcp.activity import mcp_tool_activity
 from cirno_core.agent.tools.naming import implementation_name
 from cirno_core.agent.tools.registry import ToolRegistry, is_tool_error_result, with_tool_error_hint
 from cirno_core.agent.tools.role_policy import RoleToolPolicy, ToolPolicyDenied
@@ -183,7 +186,10 @@ async def _execute_tool_call(
                         nested_tool = tools.native.get(name)
                         async with gate.enter(bool(nested_tool and nested_tool.concurrency_safe)):
                             nested = ToolCallRequest(id=f"{tool_call.id}:ptc:{identity}", name=name, arguments=arguments)
-                            nested_context = replace(context, tool_calls=[nested], response=None, streamed_content=True)
+                            nested_context = replace(
+                                context, tool_calls=[nested], response=None, streamed_content=True,
+                                tool_activity=mcp_tool_activity(tools.native, [nested]),
+                            )
                             await hook.before_execute_tools(nested_context)
                             value, event = await _execute_tool_call(
                                 tools.native, nested, external_lookup_counts, workspace_violation_counts,
@@ -234,10 +240,11 @@ async def _execute_tool_call(
     if is_tool_error_result(result):
         await hook.on_execute_tool_error(context, tool_call, tool, params, result)
         payload = with_tool_error_hint(result)
+        display_text = str(tool_result(tool_call.name, result, params))
         event = {
             "name": tool_call.name,
             "status": "error",
-            "detail": result.replace("\n", " ").strip()[:120],
+            "detail": display_text.replace("\n", " ").strip()[:120],
         }
         handled = _classify_violation(
             raw_text=result,
@@ -245,6 +252,7 @@ async def _execute_tool_call(
             event=event,
             tool_call=tool_call,
             workspace_violation_counts=workspace_violation_counts,
+            display_text=display_text,
         )
         if handled is not None:
             return handled
@@ -252,7 +260,7 @@ async def _execute_tool_call(
 
     await hook.after_execute_tool(context, tool_call, tool, params, result)
 
-    detail = "" if result is None else str(result)
+    detail = "" if result is None else str(tool_result(tool_call.name, result, params))
     detail = detail.replace("\n", " ").strip()
     if not detail:
         detail = "(empty)"
@@ -286,15 +294,17 @@ def _classify_violation(
     event: dict[str, str],
     tool_call: ToolCallRequest,
     workspace_violation_counts: dict[str, int],
+    display_text: str | None = None,
 ) -> tuple[Any, dict[str, str]] | None:
+    safe_text = raw_text if display_text is None else display_text
     if is_ssrf_violation(raw_text):
         logger.warning(
             "Tool {} blocked by SSRF guard; returning non-retryable tool error: {}",
             tool_call.name,
-            raw_text.replace("\n", " ").strip()[:200]
+            safe_text.replace("\n", " ").strip()[:200]
             if tool_log_content_allowed() else "[content hidden]",
         )
-        event["detail"] = _event_detail("ssrf_violation: ", raw_text)
+        event["detail"] = _event_detail("ssrf_violation: ", safe_text)
         return _ssrf_soft_payload(raw_text), event
 
     if _is_workspace_violation(raw_text):
@@ -303,7 +313,7 @@ def _classify_violation(
             tool_call.arguments,
             workspace_violation_counts,
         )
-        event["detail"] = _event_detail("workspace_violation: ", raw_text)
+        event["detail"] = _event_detail("workspace_violation: ", safe_text)
         if escalation is not None:
             logger.warning(
                 "Tool {} hit workspace boundary repeatedly; escalating hint",
@@ -311,7 +321,7 @@ def _classify_violation(
             )
             event["detail"] = _event_detail(
                 "workspace_violation_escalated: ",
-                raw_text,
+                safe_text,
             )
             return escalation, event
         return soft_payload, event
@@ -321,7 +331,10 @@ def _classify_violation(
 
 def _ssrf_soft_payload(raw_text: str) -> str:
     text = raw_text.strip() or "Error: request blocked by SSRF guard"
-    return f"{text}\n\n{_SSRF_BOUNDARY_NOTE}"
+    content = f"{text}\n\n{_SSRF_BOUNDARY_NOTE}"
+    if isinstance(raw_text, ToolResult):
+        return ToolResult(content, is_error=raw_text.is_error, sensitive=raw_text.sensitive)
+    return content
 
 
 def _event_detail(prefix: str, text: str, limit: int = 160) -> str:

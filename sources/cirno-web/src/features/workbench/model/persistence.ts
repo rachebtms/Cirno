@@ -15,7 +15,11 @@ export function restoreTabs(route: WorkspaceRoute, panels: WorkspaceRegistry) {
       if (!isRecord(tab) || typeof tab.id !== "string" || (tab.group !== undefined && tab.group !== 0 && tab.group !== 1)) return false;
       if (tab.type === "route") return isRecord(tab.route) && typeof tab.route.view === "string" &&
         typeof tab.route.settingsSection === "string" && (tab.route.activeKey === null || typeof tab.route.activeKey === "string") && !tab.route.temporary;
-      return typeof tab.type === "string" && panels.has(tab.type) && (tab.sessionKey === null || typeof tab.sessionKey === "string");
+      return typeof tab.type === "string" && panels.has(tab.type)
+        && (tab.sessionKey === null || typeof tab.sessionKey === "string")
+        && (tab.path === undefined || typeof tab.path === "string")
+        && (tab.scope == null || (isRecord(tab.scope) && typeof tab.scope.project_path === "string"
+          && typeof tab.scope.access_mode === "string" && ["restricted", "review", "full"].includes(tab.scope.access_mode)));
     })) throw new Error("Saved workspace tabs have an invalid format");
     const seen = new Set<string>();
     const tabs = (value as WorkspaceTab[]).map(tab => tab.type === "route"
@@ -25,7 +29,10 @@ export function restoreTabs(route: WorkspaceRoute, panels: WorkspaceRegistry) {
         seen.add(key);
         return true;
       });
-    return { tabs: tabs.length === 0 || tabs.some(tab => tab.id === current.id) ? tabs : [...tabs, current], error: "" };
+    const restored = tabs.length === 0 || tabs.some(tab => tab.id === current.id && tab.type === "route") ? tabs : [...tabs, current];
+    if (new Set(restored.map(tab => tab.id)).size !== restored.length)
+      throw new Error("Saved workspace tabs have an invalid format: duplicate tab IDs");
+    return { tabs: restored, error: "" };
   } catch (error) {
     return { tabs: [current], error: `Could not restore workspace tabs: ${String(error)}` };
   }

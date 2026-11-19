@@ -5,7 +5,11 @@ export function channelFieldValue(
   values: Record<string, string>,
 ): string {
   return (
-    values[field.key] ?? field.defaultValue ?? field.options?.[0]?.value ?? ""
+    values[field.key] ??
+    field.defaultValue ??
+    (field.kind === "bool"
+      ? (field.options?.find((option) => option.value === "")?.value ?? "false")
+      : (field.options?.[0]?.value ?? ""))
   );
 }
 
@@ -20,10 +24,7 @@ export function defaultChannelFieldValues(
   return Object.fromEntries(
     fields.map((field) => [
       field.key,
-      configValues?.[field.key] ??
-        field.defaultValue ??
-        field.options?.[0]?.value ??
-        "",
+      channelFieldValue(field, configValues ?? {}),
     ]),
   );
 }

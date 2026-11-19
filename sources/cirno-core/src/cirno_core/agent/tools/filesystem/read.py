@@ -171,7 +171,9 @@ class ReadFileTool(FileTool):
 
             fp = self._resolve_read(path)
             if not fp.exists():
-                fp = _builtin_skill_read_path(path) or fp
+                builtin = _builtin_skill_read_path(path)
+                if builtin is not None:
+                    fp = self._resolve_read(str(builtin))
             if _is_blocked_device(fp):
                 return ToolResult.error(
                     f"Error: Reading {fp} is blocked (device path that could hang or produce infinite output)."
@@ -191,11 +193,11 @@ class ReadFileTool(FileTool):
 
             # PDF support
             if fp.suffix.lower() == ".pdf":
-                return self._read_pdf(fp, pages)
+                return self._read_pdf(fp, pages, cancelled=cancelled)
 
             # Office document support
             if fp.suffix.lower() in {".docx", ".xlsx", ".pptx"}:
-                return self._read_office_doc(fp, offset, limit)
+                return self._read_office_doc(fp, offset, limit, cancelled=cancelled)
 
             with open_atomic_snapshot(fp) as source:
                 header = source.read(32)
@@ -278,7 +280,7 @@ class ReadFileTool(FileTool):
         except Exception as e:
             return ToolResult.error(f"Error reading file: {e}")
 
-    def _read_pdf(self, fp: Path, pages: str | None) -> str:
+    def _read_pdf(self, fp: Path, pages: str | None, *, cancelled: Event | None = None) -> str:
         from cirno_core.utils.document import PdfPageRangeError, PdfSafetyError, extract_pdf_pages
 
         try:
@@ -287,6 +289,7 @@ class ReadFileTool(FileTool):
                 pages=pages,
                 max_pages=self._MAX_PDF_PAGES,
                 max_chars=self._MAX_CHARS,
+                cancelled=cancelled,
             )
         except PdfPageRangeError as e:
             return ToolResult.error(f"Error: Invalid page range '{pages}': {e!s}.")
@@ -318,6 +321,8 @@ class ReadFileTool(FileTool):
         fp: Path,
         offset: int,
         limit: int | None,
+        *,
+        cancelled: Event | None = None,
     ) -> str:
         from cirno_core.utils.document import open_document_line_source
 
@@ -325,6 +330,8 @@ class ReadFileTool(FileTool):
         requested_limit = limit or self._DEFAULT_LIMIT
         source_iterator = None
         try:
+            if cancelled is not None and cancelled.is_set():
+                raise InterruptedError("Document read cancelled")
             source = open_document_line_source(fp)
             if source is None:
                 return ToolResult.error(f"Error: Unsupported file format: {fp.suffix}")
@@ -337,6 +344,8 @@ class ReadFileTool(FileTool):
             line_was_clipped = False
 
             for line in source_iterator:
+                if cancelled is not None and cancelled.is_set():
+                    raise InterruptedError("Document read cancelled")
                 total_seen = line.extracted_line
                 if line.extracted_line < offset:
                     continue

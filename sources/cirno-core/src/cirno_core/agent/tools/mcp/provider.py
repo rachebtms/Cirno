@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from loguru import logger
 
 from cirno_core.agent.tools.base import Tool
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.config.network import NetworkConfig
-from cirno_core.utils.cancellation import task_is_cancelling
-from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain, task_is_cancelling
 
 if TYPE_CHECKING:
     from cirno_core.config.schema import Config
     from cirno_core.config.tools import MCPServerConfig
 
-from cirno_core.agent.tools.mcp.connections import close_mcp_connection, close_mcp_connections
+from cirno_core.agent.tools.mcp.connections import close_mcp_connections
 from cirno_core.agent.tools.mcp.connector import connect_mcp_servers
 from cirno_core.agent.tools.mcp.contracts import MCPConnection, MCPRuntimeStatus, MCPServerLoader
 from cirno_core.agent.tools.mcp.registrations import (
@@ -38,14 +42,25 @@ def _configured_servers(config: Config) -> dict[str, MCPServerConfig]:
     return agent_plugin_mcp_servers(
         config.workspace_path,
         config.tools.mcp_servers,
+        config_path=config.source_path,
     )
 
 
-def _load_current_servers() -> tuple[dict[str, MCPServerConfig], NetworkConfig]:
+def _load_current_servers(config_path: Path | None = None) -> tuple[dict[str, MCPServerConfig], NetworkConfig]:
     from cirno_core.config.loader import load_config, resolve_config_env_vars
 
-    config = resolve_config_env_vars(load_config())
+    config = resolve_config_env_vars(load_config(config_path), config_path=config_path)
     return _configured_servers(config), config.network
+
+
+@dataclass(frozen=True)
+class _ReloadPreparation:
+    servers: dict[str, MCPServerConfig]
+    added: list[str]
+    removed: list[str]
+    changed: list[str]
+    authorization_pending: set[str]
+    tools_removed: int
 
 
 class MCPProvider:
@@ -58,9 +73,11 @@ class MCPProvider:
         *,
         server_loader: MCPServerLoader | None = None,
         network: NetworkConfig | None = None,
+        config_path: Path | None = None,
     ) -> None:
         self._servers = dict(servers)
         self._network = (network or NetworkConfig()).model_copy(deep=True)
+        self._config_path = config_path.expanduser().resolve(strict=False) if config_path is not None else None
         self._registry = registry
         self._server_loader = server_loader or _load_current_servers
         self._connections: dict[str, MCPConnection] = {}
@@ -76,12 +93,56 @@ class MCPProvider:
         *,
         server_loader: MCPServerLoader | None = None,
     ) -> MCPProvider:
+        if server_loader is None and config.source_path is not None:
+            server_loader = partial(_load_current_servers, config.source_path)
         return cls(
             _configured_servers(config),
             registry,
             server_loader=server_loader,
             network=config.network,
+            config_path=config.source_path,
         )
+
+    def _has_oauth_credentials(self, name: str, url: str) -> bool:
+        from cirno_core.agent.tools.mcp_oauth import mcp_oauth_has_credentials
+
+        if self._config_path is None:
+            return mcp_oauth_has_credentials(name, url)
+        return mcp_oauth_has_credentials(name, url, config_path=self._config_path)
+
+    def _pending_authorizations(self, servers: Mapping[str, MCPServerConfig]) -> set[str]:
+        return {
+            name for name, cfg in servers.items()
+            if cfg.auth == "oauth" and not self._has_oauth_credentials(name, cfg.url)
+        }
+
+    def _read_reload_snapshot(self) -> tuple[dict[str, MCPServerConfig], NetworkConfig, set[str]]:
+        servers, network = self._server_loader()
+        snapshot = dict(servers)
+        return snapshot, network, self._pending_authorizations(snapshot)
+
+    async def _prepare_reload(self) -> _ReloadPreparation:
+        next_servers, next_network, authorization_pending = await asyncio.to_thread(self._read_reload_snapshot)
+        current_names = set(self._servers)
+        next_names = set(next_servers)
+        removed = sorted(current_names - next_names)
+        added = sorted(next_names - current_names)
+        changed = sorted(
+            name for name in current_names & next_names
+            if _server_signature(self._servers[name]) != _server_signature(next_servers[name])
+            or (next_servers[name].use_proxy and self._network.proxy != next_network.proxy)
+        )
+        # Keep accepted loader side effects, snapshot publication and old-connection
+        # cleanup owned together. Cancellation must never start new connections.
+        self._servers = next_servers
+        self._network = next_network.model_copy(deep=True)
+        tools_removed = await self._retire_servers(set(removed) | set(changed) | authorization_pending)
+        return _ReloadPreparation(next_servers, added, removed, changed, authorization_pending, tools_removed)
+
+    async def _connect_servers(self, servers: dict[str, MCPServerConfig]) -> dict[str, MCPConnection]:
+        if self._config_path is None:
+            return await connect_mcp_servers(servers, self._registry, network=self._network)
+        return await connect_mcp_servers(servers, self._registry, network=self._network, config_path=self._config_path)
 
     @property
     def configured_server_names(self) -> set[str]:
@@ -124,19 +185,14 @@ class MCPProvider:
                 name: cfg for name, cfg in self._servers.items() if name not in self._connections
             }
             oauth_servers = {
-                name: cfg for name, cfg in configured_missing.items() if cfg.auth == "oauth"
+                name: cfg for name, cfg in self._servers.items() if cfg.auth == "oauth"
             }
             authorization_pending: set[str] = set()
             if oauth_servers:
-                from cirno_core.agent.tools.mcp_oauth import mcp_oauth_has_credentials
-
-                authorization_pending = {
-                    name
-                    for name, cfg in oauth_servers.items()
-                    if not mcp_oauth_has_credentials(name, cfg.url)
-                }
-            for name in authorization_pending:
-                self._runtime_statuses.pop(name, None)
+                authorization_pending = await asyncio.to_thread(self._pending_authorizations, oauth_servers)
+            await self._retire_servers(authorization_pending)
+            if self._closing:
+                return
             missing_servers = {
                 name: cfg
                 for name, cfg in configured_missing.items()
@@ -146,9 +202,7 @@ class MCPProvider:
                 return
             self._set_runtime_status(missing_servers, "connecting")
             try:
-                connected = await connect_mcp_servers(
-                    missing_servers, self._registry, network=self._network
-                )
+                connected = await self._connect_servers(missing_servers)
                 if self._closing:
                     await close_mcp_connections(connected)
                     return
@@ -180,8 +234,7 @@ class MCPProvider:
             if self._closing:
                 return self._closing_result()
             try:
-                loaded_servers, next_network = self._server_loader()
-                next_servers = dict(loaded_servers)
+                preparation = await shield_and_drain(self._prepare_reload())
             except Exception as exc:
                 logger.warning("MCP hot reload could not read config: {}", exc)
                 return {
@@ -191,35 +244,13 @@ class MCPProvider:
                     "error": str(exc),
                 }
 
-            current_servers = dict(self._servers)
-            current_names = set(current_servers)
+            if self._closing:
+                return self._closing_result()
+            next_servers = preparation.servers
             next_names = set(next_servers)
-            from cirno_core.agent.tools.mcp_oauth import mcp_oauth_has_credentials
-
-            authorization_pending = {
-                name
-                for name, cfg in next_servers.items()
-                if cfg.auth == "oauth" and not mcp_oauth_has_credentials(name, cfg.url)
-            }
-            removed = sorted(current_names - next_names)
-            added = sorted(next_names - current_names)
-            changed = sorted(
-                name
-                for name in current_names & next_names
-                if _server_signature(current_servers[name]) != _server_signature(next_servers[name])
-                or (next_servers[name].use_proxy and self._network.proxy != next_network.proxy)
-            )
-
-            tools_removed = 0
-            for name in [*removed, *changed]:
-                tools_removed += _unregister_server_tools(self._registry, name)
-                await self._close_server(name)
-
-            for name in [*removed, *authorization_pending]:
-                self._runtime_statuses.pop(name, None)
-
-            self._servers = next_servers
-            self._network = next_network.model_copy(deep=True)
+            added, removed, changed = preparation.added, preparation.removed, preparation.changed
+            authorization_pending = preparation.authorization_pending
+            tools_removed = preparation.tools_removed
             retry_missing = sorted(
                 name
                 for name in next_names
@@ -235,9 +266,7 @@ class MCPProvider:
             if to_connect:
                 self._set_runtime_status(to_connect, "connecting")
                 try:
-                    connected = await connect_mcp_servers(
-                        to_connect, self._registry, network=self._network
-                    )
+                    connected = await self._connect_servers(to_connect)
                 except BaseException:
                     self._set_runtime_status(to_connect, "failed")
                     raise
@@ -255,6 +284,8 @@ class MCPProvider:
                 message = "MCP config reloaded, but some servers did not connect: " + ", ".join(
                     failed
                 )
+            elif authorization_pending:
+                message = "MCP browser authorization is required for: " + ", ".join(sorted(authorization_pending))
             elif unchanged:
                 message = "MCP config is already live."
             elif retry_missing and not added and not changed and not removed:
@@ -283,6 +314,7 @@ class MCPProvider:
                 "connected": sorted(self._connections),
                 "configured": sorted(self._servers),
                 "failed": failed,
+                "authorization_required": sorted(authorization_pending),
                 "tools_removed": tools_removed,
                 "requires_restart": False,
             }
@@ -332,6 +364,15 @@ class MCPProvider:
                 )
                 return None
 
+            if cfg.auth == "oauth":
+                authorized = await asyncio.to_thread(self._has_oauth_credentials, server_name, cfg.url)
+                if self._closing:
+                    return None
+                if not authorized:
+                    await self._retire_servers({server_name})
+                    logger.info("MCP server '{}' is waiting for browser authorization", server_name)
+                    return None
+
             current_tool = self._registry.get(tool_name)
             if (
                 current_tool is not None
@@ -344,15 +385,12 @@ class MCPProvider:
                 "MCP server '{}' session terminated; refreshing connection",
                 server_name,
             )
-            _unregister_server_tools(self._registry, server_name)
-            await self._close_server(server_name)
+            await self._retire_servers({server_name})
+            if self._closing:
+                return None
 
             self._set_runtime_status({server_name}, "connecting")
-            connected = await connect_mcp_servers(
-                {server_name: cfg},
-                self._registry,
-                network=self._network,
-            )
+            connected = await self._connect_servers({server_name: cfg})
             if self._closing:
                 await close_mcp_connections(connected)
                 return None
@@ -367,11 +405,18 @@ class MCPProvider:
                 return None
             return self._registry.get(tool_name)
 
-    async def _close_server(self, server_name: str) -> None:
-        connection = self._connections.pop(server_name, None)
-        if connection is None:
-            return
-        await close_mcp_connection(server_name, connection)
+    async def _retire_servers(self, server_names: Iterable[str]) -> int:
+        """Withdraw the whole obsolete capability set before draining any close."""
+        connections: dict[str, MCPConnection] = {}
+        removed = 0
+        for name in sorted(set(server_names)):
+            removed += _unregister_server_tools(self._registry, name)
+            self._runtime_statuses.pop(name, None)
+            connection = self._connections.pop(name, None)
+            if connection is not None:
+                connections[name] = connection
+        await close_mcp_connections(connections)
+        return removed
 
     async def aclose(self) -> None:
         """Close every connection while excluding reconnect and hot reload."""

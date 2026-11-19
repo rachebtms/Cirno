@@ -168,7 +168,7 @@ class ExecSessionManager:
             session = self._sessions.get(session_id)
         if session is None:
             raise KeyError(session_id)
-        if session.owner_session_key and session.owner_session_key != owner_session_key:
+        if session.owner_session_key != owner_session_key:
             raise KeyError(session_id)
 
         if chars:
@@ -192,6 +192,17 @@ class ExecSessionManager:
             async with self._lock:
                 self._sessions.pop(session_id, None)
         return poll
+
+    async def return_output(
+        self, *, session_id: str, output: str, truncated_chars: int,
+        owner_session_key: str | None = None,
+        output_gaps: tuple[int, ...] = (),
+    ) -> None:
+        """Retain an interrupted read without recreating a closed/expired session."""
+        async with self._lock:
+            session = self._sessions.get(session_id)
+            if session is not None and session.owner_session_key == owner_session_key:
+                await session.return_output(output, truncated_chars, output_gaps=output_gaps)
 
     async def list(self, *, owner_session_key: str | None = None) -> list[ExecSessionInfo]:
         async with self._lock:

@@ -5,7 +5,7 @@ import {
   useThemes,
 } from "@/hooks/usePreferences";
 import { Check, Palette, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ThemePair } from "./contracts";
 import { patchPreferences, SNOW_THEME } from "./store";
@@ -20,21 +20,32 @@ export function ThemeSettings() {
   const selected =
     themes.find((theme) => theme.id === preferences.themeId) ?? SNOW_THEME;
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState<ThemePair | null>(null);
+  const [editing, setEditing] = useState<{ theme: ThemePair; customThemesBase: ThemePair[] } | null>(null);
+  const savingRef = useRef(false);
   const custom = preferences.customThemes.some(
     (theme) => theme.id === selected.id,
   );
+  const begin = (theme: ThemePair) => {
+    if (!savingRef.current) setEditing({ theme, customThemesBase: structuredClone(preferences.customThemes) });
+  };
   const save = async (theme: ThemePair) => {
+    if (!editing || savingRef.current) return;
+    const owner = editing;
+    savingRef.current = true;
     setSaving(true);
-    const saved = await patchPreferences({
-      themeId: theme.id,
-      customThemes: [
-        ...preferences.customThemes.filter((item) => item.id !== theme.id),
-        theme,
-      ],
-    });
-    setSaving(false);
-    if (saved) setEditing(null);
+    try {
+      const saved = await patchPreferences({
+        themeId: theme.id,
+        customThemes: [
+          ...preferences.customThemes.filter((item) => item.id !== theme.id),
+          theme,
+        ],
+      }, { customThemesBase: owner.customThemesBase });
+      if (saved) setEditing(current => current === owner ? null : current);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
   return (
     <section className="space-y-4">
@@ -46,8 +57,9 @@ export function ThemeSettings() {
         <Button
           size="sm"
           variant="outline"
+          disabled={saving}
           onClick={() =>
-            setEditing({
+            begin({
               ...selected,
               id: `custom-${crypto.randomUUID()}`,
               name: t("themes.newName"),
@@ -90,7 +102,8 @@ export function ThemeSettings() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setEditing(selected)}
+            disabled={saving}
+            onClick={() => begin(selected)}
           >
             <Pencil size={14} className="mr-1" />
             {t("themes.edit")}
@@ -98,6 +111,7 @@ export function ThemeSettings() {
           <Button
             size="sm"
             variant="ghost"
+            disabled={saving}
             onClick={() =>
               patchPreferences({
                 themeId: "cirno-snow",
@@ -114,9 +128,9 @@ export function ThemeSettings() {
       )}
       {editing && (
         <ThemeEditor
-          key={editing.id}
+          key={editing.theme.id}
           saving={saving}
-          initial={editing}
+          initial={editing.theme}
           onCancel={() => setEditing(null)}
           onSave={save}
         />

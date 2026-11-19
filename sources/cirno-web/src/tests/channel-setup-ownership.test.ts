@@ -10,6 +10,7 @@ import type {
   ChannelConfigurePayload,
   ChannelValidationPayload,
   CirnoFeatureInfo,
+  CirnoFeaturesPayload,
 } from "@/lib/contracts/channels";
 const setup: ChannelSetupPresentation = {
   fields: [
@@ -157,6 +158,18 @@ it("does not write after validation resolves for a connection which has been rep
   expect(update).not.toHaveBeenCalled();
   expect(result.current.actions.feedback).toBeNull();
 });
+
+it("does not revive a retired enable operation when its exact service returns", async () => {
+  const pending = deferred<ChannelValidationPayload>();
+  const first = service({ validate: vi.fn(() => pending.promise) }), second = service();
+  const { result, rerender } = renderHook(({ api }) => useSetup(api), { initialProps: { api: first } });
+  act(() => { void result.current.actions.toggle(true); });
+  rerender({ api: second });
+  rerender({ api: first });
+  await act(async () => pending.resolve(valid));
+  expect(first.configure).not.toHaveBeenCalled();
+  expect(result.current.actions.mutation.busy).toBe(false);
+});
 it("does not publish a completed write or its errors into another connection", async () => {
   const pending = deferred<ChannelConfigurePayload>(),
     first = service({ configure: vi.fn(() => pending.promise) }),
@@ -213,4 +226,60 @@ it("retries a rejected server validation without committing its invalid credenti
   });
   expect(api.configure).toHaveBeenCalledWith({ token: "new-token" }, true);
   expect(result.current.draft.dirty).toBe(false);
+});
+
+it("acknowledges saved credentials but displays the live enable failure instead of success", async () => {
+  const failedFeatures: CirnoFeaturesPayload = {
+    features: [{ ...feature, enabled: true, runtime_status: "failed", runtime_error: "Connection failed" }],
+    enabled_count: 1,
+    requires_restart: false,
+    last_action: { ok: false, message: "Settings saved, but the channel could not start." },
+  };
+  const api = service({ configure: vi.fn(async () => ({ ...saved, cirno_features: failedFeatures })) });
+  const update = vi.fn();
+  const { result } = renderHook(() => useSetup(api, update));
+  act(() => result.current.draft.change("token", "new-token"));
+  await act(async () => { await result.current.actions.toggle(true); });
+  expect(update).toHaveBeenCalledWith(failedFeatures);
+  expect(result.current.draft.dirty).toBe(false);
+  expect(result.current.actions.feedback).toEqual({ text: failedFeatures.last_action!.message, tone: "danger" });
+});
+
+it("explains a restart-required enable receipt without claiming live success", async () => {
+  const pending: CirnoFeaturesPayload = {
+    features: [feature], enabled_count: 0, requires_restart: true,
+    last_action: { ok: true, hot_reload: false, message: "Restart Cirno before enabling newly installed support." },
+  };
+  const api = service({ configure: vi.fn(async () => ({ ...saved, cirno_features: pending })) });
+  const { result } = renderHook(() => useSetup(api));
+  await act(async () => { await result.current.actions.toggle(true); });
+  expect(result.current.actions.feedback).toEqual({ text: pending.last_action!.message, tone: "info" });
+});
+
+it("does not misreport unrelated pending restart settings as a failed live enable", async () => {
+  const running: CirnoFeaturesPayload = {
+    features: [{ ...feature, enabled: true, runtime_status: "running" }],
+    enabled_count: 1, requires_restart: true,
+    last_action: { ok: true, hot_reload: true, message: "Channel applied without restart." },
+  };
+  const api = service({ configure: vi.fn(async () => ({ ...saved, cirno_features: running })) });
+  const { result } = renderHook(() => useSetup(api));
+  await act(async () => { await result.current.actions.toggle(true); });
+  expect(result.current.actions.feedback?.tone).toBe("success");
+});
+
+it("publishes a failed disable receipt and shows its error so the stop can be retried", async () => {
+  const failed: CirnoFeaturesPayload = {
+    features: [feature], enabled_count: 0,
+    last_action: { ok: false, message: "Saved disable request, but stopping the runtime failed." },
+  };
+  const update = vi.fn();
+  const api = service({ disable: vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce({ features: [feature], enabled_count: 0 }) });
+  const { result } = renderHook(() => useSetup(api, update));
+  await act(async () => { await result.current.actions.toggle(false); });
+  expect(update).toHaveBeenCalledWith(failed);
+  expect(result.current.actions.feedback).toEqual({ text: failed.last_action!.message, tone: "danger" });
+  await act(async () => { await result.current.actions.toggle(false); });
+  expect(api.disable).toHaveBeenCalledTimes(2);
+  expect(result.current.actions.feedback).toBeNull();
 });

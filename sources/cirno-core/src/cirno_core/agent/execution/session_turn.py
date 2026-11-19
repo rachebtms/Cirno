@@ -7,11 +7,18 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from cirno_core.agent.automation_turns import AutomationTurnError
 from cirno_core.session import turn_continuation
 from cirno_core.session.goal_state import goal_state_raw, parse_goal_state, sustained_goal_active
 from cirno_core.session.keys import ROUTER_SESSION_KEY
 from cirno_core.session.recovery.checkpoints import restore_runtime_checkpoint
-from cirno_core.session.recovery.contracts import RECOVERY_INBOUND_METADATA_KEY
+from cirno_core.session.recovery.contracts import (
+    PENDING_FOLLOWUP_ID_KEY,
+    RECOVERY_INBOUND_METADATA_KEY,
+)
+from cirno_core.session.recovery.state import approval_followup_allowed
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.utils.cancellation import shield_and_drain
 
 from .diagnostics import content_logging_allowed
 
@@ -45,6 +52,7 @@ class SessionTurn:
                         recovery.register_recovery_task(key, recovery_task)
                 if not await recovery.admit(msg):
                     logger.info("Skipped stale recovery for session {}", key)
+                    self._reject_automation(msg, "recovery")
                     return
             lock = self.agent._get_session_lock(key)
             gate = (self.agent._concurrency_gate if key != ROUTER_SESSION_KEY else None) or nullcontext()
@@ -53,6 +61,7 @@ class SessionTurn:
                 self.agent._executing_sessions.add(key)
                 stage = "guard"
                 if not await self.current_goal(msg, key):
+                    self._reject_automation(msg, "goal")
                     # The preceding segment or WebSocket admission may already
                     # have opened this turn. Skipping obsolete work still ends it.
                     lifecycle_active = True
@@ -71,12 +80,17 @@ class SessionTurn:
                     coordinator.complete(msg, response=response)
         except asyncio.CancelledError:
             logger.info("Task cancelled for session {}", key)
-            if executing:
-                delivery.continuation_pending = False
-                await self.cancel(key, delivery)
             if not completion_published:
                 lifecycle_active = True
-                await delivery.complete(None, publish_completion=True)
+
+            async def settle_cancelled() -> None:
+                if executing:
+                    delivery.continuation_pending = False
+                    await self.cancel(key, delivery)
+                if not completion_published:
+                    await delivery.complete(None, publish_completion=True)
+
+            await shield_and_drain(settle_cancelled())
             raise
         except Exception as error:
             delivery.continuation_pending = False
@@ -88,16 +102,42 @@ class SessionTurn:
             if recovery_task is not None and recovery is not None:
                 recovery.unregister_recovery_task(key, recovery_task)
             if lifecycle_active and not delivery.continuation_pending:
-                await delivery.idle()
+                await shield_and_drain(delivery.idle())
+
+    def _reject_automation(self, msg: InboundMessage, stage: str) -> None:
+        """Finish the submitter even when admission skips the model pipeline."""
+        error = AutomationTurnError(f"Automation rejected by current {stage} state; no model work was executed.")
+        for coordinator in self.agent._automation_turn_coordinators:
+            coordinator.complete(msg, error=error)
 
     async def current_goal(self, msg: InboundMessage, key: str) -> bool:
-        if turn_continuation.sustained_goal_continuation_inbound(msg.metadata) and not sustained_goal_active(
-            (await self.agent.sessions.state.get(key)).metadata
+        approval = msg.metadata.get("_approval_decision")
+        continuation = turn_continuation.sustained_goal_continuation_inbound(msg.metadata)
+        goal_id = msg.metadata.get("_goal_id")
+        if not approval and not continuation and not goal_id:
+            return True
+        # Admission may precede a wait for this session's execution lock.
+        # Inspect one current header, without recreating removed history.
+        header = await self.agent.sessions.state.read_header(key)
+        if header is None or (
+            msg.session_generation is not None and msg.session_generation != header.generation
         ):
             return False
-        goal_id = msg.metadata.get("_goal_id")
+        if approval:
+            if not approval_followup_allowed(header.metadata, goal_id=msg.metadata.get("_goal_id")):
+                followup = msg.metadata.get(PENDING_FOLLOWUP_ID_KEY)
+                if isinstance(followup, str):
+                    try:
+                        await self.agent.sessions.state.acknowledge_followups(
+                            key, (followup,), expected_generation=header.generation,
+                        )
+                    except SessionConflictError:
+                        pass  # Replacement history does not own this approval.
+                return False
+        if continuation and not sustained_goal_active(header.metadata):
+            return False
         return not goal_id or (parse_goal_state(goal_state_raw(
-            (await self.agent.sessions.state.get_header(key)).metadata
+            header.metadata
         )) or {}).get("goal_id") == goal_id
 
     async def cancel(self, key: str, delivery: TurnDelivery) -> None:

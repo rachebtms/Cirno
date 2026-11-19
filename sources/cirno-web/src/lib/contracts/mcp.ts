@@ -41,6 +41,7 @@ export interface McpPresetInfo {
   required_fields: McpPresetField[];
   connection_summary: string;
   tool_count?: number;
+  inventory_stale?: boolean;
   tool_names?: string[];
   checked_at?: string | null;
   error?: string | null;
@@ -75,6 +76,7 @@ export interface McpOAuthFlowPayload {
 
 export interface McpPresetsPayload {
   presets: McpPresetInfo[];
+  cleanup_pending?: string[];
   proxy_configured?: boolean;
   installed_count: number;
   requires_restart?: boolean;
@@ -88,11 +90,13 @@ export interface McpPresetsPayload {
     connected?: string[];
     configured?: string[];
     failed?: string[];
+    authorization_required?: string[];
     tools_removed?: number;
     requires_restart?: boolean;
   };
   last_action?: {
     ok: boolean;
+    persisted?: boolean;
     message: string;
     installed?: boolean;
     removed?: boolean;
@@ -100,6 +104,7 @@ export interface McpPresetsPayload {
     verification?: string[];
     verification_failed?: string[];
     tool_count?: number;
+    inventory_stale?: boolean;
     tool_names?: string[];
     checked_at?: string | null;
     error?: string | null;

@@ -6,6 +6,7 @@ import {
 } from "./AutomationRunDialogView";
 import { fetchAutomationRunResult } from "@/lib/api";
 import type { SessionAutomationJob } from "@/lib/contracts/automations";
+import { isLocalTriggerAutomation } from "../model/status";
 
 export type { AutomationRunRecord } from "./AutomationRunDialogView";
 
@@ -25,12 +26,14 @@ export function AutomationRunDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [attempt, setAttempt] = useState(0);
-  const kind = job.kind === "local_trigger" ? "local_trigger" : "cron";
+  const kind = isLocalTriggerAutomation(job) ? "local_trigger" : "cron";
   const resultKey = JSON.stringify([
     token,
     kind,
     job.id,
     run.run_at_ms,
+    run.run_id,
+    run.status,
     attempt,
   ]);
   const [result, setResult] = useState<{
@@ -47,13 +50,10 @@ export function AutomationRunDialog({
     }
     const controller = new AbortController();
     setResult({ key: resultKey, status: "loading", response: null });
-    void fetchAutomationRunResult(
-      token,
-      job.id,
-      run.run_at_ms,
-      kind,
-      controller.signal,
-    )
+    const request = run.run_id
+      ? fetchAutomationRunResult(token, job.id, run.run_at_ms, kind, controller.signal, run.run_id)
+      : fetchAutomationRunResult(token, job.id, run.run_at_ms, kind, controller.signal);
+    void request
       .then((payload) => {
         if (!controller.signal.aborted) {
           setResult({
@@ -74,7 +74,7 @@ export function AutomationRunDialog({
         }
       });
     return () => controller.abort();
-  }, [job.id, kind, open, resultKey, run.run_at_ms, token]);
+  }, [job.id, kind, open, resultKey, run.run_at_ms, run.run_id, token]);
   const currentResult = result?.key === resultKey ? result : null;
   return (
     <AutomationRunDialogView

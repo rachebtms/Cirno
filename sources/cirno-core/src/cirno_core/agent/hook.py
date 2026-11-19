@@ -7,12 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from cirno_usage.types import LLMUsage
 from loguru import logger
 
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.bus.agent_events import NO_EVENTS, EventSink
 from cirno_core.providers.contracts import LLMResponse
-from cirno_usage.types import LLMUsage
 from cirno_core.providers.tool_calls import ToolCallRequest
 
 
@@ -27,6 +27,8 @@ class AgentHookContext:
     tool_calls: list[ToolCallRequest] = field(default_factory=list)
     tool_results: list[Any] = field(default_factory=list)
     tool_events: list[dict[str, str]] = field(default_factory=list)
+    # Presentation-only identity, kept out of provider-facing messages and schemas.
+    tool_activity: dict[str, dict[str, str]] = field(default_factory=dict)
     streamed_content: bool = False
     # Raw segments observed this round, retained only if its terminal response fails.
     streamed_content_parts: list[str] = field(default_factory=list, repr=False)

@@ -11,6 +11,8 @@ from cirno_core.agent.tools.mcp_oauth import (
 from cirno_core.config.loader import load_config, save_config
 from cirno_core.config.network import NetworkConfig
 from cirno_core.config.tools import MCPServerConfig
+from loguru import logger
+
 from cirno_server.webui.mcp.catalog import mcp_presets_payload
 from cirno_server.webui.mcp.contracts import (
     McpPresetError,
@@ -26,7 +28,7 @@ from cirno_server.webui.mcp.fields import (
     proxy_enabled,
     validate_proxy,
 )
-from cirno_server.webui.mcp.messages import server_action_message
+from cirno_server.webui.mcp.messages import record_cleanup_failure, server_action_message
 from cirno_server.webui.mcp.parsing import (
     custom_server_from_query,
     import_mcp_servers,
@@ -43,6 +45,32 @@ def _oauth_credentials_replaced(
     return replacement.auth != "oauth" or replacement.url != previous.url
 
 
+def _retain_tool_scope(previous: MCPServerConfig | None, replacement: MCPServerConfig) -> None:
+    """Connection edits are not an implicit request to grant all capabilities."""
+    if previous is not None and "enabled_tools" not in replacement.model_fields_set:
+        replacement.enabled_tools = list(previous.enabled_tools)
+
+
+def _cleanup_oauth_credentials(
+    servers: dict[str, MCPServerConfig],
+    *,
+    invalidate_missing: set[str],
+    config_path: Path | None,
+    receipt: dict[str, Any],
+) -> None:
+    for name, cfg in servers.items():
+        try:
+            delete_mcp_oauth_credentials(
+                name,
+                config_path=config_path,
+                preserve_server_url=cfg.url if cfg.auth == "oauth" else None,
+                only_if_present=name not in invalidate_missing,
+            )
+        except OSError as exc:
+            logger.warning("MCP credential cleanup failed for '{}' ({})", name, type(exc).__name__)
+            record_cleanup_failure(receipt, name=name, verification=f"oauth_credentials_absent:{name}")
+
+
 def custom_mcp_action(
     action: str,
     query: QueryParams,
@@ -52,14 +80,20 @@ def custom_mcp_action(
     config = load_config(config_path) if config_path is not None else load_config()
     if action == "custom":
         name, cfg = custom_server_from_query(query)
+        _retain_tool_scope(config.tools.mcp_servers.get(name), cfg)
         validate_proxy(cfg, config.network)
         delete_credentials = _oauth_credentials_replaced(config.tools.mcp_servers.get(name), cfg)
         config.tools.mcp_servers[name] = cfg
         save_config(config, config_path)
-        if delete_credentials:
-            delete_mcp_oauth_credentials(name)
+        receipt = server_action_message(action, name)
+        _cleanup_oauth_credentials(
+            {name: cfg},
+            invalidate_missing={name} if delete_credentials else set(),
+            config_path=config.source_path,
+            receipt=receipt,
+        )
         payload = mcp_presets_payload(
-            last_action=server_action_message(action, name),
+            last_action=receipt,
             config_path=config_path,
         )
         payload["requires_restart"] = True
@@ -67,7 +101,8 @@ def custom_mcp_action(
 
     if action in {"import", "import-cursor"}:
         servers = import_mcp_servers(query_first(query, "config"))
-        for cfg in servers.values():
+        for name, cfg in servers.items():
+            _retain_tool_scope(config.tools.mcp_servers.get(name), cfg)
             validate_proxy(cfg, config.network)
         delete_credentials = [
             name
@@ -76,13 +111,12 @@ def custom_mcp_action(
         ]
         config.tools.mcp_servers.update(servers)
         save_config(config, config_path)
-        for name in delete_credentials:
-            delete_mcp_oauth_credentials(name)
+        receipt = {"ok": True, "message": f"Imported {len(servers)} MCP server(s)."}
+        _cleanup_oauth_credentials(
+            servers, invalidate_missing=set(delete_credentials), config_path=config.source_path, receipt=receipt,
+        )
         payload = mcp_presets_payload(
-            last_action={
-                "ok": True,
-                "message": f"Imported {len(servers)} MCP server(s).",
-            },
+            last_action=receipt,
             config_path=config_path,
         )
         payload["requires_restart"] = True
@@ -124,7 +158,7 @@ def ensure_mcp_oauth_server(
             raise McpPresetError("unknown MCP preset", status=404)
         if preset.server is None or preset.server.auth != "oauth":
             raise McpPresetError("MCP server does not support browser authorization", status=409)
-        cfg = materialize_server(preset, query, cfg)
+        cfg = materialize_server(preset, query, cfg, config_path=config.source_path)
     cfg = clone_server(cfg)
     cfg.use_proxy = proxy_enabled(query, cfg.use_proxy)
     validate_proxy(cfg, config.network)

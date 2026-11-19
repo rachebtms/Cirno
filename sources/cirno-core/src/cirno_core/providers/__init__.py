@@ -28,11 +28,12 @@ _LAZY_IMPORTS = {
     "XAIGrokProvider": ".xai_grok_provider",
     "GitHubCopilotProvider": ".github_copilot_provider",
     "AzureOpenAIProvider": ".azure_openai_provider",
-    "BedrockProvider": ".bedrock_provider",
+    "BedrockProvider": ".bedrock.provider",
 }
 
 if TYPE_CHECKING:
     from cirno_usage.types import LLMUsage
+
     from cirno_core.providers.anthropic_provider import AnthropicProvider
     from cirno_core.providers.azure_openai_provider import AzureOpenAIProvider
     from cirno_core.providers.base import LLMProvider

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import os
-import re
 from typing import Any
 
+from cirno_core.config.loader import resolve_env_refs
 from cirno_core.config.providers import ProviderConfig
 from cirno_core.config.schema import Config
 from cirno_core.providers.catalog.contracts import ProviderSpec
 from cirno_core.providers.registry import create_dynamic_spec, find_by_name
+
 from cirno_server.webui.settings.connection_contracts import OAuthStatusReader
 from cirno_server.webui.settings.providers.oauth import _OAUTH_PROXY_PROVIDERS
 
@@ -26,10 +26,7 @@ def _resolve_env_placeholders(value: str | None) -> str | None:
     if not value:
         return None
 
-    def replace(match: re.Match[str]) -> str:
-        return os.environ.get(match.group(1), "")
-
-    resolved = _ENV_REF_RE.sub(replace, value).strip()
+    resolved = resolve_env_refs(value).strip()
     return resolved or None
 
 
@@ -111,6 +108,8 @@ def _provider_advanced_field_names(name: str, spec: Any) -> list[str]:
         fields.append("extra_body")
     if spec.backend in {"openai_compat", "anthropic"}:
         fields.extend(("extra_query", "use_proxy"))
+    if spec.backend == "azure_openai":
+        fields.append("use_proxy")
     if spec.name in _OAUTH_PROXY_PROVIDERS and "use_proxy" not in fields:
         fields.append("use_proxy")
     if spec.backend == "bedrock":
@@ -118,6 +117,3 @@ def _provider_advanced_field_names(name: str, spec: Any) -> list[str]:
     if find_by_name(name) is None:
         fields.append("thinking_style")
     return fields
-
-
-_ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")

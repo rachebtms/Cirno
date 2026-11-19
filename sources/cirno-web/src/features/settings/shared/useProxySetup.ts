@@ -1,24 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { useMutation } from "@/ui/resources/useMutation";
 
 export function useProxySetup(onSave: (address: string) => Promise<void>, onClose: () => void, busy: boolean) {
   const [address, setAddress] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const mutation = useMutation(undefined);
+  const error = mutation.error ?? "";
   const input = useRef<HTMLInputElement>(null);
-  const pending = busy || saving;
+  const pending = busy || mutation.busy;
   useEffect(() => { if (error && !pending) input.current?.focus(); }, [error, pending]);
   const save = async () => {
     if (pending || !address.trim()) return;
-    setSaving(true);
-    setError("");
-    try {
-      await onSave(address);
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
+    await mutation.run(() => onSave(address), onClose);
   };
-  return { address, change: (next: string) => { setAddress(next); setError(""); }, pending, error, input, save };
+  return { address, change: (next: string) => { setAddress(next); mutation.clear(); }, pending, error, input, save };
 }

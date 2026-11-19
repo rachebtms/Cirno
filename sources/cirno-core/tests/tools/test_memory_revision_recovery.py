@@ -1,6 +1,8 @@
 """A rejected write supplies enough current state to merge instead of looping."""
 
+import asyncio
 import json
+import threading
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -14,6 +16,33 @@ from cirno_core.agent.hook import AgentHook, AgentHookContext
 from cirno_core.agent.ptc.registry import PtcToolRegistry
 from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_memory.repository import MemoryRepository
+
+
+async def test_stopping_a_memory_write_waits_for_its_durable_outcome(memory, monkeypatch):
+    repo, _ = memory
+    original = MemoryRepository.checkpoint
+    started = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+
+    def checkpoint(self, *args, **kwargs):
+        loop.call_soon_threadsafe(started.set)
+        assert release.wait(2), 'test did not release the accepted memory write'
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(MemoryRepository, 'checkpoint', checkpoint)
+    with context():
+        task = asyncio.create_task(MemoryTool().execute('checkpoint', content='Accepted progress', source='test:accepted'))
+        await asyncio.wait_for(started.wait(), timeout=1)
+        task.cancel()
+        try:
+            completed, _ = await asyncio.wait({task}, timeout=0.02)
+            assert not completed, 'Stop returned while the memory writer could still change task state'
+        finally:
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+    assert 'Accepted progress' in repo.task_context('websocket:one')
 
 
 @pytest.fixture

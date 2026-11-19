@@ -10,13 +10,14 @@ from cirno_core.agent.plugins import (
 )
 from cirno_core.apps.protocol import app_manifest, compact_dict
 from cirno_core.config.tools import MCPServerConfig
+
 from cirno_server.webui.mcp.presets import McpPreset
 
 
 def connection_summary(cfg: MCPServerConfig | None) -> str:
     if cfg is None:
         return ""
-    if cfg.command:
+    if cfg.transport_type == "stdio":
         return " ".join([cfg.command, *cfg.args[:2]]).strip()
     if cfg.url:
         parsed = urllib.parse.urlsplit(cfg.url)
@@ -31,7 +32,7 @@ def tool_allowlist(cfg: MCPServerConfig | None) -> list[str]:
 
 
 def _managed_mcp_path(name: str, cfg: MCPServerConfig | None) -> list[str]:
-    if cfg is None or not cfg.command:
+    if cfg is None or cfg.transport_type != "stdio" or not cfg.command:
         return []
     return [f"runtime:mcp/{name}"]
 
@@ -57,9 +58,9 @@ def preset_manifest(preset: McpPreset, *, logo_url: str) -> dict[str, Any]:
                 "type": "mcp",
                 "transport": preset.transport,
                 "auth": server.auth if server and server.auth else None,
-                "command": server.command if server and server.command else None,
-                "args": list(server.args) if server and server.command else None,
-                "url": connection_summary(server) if server and server.url else None,
+                "command": server.command if server and server.transport_type == "stdio" else None,
+                "args": list(server.args) if server and server.transport_type == "stdio" else None,
+                "url": connection_summary(server) if server and server.transport_type != "stdio" else None,
                 "fields": field_specs,
             }
         )
@@ -101,7 +102,7 @@ def preset_manifest(preset: McpPreset, *, logo_url: str) -> dict[str, Any]:
 
 
 def custom_manifest(name: str, cfg: MCPServerConfig) -> dict[str, Any]:
-    transport = cfg.type or ("stdio" if cfg.command else "streamableHttp")
+    transport = cfg.transport_type or "streamableHttp"
     managed_paths: list[str] = []
     return app_manifest(
         app_id=name,
@@ -116,8 +117,8 @@ def custom_manifest(name: str, cfg: MCPServerConfig) -> dict[str, Any]:
                     "type": "mcp",
                     "transport": transport,
                     "auth": cfg.auth,
-                    "command": cfg.command or None,
-                    "url": connection_summary(cfg) if cfg.url else None,
+                    "command": cfg.command if transport == "stdio" else None,
+                    "url": connection_summary(cfg) if transport != "stdio" else None,
                 }
             )
         ],

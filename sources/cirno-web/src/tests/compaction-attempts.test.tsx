@@ -13,6 +13,20 @@ function attempt(id: string, phase: "failed" | "succeeded"): UIMessage {
 }
 
 describe("compaction attempts", () => {
+  it("finishes a saved checkpoint when post-commit usage accounting is unavailable", () => {
+    const started = { event: "context_compaction", chat_id: "chat", compaction_id: "saved-no-usage", phase: "started", reason: "manual" };
+    const completed = { ...started, phase: "succeeded", context_window_tokens: 2048 };
+    expect(decodeNotification(completed)).toEqual(completed);
+    const events = parseWebuiThreadPayload({ schemaVersion: 3, projection: "events", events: [started, completed] }).events;
+    const messages = projectThreadEvents(events);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].compaction).toMatchObject({ phase: "succeeded", context_window_tokens: 2048 });
+    expect(messages[0].compaction?.context_tokens).toBeUndefined();
+    const { container } = render(<ContextCompactionNotice compaction={messages[0].compaction!} />);
+    expect(container.querySelector('[data-context-compaction="succeeded"]')).toHaveAttribute("aria-busy", "false");
+    expect(container.querySelector('[data-context-compaction="started"]')).toBeNull();
+  });
+
   it("keeps task success and learning failure separate through persisted replay", () => {
     const failure = { source: "source-original", error: "Could not save USER.md", saved: [
       { id: "memory:0", kind: "memory", label: "Measured 43.2 K" },

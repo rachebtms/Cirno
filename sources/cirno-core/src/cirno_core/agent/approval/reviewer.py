@@ -20,14 +20,15 @@ AI approval can be wrong. Do not infer authority from an agent, Heartbeat, sched
 """
 
 
-def operation_evidence(tool_name, params, workspace):
+def operation_evidence(tool_name, params, workspace, *, state_dir: Path | None = None):
     """Read only explicitly referenced scripts; bind their bytes to the decision."""
     scripts = []
     remote = None
     if tool_name == "node":
         from cirno_core.nodes.service import Nodes
+        from cirno_core.storage.instance import InstanceData
 
-        nodes = Nodes(actor="agent")
+        nodes = Nodes(data=InstanceData(state_dir), actor="agent") if state_dir is not None else Nodes(actor="agent")
         node_id = params.get("node_id")
         if params.get("job_id"):
             job = nodes.data.get("node_jobs", params["job_id"])

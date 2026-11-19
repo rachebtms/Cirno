@@ -3,8 +3,9 @@
 from typing import Literal
 from urllib.parse import urlsplit
 
-from cirno_core.config.base import Base
 from pydantic import Field, field_validator
+
+from cirno_core.config.base import Base
 
 
 class ProviderBalanceConfig(Base):
@@ -20,9 +21,18 @@ class ProviderBalanceConfig(Base):
         value = value.strip()
         if value.startswith("${") and value.endswith("}"):
             return value
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
-            raise ValueError("Enter an HTTP(S) balance endpoint without embedded credentials or a fragment")
+        try:
+            parsed = urlsplit(value)
+            valid = (
+                parsed.scheme in {"http", "https"} and parsed.hostname
+                and parsed.port != 0
+                and parsed.username is None and parsed.password is None
+                and not parsed.fragment
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("Enter an HTTP(S) balance endpoint with a valid port, without embedded credentials or a fragment")
         return value
 
     @field_validator("amount_path")

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useClient } from "@/providers/ClientProvider";
 import { useMutation } from "@/ui/resources/useMutation";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import {
   configureChannel,
   enableCirnoFeature,
@@ -23,7 +24,9 @@ export function useChannelInstances(
       [client, feature.name],
     );
   const mutation = useMutation(owner),
-    selection = useChannelSelection(owner);
+    selection = useChannelSelection(owner),
+    isCurrent = useLifetime(owner);
+  const [receipt, setReceipt] = useState<{ owner: unknown; error: string | null } | null>(null);
   const [pending, setPending] = useState<{
     owner: unknown;
     id: string;
@@ -31,6 +34,14 @@ export function useChannelInstances(
     checked?: boolean;
   } | null>(null);
   const operation = pending?.owner === owner && mutation.busy ? pending : null;
+  const acknowledge = (payload: CirnoFeaturesPayload) => {
+    onUpdate(payload);
+    if (isCurrent())
+      setReceipt({
+        owner,
+        error: payload.last_action?.ok === false ? payload.last_action.message : null,
+      });
+  };
   useEffect(() => {
     register?.(() =>
       operation?.kind === "toggle"
@@ -44,6 +55,7 @@ export function useChannelInstances(
     mutation,
     selection,
     operation,
+    error: mutation.error ?? (receipt?.owner === owner ? receipt.error : null),
     edit: async (id: string) => {
       if (selection.selected?.name === id) {
         await selection.close();
@@ -55,6 +67,7 @@ export function useChannelInstances(
     toggle: (instance: CirnoChannelInstanceInfo, checked: boolean) =>
       mutation.run(async () => {
         setPending({ owner, id: instance.id, kind: "toggle", checked });
+        setReceipt({ owner, error: null });
         return checked
           ? enableCirnoFeature(client, feature.name, {
               instanceId: instance.id,
@@ -62,7 +75,7 @@ export function useChannelInstances(
           : disableCirnoFeature(client, feature.name, {
               instanceId: instance.id,
             });
-      }, onUpdate),
+      }, acknowledge),
     save: (
       instance: CirnoChannelInstanceInfo,
       values: Record<string, string | null>,
@@ -70,13 +83,14 @@ export function useChannelInstances(
       mutation.run(
         async () => {
           setPending({ owner, id: instance.id, kind: "save" });
+          setReceipt({ owner, error: null });
           return configureChannel(client, feature.name, values, {
             enable: instance.enabled,
             instanceId: instance.id,
           });
         },
         (payload) => {
-          if (payload.cirno_features) onUpdate(payload.cirno_features);
+          if (payload.cirno_features) acknowledge(payload.cirno_features);
         },
       ),
   };

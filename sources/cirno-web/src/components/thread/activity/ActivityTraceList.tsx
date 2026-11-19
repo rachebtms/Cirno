@@ -31,10 +31,12 @@ export function ActivityTraceList({
   lines,
   active,
   stateByLine,
+  statesByIndex,
 }: {
   lines: string[];
   active: boolean;
   stateByLine?: Map<string, GenericToolState>;
+  statesByIndex?: (GenericToolState | undefined)[];
 }) {
   const items: ReactNode[] = [];
   let genericItems: GenericToolRunItem[] = [];
@@ -54,7 +56,7 @@ export function ActivityTraceList({
     const trace = parseGenericToolTrace(line);
     if (trace) {
       const key = canonicalToolTrace(line);
-      const explicitState = stateByLine?.get(key);
+      const explicitState = statesByIndex?.[index] ?? stateByLine?.get(key);
       const fallbackStatus: GenericToolStatus = active && index === lines.length - 1 ? "running" : "done";
       const item: GenericToolRunItem = {
         trace,
@@ -74,7 +76,7 @@ export function ActivityTraceList({
         key={`${line}-${index}`}
         line={line}
         active={active && index === lines.length - 1}
-        state={stateByLine?.get(canonicalToolTrace(line))}
+        state={statesByIndex?.[index] ?? stateByLine?.get(canonicalToolTrace(line))}
       />,
     );
   });

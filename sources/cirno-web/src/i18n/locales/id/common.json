@@ -168,6 +168,10 @@
           "label": "Akses web",
           "help": "Mengizinkan pencarian web dan pengambilan halaman."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "Ukuran maksimum respons halaman (MiB)",
+          "help": "Hentikan pembacaan halaman, gambar, atau respons Jina jika ukuran yang diumumkan atau setelah didekode melebihi batas ini. Terpisah dari panjang teks yang dikembalikan. Mulai ulang untuk menerapkan."
+        },
         "tools_cli_apps_enable": {
           "label": "Aplikasi CLI",
           "help": "Mengizinkan agen mengelola dan menjalankan aplikasi baris perintah."
@@ -1260,7 +1264,11 @@
         "supabase": "Lihat dan kelola proyek."
       },
       "editConfig": "Edit konfigurasi MCP",
-      "configObjectRequired": "Konfigurasi MCP harus berupa objek JSON."
+      "configObjectRequired": "Konfigurasi MCP harus berupa objek JSON.",
+      "changePending": "Perubahan MCP lain sedang diproses. Tunggu hingga selesai, lalu simpan lagi.",
+      "cleanupPending": "Masih ada data server MCP {{name}} yang telah dihapus untuk dibersihkan.",
+      "retryCleanup": "Coba pembersihan lagi",
+      "statusAuthorizationRequired": "Perlu masuk"
     },
     "legal": {
       "thirdPartyBrands": "Nama produk, logo, dan merek adalah milik pemiliknya masing-masing. Penggunaan hanya untuk identifikasi dan tidak menyiratkan dukungan."
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "Percakapan ini akan muncul kembali di daftar percakapan."
   },
   "deleteConfirm": {
+    "notConfirmed": "Penghapusan percakapan belum dikonfirmasi. Silakan coba lagi.",
     "title": "Hapus obrolan ini?",
     "titleMany": "Hapus {{count}} percakapan?",
     "description": "Tindakan ini tidak dapat dibatalkan.",

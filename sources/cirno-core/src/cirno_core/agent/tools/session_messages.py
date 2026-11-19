@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
+from loguru import logger
+
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import RequestContext, ToolContext, current_request_context
 from cirno_core.agent.tools.schema import (
@@ -34,7 +36,7 @@ from cirno_core.session.session_messages import (
     SessionMessageEnvelope,
     session_message_envelope,
 )
-from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain
 
 _RATE_LIMIT_WINDOW_SECONDS = 60.0
 MIN_REPLY_TIMEOUT_SECONDS = 5
@@ -239,24 +241,31 @@ class SendSessionMessageTool(Tool):
             from dataclasses import replace
 
             from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
-            identifier = await self._sessions.state.queue_followup(target.session_key, message)
-            if identifier is None:
-                return f"@{target.name}"
-            message = replace(message, metadata={**message.metadata, PENDING_FOLLOWUP_ID_KEY: identifier})
-            await self._bus.publish_inbound(message)
-            sent_at.append(now)
-            self._sent_at[source.session_key] = sent_at
-            self._sent_at.move_to_end(source.session_key)
-            self._cancel_pending_reply(reverse_wait_key)
-            if timeout_seconds is not None:
-                self._cancel_pending_reply(wait_key)
-                self._schedule_pending_reply(
-                    wait_key,
-                    timeout_seconds,
-                    target.name,
-                    envelope,
-                    source_header.generation,
+            async def accept_and_notify() -> None:
+                identifier = await self._sessions.state.queue_followup(target.session_key, message)
+                if identifier is None:
+                    return
+                queued = replace(
+                    message, metadata={**message.metadata, PENDING_FOLLOWUP_ID_KEY: identifier}
                 )
+                await self._bus.publish_inbound(queued)
+                sent_at.append(now)
+                self._sent_at[source.session_key] = sent_at
+                self._sent_at.move_to_end(source.session_key)
+                self._cancel_pending_reply(reverse_wait_key)
+                if timeout_seconds is not None:
+                    self._cancel_pending_reply(wait_key)
+                    self._schedule_pending_reply(
+                        wait_key,
+                        timeout_seconds,
+                        target.name,
+                        envelope,
+                        source_header.generation,
+                    )
+
+            # Once inbox admission starts, retain its wakeup, rate receipt and
+            # reply timer under the same send lock before propagating Stop.
+            await shield_and_drain(accept_and_notify())
 
         return f"@{target.name}"
 

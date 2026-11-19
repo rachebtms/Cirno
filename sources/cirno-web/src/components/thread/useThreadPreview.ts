@@ -13,6 +13,7 @@ import type { FilePreviewPayload, FileReferenceMetadata } from "@/lib/contracts/
 import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 import { createFilePreviewResource } from "@/lib/file-preview-resource";
 import { useClient } from "@/providers/ClientProvider";
+import { useLifetime } from "@/ui/resources/useLifetime";
 
 const FILE_PREVIEW_DEFAULT_WIDTH = 544;
 const FILE_PREVIEW_MIN_WIDTH = 280;
@@ -51,13 +52,28 @@ export function useThreadPreview({
 }: ThreadPreviewOptions) {
   const { client, getToken, token } = useClient();
   const workspaceOpen = useWorkspaceOpen();
+  const project = workspaceScope?.project_path, access = workspaceScope?.access_mode;
+  const paneOwner = useMemo(() => ({ client, previewSessionKey, project, access }), [client, previewSessionKey, project, access]);
+  const requestOwner = useMemo(() => ({ paneOwner, temporary, chatId }), [paneOwner, temporary, chatId]);
+  const paneCurrent = useLifetime(paneOwner), requestCurrent = useLifetime(requestOwner);
+  const [viewOwner, setViewOwner] = useState(paneOwner);
   const [browserDirty, setBrowserDirty] = useState(false);
   const [pendingPreviewAction, setPendingPreviewAction] = useState<(() => void) | null>(null);
-  const guardPreview = (action: () => void) => { if (browserDirty) setPendingPreviewAction(() => action); else action(); };
+  const guardPreview = (action: () => void) => {
+    if (!paneCurrent()) return;
+    if (browserDirty) setPendingPreviewAction(() => () => { if (paneCurrent()) action(); });
+    else action();
+  };
   const previewStoreKey = previewSessionKey ?? "new:files";
   const { state: previewState, openFile, openBrowser, resolveFile, selectTab, closeTab, close: closePreview, setWidth: setFilePreviewWidth } =
     useFilePreviewState(previewStoreKey, filePreviewStore);
   const [closingPreview, setClosingPreview] = useState<{ key: string; state: FilePreviewState } | null>(null);
+  if (viewOwner !== paneOwner) {
+    setViewOwner(paneOwner);
+    setBrowserDirty(false);
+    setPendingPreviewAction(null);
+    setClosingPreview(null);
+  }
   const filePreviewClosing = closingPreview?.key === previewStoreKey;
   const visiblePreview = filePreviewClosing ? closingPreview.state : previewState;
   const activePreview = visiblePreview.tabs.find((tab) => tab.id === visiblePreview.activeId);
@@ -79,7 +95,7 @@ export function useThreadPreview({
       filePreviewCloseTimerRef.current = null;
     }
     setClosingPreview(null);
-  }, [previewSessionKey]);
+  }, [paneOwner]);
 
   useEffect(() => {
     return () => {
@@ -92,11 +108,11 @@ export function useThreadPreview({
 
   const filePreviewAvailabilityCache = useMemo(
     () => new Map<string, FilePreviewAvailabilityCacheEntry>(),
-    [previewSessionKey],
+    [requestOwner],
   );
   const filePreviewAvailabilityRevision = messageCount;
   const resolveFilePreviewAvailability = useCallback((path: string) => {
-    if (!previewSessionKey) return Promise.resolve(false);
+    if (!previewSessionKey || !requestCurrent()) return Promise.resolve(false);
     const cached = filePreviewAvailabilityCache.get(path);
     if (
       cached
@@ -109,11 +125,11 @@ export function useThreadPreview({
         chat_id: chatId, path, probe: true,
       }).then((result) => result.available)
       : fetchFilePreviewAvailability(getToken(), previewSessionKey, path);
-    const pending = request.catch(
-      (error: unknown) => {
-        if (error instanceof ApiError) {
-          if ([400, 403, 404, 413, 415].includes(error.status)) return false;
-        }
+    let failed = false;
+    const pending = request.then(
+      available => requestCurrent() && available,
+      () => {
+        failed = true;
         return false;
       },
     );
@@ -124,7 +140,8 @@ export function useThreadPreview({
     filePreviewAvailabilityCache.set(path, entry);
     void pending.then((available) => {
       if (filePreviewAvailabilityCache.get(path) === entry) {
-        entry.available = available;
+        if (failed || !requestCurrent()) filePreviewAvailabilityCache.delete(path);
+        else entry.available = available;
       }
     });
     return pending;
@@ -136,6 +153,7 @@ export function useThreadPreview({
     temporary,
     client,
     chatId,
+    requestCurrent,
   ]);
 
   const loadTemporaryFilePreview = useCallback((path: string) =>
@@ -149,7 +167,7 @@ export function useThreadPreview({
     }), [client, chatId]);
 
   const handleCloseFilePreview = useCallback(() => {
-    if (!previewState.activeId || filePreviewClosing) return;
+    if (!paneCurrent() || !previewState.activeId || filePreviewClosing) return;
     filePreviewResizeCleanupRef.current?.();
     setClosingPreview({ key: previewStoreKey, state: previewState });
     // Record the closed state immediately, even if navigation interrupts the animation.
@@ -158,7 +176,7 @@ export function useThreadPreview({
       filePreviewCloseTimerRef.current = null;
       setClosingPreview(null);
     }, FILE_PREVIEW_CLOSE_ANIMATION_MS);
-  }, [previewStoreKey, filePreviewClosing, previewState, closePreview]);
+  }, [previewStoreKey, filePreviewClosing, previewState, closePreview, paneCurrent]);
 
   const cancelPreviewClose = useCallback(() => {
     filePreviewResizeCleanupRef.current?.();
@@ -175,40 +193,46 @@ export function useThreadPreview({
   }, [headerActive, cancelPreviewClose]);
 
   const handleOpenFilePreview = useCallback((path: string) => {
+    if (!paneCurrent()) return;
     if (workspaceOpen && !temporary) {
       workspaceOpen("file", { path, sessionKey: previewSessionKey, scope: workspaceScope });
       return;
     }
     cancelPreviewClose();
     openFile(path);
-  }, [cancelPreviewClose, openFile, workspaceOpen, temporary, previewSessionKey, workspaceScope]);
+  }, [cancelPreviewClose, openFile, workspaceOpen, temporary, previewSessionKey, workspaceScope, paneCurrent]);
 
   const handleClosePreviewTab = useCallback((id: string) => {
+    if (!paneCurrent()) return;
     if (previewState.tabs.length === 1) handleCloseFilePreview();
     else {
       filePreviewResizeCleanupRef.current?.();
       closeTab(id);
     }
-  }, [previewState.tabs.length, handleCloseFilePreview, closeTab]);
+  }, [previewState.tabs.length, handleCloseFilePreview, closeTab, paneCurrent]);
 
   // Markdown blocks can retain rendered links while their text is unchanged.
   // Keep their callback stable, but always act on the current pane/session state.
   const openFilePreviewRef = useRef(handleOpenFilePreview);
   openFilePreviewRef.current = handleOpenFilePreview;
   const openFilePreview = useCallback((path: string) => openFilePreviewRef.current(path), []);
-  const resolveFileMetadata = useCallback((path: string) => {
+  const resolveFileMetadata = useCallback(async (path: string) => {
     if (!previewSessionKey) return Promise.reject(new Error("No active session"));
-    return temporary
-      ? client.requestMutation<FileReferenceMetadata>("temporary_chat.file_preview", {
+    if (!requestCurrent()) throw new Error("File preview context changed");
+    const result = temporary
+      ? await client.requestMutation<FileReferenceMetadata>("temporary_chat.file_preview", {
         chat_id: chatId, path, metadata: true,
       })
-      : fetchFileReferenceMetadata(getToken(), previewSessionKey, path);
-  }, [chatId, client, getToken, previewSessionKey, temporary]);
+      : await fetchFileReferenceMetadata(getToken(), previewSessionKey, path);
+    if (!requestCurrent()) throw new Error("File preview context changed");
+    return result;
+  }, [chatId, client, getToken, previewSessionKey, temporary, requestCurrent]);
   const loadFilePreview = useCallback((path: string) => {
     if (!previewSessionKey) return Promise.reject(new Error("No active session"));
+    if (!requestCurrent()) return Promise.reject(new Error("File preview context changed"));
     return temporary ? loadTemporaryFilePreview(path) : fetchFilePreview(getToken(), previewSessionKey, path);
-  }, [previewSessionKey, temporary, loadTemporaryFilePreview, getToken]);
-  const filePreviews = useMemo(() => createFilePreviewResource(loadFilePreview), [loadFilePreview]);
+  }, [previewSessionKey, temporary, loadTemporaryFilePreview, getToken, requestCurrent]);
+  const filePreviews = useMemo(() => createFilePreviewResource(loadFilePreview, requestCurrent), [loadFilePreview, requestCurrent]);
   const fileActions = useMemo(() => ({
     resolveMetadata: resolveFileMetadata,
     loadPreview: filePreviews.load,
@@ -228,6 +252,7 @@ export function useThreadPreview({
   }, [previewOpen, headerActive, handleCloseFilePreview, browserDirty]);
 
   const handleFilePreviewResizeStart = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!paneCurrent()) return;
     filePreviewResizeCleanupRef.current?.();
     event.preventDefault();
     event.stopPropagation();
@@ -286,7 +311,7 @@ export function useThreadPreview({
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerUp);
-  }, [setFilePreviewWidth]);
+  }, [setFilePreviewWidth, paneCurrent]);
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -306,6 +331,7 @@ export function useThreadPreview({
   }, [previewOpen]);
 
   const openFiles = () => {
+    if (!paneCurrent()) return;
     if (workspaceOpen && !temporary) {
       workspaceOpen("files", { sessionKey: previewSessionKey, scope: workspaceScope });
     } else {

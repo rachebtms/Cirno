@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import cast
 
 from cirno_core.security.workspace_access import WorkspaceScope, build_workspace_scope
+
 from cirno_server.webui.file_preview import WebUIFilePreviewError, resolve_file_path
+
 from .signing import MediaDirProvider, b64url_decode
 
 _ALLOWED_MIMES = frozenset(
@@ -117,7 +119,7 @@ class MediaReference:
     def resolve(self) -> MediaResource:
         if self.scope is not None:
             try:
-                path = resolve_file_path(self.value, scope=self.scope, literal=True)
+                path = resolve_file_path(self.value, scope=self.scope, literal=True, media_root=self.media_dir(None))
             except WebUIFilePreviewError as exc:
                 raise MediaAccessError(exc.status, "attachment unavailable") from exc
             return MediaResource(path, True)

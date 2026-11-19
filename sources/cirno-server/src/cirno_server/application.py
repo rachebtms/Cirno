@@ -178,7 +178,7 @@ def _run_claimed_server(
     fallback_model_observer = build_webui_fallback_model_observer(bus)
 
     def _observe_provider(snapshot: ProviderSnapshot) -> ProviderSnapshot:
-        snapshot.provider.set_llm_call_observer(partial(record_llm_call, path=get_data_dir() / "llm_usage.sqlite3"))
+        snapshot.provider.set_llm_call_observer(partial(record_llm_call, path=gateway_instance.config_path.parent / "state" / "llm_usage.sqlite3"))
         if isinstance(snapshot.provider, FallbackProvider):
             snapshot.provider.set_fallback_model_observer(fallback_model_observer)
         return snapshot
@@ -264,6 +264,7 @@ def _run_claimed_server(
         publish_to_channel,
         bus=bus,
         session_manager=session_manager,
+        config_path=gateway_instance.config_path,
     )
 
     message_tool = agent.tools.get("message")
@@ -402,7 +403,10 @@ def _run_claimed_server(
                 ]
             )
             from cirno_core.nodes.monitor import monitor_node_jobs
-            tasks.append(asyncio.create_task(monitor_node_jobs(), name="cirno-node-jobs"))
+            tasks.append(asyncio.create_task(
+                monitor_node_jobs(state_dir=Path(config_path).expanduser().resolve(strict=False).parent / "state"),
+                name="cirno-node-jobs",
+            ))
             desktop_activated.set()
             if _webui_channel_enabled(config):
                 tasks.append(

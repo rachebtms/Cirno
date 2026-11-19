@@ -63,8 +63,10 @@ export async function fetchAutomationRunResult(
   runAtMs: number,
   kind: "cron" | "local_trigger",
   signal?: AbortSignal,
+  runId?: string,
 ): Promise<{ response: string | null }> {
   const query = new URLSearchParams({ id, run_at_ms: String(runAtMs), kind });
+  if (runId) query.set("run_id", runId);
   return request<{ response: string | null }>(
     `/v0/webui/automations/result?${query}`,
     token,

@@ -77,6 +77,16 @@ class SessionInbox:
                 from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
                 from cirno_core.session.session_messages import session_message_envelope
 
+                if payload.metadata.get("_heartbeat"):
+                    journal_id = payload.metadata.get(PENDING_FOLLOWUP_ID_KEY)
+                    if session.metadata.get("heartbeat_paused") or any(
+                        record.get("metadata", {}).get("_heartbeat") and record.get("id") != journal_id
+                        for record in session.metadata.get("pending_user_followups", [])
+                    ):
+                        # Tick checks can race each other or a pause command.
+                        # Reserve at most one heartbeat in the writer transaction.
+                        return session, None, True
+
                 envelope = session_message_envelope(payload.metadata)
                 identity = _receipt_identity(payload, key)
                 receipt_id, digest = identity if identity is not None else (None, None)
@@ -127,12 +137,16 @@ class SessionInbox:
 
         return await self.operations.execute(key, commit, operation_name="queue_followup")
 
-    async def acknowledge_followups(self, key: str, identifiers: Sequence[str]) -> None:
+    async def acknowledge_followups(
+        self, key: str, identifiers: Sequence[str], *, expected_generation: str | None = None,
+    ) -> None:
         from cirno_core.session.recovery.pending import acknowledge_pending_followups
 
         values = tuple(identifiers)
 
         def change(session: Session) -> None:
+            if expected_generation is not None and session.generation != expected_generation:
+                raise SessionConflictError("follow-up acknowledgement belongs to a replaced session")
             acknowledge_pending_followups(session, values)
             if session.policy.persist:
                 self.repository.store.mark_inbox_read(key, session.generation, values)

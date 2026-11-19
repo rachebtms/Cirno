@@ -14,6 +14,7 @@ from cirno_core.bus.queue import MessageBus
 from cirno_core.config.schema import Config
 from cirno_core.runtime.admission import RuntimeBusyError
 from cirno_core.session.manager import SessionManager
+
 from cirno_server.channels.manager import ChannelManager
 from cirno_server.channels.websocket import writers
 from cirno_server.channels.websocket.config import WebSocketConfig
@@ -531,7 +532,7 @@ async def test_shell_output_is_literal_without_changing_other_command_replies(
     channel._attach(cast(Any, connection), "shell-output")
     output = "Path\n----\n  __pycache__\n```mermaid\nflowchart LR\n```\n![preview](local.png)\n"
     rewritten = output.replace("local.png", "/v0/media/signed")
-    monkeypatch.setattr(channel.gateway.media, "rewrite_local_markdown_images", lambda text: rewritten)
+    monkeypatch.setattr(channel.gateway.media, "rewrite_local_markdown_images", lambda text, **kwargs: rewritten)
     message = await history.message(
         channel="websocket", chat_id="shell-output", content=output,
         metadata={"render_as": "text", INBOUND_META_USER_SHELL: user_shell},
@@ -546,5 +547,86 @@ async def test_shell_output_is_literal_without_changing_other_command_replies(
         assert persisted["text"] == output
         assert persisted.get("render_as") == ("text" if user_shell else None)
         assert message.content == output
+    finally:
+        await channel._cleanup_connection(cast(Any, connection))
+
+
+@pytest.mark.parametrize("delivery", ["message", "stream_end"])
+async def test_outbound_markdown_media_uses_the_conversations_project(tmp_path, monkeypatch, delivery):
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    default = tmp_path / "default"
+    project = tmp_path / "project"
+    for root, content in ((default, b"wrong-default-image"), (project, b"correct-project-image")):
+        root.mkdir()
+        (root / "plot.png").write_bytes(content)
+    sessions = SessionManager(tmp_path)
+    await sessions.state.open_with_metadata("websocket:project-media", {
+        "workspace_scope": {"project_path": str(project), "access_mode": "restricted"},
+    })
+    channel = _channel(sessions)
+    channel.gateway.media.workspace_path = default
+
+    def media_dir(name):
+        path = tmp_path / "media"
+        if name:
+            path /= name
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    channel.gateway.media._media_dir = media_dir
+    connection = _RecordingConnection()
+    channel._attach(cast(Any, connection), "project-media")
+    markdown = "![plot](plot.png)"
+    try:
+        if delivery == "message":
+            await channel.send(_message("project-media", markdown))
+        else:
+            await channel._outbound.send_delta("project-media", markdown, stream_end=True)
+        payload = json.loads(await asyncio.wait_for(connection.sent.get(), timeout=1))
+        text = payload["text"]
+        assert "![plot](/v0/media/" in text
+        url = text.removeprefix("![plot](").removesuffix(")")
+        sig, reference = url.removeprefix("/v0/media/").split("/", 1)
+        resource = channel.gateway.media.resolve_signed_media(sig, reference)
+        assert resource.path.read_bytes() == b"correct-project-image"
+    finally:
+        await channel._cleanup_connection(cast(Any, connection))
+        await sessions.state.aclose()
+
+
+async def test_streamed_markdown_media_can_be_resigned_after_restart(history, tmp_path):
+    key = "websocket:media-restart"
+    await history.sessions.state.open_with_metadata(key, {
+        "workspace_scope": {"project_path": str(tmp_path), "access_mode": "restricted"},
+    })
+    (tmp_path / "plot.png").write_bytes(b"plot")
+    channel = _channel(history.sessions)
+
+    def media_dir(name):
+        path = tmp_path / "media"
+        if name:
+            path /= name
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    channel.gateway.media._media_dir = media_dir
+    connection = _RecordingConnection()
+    channel._attach(cast(Any, connection), "media-restart")
+    markdown = "![plot](plot.png)"
+    try:
+        await channel._outbound.send_delta(
+            "media-restart", markdown, metadata=await history.metadata("media-restart"), stream_end=True,
+        )
+        wire = json.loads(await asyncio.wait_for(connection.sent.get(), timeout=1))
+        assert "/v0/media/" in wire["text"]
+        [record] = history.read(key)
+        assert record["text"] == markdown
+        channel.gateway.media.secret = b"replacement-instance-secret"
+        rebuilt = history.build(key, augment_assistant_text=lambda text: channel.gateway.media.rewrite_local_markdown_images(
+            text, workspace_path=tmp_path,
+        ))
+        current = channel.gateway.media.rewrite_local_markdown_images(markdown, workspace_path=tmp_path)
+        assert current != wire["text"]
+        assert current in str(rebuilt) and wire["text"] not in str(rebuilt)
     finally:
         await channel._cleanup_connection(cast(Any, connection))

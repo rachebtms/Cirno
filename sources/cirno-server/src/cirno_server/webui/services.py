@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from cirno_core.config.loader import get_config_path
-from cirno_core.config.paths import get_media_dir
 from cirno_core.session.transcript import WebUITranscriptRecorder
+from loguru import logger as default_logger
+
 from cirno_server.channels.websocket.attachment_http import AttachmentHTTP
 from cirno_server.channels.websocket.attachment_policy import AttachmentIngressLimits
 from cirno_server.channels.websocket.attachment_store import AttachmentStore
@@ -22,7 +23,6 @@ from cirno_server.webui.session_projection import WebUISessionProjection
 from cirno_server.webui.settings.services import WebUISettingsServices
 from cirno_server.webui.temporary_chats import WebUITemporaryChats
 from cirno_server.webui.workspaces import WebUIWorkspaceController
-from loguru import logger as default_logger
 
 if TYPE_CHECKING:
     from cirno_core.agent.subagents.manager import SubagentManager
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from cirno_core.cron.service import CronService
     from cirno_core.session.manager import SessionManager
     from cirno_core.triggers.local_store import LocalTriggerStore
+
     from cirno_server.channels.websocket.config import WebSocketConfig
 
 
@@ -90,6 +91,13 @@ def build_server_services(
     )
     tokens = ServerTokenStore()
     upload_config = settings.config.load().server.uploads
+    media_root = settings.config.path.parent / "state" / "media"
+
+    def instance_media_dir(channel: str | None = None) -> Path:
+        directory = media_root / channel if channel else media_root
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
     ingress = WebUIIngressPolicy(
         attachments=AttachmentIngressLimits(
             max_file_bytes=upload_config.max_file_mb * 1024 * 1024,
@@ -108,10 +116,12 @@ def build_server_services(
     media = WebUIMediaServer(
         workspace_path=workspace_path,
         logger=logger,
+        media_dir=instance_media_dir,
     )
     uploads = AttachmentHTTP(
         AttachmentStore(
-            get_media_dir("websocket"),
+            instance_media_dir("websocket"),
+            media_root=media.media_root,
             limits=ingress.attachments,
             max_pending_bytes=max(
                 128 * 1024 * 1024,
@@ -125,6 +135,7 @@ def build_server_services(
         session_manager=session_manager,
         default_workspace=workspace_path,
         default_restrict_to_workspace=default_restrict_to_workspace,
+        state_dir=settings.config.path.parent / "state",
     )
     temporary_chats = WebUITemporaryChats(
         bus=bus,

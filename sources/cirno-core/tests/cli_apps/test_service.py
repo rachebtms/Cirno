@@ -1,6 +1,4 @@
 from __future__ import annotations
-from cirno_core.apps.cli.commands import CliCommands
-from cirno_core.apps.cli import records as cli_records
 
 import asyncio
 import json
@@ -13,13 +11,13 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-
 from cirno_core.agent import plugins as agent_plugins
-from cirno_core.skills.loader import SkillsLoader
+from cirno_core.apps.cli import records as cli_records
 from cirno_core.apps.cli import service as cli_service
 from cirno_core.apps.cli.contracts import CliAppError, CliAppsRuntimeConfig
-from cirno_core.apps.cli.service import CliAppManager
 from cirno_core.apps.cli.paths import cli_app_skill_path
+from cirno_core.apps.cli.service import CliAppManager
+from cirno_core.skills.loader import SkillsLoader
 
 
 @pytest.fixture(autouse=True)
@@ -452,12 +450,18 @@ def test_install_dispatches_safe_pip_and_installs_skill(
     manager = _manager(tmp_path)
     _seed_catalog(manager)
     calls: list[list[str]] = []
+    executable_ready = False
 
     def fake_run(argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
+        nonlocal executable_ready
         calls.append(argv)
+        executable_ready = True
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
+    monkeypatch.setattr(manager.commands, "which", lambda command: (
+        str(tmp_path / "bin" / command) if executable_ready and command == "cli-anything-gimp" else None
+    ))
     monkeypatch.setattr(
         manager,
         "_fetch_skill_content",
@@ -466,7 +470,12 @@ def test_install_dispatches_safe_pip_and_installs_skill(
     from cirno_core.config.home import get_home_path
     legacy = get_home_path() / "skills" / "cli-app-gimp" / "SKILL.md"
     legacy.parent.mkdir(parents=True)
-    legacy.write_text("legacy", encoding="utf-8")
+    legacy.write_text(
+        "---\nname: cli-app-gimp\ndescription: Legacy generated GIMP Skill\n---\n"
+        '<!-- cirno-cli-app-note -->\nUse the `apps__run` tool with `name="gimp"` for command execution.\n',
+        encoding="utf-8",
+    )
+    legacy_content = legacy.read_text(encoding="utf-8")
 
     payload = manager.install("gimp")
 
@@ -483,15 +492,13 @@ def test_install_dispatches_safe_pip_and_installs_skill(
     assert 'apps__run` tool with `name="gimp"' in skill.read_text(encoding="utf-8")
     assert SkillsLoader(manager.workspace).load_skill("cli-app-gimp") is not None
     assert legacy == skill
-    assert legacy.read_text(encoding="utf-8") != "legacy"
+    assert legacy.read_text(encoding="utf-8") != legacy_content
 
 
 def test_run_argv_logs_command_exit_and_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from cirno_core.apps.cli import service as cli_service
-
     manager = _manager(tmp_path)
     records: list[str] = []
 
@@ -502,24 +509,18 @@ def test_run_argv_logs_command_exit_and_output(
     def fake_run(
         argv: list[str],
         *,
-        capture_output: bool,
-        text: bool,
-        encoding: str,
-        errors: str,
+        cwd: Path,
         timeout: int,
         env: dict[str, str],
     ) -> subprocess.CompletedProcess[str]:
-        assert capture_output is True
-        assert text is True
-        assert encoding == "utf-8"
-        assert errors == "replace"
+        assert cwd == Path.cwd()
         assert timeout == 5
         assert "OPENAI_API_KEY" not in env
         assert env["PYTHONUNBUFFERED"] == "1"
         return subprocess.CompletedProcess(argv, 0, stdout="installed ok", stderr="")
 
     monkeypatch.setattr("cirno_core.apps.cli.commands.logger", _Logger())
-    monkeypatch.setattr(cli_service.subprocess, "run", fake_run)
+    monkeypatch.setattr("cirno_core.apps.cli.commands.run_cli", fake_run)
 
     result = manager.commands._run_argv(["python", "-m", "pip", "install", "sample"], timeout=5)
 
@@ -627,8 +628,12 @@ def test_install_recovers_stale_npm_global_directory(
     monkeypatch.setattr(manager.commands, "_run_argv", fake_run)
     monkeypatch.setattr(
         "cirno_core.apps.cli.service.shutil.which",
-        lambda command: npm if command == "npm" else None,
+        lambda command: npm if command == "npm" else (
+            str(tmp_path / "bin" / "hyperframes")
+            if command == "hyperframes" and install_attempts >= 2 else None
+        ),
     )
+    monkeypatch.setattr(manager, "_fetch_skill_content", lambda app: None)
 
     payload = manager.install("hyperframes")
 

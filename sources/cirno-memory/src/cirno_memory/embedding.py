@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import selectors
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -54,12 +55,12 @@ class EmbeddingWorker:
                 remaining = self.budget.remaining()
                 # Monitor the whole child RSS, including imports and ONNX initialization.
                 if os.name == "posix":
-                    measured = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True, timeout=2)
+                    measured = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True, timeout=min(2, remaining))
                     rss = float(measured.stdout.strip() or 0) / 1024
                     self.peak_mb = max(self.peak_mb, rss)
                     if rss > self.config.embedding_max_rss_mb:
                         raise MemoryError(f"Embedding worker exceeded {self.config.embedding_max_rss_mb} MB RSS ({rss:.1f} MB); using BM25")
-                for key, _ in selector.select(timeout=min(0.05, remaining)):
+                for key, _ in selector.select(timeout=min(0.05, self.budget.remaining())):
                     if key.fileobj is process.stdin:
                         written = os.write(process.stdin.fileno(), payload[:65536])
                         payload = payload[written:]
@@ -96,13 +97,22 @@ class EmbeddingWorker:
                 self.process.stdout.close()
 
 
-def _fingerprint(config):
+def _fingerprint(config, *, budget=None):
     if config.embedding_provider == "api":
-        return hashlib.sha256(json.dumps(["api-char-chunks-v1", config.embedding_api_base.rstrip("/"), config.embedding_api_model, config.embedding_api_chunk_chars]).encode()).hexdigest()
+        from cirno_memory.config import normalize_embedding_api_base
+        base = normalize_embedding_api_base(config.embedding_api_base)
+        return hashlib.sha256(json.dumps(["api-char-chunks-v1", base, config.embedding_api_model, config.embedding_api_chunk_chars]).encode()).hexdigest()
     digest = hashlib.sha256(b"bge-token-chunks-224-stride-192-v1")
     for value in (config.embedding_model_path, config.embedding_tokenizer_path):
+        if budget is not None:
+            budget.remaining()
         with Path(value).expanduser().open("rb") as stream:
-            for chunk in iter(lambda: stream.read(65536), b""):
+            while True:
+                if budget is not None:
+                    budget.remaining()
+                chunk = stream.read(65536)
+                if not chunk:
+                    break
                 digest.update(chunk)
     return digest.hexdigest()
 
@@ -118,7 +128,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
     try:
         from cirno_memory.embedding_budget import EmbeddingBudget
         deadline = EmbeddingBudget(config.embedding_timeout_seconds)
-        fingerprint = _fingerprint(config)
+        fingerprint = _fingerprint(config, budget=deadline)
         deadline.remaining()
         access_clauses = ["m.status='active'", "m.layer IN ('knowledge','profile')"]
         args = []
@@ -222,7 +232,7 @@ def search(repo, query, config, *, mode="hybrid", limit=10, **filters):
             deadline.remaining()
             return {"memories": results, "engine": mode, "has_more": False, "next_offset": 0,
                     "embedding_index_pending": pending, "worker_peak_mb": round(worker.peak_mb, 1)}
-    except (OSError, ValueError, RuntimeError, MemoryError, TimeoutError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, RuntimeError, MemoryError, TimeoutError, subprocess.SubprocessError, sqlite3.Error) as exc:
         return {**lexical, "warning_code": "unavailable", "warning": str(exc)}
     finally:
         _LOCK.release()

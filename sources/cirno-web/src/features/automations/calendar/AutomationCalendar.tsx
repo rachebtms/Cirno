@@ -44,6 +44,10 @@ export function AutomationCalendar({
     run: AutomationRunRecord;
   } | null>(null);
   const [runOpen, setRunOpen] = useState(false);
+  const liveJob = jobs.find((job) => job.id === selectedRun?.job.id);
+  const liveRun = selectedRun?.run.run_id
+    ? liveJob?.state.run_history?.slice().reverse().find((run) => run.run_id === selectedRun.run.run_id)
+    : undefined;
   const inspect = (entry: CalendarEntry) => {
     if (entry.run) {
       setSelectedRun({ job: entry.job, run: entry.run });
@@ -172,7 +176,8 @@ export function AutomationCalendar({
       )}
       {selectedRun &&
         renderRunDialog({
-          ...selectedRun,
+          job: liveJob ?? selectedRun.job,
+          run: liveRun ?? selectedRun.run,
           locale,
           open: runOpen,
           onOpenChange: setRunOpen,

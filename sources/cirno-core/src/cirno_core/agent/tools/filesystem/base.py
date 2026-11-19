@@ -2,6 +2,7 @@
 
 # pyright: reportPrivateUsage=false
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from cirno_core.agent.tools.file_state import FileStates, current_file_states
 from cirno_core.agent.tools.filesystem_config import FileToolsConfig
 from cirno_core.agent.tools.path_utils import resolve_workspace_path
 from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import get_config_path
 from cirno_core.security.workspace_access import current_tool_workspace
 
 
@@ -38,6 +40,8 @@ class FileTool(Tool):
         restrict_to_workspace: bool | None = None,
         sandbox_restricts_workspace: bool = False,
         extra_read_allowed_files: list[Path] | None = None,
+        home_path: Path | None = None,
+        source_config_path: Path | None = None,
     ):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
@@ -51,6 +55,8 @@ class FileTool(Tool):
             else allowed_dir is not None
         )
         self._sandbox_restricts_workspace = sandbox_restricts_workspace
+        self._home_path = (home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+        self._source_config_path = (source_config_path if source_config_path is not None else get_config_path()).expanduser().resolve(strict=False)
         # Explicit state is used by isolated runners like Dream/subagents.
         # Main AgentLoop tools leave this unset and resolve state from the
         # current async task, which keeps shared tool instances session-safe.
@@ -62,7 +68,7 @@ class FileTool(Tool):
         from cirno_core.skills.metadata import BUILTIN_DOCUMENTS_DIR, BUILTIN_SKILLS_DIR
 
         agent_workspace = Path(ctx.workspace)
-        agent_home = get_home_path().resolve()
+        agent_home = ctx.home_path.expanduser().resolve(strict=False)
         restrict = ctx.config.restrict_to_workspace or ctx.config.exec.sandbox
         sandbox_restricts = bool(ctx.config.exec.sandbox)
         allowed_dir = agent_workspace if restrict else None
@@ -89,6 +95,8 @@ class FileTool(Tool):
             file_states=ctx.file_state_store,
             restrict_to_workspace=ctx.config.restrict_to_workspace,
             sandbox_restricts_workspace=sandbox_restricts,
+            home_path=agent_home,
+            source_config_path=ctx.source_config_path or ctx.instance_config_path,
         )
 
     @property
@@ -98,9 +106,11 @@ class FileTool(Tool):
         return current_file_states(self._fallback_file_states)
 
     def _effective_allowed_root(self, access_allowed_root: Path | None) -> Path | None:
-        if self._allowed_dir is None or self._workspace is None:
+        if self._allowed_dir is None:
             return access_allowed_root
         allowed_dir = Path(self._allowed_dir).expanduser().resolve(strict=False)
+        if self._workspace is None:
+            return allowed_dir
         workspace = Path(self._workspace).expanduser().resolve(strict=False)
         if allowed_dir == workspace:
             return access_allowed_root
@@ -150,6 +160,7 @@ class FileTool(Tool):
                     enabled_agent_plugin_skill_dirs(
                         Path(self._workspace),
                         requested_path=candidate.resolve(strict=False),
+                        config_path=self._source_config_path,
                     )
                 )
         return self._resolve_with_extra(
@@ -174,27 +185,41 @@ class FileTool(Tool):
                     self._resolve_read(path)
                 else:
                     # The write resolver also snapshots Skills: preflight must not.
-                    self._resolve_with_extra(
-                        path,
-                        self._extra_write_allowed_dirs,
-                        self._extra_write_allowed_files,
-                        include_media_dir=False,
-                    )
+                    self._resolve_write_path(path)
         except WorkspaceBoundaryError as error:
             return str(error)
         return None
 
-    def _resolve_write(self, path: str) -> Path:
-        resolved = self._resolve_with_extra(
+    def _resolve_write_path(self, path: str) -> Path:
+        """Authorize a destination without creating a Skill history snapshot."""
+        return self._resolve_with_extra(
             path,
             self._extra_write_allowed_dirs,
             self._extra_write_allowed_files,
             include_media_dir=False,
         )
+
+    def _resolve_write(self, path: str) -> Path:
+        resolved = self._resolve_write_path(path)
         from cirno_core.skills.history import capture_skill_path
 
-        capture_skill_path(resolved)
+        capture_skill_path(resolved, home=self._home_path)
         return resolved
+
+    def _finish_writes(self, paths: Iterable[Path]) -> None:
+        """Retire every committed read receipt, even if one history capture fails."""
+        failures: list[str] = []
+        for path in paths:
+            try:
+                self._file_states.record_write(path, home_path=self._home_path)
+            except Exception as exc:
+                failures.append(f"{path}: {exc}")
+        if failures:
+            raise RuntimeError(
+                "File contents were saved, but Skill history/read-state finalization failed: "
+                + "; ".join(failures)
+                + ". Do not repeat the write; inspect the saved files before retrying cleanup."
+            )
 
     def _resolve(self, path: str) -> Path:
         return self._resolve_read(path)

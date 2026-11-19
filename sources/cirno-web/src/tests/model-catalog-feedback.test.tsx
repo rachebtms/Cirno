@@ -58,6 +58,26 @@ const open = () =>
 
 describe("native model catalog feedback", () => {
   installSettingsViewTestHooks();
+  it.each(["not_configured", "missing_api_base"] as const)(
+    "shows %s configuration failures and lets the owner retry without losing manual model entry",
+    async status => {
+      const message = status === "not_configured" ? "Configure this provider before loading models." : "Configure an API base URL to load models.";
+      vi.stubGlobal("fetch", vi.fn()
+        .mockResolvedValueOnce(jsonResponse({ ...catalog(), provider: "openai", catalog_kind: "official", status, models: [], model_count: 0, message }))
+        .mockResolvedValueOnce(jsonResponse({ ...catalog(), provider: "openai", catalog_kind: "official" })));
+      render(<Field row={{ id: "openai", name: "OpenAI", configured: true, auth_type: "api_key", model_catalog: "official" }} />);
+      await open();
+      expect(await screen.findByRole("alert")).toHaveTextContent("Refresh failed");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Error details" }));
+      expect(await screen.findByText(message)).toBeVisible();
+      await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+      await screen.findByRole("option", { name: /Offline model/ });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "custom-model" } });
+      expect(screen.getByRole("combobox")).toHaveValue("custom-model");
+    },
+  );
+
   it.each(["stale", "fallback"] as const)(
     "hides %s models after expired authorization and offers a working sign-in action",
     async (source) => {

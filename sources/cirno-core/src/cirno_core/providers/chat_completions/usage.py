@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from cirno_usage.types import LLMUsage
 
-from .wire import mapping
+from .wire import field, mapping
 
 
 def extract_usage(response: Any) -> LLMUsage | None:
@@ -23,13 +23,13 @@ def extract_usage(response: Any) -> LLMUsage | None:
         usage_obj = response.usage
 
     usage_map = mapping(usage_obj)
-    if usage_map is not None:
-        input_tokens = int(usage_map.get("prompt_tokens") or 0)
-        output_tokens = int(usage_map.get("completion_tokens") or 0)
-    elif usage_obj:
-        input_tokens = int(getattr(usage_obj, "prompt_tokens", 0) or 0)
-        output_tokens = int(getattr(usage_obj, "completion_tokens", 0) or 0)
-    else:
+    if usage_map is None and not usage_obj:
+        return None
+    source = usage_map if usage_map is not None else usage_obj
+    input_tokens = 0 if field(source, "prompt_tokens") is None else nested_int(source, ("prompt_tokens",))
+    output_tokens = 0 if field(source, "completion_tokens") is None else nested_int(source, ("completion_tokens",))
+    if input_tokens is None or output_tokens is None:
+        # Accounting is optional telemetry, never executable response content.
         return None
 
     wire_total = nested_int(usage_obj, ("total_tokens",))
@@ -46,7 +46,7 @@ def extract_usage(response: Any) -> LLMUsage | None:
         cached = nested_int(usage_map, path)
         if cached is None and usage_obj:
             cached = nested_int(usage_obj, path)
-        if cached is not None:
+        if cached is not None and cached <= input_tokens:
             cache_read = cached
             break
 
@@ -54,6 +54,11 @@ def extract_usage(response: Any) -> LLMUsage | None:
         usage_obj,
         ("prompt_tokens_details", "cache_write_tokens"),
     )
+    if cache_write is not None and cache_write > input_tokens:
+        cache_write = None
+    if (cache_read or 0) + (cache_write or 0) > input_tokens:
+        # Neither overlapping counter can establish a reliable cache partition.
+        cache_read = cache_write = None
 
     return LLMUsage.reported(
         input_tokens=input_tokens,
@@ -80,7 +85,10 @@ def nested_int(obj: object, path: tuple[str, ...]) -> int | None:
             current = getattr(current, segment, None)
     if current is None or isinstance(current, bool):
         return None
+    if isinstance(current, float) and not current.is_integer():
+        return None
     try:
-        return int(cast(Any, current))
-    except (TypeError, ValueError):
+        value = int(cast(Any, current))
+        return value if value >= 0 else None
+    except (TypeError, ValueError, OverflowError):
         return None

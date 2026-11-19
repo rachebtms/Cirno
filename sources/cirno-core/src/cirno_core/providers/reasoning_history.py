@@ -5,6 +5,10 @@ from copy import deepcopy
 
 
 def history_policy(provider, *, tools=None, for_count=False):
+    from cirno_core.providers.fallback_provider import FallbackProvider
+
+    if isinstance(provider, FallbackProvider):
+        return history_policy(provider._primary, tools=tools, for_count=for_count)
     policy = getattr(provider, "reasoning_history", "auto")
     spec = getattr(provider, "_spec", None)
     if tools and spec is not None and spec.name == "deepseek" and policy == "omit":

@@ -12,19 +12,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 from urllib.parse import unquote
 
+from cirno_core.cron.scheduling import next_run
 from cirno_core.cron.types import CronJob, CronSchedule
 from cirno_core.session.display_history import HistoryReader
 from cirno_core.session.session_identity import is_webui_session_key
 from cirno_core.session.transcript import (
     TranscriptReplayStats,
 )
+from loguru import logger
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.http_utils import JSONResponseMetrics
 from cirno_server.webui.http_utils import (
     parse_query as _parse_query,
 )
-from loguru import logger
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
 
@@ -234,10 +236,9 @@ def _parse_automation_update(
         raw_message = values.get("message")
         if not isinstance(raw_message, str):
             return "message must be a string"
-        message = raw_message.strip()
-        if not message:
+        if not raw_message.strip():
             return "message cannot be empty"
-        update["message"] = message
+        update["message"] = raw_message
     if "schedule" in values:
         raw_schedule = values.get("schedule")
         if not isinstance(raw_schedule, dict):
@@ -325,14 +326,8 @@ def _validate_automation_schedule(schedule: CronSchedule) -> str | None:
         return None
 
     try:
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
-        from croniter import croniter
-
-        tz = ZoneInfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
-        base = datetime.now(tz=tz)
-        croniter(cast(str, schedule.expr), base).get_next(datetime)
+        if next_run(schedule, int(time.time() * 1000)) is None:
+            return "cron schedule is invalid"
     except Exception:
         return "cron schedule is invalid"
     return None

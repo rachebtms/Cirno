@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypeGuard, cast
 
 from cirno_core.config.network import NetworkConfig
+from cirno_server.channels.field_values import assign_channel_field
 
 if TYPE_CHECKING:
     from cirno_server.channels.plugin import ChannelPlugin
@@ -30,6 +31,7 @@ class ChannelValidationContext:
 # Keep callback contracts precise for static consumers. The public adapters below
 # still validate third-party implementations at runtime.
 SetupValidator = Callable[[dict[str, Any], ChannelValidationContext], dict[str, Any]]
+ConfigValidator = Callable[[dict[str, Any]], None]
 DefaultConfigFactory = Callable[[], dict[str, Any]]
 InstanceSpecsFactory = Callable[..., Iterable["ChannelInstanceSpec"]]
 InstanceConfigUpdater = Callable[..., dict[str, Any]]
@@ -38,6 +40,7 @@ FeatureInstancesFactory = Callable[..., list[dict[str, Any]] | None]
 LocalStatePresent = Callable[[Any], bool]
 
 __all__ = [
+    "assign_channel_field",
     "ChannelActivation",
     "ChannelFieldSpec",
     "ChannelInstanceSpec",
@@ -148,9 +151,11 @@ class SetupRequirement:
         """Require one complete alternative field group."""
         return cls(alternatives)
 
-    def is_satisfied(self, values: Any) -> bool:
+    def is_satisfied(
+        self, values: Any, *, fields: dict[str, ChannelFieldSpec] | None = None,
+    ) -> bool:
         return any(
-            all(channel_value_present(channel_field_value(values, field)) for field in group)
+            all(_setup_field_present(values, field, fields) for field in group)
             for group in self.alternatives
         )
 
@@ -170,6 +175,8 @@ class ChannelSetupSpec:
     official_url: str | None = None
     validator: SetupValidator | None = None
     verifies_connection: bool = False
+    # Local, dependency-free validation before persisting or probing a draft.
+    validate_config: ConfigValidator | None = None
 
     @property
     def secrets(self) -> frozenset[str]:
@@ -197,8 +204,12 @@ class ChannelSetupSpec:
 
     def is_configured(self, values: Any) -> bool:
         return bool(self.required) and all(
-            requirement.is_satisfied(values) for requirement in self.required
+            requirement.is_satisfied(values, fields=self.fields) for requirement in self.required
         )
+
+    def field_is_configured(self, values: Any, name: str) -> bool:
+        """Check a required field using the same types as its settings form."""
+        return _setup_field_present(values, name, self.fields)
 
     def to_public_dict(self, channel_name: str) -> dict[str, Any]:
         """Serialize the writable setup contract for generic WebUI consumers."""
@@ -216,6 +227,8 @@ class ChannelSetupSpec:
             }
             if field.default is not None:
                 public_field["default_value"] = stringify_channel_value(field.default)
+            elif field.kind == "bool" and not field.inheritable:
+                public_field["default_value"] = "false"
             if field.inheritable:
                 public_field["inheritable"] = True
             fields.append(public_field)
@@ -303,7 +316,7 @@ def channel_default_config(plugin: ChannelPlugin) -> dict[str, Any]:
                 }
                 value = fallback_defaults.get(field.kind, _MISSING)
             if value is not _MISSING:
-                _assign_channel_field(defaults, name, deepcopy(value))
+                assign_channel_field(defaults, name, deepcopy(value))
 
     factory = plugin.management.default_config
     if factory is None:
@@ -313,18 +326,6 @@ def channel_default_config(plugin: ChannelPlugin) -> dict[str, Any]:
         raise TypeError(f"ChannelPlugin.management.default_config for '{plugin.name}' must return a dict")
     values = cast(dict[str, Any], values_raw)
     return cast(dict[str, Any], merge_missing_defaults(values, defaults))
-
-
-def _assign_channel_field(values: dict[str, Any], field: str, value: Any) -> None:
-    target = values
-    parts = field.split(".")
-    for part in parts[:-1]:
-        nested: object = target.get(part)
-        if not isinstance(nested, dict):
-            nested = {}
-            target[part] = nested
-        target = cast(dict[str, Any], nested)
-    target[parts[-1]] = value
 
 
 def channel_local_state_present(plugin: ChannelPlugin, section: Any) -> bool:
@@ -471,6 +472,8 @@ def channel_set_config_enabled(
     values = channel_instance_config(plugin, section, instance_id=instance_id)
     values = cast(dict[str, Any], merge_missing_defaults(values, channel_default_config(plugin)))
     values["enabled"] = enabled
+    if enabled and plugin.setup is not None and plugin.setup.validate_config is not None:
+        plugin.setup.validate_config(values)
     return channel_update_instance_config(
         plugin,
         section,
@@ -587,7 +590,31 @@ def channel_field_value(values: Any, field_path: str) -> Any:
 
 
 def channel_value_present(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
     return value not in (None, "", [], {})
+
+
+def _setup_field_present(
+    values: Any, name: str, fields: dict[str, ChannelFieldSpec] | None,
+) -> bool:
+    value = channel_field_value(values, name)
+    field = fields.get(name) if fields is not None else None
+    if field is not None and field.kind == "bool":
+        return str(value).strip().lower() in {"true", "1", "yes", "on"}
+    if field is not None and field.kind == "json":
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                # Syntax errors are reported by the settings write validator.
+                return channel_value_present(value)
+            return isinstance(parsed, dict) and bool(parsed)
+        return isinstance(value, dict) and bool(value)
+    if isinstance(value, str) and field is not None:
+        if field.kind == "list":
+            return any(item.strip() for item in value.split(","))
+    return channel_value_present(value)
 
 
 def stringify_channel_value(value: Any) -> str:

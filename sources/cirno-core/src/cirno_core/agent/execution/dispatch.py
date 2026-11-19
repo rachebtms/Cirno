@@ -58,6 +58,7 @@ class SessionDispatcher:
 
     async def receive(self, msg: InboundMessage) -> None:
         """Route one input through command and session admission."""
+        self.agent.lifecycle.check_admission()
         from cirno_core.runtime.heartbeat import discard_paused_heartbeat
         if await discard_paused_heartbeat(self.agent.sessions, msg):
             return
@@ -140,6 +141,7 @@ class SessionDispatcher:
 
     async def enqueue_locked(self, msg: InboundMessage) -> None:
         """Admit session work while the caller owns its intake lock."""
+        self.agent.lifecycle.check_admission()
         self.agent.bus.admission.check()
         session_key = self.session_key(msg)
         receipted_input = bool(msg.metadata.get("_session_message")) or (
@@ -188,6 +190,9 @@ class SessionDispatcher:
             )
             if msg.is_user_input:
                 await self.agent.runtime_event_publisher.user_input_accepted(msg, session_key)
+        # Receipt/journal persistence above can yield while shutdown begins.
+        # No worker may be created after the close owner captured its task set.
+        self.agent.lifecycle.check_admission()
         pending = self.agent._pending_queues.get(session_key)
         if pending is not None:
             pending.put_nowait(msg)

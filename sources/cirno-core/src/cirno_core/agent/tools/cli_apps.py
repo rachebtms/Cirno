@@ -119,7 +119,8 @@ class CliAppsTool(Tool):
         self,
         request: RequestContext,
     ) -> RuntimeContextBlock | None:
-        lines = runtime_lines_for_request(
+        lines = await asyncio.to_thread(
+            runtime_lines_for_request,
             request.original_user_text or "",
             request.metadata,
             request.workspace or self.workspace,

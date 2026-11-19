@@ -36,6 +36,8 @@ export function mcpPresetStatusLabel(
   tx: (key: string, fallback: string) => string,
 ): string {
   switch (status) {
+    case "authorization_required":
+      return tx("settings.mcp.statusAuthorizationRequired", "Needs sign-in");
     case "configured":
       return tx("settings.mcp.statusConfigured", "Configured");
     case "missing_credentials":

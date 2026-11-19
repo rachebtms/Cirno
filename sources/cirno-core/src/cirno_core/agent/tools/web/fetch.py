@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 from typing import Any, cast
 
 import httpx
+from loguru import logger
+
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import ToolContext
 from cirno_core.agent.tools.schema import (
@@ -24,7 +27,6 @@ from cirno_core.agent.tools.web_config import (
     WebToolsConfig,
 )
 from cirno_core.utils.model_messages import build_image_content_blocks
-from loguru import logger
 
 
 @tool_parameters(
@@ -95,7 +97,7 @@ class WebFetchTool(Tool):
         url = url.strip(" \t\r\n`\"'")
         extract_mode = kwargs.pop("extractMode", extract_mode)
         max_chars = cast(int, kwargs.pop("maxChars", max_chars) or self.max_chars)
-        is_valid, error_msg = network._validate_url_safe(url)
+        is_valid, error_msg = await asyncio.to_thread(network._validate_url_safe, url)
         if not is_valid:
             return ToolResult.error(
                 json.dumps(
@@ -138,13 +140,15 @@ class WebFetchTool(Tool):
                     image_ctype = media_type.strip().lower() + separator + parameters
                     if image_ctype.startswith("image/"):
                         r.raise_for_status()
-                        raw = await r.aread()
-                        return build_image_content_blocks(
+                        raw = await network._read_response_bounded(r, self.config.max_response_mb * 1024 * 1024)
+                        return await asyncio.to_thread(build_image_content_blocks,
                             raw, image_ctype, url, f"(Image fetched from: {url})"
                         )
                 finally:
                     if stream is not None:
                         await stream.__aexit__(None, None, None)
+        except network.ResponseTooLargeError as e:
+            return ToolResult.error(json.dumps({"error": str(e), "url": url}, ensure_ascii=False))
         except Exception as e:
             unsafe_error = network._unsafe_url_request_error(e)
             if unsafe_error is not None:
@@ -162,7 +166,10 @@ class WebFetchTool(Tool):
 
         result = None
         if self.config.use_jina_reader and jina_remote_safe:
-            result = await self._fetch_jina(url, max_chars)
+            try:
+                result = await self._fetch_jina(url, max_chars)
+            except network.ResponseTooLargeError as e:
+                return ToolResult.error(json.dumps({"error": str(e), "url": url}, ensure_ascii=False))
         if result is None:
             result = await self._fetch_readability(url, extract_mode, max_chars)
         return result
@@ -185,13 +192,14 @@ class WebFetchTool(Tool):
             if jina_key:
                 headers["Authorization"] = f"Bearer {jina_key}"
             async with httpx.AsyncClient(proxy=self.proxy, timeout=20.0) as client:
-                r = await client.get(f"https://r.jina.ai/{forwarded_url}", headers=headers)
-                if r.status_code == 429:
-                    logger.debug("Jina Reader rate limited, falling back to readability")
-                    return None
-                r.raise_for_status()
+                async with client.stream("GET", f"https://r.jina.ai/{forwarded_url}", headers=headers) as r:
+                    if r.status_code == 429:
+                        logger.debug("Jina Reader rate limited, falling back to readability")
+                        return None
+                    r.raise_for_status()
+                    body = await network._read_response_bounded(r, self.config.max_response_mb * 1024 * 1024)
 
-            data = r.json().get("data", {})
+            data = (await asyncio.to_thread(json.loads, body)).get("data", {})
             title = data.get("title", "")
             text = data.get("content", "")
             if not text:
@@ -217,6 +225,8 @@ class WebFetchTool(Tool):
                 },
                 ensure_ascii=False,
             )
+        except network.ResponseTooLargeError:
+            raise
         except Exception as e:
             logger.debug(
                 "Jina Reader failed for {}, falling back to readability ({})",
@@ -235,6 +245,7 @@ class WebFetchTool(Tool):
                     client,
                     url,
                     headers={"User-Agent": self.user_agent},
+                    max_response_bytes=self.config.max_response_mb * 1024 * 1024,
                 )
                 if redirect_error:
                     return ToolResult.error(
@@ -249,17 +260,19 @@ class WebFetchTool(Tool):
             ctype = r.headers.get("content-type", "")
             # Media types are case-insensitive; parameter values retain their case.
             media_type, separator, parameters = ctype.partition(";")
-            image_ctype = media_type.strip().lower() + separator + parameters
+            media_type = media_type.strip().lower()
+            image_ctype = media_type + separator + parameters
             if image_ctype.startswith("image/"):
-                return build_image_content_blocks(
+                return await asyncio.to_thread(build_image_content_blocks,
                     r.content, image_ctype, url, f"(Image fetched from: {url})"
                 )
 
-            if "application/json" in ctype:
-                text, extractor = json.dumps(r.json(), indent=2, ensure_ascii=False), "json"
-            elif "text/html" in ctype or r.text[:256].lower().startswith(("<!doctype", "<html")):
+            if media_type == "application/json":
+                text = await asyncio.to_thread(lambda: json.dumps(r.json(), indent=2, ensure_ascii=False))
+                extractor = "json"
+            elif media_type == "text/html" or r.text[:256].lower().startswith(("<!doctype", "<html")):
                 try:
-                    text = self._extract_readable_html(r.text, extract_mode)
+                    text = await asyncio.to_thread(self._extract_readable_html, r.text, extract_mode)
                     extractor = "readability"
                 except Exception as e:
                     logger.warning(
@@ -267,7 +280,8 @@ class WebFetchTool(Tool):
                         _redact_url_for_log(url),
                         type(e).__name__,
                     )
-                    text, extractor = _normalize(_strip_tags(r.text)), "html"
+                    text = await asyncio.to_thread(lambda: _normalize(_strip_tags(r.text)))
+                    extractor = "html"
             else:
                 text, extractor = r.text, "raw"
 

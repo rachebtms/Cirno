@@ -15,9 +15,10 @@ async def run_file_operation(operation: Callable[[Event], _T]) -> _T:
     worker = asyncio.create_task(asyncio.to_thread(operation, cancelled))
     try:
         return await asyncio.shield(worker)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as cancellation:
         cancelled.set()
         try:
             await shield_and_drain(worker)
         finally:
-            raise
+            # A worker error during draining must not replace the owner's Stop.
+            raise cancellation

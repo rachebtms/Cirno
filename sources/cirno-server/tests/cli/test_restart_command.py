@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from cirno_core.agent.context import TranscriptInput
 from cirno_core.bus.events import InboundMessage
-from cirno_usage.types import LLMUsage
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.generation import GenerationSettings
 from cirno_core.session.model import Session
 from cirno_core.session.state import SessionState
+from cirno_usage.types import LLMUsage
 
 
 def _make_loop():
@@ -357,8 +357,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_history_shows_recent_messages(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = [
+        session = Session(key="telegram:c1")
+        session.messages = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there!"},
             {"role": "tool", "content": "tool result"},  # should be filtered out
@@ -379,8 +379,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_history_respects_count_argument(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = [
+        session = Session(key="telegram:c1")
+        session.messages = [
             {"role": "user", "content": f"message {i}"} for i in range(20)
         ]
         loop.sessions.state.get = AsyncMock(return_value=session)
@@ -396,8 +396,8 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_history_clamps_count_and_extracts_text_blocks(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = [
+        session = Session(key="telegram:c1")
+        session.messages = [
             {
                 "role": "user",
                 "content": [
@@ -431,8 +431,7 @@ class TestRestartCommand:
     @pytest.mark.asyncio
     async def test_history_empty_session(self):
         loop, _bus = _make_loop()
-        session = MagicMock()
-        session.get_history.return_value = []
+        session = Session(key="telegram:c1")
         loop.sessions.state.get = AsyncMock(return_value=session)
 
         msg = InboundMessage(channel="telegram", sender_id="u1", chat_id="c1", content="/history")

@@ -7,6 +7,7 @@ import shlex
 from typing import Any, Literal, Mapping, cast
 
 from cirno_core.config.tools import MCPServerConfig
+
 from cirno_server.webui.mcp.contracts import (
     McpPresetError,
     QueryParams,
@@ -17,6 +18,17 @@ from cirno_server.webui.mcp.fields import proxy_enabled
 from cirno_server.webui.mcp.presets import MCP_PRESETS
 
 _DEFAULT_CUSTOM_TIMEOUT = 30
+
+
+def _tool_timeout(value: object) -> int:
+    if value is None or isinstance(value, str) and not value.strip():
+        return _DEFAULT_CUSTOM_TIMEOUT
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise McpPresetError("tool_timeout must be an integer")
+    try:
+        return max(5, min(int(value), 600))
+    except ValueError as exc:
+        raise McpPresetError("tool_timeout must be an integer") from exc
 
 
 def _parse_json_value(raw: str | None, *, fallback: Any) -> Any:
@@ -37,7 +49,10 @@ def _parse_string_list(raw: str | None) -> list[str]:
         if all(isinstance(item, str) for item in items):
             return [item for item in cast(list[str], items) if item.strip()]
     if isinstance(parsed, str):
-        return shlex.split(parsed)
+        try:
+            return shlex.split(parsed)
+        except ValueError as exc:
+            raise McpPresetError(f"invalid command arguments: {exc}") from exc
     raise McpPresetError("expected a JSON string array")
 
 
@@ -94,6 +109,8 @@ def _normalize_auth(
     url: str,
     headers: Mapping[str, str],
 ) -> Literal["oauth"] | None:
+    if value is not None and not isinstance(value, str):
+        raise McpPresetError("MCP auth type must be a string")
     raw = str(value or "").strip().lower()
     if not raw and url and not headers:
         normalized_url = url.rstrip("/")
@@ -129,13 +146,7 @@ def custom_server_from_query(query: QueryParams) -> tuple[str, MCPServerConfig]:
         url=url,
         headers=headers,
     )
-    raw_timeout = (query_first(query, "tool_timeout") or "").strip()
-    tool_timeout = _DEFAULT_CUSTOM_TIMEOUT
-    if raw_timeout:
-        try:
-            tool_timeout = max(5, min(int(raw_timeout), 600))
-        except ValueError as exc:
-            raise McpPresetError("tool_timeout must be an integer") from exc
+    tool_timeout = _tool_timeout(query_first(query, "tool_timeout"))
     cfg = MCPServerConfig(
         type=transport,
         auth=auth,
@@ -147,7 +158,8 @@ def custom_server_from_query(query: QueryParams) -> tuple[str, MCPServerConfig]:
         headers=headers,
         use_proxy=proxy_enabled(query),
         tool_timeout=tool_timeout,
-        enabled_tools=parse_enabled_tools(query_first(query, "enabled_tools")),
+        **({"enabled_tools": parse_enabled_tools(query_first(query, "enabled_tools"))}
+           if "enabled_tools" in query else {}),
     )
     return name, cfg
 
@@ -157,6 +169,10 @@ def _mcp_server_config(name: str, raw: Any) -> tuple[str, MCPServerConfig]:
     if not isinstance(raw, Mapping):
         raise McpPresetError(f"MCP server '{server_name}' must be an object")
     server = cast(Mapping[str, Any], raw)
+    for field in ("command", "url", "cwd", "type", "transport"):
+        value = server.get(field)
+        if value is not None and not isinstance(value, str):
+            raise McpPresetError(f"MCP server '{server_name}' {field} must be a string")
     command = str(server.get("command") or "").strip()
     url = str(server.get("url") or "").strip()
     transport_value = str(server.get("type", server.get("transport", "")) or "")
@@ -165,18 +181,21 @@ def _mcp_server_config(name: str, raw: Any) -> tuple[str, MCPServerConfig]:
         raise McpPresetError(f"MCP server '{server_name}' stdio transport requires a command")
     if transport in {"sse", "streamableHttp"} and not url:
         raise McpPresetError(f"MCP server '{server_name}' remote transport requires a URL")
-    args_value: object = server.get("args") or []
-    env_value: object = server.get("env") or {}
-    headers_value: object = server.get("headers") or {}
+    args_value: object = server.get("args")
+    env_value: object = server.get("env")
+    headers_value: object = server.get("headers")
+    if args_value is None:
+        args_value = []
+    if env_value is None:
+        env_value = {}
+    if headers_value is None:
+        headers_value = {}
     cwd = str(server.get("cwd") or "").strip()
     enabled_tools_value: object = server.get("enabledTools", server.get("enabled_tools", ["*"]))
     tool_timeout: object = server.get(
         "toolTimeout", server.get("tool_timeout", _DEFAULT_CUSTOM_TIMEOUT)
     )
-    try:
-        timeout_int = max(5, min(int(cast(Any, tool_timeout)), 600))
-    except (TypeError, ValueError):
-        timeout_int = _DEFAULT_CUSTOM_TIMEOUT
+    timeout_int = _tool_timeout(tool_timeout)
     if not isinstance(args_value, list):
         raise McpPresetError(f"MCP server '{server_name}' args must be a string array")
     args = cast(list[object], args_value)
@@ -202,12 +221,10 @@ def _mcp_server_config(name: str, raw: Any) -> tuple[str, MCPServerConfig]:
         url=url,
         headers=typed_headers,
     )
-    if not isinstance(enabled_tools_value, list):
-        enabled_tools_value = ["*"]
-    else:
-        enabled_tools = cast(list[object], enabled_tools_value)
-        if not all(isinstance(item, str) for item in enabled_tools):
-            enabled_tools_value = ["*"]
+    if not isinstance(enabled_tools_value, list) or not all(
+        isinstance(item, str) for item in enabled_tools_value
+    ):
+        raise McpPresetError(f"MCP server '{server_name}' enabledTools must be a string array")
     return server_name, MCPServerConfig(
         type=transport,
         auth=auth,
@@ -219,7 +236,8 @@ def _mcp_server_config(name: str, raw: Any) -> tuple[str, MCPServerConfig]:
         headers=typed_headers,
         use_proxy=use_proxy,
         tool_timeout=timeout_int,
-        enabled_tools=cast(list[str], enabled_tools_value),
+        **({"enabled_tools": cast(list[str], enabled_tools_value)}
+           if "enabledTools" in server or "enabled_tools" in server else {}),
     )
 
 
@@ -236,6 +254,8 @@ def import_mcp_servers(raw_json: str | None) -> dict[str, MCPServerConfig]:
         if not isinstance(name, str):
             raise McpPresetError("MCP server names must be strings")
         server_name, cfg = _mcp_server_config(name, raw_server)
+        if server_name in out:
+            raise McpPresetError(f"MCP config contains duplicate server name '{server_name}'")
         out[server_name] = cfg
     if not out:
         raise McpPresetError("MCP config contains no servers")

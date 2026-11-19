@@ -7,13 +7,20 @@ import json
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 from loguru import logger
 
 from cirno_core.nodes.jobs import NodeJobs
-from cirno_core.nodes.policy import ACTIVE_JOB_STATES, TERMINAL_JOB_STATES, NodeJobPolicy, read_policy
+from cirno_core.nodes.policy import (
+    ACTIVE_JOB_STATES,
+    TERMINAL_JOB_STATES,
+    NodeJobPolicy,
+    read_policy,
+)
 from cirno_core.nodes.service import Nodes
 from cirno_core.storage.instance import InstanceData
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 def timestamp(value: str | None) -> float:
@@ -54,7 +61,7 @@ class NodeJobMonitor:
     async def cycle(self, policy: NodeJobPolicy, *, now: datetime | None = None) -> None:
         now = now or datetime.now(timezone.utc)
         if self._pruned_at is None or time.monotonic() - self._pruned_at >= 60:
-            await asyncio.to_thread(prune_records, self.nodes.data, policy, now)
+            await shield_and_drain(asyncio.to_thread(prune_records, self.nodes.data, policy, now))
             self._pruned_at = time.monotonic()
         if policy.poll_interval_seconds == 0:
             return
@@ -90,5 +97,6 @@ class NodeJobMonitor:
             await asyncio.sleep(min(5, policy.poll_interval_seconds or 5))
 
 
-async def monitor_node_jobs() -> None:
-    await NodeJobMonitor(await asyncio.to_thread(Nodes)).run()
+async def monitor_node_jobs(*, state_dir: Path | None = None) -> None:
+    nodes = await shield_and_drain(asyncio.to_thread(lambda: Nodes(InstanceData(state_dir))))
+    await NodeJobMonitor(nodes).run()

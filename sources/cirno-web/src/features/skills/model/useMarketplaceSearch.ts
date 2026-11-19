@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRequest } from "@/ui/resources/useRequest";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import type { SkillsSearchPayload, SkillsTrendingPayload, SkillsTrendsPayload } from "@/lib/contracts/skills";
 import type { SkillService } from "./service";
 interface SearchSnapshot {
@@ -7,20 +8,22 @@ interface SearchSnapshot {
   payload: SkillsSearchPayload;
 }
 export function useMarketplaceSearch(service: SkillService) {
-  const [draft, setDraft] = useState({ service, query: "" });
-  const query = draft.service === service ? draft.query : "",
+  const isCurrent = useLifetime(service);
+  const [draft, setDraft] = useState({ lifetime: isCurrent, query: "" });
+  const query = draft.lifetime === isCurrent ? draft.query : "",
     normalized = query.trim();
   const owner = useMemo(() => ({ service, query: normalized }), [service, normalized]);
   const search = useRequest<SearchSnapshot>(owner);
   const popular = useRequest<SkillsTrendingPayload>(service);
-  const [previous, setPrevious] = useState<{ service: SkillService; snapshot: SearchSnapshot } | null>(null);
+  const [previous, setPrevious] = useState<{ lifetime: typeof isCurrent; snapshot: SearchSnapshot } | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const { load: loadPopular } = popular,
-    { load } = search;
+    { load, isCurrent: isSearchCurrent } = search;
   const searchNow = useCallback(() => {
+    if (!isSearchCurrent()) return;
     window.clearTimeout(timer.current);
     return load(async () => ({ query: normalized, payload: await service.search(normalized) }));
-  }, [load, service, normalized]);
+  }, [isSearchCurrent, load, service, normalized]);
   useEffect(() => {
     void loadPopular(service.popular);
   }, [service, loadPopular]);
@@ -32,12 +35,14 @@ export function useMarketplaceSearch(service: SkillService) {
     return () => window.clearTimeout(timer.current);
   }, [normalized, searchNow]);
   useEffect(() => {
-    if (search.value) setPrevious({ service, snapshot: search.value });
-  }, [search.value, service]);
-  const snapshot = search.value ?? (previous?.service === service ? previous.snapshot : null);
+    if (search.value) setPrevious({ lifetime: isCurrent, snapshot: search.value });
+  }, [search.value, isCurrent]);
+  const snapshot = search.value ?? (previous?.lifetime === isCurrent ? previous.snapshot : null);
   return {
     query,
-    change: (query: string) => setDraft({ service, query }),
+    change: (query: string) => {
+      if (isCurrent()) setDraft({ lifetime: isCurrent, query });
+    },
     searching: normalized.length >= 2,
     snapshot,
     popular,

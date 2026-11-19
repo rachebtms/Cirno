@@ -1,12 +1,12 @@
 # Instance upgrades
 
-Cirno 0.2.19 upgrades instances from 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4, 0.2.5, 0.2.6, 0.2.7, 0.2.8, 0.2.9, 0.2.10, 0.2.11, 0.2.12, 0.2.13, 0.2.14, 0.2.15, 0.2.16, 0.2.17 and 0.2.18 and imports the published 0.1.6 layout at startup. Stop the
+Cirno 0.2.20 upgrades instances from 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4, 0.2.5, 0.2.6, 0.2.7, 0.2.8, 0.2.9, 0.2.10, 0.2.11, 0.2.12, 0.2.13, 0.2.14, 0.2.15, 0.2.16, 0.2.17, 0.2.18 and 0.2.19 and imports the published 0.1.6 layout at startup. Stop the
 old service and keep the same instance volume and external workspace mounts.
 The configuration records the last version as `lastRunVersion`; unversioned
 configuration is treated as 0.1.6. Later migrations belong to the startup
 migration registry, rather than the Agent's runtime storage code.
 
-The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3, 0.2.3 → 0.2.4, 0.2.4 → 0.2.5, 0.2.5 → 0.2.6, 0.2.6 → 0.2.7, 0.2.7 → 0.2.8, 0.2.8 → 0.2.9, 0.2.9 → 0.2.10, 0.2.10 → 0.2.11, 0.2.11 → 0.2.12, 0.2.12 → 0.2.13, 0.2.13 → 0.2.14, 0.2.14 → 0.2.15, 0.2.15 → 0.2.16, 0.2.16 → 0.2.17, 0.2.17 → 0.2.18 and 0.2.18 → 0.2.19 steps update only the configuration version. Conversations,
+The 0.2.0 → 0.2.1, 0.2.1 → 0.2.2, 0.2.2 → 0.2.3, 0.2.3 → 0.2.4, 0.2.4 → 0.2.5, 0.2.5 → 0.2.6, 0.2.6 → 0.2.7, 0.2.7 → 0.2.8, 0.2.8 → 0.2.9, 0.2.9 → 0.2.10, 0.2.10 → 0.2.11, 0.2.11 → 0.2.12, 0.2.12 → 0.2.13, 0.2.13 → 0.2.14, 0.2.14 → 0.2.15, 0.2.15 → 0.2.16, 0.2.16 → 0.2.17, 0.2.17 → 0.2.18, 0.2.18 → 0.2.19 and 0.2.19 → 0.2.20 steps update only the configuration version. Conversations,
 profiles, credentials and settings keep their existing data. Configuration
 originals and resumable journals stay under `state/migrations/<source>-to-<target>/`.
 Instances on 0.1.6 run the registered steps in order. First-use introductions
@@ -25,6 +25,10 @@ Version 0.2.4 adds shared, Router and Worker system-prompt settings through conf
   new IDs and an imported-source title. The workspace identity marker selects
   its active store when historical copies point to the same directory. Stored parent, checkpoint and automation
   references follow their imported conversation.
+  Deduplication compares typed, length-delimited database fields and streams the
+  contents of indexed external history files. Equal relative filenames alone
+  do not make two released transcripts identical; missing evidence is preserved
+  as missing rather than regenerated.
 - Workspace-owned `cron/` and `triggers/` state moves into `state/cron/` and
   `state/triggers/`. Recognized workspace identity markers are removed. Project
   instructions and task files stay in place.
@@ -65,6 +69,9 @@ Original files, the replacement journal and an import report remain in
 and gives that location. Conflicting automation IDs or files stop migration
 with their paths, leaving the originals available for resolution. Unsupported
 configuration or conversation schema versions are reported at startup.
+Symbolic links merge only when both artifacts are links with the exact same
+stored target. A regular file and a link, or links with different targets, are
+conflicts even when their current contents match.
 
 Back up the full instance and external workspaces before upgrading. To run an
 older image again, restore that pre-upgrade backup, including its configuration
@@ -80,6 +87,15 @@ key stops preparation without replacing live databases. Existing registrations
 retain `@cirno`; new registrations choose their initial display name in the browser.
 The owner can subsequently change the name without changing the conversation ID.
 
+Identity remapping treats message content, tool arguments/results, body text,
+quotes, evidence and provider conversation state as opaque payloads, including
+when they contain JSON with identity-like keys. Literal text/content/provider
+columns are not parsed as reference maps. Structured record envelopes still
+receive their owner-reference updates, while memory content and its hash stay
+unchanged. Old/new keys that converge on one Router mapping may coalesce only
+when their JSON values match; conflicting values stop preparation before live
+database replacement.
+
 Offline SQLite replacement retains the old WAL, SHM and rollback journal beside
 the original database. Those files must not remain at the replacement path:
 committed frames from an abnormal shutdown belong to the original database.
@@ -90,5 +106,9 @@ An interrupted installation resumes from its saved migration plan before startup
 Startup also moves existing SSH Nodes from `state/instance.sqlite3` into the encrypted credential vault. Node IDs and remote job references stay unchanged. Existing enrolled Nodes retain Agent access; new owner-created credentials default to private and unenrolled. Other records in an older vault remain intact and default to private when the visibility field is added.
 
 Each encrypted record commits before its old plaintext row is removed. An interrupted import retries the same ID, and a conflicting existing credential stops startup instead of replacing either record. Deleted SQLite payloads are erased and the old Node store is vacuumed. Existing external backups are not rewritten.
+
+The SSH import holds the shared instance migration lease throughout legacy
+storage access, encrypted credential publication and plaintext cleanup. Another
+launcher using the same lease cannot enter that sequence concurrently.
 
 Version 0.2.6 unifies compaction and Dream settings as context consolidation. Legacy configuration remains accepted through the configuration loader, while new saves use the unified fields. The offline version step preserves the existing configuration, profiles and conversation state.

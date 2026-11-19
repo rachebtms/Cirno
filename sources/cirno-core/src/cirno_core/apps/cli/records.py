@@ -65,12 +65,20 @@ class InstalledApps:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with FileLock(str(self.path) + ".lock", timeout=10):
             apps = self.read()
-            apps[name] = entry
+            # Catalog names are case-insensitive. Keep the established key and
+            # repair duplicate aliases written by earlier catalog case changes.
+            aliases = [key for key in apps if key.casefold() == name.casefold()]
+            canonical = aliases[0] if aliases else name
+            for key in aliases:
+                apps.pop(key)
+            apps[canonical] = entry
             _write_json(self.path, {"schema_version": 1, "apps": apps})
 
     def remove(self, name: str) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with FileLock(str(self.path) + ".lock", timeout=10):
             apps = self.read()
-            apps.pop(name, None)
+            for key in list(apps):
+                if key.casefold() == name.casefold():
+                    apps.pop(key)
             _write_json(self.path, {"schema_version": 1, "apps": apps})

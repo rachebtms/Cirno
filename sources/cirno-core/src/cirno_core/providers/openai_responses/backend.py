@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
+from loguru import logger
+
 from cirno_core.providers.contracts import LLMResponse, ProviderConversationState
 from cirno_core.providers.images import prepare_inline_images
 from cirno_core.providers.openai_responses.compaction import (
@@ -35,7 +37,7 @@ from cirno_core.providers.openai_responses.state import (
     responses_state_items,
 )
 from cirno_core.providers.timeouts import ProviderTimeouts
-from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain
 
 if TYPE_CHECKING:
     from cirno_core.providers.openai_responses.websocket import ResponsesWebSocketSession
@@ -69,7 +71,12 @@ class ResponsesBackend:
         """Release transports after the owning provider's requests have stopped."""
         sessions = list(self._sessions.values())
         self._sessions.clear()
-        await asyncio.gather(*(session.aclose() for session in sessions))
+        outcomes = await shield_and_drain(asyncio.gather(
+            *(session.aclose() for session in sessions), return_exceptions=True,
+        ))
+        for outcome in outcomes:
+            if isinstance(outcome, BaseException):
+                raise outcome
 
     async def websocket_request(
         self,
@@ -240,7 +247,7 @@ class ResponsesBackend:
         on_tool_call_delta: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
         on_response_event: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> LLMResponse:
-        options: dict[str, Any] = {"timeout": (timeouts or ProviderTimeouts()).httpx(stream=True)}
+        options: dict[str, Any] = {"timeout": (timeouts or ProviderTimeouts()).httpx(stream=True), "trust_env": False}
         body = await prepare_inline_images(body)
         if verify is not None:
             options["verify"] = verify

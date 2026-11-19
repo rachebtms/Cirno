@@ -37,6 +37,7 @@ def extract_text_tool_calls(content: str | None) -> tuple[str | None, list[ToolC
         return content, []
 
     tool_calls: list[ToolCallRequest] = []
+    seen_ids: set[str] = set()
     spans: list[tuple[int, int]] = []
     for match in _TEXT_TOOL_CALL_RE.finditer(content):
         try:
@@ -62,9 +63,13 @@ def extract_text_tool_calls(content: str | None) -> tuple[str | None, list[ToolC
             "arguments",
             payload.get("arguments", {}),
         )
+        identity = str(payload.get("id") or short_tool_id())
+        while identity in seen_ids:
+            identity = short_tool_id()
+        seen_ids.add(identity)
         tool_calls.append(
             ToolCallRequest(
-                id=str(payload.get("id") or short_tool_id()),
+                id=identity,
                 name=name,
                 arguments=parse_tool_arguments(arguments),
             )

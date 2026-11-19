@@ -10,11 +10,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from filelock import FileLock
+
 from cirno_core.config.home import get_home_path
 from cirno_core.skills.validation import SKILL_TREE_IGNORES, unsupported_entry, validate_skill
 from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_core.utils.directory_tree import walk_tree
-from filelock import FileLock
 
 
 def skill_directory(path: Path, home: Path | None = None) -> Path | None:
@@ -117,10 +118,11 @@ def inspect_skill(name: str, action: str, home: Path | None = None) -> dict[str,
     return {"version": version, "validation": validation, "versions": skill_versions(name, home)}
 
 
-def capture_skill_path(path: Path) -> None:
-    directory = skill_directory(path)
+def capture_skill_path(path: Path, home: Path | None = None) -> None:
+    home = (home if home is not None else get_home_path()).expanduser().resolve(strict=False)
+    directory = skill_directory(path, home)
     if directory is not None:
-        snapshot_skill(directory)
+        snapshot_skill(directory, home)
 
 
 def skill_versions(name: str, home: Path | None = None) -> list[dict[str, Any]]:

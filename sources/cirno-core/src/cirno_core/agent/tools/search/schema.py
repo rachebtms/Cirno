@@ -6,6 +6,7 @@ from typing import Any
 def find_parameters() -> dict[str, Any]:
     return {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "path": {
                 "type": "string",
@@ -51,6 +52,7 @@ def find_parameters() -> dict[str, Any]:
 def grep_parameters() -> dict[str, Any]:
     return {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "pattern": {
                 "type": "string",

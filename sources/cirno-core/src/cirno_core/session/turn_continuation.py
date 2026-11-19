@@ -196,6 +196,8 @@ async def maybe_continue_turn(
             media=[],
             metadata=metadata,
             session_key_override=ctx.session_key,
+            require_existing_session=True,
+            session_generation=ctx.session.generation,
         )
     )
     return True

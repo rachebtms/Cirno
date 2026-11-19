@@ -43,12 +43,12 @@ async def test_ask_then_cancel_uses_current_target_and_resolves_only_pending_not
 async def test_answer_and_cancellation_preserve_the_first_terminal_state(tmp_path):
     inbox, queued, identifier = await _ask_then_cancel(tmp_path)
     answer = f"> [!QUOTE]\n> <!-- cirno-question:{identifier} -->\n> Which dataset?\n\nDataset A"
-    inbox.answer("websocket:worker", answer)
+    inbox.answer("websocket:worker", answer, session_generation="generation")
     assert inbox.get("question:" + identifier)["status"] == "cancelled"
     # On a separately delivered question, answering first wins over withdrawal.
     fresh = NotificationInbox(tmp_path / "fresh")
     fresh.capture(queued[0])
-    fresh.answer("websocket:worker", answer)
+    fresh.answer("websocket:worker", answer, session_generation="generation")
     fresh.capture(queued[1])
     fresh.capture(queued[0])
     assert fresh.get("question:" + identifier)["status"] == "answered"

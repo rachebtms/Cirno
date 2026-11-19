@@ -41,7 +41,8 @@ export function useSubagentTasks() {
 }
 
 interface SubagentTasksProviderProps {
-  client: Pick<CirnoClient, "requestMutation" | "onChat" | "onStatus">;
+  client: Pick<CirnoClient, "requestMutation" | "onChat" | "onStatus">
+    & Partial<Pick<CirnoClient, "onSessionUpdate">>;
   sessionKey: string | null;
   token: string;
   enabled: boolean;
@@ -56,6 +57,8 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
   const pageVisible = usePageVisibility();
   const paneVisible = useThreadVisibility();
   const [tasks, setTasks] = useState<ObservedSubagentTask[]>([]);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
@@ -91,10 +94,18 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
     const refresh = async () => {
       if (refreshing) { refreshPending = true; return; }
       refreshing = true;
+      const generation = scopeGeneration.current;
+      const previousObservations = new Set(tasksRef.current);
       try {
         const payload = await fetchSubagentTasks(token, sessionKey);
-        if (!cancelled) {
-          setTasks((current) => mergeSubagentTasks(current, payload.tasks));
+        if (!cancelled && generation === scopeGeneration.current) {
+          const identifiers = new Set(payload.tasks.map(task => task.task_id));
+          setTasks((current) => {
+            // This is a full snapshot. Retire missing observations, while
+            // preserving events/control receipts received after the read began.
+            const retained = current.filter(task => identifiers.has(task.task_id) || !previousObservations.has(task));
+            return mergeSubagentTasks(retained.length === current.length ? current : retained, payload.tasks);
+          });
         }
       } catch {
         // Background read failures retain the last task snapshot.
@@ -114,6 +125,15 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
     const unsubscribeStatus = liveEvents ? client.onStatus((status) => {
       if (status === "open") void refresh();
     }) : undefined;
+    const unsubscribeSession = client.onSessionUpdate?.((chatId, scope) => {
+      if (cancelled || chatId !== sessionKey.slice("websocket:".length) || scope !== "reset") return;
+      scopeGeneration.current += 1;
+      setTasks([]);
+      setSelectedId(null);
+      setStoppingId(null);
+      setStopError(null);
+      void refresh();
+    });
     if (!refreshing) void refresh();
     const focus = () => void refresh();
     window.addEventListener("focus", focus);
@@ -121,6 +141,7 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
       cancelled = true;
       unsubscribeChat?.();
       unsubscribeStatus?.();
+      unsubscribeSession?.();
       window.removeEventListener("focus", focus);
     };
   }, [client, enabled, liveEvents, active, sessionKey, token, pageVisible, paneVisible]);
@@ -133,7 +154,8 @@ export function SubagentTasksProvider({ client, sessionKey, token, enabled, live
     try {
       const next = await cancelSubagentTask(client, sessionKey, task.task_id);
       if (!mounted.current || generation !== scopeGeneration.current) return;
-      setTasks((current) => mergeSubagentTasks(current, [next]));
+      setTasks((current) => current.some(item => item.task_id === task.task_id)
+        ? mergeSubagentTasks(current, [next]) : current);
     } catch (reason) {
       if (mounted.current && generation === scopeGeneration.current) setStopError(reason instanceof Error ? reason.message : t("thread.subagents.stopFailed"));
     } finally {

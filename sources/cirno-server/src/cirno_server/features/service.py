@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.config.schema import Config
+from cirno_core.utils.atomic_file import atomic_write_text, read_atomic_bytes
+from cirno_core.utils.file_transactions import file_write_transaction
+from cirno_setup.process import run_command as run_owned_command
 from cirno_setup.python import environment as python_environment
 from cirno_setup.python import package_command
 from cirno_setup.requirements import requirement_installed as setup_requirement_installed
@@ -141,7 +144,7 @@ def run_install_command(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(
+        return run_owned_command(
             argv,
             capture_output=True,
             text=True,
@@ -206,16 +209,15 @@ def install_packages(
 
 
 def read_config_data(path: Path) -> dict[str, Any]:
-    if not path.exists():
+    try:
+        content = read_atomic_bytes(path).decode("utf-8")
+    except FileNotFoundError:
         return {}
-    with open(path, encoding="utf-8") as f:
-        return cast(dict[str, Any], json.load(f))
+    return cast(dict[str, Any], json.loads(content))
 
 
 def write_config_data(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    atomic_write_text(path, json.dumps(data, indent=2, ensure_ascii=False))
 
 
 def set_channel_config_enabled(
@@ -227,28 +229,29 @@ def set_channel_config_enabled(
     instance_id: str | None = "default",
 ) -> None:
     """Persist one instance, or the top-level plugin gate when the target is ``None``."""
-    data = read_config_data(config_path)
-    channels = data.setdefault("channels", {})
-    existing = channels.get(channel_name, {})
-    if not isinstance(existing, dict):
-        existing = {}
-    if instance_id is None:
-        existing["enabled"] = enabled
-        channels[channel_name] = existing
-    else:
-        try:
-            channels[channel_name] = channel_set_config_enabled(
-                plugin,
-                existing,
-                enabled,
-                instance_id=instance_id,
-            )
-        except ValueError as exc:
-            raise OptionalFeatureError(
-                f"Invalid {channel_name} configuration: {exc}",
-                status=400,
-            ) from exc
-    write_config_data(config_path, data)
+    with file_write_transaction([config_path]):
+        data = read_config_data(config_path)
+        channels = data.setdefault("channels", {})
+        existing = channels.get(channel_name, {})
+        if not isinstance(existing, dict):
+            existing = {}
+        if instance_id is None:
+            existing["enabled"] = enabled
+            channels[channel_name] = existing
+        else:
+            try:
+                channels[channel_name] = channel_set_config_enabled(
+                    plugin,
+                    existing,
+                    enabled,
+                    instance_id=instance_id,
+                )
+            except ValueError as exc:
+                raise OptionalFeatureError(
+                    f"Invalid {channel_name} configuration: {exc}",
+                    status=400,
+                ) from exc
+        write_config_data(config_path, data)
 
 
 def channel_enabled(
@@ -515,17 +518,22 @@ def with_channel_runtime_status(
                         "error": "Enabled channel instance has no runtime. Check gateway logs.",
                     }
                     owner_statuses.append(status)
-                state = str(status.get("state", "stopped")) if status else "stopped"
+                state = (
+                    _combined_channel_runtime_state([status], desired_instance)
+                    if status else "stopped"
+                )
                 instance["runtime_status"] = state
-                instance["running"] = state == "running"
+                instance["running"] = _channel_runtime_running(status) if status else False
                 if status and status.get("error"):
                     instance["runtime_error"] = str(status["error"])
+                else:
+                    instance.pop("runtime_error", None)
                 decorated_instances.append(instance)
             feature["instances"] = decorated_instances
 
         state = _combined_channel_runtime_state(owner_statuses, desired_enabled)
         feature["runtime_status"] = state
-        feature["running"] = state == "running"
+        feature["running"] = any(_channel_runtime_running(status) for status in owner_statuses)
         feature["ready"] = state == "running"
         feature["status"] = "enabled" if state == "running" else state
         error = next(
@@ -538,6 +546,8 @@ def with_channel_runtime_status(
         )
         if error:
             feature["runtime_error"] = error
+        else:
+            feature.pop("runtime_error", None)
         features.append(feature)
 
     decorated = dict(payload)
@@ -554,12 +564,19 @@ def with_channel_runtime_status(
     return decorated
 
 
+def _channel_runtime_running(status: dict[str, Any]) -> bool:
+    return bool(status.get("running", status.get("state") == "running"))
+
+
 def _combined_channel_runtime_state(
     statuses: list[dict[str, Any]],
     desired_enabled: bool,
 ) -> str:
     if not desired_enabled:
-        return "stopped"
+        statuses = [
+            status for status in statuses
+            if _channel_runtime_running(status) or status.get("state") == "starting"
+        ]
     states = {str(status.get("state", "stopped")) for status in statuses}
     if "failed" in states:
         return "failed"
@@ -682,22 +699,32 @@ def enable_optional_feature(
 
     channel_plugin = channel_plugins.get(name)
     dependencies = _feature_dependencies(name, channel_plugin, extras)
-    _install_feature_dependencies(
+    installed_now = _install_feature_dependencies(
         name,
         dependencies,
         runner=runner,
     )
 
+    if installed_now and dependencies and not extra_installed(name, dependencies):
+        raise OptionalFeatureError(
+            f"Installed support for '{name}', but its dependencies are still unavailable.",
+            status=500,
+        )
+
     channel_cls: Any | None = None
     target_instance_id: str | None = None
     if channel_plugin is not None:
-        try:
-            channel_cls = channel_plugin.load_channel_class()
-        except Exception as exc:
-            raise OptionalFeatureError(
-                f"Channel '{name}' is not importable after enable: {exc}",
-                status=500,
-            ) from exc
+        # The installer may replace SDKs already imported by this process.
+        # Save the requested state from the dependency-free manifest and let
+        # the next server process import the newly installed runtime.
+        if not installed_now:
+            try:
+                channel_cls = channel_plugin.load_channel_class()
+            except Exception as exc:
+                raise OptionalFeatureError(
+                    f"Channel '{name}' is not importable after enable: {exc}",
+                    status=500,
+                ) from exc
         target_instance_id = resolve_channel_action_target(
             requested_instance_id,
         )
@@ -726,7 +753,12 @@ def enable_optional_feature(
 
     payload = optional_features_payload(
         config=load_config(config_path),
-        last_action={"ok": True, "message": message, "enabled": True},
+        last_action={
+            "ok": True,
+            "message": message,
+            "enabled": True,
+            "dependencies_installed": installed_now and channel_plugin is not None,
+        },
     )
     payload["requires_restart"] = _feature_requires_restart(
         name,

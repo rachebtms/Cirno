@@ -14,7 +14,13 @@ from cirno_core.agent.subagents.status import SubagentStatus
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model import Session, SessionPolicy
 from cirno_core.session.sqlite_store import SessionConflictError
-from cirno_core.session.types import PARENT_SESSION_KEY, SESSION_TYPE_KEY, SessionType
+from cirno_core.session.types import (
+    CHILD_SESSION_GENERATION_REQUIRED_KEY,
+    PARENT_SESSION_GENERATION_KEY,
+    PARENT_SESSION_KEY,
+    SESSION_TYPE_KEY,
+    SessionType,
+)
 
 SUBAGENT = SessionType("subagent", needs_handle=False, public_history=False)
 TASK_METADATA_KEY = "subagent_task"
@@ -39,43 +45,81 @@ class SubagentSessions:
             or self.sessions.read_session_metadata(owner, include_runtime=False) is not None
         )
 
-    def contains(self, task_id: str, owner: str) -> bool:
+    def contains(self, task_id: str, owner: str, *, child_generation: str | None = None) -> bool:
         key = self.key(task_id)
         metadata = self.sessions.get_cached_metadata(key, include_runtime=False)
         if metadata is None:
             metadata = (self.sessions.read_session_metadata(key, include_runtime=False) or {}).get("metadata", {})
-        return metadata.get(SESSION_TYPE_KEY) == SUBAGENT.name and metadata.get(PARENT_SESSION_KEY) == owner
+        return self._belongs_to(metadata, owner) and (
+            child_generation is None or child_generation == self._generation(task_id)
+        )
 
-    def snapshot(self, task_id: str, owner: str) -> Session | None:
+    def _generation(self, task_id: str) -> str | None:
+        key = self.key(task_id)
+        identity = self.sessions.state.peek_identity(key)
+        if identity is not None and not identity.policy.persist:
+            return identity.generation
+        version = self.sessions.read_session_version(key)
+        return version[0] if version is not None else None
+
+    def _belongs_to(self, metadata: dict[str, Any], owner: str) -> bool:
+        if metadata.get(SESSION_TYPE_KEY) != SUBAGENT.name or metadata.get(PARENT_SESSION_KEY) != owner:
+            return False
+        generation = metadata.get(PARENT_SESSION_GENERATION_KEY)
+        # Historical children remain readable until their parent is replaced.
+        # A replacement revokes unbound children without rewriting old records.
+        if generation is None:
+            parent = self.sessions.get_cached_metadata(owner, include_runtime=False)
+            if parent is None:
+                parent = (self.sessions.read_session_metadata(owner, include_runtime=False) or {}).get("metadata")
+            return parent is not None and parent.get(CHILD_SESSION_GENERATION_REQUIRED_KEY) is not True
+        identity = self.sessions.state.peek_identity(owner)
+        if identity is not None and not identity.policy.persist:
+            return generation == identity.generation
+        version = self.sessions.read_session_version(owner)
+        return version is not None and generation == version[0]
+
+    def snapshot(self, task_id: str, owner: str, *, child_generation: str | None = None) -> Session | None:
         """Read a detached child only while its parent still owns it."""
-        if not self.exists(owner) or not self.contains(task_id, owner):
+        if not self.exists(owner) or not self.contains(task_id, owner, child_generation=child_generation):
             return None
-        return self.sessions.get_existing(self.key(task_id))
+        child = self.sessions.get_existing(self.key(task_id))
+        if child is not None and child_generation is not None and child.generation != child_generation:
+            return None
+        return child
 
     @staticmethod
     def _payload(status: SubagentStatus) -> dict[str, Any]:
         return {
-            **_STATUS.dump_python(status, mode="json", exclude={"started_at", "finished_at"}),
+            **_STATUS.dump_python(status, mode="json", exclude={"started_at", "finished_at", "child_generation"}),
             "elapsed_seconds": status.as_dict()["elapsed_seconds"],
         }
 
     async def create(self, status: SubagentStatus, *, policy: SessionPolicy | None = None) -> Session:
-        return await self.sessions.state.create_child(
+        child = await self.sessions.state.create_child(
             status.owner, self.key(status.task_id),
             metadata={SESSION_TYPE_KEY: SUBAGENT.name, TASK_METADATA_KEY: self._payload(status)},
             content=status.task_description, policy=policy or SessionPolicy(),
         )
+        status.child_generation = child.generation
+        return child
 
     async def save(self, status: SubagentStatus) -> bool:
+        if status.child_generation is None:
+            return False
         try:
             await self.sessions.state.update_metadata(
                 self.key(status.task_id), {TASK_METADATA_KEY: self._payload(status)},
+                expected_generation=status.child_generation,
             )
         except SessionConflictError:
             return False
         return True
 
     def status(self, task_id: str, owner: str) -> SubagentStatus | None:
+        generation = self._generation(task_id)
+        if generation is None:
+            return None
         payload = self.sessions.read_session_metadata(self.key(task_id), include_runtime=False)
         if payload is None:
             metadata = self.sessions.get_cached_metadata(self.key(task_id), include_runtime=False)
@@ -83,13 +127,15 @@ class SubagentSessions:
         if payload is None:
             return None
         metadata = payload.get("metadata", {})
-        return self._status_from_metadata(task_id, owner, metadata)
+        status = self._status_from_metadata(task_id, owner, metadata)
+        if status is not None:
+            status.child_generation = generation
+        return status
 
-    @staticmethod
     def _status_from_metadata(
-        task_id: str, owner: str, metadata: dict[str, Any],
+        self, task_id: str, owner: str, metadata: dict[str, Any],
     ) -> SubagentStatus | None:
-        if metadata.get(SESSION_TYPE_KEY) != SUBAGENT.name or metadata.get(PARENT_SESSION_KEY) != owner:
+        if not self._belongs_to(metadata, owner):
             return None
         raw: object = metadata.get(TASK_METADATA_KEY)
         if not isinstance(raw, dict):

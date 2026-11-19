@@ -4,13 +4,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import heapq
 import threading
 import time
 from typing import Any, Iterator
 
 from cirno_core.agent.tools.base import ToolResult
+from cirno_core.agent.tools.filesystem.workers import run_file_operation
 from cirno_core.agent.tools.search.budget import (
     SearchBudget,
     SearchBudgetExceededError,
@@ -82,23 +82,20 @@ class FindFilesTool(PathSearchTool):
         offset: int = 0,
         **kwargs: Any,
     ) -> str:
-        cancelled = threading.Event()
         try:
-            return await asyncio.to_thread(
-                self._execute_sync,
-                path=path,
-                query=query,
-                glob=glob,
-                file_type=type,
-                include_dirs=include_dirs,
-                sort=sort,
-                head_limit=head_limit,
-                offset=offset,
-                cancelled=cancelled,
+            return await run_file_operation(
+                lambda cancelled: self._execute_sync(
+                    path=path,
+                    query=query,
+                    glob=glob,
+                    file_type=type,
+                    include_dirs=include_dirs,
+                    sort=sort,
+                    head_limit=head_limit,
+                    offset=offset,
+                    cancelled=cancelled,
+                )
             )
-        except asyncio.CancelledError:
-            cancelled.set()
-            raise
         except PermissionError as e:
             return ToolResult.error(f"Error: {e}")
         except Exception as e:

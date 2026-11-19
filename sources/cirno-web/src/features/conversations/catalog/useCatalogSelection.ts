@@ -31,6 +31,7 @@ export function useCatalogSelection(
     [rows, catalog.preferences?.title_overrides, t],
   );
   return useConversationSelection({
+    owner: catalog.owner,
     deleteItemsByKey: items,
     selectableDeleteKeys: [...items.keys()],
     archived: new Set(catalog.preferences?.archived_keys ?? []),

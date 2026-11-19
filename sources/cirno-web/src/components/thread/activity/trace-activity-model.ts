@@ -23,7 +23,7 @@ export function describeTraceLine(
   result?: unknown,
 ): TraceDescription {
   const trimmed = line.trim();
-  const functionMatch = /^([a-zA-Z0-9_.-]+)\((.*)\)$/.exec(trimmed);
+  const functionMatch = /^([a-zA-Z0-9_.-]+)\(([\s\S]*)\)$/.exec(trimmed);
   const name = implementationToolName(functionMatch?.[1] ?? "");
   const args = functionMatch?.[2] ?? "";
   const parsedUrl = traceUrlFromArgs(args, trimmed);

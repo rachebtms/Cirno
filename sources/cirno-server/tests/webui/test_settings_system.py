@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import platform
 
+import pytest
 from cirno_core.config.schema import Config
 from cirno_server.channels.registry import load_channel_plugin
+from cirno_server.webui.settings.contracts import WebUISettingsError
 from cirno_server.webui.settings.system import (
+    assign_channel_config_value,
     coerce_channel_value,
     save_channel_config_values,
     system_settings_payload,
@@ -12,6 +15,15 @@ from cirno_server.webui.settings.system import (
 )
 
 
+@pytest.mark.parametrize("value", [None, False, True])
+def test_shared_channel_assignment_preserves_inheritance_and_neighboring_fields(value):
+    config = {"nested": {"show_compaction_notices": True, "showCompactionNotices": True,
+                         "other": "preserved"}}
+    assign_channel_config_value(config, "nested.showCompactionNotices", value, inheritable=True)
+    expected = {"other": "preserved"}
+    if value is not None:
+        expected["showCompactionNotices"] = value
+    assert config == {"nested": expected}
 
 
 def test_system_domain_owns_runtime_dto_and_agent_updates(tmp_path, monkeypatch) -> None:
@@ -60,6 +72,26 @@ def test_system_domain_validates_channel_field_values() -> None:
         "123": "open"
     }
     assert coerce_channel_value("token", None, "secret") == ""
+
+
+@pytest.mark.parametrize(("kind", "value"), [
+    ("int", 8766.9), ("int", True), ("int", float("inf")),
+    ("float", True), ("float", "nan"), ("float", "inf"),
+])
+def test_channel_numeric_fields_reject_lossy_or_non_finite_values(kind, value):
+    with pytest.raises(WebUISettingsError) as error:
+        coerce_channel_value("field", value, kind)
+    assert error.value.status == 400
+
+
+def test_fractional_channel_port_does_not_change_configuration():
+    config = Config.model_validate({"channels": {"websocket": {"port": 8765}}})
+    before = config.model_dump()
+    with pytest.raises(WebUISettingsError):
+        save_channel_config_values(
+            config, "websocket", {"port": 8766.9}, load_channel_plugin=load_channel_plugin,
+        )
+    assert config.model_dump() == before
 
 
 def test_channel_secret_is_cleared_only_by_explicit_null() -> None:

@@ -1517,7 +1517,7 @@ def test_uv_install_preserves_proxy_and_legacy_index(monkeypatch, index_url):
         environments.append(kwargs["env"])
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
-    monkeypatch.setattr(optional_features.subprocess, "run", run)
+    monkeypatch.setattr(optional_features, "run_owned_command", run)
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
     monkeypatch.delenv("UV_INDEX_URL", raising=False)
     if index_url:
@@ -1551,7 +1551,7 @@ def test_missing_uv_is_reported_as_installation_failure(monkeypatch):
     def run(*args, **kwargs):
         raise FileNotFoundError("uv")
 
-    monkeypatch.setattr(optional_features.subprocess, "run", run)
+    monkeypatch.setattr(optional_features, "run_owned_command", run)
     result = optional_features.install_extra("bedrock", None)
     assert not result.ok
     assert "uv is required" in result.output
@@ -1585,7 +1585,7 @@ def test_run_install_command_returns_failure_on_timeout(monkeypatch):
     def _run(*args, **kwargs):
         raise subprocess.TimeoutExpired(["pip"], 300, output="partial", stderr=b"still running")
 
-    monkeypatch.setattr(optional_features.subprocess, "run", _run)
+    monkeypatch.setattr(optional_features, "run_owned_command", _run)
 
     result = optional_features.run_install_command(["pip"])
 
@@ -1869,7 +1869,7 @@ def test_outbound_duplicate_suppression_is_scoped_to_origin_message() -> None:
     duplicate = OutboundMessage(
         channel="feishu",
         chat_id="chat123",
-        content="  Done  ",
+        content="Done",
         metadata={"origin_message_id": "msg-1"},
     )
     separate_turn = OutboundMessage(

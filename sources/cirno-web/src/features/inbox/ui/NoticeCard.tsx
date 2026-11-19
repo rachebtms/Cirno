@@ -1,6 +1,7 @@
 import { Button, Card, Chip } from "@heroui/react";
 import { CircleHelp, ExternalLink, MessageCircle, Settings2, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { MarkdownText } from "@/components/MarkdownText";
 import type { InboxNotice } from "../model/store";
 import type { InboxFeed } from "../model/useInboxFeed";
 export function NoticeCard({ notice, feed }: { notice: InboxNotice; feed: InboxFeed }) {
@@ -18,7 +19,7 @@ export function NoticeCard({ notice, feed }: { notice: InboxNotice; feed: InboxF
           <time dateTime={new Date(notice.created_at).toISOString()}>{new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: "short", timeStyle: "short" }).format(notice.created_at)}</time>
         </div>
         {notice.data.session_title && <p className="inbox-notice-source">{notice.data.session_title}</p>}
-        {notice.body && <p className="inbox-notice-text">{notice.body}</p>}
+        {notice.body && <MarkdownText className="inbox-notice-text">{notice.body}</MarkdownText>}
         {notice.kind === "approval" && notice.data.operation && <details className="inbox-operation"><summary>{notice.data.operation}</summary>
           <pre>{JSON.stringify(notice.data.arguments, null, 2)}</pre></details>}
         <div className="inbox-notice-actions">

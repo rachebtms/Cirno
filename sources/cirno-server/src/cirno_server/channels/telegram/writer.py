@@ -7,12 +7,13 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
-from cirno_server.channels.telegram.state import StreamBuf
 from telegram.error import BadRequest, RetryAfter
+
+from cirno_server.channels.telegram.state import StreamBuf
 
 from . import limits
 from .api import TelegramAPI
-from .formatting import split_telegram_markdown_html_chunks
+from .formatting import iter_telegram_markdown_html_fragments
 from .rich import TelegramRichMessages
 
 _T = TypeVar("_T")
@@ -48,7 +49,10 @@ class TelegramStreamWriter:
     ) -> bool:
         return await self.submit(
             buf,
-            lambda: self.rich.try_send_rich(chat_id, text, thread_kwargs=thread_kwargs),
+            lambda: self.rich.try_send_rich(
+                chat_id, text, thread_kwargs=thread_kwargs,
+                **({"line_continuation": True} if buf.line_continuation else {}),
+            ),
         )
 
     async def write_legacy(
@@ -61,20 +65,23 @@ class TelegramStreamWriter:
     ) -> None:
         """Keep the last confirmed message editable and retain only its unsent tail."""
         buf.require_deliverable()
-        chunks = split_telegram_markdown_html_chunks(buf.text, limits.TELEGRAM_HTML_MAX_LEN)
-        first = 0
-        if buf.message_id is not None:
-            markdown, html = chunks[0]
-            await self.api.edit_formatted(chat_id, buf.message_id, markdown, html)
-            first = 1
-        for index in range(first, len(chunks)):
-            markdown, html = chunks[index]
+        chunks = iter_telegram_markdown_html_fragments(
+            buf.text, limits.TELEGRAM_HTML_MAX_LEN, line_continuation=buf.line_continuation,
+        )
+        for index, (chunk, html) in enumerate(chunks):
+            markdown = chunk.markdown
+            if index == 0 and buf.message_id is not None:
+                await self.api.edit_formatted(chat_id, buf.message_id, markdown, html)
+                continue
             operation = (
-                (lambda: self.api.send_preview(chat_id, markdown, **thread_kwargs))
-                if preview_tail and index == len(chunks) - 1
+                (lambda: self.api.send_preview(
+                    chat_id, markdown, line_continuation=chunk.line_continuation, **thread_kwargs,
+                ))
+                if preview_tail and not chunk.remainder.strip()
                 else (lambda: self.api.send_formatted(chat_id, markdown, html, **thread_kwargs))
             )
             sent = await self.submit(buf, operation)
             buf.message_id = sent.message_id
             buf.draft_id = None
-            buf.text = "\n".join(markdown for markdown, _ in chunks[index:])
+            buf.text = chunk.source
+            buf.line_continuation = chunk.line_continuation

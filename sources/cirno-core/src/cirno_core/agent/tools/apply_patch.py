@@ -80,20 +80,22 @@ class ApplyPatchTool(FileTool):
                 raise ValueError("must provide edits")
 
             plan, result = await run_file_operation(
-                lambda cancelled: self._prepare(edits, cancelled)
+                lambda cancelled: self._prepare(edits, cancelled, dry_run=dry_run)
             )
             if dry_run:
                 return str(result).replace("Patch applied:", "Patch dry-run succeeded:", 1)
-            await run_file_operation(plan.commit)
-            for path in plan.writes:
-                self._file_states.record_write(path)
+            def commit(cancelled: Event) -> None:
+                plan.commit(cancelled)
+                self._finish_writes(plan.writes)
+
+            await run_file_operation(commit)
             return result
         except PermissionError as exc:
             return ToolResult.error(f"Error: {exc}")
         except Exception as exc:
             return ToolResult.error(f"Error applying patch: {exc}")
 
-    def _prepare(self, edits: list[object], cancelled: Event) -> tuple[PatchPlan, FileEditResult]:
+    def _prepare(self, edits: list[object], cancelled: Event, *, dry_run: bool = False) -> tuple[PatchPlan, FileEditResult]:
         plan = PatchPlan()
         for edit_value in edits:
             if cancelled.is_set():
@@ -107,7 +109,10 @@ class ApplyPatchTool(FileTool):
             action = edit.get("action")
             if not isinstance(action, str):
                 raise ValueError(f"action required for edit: {path}")
-            source = self._resolve_write(path.strip())
+            source = (
+                self._resolve_write_path(path.strip()) if dry_run
+                else self._resolve_write(path.strip())
+            )
             plan.add(source, edit)
 
         diffs = {

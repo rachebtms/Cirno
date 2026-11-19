@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
+from cirno_core.config.loader import get_config_path
 from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.channels.telegram.binding import TelegramBinding
 
 _METHODS = {
@@ -15,15 +18,18 @@ _METHODS = {
 }
 
 
-async def telegram_action(action: str, values: dict) -> dict:
+async def telegram_action(action: str, values: dict, *, config_path: Path | None = None) -> dict:
     try:
         method = _METHODS[action]
     except KeyError:
         raise ValueError("Unknown Telegram binding action") from None
 
+    source = Path(config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
+
     def execute():
-        operation = getattr(TelegramBinding(), method)
+        operation = getattr(TelegramBinding(source.parent / "state"), method)
         return operation(values) if method == "update" else operation()
 
     worker = asyncio.to_thread(execute)
-    return await worker if method == "status" else await shield_and_drain(worker)
+    # Status also initializes the SQLite schema on first use.
+    return await shield_and_drain(worker)

@@ -1,20 +1,25 @@
+import { runObservation, isSystemCommandTurnId, SYSTEM_COMMAND_TURN_PREFIX } from "./client-run-observation";
+export { isSystemCommandTurnId } from "./client-run-observation";
+import { ClientNotifications } from "./client-notifications";
+import type { TaskNotice, StatusHandler, RuntimeModelHandler, SessionUpdateHandler,
+  SidebarStateUpdateHandler, RunStatusHandler, RunCompletionHandler, ErrorHandler } from "./client-notifications";
+export type { TaskNotice, StreamError } from "./client-notifications";
+import { ClientMessageDelivery, type MessageSendOptions } from "./client-message-delivery";
 import { ClientTranscripts } from "./client-transcripts";
-import { ClientListeners } from "./client-listeners";
 import { ClientChatRequests } from "./client-chat-requests";
 import { ClientMutations } from "./client-mutations";
 import { ClientConnection, type ClientConnectionOptions } from "./client-connection";
 import type { PreferencesSnapshot } from "@/features/preferences/contracts";
-import { uploadAttachments, uploadCapability, type AttachmentReference, type UploadCapability } from "../../packages/client-events/attachments";
-import { DeliveryReceipts } from "../../packages/client-events/delivery";
+import { uploadCapability, type AttachmentReference, type UploadCapability } from "../../packages/client-events/attachments";
 import { decodeNotification } from "../../packages/client-events/notifications";
 import type { ConnectionStatus, Outbound } from "@/lib/contracts/transport";
 import type { InboundEvent } from "@/lib/contracts/events";
-import type { OutboundCliAppMention, OutboundMcpPresetMention, OutboundMedia, SessionMention } from "@/lib/contracts/messages";
+import type { OutboundMedia } from "@/lib/contracts/messages";
 import type { SidebarStatePayload } from "@/lib/contracts/conversation-preferences";
 import type { GoalStateWsPayload } from "@/lib/contracts/activity";
 import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 import { ClientRunLedger } from "./client-run-ledger";
-import type { CanonicalRunSnapshot, RunEffect, RunObservation, RunState } from "./client-run-ledger";
+import type { CanonicalRunSnapshot, RunEffect, RunState } from "./client-run-ledger";
 
 export type { CanonicalRunSnapshot, RunState } from "./client-run-ledger";
 
@@ -63,117 +68,15 @@ function summarizeInboundWsPayload(ev: InboundEvent): unknown {
 
 type Unsubscribe = () => void;
 type EventHandler = (ev: InboundEvent) => void;
-export interface TaskNotice {
-  event: Extract<InboundEvent, { event: "turn_end" | "recovery_state" }>;
-  temporary: boolean;
-}
-type StatusHandler = (status: ConnectionStatus) => void;
-type RunCompletionHandler = (chatId: string) => void;
-type RuntimeModelHandler = (modelName: string | null, modelPreset?: string | null) => void;
-type SessionUpdateScope = "metadata" | "thread" | string;
-type SessionUpdateHandler = (
-  chatId: string,
-  scope?: SessionUpdateScope,
-  workspaceScope?: WorkspaceScopePayload,
-) => void;
-type SidebarStateUpdateHandler = (state: SidebarStatePayload) => void;
-type RunStatusHandler = (chatId: string, state: RunState) => void;
-
-/** Structured errors surfaced to the UI.
- *
- * Most entries are transport-level or protocol-level faults. Runtime and
- * workspace failures are promoted here when they must remain visible outside
- * the message stream.
- */
-export type StreamError =
-  /** Server rejected the inbound frame as too large (WS close code 1009).
-   * This is the transport fallback after text and attachment policies have
-   * already been checked independently. */
-  | { kind: "message_too_big"; chatId?: string; turnId?: string }
-  | {
-      kind: "workspace_scope_rejected";
-      reason?: string;
-      chatId?: string;
-      turnId?: string;
-    }
-  | {
-      kind: "turn_rejected";
-      detail?: string;
-      reason?: string;
-      chatId: string;
-      turnId: string;
-    }
-  | {
-      kind: "model_request_failed";
-      chatId: string;
-      turnId?: string;
-      errorKind?: string;
-      attempts?: number;
-    };
-
-type ErrorHandler = (error: StreamError) => void;
-
 interface PendingRequest<T> {
   resolve: (value: T) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
-const SYSTEM_COMMAND_TURN_PREFIX = "webui-system:";
-
-
-export function isSystemCommandTurnId(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.startsWith(SYSTEM_COMMAND_TURN_PREFIX);
-}
-
 export interface CirnoClientOptions extends ClientConnectionOptions {
   /** Maximum UTF-8 bytes accepted for one websocket message. */
   maxFrameBytes?: number;
-}
-
-function runObservation(event: InboundEvent): RunObservation | null {
-  if (!("chat_id" in event) || !event.chat_id) return null;
-  const turnId = "turn_id" in event && typeof event.turn_id === "string" ? event.turn_id : null;
-  const base = { chatId: event.chat_id, turnId, systemCommand: isSystemCommandTurnId(turnId) };
-  switch (event.event) {
-    case "message_accepted":
-    case "user_message": {
-      const activeTurnId = event.active_turn_id ?? (event.starts_turn ? event.turn_id : undefined);
-      // Receiving a Router note is input, not evidence of executing it.
-      // Only explicit admission ownership or actual run activity starts work.
-      return {
-        ...base,
-        kind: event.event === "message_accepted" ? "admission" : "input",
-        ...(activeTurnId ? { owner: { turnId: activeTurnId, startedAt: event.started_at } } : {}),
-      };
-    }
-    case "goal_status":
-      return { ...base, kind: "status", activity: event.status, startedAt: event.started_at };
-    case "turn_end":
-      return { ...base, kind: "completed" };
-    case "error":
-      return { ...base, kind: "rejection" };
-    case "delta":
-    case "reasoning_delta":
-      return { ...base, kind: event.text ? "activity" : "progress" };
-    case "stream_end":
-      return { ...base, kind: "activity" };
-    case "retry_status":
-      return { ...base, kind: event.state === "recovered" || event.state === "cleared" ? "progress" : "activity" };
-    case "recovery_state":
-      // Supersession resolves the old recovery, not the new user turn that caused it.
-      return event.status === "recovered" && event.reason === "superseded"
-        ? { ...base, kind: "progress" }
-        : { ...base, kind: "recovery", active: event.status === "resuming" };
-    case "attached":
-      return event.recovery_state && event.recovery_state.status !== "recovered"
-        ? { ...base, kind: "recovery", active: event.recovery_state.status === "resuming" }
-        : { ...base, kind: "progress" };
-    case "message":
-      return { ...base, kind: "message" };
-    default:
-      return { ...base, kind: "progress" };
-  }
 }
 
 /**
@@ -189,16 +92,25 @@ export class CirnoClient {
   private get socket(): WebSocket | null { return this.connection.socket; }
   private get currentUrl(): string { return this.connection.url; }
   private upload: UploadCapability | null = null;
-  private receipts = new DeliveryReceipts();
-  private statusHandlers = new ClientListeners<Parameters<StatusHandler>>("status");
-  private runtimeModelHandlers = new ClientListeners<Parameters<RuntimeModelHandler>>("runtime model");
-  private sessionUpdateHandlers = new ClientListeners<Parameters<SessionUpdateHandler>>("session update");
-  private sidebarStateUpdateHandlers = new ClientListeners<Parameters<SidebarStateUpdateHandler>>("sidebar state");
-  private runStatusHandlers = new ClientListeners<Parameters<RunStatusHandler>>("run status");
-  private runCompletionHandlers = new ClientListeners<Parameters<RunCompletionHandler>>("completion");
-  private errorHandlers = new ClientListeners<Parameters<ErrorHandler>>("error");
-  private taskNoticeHandlers = new ClientListeners<Parameters<(notice: TaskNotice) => void>>("task notice");
-  private readyHandlers = new ClientListeners<Parameters<() => void>>("ready");
+  private readonly notifications = new ClientNotifications({
+    status: () => this.status_, runs: () => this.runs.states(),
+  });
+  private readonly messageDelivery = new ClientMessageDelivery({
+    socket: () => this.socket,
+    upload: () => this.upload,
+    baseUrl: () => typeof window !== "undefined" ? window.location.href : this.currentUrl,
+    send: (chatId, content, media, options) => this.sendMessage(chatId, content, media, options),
+    submit: (chatId, turnId, startsNewRun) => this.applyRunEffects(this.runs.transition({
+      kind: "submit", chatId, turnId, role: startsNewRun ? "candidate-owner" : "supplement",
+    })),
+    reject: (chatId, turnId, detail, reason) => {
+      this.applyRunEffects(this.runs.transition({ kind: "reject", chatId, turnId }));
+      this.notifications.error.emit({ kind: "turn_rejected", chatId, turnId, detail, reason });
+    },
+    discardQueued: turnId => {
+      this.sendQueue = this.sendQueue.filter(frame => !(frame.type === "message" && frame.turn_id === turnId));
+    },
+  });
   private readonly transcripts = new ClientTranscripts(
     chatId => this.attach(chatId), chatId => this.temporaryChatIds.has(chatId),
   );
@@ -248,52 +160,73 @@ export class CirnoClient {
   }
 
   onStatus(handler: StatusHandler): Unsubscribe {
-    const unsubscribe = this.statusHandlers.subscribe(handler);
-    this.statusHandlers.invoke(handler, this.status_);
-    return unsubscribe;
+    return this.notifications.onStatus(handler);
   }
 
   onRuntimeModelUpdate(handler: RuntimeModelHandler): Unsubscribe {
-    return this.runtimeModelHandlers.subscribe(handler);
+    return this.notifications.runtimeModel.subscribe(handler);
   }
 
   onSessionUpdate(handler: SessionUpdateHandler): Unsubscribe {
-    return this.sessionUpdateHandlers.subscribe(handler);
+    return this.notifications.sessionUpdate.subscribe(handler);
   }
 
   onReady(handler: () => void): Unsubscribe {
-    return this.readyHandlers.subscribe(handler);
+    return this.notifications.ready.subscribe(handler);
   }
 
-  private readonly preferenceHandlers = new ClientListeners<Parameters<(snapshot: PreferencesSnapshot) => void>>("preferences");
   onPreferencesUpdate(handler: (snapshot: PreferencesSnapshot) => void): Unsubscribe {
-    return this.preferenceHandlers.subscribe(handler);
+    return this.notifications.preferences.subscribe(handler);
   }
 
   onSidebarStateUpdate(handler: SidebarStateUpdateHandler): Unsubscribe {
-    return this.sidebarStateUpdateHandlers.subscribe(handler);
+    return this.notifications.sidebarState.subscribe(handler);
   }
 
   onRunStatus(handler: RunStatusHandler): Unsubscribe {
-    const unsubscribe = this.runStatusHandlers.subscribe(handler);
-    for (const { chatId, state } of this.runs.states()) {
-      this.runStatusHandlers.invoke(handler, chatId, state);
-    }
-    return unsubscribe;
+    return this.notifications.onRunStatus(handler);
   }
 
   /** Live lifecycle events, independent of mounted chats. Never replays history. */
   onTaskNotice(handler: (notice: TaskNotice) => void): Unsubscribe {
-    return this.taskNoticeHandlers.subscribe(handler);
+    return this.notifications.taskNotice.subscribe(handler);
   }
 
   /** Subscribe to transport-level faults (see :type:`StreamError`). */
   onError(handler: ErrorHandler): Unsubscribe {
-    return this.errorHandlers.subscribe(handler);
+    return this.notifications.error.subscribe(handler);
   }
 
   getRunState(chatId: string): RunState {
     return this.runs.view(chatId);
+  }
+
+  private historyGenerations = new Map<string, { current: string; retired: Set<string> }>();
+
+  isHistoryGenerationRetired(chatId: string, generation: string): boolean {
+    return this.historyGenerations.get(chatId)?.retired.has(generation) === true;
+  }
+
+  rememberHistoryGeneration(chatId: string, generation: string): void {
+    const previous = this.historyGenerations.get(chatId);
+    if (previous?.current === generation || previous?.retired.has(generation)) return;
+    const retired = previous?.retired ?? new Set<string>();
+    if (previous) retired.add(previous.current);
+    while (retired.size > 64) retired.delete(retired.values().next().value!);
+    this.historyGenerations.set(chatId, { current: generation, retired });
+  }
+
+  /** Retire removed history owners without stopping work confirmed in its replacement. */
+  replaceHistoryRuns(chatId: string, snapshot: CanonicalRunSnapshot, completedTurnIds: readonly string[], extraRetained: readonly string[] = []): boolean {
+    const retained = new Set(extraRetained);
+    const completed = new Set(completedTurnIds);
+    if (snapshot.hasPendingToolCalls) for (const id of snapshot.observedTurnIds) if (!completed.has(id)) retained.add(id);
+    if (snapshot.activeTurnId) retained.add(snapshot.activeTurnId);
+    const previous = this.getRunTurnId(chatId);
+    const keepLifecycle = previous !== null && (retained.has(previous) || snapshot.observedTurnIds.includes(previous));
+    if (!keepLifecycle) this.goalStateByChatId.delete(chatId);
+    this.applyRunEffects(this.runs.transition({ kind: "history-replaced", chatId, retainedTurnIds: [...retained], snapshot }));
+    return keepLifecycle;
   }
 
   /** Restore pending history only within its original lifecycle generation. */
@@ -333,7 +266,7 @@ export class CirnoClient {
   }
 
   onRunCompletion(handler: RunCompletionHandler): Unsubscribe {
-    return this.runCompletionHandlers.subscribe(handler);
+    return this.notifications.completion.subscribe(handler);
   }
 
   getUnsettledRunChatIds(): string[] {
@@ -386,10 +319,10 @@ export class CirnoClient {
     for (const effect of effects) {
       switch (effect.kind) {
         case "run-status":
-          this.emitRunStatus(effect.chatId, effect.state);
+          this.notifications.runStatus.emit(effect.chatId, effect.state);
           break;
         case "completion":
-          this.runCompletionHandlers.emit(effect.chatId);
+          this.notifications.completion.emit(effect.chatId);
           break;
         case "discard-send":
           this.sendQueue = this.sendQueue.filter((frame) => !(
@@ -536,93 +469,26 @@ export class CirnoClient {
     return response.blob();
   }
 
-  async sendAttachments(
-    chatId: string, content: string, media: OutboundMedia[],
-    options?: Parameters<CirnoClient["sendMessage"]>[3],
-  ): Promise<void> {
-    const socket = this.socket;
-    const capability = this.upload;
-    const turnId = options?.turnId ?? crypto.randomUUID();
-    const stillConnected = () => this.socket === socket
-      && socket?.readyState === WS_OPEN && this.upload === capability;
-    this.applyRunEffects(this.runs.transition({
-      kind: "submit", chatId, turnId,
-      role: options?.startsNewRun === false ? "supplement" : "candidate-owner",
-    }));
-    try {
-      const references = await uploadAttachments(media, capability,
-        typeof window !== "undefined" ? window.location.href : this.currentUrl,
-        stillConnected);
-      if (!stillConnected()) throw new Error("Connection changed during attachment send");
-      await this.receipts.wait(turnId, () => {
-        if (!this.sendMessage(chatId, content, references, { ...options, turnId })) {
-          throw new Error("Message exceeds the gateway's WebSocket frame limit; draft retained");
-        }
-      });
-    } catch (error) {
-      this.applyRunEffects(this.runs.transition({ kind: "reject", chatId, turnId }));
-      this.emitError({ kind: "turn_rejected", chatId, turnId, detail: "attachment_rejected",
-        reason: error instanceof Error ? error.message : "Attachment send failed" });
-      throw error;
-    }
+  sendAttachments(chatId: string, content: string, media: OutboundMedia[], options?: MessageSendOptions): Promise<void> {
+    return this.messageDelivery.attachments(chatId, content, media, options);
   }
 
-  async sendTextMessage(
-    chatId: string, content: string, options?: Parameters<CirnoClient["sendMessage"]>[3],
-  ): Promise<void> {
-    const turnId = options?.turnId ?? crypto.randomUUID();
-    try {
-      await this.receipts.wait(turnId, () => {
-        if (!this.sendMessage(chatId, content, undefined, { ...options, turnId })) {
-          throw new Error("Message was not sent; draft retained");
-        }
-      });
-    } catch (error) {
-      // A timed-out offline send must not reappear after the user retries it.
-      this.sendQueue = this.sendQueue.filter(frame => !(frame.type === "message" && frame.turn_id === turnId));
-      this.applyRunEffects(this.runs.transition({ kind: "reject", chatId, turnId }));
-      this.emitError({ kind: "turn_rejected", chatId, turnId, detail: "message_rejected",
-        reason: error instanceof Error ? error.message : "Message send failed" });
-      throw error;
-    }
+  sendTextMessage(chatId: string, content: string, options?: MessageSendOptions): Promise<void> {
+    return this.messageDelivery.text(chatId, content, options);
   }
 
-  async sendUserShellCommand(
-    chatId: string, content: string, options?: Parameters<CirnoClient["sendMessage"]>[3],
-  ): Promise<void> {
-    const turnId = options?.turnId ?? crypto.randomUUID();
-    try {
-      await this.receipts.wait(turnId, () => {
-        if (!this.sendMessage(chatId, content, undefined, { ...options, turnId, userShell: true, startsNewRun: false })) {
-          throw new Error("Shell command was not sent; draft retained");
-        }
-      });
-    } catch (error) {
-      this.applyRunEffects(this.runs.transition({ kind: "reject", chatId, turnId }));
-      this.emitError({ kind: "turn_rejected", chatId, turnId, detail: "message_rejected",
-        reason: error instanceof Error ? error.message : "Shell command send failed" });
-      throw error;
-    }
+  sendUserShellCommand(chatId: string, content: string, options?: MessageSendOptions): Promise<void> {
+    return this.messageDelivery.shell(chatId, content, options);
   }
 
   sendMessage(
     chatId: string,
     content: string,
     media?: AttachmentReference[],
-    options?: {
-      cliApps?: OutboundCliAppMention[];
-      mcpPresets?: OutboundMcpPresetMention[];
-      sessionMentions?: SessionMention[];
-      quotedContext?: string;
-      intent?: "create_automation";
-      userShell?: boolean;
-      workspaceScope?: WorkspaceScopePayload | null;
-      turnId?: string;
-      /** False for side-channel or injected messages that do not own a lifecycle. */
-      startsNewRun?: boolean;
-    },
+    options?: MessageSendOptions,
   ): boolean {
-    if (options?.userShell && this.socket?.readyState !== WS_OPEN) return false;
+    const immediate = options?.userShell || isSystemCommandTurnId(options?.turnId);
+    if (immediate && this.socket?.readyState !== WS_OPEN) return false;
     const temporary = this.temporaryChatIds.has(chatId);
     if (!temporary) this.knownChats.add(chatId);
     const frame: Outbound = {
@@ -646,7 +512,7 @@ export class CirnoClient {
       if (options?.turnId && isSystemCommandTurnId(options.turnId)) {
         this.rejectSystemCommand(options.turnId, "message_too_big");
       }
-      this.emitError({
+      this.notifications.error.emit({
         kind: "message_too_big",
         chatId,
         ...(options?.turnId ? { turnId: options.turnId } : {}),
@@ -661,17 +527,16 @@ export class CirnoClient {
         role: options.startsNewRun === false ? "supplement" : "candidate-owner",
       }));
     }
-    if (options?.userShell) return this.rawSend(frame);
+    if (immediate) return this.rawSend(frame);
     this.queueSend(frame);
     return true;
   }
 
   sendSystemCommand(chatId: string, command: string, timeoutMs = 5_000): Promise<void> {
     const normalized = command.trim();
-    // Cancellation must reach the current connection; replaying it after a
-    // reconnect could cancel a different turn submitted in the meantime.
-    if ((normalized === "/stop" || normalized === "/new") && this.socket?.readyState !== WS_OPEN) {
-      return Promise.reject(new Error("Connection unavailable; reconnect before stopping or clearing the conversation"));
+    // Controls apply to the current server state, never a later reconnect.
+    if (this.socket?.readyState !== WS_OPEN) {
+      return Promise.reject(new Error("Connection unavailable; reconnect before changing the conversation or server"));
     }
     const turnId = `${SYSTEM_COMMAND_TURN_PREFIX}${crypto.randomUUID()}`;
     return new Promise<void>((resolve, reject) => {
@@ -680,7 +545,9 @@ export class CirnoClient {
         reject(new Error("system command timed out"));
       }, timeoutMs);
       this.pendingSystemCommands.set(turnId, { resolve, reject, timer });
-      this.sendMessage(chatId, normalized, undefined, { turnId });
+      if (!this.sendMessage(chatId, normalized, undefined, { turnId })) {
+        this.rejectSystemCommand(turnId, "System command was not sent; reconnect and try again");
+      }
     });
   }
 
@@ -703,7 +570,7 @@ export class CirnoClient {
   private setStatus(status: ConnectionStatus): void {
     if (this.status_ === status) return;
     this.status_ = status;
-    this.statusHandlers.emit(status);
+    this.notifications.status.emit(status);
   }
 
   private handleOpen(): void {
@@ -743,7 +610,7 @@ export class CirnoClient {
     }
 
     if (parsed.event === "error") this.chatRequests.accept(parsed);
-    this.receipts.event(parsed);
+    this.messageDelivery.accept(parsed);
     const turnId = "turn_id" in parsed && typeof parsed.turn_id === "string"
       ? parsed.turn_id
       : null;
@@ -780,7 +647,7 @@ export class CirnoClient {
 
     if (parsed.event === "error" && correlatedChatId && turnId) {
       if (parsed.detail !== "workspace_scope_rejected") {
-        this.emitError({
+        this.notifications.error.emit({
           kind: "turn_rejected",
           detail: parsed.detail,
           reason: parsed.reason,
@@ -794,7 +661,7 @@ export class CirnoClient {
       this.upload = uploadCapability(parsed.upload);
       this.readyChatId = parsed.chat_id;
       this.knownChats.add(parsed.chat_id);
-      this.readyHandlers.emit();
+      this.notifications.ready.emit();
       return;
     }
 
@@ -810,7 +677,7 @@ export class CirnoClient {
     }
 
     if (parsed.event === "runtime_model_updated") {
-      this.emitRuntimeModelUpdate(parsed.model_name || null, parsed.model_preset ?? null);
+      this.notifications.runtimeModel.emit(parsed.model_name || null, parsed.model_preset ?? null);
       return;
     }
 
@@ -821,22 +688,22 @@ export class CirnoClient {
         this.transcripts.clearPending(parsed.chat_id);
         this.applyRunEffects(this.runs.transition({ kind: "forget", chatId: parsed.chat_id }));
       }
-      this.emitSessionUpdate(parsed.chat_id, parsed.scope, parsed.workspace_scope);
+      this.notifications.sessionUpdate.emit(parsed.chat_id, parsed.scope, parsed.workspace_scope);
       return;
     }
 
     if (parsed.event === "preferences_updated") {
-      this.preferenceHandlers.emit(parsed.preferences);
+      this.notifications.preferences.emit(parsed.preferences);
       return;
     }
 
     if (parsed.event === "sidebar_state_updated") {
-      this.emitSidebarStateUpdate(parsed.state);
+      this.notifications.sidebarState.emit(parsed.state);
       return;
     }
 
     if (parsed.event === "error" && parsed.detail === "workspace_scope_rejected") {
-      this.emitError({
+      this.notifications.error.emit({
         kind: "workspace_scope_rejected",
         reason: parsed.reason,
         chatId: parsed.chat_id,
@@ -848,30 +715,10 @@ export class CirnoClient {
       this.recordGoalStateSnapshot(correlatedChatId, parsed);
       if ((parsed.event === "turn_end" || parsed.event === "recovery_state")
         && (this.knownChats.has(correlatedChatId) || this.temporaryChatIds.has(correlatedChatId))) {
-        this.taskNoticeHandlers.emit({ event: parsed, temporary: this.temporaryChatIds.has(correlatedChatId) });
+        this.notifications.taskNotice.emit({ event: parsed, temporary: this.temporaryChatIds.has(correlatedChatId) });
       }
       this.dispatch(correlatedChatId, parsed);
     }
-  }
-
-  private emitRuntimeModelUpdate(modelName: string | null, modelPreset?: string | null): void {
-    this.runtimeModelHandlers.emit(modelName, modelPreset);
-  }
-
-  private emitSessionUpdate(
-    chatId: string,
-    scope?: SessionUpdateScope,
-    workspaceScope?: WorkspaceScopePayload,
-  ): void {
-    this.sessionUpdateHandlers.emit(chatId, scope, workspaceScope);
-  }
-
-  private emitSidebarStateUpdate(state: SidebarStatePayload): void {
-    this.sidebarStateUpdateHandlers.emit(state);
-  }
-
-  private emitRunStatus(chatId: string, state: RunState): void {
-    this.runStatusHandlers.emit(chatId, state);
   }
 
   private dispatch(chatId: string, ev: InboundEvent): void {
@@ -880,7 +727,7 @@ export class CirnoClient {
 
   private handleClose(event: { code?: number } | undefined, willReconnect: boolean): void {
     this.upload = null;
-    this.receipts.close();
+    this.messageDelivery.close();
     this.clearTemporaryChats();
     this.chatRequests.close();
     this.mutations.disconnected(willReconnect);
@@ -897,7 +744,7 @@ export class CirnoClient {
       const rejected = this.runs.soleSentTurn(this.lastSocketMessageSend);
       if (rejected) {
         this.applyRunEffects(this.runs.transition({ kind: "reject", ...rejected }));
-        this.emitError({ kind: "message_too_big", ...rejected });
+        this.notifications.error.emit({ kind: "message_too_big", ...rejected });
         this.dispatch(rejected.chatId, {
           event: "error",
           detail: "message_too_big",
@@ -906,16 +753,12 @@ export class CirnoClient {
         });
       } else {
         // A close frame cannot identify one message among multiplexed sends.
-        this.emitError({ kind: "message_too_big" });
+        this.notifications.error.emit({ kind: "message_too_big" });
       }
     }
     this.applyRunEffects(this.runs.transition({ kind: "transport-lost" }));
     this.lastSocketMessageSend = null;
 
-  }
-
-  private emitError(error: StreamError): void {
-    this.errorHandlers.emit(error);
   }
 
   private resolveSystemCommand(turnId: string): void {
@@ -954,6 +797,7 @@ export class CirnoClient {
     this.transcripts.forget(chatId);
     const effects = this.runs.transition({ kind: "forget", chatId });
     this.goalStateByChatId.delete(chatId);
+    this.historyGenerations.delete(chatId);
     this.sendQueue = this.sendQueue.filter((frame) => (
       !("chat_id" in frame) || frame.chat_id !== chatId
     ));
@@ -980,8 +824,10 @@ export class CirnoClient {
       }
       return true;
     } catch {
-      // Shell commands require a new explicit submission, never reconnect replay.
-      if (frame.type !== "message" || !frame.user_shell) this.sendQueue.push(frame);
+      // Shell and silent control commands require a new explicit submission.
+      if (frame.type !== "message" || (!frame.user_shell && !isSystemCommandTurnId(frame.turn_id))) {
+        this.sendQueue.push(frame);
+      }
       return false;
     }
   }

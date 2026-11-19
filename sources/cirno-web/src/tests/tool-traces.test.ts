@@ -28,6 +28,14 @@ describe("tool trace identity", () => {
     });
   });
 
+  it("ignores nested JSON object field order without changing array order", () => {
+    const first = 'fixture({"z":{"b":2,"a":1},"a":[{"y":2,"x":1},3]})';
+    const reordered = 'fixture({"a":[{"x":1,"y":2},3],"z":{"a":1,"b":2}})';
+    const different = 'fixture({"a":[3,{"x":1,"y":2}],"z":{"a":1,"b":2}})';
+    expect(canonicalToolTrace(first)).toBe(canonicalToolTrace(reordered));
+    expect(canonicalToolTrace(first)).not.toBe(canonicalToolTrace(different));
+  });
+
   it("replaces an empty streaming placeholder when hosted search arguments arrive", () => {
     expect(mergeToolProgressTraceLines(
       ["web_search()"],

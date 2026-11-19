@@ -18,7 +18,7 @@ it("does not let an in-flight poll undo a completed mark-read action", async () 
   let release!: (value: InboxPage) => void;
   let calls = 0;
   const requestMutation = vi.fn(async (_method, payload) => {
-    if (payload.action === "inbox.read") return {};
+    if (payload.action === "inbox.read") return { ok: true, read_at: 2, unread: page(true).unread };
     calls++;
     if (calls === 2) return new Promise<InboxPage>(resolve => { release = resolve; });
     return page(calls > 2);

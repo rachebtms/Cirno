@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import shutil
@@ -13,6 +14,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
+from filelock import FileLock
+from loguru import logger
+
 from cirno_core.apps.cli import branding, command_support, contracts, paths, records, resources
 from cirno_core.apps.cli import output as cli_output
 from cirno_core.apps.cli.catalog import RegistryCatalog
@@ -21,8 +26,8 @@ from cirno_core.apps.cli.process import run_cli
 from cirno_core.apps.protocol import app_manifest, compact_dict
 from cirno_core.config.paths import get_runtime_subdir
 from cirno_core.security.workspace_policy import is_path_within
-from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
-from loguru import logger
+from cirno_core.skills.metadata import SKILL_FRONTMATTER, parse_skill_metadata, valid_skill_metadata
+from cirno_core.utils.atomic_file import atomic_write_text
 
 _MENTION_RE = re.compile(r"(^|[\s([{])@([a-z0-9_-]+)\b", re.IGNORECASE)
 
@@ -100,10 +105,32 @@ class CliAppManager:
         installed: dict[str, Any],
     ) -> dict[str, Any]:
         name = str(app["name"])
+        installed_name = next((key for key in installed if key.casefold() == name.casefold()), None)
+        is_installed = installed_name is not None
+        if installed_name is not None:
+            entry = records._as_object_dict(installed[installed_name])
+            if entry is None:
+                raise contracts.CliAppError(f"Invalid installed CLI App record for '{installed_name}'")
+            if (
+                isinstance(entry.get("definition"), dict)
+                or entry.get("strategy") == "bundled"
+                or (entry.get("strategy") == "pip" and entry.get("pip_distribution"))
+            ):
+                approved = self._local_app(installed_name, entry)
+                # Refresh presentation without replacing the package identity
+                # that local execution and removal actually use.
+                for field in ("display_name", "category", "description", "requires", "logo_url", "brand_color"):
+                    if app.get(field):
+                        approved[field] = app[field]
+                app = approved
+            else:
+                # Old records may lack a package recipe, but still retain the
+                # executable approved when they were installed.
+                app = {**app, "entry_point": entry.get("entry_point") or ""}
+            name = str(app["name"])
         entry_point = str(app.get("entry_point") or "")
         install_supported = self.commands._install_supported(app)
-        is_installed = name in installed
-        available = bool(entry_point and shutil.which(entry_point))
+        available = bool(entry_point and self.commands.which(entry_point))
         if is_installed and available:
             status = "installed"
         elif is_installed:
@@ -129,7 +156,7 @@ class CliAppManager:
             "status": status,
             "logo_url": logo_url,
             "brand_color": brand_color,
-            "skill_installed": paths.cli_app_skill_path(name).is_file(),
+            "skill_installed": paths._managed_skill_owner(paths.cli_app_skill_path(name)) == name.casefold(),
             "manifest": self._manifest_payload(app, logo_url=logo_url, brand_color=brand_color),
         }
 
@@ -221,11 +248,40 @@ class CliAppManager:
         apps, updated = self.registry.catalog(force_refresh=force_refresh, cache_only=cache_only)
         installed = self.installed.read()
         rows = [self._app_payload(app, installed) for app in apps]
+        visible_names = {str(app["name"]).lower() for app in apps}
+        rows.extend(
+            self._app_payload(self._local_app(name, entry), installed)
+            for name, entry in installed.items()
+            if name.lower() not in visible_names
+        )
         rows.sort(key=lambda item: (str(item["category"]), str(item["display_name"]).lower()))
         return {
             "apps": rows,
             "installed_count": sum(1 for item in rows if item["installed"]),
             "catalog_updated_at": updated,
+        }
+
+    @staticmethod
+    def _local_app(name: str, raw_entry: object) -> dict[str, Any]:
+        entry = records._as_object_dict(raw_entry)
+        if entry is None:
+            raise contracts.CliAppError(f"Invalid installed CLI App record for '{name}'")
+        definition = records._as_object_dict(entry.get("definition")) or {}
+        if not definition and entry.get("strategy") == "pip" and entry.get("pip_distribution"):
+            definition = {"pip_package": entry["pip_distribution"]}
+        return {
+            **definition,
+            "name": name,
+            "version": entry.get("version") or "unknown",
+            "display_name": entry.get("display_name") or name,
+            "category": entry.get("category") or "installed",
+            "description": entry.get("description") or "",
+            "requires": entry.get("requires") or "",
+            "_source": entry.get("source") or "local",
+            "entry_point": entry.get("entry_point") or "",
+            "package_manager": entry.get("strategy") or definition.get("package_manager") or "bundled",
+            "logo_url": entry.get("logo_url"),
+            "brand_color": entry.get("brand_color"),
         }
 
     def installed_payload(self) -> dict[str, Any]:
@@ -236,25 +292,11 @@ class CliAppManager:
         }
         rows: list[dict[str, Any]] = []
         for name, raw_entry in sorted(installed.items()):
-            entry = records._as_object_dict(raw_entry)
-            if entry is None:
-                entry = {}
-            strategy = str(entry.get("strategy") or "bundled")
+            app = self._local_app(name, raw_entry)
             cached_app = cached_by_name.get(str(name).lower(), {})
-            app: dict[str, Any] = {
-                "name": str(name),
-                "display_name": str(
-                    cached_app.get("display_name") or entry.get("display_name") or name
-                ),
-                "category": str(cached_app.get("category") or entry.get("category") or "installed"),
-                "description": str(cached_app.get("description") or entry.get("description") or ""),
-                "requires": str(cached_app.get("requires") or entry.get("requires") or ""),
-                "_source": str(entry.get("source") or "local"),
-                "entry_point": str(entry.get("entry_point") or ""),
-                "package_manager": strategy,
-                "logo_url": cached_app.get("logo_url") or entry.get("logo_url"),
-                "brand_color": cached_app.get("brand_color") or entry.get("brand_color"),
-            }
+            for field in ("display_name", "category", "description", "requires", "logo_url", "brand_color"):
+                if cached_app.get(field):
+                    app[field] = cached_app[field]
             rows.append(self._app_payload(app, installed))
         return {
             "apps": rows,
@@ -271,6 +313,13 @@ class CliAppManager:
             "source": app.get("_source") or "harness",
             "strategy": strategy,
             "installed_at": int(_now()),
+            # Retain the approved package identity. A catalog refresh must not
+            # change what an uninstall removes or make local removal need HTTP.
+            "definition": {
+                key: app[key] for key in (
+                    "install_cmd", "uninstall_cmd", "npm_package", "pip_package",
+                ) if key in app
+            } | {"package_manager": strategy},
         }
         for field in (
             "display_name",
@@ -283,11 +332,13 @@ class CliAppManager:
             value = app.get(field)
             if value not in (None, ""):
                 entry[field] = value
-        resolved = shutil.which(entry_point) if entry_point else None
+        resolved = self.commands.which(entry_point) if entry_point else None
         if resolved:
             entry["entry_point_path"] = resolved
         if strategy == "pip":
-            distribution = command_support._console_script_distribution(entry_point)
+            distribution = command_support._console_script_distribution(
+                entry_point, environment=os.environ.get("CIRNO_SHELL_VENV"),
+            )
             if distribution:
                 entry["pip_distribution"] = distribution
         return entry
@@ -338,17 +389,23 @@ If the user attached `@{name}` in chat, treat that as the selected app for the c
 Prefer machine-readable output when the CLI supports `--json`.
 """
 
-    def _with_cirno_skill_note(self, content: str, app: dict[str, Any]) -> str:
+    def _with_cirno_skill_note(
+        self, content: str, app: dict[str, Any], *, skill_name: str | None = None,
+    ) -> str:
         name = str(app.get("name") or "unknown")
-        skill_name = paths._skill_name(name)
+        skill_name = skill_name or paths._skill_name(name)
         metadata = parse_skill_metadata(content)
         if metadata is None or not valid_skill_metadata(
             metadata | {"name": skill_name}, skill_name
         ):
             content = self._fallback_skill(app)
-        content, replaced = re.subn(r"(?m)^name\s*:.*$", f"name: {skill_name}", content, count=1)
-        if not replaced:
-            content = content.replace("---\n", f"---\nname: {skill_name}\n", 1)
+            metadata = parse_skill_metadata(content)
+        frontmatter = SKILL_FRONTMATTER.match(content)
+        assert metadata is not None and frontmatter is not None
+        metadata["name"] = skill_name
+        metadata["cirno_cli_app"] = name.casefold()
+        header = yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False)
+        content = "---\n" + header + "---\n" + content[frontmatter.end():]
         marker = "<!-- cirno-cli-app-note -->"
         if marker in content:
             return content
@@ -372,16 +429,38 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
 
     def install_skill(self, app: dict[str, Any]) -> Path:
         name = str(app["name"])
-        path = paths.cli_app_skill_path(name)
-        path.parent.mkdir(parents=True, exist_ok=True)
         content = self._fetch_skill_content(app) or self._fallback_skill(app)
-        path.write_text(self._with_cirno_skill_note(content, app), encoding="utf-8")
+        root = paths.get_home_path() / "skills"
+        root.mkdir(parents=True, exist_ok=True)
+        # Resolve ownership and publish together: another process installing an
+        # app whose literal name matches a generated suffix must see its owner.
+        with FileLock(str(root / ".cli-apps.lock"), timeout=10):
+            path = paths.cli_app_skill_path(name)
+            owner = paths._managed_skill_owner(path)
+            if owner is not None and owner != name.casefold():
+                raise contracts.CliAppError(f"Managed Skill path for '{name}' belongs to '{owner}'")
+            if path.parent.is_symlink() or (path.parent.exists() and owner is None):
+                raise contracts.CliAppError(
+                    f"Skill directory {path.parent} is not owned by CLI App '{name}'; no files were changed.",
+                    status=409,
+                )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_text(path, self._with_cirno_skill_note(content, app, skill_name=path.parent.name))
         return path
 
     def remove_skill(self, name: str) -> None:
-        directory = paths.cli_app_skill_path(name).parent
-        if directory.is_dir():
-            shutil.rmtree(directory)
+        root = paths.get_home_path() / "skills"
+        if not root.is_dir():
+            return
+        with FileLock(str(root / ".cli-apps.lock"), timeout=10):
+            path = paths.cli_app_skill_path(name)
+            owner = paths._managed_skill_owner(path)
+            if owner is not None and owner != name.casefold():
+                raise contracts.CliAppError(f"Managed Skill path for '{name}' belongs to '{owner}'")
+            if owner is None:
+                return  # An unrelated or unreadable Skill is never managed cleanup.
+            if path.parent.is_dir():
+                shutil.rmtree(path.parent)
 
     def _record_installed(self, app: dict[str, Any]) -> dict[str, Any]:
         entry = self._installed_entry(app)
@@ -389,38 +468,62 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
         self.install_skill(app)
         return entry
 
+    def _record_and_verify_installation(
+        self,
+        app: dict[str, Any],
+        *,
+        message: str,
+        verification: list[str],
+    ) -> dict[str, Any]:
+        # Keep the installed package identity even when its executable is
+        # missing, so the owner can still repair or remove that package.
+        self._record_installed(app)
+        payload = self.payload()
+        entry_point = str(app.get("entry_point") or "")
+        available = any(
+            str(row["name"]).casefold() == str(app["name"]).casefold() and row["available"]
+            for row in payload["apps"]
+        )
+        last_action: dict[str, Any] = {
+            "ok": available,
+            "installed": True,
+            "message": message,
+            "verification": list(verification),
+        }
+        if available:
+            if "entry_point_available" not in last_action["verification"]:
+                last_action["verification"].append("entry_point_available")
+        else:
+            last_action["verification"] = [
+                check for check in verification if check != "entry_point_available"
+            ]
+            last_action["verification_failed"] = ["entry_point_available"]
+            last_action["message"] = (
+                f"{entry_point or app['name']} is not available on PATH after the package operation. "
+                "Cirno kept the installation record for repair or removal."
+            )
+        return {**payload, "last_action": last_action}
+
     def install(self, name: str) -> dict[str, Any]:
         app = self.registry.get_app(name)
         if not self.commands._install_supported(app):
             raise contracts.CliAppError("this CLI app uses an unsupported install strategy")
         strategy = self.commands._strategy(app)
         entry_point = str(app.get("entry_point") or "")
-        if entry_point and shutil.which(entry_point):
-            self._record_installed(app)
-            return self.payload() | {
-                "last_action": {
-                    "ok": True,
-                    "message": f"CLI for {app['display_name']} is already available.",
-                    "installed": True,
-                    "verification": [
-                        "entry_point_available",
-                        "state_recorded",
-                        "managed_paths_present",
-                    ],
-                }
-            }
+        if entry_point and self.commands.which(entry_point):
+            return self._record_and_verify_installation(
+                app,
+                message=f"CLI for {app['display_name']} is already available.",
+                verification=["state_recorded", "managed_paths_present"],
+            )
         if strategy == "bundled":
             detect_cmd = str(app.get("detect_cmd") or app.get("entry_point") or "")
             if detect_cmd and command_support._command_exists(detect_cmd):
-                self._record_installed(app)
-                return self.payload() | {
-                    "last_action": {
-                        "ok": True,
-                        "message": f"CLI for {app['display_name']} is available.",
-                        "installed": True,
-                        "verification": ["entry_point_available", "state_recorded"],
-                    }
-                }
+                return self._record_and_verify_installation(
+                    app,
+                    message=f"CLI for {app['display_name']} is available.",
+                    verification=["state_recorded", "managed_paths_present"],
+                )
             note = (
                 app.get("install_notes") or f"{app['display_name']} is bundled with its parent app."
             )
@@ -434,30 +537,22 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
             raise contracts.CliAppError(
                 cli_output._truncate(result.stderr or result.stdout or "install failed"), status=500
             )
-        self._record_installed(app)
-        return self.payload() | {
-            "last_action": {
-                "ok": True,
-                "message": f"Installed CLI for {app['display_name']}.",
-                "installed": True,
-                "verification": ["package_manager_ok", "state_recorded", "managed_paths_present"],
-            }
-        }
+        return self._record_and_verify_installation(
+            app,
+            message=f"Installed CLI for {app['display_name']}.",
+            verification=["package_manager_ok", "state_recorded", "managed_paths_present"],
+        )
 
     def update(self, name: str) -> dict[str, Any]:
         app = self.registry.get_app(name, force_refresh=True)
-        if str(app["name"]) not in self.installed.read():
+        if not any(key.lower() == str(app["name"]).lower() for key in self.installed.read()):
             raise contracts.CliAppError("CLI app is not installed")
         if self.commands._strategy(app) == "bundled":
-            self._record_installed(app)
-            return self.payload() | {
-                "last_action": {
-                    "ok": True,
-                    "message": f"Checked {app['display_name']}.",
-                    "installed": True,
-                    "verification": ["state_recorded"],
-                }
-            }
+            return self._record_and_verify_installation(
+                app,
+                message=f"Checked {app['display_name']}.",
+                verification=["state_recorded", "managed_paths_present"],
+            )
         argv = self.commands._argv_for_action(app, "update")
         assert argv is not None
         result = self.commands._run_argv(argv, timeout=self.runtime.install_timeout)
@@ -465,25 +560,32 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
             raise contracts.CliAppError(
                 cli_output._truncate(result.stderr or result.stdout or "update failed"), status=500
             )
-        self._record_installed(app)
-        return self.payload() | {
-            "last_action": {
-                "ok": True,
-                "message": f"Updated CLI for {app['display_name']}.",
-                "installed": True,
-                "verification": ["package_manager_ok", "state_recorded", "managed_paths_present"],
-            }
-        }
+        return self._record_and_verify_installation(
+            app,
+            message=f"Updated CLI for {app['display_name']}.",
+            verification=["package_manager_ok", "state_recorded", "managed_paths_present"],
+        )
 
     def uninstall(self, name: str) -> dict[str, Any]:
-        app = self.registry.get_app(name)
         installed = self.installed.read()
-        if str(app["name"]) not in installed:
+        installed_name = next((key for key in installed if key.lower() == name.lower()), None)
+        if installed_name is None:
             raise contracts.CliAppError("CLI app is not installed")
-        raw_installed_entry = installed.get(str(app["name"]))
+        raw_installed_entry = installed[installed_name]
         installed_entry = records._as_object_dict(raw_installed_entry)
         if installed_entry is None:
-            installed_entry = {}
+            raise contracts.CliAppError(f"Invalid installed CLI App record for '{name}'")
+        known_legacy_identity = installed_entry.get("strategy") == "bundled" or (
+            installed_entry.get("strategy") == "pip"
+            and isinstance(installed_entry.get("pip_distribution"), str)
+            and bool(installed_entry["pip_distribution"].strip())
+        )
+        if isinstance(installed_entry.get("definition"), dict) or known_legacy_identity:
+            app = self._local_app(installed_name, installed_entry)
+        else:
+            # Unknown older package recipes still need their established
+            # catalog resolution; do not invent a package to remove.
+            app = {**self.registry.get_app(installed_name), "name": installed_name}
         strategy = self.commands._strategy(app)
         entry_point = str(app.get("entry_point") or "").strip()
         managed_entry_path = str(installed_entry.get("entry_point_path") or "").strip()
@@ -497,7 +599,7 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
                     status=500,
                 )
             still_managed = bool(managed_entry_path and Path(managed_entry_path).exists())
-            still_available = bool(entry_point and shutil.which(entry_point))
+            still_available = bool(entry_point and self.commands.which(entry_point))
             if still_managed or (not managed_entry_path and still_available):
                 reason = (
                     f"the recorded entry point at {managed_entry_path} still exists"
@@ -508,7 +610,7 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
                     f"Uninstall for {app['display_name']} completed, but {reason}, "
                     "so cirno kept it installed."
                 )
-                return self.payload() | {
+                return self.payload(cache_only=True) | {
                     "last_action": {
                         "ok": False,
                         "message": message,
@@ -518,9 +620,9 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
                     }
                 }
         else:
-            still_available = bool(entry_point and shutil.which(entry_point))
-        self.installed.remove(str(app["name"]))
+            still_available = bool(entry_point and self.commands.which(entry_point))
         self.remove_skill(str(app["name"]))
+        self.installed.remove(str(app["name"]))
         if strategy == "bundled" and still_available:
             message = (
                 f"Removed {app['display_name']} from cirno. {entry_point} "
@@ -533,7 +635,7 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
             )
         else:
             message = f"Uninstalled CLI for {app['display_name']}."
-        return self.payload() | {
+        return self.payload(cache_only=True) | {
             "last_action": {
                 "ok": True,
                 "message": message,
@@ -546,9 +648,14 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
         }
 
     def test(self, name: str) -> dict[str, Any]:
-        app = self.registry.get_app(name)
+        installed = self.installed.read()
+        installed_name = next((key for key in installed if key.lower() == name.lower()), None)
+        app = (
+            self._local_app(installed_name, installed[installed_name])
+            if installed_name is not None else self.registry.get_app(name)
+        )
         entry = str(app.get("entry_point") or "")
-        resolved = shutil.which(entry)
+        resolved = self.commands.which(entry)
         if not entry or not resolved:
             raise contracts.CliAppError(f"{entry or name} is not available on PATH")
         result = self.commands._run_argv(
@@ -556,7 +663,7 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
         )
         ok = result.returncode == 0
         output = cli_output._truncate((result.stdout or result.stderr or "").strip(), 3000)
-        return self.payload() | {
+        return self.payload(cache_only=True) | {
             "last_action": {
                 "ok": ok,
                 "message": f"{entry} --help exited {result.returncode}",
@@ -571,6 +678,8 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
         restrict_to_workspace: bool,
     ) -> Path:
         cwd = Path(working_dir).expanduser() if working_dir else self.workspace
+        if working_dir and not cwd.is_absolute():
+            cwd = self.workspace / cwd
         cwd = cwd.resolve(strict=False)
         workspace = self.workspace.resolve(strict=False)
         if restrict_to_workspace and not is_path_within(cwd, workspace):
@@ -588,13 +697,18 @@ Use the `apps__run` tool with `name="{name}"` for command execution. Do not invo
         restrict_to_workspace: bool = False,
         cancel_event: threading.Event | None = None,
     ) -> str:
-        app = self.registry.get_app(name)
         installed = self.installed.read()
-        if str(app["name"]) not in installed:
+        installed_name = next((key for key in installed if key.lower() == name.lower()), None)
+        if installed_name is None:
             raise contracts.CliAppError(f"CLI app '{name}' is not installed")
+        entry_data = records._as_object_dict(installed[installed_name])
+        if entry_data is None:
+            raise contracts.CliAppError(f"Invalid installed CLI App record for '{name}'")
         cwd = self._resolve_cwd(working_dir, restrict_to_workspace=restrict_to_workspace)
-        entry = str(installed[str(app["name"])].get("entry_point") or app.get("entry_point") or "")
-        resolved = shutil.which(entry)
+        # Running an installed tool must not depend on an external catalog
+        # still listing it or being reachable. The owner-approved entry is durable.
+        entry = str(entry_data.get("entry_point") or "")
+        resolved = self.commands.which(entry)
         if not entry or not resolved:
             raise contracts.CliAppError(f"{entry or name} is not available on PATH")
         clean_args = [str(arg) for arg in (args or [])]

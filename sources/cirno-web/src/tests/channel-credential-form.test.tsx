@@ -26,6 +26,24 @@ const fields: ChannelConfigField[] = [
 ];
 
 describe("ChannelFields", () => {
+  it("defaults an undeclared boolean to off instead of selecting its first true option", () => {
+    const key = "channels.plugin.consent";
+    const setup = channelSetup({
+      name: "plugin", display_name: "Plugin", type: "channel", enabled: false,
+      installed: true, ready: false, status: "not_enabled",
+      install_supported: true, requires_restart: false,
+      setup: { fields: [{ key, field: "consent", kind: "bool", choices: [], required: true }] },
+    });
+    const values = defaultChannelFieldValues(setup.fields!);
+    expect(values[key]).toBe("false");
+    render(<ChannelFields fields={setup.fields!} values={values} visibleSecrets={{}}
+      onChange={vi.fn()} onToggleSecret={vi.fn()} />);
+    expect(screen.getByRole("radio", { name: "False" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "True" })).not.toBeChecked();
+    expect(channelValuesForSubmit(setup.fields!, {}, new Set([key]))).toEqual({ [key]: "false" });
+    expect(defaultChannelFieldValues([{ ...setup.fields![0]!, defaultValue: "true" }])[key]).toBe("true");
+  });
+
   it("preserves inherited notices and lets an explicit override return to the default", () => {
     const key = "channels.qq.showCompactionNotices";
     const setup = channelSetup({

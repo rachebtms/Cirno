@@ -6,6 +6,7 @@ import shlex
 import shutil
 import sys
 from importlib import metadata as importlib_metadata
+from pathlib import Path
 from typing import Any, cast
 
 _SHELL_META_CHARS = ("|", "&&", "||", ";", "$(", "`", ">", "<")
@@ -60,11 +61,16 @@ def _pip_uninstall_args_from_command(command: str) -> list[str] | None:
     return packages
 
 
-def _console_script_distribution(entry_point: str) -> str | None:
+def _console_script_distribution(entry_point: str, *, environment: str | None = None) -> str | None:
     if not entry_point:
         return None
     try:
-        distributions = importlib_metadata.distributions()
+        if environment:
+            root = Path(environment)
+            sites = [root / "Lib" / "site-packages", *root.glob("lib/python*/site-packages")]
+            distributions = importlib_metadata.distributions(path=[str(site) for site in sites])
+        else:
+            distributions = importlib_metadata.distributions()
     except Exception:
         return None
     for distribution in distributions:

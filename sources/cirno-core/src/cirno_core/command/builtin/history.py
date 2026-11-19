@@ -6,6 +6,9 @@ from typing import Any, cast
 
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.command.router import CommandContext
+from cirno_core.runtime.context import public_history_message
+from cirno_core.session.history_visibility import is_hidden_history_message
+from cirno_core.utils.model_messages import content_with_media_breadcrumbs
 
 _HISTORY_DEFAULT_COUNT = 10
 
@@ -19,9 +22,10 @@ _HISTORY_MAX_CONTENT_CHARS = 200
 def _format_history_message(msg: dict[str, Any]) -> str | None:
     """Format a single history message for display. Returns None to skip."""
     role = msg.get("role")
-    if role not in ("user", "assistant"):
+    if role not in ("user", "assistant") or is_hidden_history_message(msg):
         return None
-    content = msg.get("content") or ""
+    visible = public_history_message(msg)
+    content = content_with_media_breadcrumbs(role, visible.get("content") or "", visible.get("media"))
     if isinstance(content, list):
         parts = [
             text
@@ -58,10 +62,14 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
             )
 
     session = ctx.session or await ctx.loop.sessions.state.get(ctx.key)
-    history = session.get_history(max_messages=0, include_runtime_context=False)
-    visible = [_format_history_message(m) for m in history]
-    visible = [m for m in visible if m is not None]
-    recent = visible[-count:]
+    recent: list[str] = []
+    for message in reversed(session.messages):
+        formatted = _format_history_message(message)
+        if formatted is not None:
+            recent.append(formatted)
+            if len(recent) >= count:
+                break
+    recent.reverse()
 
     if not recent:
         return OutboundMessage(

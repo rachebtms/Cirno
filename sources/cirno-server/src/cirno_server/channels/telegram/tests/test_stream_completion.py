@@ -85,7 +85,7 @@ async def test_final_html_rejection_falls_back_to_raw_chunk_without_losing_tail(
         SimpleNamespace(message_id=8),
     ]
     channel.streams.buffers["123"] = StreamBuf(
-        text="A" * 24 + "\n**tail**",
+        text="A" * 35 + "\n**tail**",
         message_id=7,
     )
 

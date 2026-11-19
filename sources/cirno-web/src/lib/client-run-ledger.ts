@@ -58,7 +58,8 @@ type Command =
   | { kind: "transport-lost" }
   | { kind: "local-stop" | "forget"; chatId: string }
   | { kind: "fence"; chatId: string; completedTurnIds: readonly string[] }
-  | { kind: "restore-pending"; chatId: string; generation: number; turnId: string | null };
+  | { kind: "restore-pending"; chatId: string; generation: number; turnId: string | null }
+  | { kind: "history-replaced"; chatId: string; retainedTurnIds: readonly string[]; snapshot: CanonicalRunSnapshot };
 
 export type RunEffect =
   | { kind: "run-status"; chatId: string; state: RunState }
@@ -197,6 +198,27 @@ export class ClientRunLedger {
       case "forget":
         this.chats.delete(command.chatId);
         break;
+      case "history-replaced": {
+        const chat = this.ensureChat(command.chatId);
+        const retained = new Set(command.retainedTurnIds);
+        for (const [id, turn] of chat.turns) if (turn.delivery
+          && ["queued", "sent", "unknown"].includes(turn.delivery.phase)) retained.add(id);
+        const retired = [...chat.turns.keys()].filter(id => !retained.has(id));
+        if (chat.latestTurnId && !retained.has(chat.latestTurnId)) retired.push(chat.latestTurnId);
+        this.fence(command.chatId, retired, effects);
+        chat.anonymousActive = false;
+        if (!chat.latestTurnId || !retained.has(chat.latestTurnId)) {
+          chat.latestTurnId = null;
+          chat.effectiveStartedAt = null;
+        }
+        const turnId = command.snapshot.activeTurnId ?? null;
+        if (command.snapshot.hasPendingToolCalls && !this.view(command.chatId).active
+          && (!turnId || !chat.closed.has(turnId) && !chat.fenced.has(turnId))) {
+          this.advance(chat, turnId);
+          chat.anonymousActive = turnId === null;
+        }
+        break;
+      }
       case "restore-pending": {
         if (this.view(command.chatId).generation !== command.generation || this.view(command.chatId).active) break;
         const chat = this.ensureChat(command.chatId);
@@ -290,13 +312,17 @@ export class ClientRunLedger {
     const completion = observation.kind === "completed"
       || (observation.kind === "status" && observation.activity === "idle");
     const superseded = completion && chat?.latestTurnId != null && turnId !== chat.latestTurnId;
-    if (observation.kind === "status" && observation.activity === "running" && typeof observation.startedAt === "number") {
+    if (observation.kind === "status" && observation.activity === "running") {
       chat = this.ensureChat(chatId);
+      const previousTurnId = chat.latestTurnId;
       this.advance(chat, turnId);
-      if (turnId) this.ensureTurn(chat, turnId).startedAt = observation.startedAt;
-      chat.effectiveStartedAt = observation.startedAt;
+      chat.anonymousActive = turnId === null;
+      if (typeof observation.startedAt === "number") {
+        if (turnId) this.ensureTurn(chat, turnId).startedAt = observation.startedAt;
+        chat.effectiveStartedAt = observation.startedAt;
+      } else if (previousTurnId !== turnId) chat.effectiveStartedAt = null;
     } else if (observation.kind === "status" || observation.kind === "completed") {
-      // A running status without a numeric start time also settles the turn.
+      // Missing timing metadata is not a completion signal.
       chat = this.ensureChat(chatId);
       if (turnId) this.rememberClosed(chat, turnId);
       if (turnId) this.settle(chatId, turnId, effects);
@@ -466,6 +492,13 @@ export class ClientRunLedger {
       if (!turnId) continue;
       chat ??= this.ensureChat(chatId);
       chat.fenced.add(turnId);
+      // An explicit durable completion settles its own owner even when a
+      // newer running turn prevents adoption of the complete HTTP snapshot.
+      if (chat.turns.has(turnId)) this.settle(chatId, turnId, effects);
+      if (chat.latestTurnId === turnId) {
+        chat.anonymousActive = false;
+        chat.effectiveStartedAt = null;
+      }
     }
     if (chat) this.trimTerminalSet(chat.fenced);
     effects.push({ kind: "prune-inbound", chatId, turnIds: Array.from(chat?.fenced ?? []) });

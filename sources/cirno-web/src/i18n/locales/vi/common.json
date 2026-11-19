@@ -168,6 +168,10 @@
           "label": "Truy cập web",
           "help": "Cho phép tìm kiếm và tải nội dung trang web."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "Kích thước phản hồi trang tối đa (MiB)",
+          "help": "Dừng đọc trang, hình ảnh hoặc phản hồi Jina khi kích thước được thông báo hoặc sau giải mã vượt giới hạn này. Giới hạn này độc lập với độ dài văn bản trả về. Khởi động lại để áp dụng."
+        },
         "tools_cli_apps_enable": {
           "label": "Ứng dụng CLI",
           "help": "Cho phép tác nhân quản lý và chạy ứng dụng dòng lệnh."
@@ -1260,7 +1264,11 @@
         "supabase": "Xem và quản lý dự án."
       },
       "editConfig": "Chỉnh sửa cấu hình MCP",
-      "configObjectRequired": "Cấu hình MCP phải là một đối tượng JSON."
+      "configObjectRequired": "Cấu hình MCP phải là một đối tượng JSON.",
+      "changePending": "Một thay đổi MCP khác đang được xử lý. Hãy đợi hoàn tất rồi lưu lại.",
+      "cleanupPending": "Máy chủ MCP {{name}} đã bị xóa vẫn còn dữ liệu cần dọn dẹp.",
+      "retryCleanup": "Thử dọn dẹp lại",
+      "statusAuthorizationRequired": "Cần đăng nhập"
     },
     "legal": {
       "thirdPartyBrands": "Tên sản phẩm, logo và thương hiệu thuộc về chủ sở hữu tương ứng. Việc sử dụng chỉ nhằm nhận diện và không ngụ ý được xác nhận."
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "Các cuộc trò chuyện này sẽ xuất hiện lại trong danh sách cuộc trò chuyện."
   },
   "deleteConfirm": {
+    "notConfirmed": "Chưa xác nhận được việc xóa cuộc trò chuyện. Vui lòng thử lại.",
     "title": "Xóa cuộc trò chuyện này?",
     "titleMany": "Xóa {{count}} cuộc trò chuyện?",
     "description": "Không thể hoàn tác thao tác này.",

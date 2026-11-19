@@ -6,6 +6,7 @@ import json
 from contextlib import contextmanager
 from unittest.mock import patch
 
+import httpx
 import pytest
 from cirno_core.agent.tools.web.fetch import WebFetchTool
 from cirno_core.agent.tools.web.network import _validate_url
@@ -25,11 +26,13 @@ class FakeResponse:
     def json(self): return {}
 
 
-class FakeStreamResponse:
-    headers = {"content-type": "text/html"}
-    url = "https://example.com/page"
+class FakeStreamResponse(httpx.Response):
+    def __init__(self, url):
+        kwargs = ({"json": {"data": {"content": "ok"}}} if "r.jina.ai" in url
+                  else {"text": FakeResponse.text, "headers": FakeResponse.headers})
+        super().__init__(200, request=httpx.Request("GET", url), **kwargs)
     async def __aenter__(self): return self
-    async def __aexit__(self, *a): return False
+    async def __aexit__(self, *a): await self.aclose()
 
 
 class FakeClient:
@@ -37,7 +40,7 @@ class FakeClient:
     async def __aenter__(self): return self
     async def __aexit__(self, *a): return False
     def stream(self, method, url, **kw):
-        return FakeStreamResponse()
+        return FakeStreamResponse(url)
     async def get(self, url, **kw):
         return FakeResponse()
 

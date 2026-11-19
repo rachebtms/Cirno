@@ -300,6 +300,7 @@ export function ThreadShell({
     },
     refreshHistory,
     resetHistory: resetStreamHistory,
+    historyOwner,
     loadOlder,
     loadTraceDetails: loadBodyTraceDetails,
     streamError,
@@ -849,7 +850,7 @@ export function ThreadShell({
       historyEnabled={webuiCapabilities.includes("webui.subagents.history.v1")}
       active={composerActive}
       enabled={!temporary && !!session?.key.startsWith("websocket:") && webuiCapabilities.includes("webui.subagents.v1")}>
-      <QuestionReplyProvider messages={displayMessages} send={messagesReady ? answerQuestion : undefined}>
+      <QuestionReplyProvider owner={historyOwner} messages={displayMessages} send={messagesReady ? answerQuestion : undefined}>
         <section ref={shellRef} data-editing-message={Boolean(messageEditor) || undefined} data-preview-open={previewOpen || undefined} className="thread-preview-layout relative flex min-h-0 flex-1 overflow-hidden">
           <div ref={setConversationElement} className={cn(
             "thread-conversation relative flex min-w-0 flex-1 flex-col overflow-hidden",

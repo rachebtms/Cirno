@@ -11,6 +11,8 @@ from typing import Any, cast
 
 from rapidfuzz.distance import Indel, Opcode, Opcodes
 
+from cirno_core.utils.atomic_file import read_atomic_bytes
+
 TRACKED_FILE_EDIT_TOOLS = frozenset({"write_file", "edit_file", "apply_patch"})
 _MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
 _MAX_DIFF_LINES = 500
@@ -171,7 +173,9 @@ def read_file_snapshot(path: Path, *, max_bytes: int = _MAX_SNAPSHOT_BYTES) -> F
         size = path.stat().st_size
         if size > max_bytes:
             return FileSnapshot(path=path, exists=True, text=None, oversized=True)
-        raw = path.read_bytes()
+        raw = read_atomic_bytes(path, max_bytes=max_bytes + 1)
+        if len(raw) > max_bytes:
+            return FileSnapshot(path=path, exists=True, text=None, oversized=True)
     except OSError:
         return FileSnapshot(path=path, exists=path.exists(), text=None, unreadable=True)
     if b"\x00" in raw:
@@ -404,7 +408,7 @@ def _resolve_apply_patch_paths(
 def _resolve_single_path(tool: Any, workspace: Path | None, raw_path: Any) -> Path | None:
     if not isinstance(raw_path, str) or not raw_path.strip():
         return None
-    for resolver_name in ("_resolve_write", "_resolve"):
+    for resolver_name in ("_resolve_write_path", "_resolve_write", "_resolve"):
         resolver = getattr(tool, resolver_name, None)
         if callable(resolver):
             try:

@@ -68,5 +68,5 @@ class NetworkConfig(Base):
             return None
         proxy = self.resolve_environment()
         if not proxy:
-            raise ValueError("Configure the shared proxy in Advanced before enabling it")
+            raise ValueError("Configure the shared proxy in Settings > Network & retries before enabling it")
         return proxy

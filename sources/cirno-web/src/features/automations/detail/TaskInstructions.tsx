@@ -1,6 +1,6 @@
 import { Button } from "@heroui/react";
 import { Check, Clipboard } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExpandableText } from "@/components/ui/expandable-text";
 import { copyTextToClipboard } from "@/lib/clipboard";
@@ -13,10 +13,12 @@ import {
 export function TaskInstructions({ job }: { job: SessionAutomationJob }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false),
-    [copied, setCopied] = useState(false);
+    [copiedText, setCopiedText] = useState<string | null>(null);
+  const copyAttempt = useRef(0);
   const id = useId();
   const local = isLocalTriggerAutomation(job);
   const message = local ? automationTriggerCommand(job) : job.payload.message;
+  const copied = copiedText === message;
   if (job.protected || !message.trim()) return null;
   const expandable = message.length > 360 || message.split(/\r?\n/).length > 6;
   return (
@@ -31,8 +33,9 @@ export function TaskInstructions({ job }: { job: SessionAutomationJob }) {
             variant="ghost"
             size="sm"
             onPress={() => {
+              const attempt = ++copyAttempt.current;
               void copyTextToClipboard(message).then((ok) => {
-                if (ok) setCopied(true);
+                if (ok && attempt === copyAttempt.current) setCopiedText(message);
               });
             }}
           >

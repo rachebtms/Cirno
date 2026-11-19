@@ -7,6 +7,98 @@ import pytest
 from cirno_server.webui.terminals import Terminals
 
 
+async def test_concurrent_terminal_inputs_keep_order_without_blocking_other_terminals(monkeypatch):
+    from types import SimpleNamespace
+
+    from cirno_server.webui.terminals import TerminalSession
+
+    manager = Terminals()
+    manager.sessions = {
+        "one": TerminalSession(SimpleNamespace(returncode=None), 987_001, "One"),
+        "two": TerminalSession(SimpleNamespace(returncode=None), 987_002, "Two"),
+    }
+    loop = asyncio.get_running_loop()
+    waiting = asyncio.Event()
+    callbacks = {}
+    writes = []
+    released = False
+
+    def write(fd, data):
+        if fd == 987_001 and bytes(data) == b"first" and not released:
+            raise BlockingIOError()
+        writes.append((fd, bytes(data)))
+        return len(data)
+
+    def add_writer(fd, callback):
+        callbacks[fd] = callback
+        waiting.set()
+
+    monkeypatch.setattr("cirno_server.webui.terminals.os.write", write)
+    monkeypatch.setattr(loop, "add_writer", add_writer)
+    monkeypatch.setattr(loop, "remove_writer", lambda fd: callbacks.pop(fd, None))
+    first = asyncio.create_task(manager.write("one", "first"))
+    second = None
+    try:
+        async with asyncio.timeout(2):
+            await waiting.wait()
+            second = asyncio.create_task(manager.write("one", "second"))
+            await asyncio.sleep(0)
+            await manager.write("two", "independent")
+            assert writes == [(987_002, b"independent")]
+            released = True
+            callbacks[987_001]()
+            await asyncio.gather(first, second)
+        assert writes == [(987_002, b"independent"), (987_001, b"first"), (987_001, b"second")]
+        assert callbacks == {}
+    finally:
+        tasks = [task for task in (first, second) if task is not None]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def test_closing_terminal_wakes_blocked_input_without_removing_a_reused_fd_writer(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from cirno_server.webui.terminals import TerminalSession
+
+    manager = Terminals()
+    manager.sessions["old"] = TerminalSession(SimpleNamespace(returncode=0, wait=AsyncMock()), 987_003, "Old")
+    loop = asyncio.get_running_loop()
+    waiting = asyncio.Event()
+    callbacks = {}
+
+    def write(*_args):
+        raise BlockingIOError()
+
+    def add_writer(fd, callback):
+        callbacks[fd] = callback
+        waiting.set()
+
+    monkeypatch.setattr("cirno_server.webui.terminals.os.write", write)
+    monkeypatch.setattr("cirno_server.webui.terminals.os.close", lambda _: None)
+    monkeypatch.setattr(loop, "add_writer", add_writer)
+    monkeypatch.setattr(loop, "remove_writer", lambda fd: callbacks.pop(fd, None))
+    monkeypatch.setattr(loop, "remove_reader", lambda _: None)
+    pending = asyncio.create_task(manager.write("old", "input"))
+    try:
+        async with asyncio.timeout(2):
+            await waiting.wait()
+            await manager.close("old")
+            replacement = lambda: None
+            # A new PTY can receive the descriptor just closed by this tab.
+            callbacks[987_003] = replacement
+            await asyncio.sleep(0)
+            assert pending.done()
+            with pytest.raises(KeyError, match="closed"):
+                await pending
+            assert callbacks[987_003] is replacement
+    finally:
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
+
+
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.name != "posix", reason="POSIX PTY")
 async def test_local_terminal_runs_interactive_commands_replays_and_closes(tmp_path):

@@ -270,6 +270,10 @@ class BaseChannel(ABC):
         return False
 
 
+    async def check_sender(self, sender_id: str) -> bool:
+        """Async admission hook for adapters whose policy needs storage I/O."""
+        return self.is_allowed(sender_id)
+
     async def _handle_message(
         self,
         sender_id: str,
@@ -282,7 +286,7 @@ class BaseChannel(ABC):
         session_generation: str | None = None,
     ) -> None:
         """Publish an input admitted by this channel's authorization policy."""
-        if not self.is_allowed(sender_id):
+        if not await self.check_sender(sender_id):
             self.logger.warning("Access denied for sender {}", sender_id)
             return
 

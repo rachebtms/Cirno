@@ -11,18 +11,20 @@ import re
 import socket
 import ssl
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
 import httpx
 from cirno_core.config.loader import load_config
 from cirno_core.security.network import resolve_url_target
+
 from cirno_server.channels._setup import channel_setup_spec
 from cirno_server.channels.contracts import (
     ChannelSetupSpec,
     ChannelValidationContext,
+    assign_channel_field,
     channel_field_value,
     channel_instance_config,
-    channel_value_present,
 )
 from cirno_server.channels.plugin import ChannelPlugin
 from cirno_server.channels.registry import load_channel_plugin
@@ -53,6 +55,7 @@ def validate_channel_config(
     raw_values: dict[str, Any] | None = None,
     *,
     instance_id: str = "default",
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Validate a channel setup without mutating persisted config."""
 
@@ -60,7 +63,7 @@ def validate_channel_config(
     if not channel:
         return _payload("unknown", "unsupported", [_check("channel", "Channel", "fail", "Missing channel name")])
 
-    config = load_config()
+    config = load_config(config_path)
     section = getattr(config.channels, channel, None)
     plugin, setup_spec = _channel_contract(channel)
     values = _channel_config(
@@ -69,6 +72,12 @@ def validate_channel_config(
         instance_id=instance_id,
     )
     values = _merge_form_values(channel, values, raw_values or {}, setup_spec=setup_spec)
+
+    if setup_spec is not None and setup_spec.validate_config is not None:
+        try:
+            setup_spec.validate_config(values)
+        except ValueError as exc:
+            return _payload(channel, "invalid", [_check("config", "Configuration", "fail", str(exc))])
 
     if setup_spec is not None and setup_spec.validator is not None:
         context = ChannelValidationContext(
@@ -137,7 +146,13 @@ def _merge_form_values(
         field = raw_key[len(prefix):] if raw_key.startswith(prefix) else raw_key
         if field in secrets and raw_value is not None and not _str(raw_value):
             continue
-        _assign(merged, field, "" if field in secrets and raw_value is None else raw_value)
+        field_spec = spec.fields.get(field) if spec is not None else None
+        if field_spec is not None and not field_spec.inheritable:
+            if field_spec.kind in {"int", "float", "json", "enum"} and raw_value in (None, ""):
+                continue
+            if field_spec.kind == "enum" and isinstance(raw_value, str) and not raw_value.strip():
+                continue
+        assign_channel_field(merged, field, "" if field in secrets and raw_value is None else raw_value)
     return merged
 
 
@@ -152,13 +167,10 @@ def _required_checks(
     spec = setup_spec
     if spec is None:
         _, spec = _channel_contract(name)
-    for field in spec.simple_required_fields if spec is not None else ():
-        value = _get(values, field)
-        if field == "consentGranted":
-            if not _truthy(value):
-                missing.append(field)
-            continue
-        if _str(value):
+    if spec is None:
+        return checks, missing
+    for field in spec.simple_required_fields:
+        if spec.field_is_configured(values, field):
             checks.append(_check(f"field:{field}", _label(field), "pass", "Configured."))
         else:
             missing.append(field)
@@ -173,7 +185,9 @@ def _composite_requirement_checks(
     checks: list[dict[str, Any]] = []
     missing: list[str] = []
     for index, requirement in enumerate(setup_spec.required):
-        if requirement.simple_field is not None or requirement.is_satisfied(values):
+        if requirement.simple_field is not None or requirement.is_satisfied(
+            values, fields=setup_spec.fields,
+        ):
             continue
 
         alternatives = [
@@ -182,7 +196,7 @@ def _composite_requirement_checks(
                 tuple(
                     field
                     for field in alternative
-                    if not channel_value_present(channel_field_value(values, field))
+                    if not setup_spec.field_is_configured(values, field)
                 ),
             )
             for alternative in requirement.alternatives
@@ -271,27 +285,6 @@ def _check(
     if action_url:
         payload["action_url"] = action_url
     return payload
-
-
-def _assign(values: dict[str, Any], field: str, value: Any) -> None:
-    target = values
-    parts = field.split(".")
-    for part in parts[:-1]:
-        current = target.get(part)
-        if not isinstance(current, dict):
-            current = {}
-            target[part] = current
-        target = cast(dict[str, Any], current)
-    target[parts[-1]] = value
-
-
-def _get(values: dict[str, Any], field: str) -> Any:
-    target: Any = values
-    for part in field.split("."):
-        if not isinstance(target, dict):
-            return None
-        target = cast(dict[str, Any], target).get(part)
-    return target
 
 
 def _str(value: Any) -> str:

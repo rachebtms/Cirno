@@ -12,6 +12,7 @@ from typing import Any, Callable, NamedTuple, TypedDict
 
 from cirno_core.session.display_history import (
     HistoryReader,
+    is_model_input_fact,
 )
 from cirno_core.session.presentation_history import (
     record_from_fact,
@@ -100,6 +101,9 @@ def _history_prompt_summaries(history: HistoryReader) -> _ChunkPromptView:
                 if record.get("event") == "user":
                     has_user = True
                     pending = None
+                    if not is_model_input_fact(fact):
+                        yield record
+                        continue
                     turn_id = str(record.get("turn_id") or "")
                     provenance = normalize_session_message_ui_metadata(record.get("session_message"))
                     duplicate = False

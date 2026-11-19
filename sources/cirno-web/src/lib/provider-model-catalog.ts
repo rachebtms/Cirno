@@ -13,7 +13,7 @@ export function isCatalogAvailable(payload: ProviderModelsPayload | null): boole
 }
 
 function catalogFailed(payload: ProviderModelsPayload): boolean {
-  return payload.status === "error" || Boolean(payload.error_kind)
+  return ["error", "not_configured", "missing_api_base"].includes(payload.status) || Boolean(payload.error_kind)
     || payload.source === "stale" || payload.source === "fallback";
 }
 

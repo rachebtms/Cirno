@@ -253,8 +253,9 @@ def validate_workspace_scope_payload(
     default_workspace: str | Path,
     default_restrict_to_workspace: bool,
     source_channel: str | None = None,
+    require_existing: bool = True,
 ) -> WorkspaceScope:
-    """Validate a client-requested workspace scope."""
+    """Validate a scope; newly selected directories must exist by default."""
     if raw is None:
         return default_workspace_scope(
             default_workspace,
@@ -265,7 +266,9 @@ def validate_workspace_scope_payload(
         raise WorkspaceScopeError("workspace_scope must be an object")
     scope_data = cast(dict[str, Any], raw)
 
-    raw_path = scope_data.get("project_path") or scope_data.get("path")
+    raw_path = scope_data.get("project_path")
+    if raw_path is None or raw_path == "":
+        raw_path = scope_data.get("path")
     if raw_path is None or raw_path == "":
         raw_path = str(Path(default_workspace).expanduser().resolve(strict=False))
     if not isinstance(raw_path, str):
@@ -277,7 +280,7 @@ def validate_workspace_scope_payload(
     if not project.is_absolute():
         raise WorkspaceScopeError("project_path must be absolute")
     project = project.resolve(strict=False)
-    if not project.is_dir():
+    if require_existing and not project.is_dir():
         raise WorkspaceScopeError("project_path must be an existing directory")
 
     raw_mode = scope_data.get("access_mode")
@@ -295,27 +298,21 @@ def workspace_scope_from_metadata(
     default_restrict_to_workspace: bool,
     source_channel: str | None = None,
 ) -> WorkspaceScope:
-    """Resolve persisted metadata, falling back safely for old or stale sessions."""
+    """Retain saved boundaries even when the directory is temporarily absent."""
     if not isinstance(metadata, dict):
         return default_workspace_scope(
             default_workspace,
             default_restrict_to_workspace,
             source_channel=source_channel,
         )
-    try:
-        metadata_data = cast(dict[str, Any], metadata)
-        return validate_workspace_scope_payload(
-            metadata_data.get(WORKSPACE_SCOPE_METADATA_KEY),
-            default_workspace=default_workspace,
-            default_restrict_to_workspace=default_restrict_to_workspace,
-            source_channel=source_channel,
-        )
-    except WorkspaceScopeError:
-        return default_workspace_scope(
-            default_workspace,
-            default_restrict_to_workspace,
-            source_channel=source_channel,
-        )
+    metadata_data = cast(dict[str, Any], metadata)
+    return validate_workspace_scope_payload(
+        metadata_data.get(WORKSPACE_SCOPE_METADATA_KEY),
+        default_workspace=default_workspace,
+        default_restrict_to_workspace=default_restrict_to_workspace,
+        source_channel=source_channel,
+        require_existing=False,
+    )
 
 
 def resolve_effective_workspace_scope(

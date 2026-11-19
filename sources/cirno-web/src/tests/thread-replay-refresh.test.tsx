@@ -22,6 +22,69 @@ function response(content: string) {
 
 afterEach(() => { vi.unstubAllGlobals(); webuiThreadCache.clear(); });
 
+it("retires an old Working owner when HTTP discovers a clear missed by the socket", async () => {
+  const { client, receive } = createStreamClient();
+  const initial = { schemaVersion: 3, projection: "events", history_generation: "a", revision: "a1",
+    completed_turn_ids: [], has_pending_tool_calls: true, active_turn_id: "old",
+    events: [{ event: "user_message", chat_id: "missed", turn_id: "old", turn_seq: 0, text: "Deleted", starts_turn: true }] };
+  const cleared = { ...initial, history_generation: "b", revision: "b1", events: [], has_pending_tool_calls: false, active_turn_id: null };
+  const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(initial), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(cleared), { status: 200 }));
+  vi.stubGlobal("fetch", fetch);
+  const view = renderHook(() => useCirnoStream("missed", undefined, false, undefined, undefined, [], { key: "websocket:missed" }), {
+    wrapper: ({ children }: { children: ReactNode }) => <ClientProvider client={client} token="fixture">{children}</ClientProvider>,
+  });
+  try {
+    await waitFor(() => expect(view.result.current.messages).toHaveLength(1));
+    act(() => receive({ event: "goal_status", chat_id: "missed", turn_id: "old", status: "running", started_at: 100 }));
+    expect(view.result.current.isStreaming).toBe(true);
+    const owner = view.result.current.historyOwner;
+    act(() => view.result.current.refreshHistory());
+    await waitFor(() => expect(view.result.current.messages).toEqual([]));
+    expect(view.result.current.isStreaming).toBe(false);
+    expect(view.result.current.historyOwner).not.toBe(owner);
+    act(() => receive({ event: "message", chat_id: "missed", turn_id: "old", turn_seq: 2, text: "Late deleted answer" }));
+    expect(view.result.current.messages).toEqual([]);
+  } finally { view.unmount(); client.close(); }
+});
+
+it("keeps new live work while HTTP retires the previous history generation", async () => {
+  const { client, receive } = createStreamClient();
+  const latest = deferred();
+  const initial = { schemaVersion: 3, projection: "events", history_generation: "a", revision: "a1",
+    completed_turn_ids: [], has_pending_tool_calls: true, active_turn_id: "old",
+    events: [{ event: "user_message", chat_id: "replaced", turn_id: "old", turn_seq: 0, text: "Deleted", starts_turn: true }] };
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(initial), { status: 200 }))
+    .mockReturnValueOnce(latest.promise));
+  const view = renderHook(() => useCirnoStream("replaced", undefined, false, undefined, undefined, [], { key: "websocket:replaced" }), {
+    wrapper: ({ children }: { children: ReactNode }) => <ClientProvider client={client} token="fixture">{children}</ClientProvider>,
+  });
+  try {
+    await waitFor(() => expect(view.result.current.messages).toHaveLength(1));
+    act(() => {
+      receive({ event: "goal_status", chat_id: "replaced", turn_id: "old", status: "running", started_at: 100 });
+      view.result.current.refreshHistory();
+    });
+    const input = { event: "user_message" as const, chat_id: "replaced", turn_id: "new", turn_seq: 0, text: "Replacement", starts_turn: true };
+    act(() => {
+      receive({ event: "goal_status", chat_id: "replaced", turn_id: "new", status: "running", started_at: 200 });
+      receive(input);
+      receive({ event: "delta", chat_id: "replaced", turn_id: "new", turn_seq: 1, stream_id: "new-answer", text: "Current" });
+    });
+    await waitFor(() => expect(view.result.current.messages.at(-1)?.content).toBe("Current"));
+    await act(async () => latest.resolve(new Response(JSON.stringify({ ...initial,
+      history_generation: "b", revision: "b1", active_turn_id: "new", events: [input],
+    }), { status: 200 })));
+    expect(view.result.current.messages.map(row => row.content)).toEqual(["Replacement", "Current"]);
+    expect(view.result.current.isStreaming).toBe(true);
+    expect(client.getRunStartedAt("replaced")).toBe(200);
+    act(() => receive({ event: "stream_end", chat_id: "replaced", turn_id: "new", turn_seq: 2, stream_id: "new-answer", text: "Current continues" }));
+    expect(view.result.current.messages.at(-1)?.content).toBe("Current continues");
+    act(() => receive({ event: "turn_end", chat_id: "replaced", turn_id: "new", turn_seq: 3 }));
+    expect(view.result.current.isStreaming).toBe(false);
+  } finally { view.unmount(); client.close(); }
+});
+
 it.each(["visibility", "pageshow"] as const)("keeps one reply across a %s foreground refresh and repeated delivery", async (resume) => {
   const { client, receive } = createStreamClient();
   const latest = deferred();

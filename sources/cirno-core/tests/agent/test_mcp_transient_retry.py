@@ -538,7 +538,59 @@ async def test_tool_refresh_leaves_one_transient_retry_available():
     sleep.assert_awaited_once_with(1)
 
 
-async def test_tool_later_refresh_does_not_reset_transient_budget():
+@pytest.mark.parametrize("kind", ["tool", "resource", "prompt"])
+async def test_unavailable_reconnect_never_replays_on_the_withdrawn_session(kind):
+    if kind == "tool":
+        method = "call_tool"
+        result = _make_tool_result("Withdrawn tool must not run")
+        factory, definition = MCPToolWrapper, _make_tool_def()
+    elif kind == "resource":
+        method = "read_resource"
+        result = _make_resource_result("Withdrawn resource must not be read")
+        factory, definition = MCPResourceWrapper, _make_resource_def()
+    else:
+        method = "get_prompt"
+        result = _make_prompt_result("Withdrawn prompt must not be read")
+        factory, definition = MCPPromptWrapper, _make_prompt_def()
+    request = AsyncMock(side_effect=[ConnectionResetError("Old connection lost"), result])
+    wrapper = factory(SimpleNamespace(**{method: request}), "fixture", definition)
+    reconnect = AsyncMock(return_value=None)
+    wrapper.set_reconnect_handler(reconnect)
+    with patch("cirno_core.agent.tools.mcp.wrappers.asyncio.sleep", new_callable=AsyncMock) as sleep:
+        output = await wrapper.execute()
+    assert is_tool_error_result(output)
+    assert "not replayed" in output
+    request.assert_awaited_once()
+    reconnect.assert_awaited_once()
+    sleep.assert_not_awaited()
+
+
+@pytest.mark.parametrize("changed", ["schema", "literal_type", "description", "replay_hints"])
+async def test_reconnect_cannot_automatically_execute_a_changed_tool_definition(changed):
+    original, replacement = _make_tool_def(), _make_tool_def()
+    if changed == "schema":
+        replacement.inputSchema["properties"]["new_required"] = {"type": "string"}
+        replacement.inputSchema["required"] = ["new_required"]
+    elif changed == "literal_type":
+        original.inputSchema["properties"]["value"] = {"enum": [True]}
+        replacement.inputSchema["properties"]["value"] = {"enum": [1]}
+    elif changed == "description":
+        replacement.description = "Changed operation semantics"
+    else:
+        # Both are replay-safe, but the replacement is now a mutating operation.
+        replacement.annotations = mcp_types.ToolAnnotations(readOnlyHint=False, idempotentHint=True)
+    old = SimpleNamespace(call_tool=AsyncMock(side_effect=ConnectionResetError("Lost response")))
+    fresh = SimpleNamespace(call_tool=AsyncMock(return_value=_make_tool_result("New operation must not run")))
+    wrapper = MCPToolWrapper(old, "fixture", original)
+    wrapper.set_reconnect_handler(AsyncMock(return_value=MCPToolWrapper(fresh, "fixture", replacement)))
+    output = await wrapper.execute()
+    assert is_tool_error_result(output)
+    assert "definition changed" in output.lower()
+    old.call_tool.assert_awaited_once()
+    fresh.call_tool.assert_not_awaited()
+
+
+async def test_failed_refresh_stops_without_retrying_the_old_session_or_refreshing_again():
     old, fresh = AsyncMock(), AsyncMock()
     old.call_tool.side_effect = [ConnectionResetError("first"), _session_terminated_error()]
     fresh.call_tool.side_effect = ConnectionResetError("last")
@@ -550,11 +602,11 @@ async def test_tool_later_refresh_does_not_reset_transient_budget():
     with patch("cirno_core.agent.tools.mcp.wrappers.asyncio.sleep", new_callable=AsyncMock) as sleep:
         output = await wrapper.execute()
 
-    assert output == "(MCP tool call failed after retry: ConnectionResetError)"
+    assert "unavailable after reconnect" in output
     assert is_tool_error_result(output)
-    assert (old.call_tool.await_count, fresh.call_tool.await_count) == (2, 1)
-    assert reconnect.await_count == 2
-    sleep.assert_awaited_once_with(1)
+    assert (old.call_tool.await_count, fresh.call_tool.await_count) == (1, 0)
+    reconnect.assert_awaited_once()
+    sleep.assert_not_awaited()
 
 
 @pytest.mark.parametrize("phase", ["refresh", "backoff"])

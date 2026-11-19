@@ -99,8 +99,11 @@ class SessionTurns:
             self.repository.publish(current)
             return self.repository.draft(current, previous=draft)
 
-        fresh = await self.operations.execute(draft.key, commit)
-        self._refresh(draft, fresh)
+        # A committed write must advance this owner's merge baseline even if
+        # the caller cancelled while the physical writer was finishing.
+        await self.operations.execute(
+            draft.key, commit, acknowledge=lambda fresh: self._refresh(draft, fresh),
+        )
 
     async def prepare_input(self, session: Session) -> None:
         """Commit the prepared input and recovery baseline before external execution."""
@@ -143,17 +146,19 @@ class SessionTurns:
             self.repository.publish(current, history=not current.policy.persist)
             return current
 
-        committed = await self.operations.execute(draft.key, commit)
-        # Only the checkpoint fields have committed; preserve other local changes.
-        draft.metadata[RUNTIME_CHECKPOINT_KEY] = dict(payload)
-        if baseline is not None:
-            metadata = {
-                **baseline.metadata,
-                RUNTIME_CHECKPOINT_KEY: committed.metadata[RUNTIME_CHECKPOINT_KEY],
-            }
-            draft._baseline = replace(  # pyright: ignore[reportPrivateUsage]
-                baseline, metadata=metadata, provider_state=committed.provider_state
-            )
+        def acknowledge(committed: Session) -> None:
+            # Only the checkpoint fields have committed; preserve other local changes.
+            draft.metadata[RUNTIME_CHECKPOINT_KEY] = dict(payload)
+            if baseline is not None:
+                metadata = {
+                    **baseline.metadata,
+                    RUNTIME_CHECKPOINT_KEY: committed.metadata[RUNTIME_CHECKPOINT_KEY],
+                }
+                draft._baseline = replace(  # pyright: ignore[reportPrivateUsage]
+                    baseline, metadata=metadata, provider_state=committed.provider_state
+                )
+
+        await self.operations.execute(draft.key, commit, acknowledge=acknowledge)
 
     async def commit_summary(
         self,

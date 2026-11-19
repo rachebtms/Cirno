@@ -34,6 +34,7 @@ from cirno_core.bus.runtime_events import (
     TurnRuntimeAdmitted,
     UserInputAccepted,
 )
+from cirno_core.runtime.admission import RuntimeMaintenanceError
 from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno_core.session.goal_state import goal_state_ws_blob
 from cirno_core.session.keys import ROUTER_CHAT_ID, ROUTER_SESSION_KEY
@@ -353,12 +354,20 @@ class WebuiTurnCoordinator:
         cid = str(event.context.chat_id or "").strip()
         if not cid:
             return
+        session = await self.sessions.state.read_header(event.context.session_key)
+        if session is None or (
+            event.context.session_generation is not None
+            and session.generation != event.context.session_generation
+        ):
+            return
         await self.bus.publish_outbound(
             outbound_message_for_event(
                 channel=event.context.channel,
                 chat_id=cid,
                 event=GoalStateSyncEvent(
-                    goal_state=goal_state_ws_blob(event.session_metadata),
+                    # A later Goal update may have committed before this
+                    # notification is delivered, even within one generation.
+                    goal_state=goal_state_ws_blob(session.metadata),
                 ),
                 metadata=event.context.metadata,
             ),
@@ -367,6 +376,11 @@ class WebuiTurnCoordinator:
     async def _handle_subagent_task_changed(self, event: SubagentTaskChanged) -> None:
         ctx = event.context
         if not self._is_websocket_event(ctx) or ctx.session_key != webui_session_key(ctx.chat_id):
+            return
+        session = await self.sessions.state.read_header(ctx.session_key)
+        if session is None or (
+            ctx.session_generation is not None and ctx.session_generation != session.generation
+        ):
             return
         await self.bus.publish_event(event, channel=ctx.channel, chat_id=ctx.chat_id)
 
@@ -457,7 +471,12 @@ class WebuiTurnCoordinator:
                     metadata=event.context.metadata,
                 )
 
-        self.schedule_background(_generate_title_and_notify())
+        pending = _generate_title_and_notify()
+        try:
+            self.schedule_background(pending)
+        except RuntimeMaintenanceError:
+            pending.close()
+            logger.debug("Skipped optional title generation while Agent admission is closed")
 
     async def _publish_session_metadata_updated(
         self,

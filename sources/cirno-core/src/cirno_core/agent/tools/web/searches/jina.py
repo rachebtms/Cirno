@@ -6,11 +6,13 @@ import os
 from urllib.parse import quote
 
 import httpx
+from loguru import logger
+
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.web.content import _format_results
 from cirno_core.agent.tools.web.context import SearchContext
+from cirno_core.agent.tools.web.safety import _redact_search_error
 from cirno_core.agent.tools.web.searches import duckduckgo
-from loguru import logger
 
 
 async def search(context: SearchContext, query: str, n: int) -> str:
@@ -29,7 +31,7 @@ async def search(context: SearchContext, query: str, n: int) -> str:
             r = await client.get(
                 f"https://s.jina.ai/{encoded_query}",
                 headers=headers,
-                timeout=15.0,
+                timeout=float(context.config.timeout),
             )
             r.raise_for_status()
         data = r.json().get("data", [])[:n]
@@ -45,6 +47,8 @@ async def search(context: SearchContext, query: str, n: int) -> str:
     except Exception as e:
         logger.warning(
             "Jina search failed ({}), falling back to DuckDuckGo",
-            e if tool_log_content_allowed() else type(e).__name__,
+            _redact_search_error(
+                str(e), api_key=api_key, proxy=context.proxy, base_url=context.config.base_url,
+            ) if tool_log_content_allowed() else type(e).__name__,
         )
         return await duckduckgo.search(context, query, n)

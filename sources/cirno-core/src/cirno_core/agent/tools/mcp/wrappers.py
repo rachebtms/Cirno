@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from loguru import logger
+
 from cirno_core.agent.tools.base import Tool, ToolResult
 from cirno_core.agent.tools.context import tool_log_content_allowed
-from cirno_core.utils.cancellation import task_is_cancelling
-from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain, task_is_cancelling
 
 if TYPE_CHECKING:
     from mcp import ClientSession
@@ -19,7 +21,11 @@ if TYPE_CHECKING:
 from cirno_core.agent.tools.mcp.contracts import _MCPResultT, _ReconnectCallback
 from cirno_core.agent.tools.mcp.errors import _is_session_terminated, _is_transient
 from cirno_core.agent.tools.mcp.names import _sanitize_mcp_tool_name
-from cirno_core.agent.tools.mcp.results import _image_block_data_url, _mcp_image_tool_result
+from cirno_core.agent.tools.mcp.results import (
+    _image_block_data_url,
+    _mcp_image_tool_result,
+    _structured_text_matches,
+)
 from cirno_core.agent.tools.mcp.schema import _normalize_schema_for_openai
 
 
@@ -30,6 +36,11 @@ class _MCPWrapperBase(Tool):
     _session: ClientSession
     _server_name: str
     _name: str
+    _activity_name: str
+
+    @property
+    def activity_identity(self) -> dict[str, str]:
+        return {"mcp_server": self._server_name, "mcp_tool": self._activity_name}
 
     def _set_mcp_connection(self, session: ClientSession, server_name: str) -> None:
         self._session = session
@@ -44,7 +55,7 @@ class _MCPWrapperBase(Tool):
         exc: BaseException,
         already_refreshed: bool,
         capability_kind: str,
-    ) -> bool:
+    ) -> bool | ToolResult:
         if already_refreshed or not _is_session_terminated(exc) or self._reconnect is None:
             return False
         logger.warning(
@@ -62,7 +73,19 @@ class _MCPWrapperBase(Tool):
                 self._name,
                 self._server_name,
             )
-            return False
+            return ToolResult.error(
+                f"(MCP {capability_kind} unavailable after reconnect; no replacement capability "
+                "is available and this request was not replayed. Refresh the tool catalog before retrying.)"
+            )
+        if (
+            type(refreshed_tool) is not type(self)
+            or json.dumps(refreshed_tool.to_schema(), sort_keys=True) != json.dumps(self.to_schema(), sort_keys=True)
+            or getattr(refreshed_tool, "_replay_hints", None) != getattr(self, "_replay_hints", None)
+        ):
+            return ToolResult.error(
+                f"(MCP {capability_kind} definition changed during reconnect; this request was not replayed. "
+                "Refresh the tool catalog and retry explicitly using the current definition.)"
+            )
         self._session = refreshed_session
         return True
 
@@ -110,13 +133,18 @@ class _MCPWrapperBase(Tool):
                     # a call whose remote effects cannot be determined locally.
                     reconnect_error = ""
                     try:
-                        await self._refresh_session_after_termination(exc, refreshed_session, capability_kind)
+                        refreshed = await self._refresh_session_after_termination(exc, refreshed_session, capability_kind)
+                        if isinstance(refreshed, ToolResult):
+                            reconnect_error = f" {refreshed}"
                     except Exception as error:
                         reconnect_error = f" Reconnection failed: {type(error).__name__}."
                     return ToolResult.error(f"(MCP {operation} failed to confirm outcome: {type(exc).__name__})" + uncertain + reconnect_error)
-                if await self._refresh_session_after_termination(
+                refreshed = await self._refresh_session_after_termination(
                     exc, refreshed_session, capability_kind
-                ):
+                )
+                if isinstance(refreshed, ToolResult):
+                    return refreshed
+                if refreshed:
                     refreshed_session = True
                     continue
                 if capability_kind == "prompt" and isinstance(exc, McpError):
@@ -173,12 +201,17 @@ class MCPToolWrapper(_MCPWrapperBase):
     ):
         self._set_mcp_connection(session, server_name)
         self._original_name = tool_def.name
+        self._activity_name = tool_def.name
         self._name = _sanitize_mcp_tool_name(f"mcp_{server_name}_{tool_def.name}")
         self._description = tool_def.description or tool_def.name
         raw_schema = tool_def.inputSchema or {"type": "object", "properties": {}}
         self._parameters = _normalize_schema_for_openai(raw_schema)
         self._tool_timeout = tool_timeout
         annotations = getattr(tool_def, "annotations", None)
+        self._replay_hints = None if annotations is None else tuple(
+            getattr(annotations, name, None)
+            for name in ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
+        )
         self._replay_safe = annotations is not None and (
             annotations.readOnlyHint is True or annotations.idempotentHint is True
         )
@@ -206,7 +239,12 @@ class MCPToolWrapper(_MCPWrapperBase):
             return result
         # Success — extract text and persist any image content as artifacts.
         try:
-            rendered = self._render_call_result(result.content, kwargs)
+            # Image decoding and artifact writes must not block chat/Stop. An
+            # accepted file write still belongs to this call until it settles.
+            rendered = await shield_and_drain(asyncio.to_thread(
+                self._render_call_result, result.content, kwargs,
+                structured=getattr(result, "structuredContent", None),
+            ))
             if getattr(result, "isError", False):
                 return ToolResult.error(rendered)
             return rendered
@@ -219,7 +257,7 @@ class MCPToolWrapper(_MCPWrapperBase):
             )
             return ToolResult.error(f"(MCP tool returned malformed content: {type(exc).__name__})")
 
-    def _render_call_result(self, content: Any, arguments: Mapping[str, Any]) -> str:
+    def _render_call_result(self, content: Any, arguments: Mapping[str, Any], *, structured: dict[str, Any] | None = None) -> str:
         """Turn MCP content blocks into a tool result string.
 
         Text is concatenated as before. Image blocks are decoded and saved as
@@ -246,8 +284,15 @@ class MCPToolWrapper(_MCPWrapperBase):
             text_parts.append(str(block))
 
         if artifacts:
-            return _mcp_image_tool_result(text_parts, artifacts)
-        return "\n".join(text_parts) or "(no output)"
+            return _mcp_image_tool_result(text_parts, artifacts, structured=structured)
+        text = "\n".join(text_parts)
+        if structured is None:
+            return text or "(no output)"
+        if text:
+            if _structured_text_matches(text, structured):
+                return text  # Many servers include the same JSON in both fields.
+            return json.dumps({"text": text, "structured_content": structured}, ensure_ascii=False)
+        return json.dumps(structured, ensure_ascii=False)
 
     def _store_image_block(
         self, data_url: str, arguments: Mapping[str, Any]
@@ -286,6 +331,7 @@ class MCPResourceWrapper(_MCPWrapperBase):
     ):
         self._set_mcp_connection(session, server_name)
         self._uri = resource_def.uri
+        self._activity_name = f"resource_{resource_def.name}"
         self._name = _sanitize_mcp_tool_name(f"mcp_{server_name}_resource_{resource_def.name}")
         desc = resource_def.description or resource_def.name
         self._description = f"[MCP Resource] {desc}\nURI: {self._uri}"
@@ -347,6 +393,7 @@ class MCPPromptWrapper(_MCPWrapperBase):
     ):
         self._set_mcp_connection(session, server_name)
         self._prompt_name = prompt_def.name
+        self._activity_name = f"prompt_{prompt_def.name}"
         self._name = _sanitize_mcp_tool_name(f"mcp_{server_name}_prompt_{prompt_def.name}")
         desc = prompt_def.description or prompt_def.name
         self._description = (

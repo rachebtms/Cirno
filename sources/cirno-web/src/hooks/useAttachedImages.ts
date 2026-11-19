@@ -279,13 +279,15 @@ export function useAttachedImages({
   // files, paste storms). ``state`` is stale for that second + call.
   const imagesRef = useRef<AttachedAttachment[]>([]);
   imagesRef.current = images;
+  const active = useRef(true);
 
   const setEntry = useCallback((id: string, patch: Partial<AttachedAttachment>) => {
-    setImages((prev) => {
-      const next = prev.map((img) => (img.id === id ? { ...img, ...patch } : img));
-      imagesRef.current = next;
-      return next;
-    });
+    if (!active.current) return;
+    const current = imagesRef.current;
+    if (!current.some((image) => image.id === id)) return;
+    const next = current.map((img) => (img.id === id ? { ...img, ...patch } : img));
+    imagesRef.current = next;
+    setImages(next);
   }, []);
 
   const enqueue = useCallback(
@@ -344,6 +346,7 @@ export function useAttachedImages({
         // Fire the Worker after the commit so chips render first (good INP).
         for (const entry of toAdd) {
           queueMicrotask(() => {
+            if (!active.current || !imagesRef.current.some((image) => image.id === entry.id)) return;
             const work = entry.kind === "image"
               ? encodeImage(entry.file)
               : encodeFile(entry.file, entry.kind === "video" ? maxVideoBytes : maxFileBytes);
@@ -397,42 +400,37 @@ export function useAttachedImages({
   }, [maxAttachments]);
 
   const remove = useCallback((id: string) => {
-    let nextFocusId: string | null = null;
-    setImages((prev) => {
-      const idx = prev.findIndex((img) => img.id === id);
-      if (idx === -1) return prev;
-      const target = prev[idx];
-      if (target.previewUrl) {
-        try {
-          URL.revokeObjectURL(target.previewUrl);
-        } catch {
-          // No-op: previewUrl revocation is best-effort.
-        }
+    const current = imagesRef.current;
+    const idx = current.findIndex((img) => img.id === id);
+    if (idx === -1) return { nextFocusId: null };
+    const target = current[idx];
+    if (target.previewUrl) {
+      try {
+        URL.revokeObjectURL(target.previewUrl);
+      } catch {
+        // No-op: previewUrl revocation is best-effort.
       }
-      const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
-      imagesRef.current = next;
-      // Prefer moving focus to the chip at the same index, else previous.
-      const candidate = next[idx] ?? next[idx - 1];
-      nextFocusId = candidate?.id ?? null;
-      return next;
-    });
-    return { nextFocusId };
+    }
+    const next = [...current.slice(0, idx), ...current.slice(idx + 1)];
+    imagesRef.current = next;
+    setImages(next);
+    // Prefer moving focus to the chip at the same index, else previous.
+    const candidate = next[idx] ?? next[idx - 1];
+    return { nextFocusId: candidate?.id ?? null };
   }, []);
 
   const clear = useCallback(() => {
-    setImages((prev) => {
-      for (const img of prev) {
-        if (img.previewUrl) {
-          try {
-            URL.revokeObjectURL(img.previewUrl);
-          } catch {
-            // revoke is best-effort
-          }
+    for (const img of imagesRef.current) {
+      if (img.previewUrl) {
+        try {
+          URL.revokeObjectURL(img.previewUrl);
+        } catch {
+          // revoke is best-effort
         }
       }
-      imagesRef.current = [];
-      return [];
-    });
+    }
+    imagesRef.current = [];
+    setImages([]);
   }, []);
 
   const restoreReadyImages = useCallback((restored: RestoredReadyAttachment[]) => {
@@ -454,26 +452,26 @@ export function useAttachedImages({
         ...(kind === "image" ? { previewUrl: img.dataUrl } : {}),
       }];
     });
-    setImages((prev) => {
-      for (const img of prev) {
-        if (img.previewUrl) {
-          try {
-            URL.revokeObjectURL(img.previewUrl);
-          } catch {
-            // revoke is best-effort
-          }
+    for (const img of imagesRef.current) {
+      if (img.previewUrl) {
+        try {
+          URL.revokeObjectURL(img.previewUrl);
+        } catch {
+          // revoke is best-effort
         }
       }
-      imagesRef.current = toRestore;
-      return toRestore;
-    });
+    }
+    imagesRef.current = toRestore;
+    setImages(toRestore);
   }, []);
 
   // Final safety net: revoke any outstanding blob URLs on unmount. Safe
   // under StrictMode double-invoke because revoked blob URLs are only
   // referenced from in-hook chip state, which is rebuilt on remount.
   useEffect(() => {
+    active.current = true;
     return () => {
+      active.current = false;
       for (const img of imagesRef.current) {
         if (img.previewUrl) {
           try {

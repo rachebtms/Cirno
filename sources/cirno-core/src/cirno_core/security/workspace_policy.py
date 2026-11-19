@@ -123,6 +123,12 @@ def resolve_allowed_path(
             f"Path {path} is outside allowed directory {boundary}"
             + WORKSPACE_BOUNDARY_NOTE
         )
-    if strict:
-        return resolve_path(path, workspace, strict=True)
-    return resolved
+    # Existence checking must not return a different target from the one that
+    # passed containment/exact-file checks. This also catches retargeted parent
+    # links for callers preparing a new path with strict=False.
+    checked = resolve_path(path, workspace, strict=strict)
+    if checked != resolved:
+        raise WorkspaceBoundaryError(
+            f"Path {path} changed while checking workspace access" + WORKSPACE_BOUNDARY_NOTE
+        )
+    return checked

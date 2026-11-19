@@ -15,7 +15,6 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     id: initial.tabs.some(tab => tab.id === routeTabId(props.route)) ? routeTabId(props.route) : "", revision: 0,
   }));
   const active = selection.id;
-  const setActive = useCallback((id: string) => setSelection(old => ({ id, revision: old.revision + 1 })), []);
   const [visited, setVisited] = useState(() => new Set([active]));
   const [error, setError] = useState(initial.error);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
@@ -23,6 +22,15 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
   const closingIds = useRef(new Set<string>());
   const currentState = useRef({ tabs, active });
   currentState.current = { tabs, active };
+  const updateTabs = useCallback((update: (current: WorkspaceTab[]) => WorkspaceTab[]) => {
+    const next = update(currentState.current.tabs);
+    currentState.current = { ...currentState.current, tabs: next };
+    setTabs(next);
+  }, []);
+  const setActive = useCallback((id: string) => {
+    currentState.current = { ...currentState.current, active: id };
+    setSelection(old => ({ id, revision: old.revision + 1 }));
+  }, []);
   const dirty = useRef(new Set<string>());
   const closers = useRef(new Map<string, () => Promise<void>>());
   const routeKey = routeTabId(props.route);
@@ -44,7 +52,7 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     navigationSequence.current = props.navigationSequence;
     previousRouteKey.current = routeKey;
     const next: WorkspaceTab = { id: routeKey, type: "route", route: route.current, group: focusedGroup.current, ownerId: crypto.randomUUID() };
-    setTabs(current => updateRouteTab(current, next, { admitDraft, requested }));
+    updateTabs(current => updateRouteTab(current, next, { admitDraft, requested }));
     if (requested) setActive(routeKey);
   }, [routeKey, props.navigationSequence, props.route.temporary, props.route.settingsSection, props.admittedSessionKey]);
   useEffect(() => {
@@ -53,13 +61,14 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     const invalid = (tab: WorkspaceTab) => tab.type === "route" && tab.route.view === "chat"
       && !!tab.route.activeKey && !tab.route.temporary && !known.has(tab.route.activeKey)
       && props.admittedSessionKey !== tab.route.activeKey;
-    const remaining = tabs.filter(tab => !invalid(tab));
-    if (remaining.length === tabs.length) return;
-    setTabs(current => current.filter(tab => !invalid(tab)));
-    if (remaining.some(tab => tab.id === active)) return;
+    const latest = currentState.current;
+    const remaining = latest.tabs.filter(tab => !invalid(tab));
+    if (remaining.length === latest.tabs.length) return;
+    updateTabs(() => remaining);
+    if (remaining.some(tab => tab.id === latest.active)) return;
     // A simultaneous route change owns the new selection, including first-message admission.
-    if (routeKey !== active) return;
-    const next = tabNeighbor(tabs, active, remaining);
+    if (routeKey !== latest.active) return;
+    const next = tabNeighbor(latest.tabs, latest.active, remaining);
     setActive(next?.id ?? "");
     if (next?.type === "route") props.onRoute(next.route);
     else if (!next) props.onNewChat();
@@ -68,7 +77,7 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     try { persistTabs(tabs); }
     catch (reason) { setError(`Could not save workspace tabs: ${String(reason)}`); }
   }, [tabs]);
-  const reorder = (id: string, before: string) => setTabs(current => reorderItems(current, id, before));
+  const reorder = (id: string, before: string) => updateTabs(current => reorderItems(current, id, before));
   const setDirty = useCallback((id: string, value: boolean) => {
     if (value) dirty.current.add(id); else dirty.current.delete(id);
   }, []);
@@ -79,9 +88,12 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     setActive(tab.id);
     if (tab.type === "route") props.onRoute(tab.route);
   };
-  const activate = (tab: WorkspaceTab) => props.beforeActivate(() => commitActivation(tab));
+  const activate = (tab: WorkspaceTab) => props.beforeActivate(() => {
+    const current = currentState.current.tabs.find(item => item.id === tab.id);
+    if (current) commitActivation(current);
+  });
   const focusGroup = (group: TabGroup) => { focusedGroup.current = group; };
-  const mergeGroups = () => setTabs(current => current.map(tab => ({ ...tab, group: 0 })));
+  const mergeGroups = () => updateTabs(current => current.map(tab => ({ ...tab, group: 0 })));
   const move = (id: string, group: TabGroup, before?: string) => props.beforeActivate(() => {
     const current = currentState.current;
     const target = current.tabs.find(tab => tab.id === id);
@@ -90,8 +102,7 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     const next = current.tabs.filter(tab => tab.id !== id);
     const index = before ? next.findIndex(tab => tab.id === before) : -1;
     next.splice(index < 0 ? next.length : index, 0, moved);
-    currentState.current = { ...current, tabs: next };
-    setTabs(next);
+    updateTabs(() => next);
     commitActivation(moved);
   });
   const open = (type: PanelKind, path?: string, parent?: PanelTab) => props.beforeActivate(() => {
@@ -102,8 +113,7 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
     const existing = identity && current.tabs.find(item => item.type !== "route" && panelTabIdentity(item, panels) === identity);
     const selected = existing || tab;
     const next = existing ? current.tabs : [...current.tabs, tab];
-    currentState.current = { tabs: next, active: selected.id };
-    setTabs(next);
+    updateTabs(() => next);
     focusedGroup.current = selected.group ?? 0;
     setActive(selected.id);
   });
@@ -124,7 +134,7 @@ export function useWorkbench(props: WorkbenchProps, panels: WorkspaceRegistry) {
       const { tabs: latestTabs, active: latestActive } = currentState.current;
       const remaining = latestTabs.filter(item => item.id !== id);
       const next = tabNeighbor(latestTabs, id, remaining);
-      setTabs(current => current.filter(item => item.id !== id));
+      updateTabs(() => remaining);
       if (latestActive === id) { if (next) commitActivation(next); else setActive(""); }
     } catch (reason) { setError(String(reason)); }
     finally { closingIds.current.delete(id); setClosing(new Set(closingIds.current)); }

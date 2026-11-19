@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import socket
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 from urllib.request import getproxies_environment
 
@@ -47,16 +48,17 @@ def _fake_resolve_public(hostname, port, family=0, type_=0):
 def _patch_web_fetch_fake_client(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     client_kwargs: list[dict] = []
 
-    class FakeStreamResponse:
-        status_code = 200
-        headers = {"content-type": "text/html"}
-        url = "https://example.com/page"
+    class FakeStreamResponse(httpx.Response):
+        def __init__(self, url):
+            data = ({"json": {"data": {"title": "Example", "content": "Hello"}}} if "r.jina.ai" in url
+                    else {"text": "<html><p>Hello</p></html>", "headers": {"content-type": "text/html"}})
+            super().__init__(200, request=httpx.Request("GET", url), **data)
 
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
-            return False
+            await self.aclose()
 
     class FakeJinaResponse:
         status_code = 200
@@ -78,7 +80,7 @@ def _patch_web_fetch_fake_client(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
             return False
 
         def stream(self, method, url, headers=None, **kwargs):
-            return FakeStreamResponse()
+            return FakeStreamResponse(url)
 
         async def get(self, url, headers=None, **kwargs):
             return FakeJinaResponse()
@@ -299,16 +301,16 @@ async def test_web_fetch_can_skip_jina_and_use_custom_user_agent(monkeypatch):
     async def _fail_jina(*args, **kwargs):
         raise AssertionError("Jina Reader should be skipped when disabled")
 
-    class FakeStreamResponse:
-        status_code = 200
-        headers = {"content-type": "text/html"}
-        url = "https://example.com/page"
+    class FakeStreamResponse(httpx.Response):
+        def __init__(self):
+            super().__init__(200, request=httpx.Request("GET", "https://example.com/page"),
+                             headers={"content-type": "text/html"}, text="<html><p>Hello world</p></html>")
 
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
-            return False
+            await self.aclose()
 
         async def aread(self):
             raise AssertionError("non-image prefetch body should not be read")
@@ -383,6 +385,15 @@ async def test_web_fetch_falls_back_when_readability_dependency_is_missing(monke
         async def get(self, url, headers=None, follow_redirects=False, **kwargs):
             return FakeResponse()
 
+        @asynccontextmanager
+        async def stream(self, method, url, **kwargs):
+            response = httpx.Response(200, request=httpx.Request(method, url),
+                                      headers=FakeResponse.headers, text=FakeResponse.text)
+            try:
+                yield response
+            finally:
+                await response.aclose()
+
     def _missing_readability(*args, **kwargs):
         raise ModuleNotFoundError("No module named 'lxml_html_clean'")
 
@@ -426,6 +437,14 @@ async def test_web_fetch_blocks_private_redirect_before_readability_request(monk
         async def aclose(self):
             return None
 
+    @asynccontextmanager
+    async def redirect_stream(url):
+        response = httpx.Response(302, request=httpx.Request("GET", url), headers=FakeRedirectResponse.headers)
+        try:
+            yield response
+        finally:
+            await response.aclose()
+
     class FakeClient:
         def __init__(self, *args, **kwargs):
             pass
@@ -437,7 +456,15 @@ async def test_web_fetch_blocks_private_redirect_before_readability_request(monk
             return False
 
         def stream(self, method, url, headers=None, **kwargs):
-            return FakeStreamResponse()
+            # Each phase creates its own client. Preflight opens headers only;
+            # the local extraction request exposes the unsafe redirect.
+            if not getattr(FakeClient, "preflight_done", False):
+                FakeClient.preflight_done = True
+                return FakeStreamResponse()
+            requested.append(url)
+            if url == "http://127.0.0.1:8765/metadata":
+                raise AssertionError("private redirect target should not be requested")
+            return redirect_stream(url)
 
         async def get(self, url, headers=None, **kwargs):
             requested.append(url)

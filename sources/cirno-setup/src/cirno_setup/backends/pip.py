@@ -1,6 +1,7 @@
 """Python tools and channel/service packages use separate environments."""
 
 import json
+import os
 from email.message import Message
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
@@ -14,6 +15,8 @@ from cirno_setup.context import Context
 from cirno_setup.python import package_command
 from cirno_setup.recipe import Recipe, Verification
 from cirno_setup.requirements import requirement_installed
+
+METADATA_PREFIX = "__CIRNO_SETUP_DISTRIBUTIONS__="
 
 
 def interpreter(context: Context, recipe: Recipe) -> Path:
@@ -37,15 +40,25 @@ def verify(context: Context, recipe: Recipe) -> Verification:
     script = (
         "import importlib, importlib.metadata as m, json, sys; "
         "[importlib.import_module(name) for name in json.loads(sys.argv[1])]; "
-        "print(json.dumps([[d.metadata['Name'],d.version,d.requires,d.metadata.get_all('Provides-Extra')] for d in m.distributions()]))"
+        f"print('\\n'+{METADATA_PREFIX!r}+json.dumps([[d.metadata['Name'],d.version,d.requires,d.metadata.get_all('Provides-Extra')] for d in m.distributions()]))"
     )
     process = context.inspect([
         str(interpreter(context, recipe)), "-c", script, json.dumps(recipe.imports),
     ], env_override={"PYTHONPATH": ""})
     if process.returncode:
         return Verification(False, process.stderr.strip()[-1000:])
+    record = next((line.removeprefix(METADATA_PREFIX) for line in reversed(process.stdout.splitlines())
+                   if line.startswith(METADATA_PREFIX)), None)
+    if record is None:
+        return Verification(False, "Python dependency metadata probe returned no record")
+    try:
+        metadata_rows = json.loads(record)
+    except (ValueError, RecursionError):
+        return Verification(False, "Python dependency metadata probe returned malformed JSON")
     distributions: dict[str, Any] = {}
-    for name, version, requires, extras in json.loads(process.stdout):
+    for name, version, requires, extras in metadata_rows:
+        if not name:
+            continue  # An unrelated, incomplete dist-info directory is not a distribution.
         metadata = Message()
         for extra in cast(list[str], extras or []):
             metadata["Provides-Extra"] = extra
@@ -57,7 +70,8 @@ def verify(context: Context, recipe: Recipe) -> Verification:
         except KeyError:
             raise PackageNotFoundError(name) from None
 
-    valid = all((interpreter(context, recipe).parent / name).is_file() for name in recipe.commands)
+    valid = all((path := interpreter(context, recipe).parent / name).is_file() and os.access(path, os.X_OK)
+                for name in recipe.commands)
     valid = valid and all(requirement_installed(str(req), lookup=lookup) for req in requirements)
     return Verification(valid, "" if valid else "Python package, requested extra or executable is missing or incompatible")
 

@@ -7,11 +7,15 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from cirno_core.security.workspace_access import WorkspaceScope
+from cirno_core.security.workspace_access import WorkspaceScope, WorkspaceScopeError
 from cirno_core.session.keys import ROUTER_SESSION_KEY
 from cirno_core.session.session_handles import SessionHandle, SessionHandleResolver
 from cirno_core.session.session_identity import is_webui_session_key
 from cirno_core.triggers.local_types import LocalTrigger
+from cirno_core.utils.cancellation import shield_and_drain
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.file_preview import (
     WebUIFilePreviewError,
     preview_request_payload,
@@ -22,6 +26,7 @@ from cirno_server.webui.http_utils import http_json_response as _http_json_respo
 from cirno_server.webui.http_utils import parse_query as _parse_query
 from cirno_server.webui.http_utils import query_first as _query_first
 from cirno_server.webui.session_automations import (
+    AutomationJob,
     serialize_automation_jobs,
     session_automation_jobs,
     session_automations_payload,
@@ -32,8 +37,6 @@ from cirno_server.webui.session_list_index import (
     indexed_workspace_scope,
     list_webui_sessions,
 )
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 from .shared import (
     _NO_STORE_HEADERS,
@@ -225,10 +228,11 @@ class SessionsRoutes:
         try:
             scope = self.server.workspaces.scope_for_session_key(decoded_key)
             payload = preview_request_payload(path, scope=scope, metadata_only=metadata_only, probe=is_probe,
+                media_root=self.server.media.media_root,
                 media_url=lambda target: self.server.media.workspace_media_url(
                     str(target), scope=scope, session_key=decoded_key,
                 ))
-        except WebUIFilePreviewError as e:
+        except (WebUIFilePreviewError, WorkspaceScopeError) as e:
             if is_probe and not metadata_only and e.status in {400, 403, 404, 413, 415}:
                 return _http_json_response({"available": False}, extra_headers=_NO_STORE_HEADERS)
             return _http_error(e.status, e.message)
@@ -282,6 +286,12 @@ class SessionsRoutes:
                     "automations": serialize_automation_jobs(automation_jobs, trigger_root=self.server.local_trigger_store.root if self.server.local_trigger_store is not None else None),
                 }
             )
+        return await shield_and_drain(self._delete_confirmed_session(decoded_key, automation_jobs))
+
+    async def _delete_confirmed_session(self, decoded_key: str, automation_jobs: list[AutomationJob]) -> Response:
+        """Keep the accepted automation/runtime/history cleanup together on Stop."""
+        sessions = self.server.session_manager
+        assert sessions is not None
         if automation_jobs:
             for job in automation_jobs:
                 if isinstance(job, LocalTrigger):
@@ -294,5 +304,5 @@ class SessionsRoutes:
             await self.server.discard_session(decoded_key)
         elif self.server.subagent_manager is not None:
             await self.server.subagent_manager.cancel_by_session(decoded_key)
-        session_deleted = await self.server.session_manager.state.delete(decoded_key)
+        session_deleted = await sessions.state.delete(decoded_key)
         return _http_json_response({"deleted": bool(draft_deleted or session_deleted)})

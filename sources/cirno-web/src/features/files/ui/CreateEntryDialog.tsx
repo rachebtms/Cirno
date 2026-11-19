@@ -2,19 +2,17 @@ import { Alert, Button, Form, Input, Label, Modal, TextField } from "@heroui/rea
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { DirectoryModel, FileEntry } from "../model/useDirectory";
+import { useMutation } from "@/ui/resources/useMutation";
 
 export function CreateEntryDialog({ kind, directory, onClose, onCreated }: {
   kind: FileEntry["kind"]; directory: DirectoryModel; onClose: () => void; onCreated: (entry: FileEntry) => void;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const mutation = useMutation(directory.owner);
+  const { busy: saving, error } = mutation;
   async function create() {
-    setSaving(true); setError("");
-    try { const entry = await directory.create(kind, name.trim()); onCreated(entry); onClose(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setSaving(false); }
+    await mutation.run(() => directory.create(kind, name.trim()), entry => { onCreated(entry); onClose(); });
   }
   return <Modal.Backdrop isOpen onOpenChange={open => { if (!open && !saving) onClose(); }} isDismissable={!saving} isKeyboardDismissDisabled={saving}><Modal.Container size="sm"><Modal.Dialog>
       <Modal.Header><Modal.Heading>{t(`files.${kind === "file" ? "newFile" : "newFolder"}`)}</Modal.Heading><p className="files-dialog-path">{directory.directory?.path}</p></Modal.Header>
@@ -23,7 +21,7 @@ export function CreateEntryDialog({ kind, directory, onClose, onCreated }: {
           {error && <Alert status="danger" role="alert"><Alert.Description>{error}</Alert.Description></Alert>}
         </Modal.Body>
         <Modal.Footer><Button variant="secondary" isDisabled={saving} onPress={onClose}>{t("files.cancel")}</Button>
-          <Button type="submit" isPending={saving} isDisabled={!name.trim()}>{t("files.create")}</Button></Modal.Footer>
+          <Button type="submit" isPending={saving} isDisabled={saving || !name.trim()}>{t("files.create")}</Button></Modal.Footer>
       </Form>
     </Modal.Dialog></Modal.Container></Modal.Backdrop>;
 }

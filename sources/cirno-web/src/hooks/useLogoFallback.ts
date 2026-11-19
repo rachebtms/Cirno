@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useResourceScope } from "@/ui/resources/useResourceScope";
+import { useScopedState } from "@/ui/resources/useScopedState";
 
 const loadedLogoUrls = new Set<string>();
 const failedLogoUrls = new Set<string>();
@@ -45,33 +47,32 @@ function nextLogoIndex(urls: readonly string[], afterIndex: number): number {
 export function useLogoFallback(urls: readonly string[] | undefined) {
   const cacheKey = useMemo(() => logoCacheKey(urls?.filter(Boolean) ?? []), [urls]);
   const safeUrls = useMemo(() => logoUrlsFromKey(cacheKey), [cacheKey]);
-  const [logoIndex, setLogoIndex] = useState(() => firstUsableLogoIndex(safeUrls));
+  const entry = useResourceScope(cacheKey);
+  const [selection, setSelection] = useScopedState(entry, () => ({
+    index: firstUsableLogoIndex(safeUrls), loadedUrl: undefined as string | undefined,
+  }));
+  const logoIndex = selection.index;
   const logoUrl = logoIndex >= 0 ? safeUrls[logoIndex] : undefined;
-  const [loadedUrl, setLoadedUrl] = useState<string>();
-  const logoLoaded = Boolean(logoUrl && (loadedUrl === logoUrl || loadedLogoUrls.has(logoUrl)));
-
-  useEffect(() => {
-    setLogoIndex(firstUsableLogoIndex(safeUrls));
-  }, [cacheKey, safeUrls]);
+  const image = useResourceScope(logoUrl);
+  const logoLoaded = Boolean(logoUrl && (selection.loadedUrl === logoUrl || loadedLogoUrls.has(logoUrl)));
 
   const onLogoLoad = useCallback(() => {
-    if (!logoUrl || logoIndex < 0) return;
+    if (!entry.isCurrent() || !image.isCurrent() || !logoUrl || logoIndex < 0) return;
     loadedLogoUrls.add(logoUrl);
     failedLogoUrls.delete(logoUrl);
     resolvedLogoIndexByKey.set(cacheKey, logoIndex);
-    setLoadedUrl(logoUrl);
-  }, [cacheKey, logoIndex, logoUrl]);
+    setSelection((current) => ({ ...current, loadedUrl: logoUrl }));
+  }, [cacheKey, entry, image, logoIndex, logoUrl, setSelection]);
 
   const onLogoError = useCallback(() => {
-    if (!logoUrl || logoIndex < 0) return;
+    if (!entry.isCurrent() || !image.isCurrent() || !logoUrl || logoIndex < 0) return;
     failedLogoUrls.add(logoUrl);
     loadedLogoUrls.delete(logoUrl);
     if (resolvedLogoIndexByKey.get(cacheKey) === logoIndex) {
       resolvedLogoIndexByKey.delete(cacheKey);
     }
-    setLoadedUrl(undefined);
-    setLogoIndex(nextLogoIndex(safeUrls, logoIndex));
-  }, [cacheKey, logoIndex, logoUrl, safeUrls]);
+    setSelection({ index: nextLogoIndex(safeUrls, logoIndex), loadedUrl: undefined });
+  }, [cacheKey, entry, image, logoIndex, logoUrl, safeUrls, setSelection]);
 
   return { logoUrl, logoLoaded, onLogoLoad, onLogoError };
 }

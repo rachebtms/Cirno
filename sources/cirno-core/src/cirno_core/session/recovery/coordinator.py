@@ -12,14 +12,20 @@ from cirno_core.bus.queue import MessageBus
 from cirno_core.config.agents import ResumeConfig
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_identity import webui_chat_id
+from cirno_core.session.sqlite_store import SessionConflictError
 
 from .actions import RecoveryActions
 from .checkpoints import restore_runtime_checkpoint
-from .contracts import RECOVERY_INBOUND_METADATA_KEY
+from .contracts import PENDING_FOLLOWUP_ID_KEY, RECOVERY_INBOUND_METADATA_KEY
 from .delivery import RecoveryDelivery
 from .interruption import append_recovery_interruption, restore_pending_interruption
 from .restart import RecoveryRestart
-from .state import recovery_state_from_metadata, set_recovery_state, webui_route
+from .state import (
+    approval_followup_allowed,
+    recovery_state_from_metadata,
+    set_recovery_state,
+    webui_route,
+)
 
 
 @dataclasses.dataclass(slots=True)
@@ -100,6 +106,18 @@ class RecoveryCoordinator:
             and session.generation != message.session_generation
         ):
             return False
+        if message.metadata.get("_approval_decision") and not approval_followup_allowed(
+            session.metadata, goal_id=message.metadata.get("_goal_id"),
+        ):
+            followup = message.metadata.get(PENDING_FOLLOWUP_ID_KEY)
+            if isinstance(followup, str):
+                try:
+                    await self.sessions.state.acknowledge_followups(
+                        message.session_key, (followup,), expected_generation=session.generation,
+                    )
+                except SessionConflictError:
+                    pass  # A reset during the check must retain the new journal.
+            return False
         state = recovery_state_from_metadata(session.metadata)
         if state and state["status"] in {"resuming", "awaiting_user", "failed"}:
             await self._cancel_active_recovery(message.session_key)
@@ -127,10 +145,12 @@ class RecoveryCoordinator:
             await self._delivery.publish(chat_id, recovered, generation=session.generation)
         return True
 
-    async def turn_stopped(self, session_key: str) -> None:
+    async def turn_stopped(self, session_key: str, *, expected_generation: str | None = None) -> None:
         """Offer continuation after cancellation has saved the partial turn."""
         session = await self.sessions.state.read(session_key)
-        if session is None or not session.policy.persist:
+        if session is None or not session.policy.persist or (
+            expected_generation is not None and session.generation != expected_generation
+        ):
             return
         route = webui_route(session.key)
         if route is None or not any(message.get("role") == "user" for message in session.messages):
@@ -143,7 +163,10 @@ class RecoveryCoordinator:
             reason="user_stopped",
             can_continue=True,
         )
-        await self.sessions.state.restore_interruption(session)
+        try:
+            await self.sessions.state.restore_interruption(session)
+        except SessionConflictError:
+            return  # A newer history/control decision supersedes this stop.
         await self._delivery.publish(route[1], waiting, generation=session.generation)
 
     async def turn_completed(

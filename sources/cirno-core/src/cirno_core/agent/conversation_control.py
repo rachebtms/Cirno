@@ -27,6 +27,7 @@ from cirno_core.session.goal_state import (
     RESUMABLE_GOAL_STATUSES,
     goal_resume_error,
     goal_state_raw,
+    goal_wait_deadline,
     parse_goal_state,
 )
 from cirno_core.session.keys import ROUTER_SESSION_KEY
@@ -304,14 +305,17 @@ class ConversationControl:
         if action not in {"create", "set"} and "objective" in values:
             return "Use set to change the objective; update preserves it."
         status = (prior or {}).get("status")
-        if action in {"stop", "pause", "wait"} and status not in {"active", "waiting"}:
-            return "Only an active or waiting Goal can be stopped, paused or put to sleep."
+        if action in {"stop", "pause"} and status not in {"active", *RESUMABLE_GOAL_STATUSES}:
+            return "Only an unfinished Goal can be paused or stopped."
         if action == "resume":
             return goal_resume_error(prior or {})
         if action == "wait" and status != "active":
             return "Only an active Goal can wait."
-        if action == "wait" and (values.get("wake_after_seconds") or 0) < 1:
-            return "wait requires a positive wake_after_seconds."
+        if action == "wait":
+            try:
+                goal_wait_deadline(values.get("wake_after_seconds"))
+            except ValueError as error:
+                return str(error)
         return None
 
     async def _goal_action(self, session: Session, action: str, values: dict, request) -> str:

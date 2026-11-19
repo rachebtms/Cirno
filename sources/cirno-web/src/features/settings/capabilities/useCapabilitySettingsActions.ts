@@ -50,6 +50,8 @@ export function useCapabilitySettingsActions({
   } = state;
   const latestWebSearchForm = useRef(webSearchForm);
   latestWebSearchForm.current = webSearchForm;
+  const webSearchSaves = useRef(new Map<WebSearchSettingsUpdate, Promise<boolean>>());
+  const webSearchSaveTail = useRef(Promise.resolve(true));
   const setError = (section: "web" | "safety", message?: string) =>
     state.setCapabilityErrors((prev) => ({ ...prev, [section]: message }));
 
@@ -75,7 +77,7 @@ export function useCapabilitySettingsActions({
     }
   };
 
-  const saveWebSearch = async () => {
+  const persistWebSearch = async () => {
     if (!settings) return false;
     const draft = webSearchDraftState(settings, webSearchForm);
     if (draft.invalidNumbers || draft.missingCredential) return false;
@@ -84,10 +86,14 @@ export function useCapabilitySettingsActions({
     const apiKey = webSearchForm.apiKey?.trim() ?? "";
     const baseUrl = webSearchForm.baseUrl?.trim() ?? "";
 
-    setError("web");
-    setWebSearchSaving(true);
+    const isCurrentDraft = () => latestWebSearchForm.current === webSearchForm;
+    if (isCurrentDraft()) setError("web");
     try {
-      if (provider.name === "olostep" && !(await installCapabilities(["olostep"]))) return false;
+      if (provider.name === "olostep") {
+        if (!(await installCapabilities(["olostep"]))) return false;
+        // Installing a dependency does not authorize saving a superseded draft.
+        if (!isCurrentDraft()) return true;
+      }
       const webFetchRestartRequired =
         (webSearchForm.useJinaReader ?? settings.web.fetch.use_jina_reader) !==
         settings.web.fetch.use_jina_reader;
@@ -112,7 +118,7 @@ export function useCapabilitySettingsActions({
 
       setWebSearchForm((prev) => prev !== webSearchForm ? prev : ({
         provider: payload.web_search.provider,
-        apiKey: "",
+        apiKey: undefined,
         baseUrl: payload.web_search.base_url ?? prev.baseUrl ?? "",
         maxResults: payload.web_search.max_results,
         timeout: payload.web_search.timeout,
@@ -122,21 +128,34 @@ export function useCapabilitySettingsActions({
         setWebSearchKeyVisible(false);
         setWebSearchKeyEditing(false);
       }
-      setError("web");
+      if (isCurrentDraft()) setError("web");
       return true;
     } catch (err) {
-      setError("web", (err as Error).message);
+      if (isCurrentDraft()) setError("web", (err as Error).message);
       return false;
-    } finally {
-      setWebSearchSaving(false);
     }
+  };
+
+  const saveWebSearch = () => {
+    // Explicit install/retry buttons and autosave share one ordered write queue.
+    const existing = webSearchSaves.current.get(webSearchForm);
+    if (existing) return existing;
+    const request = webSearchSaveTail.current.then(persistWebSearch);
+    webSearchSaveTail.current = request;
+    webSearchSaves.current.set(webSearchForm, request);
+    setWebSearchSaving(true);
+    void request.then(() => {
+      webSearchSaves.current.delete(webSearchForm);
+      if (!webSearchSaves.current.size) setWebSearchSaving(false);
+    });
+    return request;
   };
 
   const resetWebSearchDraft = useCallback(() => {
     if (!settings) return;
     setWebSearchForm({
       provider: settings.web_search.provider,
-      apiKey: "",
+      apiKey: undefined,
       baseUrl: settings.web_search.base_url ?? "",
       maxResults: settings.web_search.max_results,
       timeout: settings.web_search.timeout,
@@ -150,7 +169,7 @@ export function useCapabilitySettingsActions({
     if (!settings) return;
     setWebSearchForm((prev) => ({
       provider,
-      apiKey: "",
+      apiKey: undefined,
       baseUrl: provider === settings.web_search.provider ? settings.web_search.base_url ?? "" : "",
       maxResults: prev.maxResults ?? settings.web_search.max_results,
       timeout: prev.timeout ?? settings.web_search.timeout,

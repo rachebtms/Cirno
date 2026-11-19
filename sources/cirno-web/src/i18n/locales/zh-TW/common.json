@@ -168,6 +168,10 @@
           "label": "網頁訪問",
           "help": "允許搜尋網頁和讀取網頁內容"
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "網頁回應大小上限（MiB）",
+          "help": "網頁、圖片或 Jina 回應的宣告或解碼後大小超過此值時停止讀取。此設定獨立於回傳文字長度；重新啟動後生效。"
+        },
         "tools_cli_apps_enable": {
           "label": "CLI 應用",
           "help": "允許安裝、管理和執行 CLI 應用"
@@ -1052,6 +1056,7 @@
       "presetName": "預設名稱",
       "presetNameHelp": "名稱不可重複。修改名稱不會改變模型 ID。",
       "presetNameDuplicate": "已有同名預設。",
+      "createdOrderFailed": "預設已建立，但更新呼叫順序失敗。可在預設清單中啟用它以重試。{{error}}",
       "presetNamePlaceholder": "例如：快速寫作",
       "advancedOptions": "進階選項",
       "requestAPI": "連線方式",
@@ -1260,7 +1265,11 @@
         "supabase": "檢視和管理專案"
       },
       "editConfig": "編輯 MCP 設定",
-      "configObjectRequired": "MCP 設定必須是 JSON 物件。"
+      "configObjectRequired": "MCP 設定必須是 JSON 物件。",
+      "changePending": "另一項 MCP 變更正在處理中，請完成後再儲存。",
+      "cleanupPending": "已移除的 MCP 伺服器 {{name}} 仍有內容待清理。",
+      "retryCleanup": "重試清理",
+      "statusAuthorizationRequired": "需要登入授權"
     },
     "legal": {
       "thirdPartyBrands": "產品名稱、Logo 與品牌均為各自擁有者的財產。僅供識別之用，不代表任何形式的背書。"
@@ -1877,6 +1886,7 @@
     "unarchiveDescription": "這些會話將重新顯示在會話清單中。"
   },
   "deleteConfirm": {
+    "notConfirmed": "尚未確認會話已刪除，請重試。",
     "title": "刪除這個會話？",
     "titleMany": "刪除這 {{count}} 個對話？",
     "description": "此操作無法復原。",

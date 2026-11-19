@@ -1,7 +1,4 @@
 from __future__ import annotations
-from cirno_core.apps.cli.catalog import RegistryCatalog
-from cirno_core.apps.cli import paths as cli_paths
-from cirno_core.apps.cli import records as cli_records
 
 import asyncio
 import json
@@ -9,11 +6,14 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
+from cirno_core.apps.cli import paths as cli_paths
+from cirno_core.apps.cli import records as cli_records
 from cirno_core.apps.cli import service as cli_service
+from cirno_core.apps.cli.catalog import RegistryCatalog
 from cirno_core.config import home, loader
 from cirno_server.webui import cli_apps_api
 
@@ -74,13 +74,11 @@ def test_cli_apps_payload_uses_cache_and_marks_refresh_pending(monkeypatch) -> N
     manager = _FakeManager(fresh=False)
     refreshes = []
     monkeypatch.setattr(cli_apps_api, "_manager", lambda: manager)
-    monkeypatch.setattr(
-        cli_apps_api,
-        "_start_catalog_refresh",
-        lambda _manager: refreshes.append(True) or True,
-    )
+    def start_refresh(_manager):
+        refreshes.append(True)
+        return True
 
-    payload = asyncio.run(cli_apps_api.cli_apps_payload())
+    payload = asyncio.run(cli_apps_api.cli_apps_payload(start_refresh=start_refresh))
 
     assert manager.payload_calls == [True]
     assert manager.fresh_checks == [True]
@@ -113,13 +111,11 @@ def test_cli_apps_payload_skips_refresh_when_cache_is_fresh(monkeypatch) -> None
     )
     refreshes = []
     monkeypatch.setattr(cli_apps_api, "_manager", lambda: manager)
-    monkeypatch.setattr(
-        cli_apps_api,
-        "_start_catalog_refresh",
-        lambda _manager: refreshes.append(True) or True,
-    )
+    def start_refresh(_manager):
+        refreshes.append(True)
+        return True
 
-    payload = asyncio.run(cli_apps_api.cli_apps_payload())
+    payload = asyncio.run(cli_apps_api.cli_apps_payload(start_refresh=start_refresh))
 
     assert manager.payload_calls == [True]
     assert manager.fresh_checks == [True]
@@ -153,13 +149,11 @@ def test_cli_apps_payload_refreshes_when_optional_cache_is_stale(monkeypatch) ->
     )
     refreshes = []
     monkeypatch.setattr(cli_apps_api, "_manager", lambda: manager)
-    monkeypatch.setattr(
-        cli_apps_api,
-        "_start_catalog_refresh",
-        lambda _manager: refreshes.append(True) or True,
-    )
+    def start_refresh(_manager):
+        refreshes.append(True)
+        return True
 
-    payload = asyncio.run(cli_apps_api.cli_apps_payload())
+    payload = asyncio.run(cli_apps_api.cli_apps_payload(start_refresh=start_refresh))
 
     assert manager.payload_calls == [True]
     assert manager.fresh_checks == [True]
@@ -171,9 +165,10 @@ def test_cli_apps_payload_refreshes_when_optional_cache_is_stale(monkeypatch) ->
 def test_cli_apps_payload_reports_not_pending_when_refresh_is_throttled(monkeypatch) -> None:
     manager = _FakeManager(fresh=False)
     monkeypatch.setattr(cli_apps_api, "_manager", lambda: manager)
-    monkeypatch.setattr(cli_apps_api, "_start_catalog_refresh", lambda _manager: False)
+    def start_refresh(_manager):
+        return False
 
-    payload = asyncio.run(cli_apps_api.cli_apps_payload())
+    payload = asyncio.run(cli_apps_api.cli_apps_payload(start_refresh=start_refresh))
 
     assert manager.payload_calls == [True]
     assert manager.fresh_checks == [True]
@@ -218,7 +213,10 @@ def _local_cli_apps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     })
     skill = cli_paths.cli_app_skill_path("gimp")
     skill.parent.mkdir(parents=True)
-    skill.write_text("# GIMP\n", encoding="utf-8")
+    skill.write_text(
+        f"---\nname: {skill.parent.name}\ndescription: GIMP\ncirno_cli_app: gimp\n---\n# GIMP\n",
+        encoding="utf-8",
+    )
 
     def no_network(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("local CLI Apps reads must not use the network")
@@ -291,10 +289,9 @@ def test_cli_apps_payload_keeps_loop_responsive(
     monkeypatch.setattr(cli_service.CliAppManager, "__init__", initialize)
     monkeypatch.setattr(cli_records, "_read_json", read)
     monkeypatch.setattr(RegistryCatalog, "catalog_cache_fresh", freshness)
-    monkeypatch.setattr(
-        cli_apps_api, "_start_catalog_refresh",
-        lambda manager: refresh_threads.append(threading.get_ident()) or True,
-    )
+    def start_refresh(manager):
+        refresh_threads.append(threading.get_ident())
+        return True
 
     async def check() -> None:
         loop_thread = threading.get_ident()
@@ -308,7 +305,7 @@ def test_cli_apps_payload_keeps_loop_responsive(
 
         observer = asyncio.create_task(unrelated())
         request = asyncio.create_task(cli_apps_api.cli_apps_payload(
-            installed_only=installed_only, config_path=_local_cli_apps,
+            installed_only=installed_only, config_path=_local_cli_apps, start_refresh=start_refresh,
         ))
         try:
             await asyncio.wait_for(asyncio.shield(observer), 10)
@@ -346,9 +343,9 @@ def test_cli_apps_payload_cancellation_discards_late_refresh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     refreshes: list[cli_service.CliAppManager] = []
-    monkeypatch.setattr(
-        cli_apps_api, "_start_catalog_refresh", lambda manager: refreshes.append(manager) or True,
-    )
+    def start_refresh(manager):
+        refreshes.append(manager)
+        return True
 
     async def check() -> None:
         loop = asyncio.get_running_loop()
@@ -368,7 +365,7 @@ def test_cli_apps_payload_cancellation_discards_late_refresh(
 
         monkeypatch.setattr(cli_apps_api.asyncio, "to_thread", tracked_to_thread)
         probe = _HeldProbe(monkeypatch)
-        request = asyncio.create_task(cli_apps_api.cli_apps_payload(config_path=_local_cli_apps))
+        request = asyncio.create_task(cli_apps_api.cli_apps_payload(config_path=_local_cli_apps, start_refresh=start_refresh))
         try:
             await asyncio.wait_for(probe.entered.wait(), 10)
             assert not probe.watchdog_fired.is_set(), "cancellation must run while the probe is held"
@@ -391,3 +388,10 @@ def test_cli_apps_payload_cancellation_discards_late_refresh(
                 await asyncio.wait_for(worker_finished.wait(), 10)
 
     asyncio.run(check())
+
+
+def test_catalog_read_without_runtime_owner_does_not_launch_detached_work(monkeypatch):
+    manager = _FakeManager(fresh=False)
+    monkeypatch.setattr(cli_apps_api, "_manager", lambda: manager)
+    payload = asyncio.run(cli_apps_api.cli_apps_payload())
+    assert payload["catalog_refresh_pending"] is False

@@ -38,6 +38,8 @@ export interface WebuiThreadPersistedPayload {
   savedAt?: string;
   /** Cheap server revision used for application-managed conditional revalidation. */
   revision?: string;
+  /** Opaque identity replaced by clear, history edit or session replacement. */
+  history_generation?: string;
   /** Canonical transcript events projected by the same reducer as live events. */
   events: ThreadProjectionEvent[];
   projection: "events";

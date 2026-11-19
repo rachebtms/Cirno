@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 SESSION_TYPE_KEY = "session_type"
 PARENT_SESSION_KEY = "parent_session_key"
+PARENT_SESSION_GENERATION_KEY = "parent_session_generation"
+CHILD_SESSION_GENERATION_REQUIRED_KEY = "child_session_generation_required"
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,7 +16,23 @@ export function channelRequirementErrors(
     const field = fieldByKey.get(key);
     if (!field || clearedSecrets.has(key)) return false;
     const value = (values[key] ?? "").trim();
-    if (field.kind === "bool") return value === "true";
+    if (field.kind === "bool")
+      return ["true", "1", "yes", "on"].includes(value.toLowerCase());
+    if (field.kind === "list") return value.split(",").some((item) => item.trim());
+    if (field.kind === "json" && value) {
+      try {
+        const parsed: unknown = JSON.parse(value);
+        return (
+          parsed !== null &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed) &&
+          Object.keys(parsed).length > 0
+        );
+      } catch {
+        // The settings write reports invalid JSON separately from missing fields.
+        return true;
+      }
+    }
     if (value) return true;
     return Boolean(field.secret && configuredFields.has(key));
   };
@@ -29,8 +45,9 @@ export function channelRequirementErrors(
     const closest =
       [...requirement.alternatives].sort(
         (left, right) =>
-          left.filter((key) => !present(key)).length -
-          right.filter((key) => !present(key)).length,
+          (left.filter((key) => !present(key)).length -
+            right.filter((key) => !present(key)).length) ||
+          right.filter(present).length - left.filter(present).length,
       )[0] ?? [];
     for (const key of closest) {
       if (!present(key) && fieldByKey.has(key)) errors[key] = message;
@@ -50,7 +67,7 @@ export function channelServerValidationErrors(
       .filter(
         (field) =>
           missing.has(field.key) ||
-          missing.has(field.key.split(".").at(-1) ?? ""),
+          missing.has(field.key.replace(/^channels\.[^.]+\./, "")),
       )
       .map((field) => [field.key, message]),
   );

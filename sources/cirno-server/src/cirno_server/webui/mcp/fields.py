@@ -8,14 +8,23 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+from cirno_core.agent.tools.mcp.headers import merge_mcp_headers
+from cirno_core.agent.tools.mcp.stdio import locate_stdio_command
 from cirno_core.agent.tools.mcp_oauth import (
     mcp_oauth_has_credentials,
 )
+from cirno_core.config.loader import get_config_path, resolve_env_refs
 from cirno_core.config.network import NetworkConfig
-from cirno_core.config.paths import get_runtime_subdir
 from cirno_core.config.tools import MCPServerConfig
 from cirno_core.utils.file_io import ensure_dir
-from cirno_server.webui.mcp.contracts import McpPresetError, QueryParams, query_first, query_value
+
+from cirno_server.webui.mcp.contracts import (
+    McpPresetError,
+    QueryParams,
+    query_first,
+    query_value,
+    validated_server_name,
+)
 from cirno_server.webui.mcp.presets import McpPreset, McpPresetField
 
 
@@ -23,23 +32,45 @@ def clone_server(server: MCPServerConfig) -> MCPServerConfig:
     return MCPServerConfig.model_validate(server.model_dump(mode="json"))
 
 
-def _with_managed_stdio_cwd(name: str, cfg: MCPServerConfig) -> MCPServerConfig:
+def _managed_stdio_root(config_path: Path | None = None) -> Path:
+    owner = (config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False).parent
+    managed = owner / "state" / "mcp"
+    if managed.is_symlink() or managed.parent.is_symlink():
+        raise McpPresetError("Managed MCP runtime directory cannot be redirected by symbolic links")
+    root = managed.resolve(strict=False)
+    if not root.is_relative_to(owner):
+        raise McpPresetError("Managed MCP runtime directory escapes its instance")
+    if root != managed:
+        raise McpPresetError("Managed MCP runtime directory cannot be redirected by symbolic links")
+    return root
+
+
+def _with_managed_stdio_cwd(name: str, cfg: MCPServerConfig, *, config_path: Path | None = None) -> MCPServerConfig:
     if cfg.command and (cfg.type in (None, "stdio")) and not cfg.cwd:
-        cfg.cwd = str(ensure_dir(get_runtime_subdir("mcp") / name))
+        managed = _managed_stdio_root(config_path) / validated_server_name(name)
+        if managed.is_symlink():
+            raise McpPresetError("Managed MCP runtime directory cannot be a symbolic link")
+        cfg.cwd = str(ensure_dir(managed))
     return cfg
 
 
-def remove_managed_stdio_cwd(name: str, cfg: MCPServerConfig | None) -> bool:
-    if cfg is None or not cfg.cwd:
+def remove_managed_stdio_cwd(name: str, cfg: MCPServerConfig | None, *, config_path: Path | None = None) -> bool:
+    if cfg is not None and not cfg.cwd:
         return False
-    cwd = Path(cfg.cwd).expanduser().resolve(strict=False)
-    managed = (get_runtime_subdir("mcp") / name).resolve(strict=False)
-    if cwd != managed or not cwd.exists():
+    validated_server_name(name)
+    root = _managed_stdio_root(config_path)
+    managed = root / name
+    cwd = Path(cfg.cwd).expanduser() if cfg is not None else managed
+    # Resolve only the parent: following the final link would adopt its target
+    # as managed data, including a user-selected directory outside this instance.
+    if cwd.name != name or cwd.parent.resolve(strict=False) != root:
         return False
-    if cwd.is_symlink() or cwd.is_file():
-        cwd.unlink()
+    if managed.is_symlink() or managed.is_file():
+        managed.unlink()
+    elif not managed.exists():
+        return False
     else:
-        shutil.rmtree(cwd)
+        shutil.rmtree(managed)
     return True
 
 
@@ -87,6 +118,15 @@ def _with_arg_value(args: list[str], flag: str, value: str) -> list[str]:
     return out
 
 
+def _header_value(cfg: MCPServerConfig | None, target_name: str) -> str | None:
+    if cfg is None:
+        return None
+    return next(
+        (value for name, value in reversed(cfg.headers.items()) if name.lower() == target_name.lower()),
+        None,
+    )
+
+
 def _field_value_from_config(field: McpPresetField, cfg: MCPServerConfig | None) -> str | None:
     if cfg is None:
         return None
@@ -95,7 +135,7 @@ def _field_value_from_config(field: McpPresetField, cfg: MCPServerConfig | None)
         value = cfg.env.get(target_name)
         return value if value else None
     if target_kind == "header":
-        value = cfg.headers.get(target_name)
+        value = _header_value(cfg, target_name)
         return value.removeprefix(field.value_prefix) if value else None
     if target_kind == "url":
         return cfg.url or None
@@ -154,7 +194,7 @@ def proxy_enabled(query: QueryParams, current: bool = False) -> bool:
 
 
 def validate_proxy(cfg: MCPServerConfig, network: NetworkConfig) -> None:
-    if cfg.use_proxy and (cfg.command or not cfg.url):
+    if cfg.use_proxy and (cfg.transport_type == "stdio" or not cfg.url):
         raise McpPresetError("The shared proxy is available for HTTP and SSE MCP connections")
     try:
         network.resolve_proxy(cfg.use_proxy)
@@ -166,6 +206,7 @@ def materialize_server(
     preset: McpPreset,
     query: QueryParams,
     existing: MCPServerConfig | None,
+    *, config_path: Path | None = None,
 ) -> MCPServerConfig:
     if preset.server is None or not preset.install_supported:
         raise McpPresetError(f"{preset.display_name} is not supported yet", status=409)
@@ -182,42 +223,52 @@ def materialize_server(
         if target_kind == "env":
             cfg.env[target_name] = value
         elif target_kind == "header":
-            cfg.headers[target_name] = field_spec.value_prefix + value
+            # A saved HTTP header is already complete, including its scheme or
+            # whole-header environment reference. Prefix only new field input.
+            retained = (
+                _header_value(existing, target_name)
+                if not query_value(query, field_spec.name) and _field_value_from_config(field_spec, existing)
+                else None
+            )
+            cfg.headers = merge_mcp_headers(cfg.headers, {target_name: retained or field_spec.value_prefix + value})
         elif target_kind == "arg":
             cfg.args = _with_arg_value(list(cfg.args), target_name, value)
         elif target_kind == "url_param":
             cfg.url = _url_with_param(cfg.url, target_name, value)
         elif target_kind == "url":
             cfg.url = value
-    return _with_managed_stdio_cwd(preset.name, cfg)
+    return _with_managed_stdio_cwd(preset.name, cfg, config_path=config_path)
 
 
-def command_available(command: str) -> bool:
-    if not command:
+def command_available(command: str, *, cwd: str = "", env: dict[str, str] | None = None) -> bool:
+    try:
+        command = resolve_env_refs(command, strict=True)
+        cwd = resolve_env_refs(cwd, strict=True)
+        path_env = {
+            key: resolve_env_refs(value, strict=True)
+            for key, value in (env or {}).items()
+            if key == "PATH" or os.name == "nt" and key.upper() == "PATH"
+        }
+    except ValueError:
         return False
-    if shutil.which(command):
-        return True
-    path = Path(command).expanduser()
-    return path.exists() and path.is_file()
+    return locate_stdio_command(command, cwd=cwd, env=path_env) is not None
 
 
 def config_available(cfg: MCPServerConfig | None) -> bool:
     if cfg is None:
         return False
-    if cfg.command:
-        return command_available(cfg.command)
-    if cfg.url:
-        return True
-    return False
+    if cfg.transport_type == "stdio":
+        return command_available(cfg.command, cwd=cfg.cwd, env=cfg.env)
+    return bool(cfg.url)
 
 
-def status_for(preset: McpPreset, cfg: MCPServerConfig | None) -> str:
+def status_for(preset: McpPreset, cfg: MCPServerConfig | None, *, config_path: Path | None = None) -> str:
     if cfg is None:
         return "not_installed" if preset.install_supported else "coming_soon"
     if any(field.required and not _field_configured(field, cfg) for field in preset.fields):
         return "missing_credentials"
-    if cfg.auth == "oauth" and not mcp_oauth_has_credentials(preset.name, cfg.url):
+    if cfg.auth == "oauth" and not mcp_oauth_has_credentials(preset.name, cfg.url, config_path=config_path):
         return "authorization_required"
-    if cfg.command and not command_available(cfg.command):
+    if cfg.transport_type == "stdio" and not command_available(cfg.command, cwd=cfg.cwd, env=cfg.env):
         return "missing_dependency"
     return "configured"

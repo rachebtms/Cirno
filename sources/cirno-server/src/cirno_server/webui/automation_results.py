@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
 from cirno_core.cron.types import CronJob, CronRunRecord
 from cirno_core.triggers.local_types import LocalTrigger, TriggerRunRecord
-from cirno_core.utils.run_records import safe_run_record_name
 from cirno_core.utils.atomic_file import read_atomic_bytes
+from cirno_core.utils.run_records import safe_run_record_name
 
 MAX_RUN_RECORD_BYTES = 2 * 1024 * 1024
 
@@ -81,15 +82,24 @@ def cron_run_response(runs_dir: Path, job: CronJob, run: CronRunRecord) -> str |
 def trigger_run_response(
     runs_dir: Path, trigger: LocalTrigger, run: TriggerRunRecord,
 ) -> str | None:
-    """Match a trigger delivery by its saved creation time and session, never the latest reply."""
+    """Read the exact delivery, with a unique timestamp fallback for legacy history."""
+    records: Iterable[dict[str, object]]
+    if run.delivery_id:
+        record = _read_record(runs_dir / f"{safe_run_record_name(run.delivery_id)}.json", runs_dir)
+        if not record or record.get("run_id") != run.delivery_id or record.get("delivery_id") != run.delivery_id:
+            return None
+        records = [record]
+    else:
+        records = (record for path in runs_dir.glob("*.json") if (record := _read_record(path, runs_dir)))
     matching: list[dict[str, object]] = []
-    for path in runs_dir.glob("*.json"):
-        record = _read_record(path, runs_dir)
+    for record in records:
         if (record and record.get("trigger_id") == trigger.id
                 and record.get("session_key") == trigger.session_key
                 and record.get("created_at_ms") == run.run_at_ms
                 and record.get("status") == run.status):
             matching.append(record)
+            if len(matching) > 1:
+                return None
     if len(matching) != 1:
         return None
     response = matching[0].get("response")

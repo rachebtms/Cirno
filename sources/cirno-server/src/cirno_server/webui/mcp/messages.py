@@ -7,6 +7,17 @@ from typing import Any
 from cirno_server.webui.mcp.presets import McpPreset
 
 
+def record_cleanup_failure(result: dict[str, Any], *, name: str, verification: str) -> None:
+    """Retain an accepted config commit while reporting incomplete cleanup."""
+    result["ok"] = False
+    result["persisted"] = True
+    result.setdefault("verification_failed", []).append(verification)
+    result["message"] = (
+        f"{result['message']} Configuration changes were saved, but cleanup failed "
+        f"for {name} ({verification})."
+    )
+
+
 def action_message(action: str, preset: McpPreset, *, ok: bool = True) -> dict[str, Any]:
     verb = {
         "enable": "Enabled",

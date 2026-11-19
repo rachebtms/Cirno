@@ -1,5 +1,3 @@
-import cirno_core.agent.tools.mcp.provider as mcp_provider
-
 """Context builder for assembling agent prompts."""
 
 import base64
@@ -10,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, cast
 
+import cirno_core.agent.tools.mcp.provider as mcp_provider
 from cirno_core.agent.tools import sessions as session_tools
 from cirno_core.apps.cli import utils as cli_app_utils
 from cirno_core.config.home import get_home_path
@@ -82,11 +81,13 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md"]
     _SKIPPABLE_DEFAULTS = {"AGENTS.md", "USER.md"}
 
-    def __init__(self, workspace: Path, timezone: str | None = None, disabled_skills: list[str] | None = None, always_skills: list[str] | None = None):
+    def __init__(self, workspace: Path, timezone: str | None = None, disabled_skills: list[str] | None = None, always_skills: list[str] | None = None, *, source_config_path: Path | None = None):
         self.workspace = workspace
         self.timezone = timezone
         self.memory = MemoryStore(get_home_path())
-        self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills or []), always_skills=set(always_skills or []))
+        if source_config_path is not None:
+            self.memory.dream.source_config_path = Path(source_config_path).expanduser().resolve(strict=False)
+        self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills or []), always_skills=set(always_skills or []), home=self.memory.workspace, config_path=source_config_path)
         self.memory_context_tokens = 2000
         self.memory_context_files: list[str] = []
         self.memory_context_files_tokens = 2000
@@ -120,7 +121,7 @@ class ContextBuilder:
             system_prompts = self.current_system_prompts()
         profiles = ("SOUL.md", "WORKER.md") if internal else role.profile_files
         identity = (
-            render_template("agent/maintenance_context.md", home_path=str(get_home_path().resolve()))
+            render_template("agent/maintenance_context.md", home_path=str(self.memory.workspace.resolve()))
             if internal else self._get_identity(channel=channel, workspace=self.workspace, profile_file=profiles[0])
         )
         parts = [identity,
@@ -160,7 +161,7 @@ class ContextBuilder:
 
         if role.name == "router":
             from cirno_core.profiles.awakening import awakening_prompt
-            if awakening := awakening_prompt():
+            if awakening := awakening_prompt(home=self.memory.workspace):
                 parts.append(awakening)
 
         if not internal:
@@ -174,7 +175,7 @@ class ContextBuilder:
         """Get the core identity section."""
         root = workspace or self.workspace
         workspace_path = str(root.expanduser().resolve())
-        agent_workspace_path = str(get_home_path().resolve())
+        agent_workspace_path = str(self.memory.workspace.resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 
@@ -215,11 +216,12 @@ class ContextBuilder:
         """Load shared/project instructions and only the selected role's profile."""
         parts: list[str] = []
         project_root = workspace or self.workspace
+        home = self.memory.workspace
         sources = [
-            ("AGENTS.md", get_home_path()),
-            *([("AGENTS.md", project_root)] if project_root != get_home_path() else []),
-            *((filename, get_home_path()) for filename in profile_files),
-            ("USER.md", get_home_path()),
+            ("AGENTS.md", home),
+            *([("AGENTS.md", project_root)] if project_root != home else []),
+            *((filename, home) for filename in profile_files),
+            ("USER.md", home),
         ]
 
         for filename, root in sources:

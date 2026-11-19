@@ -1,6 +1,7 @@
 /** Automations contracts shared by the browser and its transports. */
 
 export interface SessionAutomationJob {
+  webui_session_key?: string | null; // Bound Web UI conversation; null: external, absent: older host.
   chat_binding_revision?: string;
   id: string;
   name: string;
@@ -29,6 +30,7 @@ export interface SessionAutomationJob {
     last_error?: string | null;
     pending?: boolean;
     run_history?: Array<{
+      run_id?: string | null;
       run_at_ms: number;
       status: "ok" | "error" | "skipped" | string;
       duration_ms?: number;

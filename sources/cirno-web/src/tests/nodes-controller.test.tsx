@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CirnoClient } from "@/lib/cirno-client";
-import type { NodeRecord } from "@/features/settings/nodes/model/contracts";
+import { nodeDraft, type NodeRecord } from "@/features/settings/nodes/model/contracts";
 import { useNodes } from "@/features/settings/nodes/model/useNodes";
 
 const node: NodeRecord = { id: "research", name: "Research Node", host: "example.test", port: 22, username: "owner",
@@ -17,6 +17,35 @@ function mount(request: ReturnType<typeof vi.fn>) {
 }
 
 describe("Node operations", () => {
+  it("releases old-client locks and ignores old completion while the new client is busy", async () => {
+    let finishOld!: (value: unknown) => void;
+    let finishNew!: (value: unknown) => void;
+    const oldRequest = server(payload => payload.action === "nodes.test"
+      ? new Promise(resolve => { finishOld = resolve; }) : undefined);
+    const newRequest = server(payload => payload.action === "nodes.test"
+      ? new Promise(resolve => { finishNew = resolve; }) : undefined);
+    const view = mount(oldRequest);
+    await waitFor(() => expect(view.result.current.ready).toBe(true));
+    let oldOperation!: Promise<void>;
+    act(() => { oldOperation = view.result.current.test(node); });
+    expect(view.result.current.busy).toBe(true);
+
+    view.rerender({ currentClient: { requestMutation: newRequest } as unknown as CirnoClient });
+    await waitFor(() => expect(view.result.current.ready).toBe(true));
+    expect(view.result.current.busy).toBe(false);
+    let newOperation!: Promise<void>;
+    act(() => { newOperation = view.result.current.test(node); });
+    expect(view.result.current.busy).toBe(true);
+    await act(async () => { finishOld({ output: "Old server" }); await oldOperation; });
+    expect(view.result.current.busy).toBe(true);
+    expect(view.result.current.notice).toBe("");
+    await act(async () => view.result.current.test(node));
+    expect(newRequest.mock.calls.filter(([, payload]) => payload.action === "nodes.test")).toHaveLength(1);
+    await act(async () => { finishNew({ output: "New server" }); await newOperation; });
+    expect(view.result.current.busy).toBe(false);
+    expect(view.result.current.notice).toBe("New server");
+  });
+
   it("allows remote status operations to finish within the backend SSH deadline", async () => {
     const request = server(payload => payload.action === "nodes.test" ? Promise.resolve({ output: "SSH ready" }) : undefined);
     const view = mount(request);
@@ -127,4 +156,46 @@ it("waits for the currently selected credential and ignores a late response from
   await act(async () => { pending.get("old")!({ ssh: { working_directory: "/stale", environment: {} } }); await old; });
   expect(view.result.current.draft?.working_directory).toBe("/research");
   expect(view.result.current.busy).toBe(false);
+});
+
+for (const action of ["refresh", "test", "saveJobSettings", "selectCredential", "save", "execute", "remove", "readJob", "stopJob"] as const) {
+  it(`rejects retained ${action} actions after changing connected servers`, async () => {
+    const request = server(), replacementRequest = server();
+    const view = mount(request);
+    await waitFor(() => expect(view.result.current.ready).toBe(true));
+    act(() => { view.result.current.edit(node); view.result.current.startCommand(node); });
+    act(() => view.result.current.setCommand("uname"));
+    const previous = view.result.current;
+    const count = request.mock.calls.length;
+    view.rerender({ currentClient: { requestMutation: replacementRequest } as unknown as CirnoClient });
+    await waitFor(() => expect(view.result.current.ready).toBe(true));
+    await act(async () => {
+      if (action === "test" || action === "remove") await previous[action](node);
+      else if (action === "readJob" || action === "stopJob") await previous[action]({ id: "old-job", node_id: node.id, state: "running", command: "train" });
+      else if (action === "saveJobSettings") await previous.saveJobSettings({ retention_days: 1 });
+      else if (action === "selectCredential") await previous.selectCredential("old-credential");
+      else await previous[action]();
+    });
+    expect(request.mock.calls).toHaveLength(count);
+    expect(view.result.current.draft).toBeNull();
+    expect(view.result.current.target).toBeNull();
+    expect(view.result.current.output).toBeNull();
+    expect(view.result.current.error).toBe("");
+    expect(view.result.current.busy).toBe(false);
+  });
+}
+
+it("ignores retained local editor and command callbacks after a server change", async () => {
+  const view = mount(server());
+  await waitFor(() => expect(view.result.current.ready).toBe(true));
+  const previous = view.result.current;
+  view.rerender({ currentClient: { requestMutation: server() } as unknown as CirnoClient });
+  await waitFor(() => expect(view.result.current.ready).toBe(true));
+  act(() => {
+    previous.edit(node); previous.startCommand(node); previous.setCommand("old command");
+    previous.setTarget(node); previous.setDraft(nodeDraft(node));
+  });
+  expect(view.result.current.draft).toBeNull();
+  expect(view.result.current.target).toBeNull();
+  expect(view.result.current.command).toBe("");
 });

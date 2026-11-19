@@ -8,15 +8,23 @@ Settings → Personality appends shared and role-specific system instructions. T
 
 These choices preserve unchanged prefixes for provider caching. Actual reuse depends on the endpoint; the usage display uses reported cache metrics rather than assuming a cache hit.
 
+At the provider boundary, a single content block receives the same empty-text and internal-metadata cleanup as a list of blocks. This normalization operates on request copies and does not rewrite the saved transcript.
+
 Goal execution and continuation retain these role boundaries. A Router Goal does not grant permission to execute medium or large work directly; its runtime guidance requires durable Worker delegation too.
 
 ## Reasoning history
 
 Each model configuration has a **Reasoning history** setting. Automatic follows the known endpoint's plaintext reasoning rules. Preserve keeps plaintext reasoning where the adapter permits it; Omit excludes it from compatible replay. Signed thinking blocks and opaque provider continuation state remain owned by the native adapter and are not converted to ordinary replies.
 
+For Anthropic, the transcript retains encrypted `redacted_thinking` blocks alongside signed thinking blocks and replays their native data unchanged. They are not displayed as plaintext or assigned prompt-cache markers. Disabling tool selection sends `tool_choice: {"type": "none"}` while retaining the tool catalog and system prefix, including when thinking is enabled. Cancellation also waits for the client to finish closing before releasing its owner.
+
 DeepSeek tool requests require complete reasoning replay, including earlier turns without tool calls. Cirno rejects Omit for those requests. Internal DeepSeek finalization retains tool schemas with tool selection disabled so the endpoint can reuse reasoning while generating the final answer. Without tools, DeepSeek ignores historical reasoning; the local estimate excludes that ignored history. This distinction follows the [DeepSeek thinking API contract](https://api-docs.deepseek.com/guides/thinking_mode/). Generating reasoning still consumes output tokens even when a later request does not reuse it. A relay or custom model can have different rules; choose a compatible policy for that endpoint.
 
 The saved transcript retains reasoning independently of request filtering. Changing the policy does not delete it. Provider-reported usage calibrates the display after requests finish. During generation, context usage is an explicitly marked estimate that grows with reasoning, text and tool output; it is not an additional billing measurement.
+
+With fallback models enabled, primary-request estimates and checkpoint working-note decisions still follow the primary model's reasoning-history policy, including DeepSeek's tool-history requirements. Each fallback retains its own request filtering policy when actually called. Merely adding a fallback does not rewrite existing messages or prompt-cache prefixes.
+
+Codex and xAI adapters retain the `invalid_response` classification when a stream cannot be assembled safely, including conflicting tool-call identities. The shared retry policy can then decide recovery within its existing limits. Ambiguous calls are not executed, and this classification does not add concurrent requests or rewrite the cached prefix.
 
 The session also retains a content-free snapshot of the eight most recent completed provider requests, without waiting for the entire agent turn to finish. The context popover restores these input/output, cache and timing details after a page refresh, even when the relevant chat messages are outside the loaded history page. A request still generating has no final usage yet; its actual details become available when the provider returns. These snapshots are display metadata and are never added to model prompts.
 
@@ -113,3 +121,5 @@ Repeated-output correction is an append-only Harness notice, never a rewrite of 
 An accepted turn cancelled before execution, while waiting for a worker slot, or skipped because its Goal is obsolete still emits its terminal and idle notifications with the original turn/owner identity. Passive Router supervisory notes remain visible inputs; without explicit turn ownership they do not start the client run ledger. Goal status and actual execution remain separate: stopping future continuation alone is not evidence that a currently executing model has finished.
 
 An independently dispatched Worker report uses the same visible execution lifecycle as a Heartbeat, including completion and idle when the Router chooses to remain quiet. Automatic Goal slices inherit the admitted display turn ID and registered owner through request metadata. They keep one Working lifetime until the final slice completes; independent inputs acquire separate owners. This prevents completed background work from leaving orphaned active turns in the browser or reconnect projection.
+
+Re-registering an automatic slice preserves any earlier answer-persistence failure for the same owner, turn ID and history generation. The final record remains marked incomplete so transcript recovery can repair it; a new execution or replacement history does not inherit that failure. Repeated cancellation waits for an accepted turn's stream closure, checkpoint settlement and completion/idle notifications. Shutdown still retains the in-flight checkpoint, and discarding a session still skips ordinary checkpoint materialization.

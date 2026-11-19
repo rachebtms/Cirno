@@ -1,8 +1,8 @@
 """Render Inbox notifications for the bound personal Telegram account."""
 
-from urllib.parse import urlencode
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlencode
 
 from cirno_core.bus.delivery import DeliveryRequest
 from cirno_core.bus.events import OutboundMessage
@@ -24,6 +24,8 @@ def notification_message(notice: Mapping[str, Any], binding: Mapping[str, Any]) 
     parts.append("打开 Cirno 收件箱查看或处理。" if zh else "Open Cirno Inbox to view or respond.")
     metadata = {"_telegram_binding": binding["id"], "_telegram_category": notice["category"],
                 "_inbox_notice": notice["id"], "_telegram_action_label": "打开 Cirno 收件箱" if zh else "Open Cirno Inbox"}
+    if "notice_revision" in notice:
+        metadata["_inbox_notice_revision"] = notice["notice_revision"]
     if binding.get("webui_url"):
         metadata["_telegram_action_url"] = binding["webui_url"].rstrip("/") + "/#/inbox?" + urlencode({
             "category": notice["category"], "chat": notice["session_key"] or ROUTER_SESSION_KEY,

@@ -11,15 +11,20 @@ from cirno_core.cron.binding import CronBindingError, binding_revision
 from cirno_core.cron.session_turns import is_bound_cron_job
 from cirno_core.cron.types import CronJob
 from cirno_core.triggers.local_types import LocalTrigger
+from loguru import logger
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.automation_chats import AutomationChat, automation_chats
-from cirno_server.webui.automation_results import AutomationResultReadError, cron_run_response, trigger_run_response
+from cirno_server.webui.automation_results import (
+    AutomationResultReadError,
+    cron_run_response,
+    trigger_run_response,
+)
 from cirno_server.webui.http_utils import http_error as _http_error
 from cirno_server.webui.http_utils import http_json_response as _http_json_response
 from cirno_server.webui.http_utils import query_first as _query_first
 from cirno_server.webui.session_automations import all_automations_payload
-from loguru import logger
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 from .shared import (
     _automation_values_from_request,
@@ -150,6 +155,7 @@ class AutomationsRoutes:
         if not job_id or run_at_ms < 0:
             return _http_error(400, "invalid automation run")
         kind = _query_first(query, "kind") or "cron"
+        run_id = _query_first(query, "run_id")
         try:
             if kind == "local_trigger":
                 trigger = (
@@ -159,7 +165,10 @@ class AutomationsRoutes:
                 )
                 if trigger is None or self.server.local_trigger_store is None:
                     return _http_error(404, "automation not found")
-                deliveries = [item for item in trigger.run_history if item.run_at_ms == run_at_ms]
+                deliveries = [
+                    item for item in trigger.run_history if item.run_at_ms == run_at_ms
+                    and (run_id is None or item.delivery_id == run_id)
+                ]
                 if len(deliveries) != 1:
                     return _http_error(404, "run not found")
                 response = await asyncio.to_thread(
@@ -174,7 +183,10 @@ class AutomationsRoutes:
                     return _http_error(404, "automation not found")
                 if job.payload.kind == "system_event":
                     return _http_error(403, "system automation is protected")
-                runs = [item for item in job.state.run_history if item.run_at_ms == run_at_ms]
+                runs = [
+                    item for item in job.state.run_history if item.run_at_ms == run_at_ms
+                    and (run_id is None or item.run_id == run_id)
+                ]
                 if len(runs) != 1:
                     return _http_error(404, "run not found")
                 response = await asyncio.to_thread(
@@ -225,7 +237,11 @@ class AutomationsRoutes:
             return _http_error(409, "automation has no linked chat")
 
         if action == "enable":
-            if self.server.cron_service.enable_job(job_id, enabled=True) is None:
+            try:
+                enabled_job = self.server.cron_service.enable_job(job_id, enabled=True)
+            except ValueError as exc:
+                return _http_error(400, str(exc))
+            if enabled_job is None:
                 return _http_error(404, "automation not found")
         elif action == "disable":
             if self.server.cron_service.enable_job(job_id, enabled=False) is None:

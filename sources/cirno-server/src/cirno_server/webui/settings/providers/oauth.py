@@ -14,6 +14,7 @@ from cirno_core.providers.oauth_model_catalog import (
     invalidate_oauth_model_catalog,
 )
 from cirno_core.providers.registry import find_by_name
+
 from cirno_server.webui.settings.contracts import (
     QueryParams,
     WebUISettingsError,
@@ -141,10 +142,18 @@ def login_oauth_provider(
         except ImportError:
             raise WebUISettingsError(OAUTH_CLI_KIT_MISSING_MESSAGE, status=500) from None
 
+        try:
+            resolved_config = resolve_config_env_vars(config, config_path=config_path)
+            proxy = resolved_config.network.resolve_proxy(
+                resolved_config.providers.github_copilot.use_proxy
+            )
+        except ValueError as exc:
+            raise WebUISettingsError(str(exc), status=400) from exc
+
         # An existing token can be revoked. Expose the device prompt immediately
         # instead of waiting for approval inside a blocking CLI login request.
         oauth_flows.clear(spec.name)
-        copilot_flow = GitHubCopilotOAuthFlow()
+        copilot_flow = GitHubCopilotOAuthFlow(proxy=proxy)
         flow_id = secrets.token_urlsafe(24)
         # Own the flow before network I/O, so logout/replacement also cancels a
         # login that is still waiting for GitHub to return its device prompt.
@@ -232,6 +241,13 @@ def complete_oauth_provider(
             try:
                 token = flow.complete(authorization_response)
             except OpenAICodexOAuthInputError as exc:
+                raise WebUISettingsError(str(exc), status=400) from exc
+        elif spec.name == "xai_grok":
+            from cirno_core.providers.xai_oauth import XAIOAuthInputError
+
+            try:
+                token = flow.complete(authorization_response)
+            except XAIOAuthInputError as exc:
                 raise WebUISettingsError(str(exc), status=400) from exc
         else:
             token = flow.complete(authorization_response)

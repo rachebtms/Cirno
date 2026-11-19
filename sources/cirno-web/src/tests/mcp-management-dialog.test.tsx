@@ -49,6 +49,31 @@ describe("McpManagementDialog", () => {
     await i18n.changeLanguage("en");
   });
 
+  it.each([false, true])("saves an edited preset token together with its proxy draft (%s)", (changeProxy) => {
+    const onAction = vi.fn();
+    renderDialog({ initialTab: "connection", onAction, preset: { ...connectedPreset, source: "preset",
+      required_fields: [{ name: "token", label: "Token", secret: true, required: true, configured: true, placeholder: "" }] } });
+    fireEvent.change(screen.getByLabelText("Token"), { target: { value: "replacement-secret" } });
+    if (changeProxy) fireEvent.click(screen.getByRole("switch", { name: "Use proxy" }));
+    expect(onAction).not.toHaveBeenCalled();
+    const save = screen.getByRole("button", { name: "Save changes" });
+    fireEvent.click(save);
+    expect(onAction).toHaveBeenCalledWith("enable", "docs", { token: "replacement-secret", use_proxy: String(changeProxy) });
+  });
+
+  it("does not turn a stale allowed tool into an all-tools grant by counting selections", () => {
+    const onToolsChange = vi.fn();
+    renderDialog({ initialTab: "tools", onToolsChange,
+      preset: { ...connectedPreset, enabled_tools: ["search_docs", "retired_tool"] } });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    const listSources = within(dialog).getByRole("checkbox", { name: /list_sources/ });
+    expect(listSources).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /write_note/ }));
+    expect(listSources).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(onToolsChange).toHaveBeenCalledWith("docs", ["search_docs", "retired_tool", "write_note"]);
+  });
+
   it("keeps tool scope changes as a draft until Save changes", () => {
     const onToolsChange = vi.fn();
     renderDialog({ initialTab: "tools", onToolsChange });
@@ -68,6 +93,73 @@ describe("McpManagementDialog", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
     expect(onToolsChange).toHaveBeenCalledWith("docs", ["write_note", "list_sources"]);
+  });
+
+  it("keeps all individually selected tools as a finite allowlist", () => {
+    const onToolsChange = vi.fn();
+    renderDialog({ initialTab: "tools", onToolsChange,
+      preset: { ...connectedPreset, enabled_tools: ["search_docs", "write_note"] } });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /list_sources/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(onToolsChange).toHaveBeenCalledWith("docs", ["search_docs", "write_note", "list_sources"]);
+  });
+
+  it("follows a new saved tool scope while the current selection is untouched", () => {
+    const { updateDialog } = renderDialog({ initialTab: "tools" });
+    updateDialog({ ...connectedPreset, enabled_tools: ["search_docs"] });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    expect(within(dialog).getByRole("checkbox", { name: "search_docs" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "write_note" })).not.toBeChecked();
+    expect(within(dialog).queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+
+  it("preserves an explicit tool draft when the saved scope changes elsewhere", () => {
+    const onToolsChange = vi.fn();
+    const { updateDialog } = renderDialog({ initialTab: "tools", onToolsChange });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "search_docs" }));
+    updateDialog({ ...connectedPreset, enabled_tools: [] });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(onToolsChange).toHaveBeenCalledWith("docs", ["write_note", "list_sources"]);
+  });
+
+  it("replaces a cached inventory after a newer successful empty inspection", () => {
+    const { updateDialog } = renderDialog({ initialTab: "tools" });
+    updateDialog({ ...connectedPreset, tool_names: [], tool_count: 0, checked_at: "2026-08-12T08:01:00Z" });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    expect(within(dialog).queryByRole("checkbox", { name: "search_docs" })).not.toBeInTheDocument();
+    expect(within(dialog).getByText("No tools available")).toBeInTheDocument();
+  });
+
+  it("keeps the last known inventory and its selection count after a failed inspection", () => {
+    const { updateDialog } = renderDialog({ initialTab: "tools" });
+    updateDialog({ ...connectedPreset, tool_names: [], tool_count: 0, checked_at: "2026-08-12T08:01:00Z", error: "Fixture inspection failed" });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Fixture inspection failed");
+    expect(within(dialog).getByRole("checkbox", { name: "search_docs" })).toBeChecked();
+    expect(within(dialog).getByText("3 enabled")).toBeInTheDocument();
+  });
+
+  it("retires cached tools when inspection reports a changed connection", () => {
+    const { updateDialog } = renderDialog({ initialTab: "tools" });
+    updateDialog({ ...connectedPreset, inventory_stale: true, tool_names: [], tool_count: 0,
+      error: "Connection changed; test again." });
+    const dialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    expect(within(dialog).queryByRole("checkbox", { name: "search_docs" })).not.toBeInTheDocument();
+    updateDialog({ ...connectedPreset, tool_names: [], tool_count: undefined, checked_at: undefined });
+    expect(within(dialog).queryByRole("checkbox", { name: "search_docs" })).not.toBeInTheDocument();
+  });
+
+  it("retires inventory and selection drafts when management changes to another server", () => {
+    const { updateDialog } = renderDialog({ initialTab: "tools" });
+    const oldDialog = screen.getByRole("dialog", { name: "Docs MCP" });
+    fireEvent.click(within(oldDialog).getByRole("checkbox", { name: "search_docs" }));
+    updateDialog({ ...connectedPreset, name: "other", display_name: "Other MCP", tool_names: ["other_tool"], tool_count: 1, enabled_tools: [] });
+    const dialog = screen.getByRole("dialog", { name: "Other MCP" });
+    expect(within(dialog).getByRole("checkbox", { name: "other_tool" })).not.toBeChecked();
+    expect(within(dialog).getByText("0 enabled")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
 
   it("searches the inventory and exposes connection management in the same modal", () => {
@@ -111,7 +203,7 @@ describe("McpManagementDialog", () => {
   it("associates proxy guidance with its switch without changing the connection draft", () => {
     const onAction = vi.fn();
     renderDialog({ initialTab: "connection", onAction });
-    expect(screen.getByRole("switch", { name: "Use proxy" })).toHaveAccessibleDescription("Uses the shared proxy in Advanced.");
+    expect(screen.getByRole("switch", { name: "Use proxy" })).toHaveAccessibleDescription("Uses the shared proxy in Network & retries.");
     expect(onAction).not.toHaveBeenCalled();
     expect(screen.getByRole("switch", { name: "Use proxy" })).not.toBeChecked();
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();

@@ -1,13 +1,24 @@
 import { Alert, Button, Form, Modal } from "@heroui/react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { CirnoClient } from "@/lib/cirno-client";
 import { SharedProxyEditor } from "./SharedProxyEditor";
 import { useProxySetup } from "./useProxySetup";
 
-export function SharedProxySetupDialog({ onClose, onSave, busy }: {
+type SharedProxySetupProps = {
+  client: CirnoClient;
   busy: boolean;
   onClose: () => void;
   onSave: (address: string) => Promise<void>;
-}) {
+};
+
+export function SharedProxySetupDialog(props: SharedProxySetupProps) {
+  const [view, setView] = useState({ client: props.client, generation: 0 });
+  if (view.client !== props.client) setView({ client: props.client, generation: view.generation + 1 });
+  return <SharedProxySetupForm key={view.generation} {...props} />;
+}
+
+function SharedProxySetupForm({ onClose, onSave, busy }: SharedProxySetupProps) {
   const { t } = useTranslation();
   const setup = useProxySetup(onSave, onClose, busy);
   return <Modal.Backdrop isOpen onOpenChange={open => { if (!open && !setup.pending) onClose(); }} isDismissable={!setup.pending} isKeyboardDismissDisabled={setup.pending}><Modal.Container size="sm"><Modal.Dialog>

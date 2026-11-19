@@ -164,7 +164,7 @@ export function projectThreadEvent(
 
   if (event.event === "reasoning_end") {
     if (state.suppressUntilTurnEnd) return state;
-    if (event.text) attachProjectedReasoning(state, event, event.text, options);
+    if (typeof event.text === "string") attachProjectedReasoning(state, event, event.text, options);
     state.messages = closeReasoningStream(
       state.messages,
       options.persisted ? undefined : options.now,
@@ -295,11 +295,16 @@ export function projectThreadEvent(
     return state;
   }
 
-  const turn = turnFieldsForProjection(state, event, "complete");
-  state.suppressUntilTurnEnd = false;
-  state.activitySegmentId = null;
-  state.fileEditSegmentId = null;
-  state.messages = finalizeStreamedTurn(state.messages);
+  // A repeated completion is still about the closed turn. Only new content
+  // can establish a replay alias for a legacy gateway that reuses turn IDs.
+  const turn = event.turn_id && state.closedTurnIds.has(event.turn_id)
+    && !state.turnAliases.has(event.turn_id)
+    ? turnFieldsFromEvent(event, "complete")
+    : turnFieldsForProjection(state, event, "complete");
+  const foregroundTurnId = state.messages.find(message => message.id === state.activeAssistantId)?.turnId
+    ?? state.messages.at(-1)?.turnId;
+  const endsForeground = !turn.turnId || !foregroundTurnId || turn.turnId === foregroundTurnId;
+  state.messages = finalizeStreamedTurn(state.messages, turn);
   const latencyMs = typeof event.latency_ms === "number" && event.latency_ms >= 0
     ? Math.round(event.latency_ms)
     : undefined;
@@ -316,10 +321,15 @@ export function projectThreadEvent(
     },
     turn.turnId,
   );
-  state.activeAssistantId = null;
-  state.closedAssistantIds.clear();
-  state.closedAnswerStreamIds.clear();
-  state.mergeReasoning = false;
+  if (endsForeground) {
+    state.suppressUntilTurnEnd = false;
+    state.activitySegmentId = null;
+    state.fileEditSegmentId = null;
+    state.activeAssistantId = null;
+    state.closedAssistantIds.clear();
+    state.closedAnswerStreamIds.clear();
+    state.mergeReasoning = false;
+  }
   if (event.turn_id) {
     if (state.turnAliases.has(event.turn_id)) state.turnAliases.delete(event.turn_id);
     else state.closedTurnIds.add(event.turn_id);

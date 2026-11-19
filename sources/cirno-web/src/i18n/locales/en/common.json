@@ -98,7 +98,7 @@
     },
     "network": {
       "useProxy": "Use proxy",
-      "useProxyHelp": "Uses the shared proxy in Advanced.",
+      "useProxyHelp": "Uses the shared proxy in Network & retries.",
       "configureProxy": "Configure proxy",
       "sharedProxyScope": "Shared by all features with proxy enabled.",
       "authentication": "Authentication (optional)",
@@ -168,6 +168,10 @@
           "label": "Web access",
           "help": "Allow web search and web fetch tools."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "Maximum page response (MiB)",
+          "help": "Stop reading a page, image or Jina response when its announced or decoded body exceeds this size. Separate from the returned text length. Restart to apply."
+        },
         "tools_cli_apps_enable": {
           "label": "CLI apps",
           "help": "Allow the agent to manage and run CLI apps."
@@ -214,7 +218,7 @@
         },
         "network_proxy": {
           "label": "Shared proxy",
-          "help": "Address used by features with Use proxy enabled. 127.0.0.1 is the machine running cirno."
+          "help": "Address used by features with Use proxy enabled. Turn off those switches before clearing this address. 127.0.0.1 is the machine running cirno."
         },
         "tools_web_use_proxy": {
           "label": "Use proxy",
@@ -474,7 +478,7 @@
         },
         "agents_defaults_router_tool_timeout_seconds": {
           "label": "Router tool time budget (seconds)",
-          "help": "Cumulative ordinary tool execution per Router run (1–3600 seconds; default 60), excluding model and approval waiting. At most nine ordinary calls; delegate medium and large tasks to Workers. Requires restart."
+          "help": "Cumulative ordinary tool execution per Router run (1–3600 seconds; default 60), excluding model and native-tool approval waiting. PTC programs include nested waits. At most nine ordinary calls; delegate medium and large tasks to Workers. Requires restart."
         },
         "agents_defaults_output_repetition_enabled": {
           "label": "Repeated-output protection",
@@ -733,6 +737,7 @@
       "presetName": "Preset name",
       "presetNameHelp": "Names must be unique. Renaming keeps the model ID unchanged.",
       "presetNameDuplicate": "A preset with this name already exists.",
+      "createdOrderFailed": "Preset created, but its call order update failed. Enable it from the preset list to retry. {{error}}",
       "presetNamePlaceholder": "e.g. Fast writing",
       "advancedOptions": "Advanced options",
       "requestAPI": "API connection",
@@ -1060,7 +1065,11 @@
       "toolsFound_one": "{{count}} tool",
       "toolsFound_other": "{{count}} tools",
       "editConfig": "Edit MCP configuration",
-      "configObjectRequired": "MCP configuration must be a JSON object."
+      "configObjectRequired": "MCP configuration must be a JSON object.",
+      "changePending": "Another MCP change is in progress. Wait for it to finish, then save again.",
+      "cleanupPending": "Cleanup remains for removed MCP server {{name}}.",
+      "retryCleanup": "Retry cleanup",
+      "statusAuthorizationRequired": "Needs sign-in"
     },
     "values": {
       "light": "Light",
@@ -1877,6 +1886,7 @@
     "unarchiveDescription": "These conversations will return to the Conversations list."
   },
   "deleteConfirm": {
+    "notConfirmed": "Conversation deletion was not confirmed. Please retry.",
     "title": "Delete this conversation?",
     "titleMany": "Delete {{count}} conversations?",
     "description": "This action cannot be undone.",

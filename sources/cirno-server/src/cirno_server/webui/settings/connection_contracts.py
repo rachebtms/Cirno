@@ -18,6 +18,16 @@ HttpGet = Callable[..., httpx.Response]
 
 SettingsOperation = Callable[..., dict[str, Any]]
 
+CONNECTION_CONFIG_MUTATIONS = {
+    "agent-update": "update_agent",
+    "model-update": "update_model",
+    "model-create": "create_model",
+    "model-delete": "delete_model",
+    "call-order-update": "update_call_order",
+    "provider-create": "create_provider",
+    "provider-update": "update_provider",
+}
+
 
 @dataclass(frozen=True)
 class ConnectionSettingsOperations:

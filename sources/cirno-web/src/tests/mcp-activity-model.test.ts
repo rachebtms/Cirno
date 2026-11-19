@@ -6,6 +6,8 @@ import i18n, { setAppLanguage } from "@/i18n";
 describe("describeMcpActivity", () => {
   it.each([
     ["browser_navigate", { url: "https://example.com/docs" }, "done", "Opened", "example.com/docs"],
+    ["browser.navigate", { url: "https://example.com/docs" }, "done", "Opened", "example.com/docs"],
+    ["browser-navigate", { url: "https://example.com/docs" }, "done", "Opened", "example.com/docs"],
     ["browser_click", { element: "Submit" }, "running", "Clicking", "Submit"],
     ["browser_snapshot", {}, "done", "Inspected page", undefined],
     ["browser_screenshot", {}, "done", "Captured screenshot", undefined],
@@ -36,6 +38,11 @@ describe("describeMcpActivity", () => {
     expect(describeMcpActivity("browser_export_report", {}, "done", i18n.t)).toEqual({
       action: "Export report completed",
     });
+  });
+
+  it.each(["fcdn.example.org", "fd-tools.example.org"])("keeps a public browser target beginning with an IPv6-like prefix (%s)", host => {
+    expect(describeMcpActivity("browser_navigate", { url: `https://${host}/docs?token=private` }, "done", i18n.t))
+      .toEqual({ action: "Opened", target: `${host}/docs` });
   });
 
   it("localizes browser actions without translating targets", async () => {

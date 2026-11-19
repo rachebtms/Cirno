@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useLifetime } from "./useLifetime";
+import { useCallback, useRef } from "react";
+import { useResourceScope } from "./useResourceScope";
+import { useScopedState } from "./useScopedState";
 
 type RequestStatus = "idle" | "loading" | "success" | "error";
 interface RequestState<T> {
-  owner: unknown;
   value: T | null;
   status: RequestStatus;
   error: string | null;
@@ -11,32 +11,26 @@ interface RequestState<T> {
 /** Latest read wins; replacing an owner immediately hides its previous data. */
 export function useRequest<T>(owner: unknown) {
   const sequence = useRef(0);
-  const isCurrent = useLifetime(owner);
-  const [state, setState] = useState<RequestState<T>>({
-    owner,
+  const scope = useResourceScope(owner);
+  const { isCurrent } = scope;
+  const [state, setState] = useScopedState<RequestState<T>>(scope, () => ({
     value: null,
     status: "idle",
     error: null,
-  });
-  useEffect(() => {
-    return () => {
-      sequence.current += 1;
-    };
-  }, [owner]);
+  }));
   const load = useCallback(
     async (request: () => Promise<T>) => {
       if (!isCurrent()) return;
       const id = ++sequence.current;
       setState((previous) => ({
-        owner,
-        value: previous.owner === owner ? previous.value : null,
+        value: previous.value,
         status: "loading",
         error: null,
       }));
       try {
         const value = await request();
         if (id === sequence.current && isCurrent()) {
-          setState({ owner, value, status: "success", error: null });
+          setState({ value, status: "success", error: null });
           return value;
         }
       } catch (reason) {
@@ -48,22 +42,20 @@ export function useRequest<T>(owner: unknown) {
           }));
       }
     },
-    [owner, isCurrent],
+    [isCurrent, setState],
   );
   const clear = useCallback(() => {
     if (!isCurrent()) return;
     sequence.current += 1;
-    setState({ owner, value: null, status: "idle", error: null });
-  }, [owner, isCurrent]);
+    setState({ value: null, status: "idle", error: null });
+  }, [isCurrent, setState]);
   const assign = useCallback(
     (value: T) => {
       if (!isCurrent()) return;
       sequence.current += 1;
-      setState({ owner, value, status: "success", error: null });
+      setState({ value, status: "success", error: null });
     },
-    [owner, isCurrent],
+    [isCurrent, setState],
   );
-  const current =
-    state.owner === owner ? state : { owner, value: null, status: "idle" as const, error: null };
-  return { ...current, loading: current.status === "loading", load, clear, assign, isCurrent };
+  return { owner, ...state, loading: state.status === "loading", load, clear, assign, isCurrent };
 }

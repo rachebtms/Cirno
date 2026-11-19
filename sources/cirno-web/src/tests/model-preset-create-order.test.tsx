@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import type { SettingsPayload } from "@/lib/contracts/settings";
 import {
@@ -16,6 +16,40 @@ import {
 
 describe("Settings models", () => {
   installSettingsViewTestHooks();
+  it("locks the new preset draft until creation and call-order publication both settle", async () => {
+    const { payload } = settingsPayloadWithBackup();
+    let finishCreate!: (value: SettingsPayload) => void;
+    let finishOrder!: (value: SettingsPayload) => void;
+    requestMutationMock
+      .mockReturnValueOnce(new Promise<SettingsPayload>(resolve => { finishCreate = resolve; }))
+      .mockReturnValueOnce(new Promise<SettingsPayload>(resolve => { finishOrder = resolve; }));
+    renderSettingsView({ initialSection: "models", initialSettings: payload });
+    fireEvent.click(screen.getByRole("button", { name: "New preset" }));
+    const name = screen.getByRole("textbox", { name: /^Preset name/ });
+    fireEvent.change(name, { target: { value: "Writer" } });
+    const modelSearch = await openModelPicker();
+    fireEvent.change(modelSearch, { target: { value: "openai/gpt-4o-mini" } });
+    fireEvent.keyDown(modelSearch, { key: "Enter" });
+    await returnToPresetEditor();
+    fireEvent.click(presetSaveButton());
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(1));
+    const lockedDuringCreate = name.closest("fieldset")?.disabled;
+    const writer = { ...payload.model_presets[0]!, id: "writer", name: "Writer" };
+    const created: SettingsPayload = {
+      ...payload, created_model_preset: writer.id,
+      model_presets: [...payload.model_presets, writer],
+    };
+    await act(async () => { finishCreate(created); });
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(2));
+    const lockedDuringOrder = name.closest("fieldset")?.disabled;
+    await act(async () => { finishOrder({ ...created, model_call_order: ["primary", "backup", "writer"] }); });
+    expect(lockedDuringCreate).toBe(true);
+    expect(lockedDuringOrder).toBe(true);
+    expect(name).toBeEnabled();
+    expect(name).toHaveValue("Writer");
+    expect(screen.getByTestId("model-call-order-row-writer")).toBeInTheDocument();
+  });
+
   it("appends a new model preset to the call order immediately", async () => {
     const { payload } = settingsPayloadWithBackup();
     const writerPreset = {

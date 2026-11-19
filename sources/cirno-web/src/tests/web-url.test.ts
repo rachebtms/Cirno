@@ -34,4 +34,12 @@ describe("activity web URLs", () => {
     expect(url?.href).toBe("https://example.com/docs");
     expect(formatCompactWebUrl(url!)).toBe("example.com/docs");
   });
+
+  it.each(["fcdn.example.org", "fd-tools.example.org"])("keeps ordinary DNS host %s distinct from IPv6 private prefixes", host => {
+    expect(parseSafeActivityHttpUrl(`https://${host}/docs?token=private`)?.href).toBe(`https://${host}/docs`);
+  });
+
+  it.each(["http://localhost.:3000", "http://service.internal./docs", "http://[fe90::1]/", "http://[fea0::1]/", "http://[febf::1]/", "http://[fc00::1]/", "http://[fd00::1]/"])("does not expose local target spelling %s in timeline URLs", value => {
+    expect(parseSafeActivityHttpUrl(value)).toBeNull();
+  });
 });

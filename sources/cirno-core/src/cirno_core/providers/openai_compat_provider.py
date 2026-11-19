@@ -48,6 +48,7 @@ from cirno_core.providers.model_api import (
     is_hosted_web_search_tool,
 )
 from cirno_core.providers.openai_responses import ResponsesBackend, responses_state_matches
+from cirno_core.providers.openai_responses.errors import ResponsesAPIError
 from cirno_core.providers.reasoning_history import prepare_reasoning_history
 from cirno_core.providers.request_bodies import merge_responses_extra_body
 from cirno_core.utils.cancellation import shield_and_drain
@@ -162,6 +163,11 @@ class OpenAICompatProvider(LLMProvider):
         if uses_openrouter_attribution(spec, effective_base):
             self._default_headers.update(_DEFAULT_OPENROUTER_HEADERS)
         if extra_headers:
+            names = {name.lower() for name in extra_headers}
+            self._default_headers = {
+                name: value for name, value in self._default_headers.items()
+                if name.lower() not in names
+            }
             self._default_headers.update(extra_headers)
         self._opencode_session_affinity = uses_opencode_affinity(spec, effective_base) and not any(
             name.lower() == "x-opencode-session" for name in self.extra_headers
@@ -182,7 +188,7 @@ class OpenAICompatProvider(LLMProvider):
         self._responses_failures: dict[str, int] = {}
         self._responses_tripped_at: dict[str, float] = {}
 
-    def _build_client(self) -> None:
+    async def _build_client(self) -> None:
         """Create the OpenAI client using the current module-level AsyncOpenAI."""
         import httpx
 
@@ -221,15 +227,20 @@ class OpenAICompatProvider(LLMProvider):
                 trust_env=False,
                 follow_redirects=True,
             )
-        self._client = AsyncOpenAI(
-            api_key=self._api_key_for_client,
-            base_url=self._effective_base,
-            default_headers=self._default_headers,
-            default_query=self._extra_query or None,
-            max_retries=0,
-            timeout=timeout_s,
-            http_client=http_client,
-        )
+        try:
+            self._client = AsyncOpenAI(
+                api_key=self._api_key_for_client,
+                base_url=self._effective_base,
+                default_headers=self._default_headers,
+                default_query=self._extra_query or None,
+                max_retries=0,
+                timeout=timeout_s,
+                http_client=http_client,
+            )
+        except BaseException:
+            # SDK construction has not accepted ownership of its HTTP transport.
+            await shield_and_drain(http_client.aclose())
+            raise
 
     async def _ensure_client(self) -> AsyncOpenAIType:
         """Return the shared OpenAI client, creating it on first call."""
@@ -244,7 +255,7 @@ class OpenAICompatProvider(LLMProvider):
 
                 AsyncOpenAI = _AsyncOpenAI
 
-            self._build_client()
+            await self._build_client()
             if self._client is None:
                 raise RuntimeError("OpenAI client initialization did not produce a client")
             return self._client
@@ -255,7 +266,7 @@ class OpenAICompatProvider(LLMProvider):
         finally:
             client, self._client = self._client, None
             if client is not None:
-                await client.close()
+                await shield_and_drain(client.close())
 
     # ------------------------------------------------------------------
     # Build kwargs
@@ -443,6 +454,8 @@ class OpenAICompatProvider(LLMProvider):
     @staticmethod
     def _should_fallback_from_responses_error(e: Exception) -> bool:
         """Fallback only for likely Responses API compatibility errors."""
+        if isinstance(e, ResponsesAPIError):
+            return e.api_unsupported
         response = getattr(e, "response", None)
         status_code = getattr(e, "status_code", None)
         if status_code is None and response is not None:
@@ -671,6 +684,26 @@ class OpenAICompatProvider(LLMProvider):
         client = await self._ensure_client()
         idle_timeout_s = self.stream_idle_timeout_s
         affinity = self._opencode_affinity_headers(provider_context)
+        response_started = False
+
+        async def content_delta(text: str) -> None:
+            nonlocal response_started
+            response_started |= bool(text)
+            if on_content_delta:
+                await on_content_delta(text)
+
+        async def thinking_delta(text: str) -> None:
+            nonlocal response_started
+            response_started |= bool(text)
+            if on_thinking_delta:
+                await on_thinking_delta(text)
+
+        async def tool_delta(event: dict[str, Any]) -> None:
+            nonlocal response_started
+            response_started = True
+            if on_tool_call_delta:
+                await on_tool_call_delta(event)
+
         try:
             if self._should_use_responses_api(model, reasoning_effort):
                 try:
@@ -690,14 +723,14 @@ class OpenAICompatProvider(LLMProvider):
                         body,
                         provider=self._responses_state_provider(),
                         extra_headers=affinity,
-                        on_content_delta=on_content_delta,
-                        on_thinking_delta=on_thinking_delta,
-                        on_tool_call_delta=on_tool_call_delta,
+                        on_content_delta=content_delta,
+                        on_thinking_delta=thinking_delta,
+                        on_tool_call_delta=tool_delta,
                     )
                     self._record_responses_success(model, reasoning_effort)
                     return result
                 except Exception as responses_error:
-                    if self._responses_is_required(model, reasoning_effort):
+                    if response_started or self._responses_is_required(model, reasoning_effort):
                         raise
                     if not self._should_fallback_from_responses_error(responses_error):
                         raise

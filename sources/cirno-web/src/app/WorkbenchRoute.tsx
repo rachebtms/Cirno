@@ -4,6 +4,7 @@ import type { WorkspaceRoute } from "@/features/workbench/contracts";
 import { InboxPage, SettingsView, isSettingsSectionKey } from "./navigation";
 import { WorkbenchConversation } from "./WorkbenchConversation";
 import type { ShellSurfaceProps } from "./surface-contract";
+import { SurfaceVisibilityContext } from "@/hooks/usePageVisibility";
 
 export function WorkbenchRoute({ route, visible, focused, surface }: {
   route: WorkspaceRoute; visible: boolean; focused: boolean; surface: ShellSurfaceProps;
@@ -11,7 +12,7 @@ export function WorkbenchRoute({ route, visible, focused, surface }: {
   const { workspaceState: state, conversationActions: actions, conversationLifecycle: lifecycle,
     workspaceActions, runtimeActions, inputs } = surface;
   if (route.view === "chat") return <WorkbenchConversation {...{ route, visible, focused, surface }} />;
-  return <Suspense fallback={<StartupShell embedded surface={route.view === "automations" ? "automations" : "settings"} />}>
+  return <SurfaceVisibilityContext.Provider value={visible}><Suspense fallback={<StartupShell embedded surface={route.view === "automations" ? "automations" : "settings"} />}>
     {route.view === "inbox" ? <InboxPage returnKey={route.activeKey} onBack={actions.onBackToChat}
       onSelect={workspaceActions.onSelectChat} onSettings={() => actions.onOpenSettings("notifications")} /> :
       <SettingsView registerExitGuard={state.registerSettingsExitGuard} themePreference={state.themePreference}
@@ -20,5 +21,5 @@ export function WorkbenchRoute({ route, visible, focused, surface }: {
         onSettingsChange={state.setSettingsSnapshot} skills={state.skills} skillsLoading={state.skillsLoading} skillsError={state.skillsError}
         onStartAutomationChat={lifecycle.onStartAutomationChat} titleOverrides={state.sidebarState.title_overrides} sessions={state.topicSessions}
         onSectionChange={actions.onSettingsSectionChange} onLogout={inputs.onLogout} onRestart={runtimeActions.onRestart} isRestarting={state.isRestarting} />}
-  </Suspense>;
+  </Suspense></SurfaceVisibilityContext.Provider>;
 }

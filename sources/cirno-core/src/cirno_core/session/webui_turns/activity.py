@@ -12,6 +12,7 @@ from cirno_core.bus.outbound_events import (
     outbound_message_for_event,
 )
 from cirno_core.bus.queue import MessageBus
+from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno_core.session.transport_metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
@@ -31,6 +32,7 @@ class _WebsocketTurn:
     started_at: float
     turn_id: str | None
     transcript_persistence_failed: bool = False
+    history_generation: str | None = None
 
 
 _WEBSOCKET_ACTIVE_TURNS: dict[str, dict[str, _WebsocketTurn]] = {}
@@ -63,6 +65,19 @@ def websocket_turn_wall_started_at(chat_id: str) -> float | None:
 def websocket_turn_id(chat_id: str) -> str | None:
     """Return the WebUI identity of the active turn, when one was provided."""
     return _WEBSOCKET_TURN_IDS.get(chat_id)
+
+
+def websocket_turn_snapshot(
+    chat_id: str, *, history_generation: str | None = None,
+) -> tuple[float | None, str | None, bool]:
+    """Read one owner in the HTTP history lifetime, ignoring replaced histories."""
+    turns = tuple(_WEBSOCKET_ACTIVE_TURNS.get(chat_id, {}).values())
+    for turn in reversed(turns):
+        # Queued ingress can be registered before its history admission; it
+        # remains visible until admission supplies the destination generation.
+        if history_generation is None or turn.history_generation in (None, history_generation):
+            return turn.started_at, turn.turn_id, turn.transcript_persistence_failed
+    return None, None, False
 
 
 def register_queued_websocket_turn_if_idle(
@@ -169,8 +184,19 @@ async def publish_turn_run_status(
         current_turn_id = turn_id if isinstance(turn_id, str) and turn_id else None
         turns = _WEBSOCKET_ACTIVE_TURNS.setdefault(cid, {})
         # Re-registration makes this owner the latest projection.
-        turns.pop(owner, None)
-        turns[owner] = _WebsocketTurn(started_at=t0, turn_id=current_turn_id)
+        previous = turns.pop(owner, None)
+        generation = msg.metadata.get(HISTORY_GENERATION_METADATA_KEY)
+        history_generation = generation if isinstance(generation, str) and generation else None
+        turns[owner] = _WebsocketTurn(
+            started_at=t0, turn_id=current_turn_id,
+            history_generation=history_generation,
+            transcript_persistence_failed=bool(
+                previous is not None
+                and previous.turn_id == current_turn_id
+                and previous.history_generation == history_generation
+                and previous.transcript_persistence_failed
+            ),
+        )
         _sync_websocket_turn_projection(cid)
     await bus.publish_outbound(
         outbound_message_for_event(

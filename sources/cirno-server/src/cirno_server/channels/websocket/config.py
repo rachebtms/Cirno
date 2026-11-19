@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from pathlib import Path
 from typing import Self
 from urllib.parse import urlsplit, urlunsplit
@@ -64,7 +65,7 @@ class TrustedProxyAuthConfig(Base):
     @classmethod
     def validate_assertion_header(cls, value: str) -> str:
         value = value.strip()
-        if not value or any(char.isspace() or ord(char) < 0x21 for char in value):
+        if re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", value) is None:
             raise ValueError("assertion_header must be a valid HTTP header name")
         if _is_routing_assertion_header(value):
             raise ValueError(
@@ -90,7 +91,7 @@ class WebSocketConfig(Base):
 
     enabled: bool = True
     host: str = "127.0.0.1"
-    port: int = 8765
+    port: int = Field(default=8765, ge=0, le=65535)
     unix_socket_path: str = ""
     path: str = WEBSOCKET_PATH
     public_ws_url: str = ""
@@ -146,10 +147,17 @@ class WebSocketConfig(Base):
         value = value.strip()
         if not value:
             return ""
-        parsed = urlsplit(value)
+        try:
+            parsed = urlsplit(value)
+            hostname = parsed.hostname
+            # Accessing port validates its numeric form and range.
+            _ = parsed.port
+        except ValueError:
+            raise ValueError("public_ws_url must have a valid host and port") from None
         if (
             parsed.scheme not in {"ws", "wss"}
-            or not parsed.netloc
+            or not hostname
+            or any(char.isspace() or ord(char) < 0x21 for char in parsed.netloc)
             or parsed.username is not None
             or parsed.password is not None
             or parsed.query
@@ -176,11 +184,15 @@ class WebSocketConfig(Base):
 
     @model_validator(mode="after")
     def wildcard_host_requires_auth(self) -> Self:
-        if self.host not in ("0.0.0.0", "::"):
+        try:
+            wildcard = ipaddress.ip_address(self.host).is_unspecified
+        except ValueError:
+            wildcard = self.host == ""
+        if not wildcard:
             return self
         if self.browser_setup or self.token.strip() or self.token_issue_secret.strip() or self.trusted_proxy_auth is not None:
             return self
         raise ValueError(
-            "host is 0.0.0.0 (all interfaces) but neither browser_setup, token, token_issue_secret, "
+            "host binds all interfaces but neither browser_setup, token, token_issue_secret, "
             "nor trusted_proxy_auth is set — set one to prevent unauthenticated access"
         )

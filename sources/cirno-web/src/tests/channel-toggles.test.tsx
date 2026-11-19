@@ -71,6 +71,23 @@ describe("optimistic channel switches", () => {
   installSettingsViewTestHooks();
   afterEach(() => vi.restoreAllMocks());
 
+  it("shows a catalog stop failure receipt and keeps the live channel stoppable", async () => {
+    const failed = {
+      ...payload({ ...feature(true), enabled: false }),
+      requires_restart: true,
+      last_action: { ok: false, message: "Disable saved, but the runtime could not stop." },
+    };
+    requestMutationMock.mockResolvedValue(failed);
+    renderChannel(feature(true));
+    const toggle = await screen.findByRole("switch", { name: "Test Chat channel" });
+    fireEvent.click(toggle);
+    expect(await screen.findByText(failed.last_action.message)).toBeVisible();
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeEnabled();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(2));
+  });
+
   for (const surface of ["catalog", "setup", "instance"] as const) {
     it.each([
       [false, true],

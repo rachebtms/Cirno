@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {channelIsRunning, channelStatusLabel, channelToggleChecked} from "@/features/channels/model/status";
 import {channelSetup} from "@/features/channels/model/presentation";
 import type { CirnoFeatureInfo } from "@/lib/contracts/channels";
+import { channelGroups, defaultChannelFilter } from "@/features/channels/model/catalog";
 
 function feature(overrides: Partial<CirnoFeatureInfo>): CirnoFeatureInfo {
   return {
@@ -165,5 +166,15 @@ describe("channel runtime state", () => {
     expect(channelIsRunning(unknown)).toBe(false);
     expect(channelToggleChecked(unknown)).toBe(false);
     expect(channelStatusLabel(unknown, tx)).toBe("Not running");
+  });
+
+  it("retains a live adapter and its stop switch when its replacement has failed", () => {
+    const live = feature({ enabled: false, runtime_status: "failed", running: true });
+    expect(channelIsRunning(live)).toBe(true);
+    expect(channelToggleChecked(live)).toBe(true);
+    expect(channelStatusLabel(live, tx)).toBe("Failed");
+    expect(defaultChannelFilter([live])).toBe("enabled");
+    const translate = ((key: string) => key) as Parameters<typeof channelGroups>[3];
+    expect(channelGroups([live], "", "enabled", translate)[0]?.channels).toEqual([live]);
   });
 });

@@ -9,7 +9,7 @@ from typing import Any
 from cirno_server.channels.telegram.state import StreamBuf
 
 from . import limits
-from .formatting import split_telegram_markdown
+from .formatting import iter_telegram_markdown_fragments
 from .presence import TelegramPresence
 from .rich import TelegramRichMessages
 from .writer import TelegramStreamWriter
@@ -32,16 +32,24 @@ class TelegramStreamFinalizer:
         if message_thread_id := meta.get("message_thread_id"):
             thread_kwargs["message_thread_id"] = message_thread_id
 
+        if not buf.text.strip():
+            # Empty/whitespace streams created no preview. Retire their
+            # presence and buffer without submitting an empty Bot API message.
+            self.buffers.pop(chat_id, None)
+            return
         if buf.draft_id is not None:
-            chunks = split_telegram_markdown(buf.text, limits.TELEGRAM_RICH_MAX_LEN)
-            for index, text in enumerate(chunks):
+            chunks = iter_telegram_markdown_fragments(
+                buf.text, limits.TELEGRAM_RICH_MAX_LEN, line_continuation=buf.line_continuation,
+            )
+            for chunk in chunks:
                 if self.rich.rich_streaming_enabled() and await self.writer.write_rich(
                     int(chat_id),
                     buf,
-                    text,
+                    chunk.markdown,
                     thread_kwargs,
                 ):
-                    buf.text = "\n".join(chunks[index + 1 :])
+                    buf.text = chunk.remainder
+                    buf.line_continuation = chunk.remainder_line_continuation
                     continue
                 await self.writer.write_legacy(int(chat_id), buf, thread_kwargs)
                 break

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
+from cirno_vault.redaction import tool_history
 
 from cirno_core.agent.execution.context import TurnContext, TurnKind
 from cirno_core.bus.events import (
@@ -54,7 +55,7 @@ class TurnPersistence:
 
         def archive(messages, project_id):
             return MemoryRepository(home).archive_messages(
-                messages, session_key, project_id, preserve_system=True
+                tool_history(messages), session_key, project_id, preserve_system=True
             )
 
         released = await self.agent.sessions.state.release_archived_runtime(session_key, archive)
@@ -199,7 +200,9 @@ class TurnPersistence:
                 insert_at=insert_at,
             )
 
-        for message_index, message in enumerate(messages[skip:], start=skip):
+        # Keep the live request intact; persist only redacted credential observations.
+        durable_messages = tool_history(messages)
+        for message_index, message in enumerate(durable_messages[skip:], start=skip):
             if message_positions is not None:
                 message_positions[message_index] = len(session.messages)
             # Insert against the raw transcript index before filtering the
@@ -234,7 +237,7 @@ class TurnPersistence:
                     )
                     continue
                 fulfilled_tool_call_ids.add(tool_call_id_str)
-                # Preserve model-visible text for replay; redact only inline images.
+                # Credential results were hidden above; also redact inline images.
                 if isinstance(content, list):
                     filtered = self.sanitize_blocks(
                         cast(list[object], content),
@@ -379,6 +382,12 @@ class TurnPersistence:
                 boundary not in message_positions and not skip <= boundary <= len(messages)
             ):
                 raise ValueError("Checkpoint summary does not belong to the persisted transcript")
+        completed = payload.get("completed_tool_results")
+        if isinstance(completed, list):
+            assistant = payload.get("assistant_message")
+            rows = ([assistant] if isinstance(assistant, dict) else []) + completed
+            durable_rows = tool_history(rows)
+            payload = {**payload, "completed_tool_results": durable_rows[-len(completed):] if completed else []}
         session.metadata[RUNTIME_CHECKPOINT_KEY] = payload
         if messages is None:
             await self.agent.sessions.state.checkpoint_view(session, payload)

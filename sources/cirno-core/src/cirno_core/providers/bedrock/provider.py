@@ -17,6 +17,7 @@ from cirno_core.providers.bedrock.responses import parse_response, parse_stream_
 from cirno_core.providers.bedrock.stream import stream_events
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.images import prepare_message_images
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 class BedrockProvider(LLMProvider):
@@ -65,8 +66,17 @@ class BedrockProvider(LLMProvider):
 
     async def aclose(self) -> None:
         if self._owns_client:
-            for client in await asyncio.to_thread(self._take_clients):
-                await asyncio.to_thread(client.close)
+            async def settle() -> None:
+                errors: list[Exception] = []
+                for client in await asyncio.to_thread(self._take_clients):
+                    try:
+                        await asyncio.to_thread(client.close)
+                    except Exception as error:
+                        errors.append(error)
+                if errors:
+                    raise errors[0]
+
+            await shield_and_drain(settle())
 
     def _make_client(self, *, stream: bool = False) -> Any:
         try:
@@ -131,10 +141,10 @@ class BedrockProvider(LLMProvider):
                 default_model=self.default_model,
                 extra_body=self._extra_body,
             )
-            client = await asyncio.to_thread(self._get_client)
+            client = await shield_and_drain(asyncio.to_thread(self._get_client))
             response = cast(
                 dict[str, Any],
-                await asyncio.to_thread(client.converse, **kwargs),
+                await shield_and_drain(asyncio.to_thread(client.converse, **kwargs)),
             )
             return parse_response(response)
         except Exception as e:
@@ -172,7 +182,7 @@ class BedrockProvider(LLMProvider):
                 default_model=self.default_model,
                 extra_body=self._extra_body,
             )
-            client = await asyncio.to_thread(self._get_client, stream=True)
+            client = await shield_and_drain(asyncio.to_thread(self._get_client, stream=True))
             async with stream_events(
                 partial(client.converse_stream, **kwargs), idle_timeout_s=idle_timeout_s
             ) as events:

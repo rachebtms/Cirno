@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, cast
 
+from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model import Session
 from cirno_core.session.session_identity import webui_chat_id
@@ -20,6 +21,27 @@ from .contracts import (
 _RECOVERY_STATUSES = frozenset({"resuming", "awaiting_user", "recovered", "failed"})
 
 
+def goal_recovery_pending(metadata: Mapping[str, Any]) -> bool:
+    """Recovery owns scheduling while an accepted turn still needs settlement."""
+    if metadata.get(RUNTIME_CHECKPOINT_KEY) or metadata.get(PENDING_USER_TURN_KEY):
+        return True
+    recovery = recovery_state_from_metadata(metadata)
+    return bool(recovery and recovery["status"] in {"awaiting_user", "failed", "resuming"})
+
+
+def approval_followup_allowed(metadata: Mapping[str, Any], *, goal_id: str | None = None) -> bool:
+    """An operation decision does not undo a later pause, stop or Goal closure."""
+    goal = parse_goal_state(goal_state_raw(metadata))
+    if goal_id and (not goal or goal.get("goal_id") != goal_id
+                    or goal.get("status") in {"paused", "stopped", "completed", "cancelled"}):
+        return False
+    recovery = recovery_state_from_metadata(metadata)
+    return not (
+        recovery and recovery["status"] in {"awaiting_user", "failed"}
+        and recovery.get("reason") == "user_stopped"
+    )
+
+
 def recovery_state_from_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """Return a sanitized recovery state suitable for the WebSocket wire."""
     value = metadata.get(RECOVERY_METADATA_KEY) if metadata else None
@@ -28,14 +50,19 @@ def recovery_state_from_metadata(metadata: Mapping[str, Any] | None) -> dict[str
     state = cast(dict[str, Any], value)
     status = state.get("status")
     recovery_id = state.get("recovery_id")
-    if status not in _RECOVERY_STATUSES or not isinstance(recovery_id, str):
+    if (
+        not isinstance(status, str)
+        or status not in _RECOVERY_STATUSES
+        or not isinstance(recovery_id, str)
+        or not recovery_id
+    ):
         return None
     payload: dict[str, Any] = {"status": status, "recovery_id": recovery_id}
     reason = state.get("reason")
     if isinstance(reason, str) and reason:
         payload["reason"] = reason
     attempts = state.get("attempts")
-    if isinstance(attempts, int) and attempts >= 0:
+    if isinstance(attempts, int) and not isinstance(attempts, bool) and attempts >= 0:
         payload["attempts"] = attempts
     can_continue = state.get("can_continue")
     if isinstance(can_continue, bool):
@@ -90,7 +117,7 @@ def resume_message_count(session: Session) -> int | None:
     if value is None:
         return None
     count = value.get("resume_message_count")
-    return count if isinstance(count, int) and count >= 0 else None
+    return count if isinstance(count, int) and not isinstance(count, bool) and count >= 0 else None
 
 
 def has_saved_continuation_context(session: Session) -> bool:

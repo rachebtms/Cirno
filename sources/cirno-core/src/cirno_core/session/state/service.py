@@ -15,8 +15,8 @@ from cirno_core.session.types import SessionTypes
 
 from .access import SessionAccess
 from .branches import SessionBranches
-from .history import SessionHistory
 from .handles import SessionHandles
+from .history import SessionHistory
 from .inbox import SessionInbox
 from .lifecycle import SessionLifecycle
 from .metadata import SessionMetadata
@@ -195,8 +195,10 @@ class SessionState:
     async def queue_followup(self, key: str, message: InboundMessage) -> str | None:
         return await self.inbox.queue_followup(key, message)
 
-    async def acknowledge_followups(self, key: str, identifiers: Sequence[str]) -> None:
-        return await self.inbox.acknowledge_followups(key, identifiers)
+    async def acknowledge_followups(
+        self, key: str, identifiers: Sequence[str], *, expected_generation: str | None = None,
+    ) -> None:
+        return await self.inbox.acknowledge_followups(key, identifiers, expected_generation=expected_generation)
 
     async def release_archived_runtime(self, key: str, archive: ArchiveWriter) -> int:
         """Release only committed archived input, never transient or privacy-disabled state."""
@@ -263,8 +265,12 @@ class SessionState:
             history_projection=history_projection,
         )
 
-    async def delete(self, key: str, *, expected_generation: str | None = None) -> bool:
-        return await self.lifecycle.delete(key, expected_generation=expected_generation)
+    async def delete(
+        self, key: str, *, expected_generation: str | None = None, only_if_unused: bool = False,
+    ) -> bool:
+        return await self.lifecycle.delete(
+            key, expected_generation=expected_generation, only_if_unused=only_if_unused,
+        )
 
     async def update_metadata(
         self,

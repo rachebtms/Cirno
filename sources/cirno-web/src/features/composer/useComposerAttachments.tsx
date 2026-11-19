@@ -128,8 +128,9 @@ export function useComposerAttachments({
   const { rawSelection, replace: replaceMentionInput } = mentionInput;
   const onPaste = useCallback(
     (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      onAttachmentPaste(event);
+      const attached = onAttachmentPaste(event);
       if (
+        attached ||
         event.defaultPrevented ||
         interactionDisabled ||
         isUserShell ||

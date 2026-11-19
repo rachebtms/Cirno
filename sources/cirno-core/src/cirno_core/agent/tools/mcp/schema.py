@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import urllib.parse
+from copy import deepcopy
 from typing import Any, cast
 
 from loguru import logger
@@ -95,7 +96,21 @@ def _rewrite_local_schema_refs(schema: dict[str, Any]) -> dict[str, Any]:
             if name is not None:
                 rewritten["$ref"] = f"#/$defs/{name}"
 
-        return {key: rewrite(item) for key, item in rewritten.items()}
+        result: dict[str, Any] = {}
+        for key, item in rewritten.items():
+            if key in {"properties", "patternProperties", "$defs", "definitions", "dependentSchemas", "dependencies"} and isinstance(item, dict):
+                result[key] = {name: rewrite(child) for name, child in item.items()}
+            elif key in {
+                "items", "additionalItems", "additionalProperties", "unevaluatedItems",
+                "unevaluatedProperties", "propertyNames", "contains", "not", "if", "then",
+                "else", "allOf", "anyOf", "oneOf", "prefixItems", "contentSchema",
+            }:
+                result[key] = rewrite(item)
+            else:
+                # Defaults, examples, enum/const values and extension metadata
+                # are instance data, even when they contain a literal $ref key.
+                result[key] = deepcopy(item)
+        return result
 
     result = cast(dict[str, Any], rewrite(schema))
     if generated_defs:

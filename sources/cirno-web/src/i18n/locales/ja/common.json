@@ -168,6 +168,10 @@
           "label": "ウェブアクセス",
           "help": "ウェブ検索とページ取得を許可します。"
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "ページ応答の最大サイズ（MiB）",
+          "help": "ページ、画像、Jina 応答の通知サイズまたはデコード後のサイズがこの値を超えると読み取りを停止します。返されるテキストの長さとは別の制限です。再起動後に適用されます。"
+        },
         "tools_cli_apps_enable": {
           "label": "CLI アプリ",
           "help": "エージェントによる CLI アプリの管理と実行を許可します。"
@@ -1260,7 +1264,11 @@
         "supabase": "プロジェクトを確認・管理します。"
       },
       "editConfig": "MCP 設定を編集",
-      "configObjectRequired": "MCP 設定は JSON オブジェクトである必要があります。"
+      "configObjectRequired": "MCP 設定は JSON オブジェクトである必要があります。",
+      "changePending": "別の MCP 設定変更を処理中です。完了してから再度保存してください。",
+      "cleanupPending": "削除済みの MCP サーバー {{name}} に未削除のデータがあります。",
+      "retryCleanup": "削除を再試行",
+      "statusAuthorizationRequired": "ログインが必要"
     },
     "legal": {
       "thirdPartyBrands": "製品名、ロゴ、ブランドはそれぞれの所有者に帰属します。使用は識別のみを目的とし、承認を意味するものではありません。"
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "これらの会話が会話一覧に再表示されます。"
   },
   "deleteConfirm": {
+    "notConfirmed": "会話の削除を確認できませんでした。もう一度お試しください。",
     "title": "このチャットを削除しますか？",
     "titleMany": "{{count}} 件の会話を削除しますか？",
     "description": "この操作は元に戻せません。",

@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import get_config_path
 from cirno_core.config.network import NetworkConfig
 from cirno_core.processes.sessions import ExecSessionManager
 
@@ -108,3 +110,6 @@ class ToolContext:
     goal_continuation_limit: int = 0
     runtime_control: RuntimeControl | None = None
     conversation_control: ConversationControl | None = None
+    source_config_path: Path | None = None
+    home_path: Path = field(default_factory=get_home_path)
+    instance_config_path: Path = field(default_factory=get_config_path)

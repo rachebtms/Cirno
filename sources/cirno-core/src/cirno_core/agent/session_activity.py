@@ -6,8 +6,8 @@ from copy import deepcopy
 from typing import Any
 
 from cirno_core.agent.hook import AgentHook, AgentHookContext
-from cirno_core.bus.outbound_events import ProgressEvent
 from cirno_core.bus.agent_events import AgentEvent
+from cirno_core.bus.outbound_events import ProgressEvent
 
 
 class SessionActivity(AgentHook):
@@ -63,8 +63,19 @@ class SessionActivity(AgentHook):
 
     @staticmethod
     def _fields(events: list[ProgressEvent]) -> dict[str, Any]:
-        tools = list({tool["call_id"]: tool for event in events
-                      for tool in event.tool_events or []}.values())
+        # Match the live client's phase ordering: delayed starts cannot replace
+        # a completed call, and a partial finish retains its start metadata.
+        phase_rank = {"start": 1, "end": 2, "error": 3}
+        tools_by_id: dict[str, dict[str, Any]] = {}
+        for event in events:
+            for tool in event.tool_events or []:
+                key = tool["call_id"]
+                existing = tools_by_id.get(key)
+                if existing is None:
+                    tools_by_id[key] = tool
+                elif phase_rank.get(tool.get("phase"), 0) >= phase_rank.get(existing.get("phase"), 0):
+                    tools_by_id[key] = {**existing, **tool}
+        tools = list(tools_by_id.values())
         edits = list({(edit["call_id"], edit["path"]): edit for event in events
                       for edit in event.file_edit_events or []}.values())
         return {key: deepcopy(value) for key, value in (

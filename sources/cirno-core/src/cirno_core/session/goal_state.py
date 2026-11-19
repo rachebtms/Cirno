@@ -8,7 +8,7 @@ importing tool implementations.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, cast
 
 GOAL_STATE_KEY = "goal_state"
@@ -21,6 +21,22 @@ GOAL_COMPLETION_INSTRUCTION = (
     "In PTC, use tools.goals.update(action='complete'). A normal reply does not finish the Goal. "
     "Use the same tool with action='wait' and wake_after_seconds when no work is currently actionable."
 )
+
+
+def goal_wait_deadline(wake_after_seconds: object) -> str:
+    """Validate a wait before control paths interrupt any current execution."""
+    if (
+        isinstance(wake_after_seconds, bool)
+        or not isinstance(wake_after_seconds, int)
+        or wake_after_seconds < 1
+    ):
+        raise ValueError("wait requires a positive integer wake_after_seconds.")
+    try:
+        return (
+            datetime.now(timezone.utc) + timedelta(seconds=wake_after_seconds)
+        ).isoformat()
+    except OverflowError:
+        raise ValueError("wake_after_seconds exceeds the supported date range.") from None
 
 
 def _session_goal_raw(metadata: Mapping[str, Any] | None) -> Any:
@@ -98,6 +114,16 @@ def goal_resume_error(goal: Mapping[str, Any]) -> str | None:
         "Only a paused, stopped, waiting or blocked Goal can be resumed. "
         f"Current Goal id={goal.get('goal_id', '(none)')}, status={goal.get('status', '(none)')}."
     )
+
+
+def pause_goal_at_limit(goal: Mapping[str, Any]) -> dict[str, Any]:
+    """Record the limit separately from the worker's verified progress."""
+    paused = {**goal, "status": "paused", "pause_reason": "continuation_limit",
+              "paused_at": datetime.now(timezone.utc).isoformat()}
+    paused.pop("wake_at", None)
+    if not paused.get("recap"):
+        paused["recap"] = "Automatic continuation limit reached."
+    return paused
 
 
 def goal_state_runtime_lines(metadata: Mapping[str, Any] | None) -> list[str]:

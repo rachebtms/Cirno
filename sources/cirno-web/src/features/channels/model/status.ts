@@ -1,15 +1,15 @@
 import type { CirnoFeatureInfo } from "@/lib/contracts/channels";
 export function channelIsRunning(
-  feature: Pick<CirnoFeatureInfo, "runtime_status">,
+  feature: Pick<CirnoFeatureInfo, "runtime_status" | "running">,
 ): boolean {
-  return feature.runtime_status === "running";
+  return feature.running ?? (feature.runtime_status === "running");
 }
 
 export function channelToggleChecked(
-  feature: Pick<CirnoFeatureInfo, "runtime_status">,
+  feature: Pick<CirnoFeatureInfo, "runtime_status" | "running">,
 ): boolean {
   return (
-    feature.runtime_status === "running" ||
+    channelIsRunning(feature) ||
     feature.runtime_status === "starting"
   );
 }

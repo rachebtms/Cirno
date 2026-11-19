@@ -7,6 +7,7 @@ import json
 from cirno_core.config.models import ModelAPIConfig, ModelPresetConfig
 from cirno_core.config.schema import Config
 from cirno_core.providers.routing import resolve_model_api
+
 from cirno_server.webui.settings import requests as request_settings
 from cirno_server.webui.settings.contracts import (
     QueryParams,
@@ -28,6 +29,7 @@ def _preset_with_request_updates(
         snake: request_settings.restore_request_secrets(
             request_settings.parse_request_object(query, snake, camel),
             getattr(preset, snake),
+            case_insensitive_keys=snake == "extra_headers",
         )
         for snake, camel in (
             ("extra_headers", "extraHeaders"),

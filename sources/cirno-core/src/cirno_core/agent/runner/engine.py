@@ -49,6 +49,7 @@ from cirno_core.agent.runner.usage import (
 )
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.execution import execute_tool_calls
+from cirno_core.agent.tools.mcp.activity import mcp_tool_activity
 from cirno_core.agent.tools.message import (
     current_conversation_has_delivery,
 )
@@ -359,6 +360,7 @@ class AgentRunner:
                     },
                 )
 
+                context.tool_activity = mcp_tool_activity(spec.tools, context.tool_calls)
                 await hook.before_execute_tools(context)
                 tool_checkpoints = ToolResultCheckpoints(
                     spec, request_state, response, assistant_message, iteration,

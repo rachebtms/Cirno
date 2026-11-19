@@ -1,27 +1,45 @@
 """Rename the preview router identity with staged, resumable instance replacements."""
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-from cirno_server.maintenance.migrations.plan import MigrationPlan
-
 from cirno_core.session.keys import ROUTER_CHAT_ID, ROUTER_SESSION_KEY
+
+from cirno_server.maintenance.migrations.plan import MigrationPlan
 
 OLD_KEYS = ("websocket:global", "websocket:cirno")
 NEW = ROUTER_SESSION_KEY
 OLD_HANDLES = tuple("handle_" + hashlib.sha256(key.encode()).hexdigest()[:32] for key in OLD_KEYS)
 NEW_HANDLE = "handle_" + hashlib.sha256(NEW.encode()).hexdigest()[:32]
 _REFERENCE_FIELDS = {"key", "session", "source", "target", "delegated_by", "parent", "returnKey", "activeKey"}
+_PAYLOAD_FIELDS = {
+    "content", "text", "body", "arguments", "result", "results", "output",
+    "stdout", "stderr", "error", "quote", "evidence", "reasoning_content",
+    "thinking_blocks", "provider_state",
+}
+# A records.body column is a structured envelope (e.g. instance records and
+# memory records), whereas its nested body/content fields contain user payload.
+_PAYLOAD_COLUMNS = _PAYLOAD_FIELDS - {"body"}
 
 
 def remap(value, field=""):
     """Change structured references, leaving prose, evidence and tool output intact."""
+    if field in _PAYLOAD_FIELDS:
+        return value
     if isinstance(value, dict):
-        result = {NEW if key in OLD_KEYS else key: remap(item, key) for key, item in value.items() if key != "is_global"}
+        result = {}
+        for key, item in value.items():
+            if key == "is_global":
+                continue
+            target = NEW if key in OLD_KEYS else key
+            revised = remap(item, key)
+            if target in result and json.dumps(result[target], sort_keys=True) != json.dumps(revised, sort_keys=True):
+                raise ValueError("Conflicting Router identity references in a structured mapping")
+            result[target] = revised
         if value.get("is_global") is True:
             result["role"] = "router"
         return result
@@ -56,7 +74,7 @@ def _rewrite_database(path: Path) -> bool:
             columns = list(db.execute(f"PRAGMA table_info({quoted})"))
             for column in columns:
                 name, kind = column[1], column[2].upper()
-                if "TEXT" not in kind:
+                if "TEXT" not in kind or name in _PAYLOAD_COLUMNS:
                     continue
                 field = '"' + name.replace('"', '""') + '"'
                 needles = (*OLD_KEYS, *OLD_HANDLES, '"cirno"', "is_global", '"global"')

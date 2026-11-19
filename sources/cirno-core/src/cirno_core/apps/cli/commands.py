@@ -17,6 +17,7 @@ from loguru import logger
 
 from cirno_core.apps.cli import branding, command_support, contracts
 from cirno_core.apps.cli import output as cli_output
+from cirno_core.apps.cli.process import run_cli
 from cirno_core.security.workspace_policy import is_path_within
 from cirno_core.utils.tool_environment import TOOL_ENV_KEYS
 
@@ -26,6 +27,12 @@ _SAFE_NPM_DIR_RE = re.compile(r"^[a-z0-9._-]+$", re.IGNORECASE)
 class CliCommands:
     def __init__(self, runtime: contracts.CliAppsRuntimeConfig):
         self.runtime = runtime
+
+    def which(self, command: str) -> str | None:
+        """Discover commands on the same PATH used to execute them."""
+        if os.environ.get("CIRNO_SHELL_VENV"):
+            return shutil.which(command, path=self._subprocess_env()["PATH"])
+        return shutil.which(command)
 
     def _strategy(self, app: dict[str, Any]) -> str:
         package_manager = str(app.get("package_manager") or "").lower()
@@ -109,7 +116,7 @@ class CliCommands:
         return [*prefix, package]
 
     def _npm_argv(self, app: dict[str, Any], action: str) -> list[str]:
-        npm = shutil.which("npm")
+        npm = self.which("npm")
         if not npm:
             raise contracts.CliAppError("npm is not installed")
         package = str(app.get("npm_package") or "")
@@ -118,11 +125,13 @@ class CliCommands:
         if action == "install":
             return [npm, "install", "-g", package]
         if action == "update":
+            name, separator, _ = package.rpartition("@")
+            package = name if separator and name else package
             return [npm, "install", "-g", package + "@latest"]
         return [npm, "uninstall", "-g", package]
 
     def _cleanup_stale_npm_install(self, app: dict[str, Any]) -> bool:
-        npm = shutil.which("npm")
+        npm = self.which("npm")
         package = str(app.get("npm_package") or "").strip()
         if not npm or not package or "/" in package or _SAFE_NPM_DIR_RE.match(package) is None:
             return False
@@ -223,19 +232,19 @@ class CliCommands:
                 "PATH": os.environ.get("PATH", f"{sr}\\system32;{sr}"),
                 "PYTHONUNBUFFERED": "1",
             }
-            return env
-        env = {
-            "HOME": os.environ.get("HOME", "/tmp"),
-            "LANG": os.environ.get("LANG", "C.UTF-8"),
-            "TERM": os.environ.get("TERM", "dumb"),
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "PYTHONUNBUFFERED": "1",
-        }
+        else:
+            env = {
+                "HOME": os.environ.get("HOME", "/tmp"),
+                "LANG": os.environ.get("LANG", "C.UTF-8"),
+                "TERM": os.environ.get("TERM", "dumb"),
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "PYTHONUNBUFFERED": "1",
+            }
         env.update({key: os.environ[key] for key in TOOL_ENV_KEYS if key in os.environ})
         venv = os.environ.get("CIRNO_SHELL_VENV")
         if venv:
             env["VIRTUAL_ENV"] = venv
-            env["PATH"] = str(Path(venv) / "bin") + os.pathsep + env["PATH"]
+            env["PATH"] = str(Path(venv) / ("Scripts" if sys.platform == "win32" else "bin")) + os.pathsep + env["PATH"]
         # Desktop CLIs use this directory to locate the running application.
         if "XDG_RUNTIME_DIR" in os.environ:
             env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
@@ -244,14 +253,8 @@ class CliCommands:
     def _run_argv(self, argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
         command = subprocess.list2cmdline(argv)
         logger.info("CLI Apps: running {}", command)
-        result = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            env=self._subprocess_env(),
+        result = run_cli(
+            argv, cwd=Path.cwd(), timeout=timeout, env=self._subprocess_env(),
         )
         logger.info("CLI Apps: command exited with code {}: {}", result.returncode, command)
         output = (result.stderr or result.stdout or "").strip()

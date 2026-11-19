@@ -15,6 +15,76 @@ from cirno_server.webui.settings.runtime import (
 from cirno_server.webui.settings.services import WebUISettingsServices
 
 
+def test_fetch_response_budget_roundtrip_and_rejection_preserve_file(tmp_path):
+    config_path = tmp_path / "config.json"
+    save_config(Config(), config_path)
+    key = "tools.web.fetch.max_response_mb"
+    assert runtime_config_payload(load_config(config_path))[key] == 16
+    result = update_runtime_config_settings({key: 32}, config_path=config_path)
+    assert result["runtime_config"][key] == 32
+    assert load_config(config_path).tools.web.fetch.max_response_mb == 32
+    before = config_path.read_bytes()
+    for invalid in (0, -1, True, 1.5):
+        with pytest.raises(WebUISettingsError):
+            update_runtime_config_settings({key: invalid}, config_path=config_path)
+        assert config_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("consumer", [
+    {"tools": {"web": {"useProxy": True}}},
+    {"providers": {"openai": {"useProxy": True}}},
+    {"providers": {"private_lab": {"useProxy": True}}},
+    {"providers": {"openai_codex": {"useProxy": True}}},
+    {"tools": {"mcpServers": {"remote": {"url": "https://mcp.example", "useProxy": True}}}},
+    {"channels": {"telegram": {"enabled": True, "useProxy": True}}},
+    {"channels": {"telegram": {"enabled": True, "use_proxy": True}}},
+])
+def test_shared_proxy_cannot_be_removed_while_a_consumer_requires_it(consumer):
+    config = Config.model_validate({"network": {"proxy": "http://proxy.example:7890"}, **consumer})
+    before = config.model_dump()
+    with pytest.raises(WebUISettingsError, match="proxy"):
+        update_runtime_config(config, {"network.proxy": None})
+    assert config.model_dump() == before
+
+
+def test_shared_proxy_removal_failure_preserves_the_saved_configuration(tmp_path):
+    path = tmp_path / "config.json"
+    save_config(Config.model_validate({
+        "network": {"proxy": "http://proxy.example:7890"},
+        "tools": {"web": {"useProxy": True}},
+    }), path)
+    before = path.read_bytes()
+    with pytest.raises(WebUISettingsError, match="proxy"):
+        update_runtime_config_settings({"network.proxy": ""}, config_path=path)
+    assert path.read_bytes() == before
+
+
+def test_shared_proxy_can_be_removed_with_its_final_consumer_disabled():
+    config = Config.model_validate({
+        "network": {"proxy": "http://proxy.example:7890"},
+        "tools": {"web": {"useProxy": True}},
+    })
+    assert update_runtime_config(config, {"network.proxy": None, "tools.web.use_proxy": False})
+    assert config.network.proxy is None
+    assert config.tools.web.use_proxy is False
+
+
+def test_shared_proxy_reference_must_resolve_for_configured_consumers(monkeypatch):
+    variable = "CIRNO_AUDIT_SHARED_PROXY"
+    monkeypatch.delenv(variable, raising=False)
+    config = Config.model_validate({
+        "network": {"proxy": "http://proxy.example:7890"},
+        "providers": {"private_lab": {"useProxy": True}},
+    })
+    reference = "${" + variable + "}"
+    with pytest.raises(WebUISettingsError, match="environment variable"):
+        update_runtime_config(config, {"network.proxy": reference})
+    assert config.network.proxy == "http://proxy.example:7890"
+    monkeypatch.setenv(variable, "http://new-proxy.example:7891")
+    assert update_runtime_config(config, {"network.proxy": reference})
+    assert config.network.proxy == reference
+
+
 def test_shared_proxy_roundtrip_preserves_independent_feature_switches(tmp_path):
     path = tmp_path / "config.json"
     config = Config()
@@ -38,7 +108,7 @@ def test_enabling_web_proxy_without_an_address_preserves_config(tmp_path):
     path = tmp_path / "config.json"
     save_config(Config(), path)
     before = path.read_bytes()
-    with pytest.raises(WebUISettingsError, match="Advanced"):
+    with pytest.raises(WebUISettingsError, match="Network & retries"):
         update_runtime_config_settings({"tools.web.use_proxy": True}, config_path=path)
     assert path.read_bytes() == before
 
@@ -330,7 +400,7 @@ def test_setup_is_not_an_application_setting_or_saved_configuration(tmp_path):
 
 
 def test_fixed_context_settings_are_saved_without_requiring_restart(tmp_path):
-    from cirno_core.config.loader import save_config, load_config
+    from cirno_core.config.loader import load_config, save_config
     path = tmp_path / 'config.json'
     save_config(Config(), path)
     payload = update_runtime_config_settings({

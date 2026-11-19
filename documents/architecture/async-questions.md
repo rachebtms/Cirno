@@ -20,6 +20,21 @@ Replies carry the original question and a hidden correlation marker through the 
 
 Question payloads use `_agent_ui` in the stored assistant activity stream. Browser history projection hides their inline cards and builds the composer queue from questions and accepted user replies. Refreshes and other connected clients can recover the accepted answer state. Accepted answers mark the corresponding Inbox item answered and read. Unsent drafts do not survive a page reload. The feature uses conversation storage rather than a separate question database or waiting worker.
 
+A question quotation alone, a malformed quote or an empty answer does not resolve
+the question. Browser history and the Inbox both require non-empty answer text.
+Inbox answers retain the originating conversation and generation. If editing a
+later message created a new generation, a question retained in its durable
+display history can still be answered and its pending Inbox record is rebound
+to that generation. This uses a targeted history lookup without loading tool
+bodies or scheduling model work. A question absent after clearing history cannot
+be resolved by carrying its old quote into the replacement conversation.
+
+Local answer acknowledgements belong to the received history that submitted
+them. Resetting or editing that history discards the acknowledgement bridge and
+ignores late acknowledgements from the previous owner. The question card resets
+its pending send state, while the main composer stays mounted with its unsent
+message. Ordinary refreshes and paging keep the same owner.
+
 Router and Worker conversations can both ask questions. A question does not count as delivery of a final reply. Telegram displays question text and accepts ordinary quoted chat replies. Use the authenticated Web UI to answer a linked Inbox question and update its queue state. The sequential question composer and queue controls are Web-only.
 
 ## Withdrawing obsolete questions

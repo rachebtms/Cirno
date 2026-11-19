@@ -6,6 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING, Any, Callable
 
 from cirno_core.runtime.admission import RuntimeAdmission
+from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.webui.settings.contracts import (
     SettingsRequest,
     SettingsRouteResult,
@@ -18,7 +20,11 @@ if TYPE_CHECKING:
     )
 
 
-from cirno_server.webui.settings.connection_contracts import ConnectionSettingsOperations
+from cirno_server.webui.settings.connection_contracts import (
+    CONNECTION_CONFIG_MUTATIONS,
+    ConnectionSettingsOperations,
+    SettingsOperation,
+)
 
 
 class ConnectionSettingsHandler:
@@ -55,6 +61,16 @@ class ConnectionSettingsHandler:
         if self.settings.refresh_runtime_config is not None:
             self.settings.refresh_runtime_config()
 
+    async def _mutate_and_refresh(
+        self, operation: SettingsOperation, request: SettingsRequest,
+    ) -> dict[str, Any]:
+        async def settle() -> dict[str, Any]:
+            payload = await asyncio.to_thread(self.settings.mutate, operation, request.query)
+            self._refresh_runtime_config()
+            return payload
+
+        return await shield_and_drain(settle())
+
     async def handle(
         self,
         action: str,
@@ -68,51 +84,14 @@ class ConnectionSettingsHandler:
                     lambda: self.settings.oauth_flows.has_pending_work,
                 )
         try:
-            if action == "agent-update":
-                payload = await asyncio.to_thread(
-                    self.settings.mutate,
-                    operations.update_agent,
-                    request.query,
-                )
-                self._refresh_runtime_config()
+            operation_name = CONNECTION_CONFIG_MUTATIONS.get(action)
+            if operation_name is not None:
+                payload = await self._mutate_and_refresh(getattr(operations, operation_name), request)
                 return SettingsRouteResult.success(
                     payload,
                     decorate_restart=True,
-                    restart_section="runtime",
+                    restart_section="runtime" if action == "agent-update" else None,
                 )
-
-            if action == "model-update":
-                payload = await asyncio.to_thread(
-                    self.settings.mutate,
-                    operations.update_model,
-                    request.query,
-                )
-                self._refresh_runtime_config()
-                return SettingsRouteResult.success(payload, decorate_restart=True)
-
-            mutation = {
-                "model-create": operations.create_model,
-                "model-delete": operations.delete_model,
-                "call-order-update": operations.update_call_order,
-                "provider-create": operations.create_provider,
-            }.get(action)
-            if mutation is not None:
-                payload = await asyncio.to_thread(
-                    self.settings.mutate,
-                    mutation,
-                    request.query,
-                )
-                self._refresh_runtime_config()
-                return SettingsRouteResult.success(payload, decorate_restart=True)
-
-            if action == "provider-update":
-                payload = await asyncio.to_thread(
-                    self.settings.mutate,
-                    operations.update_provider,
-                    request.query,
-                )
-                self._refresh_runtime_config()
-                return SettingsRouteResult.success(payload, decorate_restart=True)
 
             if action == "model-api":
                 payload = await asyncio.to_thread(

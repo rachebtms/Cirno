@@ -12,6 +12,11 @@ from urllib.parse import quote
 
 from cirno_core.runtime.admission import RuntimeMaintenanceError
 from cirno_core.session.manager import SessionManager
+from loguru import logger
+from websockets.datastructures import Headers
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.access_tokens import ServerTokenStore
 from cirno_server.webui.http_utils import combined_list_header as _combined_list_header
 from cirno_server.webui.http_utils import http_error as _http_error
@@ -25,10 +30,6 @@ from cirno_server.webui.http_utils import parse_request_path as _parse_request_p
 from cirno_server.webui.ingress_policy import WebUIIngressPolicy
 from cirno_server.webui.media_gateway import WebUIMediaServer
 from cirno_server.webui.workspaces import WebUIWorkspaceController
-from loguru import logger
-from websockets.datastructures import Headers
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 from .assets import AssetsRoutes
 from .automations import AutomationsRoutes
@@ -93,17 +94,16 @@ class ServerHTTPHandler:
         self.workspaces = workspaces
         from cirno_server.webui.workbench_api import WorkbenchAPI
 
-        self.workbench = WorkbenchAPI(workspaces, session_manager)
+        self.workbench = WorkbenchAPI(workspaces, session_manager, source_config_path=settings.config.path)
         self.settings = settings
         from cirno_core.profile.preferences import PreferencesRepository
 
         self.preferences = PreferencesRepository(
             settings.config.path.parent / "state" / "preferences.sqlite3"
         )
+        from cirno_server.webui.auth.router_identity import RouterIdentity
         from cirno_server.webui.auth.routes import BrowserAuth
         from cirno_server.webui.auth.store import AccountStore
-
-        from cirno_server.webui.auth.router_identity import RouterIdentity
         self.auth = BrowserAuth(
             AccountStore(settings.config.path.parent / "state" / "webui-auth.sqlite3"),
             enabled=config.browser_setup,
@@ -201,6 +201,11 @@ class ServerHTTPHandler:
         """Run one explicitly allowlisted mutation for an authenticated WebUI socket."""
         if action == "connection.check":
             return _http_json_response({"connected": True})
+        if action in {"preferences.read", "preferences.update"}:
+            operation = "read" if action == "preferences.read" else "update"
+            if payload.get("operation") is not None and payload["operation"] != operation:
+                return _http_error(400, "Preference operation does not match the requested action")
+            payload = {**payload, "operation": operation}
         path = self._webui_mutation_path(action, payload)
         if isinstance(path, Response):
             return path
@@ -337,6 +342,7 @@ class ServerHTTPHandler:
                 result = await instance_action(
                     _mutation_payload(request) or {}, sessions=self.session_manager, bus=self.bus,
                     config_path=self.settings_routes.settings.config.path,
+                    home_path=self.settings_routes.settings.home_path,
                 )
             except (ValueError, KeyError, RuntimeError, OSError) as exc:
                 return _http_error(400, str(exc))
@@ -410,5 +416,6 @@ if TYPE_CHECKING:
     from cirno_core.bus.queue import MessageBus
     from cirno_core.cron.service import CronService
     from cirno_core.triggers.local_store import LocalTriggerStore
+
     from cirno_server.channels.websocket.config import WebSocketConfig
     from cirno_server.webui.settings.services import WebUISettingsServices

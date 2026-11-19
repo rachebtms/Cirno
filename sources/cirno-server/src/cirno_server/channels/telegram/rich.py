@@ -6,14 +6,16 @@ import time
 from dataclasses import dataclass
 from typing import Any, cast
 
-from cirno_server.channels.telegram.config import TelegramConfig
 from telegram import (
     InlineKeyboardMarkup,
     ReplyParameters,
 )
 from telegram.error import BadRequest
 
+from cirno_server.channels.telegram.config import TelegramConfig
+
 from .api import TelegramAPI
+from .formatting import rich_markdown_continuation
 
 
 @dataclass
@@ -39,8 +41,8 @@ class TelegramRichMessages:
         return self.config.rich_messages and not self.disabled
 
     @staticmethod
-    def rich_message_payload(content: str) -> dict[str, str]:
-        return {"markdown": content}
+    def rich_message_payload(content: str, *, line_continuation: bool = False) -> dict[str, str]:
+        return {"markdown": rich_markdown_continuation(content) if line_continuation else content}
 
     def mark_rich_unavailable(self, exc: Exception, operation: str) -> bool:
         if not self.is_rich_capability_error(exc):
@@ -56,6 +58,7 @@ class TelegramRichMessages:
         reply_params: ReplyParameters | dict[str, int | bool] | None = None,
         thread_kwargs: dict[str, int] | None = None,
         reply_markup: InlineKeyboardMarkup | None = None,
+        *, line_continuation: bool = False,
     ) -> bool:
         """Attempt sendRichMessage (Bot API 10.1). Returns True on success."""
         if not self.api.connection.app:
@@ -63,7 +66,7 @@ class TelegramRichMessages:
 
         payload: dict[str, Any] = {
             "chat_id": chat_id,
-            "rich_message": self.rich_message_payload(content),
+            "rich_message": self.rich_message_payload(content, line_continuation=line_continuation),
         }
         if reply_params is not None:
             # sendRichMessage uses reply_parameters (object), not reply_to_message_id.
@@ -110,13 +113,14 @@ class TelegramRichMessages:
         draft_id: int,
         content: str,
         thread_kwargs: dict[str, int],
+        *, line_continuation: bool = False,
     ) -> bool:
         """Create or update the ephemeral rich preview for a private chat."""
         app = self.api.connection.require_app()
         payload: dict[str, Any] = {
             "chat_id": chat_id,
             "draft_id": draft_id,
-            "rich_message": self.rich_message_payload(content),
+            "rich_message": self.rich_message_payload(content, line_continuation=line_continuation),
             **thread_kwargs,
         }
         try:

@@ -109,7 +109,7 @@ def _zone(timezone_name: str | None) -> timezone | ZoneInfo:
         return timezone.utc
     try:
         return ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
         return timezone.utc
 
 

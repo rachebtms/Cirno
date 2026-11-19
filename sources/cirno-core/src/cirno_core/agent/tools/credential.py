@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from pathlib import Path
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.schema import (
@@ -10,7 +11,10 @@ from cirno_core.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from cirno_core.config.loader import get_config_path
 from cirno_core.credentials.service import Credentials
+from cirno_core.storage.instance import InstanceData
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 @tool_parameters(
@@ -36,6 +40,14 @@ from cirno_core.credentials.service import Credentials
     )
 )
 class CredentialTool(Tool):
+    def __init__(self, *, source_config_path: Path | None = None):
+        source = source_config_path if source_config_path is not None else get_config_path()
+        self.state_dir = Path(source).expanduser().resolve(strict=False).parent / "state"
+
+    @classmethod
+    def create(cls, ctx):
+        return cls(source_config_path=ctx.source_config_path or ctx.instance_config_path)
+
     @property
     def name(self):
         return "credential"
@@ -50,22 +62,22 @@ class CredentialTool(Tool):
         return None
 
     async def execute(self, action="list", id=None, label="", kind="text", value=None, username="", ssh=None):
-        vault = await asyncio.to_thread(Credentials, actor="agent")
-        try:
+        def run():
+            vault = Credentials(data=InstanceData(self.state_dir), actor="agent")
             if action == "list":
-                result = await asyncio.to_thread(vault.list)
+                result = vault.list()
             elif action == "read":
                 if not id:
                     return ToolResult.error("Choose a credential ID to read")
-                result = await asyncio.to_thread(vault.reveal, id)
+                result = vault.reveal(id)
             elif action == "store":
-                result = await asyncio.to_thread(
-                    vault.save, id=id, label=label, kind=kind, value=value, username=username, ssh=ssh
-                )
+                result = vault.save(id=id, label=label, kind=kind, value=value, username=username, ssh=ssh)
             elif action == "delete":
-                result = await asyncio.to_thread(vault.delete, id)
+                result = vault.delete(id)
             else:
                 return ToolResult.error("Unknown credential operation")
-            return json.dumps(result, ensure_ascii=False)
-        except (ValueError, KeyError) as exc:
+            return ToolResult(json.dumps(result, ensure_ascii=False), sensitive=action == "read")
+        try:
+            return await shield_and_drain(asyncio.to_thread(run))
+        except (ValueError, KeyError, OSError) as exc:
             return ToolResult.error(str(exc))

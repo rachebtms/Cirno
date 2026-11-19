@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from cirno_vault.redaction import is_sensitive_result
+
+from cirno_core.agent.tools.base import ToolResult
+
 from cirno_core.agent.governance.contracts import ContextGovernanceConfig
 from cirno_core.agent.tools.naming import implementation_name
 from cirno_core.utils.runtime import ensure_nonempty_tool_result
@@ -20,6 +24,13 @@ def normalize_tool_result(
     result: Any,
 ) -> Any:
     result = ensure_nonempty_tool_result(tool_name, result)
+    if is_sensitive_result(tool_name, result):
+        if isinstance(result, str) and len(result) > config.max_tool_result_chars:
+            return ToolResult.error(
+                "Credential exceeds the configured tool result character limit; "
+                "increase that limit before reading it. No plaintext spill file was created."
+            )
+        return result
     if implementation_name(tool_name) in TOOL_RESULT_OFFLOAD_EXEMPT_TOOLS:
         return result
 

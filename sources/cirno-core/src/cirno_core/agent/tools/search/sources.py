@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from cirno_core.utils.atomic_file import open_atomic_snapshot
 from cirno_core.utils.document import (
     DocumentLineSource,
     LocatedDocumentLine,
@@ -24,12 +25,14 @@ def _is_binary(raw: bytes) -> bool:
 def open_source(path: Path, pages: str | None, max_bytes: int) -> DocumentLineSource | None:
     if path.suffix.lower() in DOCUMENT_EXTENSIONS:
         return open_document_line_source(path, pages=pages)
-    with path.open("rb") as file:
+    with open_atomic_snapshot(path) as file:
         raw = file.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ValueError("File grew beyond the search limit; select a smaller file")
     if _is_binary(raw):
         return None
     try:
-        content = raw.decode("utf-8")
+        content = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         return None
     return DocumentLineSource(

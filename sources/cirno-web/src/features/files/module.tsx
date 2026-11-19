@@ -81,7 +81,7 @@ export const filesModule: WorkspaceModule = {
       titleKey: "workspace.file",
       Icon: File,
       Content: FilePanel,
-      tabPolicy: { identity: tab => JSON.stringify([tab.scope?.project_path, tab.path]) },
+      tabPolicy: { identity: tab => JSON.stringify([tab.sessionKey, tab.scope?.project_path, tab.scope?.access_mode, tab.path]) },
       showInMenu: false,
       title: (tab) => tab.path?.split("/").pop(),
     },
@@ -90,7 +90,7 @@ export const filesModule: WorkspaceModule = {
       titleKey: "filePreview.preview",
       Icon: Eye,
       Content: FilePanel,
-      tabPolicy: { identity: tab => JSON.stringify([tab.scope?.project_path, tab.path]) },
+      tabPolicy: { identity: tab => JSON.stringify([tab.sessionKey, tab.scope?.project_path, tab.scope?.access_mode, tab.path]) },
       showInMenu: false,
       title: (tab, translate) =>
         `${tab.path?.split("/").pop() ?? ""} · ${translate("filePreview.preview")}`,

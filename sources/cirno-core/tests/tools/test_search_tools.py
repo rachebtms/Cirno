@@ -19,6 +19,8 @@ from cirno_core.agent.loop import AgentLoop
 from cirno_core.agent.subagents.manager import SubagentManager
 from cirno_core.agent.tools.registry import is_tool_error_result
 from cirno_core.agent.tools.search import FindFilesTool, GrepTool
+
+
 from cirno_core.agent.tools.web.search import WebSearchTool
 from cirno_core.agent.tools.web_config import WebSearchConfig
 from cirno_core.bus.queue import MessageBus
@@ -31,6 +33,35 @@ from cirno_core.security.workspace_access import (
 )
 from cirno_core.utils.document import extract_text
 from cirno_core.utils.llm_runtime import LLMRuntime
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig"])
+async def test_grep_anchored_first_line_handles_utf8_bom(tmp_path, encoding):
+    target = tmp_path / "notes.md"
+    target.write_text("科研记录\nnext line\n", encoding=encoding)
+    result = await GrepTool(workspace=tmp_path).execute(
+        pattern="^科研记录$", path=str(target), context_before=0, context_after=0,
+    )
+    assert "notes.md:1" in result
+    assert "> 1| 科研记录" in result
+    assert "\ufeff" not in result
+
+
+@pytest.mark.parametrize("tool_cls,name,params", [
+    (FindFilesTool, "files__find", {"query": "note", "include_dir": True}),
+    (GrepTool, "files__search", {"pattern": "needle", "case_insenstive": True}),
+])
+async def test_file_search_rejects_misspelled_options_before_execution(tmp_path, tool_cls, name, params):
+    from cirno_core.agent.tools.registry import ToolRegistry
+
+    tool = tool_cls(workspace=tmp_path)
+    tool.execute = AsyncMock(return_value="must not execute")
+    registry = ToolRegistry()
+    registry.register(tool)
+    result = await registry.execute(name, params)
+    assert is_tool_error_result(result)
+    assert "unexpected parameter" in result
+    tool.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio

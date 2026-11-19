@@ -168,6 +168,10 @@
           "label": "웹 접근",
           "help": "웹 검색과 페이지 가져오기를 허용합니다."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "페이지 응답 최대 크기(MiB)",
+          "help": "페이지, 이미지 또는 Jina 응답의 명시된 크기나 디코딩된 본문이 이 값을 초과하면 읽기를 중단합니다. 반환되는 텍스트 길이와는 별도의 제한이며, 다시 시작한 후 적용됩니다."
+        },
         "tools_cli_apps_enable": {
           "label": "CLI 앱",
           "help": "에이전트의 CLI 앱 관리와 실행을 허용합니다."
@@ -1260,7 +1264,11 @@
         "supabase": "프로젝트를 확인하고 관리합니다."
       },
       "editConfig": "MCP 설정 편집",
-      "configObjectRequired": "MCP 설정은 JSON 객체여야 합니다."
+      "configObjectRequired": "MCP 설정은 JSON 객체여야 합니다.",
+      "changePending": "다른 MCP 변경을 처리 중입니다. 완료된 후 다시 저장하세요.",
+      "cleanupPending": "삭제된 MCP 서버 {{name}}에 정리할 데이터가 남아 있습니다.",
+      "retryCleanup": "정리 다시 시도",
+      "statusAuthorizationRequired": "로그인 필요"
     },
     "legal": {
       "thirdPartyBrands": "제품 이름, 로고 및 브랜드는 각 소유자의 자산입니다. 사용은 식별 목적일 뿐 보증이나 제휴를 의미하지 않습니다."
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "이 대화들이 대화 목록에 다시 표시됩니다."
   },
   "deleteConfirm": {
+    "notConfirmed": "대화 삭제가 확인되지 않았습니다. 다시 시도해 주세요.",
     "title": "이 채팅을 삭제할까요?",
     "titleMany": "대화 {{count}}개를 삭제할까요?",
     "description": "이 작업은 되돌릴 수 없습니다.",

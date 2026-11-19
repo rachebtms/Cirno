@@ -8,12 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from cirno_core.runtime.context import RUNTIME_CONTEXT_INPUT_META
-from cirno_core.session.webui_turns import activity as wth_activity
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.session_handles import SessionHandleResolver
-from cirno_server.webui.media.resources import MediaAccessError
+from cirno_core.session.webui_turns import activity as wth_activity
+
 from cirno_server.channels.websocket.config import WebSocketConfig
 from cirno_server.channels.websocket.runtime import WebSocketChannel
+from cirno_server.webui.media.resources import MediaAccessError
 from cirno_server.webui.services import build_server_services
 
 
@@ -315,6 +316,189 @@ async def test_reference_attachments_are_projected_to_other_clients(tmp_path, mo
     accepted = json.loads(origin.send.await_args.args[0])
     assert accepted["event"] == "message_accepted"
     assert accepted["media_urls"] == payload["media_urls"]
+
+
+@pytest.mark.parametrize("failure", ["scope", "storage"])
+async def test_attachment_reference_survives_failed_workspace_admission(tmp_path, monkeypatch, failure):
+    from cirno_core.security.workspace_access import WorkspaceScopeError
+
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    channel = _make_channel(workspace=tmp_path, restricted=True)
+    connection = AsyncMock()
+    channel._webui_connections.add(connection)
+    owner = channel.gateway.uploads.issue(connection)["token"]
+    reference = await channel.gateway.uploads.store.upload(
+        _small_attachment_body(), owner=owner, mime="text/plain", size=5,
+    )
+    error = WorkspaceScopeError("project_locked", status=409) if failure == "scope" else OSError("storage unavailable")
+    persist = AsyncMock(side_effect=[error, (None, False)])
+    monkeypatch.setattr(channel.gateway.workspaces, "persist_scope", persist)
+    message = {
+        "type": "message", "chat_id": "failed-admission", "content": "Keep the attachment",
+        "webui": True, "turn_id": "same-retry", "media": [{"reference": reference}],
+    }
+    await channel._dispatch_envelope(connection, "client", message)
+    assert json.loads(connection.send.await_args.args[0])["event"] == "error"
+    channel._handle_message.assert_not_awaited()
+    paths = channel.gateway.uploads.store.resolve([reference], owner=owner)
+    assert Path(paths[0]).read_bytes() == b"notes"
+    assert wth_activity.websocket_turn_wall_started_at("failed-admission") is None
+
+    await channel._dispatch_envelope(connection, "client", message)
+    channel._handle_message.assert_awaited_once()
+    assert channel._handle_message.await_args.kwargs["media"] == paths
+    assert json.loads(connection.send.await_args.args[0])["event"] == "message_accepted"
+
+
+async def _small_attachment_body():
+    yield b"notes"
+
+
+@pytest.mark.parametrize("failure", ["disconnect", "expiry"])
+async def test_attachment_is_rechecked_after_workspace_admission(tmp_path, monkeypatch, failure):
+    from dataclasses import replace
+
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    sessions = SessionManager(tmp_path)
+    channel = _make_channel(sessions, workspace=tmp_path, restricted=True)
+    connection = AsyncMock()
+    channel._webui_connections.add(connection)
+    owner = channel.gateway.uploads.issue(connection)["token"]
+    store = channel.gateway.uploads.store
+    reference = await store.upload(_small_attachment_body(), owner=owner, mime="text/plain", size=5)
+    persist = channel.gateway.workspaces.persist_scope
+
+    async def admit(*args, **kwargs):
+        result = await persist(*args, **kwargs)
+        if failure == "disconnect":
+            channel.gateway.uploads.revoke(connection)
+        elif reference in store._entries:
+            store._entries[reference] = replace(store._entries[reference], expires=0)
+        return result
+
+    monkeypatch.setattr(channel.gateway.workspaces, "persist_scope", admit)
+    try:
+        await channel._dispatch_envelope(connection, "client", {
+            "type": "message", "chat_id": "late-attachment-failure", "content": "Keep my draft",
+            "webui": True, "turn_id": "attachment-recheck", "media": [{"reference": reference}],
+        })
+        assert json.loads(connection.send.await_args.args[0])["detail"] == "attachment_rejected"
+        channel._handle_message.assert_not_awaited()
+        assert await sessions.state.read_header("websocket:late-attachment-failure") is None
+        assert not store._entries and store._reserved_bytes == 0
+        assert not [path for path in store.media_dir.rglob("*") if path.is_file()]
+        assert wth_activity.websocket_turn_wall_started_at("late-attachment-failure") is None
+    finally:
+        await sessions.state.aclose()
+
+
+async def test_committed_attachment_survives_cleanup_while_history_is_being_saved(tmp_path, monkeypatch):
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    channel = _make_channel(workspace=tmp_path, restricted=True)
+    connection = AsyncMock()
+    channel._webui_connections.add(connection)
+    owner = channel.gateway.uploads.issue(connection)["token"]
+    store = channel.gateway.uploads.store
+    reference = await store.upload(_small_attachment_body(), owner=owner, mime="text/plain", size=5)
+    path = Path(store.resolve([reference], owner=owner)[0])
+
+    async def save_history(*args, **kwargs):
+        assert reference not in store._entries
+        channel.gateway.uploads.revoke(connection)
+        store.prune()
+        assert path.read_bytes() == b"notes"
+        return True
+
+    monkeypatch.setattr(channel.gateway.transcripts, "append_user_message", save_history)
+    await channel._dispatch_envelope(connection, "client", {
+        "type": "message", "chat_id": "protected-attachment", "content": "Keep the saved attachment",
+        "webui": True, "turn_id": "protected-upload", "media": [{"reference": reference}],
+    })
+    channel._handle_message.assert_awaited_once()
+    assert path.read_bytes() == b"notes"
+
+
+@pytest.mark.parametrize("turn_id", [None, "retry-history-write"])
+async def test_failed_history_write_does_not_accept_or_dispatch_input(tmp_path, monkeypatch, turn_id):
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    sessions = SessionManager(tmp_path)
+    channel = _make_channel(sessions, workspace=tmp_path, restricted=True)
+    connection = AsyncMock()
+    channel._webui_connections.add(connection)
+    recorder = channel.gateway.transcripts
+    append = recorder.append_user_message
+    attempt = 0
+
+    async def fail_once(*args, **kwargs):
+        nonlocal attempt
+        attempt += 1
+        return False if attempt == 1 else await append(*args, **kwargs)
+
+    monkeypatch.setattr(recorder, "append_user_message", fail_once)
+    message = {
+        "type": "message", "chat_id": "history-write-failed", "content": "Retain this input",
+        "webui": True, **({"turn_id": turn_id} if turn_id else {}),
+    }
+    try:
+        await channel._dispatch_envelope(connection, "client", message)
+        assert json.loads(connection.send.await_args.args[0])["detail"] == "message_rejected"
+        channel._handle_message.assert_not_awaited()
+        assert await sessions.state.read_header("websocket:history-write-failed") is None
+        assert wth_activity.websocket_turn_wall_started_at("history-write-failed") is None
+        await channel._dispatch_envelope(connection, "client", message)
+        channel._handle_message.assert_awaited_once()
+        facts = await sessions.state.project_history("websocket:history-write-failed", lambda history: history.all_facts())
+        assert len(facts) == 1 and facts[0].content["text"] == "Retain this input"
+    finally:
+        await sessions.state.aclose()
+
+
+async def test_stop_dispatch_does_not_require_a_user_history_record(tmp_path, monkeypatch):
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    sessions = SessionManager(tmp_path)
+    channel = _make_channel(sessions, workspace=tmp_path, restricted=True)
+    connection = AsyncMock()
+    channel._webui_connections.add(connection)
+    try:
+        await channel._dispatch_envelope(connection, "client", {
+            "type": "message", "chat_id": "history-stop", "content": "/stop",
+            "webui": True, "turn_id": "stop-without-history",
+        })
+        channel._handle_message.assert_awaited_once()
+        assert json.loads(connection.send.await_args.args[0])["event"] == "message_accepted"
+        assert await sessions.state.project_history("websocket:history-stop", lambda history: history.all_facts()) == []
+    finally:
+        await sessions.state.aclose()
+
+
+@pytest.mark.parametrize("damaged_policy", [False, True])
+@pytest.mark.parametrize("stale_scope", [False, True])
+async def test_stop_does_not_depend_on_workspace_policy_or_preferences(tmp_path, monkeypatch, damaged_policy, stale_scope):
+    monkeypatch.setattr("cirno_core.config.paths.get_data_dir", lambda: tmp_path / "data")
+    sessions = SessionManager(tmp_path)
+    key = "websocket:stop-damaged-workspace"
+    stored_scope = {"project_path": str(tmp_path), "access_mode": "broken" if damaged_policy else "restricted"}
+    await sessions.state.open_with_metadata(key, {"workspace_scope": stored_scope})
+    channel = _make_channel(sessions, workspace=tmp_path, restricted=True)
+    connection = AsyncMock()
+    channel._webui_connections.add(connection)
+
+    def fail_preferences(*args, **kwargs):
+        pytest.fail("Stopping must not save workspace preferences")
+
+    monkeypatch.setattr("cirno_server.webui.workspaces.remember_webui_project", fail_preferences)
+    try:
+        await channel._dispatch_envelope(connection, "client", {
+            "type": "message", "chat_id": "stop-damaged-workspace", "content": "/stop",
+            **({"workspace_scope": {"project_path": "/missing", "access_mode": "full"}} if stale_scope else {}),
+            "webui": True, "turn_id": "stop-without-workspace-save",
+        })
+        channel._handle_message.assert_awaited_once()
+        assert json.loads(connection.send.await_args.args[0])["event"] == "message_accepted"
+        saved = await sessions.state.read_metadata(key, include_runtime=False)
+        assert saved["metadata"]["workspace_scope"] == stored_scope
+    finally:
+        await sessions.state.aclose()
 
 
 @pytest.mark.asyncio

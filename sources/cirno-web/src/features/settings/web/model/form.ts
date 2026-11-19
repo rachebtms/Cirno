@@ -15,7 +15,8 @@ export function webSearchFormFromPayload(
 ): WebSearchSettingsUpdate {
   return {
     provider: payload.web_search.provider,
-    apiKey: previous?.provider === payload.web_search.provider ? previous.apiKey ?? "" : "",
+    // Undefined retains the stored key; an empty string is an explicit edit.
+    apiKey: previous?.provider === payload.web_search.provider ? previous.apiKey : undefined,
     baseUrl: payload.web_search.base_url ?? "",
     maxResults: payload.web_search.max_results,
     timeout: payload.web_search.timeout,
@@ -40,11 +41,13 @@ export function webSearchDraftState(settings: SettingsPayload, form: WebSearchSe
   const hasExistingSecret = webSearchProviderAcceptsApiKey(provider) &&
     form.provider === settings.web_search.provider && Boolean(settings.web_search.api_key_hint);
   const jinaReaderDirty = (form.useJinaReader ?? settings.web.fetch.use_jina_reader) !== settings.web.fetch.use_jina_reader;
+  const clearOptionalKey = provider?.credential === "optional_api_key" && hasExistingSecret &&
+    form.apiKey !== undefined && !apiKey;
   return {
     hasExistingSecret,
     invalidNumbers: !Number.isFinite(form.maxResults ?? settings.web_search.max_results) || !Number.isFinite(form.timeout ?? settings.web_search.timeout),
     jinaReaderDirty,
-    dirty: form.provider !== settings.web_search.provider || apiKey.length > 0 ||
+    dirty: form.provider !== settings.web_search.provider || apiKey.length > 0 || clearOptionalKey ||
       baseUrl !== (settings.web_search.base_url ?? "") || form.maxResults !== settings.web_search.max_results ||
       form.timeout !== settings.web_search.timeout || jinaReaderDirty,
     missingCredential: webSearchProviderRequiresApiKey(provider) ? !apiKey && !hasExistingSecret

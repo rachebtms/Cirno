@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from cirno_core.config.paths import get_webui_dir
-from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_core.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScope,
@@ -24,9 +23,17 @@ from cirno_core.security.workspace_access import (
     build_workspace_scope,
     default_workspace_scope,
     validate_workspace_scope_payload,
+    workspace_scope_from_metadata,
 )
 from cirno_core.session.session_identity import webui_session_key
-from cirno_core.session.webui_turns.activity import websocket_turn_wall_started_at
+from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.webui_turns.activity import (
+    websocket_turn_snapshot,
+    websocket_turn_wall_started_at,
+)
+from cirno_core.utils.atomic_file import atomic_write_text, open_atomic_snapshot
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.file_transactions import file_write_transaction
 
 if TYPE_CHECKING:
     from cirno_core.session.manager import SessionManager
@@ -46,8 +53,8 @@ def _scope_change_is_non_escalating(current: WorkspaceScope, requested: Workspac
     )
 
 
-def webui_workspace_state_path() -> Path:
-    return get_webui_dir() / "workspace-state.json"
+def webui_workspace_state_path(*, state_dir: Path | None = None) -> Path:
+    return (state_dir / "webui" if state_dir is not None else get_webui_dir()) / "workspace-state.json"
 
 
 def default_webui_workspace_state() -> dict[str, Any]:
@@ -83,18 +90,19 @@ def normalize_webui_workspace_state(raw: Any) -> dict[str, Any]:
     return state
 
 
-def remember_webui_project(path: Path) -> None:
-    state = read_webui_workspace_state()
-    recent = [str(path), *(item for item in state["recent_projects"] if item != str(path))][:20]
-    if recent != state["recent_projects"]:
-        state["recent_projects"] = recent
-        write_webui_workspace_state(state)
+def remember_webui_project(path: Path, *, state_dir: Path | None = None) -> None:
+    with file_write_transaction([webui_workspace_state_path(state_dir=state_dir)]):
+        state = read_webui_workspace_state(state_dir=state_dir)
+        recent = [str(path), *(item for item in state["recent_projects"] if item != str(path))][:20]
+        if recent != state["recent_projects"]:
+            state["recent_projects"] = recent
+            write_webui_workspace_state(state, state_dir=state_dir)
 
 
-def read_webui_workspace_state() -> dict[str, Any]:
-    path = webui_workspace_state_path()
+def read_webui_workspace_state(*, state_dir: Path | None = None) -> dict[str, Any]:
+    path = webui_workspace_state_path(state_dir=state_dir)
     try:
-        with path.open("rb") as stream:
+        with open_atomic_snapshot(path) as stream:
             content = stream.read(_MAX_STATE_FILE_BYTES + 1)
     except FileNotFoundError:
         return default_webui_workspace_state()
@@ -106,7 +114,7 @@ def read_webui_workspace_state() -> dict[str, Any]:
         raise ValueError(f"Invalid workspace preferences at {path}: {error}") from error
 
 
-def write_webui_workspace_state(raw: dict[str, Any]) -> dict[str, Any]:
+def write_webui_workspace_state(raw: dict[str, Any], *, state_dir: Path | None = None) -> dict[str, Any]:
     state = normalize_webui_workspace_state(raw)
     state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     encoded = json.dumps(
@@ -118,32 +126,34 @@ def write_webui_workspace_state(raw: dict[str, Any]) -> dict[str, Any]:
     if len(encoded) > _MAX_STATE_FILE_BYTES:
         raise ValueError("workspace state is too large")
 
-    atomic_write_text(webui_workspace_state_path(), encoded.decode("utf-8") + "\n")
+    atomic_write_text(webui_workspace_state_path(state_dir=state_dir), encoded.decode("utf-8") + "\n")
     return state
 
 
-def read_webui_default_access_mode() -> str:
-    state = read_webui_workspace_state()
+def read_webui_default_access_mode(*, state_dir: Path | None = None) -> str:
+    state = read_webui_workspace_state(state_dir=state_dir)
     mode = state.get("default_access_mode")
     return mode if mode in _DEFAULT_ACCESS_MODES else "default"
 
 
-def write_webui_default_access_mode(mode: str) -> bool:
+def write_webui_default_access_mode(mode: str, *, state_dir: Path | None = None) -> bool:
     if not isinstance(mode, str) or mode not in _DEFAULT_ACCESS_MODES:
         raise ValueError("default access mode must be default, review or full")
-    state = read_webui_workspace_state()
-    changed = state.get("default_access_mode") != mode
-    if changed:
-        state["default_access_mode"] = mode
-        write_webui_workspace_state(state)
-    return changed
+    with file_write_transaction([webui_workspace_state_path(state_dir=state_dir)]):
+        state = read_webui_workspace_state(state_dir=state_dir)
+        changed = state.get("default_access_mode") != mode
+        if changed:
+            state["default_access_mode"] = mode
+            write_webui_workspace_state(state, state_dir=state_dir)
+        return changed
 
 
 def default_scope_for_webui(
     default_workspace: Path,
     default_restrict_to_workspace: bool,
+    *, state_dir: Path | None = None,
 ) -> WorkspaceScope:
-    mode = read_webui_default_access_mode()
+    mode = read_webui_default_access_mode(state_dir=state_dir)
     if mode == "default":
         return default_workspace_scope(
             default_workspace,
@@ -158,8 +168,9 @@ def workspaces_payload(
     default_workspace: Path,
     default_restrict_to_workspace: bool,
     can_change_project: bool,
+    state_dir: Path | None = None,
 ) -> dict[str, Any]:
-    state = read_webui_workspace_state()
+    state = read_webui_workspace_state(state_dir=state_dir)
     default_access_mode = state["default_access_mode"]
     default_scope = (
         default_workspace_scope(
@@ -201,10 +212,12 @@ class WebUIWorkspaceController:
         session_manager: SessionManager | None,
         default_workspace: Path,
         default_restrict_to_workspace: bool,
+        state_dir: Path | None = None,
     ) -> None:
         self._sessions = session_manager
         self._default_workspace = default_workspace
         self._default_restrict_to_workspace = default_restrict_to_workspace
+        self.state_dir = Path(state_dir if state_dir is not None else webui_workspace_state_path().parent.parent).expanduser().resolve(strict=False)
         self._draft_scopes: OrderedDict[str, WorkspaceScope] = OrderedDict()
         self._scope_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
 
@@ -220,6 +233,7 @@ class WebUIWorkspaceController:
         return default_scope_for_webui(
             self._default_workspace,
             self._default_restrict_to_workspace,
+            state_dir=self.state_dir,
         )
 
     def automation_scope(
@@ -249,14 +263,18 @@ class WebUIWorkspaceController:
         default_scope: WorkspaceScope | None = None,
     ) -> WorkspaceScope:
         try:
-            return validate_workspace_scope_payload(
-                raw_scope,
+            return workspace_scope_from_metadata(
+                {WORKSPACE_SCOPE_METADATA_KEY: raw_scope},
                 default_workspace=self._default_workspace,
                 default_restrict_to_workspace=self._default_restrict_to_workspace,
                 source_channel=_WEBUI_SCOPE_CHANNEL,
             )
         except WorkspaceScopeError:
-            return default_scope if default_scope is not None else self.default_scope()
+            # Indexed sidebar data is presentation only. Live authority must
+            # never turn an invalid explicit policy into default full access.
+            if default_scope is not None:
+                return default_scope
+            raise
 
     def scope_for_indexed_metadata(
         self,
@@ -275,27 +293,37 @@ class WebUIWorkspaceController:
 
     def existing_scope_for_session_key(self, session_key: str) -> WorkspaceScope | None:
         """Resolve live authority without turning a deleted session into a default scope."""
+        if self._sessions is not None:
+            identity = self._sessions.state.peek_identity(session_key)
+            if identity is not None and not identity.policy.persist:
+                return self.restricted_default_scope()
+            data = self._sessions.read_session_metadata(session_key, include_runtime=False)
+            if data is not None:
+                self._draft_scopes.pop(session_key, None)
+                return self._scope_from_snapshot(data)
         draft = self._draft_scopes.get(session_key)
         if draft is not None:
             self._draft_scopes.move_to_end(session_key)
             return draft
-        if self._sessions is None:
-            return None
-        identity = self._sessions.state.peek_identity(session_key)
-        if identity is not None and not identity.policy.persist:
-            return self.restricted_default_scope()
-        data = self._sessions.read_session_metadata(session_key, include_runtime=False)
-        return self._scope_from_snapshot(data) if data is not None else None
+        return None
 
     async def async_scope_for_session_key(self, session_key: str) -> WorkspaceScope:
+        original_draft = self._draft_scopes.get(session_key)
+        if self._sessions is not None:
+            identity = self._sessions.state.peek_identity(session_key)
+            if identity is not None and not identity.policy.persist:
+                return self.restricted_default_scope()
+            data = await self._sessions.state.read_metadata(session_key, include_runtime=False)
+            if data is not None:
+                # Do not discard a different draft staged while the read waited.
+                if self._draft_scopes.get(session_key) is original_draft:
+                    self._draft_scopes.pop(session_key, None)
+                return self._scope_from_snapshot(data)
         draft = self._draft_scopes.get(session_key)
         if draft is not None:
             self._draft_scopes.move_to_end(session_key)
             return draft
-        if self._sessions is None:
-            return self.default_scope()
-        data = await self._sessions.state.read_metadata(session_key, include_runtime=False)
-        return self._scope_from_snapshot(data)
+        return self.default_scope()
 
     def _scope_from_snapshot(self, data: dict[str, Any] | None) -> WorkspaceScope:
         if not isinstance(data, dict):
@@ -326,6 +354,7 @@ class WebUIWorkspaceController:
             default_workspace=self._default_workspace,
             default_restrict_to_workspace=self._default_restrict_to_workspace,
             can_change_project=can_change_project,
+            state_dir=self.state_dir,
         )
 
     def resolve_project(self, path: object) -> dict[str, str]:
@@ -338,7 +367,7 @@ class WebUIWorkspaceController:
             default_restrict_to_workspace=self._default_restrict_to_workspace,
             source_channel=_WEBUI_SCOPE_CHANNEL,
         )
-        remember_webui_project(scope.project_path)
+        remember_webui_project(scope.project_path, state_dir=self.state_dir)
         return {"path": str(scope.project_path), "name": scope.project_name}
 
     def set_favorite_project(self, path: object, pinned: object) -> list[dict[str, str]]:
@@ -356,18 +385,19 @@ class WebUIWorkspaceController:
                 source_channel=_WEBUI_SCOPE_CHANNEL,
             )
             path = str(scope.project_path)
-        state = read_webui_workspace_state()
-        favorites: list[str] = state["favorite_projects"]
-        existing = next((item for item in favorites if os.path.normcase(item) == os.path.normcase(path)), None)
-        if pinned and existing is None:
-            if len(favorites) >= 40:
-                raise WorkspaceScopeError("at most 40 favorite folders can be pinned")
-            favorites.append(path)
-            write_webui_workspace_state(state)
-        elif not pinned and existing is not None:
-            favorites.remove(existing)
-            write_webui_workspace_state(state)
-        return [{"name": Path(item).name or item, "path": item} for item in favorites]
+        with file_write_transaction([webui_workspace_state_path(state_dir=self.state_dir)]):
+            state = read_webui_workspace_state(state_dir=self.state_dir)
+            favorites: list[str] = state["favorite_projects"]
+            existing = next((item for item in favorites if os.path.normcase(item) == os.path.normcase(path)), None)
+            if pinned and existing is None:
+                if len(favorites) >= 40:
+                    raise WorkspaceScopeError("at most 40 favorite folders can be pinned")
+                favorites.append(path)
+                write_webui_workspace_state(state, state_dir=self.state_dir)
+            elif not pinned and existing is not None:
+                favorites.remove(existing)
+                write_webui_workspace_state(state, state_dir=self.state_dir)
+            return [{"name": Path(item).name or item, "path": item} for item in favorites]
 
     async def scope_from_envelope(
         self,
@@ -428,11 +458,32 @@ class WebUIWorkspaceController:
     ) -> WorkspaceScope:
         if chat_running:
             raise WorkspaceScopeError("chat_running", status=409)
-        return await self.scope_from_envelope(
-            envelope,
-            session_key=webui_session_key(chat_id),
-            can_change_project=can_change_project,
-        )
+        key = webui_session_key(chat_id)
+        try:
+            return await self.scope_from_envelope(
+                envelope, session_key=key, can_change_project=can_change_project,
+            )
+        except WorkspaceScopeError:
+            raw = envelope.get(WORKSPACE_SCOPE_METADATA_KEY)
+            if not can_change_project or raw is None or self._sessions is None:
+                raise
+            data = await self._sessions.state.read_metadata(key, include_runtime=False)
+            if data is None:
+                raise
+            try:
+                self._scope_from_snapshot(data)
+            except WorkspaceScopeError:
+                # Only this explicit owner setting action may repair a damaged
+                # mode; ordinary messages and file requests must remain denied.
+                scope = validate_workspace_scope_payload(
+                    raw,
+                    default_workspace=self._default_workspace,
+                    default_restrict_to_workspace=self._default_restrict_to_workspace,
+                    source_channel=_WEBUI_SCOPE_CHANNEL,
+                )
+                self._validate_existing_project(data["metadata"], scope)
+                return scope
+            raise
 
     async def scope_for_message(
         self,
@@ -474,15 +525,29 @@ class WebUIWorkspaceController:
     ) -> tuple[str | None, bool]:
         generation = expected_generation
         created = False
-        if self._sessions is not None:
+
+        async def open_scope() -> None:
+            nonlocal generation, created
+            assert self._sessions is not None
             generation, created = await self._sessions.state.open_with_metadata(
                 session_key,
                 {"webui": True, WORKSPACE_SCOPE_METADATA_KEY: scope.metadata()},
                 expected_generation=generation,
                 validate_existing=lambda metadata: self._validate_existing_project(metadata, scope),
             )
+        try:
+            if self._sessions is not None:
+                # Capture the owned result even when cancellation races the
+                # journal commit, before deciding whether rollback is needed.
+                await shield_and_drain(open_scope())
+            await shield_and_drain(asyncio.to_thread(remember_webui_project, scope.project_path, state_dir=self.state_dir))
+        except BaseException:
+            if created:
+                await shield_and_drain(self.rollback_scope_admission(
+                    session_key, generation, created=created,
+                ))
+            raise
         self._draft_scopes.pop(session_key, None)
-        remember_webui_project(scope.project_path)
         return generation, created
 
     async def rollback_scope_admission(
@@ -492,27 +557,41 @@ class WebUIWorkspaceController:
         *,
         created: bool,
     ) -> None:
-        """Remove a newly opened session when transport admission fails."""
+        """Remove an unused admission; another accepted input owns its history."""
         if not created or generation is None or self._sessions is None:
             return
-        await self._sessions.state.delete(
-            session_key,
-            expected_generation=generation,
-        )
+        try:
+            await self._sessions.state.delete(
+                session_key,
+                expected_generation=generation,
+                only_if_unused=True,
+            )
+        except SessionConflictError:
+            # Reset/deletion already retired this admission. Never target its successor.
+            return
 
     async def stage_scope(self, chat_id: str, scope: WorkspaceScope) -> WorkspaceScope:
         """Keep a new chat's scope transient until its first accepted message."""
         async with self._scope_lock(chat_id):
-            if websocket_turn_wall_started_at(chat_id) is not None:
-                raise WorkspaceScopeError("chat_running", status=409)
             session_key = webui_session_key(chat_id)
+            if self._sessions is not None:
+                started_at = await self._sessions.state.project_history(
+                    session_key,
+                    lambda history: websocket_turn_snapshot(
+                        chat_id, history_generation=history.revision[0] if history.revision is not None else None,
+                    )[0],
+                )
+            else:
+                started_at = websocket_turn_wall_started_at(chat_id)
+            if started_at is not None:
+                raise WorkspaceScopeError("chat_running", status=409)
             if (
                 self._sessions is not None
                 and await self._sessions.state.read_metadata(session_key, include_runtime=False) is not None
             ):
                 await self._persist_scope(session_key, scope)
                 return scope
-            remember_webui_project(scope.project_path)
+            await shield_and_drain(asyncio.to_thread(remember_webui_project, scope.project_path, state_dir=self.state_dir))
             self._draft_scopes[session_key] = scope
             self._draft_scopes.move_to_end(session_key)
             while len(self._draft_scopes) > _MAX_DRAFT_SCOPES:

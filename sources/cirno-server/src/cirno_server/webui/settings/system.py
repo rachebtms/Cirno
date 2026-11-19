@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 import platform
 import re
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 from zoneinfo import ZoneInfo
@@ -18,18 +16,16 @@ from cirno_core.config.schema import Config
 from cirno_core.runtime.admission import RuntimeAdmission
 from cirno_core.runtime.build_info import COMMIT
 from cirno_core.security.workspace_access import workspace_sandbox_status
-from cirno_server.channels._setup import channel_setup_spec
+from cirno_core.utils.cancellation import shield_and_drain
+from cirno_usage import llm_usage_payload
+
 from cirno_server.channels.connect import (
     ChannelConnectError,
     ChannelConnector,
     ManagedChannelConnector,
 )
-from cirno_server.channels.contracts import (
-    RouteFieldType,
-    channel_instance_config,
-    channel_update_instance_config,
-)
-from cirno_server.features.service import OptionalFeatureError, with_channel_runtime_status
+from cirno_server.features.service import OptionalFeatureError
+from cirno_server.webui.cli_catalog_refresh import CliCatalogRefresh
 from cirno_server.webui.settings.capabilities import network_safety_payload
 from cirno_server.webui.settings.contracts import (
     QueryParams,
@@ -40,32 +36,24 @@ from cirno_server.webui.settings.contracts import (
     query_first_alias,
 )
 from cirno_server.webui.settings.runtime import runtime_config_payload
-from cirno_usage import llm_usage_payload
-from pydantic.alias_generators import to_snake
+from cirno_server.webui.settings.feature_settings import FeatureSettings
+from cirno_server.webui.settings.system_contracts import SystemSettingsOperations as SystemSettingsOperations
+from cirno_server.webui.settings.channel_values import (
+    coerce_channel_value as coerce_channel_value,
+    assign_channel_config_value as assign_channel_config_value,
+    save_channel_config_values as save_channel_config_values,
+    update_channel_config_values,
+)
 
 if TYPE_CHECKING:
-    from cirno_server.channels.plugin import ChannelPlugin
     from cirno_server.webui.settings.services import WebUISettingsServices
 
-LoadChannelPlugin = Callable[[str], "ChannelPlugin"]
-SettingsOperation = Callable[..., Any]
-
-
-@dataclass(frozen=True)
-class SystemSettingsOperations:
-    update_runtime_config: SettingsOperation
-    cli_apps_payload: SettingsOperation
-    cli_apps_action: SettingsOperation
-    cirno_features_payload: SettingsOperation
-    cirno_features_action: SettingsOperation
-    cirno_feature_instance_target: SettingsOperation
-    validate_channel_config: SettingsOperation
-    load_channel_plugin: LoadChannelPlugin
-    mcp_presets_action: SettingsOperation
-    reload_mcp: SettingsOperation
-    mcp_runtime_status: Callable[[], Mapping[str, str]] | None
-    channel_feature_action: SettingsOperation | None = None
-    channel_runtime_status: Callable[[], dict[str, Any]] | None = None
+SETTLED_SYSTEM_ACTIONS = frozenset({
+    "runtime-config-update", "features-enable", "features-disable", "channel-configure",
+    "cli-install", "cli-update", "cli-uninstall", "cli-test",
+    "mcp-enable", "mcp-disable", "mcp-remove", "mcp-proxy", "mcp-custom",
+    "mcp-import", "mcp-import-cursor", "mcp-tools", "mcp-reconnect",
+})
 
 
 class ServerEnvironmentPayload(TypedDict):
@@ -87,7 +75,6 @@ class SystemSettingsPayload(TypedDict):
 
 _DOCS_STABLE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:\.post\d+)?$")
 _DOCS_LATEST_URL = "https://github.com/rachebtms/Cirno/tree/main/documents"
-_SKIP_FIELD = object()
 
 
 def docs_version(version: str) -> str:
@@ -134,7 +121,7 @@ def system_settings_payload(
             },
             "consolidation": {"mode": "inline", "learning": defaults.consolidation.learn},
         },
-        "usage": llm_usage_payload(get_data_dir() / "llm_usage.sqlite3", timezone_name=defaults.timezone),
+        "usage": llm_usage_payload(config_path.expanduser().resolve(strict=False).parent / "state" / "llm_usage.sqlite3", timezone_name=defaults.timezone),
         "advanced": {
             "restrict_to_workspace": config.tools.restrict_to_workspace,
             "workspace_sandbox": sandbox_status.as_dict(),
@@ -159,7 +146,8 @@ def system_settings_payload(
 
 def settings_usage_payload(config: Config) -> dict[str, Any]:
     """Return the lightweight token usage slice for Overview refreshes."""
-    return llm_usage_payload(get_data_dir() / "llm_usage.sqlite3", timezone_name=config.agents.defaults.timezone)
+    state_dir = config.runtime_data_dir if config.runtime_data_dir is not None else get_data_dir()
+    return llm_usage_payload(state_dir / "llm_usage.sqlite3", timezone_name=config.agents.defaults.timezone)
 
 
 def update_agent_system_settings(config: Config, query: QueryParams) -> tuple[bool, bool]:
@@ -206,184 +194,6 @@ def update_agent_system_settings(config: Config, query: QueryParams) -> tuple[bo
     return changed, restart_required
 
 
-def save_channel_config_values(
-    config: Config,
-    name: str,
-    raw_values: dict[str, Any],
-    instance_id: str = "default",
-    *,
-    load_channel_plugin: LoadChannelPlugin,
-) -> list[str]:
-    if not name:
-        raise WebUISettingsError("missing channel name")
-    try:
-        plugin = load_channel_plugin(name)
-    except ImportError:
-        raise WebUISettingsError(f"unknown channel '{name}'", status=404) from None
-    setup_spec = channel_setup_spec(name, plugin=plugin)
-    if setup_spec is None:
-        raise WebUISettingsError(
-            f"channel '{name}' cannot be configured from WebUI",
-            status=404,
-        )
-    field_types = setup_spec.route_field_types
-    if not raw_values:
-        return []
-
-    section = getattr(config.channels, name, None)
-    channel_config = channel_instance_config(
-        plugin,
-        section,
-        instance_id=instance_id,
-    )
-    saved: list[str] = []
-    prefix = f"channels.{name}."
-    for raw_key, raw_value in raw_values.items():
-        if not raw_key:
-            raise WebUISettingsError(
-                "channel settings payload contains an invalid key"
-            )
-        field = raw_key[len(prefix) :] if raw_key.startswith(prefix) else raw_key
-        value_type = field_types.get(field)
-        if value_type is None:
-            raise WebUISettingsError(f"'{raw_key}' cannot be configured from WebUI")
-        if setup_spec.fields[field].inheritable and raw_value in (None, ""):
-            value = None
-        else:
-            value = coerce_channel_value(raw_key, raw_value, value_type)
-        if value is _SKIP_FIELD:
-            continue
-        assign_channel_config_value(
-            channel_config, field, value, inheritable=setup_spec.fields[field].inheritable,
-        )
-        saved.append(raw_key)
-
-    try:
-        updated_section = channel_update_instance_config(
-            plugin,
-            section,
-            channel_config,
-            instance_id=instance_id,
-        )
-    except ValueError as exc:
-        raise WebUISettingsError(
-            f"Invalid {name} configuration: {exc}",
-            status=400,
-        ) from exc
-    setattr(config.channels, name, updated_section)
-    return saved
-
-
-def coerce_channel_value(
-    raw_key: str,
-    raw_value: Any,
-    value_type: RouteFieldType,
-) -> Any:
-    if isinstance(value_type, tuple):
-        kind = value_type[0]
-        allowed = value_type[1]
-    else:
-        kind = value_type
-        allowed = None
-
-    if kind in {"string", "secret"}:
-        if kind == "secret" and raw_value is None:
-            return ""
-        value = raw_value.strip() if isinstance(raw_value, str) else str(raw_value)
-        if kind == "secret" and not value:
-            return _SKIP_FIELD
-        return value
-
-    if kind == "list":
-        if raw_value is None:
-            return []
-        if isinstance(raw_value, str):
-            return [item.strip() for item in raw_value.split(",") if item.strip()]
-        if isinstance(raw_value, list):
-            return [
-                str(item).strip()
-                for item in cast(list[Any], raw_value)
-                if str(item).strip()
-            ]
-        raise WebUISettingsError(f"'{raw_key}' must be a comma-separated list")
-
-    if kind == "int":
-        if raw_value in (None, ""):
-            return _SKIP_FIELD
-        try:
-            return int(raw_value)
-        except (TypeError, ValueError) as exc:
-            raise WebUISettingsError(f"'{raw_key}' must be a number") from exc
-
-    if kind == "float":
-        if raw_value in (None, ""):
-            return _SKIP_FIELD
-        try:
-            return float(raw_value)
-        except (TypeError, ValueError) as exc:
-            raise WebUISettingsError(f"'{raw_key}' must be a number") from exc
-
-    if kind == "json":
-        if raw_value in (None, ""):
-            return _SKIP_FIELD
-        try:
-            value = json.loads(raw_value) if isinstance(raw_value, str) else raw_value
-        except (TypeError, ValueError) as exc:
-            raise WebUISettingsError(f"'{raw_key}' must be valid JSON") from exc
-        if not isinstance(value, dict):
-            raise WebUISettingsError(f"'{raw_key}' must be a JSON object")
-        return cast(dict[str, Any], value)
-
-    if kind == "bool":
-        if isinstance(raw_value, bool):
-            return raw_value
-        value = str(raw_value).strip().lower()
-        if value in {"true", "1", "yes", "on"}:
-            return True
-        if value in {"false", "0", "no", "off"}:
-            return False
-        raise WebUISettingsError(f"'{raw_key}' must be true or false")
-
-    if kind == "enum":
-        value = raw_value.strip() if isinstance(raw_value, str) else str(raw_value)
-        if not value:
-            return _SKIP_FIELD
-        if allowed is None or value not in allowed:
-            options = ", ".join(sorted(allowed or ()))
-            raise WebUISettingsError(f"'{raw_key}' must be one of: {options}")
-        return value
-
-    raise WebUISettingsError(f"'{raw_key}' has an unsupported field type")
-
-
-def assign_channel_config_value(
-    channel_config: dict[str, Any],
-    field: str,
-    value: Any,
-    *,
-    inheritable: bool = False,
-) -> None:
-    target = channel_config
-    parts = field.split(".")
-    for part in parts[:-1]:
-        current: object = target.get(part)
-        if not isinstance(current, dict):
-            current = {}
-            target[part] = current
-        target = cast(dict[str, Any], current)
-    key = parts[-1]
-    if inheritable:
-        # Do not leave an older snake_case override shadowing this UI edit.
-        target.pop(to_snake(key), None)
-        if value is None:
-            # Absence restores inheritance and remains readable by older configs.
-            target.pop(key, None)
-            return
-    target[key] = value
-
-
-
-
 class SystemSettingsHandler:
     """Handle channel and system commands behind a transport-neutral request DTO."""
 
@@ -393,8 +203,9 @@ class SystemSettingsHandler:
         self.settings = settings
         self.logger = logger
         self._admission = admission
+        self._cli_catalog_refresh = CliCatalogRefresh(admission)
         self._channel_connectors: dict[str, ChannelConnector] = {}
-        self._pending_channel_restarts: set[str] = set()
+        self.features = FeatureSettings(settings, logger)
         self._remove_pending_work: Callable[[], None] | None = None
         self._closing_connectors = False
 
@@ -405,7 +216,11 @@ class SystemSettingsHandler:
         )
 
     async def close(self) -> None:
-        """Release channel-owned setup sessions during gateway shutdown."""
+        """Settle catalog and channel-owned work before gateway shutdown returns."""
+        await shield_and_drain(self._close())
+
+    async def _close(self) -> None:
+        await self._cli_catalog_refresh.close()
         connectors = tuple(self._channel_connectors.items())
         self._closing_connectors = True
         try:
@@ -439,6 +254,22 @@ class SystemSettingsHandler:
         channel_name: str | None = None,
         connect_action: str | None = None,
     ) -> SettingsRouteResult:
+        work = self._handle(
+            action, request, operations, channel_name=channel_name, connect_action=connect_action,
+        )
+        if action in SETTLED_SYSTEM_ACTIONS:
+            return await shield_and_drain(work)
+        return await work
+
+    async def _handle(
+        self,
+        action: str,
+        request: SettingsRequest,
+        operations: SystemSettingsOperations,
+        *,
+        channel_name: str | None = None,
+        connect_action: str | None = None,
+    ) -> SettingsRouteResult:
         if action == "runtime-config-update":
             values = (request.payload or {}).get("values")
             if not isinstance(values, dict):
@@ -463,9 +294,9 @@ class SystemSettingsHandler:
                 operations,
             )
         if action == "features-list":
-            return await self._features(operations)
+            return await self.features.list(operations)
         if action in {"features-enable", "features-disable"}:
-            return await self._features_action(
+            return await self.features.action(
                 request,
                 action.removeprefix("features-"),
                 operations,
@@ -492,9 +323,6 @@ class SystemSettingsHandler:
         return SettingsRouteResult.failure(404, "unknown settings action")
 
 
-
-
-
     async def _cli_apps(
         self,
         request: SettingsRequest,
@@ -509,6 +337,7 @@ class SystemSettingsHandler:
             payload = await operations.cli_apps_payload(
                 installed_only=installed_only,
                 config_path=self.settings.config.path,
+                start_refresh=self._cli_catalog_refresh.start,
             )
         except Exception:
             self.logger.exception("failed to load CLI Apps payload")
@@ -537,175 +366,6 @@ class SystemSettingsHandler:
                 self.logger.exception("CLI Apps action '{}' failed", action)
             return SettingsRouteResult.failure(status, message)
         return SettingsRouteResult.success(payload)
-
-    async def _features(
-        self,
-        operations: SystemSettingsOperations,
-    ) -> SettingsRouteResult:
-        try:
-            payload = await asyncio.to_thread(
-                operations.cirno_features_payload,
-                config_path=self.settings.config.path,
-            )
-        except Exception:
-            self.logger.exception("failed to load cirno features")
-            return SettingsRouteResult.failure(500, "failed to load cirno features")
-        return SettingsRouteResult.success(
-            self._with_channel_runtime_status(payload, operations)
-        )
-
-    def _cirno_features_payload(
-        self,
-        operations: SystemSettingsOperations,
-    ) -> dict[str, Any]:
-        return operations.cirno_features_payload(config_path=self.settings.config.path)
-
-    def _cirno_features_action(
-        self,
-        action: str,
-        query: QueryParams,
-        operations: SystemSettingsOperations,
-    ) -> dict[str, Any]:
-        return self.settings.mutate(
-            operations.cirno_features_action,
-            action,
-            query,
-        )
-
-    async def _features_action(
-        self,
-        request: SettingsRequest,
-        action: str,
-        operations: SystemSettingsOperations,
-    ) -> SettingsRouteResult:
-        install_only = (
-            action == "enable"
-            and (query_first(request.query, "install_only") or "").strip().lower()
-            in {"1", "true", "yes"}
-        )
-        try:
-            payload = await asyncio.to_thread(
-                self._cirno_features_action,
-                action,
-                request.query,
-                operations,
-            )
-        except OptionalFeatureError as exc:
-            return SettingsRouteResult.failure(exc.status, exc.message)
-        except Exception as exc:
-            status = getattr(exc, "status", 500)
-            message = getattr(exc, "message", str(exc))
-            if status >= 500:
-                self.logger.exception(
-                    "cirno feature action '{}' failed",
-                    action,
-                )
-            return SettingsRouteResult.failure(status, message)
-        if install_only and payload.get("requires_restart"):
-            self._pending_channel_restarts.add((query_first(request.query, "name") or "").strip())
-        if not install_only:
-            payload = await self._apply_feature_runtime_change(
-                action,
-                request.query,
-                payload,
-                operations,
-            )
-        payload = self._with_channel_runtime_status(payload, operations)
-        return SettingsRouteResult.success(
-            payload,
-            decorate_restart=True,
-            restart_section="runtime",
-        )
-
-    def _with_channel_runtime_status(
-        self,
-        payload: dict[str, Any],
-        operations: SystemSettingsOperations,
-    ) -> dict[str, Any]:
-        if operations.channel_runtime_status is not None:
-            try:
-                payload = with_channel_runtime_status(
-                    payload,
-                    operations.channel_runtime_status(),
-                )
-            except Exception:
-                self.logger.exception("failed to load channel runtime status")
-        return {
-            **payload,
-            "features": [
-                {**feature, "restart_pending": feature["name"] in self._pending_channel_restarts}
-                if feature["type"] == "channel" else feature
-                for feature in payload["features"]
-            ],
-        }
-
-    async def _apply_feature_runtime_change(
-        self,
-        action: str,
-        query: QueryParams,
-        payload: dict[str, Any],
-        operations: SystemSettingsOperations,
-    ) -> dict[str, Any]:
-        if operations.channel_feature_action is None:
-            return payload
-        name = (query_first(query, "name") or "").strip()
-        if not name:
-            return payload
-        try:
-            instance_id = operations.cirno_feature_instance_target(query)
-            result = operations.channel_feature_action(action, name, instance_id)
-            if inspect.isawaitable(result):
-                result = await result
-        except Exception as exc:
-            self.logger.exception("failed to apply channel '{}' without restart", name)
-            return self.feature_runtime_fallback(
-                payload,
-                message=(
-                    f"{name} channel config was saved, but hot reload failed: {exc}"
-                ),
-            )
-
-        if not isinstance(result, dict):
-            return payload
-        result = cast(dict[str, Any], result)
-        if not result.get("handled"):
-            return payload
-
-        updated = dict(payload)
-        updated["requires_restart"] = bool(result.get("requires_restart"))
-        message = result.get("message")
-        if isinstance(message, str) and message:
-            last_action = dict(updated.get("last_action") or {})
-            previous = last_action.get("message")
-            last_action["message"] = (
-                f"{previous}. {message}"
-                if isinstance(previous, str) and previous
-                else message
-            )
-            last_action["hot_reload"] = not updated["requires_restart"]
-            if "ok" in result:
-                last_action["ok"] = bool(result["ok"])
-            updated["last_action"] = last_action
-        return updated
-
-    @staticmethod
-    def feature_runtime_fallback(
-        payload: dict[str, Any],
-        *,
-        message: str,
-    ) -> dict[str, Any]:
-        updated = dict(payload)
-        updated["requires_restart"] = True
-        last_action = dict(updated.get("last_action") or {})
-        previous = last_action.get("message")
-        last_action["message"] = (
-            f"{previous}. {message}"
-            if isinstance(previous, str) and previous
-            else message
-        )
-        last_action["hot_reload"] = False
-        updated["last_action"] = last_action
-        return updated
 
     async def _channel_configure(
         self,
@@ -742,10 +402,10 @@ class SystemSettingsHandler:
         }
         if not enable:
             features = await asyncio.to_thread(
-                self._cirno_features_payload,
+                self.features.read,
                 operations,
             )
-            payload["cirno_features"] = self._with_channel_runtime_status(
+            payload["cirno_features"] = self.features.with_runtime_status(
                 features,
                 operations,
             )
@@ -761,7 +421,7 @@ class SystemSettingsHandler:
             feature_query["instance_id"] = [instance_id]
         try:
             features = await asyncio.to_thread(
-                self._cirno_features_action,
+                self.features.mutate,
                 "enable",
                 feature_query,
                 operations,
@@ -781,13 +441,13 @@ class SystemSettingsHandler:
                 f"Settings saved, but enabling {name} failed: {exc}",
             )
 
-        features = await self._apply_feature_runtime_change(
+        features = await self.features.apply_runtime_change(
             "enable",
             feature_query,
             features,
             operations,
         )
-        payload["cirno_features"] = self._with_channel_runtime_status(
+        payload["cirno_features"] = self.features.with_runtime_status(
             features,
             operations,
         )
@@ -809,6 +469,7 @@ class SystemSettingsHandler:
         ).strip()
         try:
             payload = await asyncio.to_thread(
+                self.settings.read,
                 operations.validate_channel_config,
                 name,
                 self.parse_channel_values(request),
@@ -842,14 +503,9 @@ class SystemSettingsHandler:
         instance_id: str,
         operations: SystemSettingsOperations,
     ) -> list[str]:
-        return self.settings.config.update(
-            lambda config: save_channel_config_values(
-                config,
-                name,
-                raw_values,
-                instance_id,
-                load_channel_plugin=operations.load_channel_plugin,
-            )
+        return update_channel_config_values(
+            self.settings.config, name, raw_values, instance_id,
+            load_channel_plugin=operations.load_channel_plugin,
         )
 
     async def _channel_connect(
@@ -918,28 +574,28 @@ class SystemSettingsHandler:
             target["instance_id"] = [str(payload["instance_id"])]
         try:
             features = await asyncio.to_thread(
-                self._cirno_features_action,
+                self.features.mutate,
                 "enable",
                 target,
                 operations,
             )
         except OptionalFeatureError as exc:
-            features = self.feature_runtime_fallback(
-                self._cirno_features_payload(operations),
+            features = self.features.runtime_fallback(
+                self.features.read(operations),
                 message=(
                     f"{channel_name} connected, but enabling channel support failed: "
                     f"{exc.message}"
                 ),
             )
         else:
-            features = await self._apply_feature_runtime_change(
+            features = await self.features.apply_runtime_change(
                 "enable",
                 target,
                 features,
                 operations,
             )
         updated = dict(payload)
-        updated["cirno_features"] = self._with_channel_runtime_status(
+        updated["cirno_features"] = self.features.with_runtime_status(
             features,
             operations,
         )

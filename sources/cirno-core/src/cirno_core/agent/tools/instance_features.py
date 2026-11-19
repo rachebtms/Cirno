@@ -2,9 +2,10 @@
 
 import asyncio
 import json
+from pathlib import Path
 
-from cirno_memory.repository import MemoryRepository
 from cirno_memory.errors import MemoryRevisionConflict
+from cirno_memory.repository import MemoryRepository
 
 from cirno_core.agent.tools.base import Tool, ToolResult, tool_parameters
 from cirno_core.agent.tools.context import current_request_context
@@ -16,11 +17,14 @@ from cirno_core.agent.tools.schema import (
     tool_parameters_schema,
 )
 from cirno_core.config.home import get_home_path
-from cirno_core.nodes.service import Nodes
+from cirno_core.config.loader import get_config_path
 from cirno_core.nodes.commands import CommandOutcomeUnknown
+from cirno_core.nodes.service import Nodes
 from cirno_core.security.workspace_access import current_workspace_scope
 from cirno_core.security.workspace_policy import resolve_allowed_path
 from cirno_core.skills.history import inspect_skill
+from cirno_core.storage.instance import InstanceData
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 @tool_parameters(
@@ -37,13 +41,17 @@ from cirno_core.skills.history import inspect_skill
     )
 )
 class NodeTool(Tool):
+    def __init__(self, *, source_config_path: Path | None = None):
+        config_path = source_config_path if source_config_path is not None else get_config_path()
+        self.state_dir = Path(config_path).expanduser().resolve(strict=False).parent / "state"
+
     @classmethod
     def enabled(cls, ctx):
         return ctx.config.exec.enable
 
     @classmethod
     def create(cls, ctx):
-        return cls()
+        return cls(source_config_path=ctx.source_config_path or ctx.instance_config_path)
 
     @property
     def name(self):
@@ -71,8 +79,8 @@ class NodeTool(Tool):
         scope = current_workspace_scope()
         if action != "list" and scope and scope.access_mode != "full":
             return ToolResult.error("SSH operations require AI approval or Full Access. No remote operation was executed.")
-        nodes = await asyncio.to_thread(Nodes, actor="agent")
         try:
+            nodes = await shield_and_drain(asyncio.to_thread(lambda: Nodes(data=InstanceData(self.state_dir), actor="agent")))
             if action == "list":
                 result = await asyncio.to_thread(nodes.catalog)
             elif action in {"execute", "start"}:
@@ -156,14 +164,17 @@ class MemoryTool(Tool):
 
     @classmethod
     def create(cls, ctx):
-        return cls(ctx.sessions)
+        return cls(ctx.sessions, home_path=ctx.home_path, source_config_path=ctx.source_config_path or ctx.instance_config_path)
 
-    def __init__(self, sessions=None, *, maintenance=False, owner_access=None, evidence_ids=None, batch_token=None):
+    def __init__(self, sessions=None, *, maintenance=False, owner_access=None, evidence_ids=None, batch_token=None,
+                 home_path: Path | None = None, source_config_path: Path | None = None):
         self.sessions = sessions
         self.maintenance = maintenance
         self.owner_access = owner_access
         self.evidence_ids = evidence_ids
         self.batch_token = batch_token
+        self.home_path = Path(home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+        self.source_config_path = Path(source_config_path if source_config_path is not None else get_config_path()).expanduser().resolve(strict=False)
 
     @property
     def name(self):
@@ -194,7 +205,7 @@ class MemoryTool(Tool):
         metadata = ((await self.sessions.state.read_metadata(request.session_key)) or {}).get("metadata", {}) if self.sessions else {}
         access = self.owner_access or dict(session_key=request.session_key, project_id=metadata.get("project_id"), maintenance=self.maintenance)
         def run():
-            repo = MemoryRepository(get_home_path())
+            repo = MemoryRepository(self.home_path)
             repo.sync_profiles()
             if action == "status":
                 return repo.status(**access)
@@ -231,14 +242,19 @@ class MemoryTool(Tool):
                                  enqueue=not self.maintenance, observed_at=observed_at, **access)
             if action != "search":
                 raise ValueError("Unknown memory action")
-            from cirno_core.config.loader import load_config
-            config = load_config().agents.defaults
+            from cirno_core.config.loader import load_config, resolve_config_env_vars
+            config = resolve_config_env_vars(
+                load_config(self.source_config_path), config_path=self.source_config_path,
+            ).agents.defaults
             filters = dict(scope=scope, layer=layer, tags=tags, include_history=include_history,
                            offset=offset, since=since, until=until, time_field=time_field, time_zone=time_zone or config.timezone, purpose=purpose, expand_links=expand_links, **access)
             from cirno_memory.search import search
             return search(repo, query, config.memory, mode=mode, limit=limit, **filters)
         try:
-            return json.dumps(await asyncio.to_thread(run), ensure_ascii=False)
+            # Thread cancellation cannot undo accepted writes (including profile
+            # synchronization). Settle them before the execution owner releases
+            # the conversation to Stop or a subsequent turn.
+            return json.dumps(await shield_and_drain(asyncio.to_thread(run)), ensure_ascii=False)
         except MemoryRevisionConflict as exc:
             retry_action = "checkpoint" if action == "checkpoint" else "update"
             recovery = (
@@ -261,9 +277,12 @@ class MemoryTool(Tool):
     )
 )
 class InspectSkillTool(Tool):
+    def __init__(self, *, home_path: Path | None = None):
+        self.home_path = Path(home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+
     @classmethod
     def create(cls, ctx):
-        return cls()
+        return cls(home_path=ctx.home_path)
 
     @property
     def name(self):
@@ -276,6 +295,6 @@ class InspectSkillTool(Tool):
     async def execute(self, name, action, **kwargs):
         import asyncio
         try:
-            return json.dumps(await asyncio.to_thread(inspect_skill, name, action), ensure_ascii=False)
+            return json.dumps(await shield_and_drain(asyncio.to_thread(inspect_skill, name, action, self.home_path)), ensure_ascii=False)
         except (ValueError, OSError) as exc:
             return ToolResult.error(str(exc))

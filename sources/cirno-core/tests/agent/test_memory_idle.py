@@ -1,12 +1,12 @@
 """Idle indexing is local; learning runs only inside context consolidation."""
+import sqlite3
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
-from cirno_core.memory.idle import MemoryIdleCoordinator
 from cirno_core.config.home import set_instance_path
 from cirno_core.config.schema import Config
+from cirno_core.memory.idle import MemoryIdleCoordinator
 from cirno_memory.repository import MemoryRepository
 
 
@@ -30,10 +30,14 @@ async def test_idle_maintenance_never_starts_an_independent_model_run(idle):
 @pytest.mark.parametrize("block", ["active", "background", "pending", "admission"])
 async def test_busy_runtime_defers_local_index_maintenance(idle, block, monkeypatch):
     coordinator, agent = idle
-    if block == "active": agent._active_tasks.add("busy")
-    if block == "background": agent._background_tasks.add("busy")
-    if block == "pending": agent.bus.has_pending_events = True
-    if block == "admission": agent.bus.admission.paused = True
+    if block == "active":
+        agent._active_tasks.add("busy")
+    if block == "background":
+        agent._background_tasks.add("busy")
+    if block == "pending":
+        agent.bus.has_pending_events = True
+    if block == "admission":
+        agent.bus.admission.paused = True
     reconcile = MagicMock()
     monkeypatch.setattr(MemoryRepository, "reconcile", reconcile)
     await coordinator.check()
@@ -48,4 +52,35 @@ async def test_idle_maintenance_indexes_manual_changes(idle, tmp_path):
     (repo.root / "entries" / (record["id"] + ".md")).write_text("new entropy")
     await coordinator.check()
     assert repo.search("entropy", session_key="a")["memories"]
+    agent.schedule_background.assert_not_called()
+
+
+async def test_corrupt_catalog_is_reported_without_stopping_idle_loop_or_replacing_it(idle, tmp_path, monkeypatch):
+    coordinator, agent = idle
+    path = tmp_path / "home" / "memory" / "catalog.sqlite3"
+    path.parent.mkdir(parents=True)
+    original = b"not a SQLite database; keep for owner recovery"
+    path.write_bytes(original)
+    warning = MagicMock()
+    monkeypatch.setattr("cirno_core.memory.idle.logger.warning", warning)
+    await coordinator.check()
+    assert path.read_bytes() == original
+    warning.assert_called_once()
+    assert isinstance(warning.call_args.args[-1], sqlite3.DatabaseError)
+    agent.schedule_background.assert_not_called()
+
+
+async def test_locked_catalog_is_reported_and_next_scan_remains_throttled(idle, monkeypatch):
+    coordinator, agent = idle
+    monkeypatch.setattr("cirno_core.memory.idle.time.monotonic", lambda: 100.0)
+    error = sqlite3.OperationalError("database is locked")
+    reconcile = MagicMock(side_effect=error)
+    monkeypatch.setattr(MemoryRepository, "reconcile", reconcile)
+    warning = MagicMock()
+    monkeypatch.setattr("cirno_core.memory.idle.logger.warning", warning)
+    await coordinator.check()
+    await coordinator.check()
+    assert coordinator.next_scan == 160.0
+    reconcile.assert_called_once()
+    warning.assert_called_once_with("Memory maintenance: {}", error)
     agent.schedule_background.assert_not_called()

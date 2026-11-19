@@ -2,10 +2,12 @@
 
 import asyncio
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.queue import MessageBus
+from cirno_core.config.loader import get_config_path
 from cirno_core.session.keys import ROUTER_SESSION_KEY, session_key_for_channel
 from cirno_core.session.manager import SessionManager
 
@@ -18,8 +20,10 @@ async def publish_to_channel(
     record: bool = False,
     session_key: str | None = None,
     session_generation: str | None = None,
+    config_path: Path | None = None,
 ) -> None:
     """Publish a user-visible message and mirror it into its admitted session."""
+    source_config = Path(config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
     metadata = dict(msg.metadata or {})
     record = record or bool(metadata.pop("_record_channel_delivery", False))
     raw_key = metadata.pop("_session_key", None)
@@ -76,7 +80,7 @@ async def publish_to_channel(
     ):
         from cirno_server.channels.telegram.binding import TelegramBinding
 
-        binding = await asyncio.to_thread(TelegramBinding().destination, "router")
+        binding = await asyncio.to_thread(TelegramBinding(source_config.parent / "state").destination, "router")
         if binding is not None:
             await bus.publish_outbound(
                 replace(

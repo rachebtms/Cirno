@@ -27,8 +27,18 @@ Command names are case-insensitive. Spaces, tabs and newlines separate names fro
 | `/pairing ...` | Explain personal Telegram owner-PIN binding in Settings. | Transition reply; generic pairing stays retired. |
 | `!command` | Trusted local WebUI shell input through the existing execution/permission policy. | Preserved; remote text cannot impersonate it. |
 
+`/history` reads the visible persisted conversation rather than the model's replay
+window, so consolidation does not hide earlier messages from this command. It
+omits hidden/internal inputs and tool observations, retains visible command
+messages, strips injected runtime context, and preserves user-media breadcrumbs
+and text-block previews. It scans backward only until the requested number of
+visible entries has been collected; it does not change messages or the archive
+boundary.
+
 Legacy Git commands concern saved `dream:` versions of tracked profile/memory files. Current catalog revisions are in the Memory inspector; checkpoint/learning results are in consolidation reports. Restore undoes the selected legacy change toward its parent. Extra commit arguments are rejected and replies retain transport correlation metadata.
 
 Control input such as `/help`, `/model`, usage errors and retired-command guidance is sendable before model setup. Operations needing a model, such as consolidation/recovery, still require a valid runtime. `/goal <task>` and ordinary prompts retain the model-setup requirement. Control errors do not become queued guidance.
 
 Temporary conversations intentionally expose only `/model` and `/stop`; the server rejects other registered commands under their privacy policy. Creation-only options disappear after a durable conversation is created. Telegram menus omit WebUI creation controls and advertise `/consolidate`, while accepting `/compact` and `/dream`. Hyphenated menu names use underscores, such as `/dream_log`.
+
+Temporary disposal retains the original connection's ownership and attachments until transient-state retirement and runtime cancellation admission both succeed. A failed disposal can be retried by that owner, including when state retirement already succeeded; it cannot target another owner's chat or a persistent replacement. Repeated cancellation waits for accepted disposal to settle. Disconnect cleanup attempts every owned temporary chat and releases connection bookkeeping even if one chat fails, then reports the cleanup error.

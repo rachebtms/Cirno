@@ -25,12 +25,16 @@ export function formatToolCallTrace(call: unknown): string | null {
 
 export function canonicalToolTrace(line: string): string {
   const trimmed = line.trim();
-  const match = /^([a-zA-Z0-9_.-]+)\((.*)\)$/.exec(trimmed);
+  const match = /^([a-zA-Z0-9_.-]+)\(([\s\S]*)\)$/.exec(trimmed);
   if (!match) return trimmed;
   const args = match[2].trim();
   if (!args) return `${match[1]}()`;
   try {
-    return `${match[1]}(${JSON.stringify(JSON.parse(args))})`;
+    const serialized = JSON.stringify(JSON.parse(args), (_key, value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+      return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+    });
+    return `${match[1]}(${serialized})`;
   } catch {
     return trimmed;
   }
@@ -67,9 +71,8 @@ export function mergeToolProgressEvents(
   previous: ToolProgressEvent[] | undefined,
   incoming: ToolProgressEvent[],
 ): ToolProgressEvent[] {
-  if (!previous?.length) return incoming;
-  if (!incoming.length) return previous;
-  const next = [...previous];
+  if (!incoming.length) return previous ?? incoming;
+  const next = [...(previous ?? [])];
   const indexByKey = new Map(next.map((event, index) => [toolEventKey(event), index]));
   for (const event of incoming) {
     const key = toolEventKey(event);

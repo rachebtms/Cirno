@@ -7,12 +7,21 @@ from cirno_core.credentials.ssh import SSHCredential
 from cirno_core.nodes.service import Node
 from cirno_core.storage.instance import InstanceData
 from cirno_vault.vault import CredentialVault
+from filelock import FileLock
 
 
 def migrate_ssh_credentials(instance: Path) -> bool:
     state = instance / "state"
     if not (state / "instance.sqlite3").exists():
         return False
+    directory = state / "migrations"
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with FileLock(str(directory / ".lock"), timeout=30):
+        return _migrate_ssh_credentials(instance)
+
+
+def _migrate_ssh_credentials(instance: Path) -> bool:
+    state = instance / "state"
     data = InstanceData(state)
     records = data.list("nodes")
     if not records:

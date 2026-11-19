@@ -14,6 +14,7 @@ class SubagentOrigin(TypedDict):
     channel: str
     chat_id: str
     session_key: str | None
+    session_generation: NotRequired[str | None]
     llm_usage_source: NotRequired[LLMUsageSource]
 
 
@@ -26,6 +27,8 @@ class SubagentMessageReceipt(TypedDict):
     message_id: str
     receipt: Literal["accepted"]
     delivered: Literal[False]
+    persisted: NotRequired[Literal[False]]
+    warning: NotRequired[str]
 
 
 @dataclass(frozen=True, slots=True)

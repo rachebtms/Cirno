@@ -76,11 +76,11 @@ class FileStates:
             result_hash=hashlib.sha256(result.encode("utf-8")).hexdigest() if result else None,
         )
 
-    def record_write(self, path: str | Path) -> None:
+    def record_write(self, path: str | Path, *, home_path: Path | None = None) -> None:
         """Invalidate a prior read after a write; a write summary is not file content."""
-        from cirno_core.skills.history import capture_skill_path
-        capture_skill_path(Path(path))
         self._state.pop(str(Path(path).resolve()), None)
+        from cirno_core.skills.history import capture_skill_path
+        capture_skill_path(Path(path), home=home_path)
 
     def is_unchanged(
         self, path: str | Path, offset: int = 1, limit: int | None = None, *,

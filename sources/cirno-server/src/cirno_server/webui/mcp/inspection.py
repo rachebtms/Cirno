@@ -11,8 +11,11 @@ from typing import Any
 from cirno_core.agent.tools.mcp.connections import close_mcp_connections
 from cirno_core.agent.tools.mcp.contracts import MCPConnection
 from cirno_core.agent.tools.registry import ToolRegistry
-from cirno_core.config.loader import load_config, resolve_config_env_vars
+from cirno_core.config.loader import get_config_path, load_config, resolve_config_env_vars
+from cirno_core.config.schema import Config
 from cirno_core.config.tools import MCPServerConfig
+from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.webui.mcp.catalog import mcp_presets_payload
 from cirno_server.webui.mcp.contracts import (
     MCP_SERVER_NAME_RE,
@@ -23,6 +26,7 @@ from cirno_server.webui.mcp.contracts import (
     query_first,
 )
 from cirno_server.webui.mcp.fields import command_available, status_for
+from cirno_server.webui.mcp.presets import McpPreset
 
 _DEFAULT_TEST_TIMEOUT = 20
 _SECRET_QUERY_RE = re.compile(
@@ -50,6 +54,76 @@ def _test_timeout(cfg: MCPServerConfig) -> int:
     return max(5, min(int(raw), _DEFAULT_TEST_TIMEOUT))
 
 
+def _render_inspection_payload(
+    name: str, *, last_action: dict[str, Any], config_path: Path | None,
+    expected_config: Config | None = None,
+) -> dict[str, Any]:
+    """Keep an observed empty inventory distinct from an uninspected catalog row."""
+    snapshot = load_config(config_path)
+    stale = False
+    if expected_config is not None:
+        before = expected_config.tools.mcp_servers.get(name)
+        try:
+            current = resolve_config_env_vars(snapshot, config_path=config_path)
+            after = current.tools.mcp_servers.get(name)
+            stale = (
+                before is None or after is None
+                or before.model_dump(exclude={"enabled_tools"}) != after.model_dump(exclude={"enabled_tools"})
+                or (before.use_proxy and expected_config.network.proxy != current.network.proxy)
+            )
+        except ValueError:
+            stale = True
+        if stale:
+            last_action = {
+                "ok": False,
+                "message": "MCP connection changed during inspection. Test the current connection again.",
+                "error": "Connection changed; test again.",
+                "inventory_stale": True,
+                "tool_names": [], "tool_count": 0,
+                "checked_at": last_action["checked_at"],
+            }
+    payload = mcp_presets_payload(
+        last_action=last_action,
+        tool_preview={name: last_action.get("tool_names", [])},
+        config_path=config_path,
+        config_snapshot=snapshot,
+    )
+    for row in payload["presets"]:
+        if row.get("name") == name:
+            row.update({key: last_action[key] for key in ("tool_names", "tool_count", "checked_at")})
+            if last_action.get("error"):
+                row["error"] = last_action["error"]
+            if stale:
+                row["inventory_stale"] = True
+    return payload
+
+
+async def _inspection_payload(
+    name: str, *, last_action: dict[str, Any], config_path: Path,
+    expected_config: Config | None = None,
+) -> dict[str, Any]:
+    # Catalog discovery can materialize plugin data directories. Do not leave
+    # that accepted filesystem work outside the cancelled request's lifetime.
+    return await shield_and_drain(asyncio.to_thread(
+        _render_inspection_payload, name, last_action=last_action, config_path=config_path,
+        expected_config=expected_config,
+    ))
+
+
+def _prepare_inspection(name: str, preset: McpPreset | None, config_path: Path) -> tuple[Config, MCPServerConfig, str, bool]:
+    config = resolve_config_env_vars(load_config(config_path), config_path=config_path)
+    cfg = config.tools.mcp_servers.get(name)
+    if cfg is None:
+        raise McpPresetError(f"{display_name_for(name, preset)} is not enabled", status=404)
+    command_found = cfg.transport_type != "stdio" or command_available(cfg.command, cwd=cfg.cwd, env=cfg.env)
+    status = (
+        status_for(preset, cfg, config_path=config.source_path)
+        if preset is not None
+        else ("configured" if command_found else "missing_dependency")
+    )
+    return config, cfg, status, command_found
+
+
 async def mcp_presets_test_action(
     query: QueryParams,
     *,
@@ -65,14 +139,15 @@ async def mcp_presets_test_action(
         raise McpPresetError("invalid MCP server name")
     preset = preset_by_name_optional(name)
     display_name = display_name_for(name, preset)
+    config_path = config_path if config_path is not None else get_config_path()
 
     try:
-        config = resolve_config_env_vars(
-            load_config(config_path) if config_path is not None else load_config(),
-            config_path=config_path,
-        )
+        config, cfg, status, command_found = await shield_and_drain(asyncio.to_thread(
+            _prepare_inspection, name, preset, config_path,
+        ))
     except ValueError as exc:
-        return mcp_presets_payload(
+        return await _inspection_payload(
+            name,
             last_action={
                 "ok": False,
                 "message": _scrub_test_error(str(exc)),
@@ -84,19 +159,7 @@ async def mcp_presets_test_action(
             config_path=config_path,
         )
 
-    cfg = config.tools.mcp_servers.get(name)
-    if cfg is None:
-        raise McpPresetError(f"{display_name} is not enabled", status=404)
-
-    status = (
-        status_for(preset, cfg)
-        if preset is not None
-        else (
-            "missing_dependency"
-            if cfg.command and not command_available(cfg.command)
-            else "configured"
-        )
-    )
+    config_path = config.source_path or config_path
     if status == "missing_credentials":
         last_action: dict[str, Any] = {
             "ok": False,
@@ -106,9 +169,11 @@ async def mcp_presets_test_action(
             "tool_names": [],
             "checked_at": _checked_at(),
         }
-        return mcp_presets_payload(last_action=last_action, config_path=config_path)
+        return await _inspection_payload(
+            name, last_action=last_action, config_path=config_path, expected_config=config,
+        )
 
-    if cfg.command and not command_available(cfg.command):
+    if not command_found:
         last_action = {
             "ok": False,
             "message": f"{display_name} requires '{cfg.command}' on PATH.",
@@ -117,14 +182,16 @@ async def mcp_presets_test_action(
             "tool_names": [],
             "checked_at": _checked_at(),
         }
-        return mcp_presets_payload(last_action=last_action, config_path=config_path)
+        return await _inspection_payload(
+            name, last_action=last_action, config_path=config_path, expected_config=config,
+        )
 
     registry = ToolRegistry()
     stacks: dict[str, MCPConnection] = {}
     inspection_cfg = cfg.model_copy(update={"enabled_tools": ["*"]})
     try:
         stacks = await asyncio.wait_for(
-            connect_mcp_servers({name: inspection_cfg}, registry, network=config.network),
+            connect_mcp_servers({name: inspection_cfg}, registry, network=config.network, config_path=config.source_path),
             timeout=_test_timeout(cfg),
         )
         tool_names = sorted(registry.tool_names)
@@ -180,10 +247,9 @@ async def mcp_presets_test_action(
             ok=False, error=error, message=f"{display_name} connection cleanup failed: {error}"
         )
 
-    tool_names = last_action.get("tool_names", [])
-    preview = {name: tool_names} if tool_names else None
-    return mcp_presets_payload(
+    return await _inspection_payload(
+        name,
         last_action=last_action,
-        tool_preview=preview,
         config_path=config_path,
+        expected_config=config,
     )

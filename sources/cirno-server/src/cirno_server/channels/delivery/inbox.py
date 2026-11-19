@@ -10,12 +10,12 @@ from pathlib import Path
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.bus.runtime_events import UserInputAccepted
-from cirno_core.notifications.inbox import NotificationInbox
+from cirno_core.notifications.inbox import NotificationInbox, question_reply_id
 from cirno_core.session.manager import SessionManager
+from cirno_core.utils.thread_io import SerializedThreadIO
 from loguru import logger
 
 from cirno_server.channels.base import BaseChannel
-
 
 class InboxDelivery:
     def __init__(
@@ -30,6 +30,7 @@ class InboxDelivery:
         self.sessions = sessions
         self.channel = channel
         self.inbox = NotificationInbox(config_path.parent / "state")
+        self._io = SerializedThreadIO()
         self._unsubscribe = bus.subscribe(self.answer, UserInputAccepted)
 
     def close(self) -> None:
@@ -57,7 +58,7 @@ class InboxDelivery:
                     }
                 elif msg.channel == "websocket":
                     return
-            await asyncio.to_thread(self.inbox.record, **notice)
+            await self._io(self.inbox.record, **notice)
             await self.queue_telegram()
         except (OSError, ValueError, sqlite3.Error, RuntimeError):
             logger.exception(
@@ -67,7 +68,29 @@ class InboxDelivery:
     async def answer(self, event: UserInputAccepted) -> None:
         if event.context.channel != "websocket" or event.context.metadata.get("_session_message"):
             return
-        await asyncio.to_thread(self.inbox.answer, event.context.session_key, event.content)
+        answered = await self._io(
+            self.inbox.answer, event.context.session_key, event.content,
+            session_generation=event.context.session_generation,
+        )
+        if answered or self.sessions is None or event.context.session_generation is None:
+            return
+        identifier = question_reply_id(event.content)
+        if identifier is None:
+            return
+        # Editing a later human message replaces the generation but can retain
+        # an earlier unanswered question. Only its actual current display fact
+        # permits rebinding; a quote carried over from a cleared chat does not.
+        retained = await self.sessions.state.project_history(
+            event.context.session_key,
+            lambda reader: (revision := reader.revision) is not None
+            and revision[0] == event.context.session_generation
+            and reader.has_answer_ui("user_question", identifier),
+        )
+        if retained:
+            await self._io(
+                self.inbox.answer, event.context.session_key, event.content,
+                session_generation=event.context.session_generation, retained_generation=True,
+            )
 
     async def queue_telegram(self) -> None:
         if self.channel("telegram") is None:
@@ -78,7 +101,7 @@ class InboxDelivery:
         state = await asyncio.to_thread(TelegramBinding(self.config_path.parent / "state").status)
         if not state["bound"]:
             return
-        for notice in await asyncio.to_thread(self.inbox.telegram_pending, state["bound_at"]):
+        for notice in await self._io(self.inbox.telegram_pending, state["bound_at"]):
             should_send = (
                 state["enabled"]
                 and notice["category"] in state["notifications"]
@@ -89,4 +112,4 @@ class InboxDelivery:
                 # Record in the existing durable outbox before acknowledging the
                 # Inbox queue. A restart cannot lose an admitted notification.
                 await self.bus.publish_outbound(notification_message(notice, state))
-            await asyncio.to_thread(self.inbox.telegram_queued, notice["id"], notice["revision"])
+            await self._io(self.inbox.telegram_queued, notice["id"], notice["revision"])

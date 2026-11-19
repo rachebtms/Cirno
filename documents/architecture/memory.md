@@ -26,6 +26,8 @@ Records have `user`, `project` or `session` scope. Structured retrieval, reads, 
 
 Large files, web artifacts and Node job output remain at their original locations. Memory stores their references instead of copying entire workspaces.
 
+Memory revisions and original JSONL evidence are flushed and synchronized before atomic publication and catalog commit; on POSIX, new directory links and the published file directory are synchronized too. Unsupported directory synchronization is tolerated only for the platform/filesystem case; file or directory I/O failures abort the catalog transaction and leave the prior committed revision readable.
+
 Immutable memory bodies are checked against their recorded content hash on reads, including historical revisions and semantic indexing/snippet extraction. A mismatch is reported rather than returning altered content. Scope identity uses the user scope, Project ID or conversation key; Project records from different Workers in the same Project can be revised or linked without changing their originating-session metadata. `WORKER.md` is indexed alongside the shared profiles, and removing a profile removes its active indexed record. Original evidence reads are paged with line and character cursors and a 16,000-character total page limit, including memory-body pointers and very long individual lines. Building the source index also reads bounded fragments, retaining line numbers and overlaps without loading an entire JSONL line.
 
 ## Context consolidation
@@ -41,6 +43,14 @@ Self-improvement is part of this pass: verified failures/fixes and user correcti
 Only a non-Project Router batch may update supplied SOUL.md, USER.md and memory/MEMORY.md profiles, and changes require explicit user-message evidence. Tool output, internal runtime context and Worker/Project reports cannot redefine the user or Router identity. Full document snapshots and the shared foreground file transaction prevent overwriting an owner or Worker edit made during generation.
 
 The default generation budget is 8,192 tokens shared by checkpoint and learning, low reasoning effort, at most eight memory/document updates and 16,000 characters of additional reference material. The selected conversation model is reused. Optional references are bounded by remaining input space and appended at the request tail. Disabling learning preserves checkpoint generation and previously saved memory. Settings → Context consolidation exposes these controls together with active/idle thresholds and retention.
+
+Optional profile, Skill and memory bodies are read with the remaining character
+budget plus one character to detect overflow. Oversized bodies are skipped in
+full rather than offered as truncated replacement documents; pending memories
+remain queued for later review or explicit reading. Complete memory bodies still
+require their saved content hash. Reference JSON and separators count toward the
+same limit. This adds no model request or parallel work and keeps references at
+the request tail.
 
 Learning plans, source bindings, raw invalid output, errors and completed item IDs persist under `memory/consolidations/<source-id>.json`. A task checkpoint can succeed while learning remains incomplete. The conversation notice and Memory status list completed updates separately from updates needing retry, including document paths and memory labels. An incomplete item may already have partial writes; the UI says so instead of claiming a rollback. Original source IDs remain visible. A first consolidation after upgrading can reuse an older batch's retained checkpoint and show that batch's unresolved learning error; this does not imply another extraction request was made. A successful checkpoint is never reported as a total consolidation failure because learning failed.
 
@@ -65,7 +75,7 @@ The default `releaseArchivedRuntime` behavior releases consolidated runtime pref
 
 ## Revisions and maintenance
 
-Updates require `expected_revision` from the latest read or successful write. Each conversation has one task checkpoint per Project scope: its first `memory.checkpoint` may omit the version, but replacing it requires the previous checkpoint's returned `revision` as `expected_revision`. Historical bodies are retained. Relations include `supports`, `conflicts`, `related`, `derived_from` and `supersedes`. Superseded findings leave default search results but remain readable.
+Updates require `expected_revision` from the latest read or successful write. Each conversation has one task checkpoint per Project scope: its first `memory.checkpoint` may omit the version, but replacing it requires the previous checkpoint's returned `revision` as `expected_revision`. Supplying `expected_revision` for a missing record is also rejected without writing: a stale update cannot silently create a new checkpoint after its conversation or Project scope changes. Historical bodies are retained. Relations include `supports`, `conflicts`, `related`, `derived_from` and `supersedes`. Superseded findings leave default search results but remain readable.
 
 A rejected write distinguishes a missing version (`memory_revision_required`) from an outdated version (`memory_revision_conflict`). Tool results explicitly report `write_applied: false` and include the authorized current record's ID, revision, source and content, captured before any mutation. The Agent compares that snapshot with its proposal and retries the appropriate checkpoint/update using the snapshot revision; no extra read is needed unless the result was truncated. Another intervening edit is still rejected. Conflict handling never automatically overwrites, creates a duplicate, or schedules another model request. Inaccessible records return the existing scope error without disclosing their state. Snapshots live in the ordinary tool result, leaving the system prefix unchanged.
 
@@ -95,7 +105,28 @@ Catalog, search and queue writes use attached SQLite databases and rollback-jour
 
 Back up the entire instance root while the service is stopped; Agent Home is its `home/` subdirectory. Catalog and pending-input databases contain authoritative state. Search and vectors are derived indexes; after losing the text index, perform a full rebuild in Settings. Vector chunks regenerate on explicit searches. Markdown alone cannot restore scopes, revisions, links or processing state. Evidence and revisions do not expire automatically, so disk usage grows with history.
 
-Checkpoint writes and evidence capture run outside the server event loop, including provider-failure and exhausted-budget fallbacks. Runtime history is released only after its checkpoint is committed. Learning persistence settles before cancellation releases file ownership; no second model task is scheduled.
+Checkpoint writes and evidence capture run outside the server event loop, including provider-failure and exhausted-budget fallbacks. Runtime history is released only after its checkpoint is committed. Learning persistence settles before cancellation releases file ownership; no second model task is scheduled. Memory tool operations also settle accepted thread writes before Stop releases the conversation, so a subsequent turn cannot overlap an abandoned writer. Cancellation still propagates to the caller.
+
+Once a session checkpoint is durably committed, failure to estimate its remaining
+context usage is logged and does not turn that saved checkpoint into a failed
+consolidation. Its completion event omits unavailable usage figures. Cancellation
+during this accounting stage also settles the saved checkpoint's completion
+event before propagating; it does not claim that the interrupted task continued.
+If cancellation arrives during an already admitted checkpoint write, the report
+waits for that write's result: a committed checkpoint is reported as saved; a
+write that did not commit is not. Cancellation still propagates afterward.
+Checkpoint-write and original-evidence archive failures still propagate.
+
+Accepted turn and recovery-checkpoint writes also settle their caller-owned
+draft acknowledgement before releasing cancellation. A later finalization or
+retry therefore uses the committed merge baseline, avoiding duplicate transcript
+rows or recovery markers left behind after a completed turn.
+
+Idle local index maintenance logs database errors, including locked or corrupt
+SQLite catalogs, without stopping the Agent message loop. It keeps the normal
+scan interval and does not replace or automatically rebuild a corrupt catalog.
+Memory operations using that catalog can still report errors; restore or repair
+the authoritative database before expecting those operations to work.
 
 ## Optional embeddings
 

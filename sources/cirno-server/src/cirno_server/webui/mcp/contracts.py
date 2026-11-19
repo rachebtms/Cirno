@@ -47,7 +47,7 @@ def query_value(query: QueryParams, key: str) -> str | None:
 
 
 def _preset_by_name(name: str) -> McpPreset:
-    if not name or MCP_SERVER_NAME_RE.match(name) is None:
+    if not name or MCP_SERVER_NAME_RE.fullmatch(name) is None:
         raise McpPresetError("invalid MCP preset name")
     for preset in MCP_PRESETS:
         if preset.name == name:
@@ -71,6 +71,6 @@ def display_name_for(name: str, preset: McpPreset | None = None) -> str:
 
 
 def validated_server_name(name: str) -> str:
-    if not name or MCP_SERVER_NAME_RE.match(name) is None:
+    if not name or MCP_SERVER_NAME_RE.fullmatch(name) is None:
         raise McpPresetError("invalid MCP server name")
     return name.strip().lower()

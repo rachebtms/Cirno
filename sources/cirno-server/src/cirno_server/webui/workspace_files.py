@@ -12,6 +12,7 @@ from cirno_core.security.workspace_access import WorkspaceScope
 from cirno_core.security.workspace_policy import WorkspaceBoundaryError, resolve_allowed_path
 from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_core.utils.file_transactions import file_write_transaction
+
 from cirno_server.webui.file_preview import (
     MAX_FILE_PREVIEW_BYTES,
     WebUIFilePreviewError,
@@ -56,6 +57,8 @@ def read_workspace_file(path: str, *, scope: WorkspaceScope, media_url: Callable
 
 
 def save_workspace_file(path: str, content: str, revision: str, *, scope: WorkspaceScope) -> dict[str, Any]:
+    if "\0" in content:
+        raise WebUIFilePreviewError(415, "Binary content cannot be saved in the text editor")
     if len(content.encode("utf-8")) > MAX_FILE_PREVIEW_BYTES:
         raise WebUIFilePreviewError(413, "Text files larger than 384 KiB cannot be edited")
     with file_write_transaction([_resolve(path, scope)]):

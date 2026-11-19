@@ -129,9 +129,10 @@ export class FileDocuments {
     };
   }
 }
-const DocumentsContext = createContext<FileDocuments | null>(null);
+type DocumentOwners = WeakMap<CirnoClient, FileDocuments>;
+const DocumentsContext = createContext<DocumentOwners | null>(null);
 export function FileDocumentsProvider({ children }: { children: ReactNode }) {
-  const [documents] = useState(() => new FileDocuments());
+  const [documents] = useState(() => new WeakMap<CirnoClient, FileDocuments>());
   return (
     <DocumentsContext.Provider value={documents}>
       {children}
@@ -147,8 +148,16 @@ export function useFileDocument(
   preview: boolean,
 ) {
   const shared = useContext(DocumentsContext);
-  const [local] = useState(() => new FileDocuments());
-  const documents = shared ?? local;
+  const [local] = useState(() => new WeakMap<CirnoClient, FileDocuments>());
+  const owners = shared ?? local;
+  const documents = useMemo(() => {
+    let owned = owners.get(client);
+    if (!owned) {
+      owned = new FileDocuments();
+      owners.set(client, owned);
+    }
+    return owned;
+  }, [client, owners]);
   const key = JSON.stringify([
     sessionKey,
     scope?.project_path,

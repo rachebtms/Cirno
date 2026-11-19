@@ -61,6 +61,10 @@ def parse_response(response: Any, *, spec: ProviderSpec | None = None) -> LLMRes
     message_tool_calls = cast(object, msg0.get("tool_calls"))
     if isinstance(message_tool_calls, list):
         raw_tool_calls.extend(cast(list[object], message_tool_calls))
+    if not raw_tool_calls and (legacy := mapping(msg0.get("function_call"))):
+        # The streaming path accepts this older compatible protocol too.
+        # Gateways can send both fields: execute the modern list only once.
+        raw_tool_calls.append({"type": "function", "function": legacy})
 
     # Deduplicate tool call IDs (same pattern as streaming path)
     # Some providers reuse the same ID for parallel tool calls.

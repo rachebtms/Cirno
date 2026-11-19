@@ -12,7 +12,10 @@ from cirno_core.agent.tools.mcp_oauth import (
     mcp_oauth_has_credentials,
 )
 from cirno_core.config.loader import load_config
+from cirno_core.config.schema import Config
 from cirno_core.config.tools import MCPServerConfig
+
+from cirno_server.webui.mcp.cleanup import pending_cleanup_names
 from cirno_server.webui.mcp.contracts import (
     McpPresetError,
     favicon_url,
@@ -38,10 +41,10 @@ _MCP_RUNTIME_STATUSES = {"connecting", "connected", "failed"}
 
 
 def _preset_payload(
-    preset: McpPreset, configured_servers: dict[str, MCPServerConfig]
+    preset: McpPreset, configured_servers: dict[str, MCPServerConfig], *, config_path: Path | None = None,
 ) -> dict[str, Any]:
     cfg = configured_servers.get(preset.name)
-    status = status_for(preset, cfg)
+    status = status_for(preset, cfg, config_path=config_path)
     configured = cfg is not None and status not in {"missing_credentials", "authorization_required"}
     logo_url = favicon_url(preset.brand_domain)
     return {
@@ -50,7 +53,7 @@ def _preset_payload(
         "category": preset.category,
         "description": preset.description,
         "docs_url": preset.docs_url,
-        "transport": preset.transport,
+        "transport": (cfg.transport_type or preset.transport) if cfg is not None else preset.transport,
         "auth": (cfg.auth if cfg is not None else (preset.server.auth if preset.server else None)),
         "use_proxy": cfg.use_proxy if cfg is not None else False,
         "requires": preset.requires,
@@ -84,20 +87,15 @@ def _custom_payload(
     cfg: MCPServerConfig,
     *,
     tool_names: list[str] | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
-    transport = cfg.type
-    if not transport:
-        transport = (
-            "stdio"
-            if cfg.command
-            else ("sse" if cfg.url.rstrip("/").endswith("/sse") else "streamableHttp")
-        )
-    if cfg.auth == "oauth" and not mcp_oauth_has_credentials(name, cfg.url):
+    transport = cfg.transport_type or "streamableHttp"
+    if cfg.auth == "oauth" and not mcp_oauth_has_credentials(name, cfg.url, config_path=config_path):
         status = "authorization_required"
     else:
         status = (
             "missing_dependency"
-            if cfg.command and not command_available(cfg.command)
+            if transport == "stdio" and not command_available(cfg.command, cwd=cfg.cwd, env=cfg.env)
             else "configured"
         )
     configured = status != "authorization_required"
@@ -134,11 +132,14 @@ def mcp_presets_payload(
     tool_preview: Mapping[str, list[str]] | None = None,
     runtime_status: Mapping[str, str] | None = None,
     config_path: Path | None = None,
+    config_snapshot: Config | None = None,
 ) -> dict[str, Any]:
-    config = load_config(config_path) if config_path is not None else load_config()
+    config = config_snapshot if config_snapshot is not None else (
+        load_config(config_path) if config_path is not None else load_config()
+    )
     known = known_preset_names()
     preset_rows = [
-        _preset_payload(preset, config.tools.mcp_servers)
+        _preset_payload(preset, config.tools.mcp_servers, config_path=config.source_path)
         | (
             {"tool_names": tool_preview.get(preset.name, [])}
             if tool_preview and preset.name in tool_preview
@@ -147,18 +148,20 @@ def mcp_presets_payload(
         for preset in MCP_PRESETS
     ]
     custom_rows = [
-        _custom_payload(name, cfg, tool_names=(tool_preview or {}).get(name))
+        _custom_payload(name, cfg, tool_names=(tool_preview or {}).get(name), config_path=config.source_path)
         for name, cfg in sorted(config.tools.mcp_servers.items())
         if name not in known
     ]
     existing_names = {str(row["name"]) for row in (*preset_rows, *custom_rows)}
+    plugins = discover_agent_plugins(config.workspace_path, config_path=config.source_path)
     plugin_rows = [
         agent_plugin_payload(plugin)
-        for plugin in discover_agent_plugins(config.workspace_path)
+        for plugin in plugins
         if f"plugin-{plugin.name}" not in existing_names
     ]
     payload: dict[str, Any] = {
         "presets": [*preset_rows, *custom_rows, *plugin_rows],
+        "cleanup_pending": pending_cleanup_names(config, plugins),
         "proxy_configured": bool(config.network.proxy),
         "installed_count": len(config.tools.mcp_servers)
         + sum(int(row["enabled"]) for row in plugin_rows),

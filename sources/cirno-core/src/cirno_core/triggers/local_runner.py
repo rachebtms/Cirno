@@ -12,10 +12,14 @@ from loguru import logger
 from cirno_core.agent.automation_turns import AutomationTurnError
 from cirno_core.bus.events import InboundMessage, OutboundMessage
 from cirno_core.runtime.admission import RuntimeAdmission
+from cirno_core.session.automation_metadata import automation_origin_metadata
+from cirno_core.session.transport_metadata import (
+    WEBUI_MESSAGE_SOURCE_METADATA_KEY,
+    WEBUI_TURN_METADATA_KEY,
+)
 from cirno_core.triggers.local_session_turns import LOCAL_TRIGGER_META
-from cirno_core.triggers.local_store import LocalTriggerStore
+from cirno_core.triggers.local_store import UNCONFIRMED_DELIVERY_ERROR, LocalTriggerStore
 from cirno_core.triggers.local_types import LocalTrigger, TriggerDelivery
-from cirno_core.session.transport_metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
 async def run_local_trigger_queue(
@@ -59,35 +63,33 @@ async def _run_delivery(
     submit_turn: Callable[[InboundMessage], Awaitable[OutboundMessage | None]],
     is_channel_enabled: Callable[[str], bool],
 ) -> None:
+    record = store.read_delivery_run_record(delivery)
+    if record and record.get("status") in {"ok", "error"}:
+        _settle_delivery_result(store, delivery, record)
+        return
+    if record and record.get("status") == "processing":
+        store.fail_delivery(delivery, UNCONFIRMED_DELIVERY_ERROR)
+        store.record_delivery(
+            delivery.trigger_id, status="error", error=UNCONFIRMED_DELIVERY_ERROR,
+            run_at_ms=delivery.created_at_ms, delivery_id=delivery.id,
+        )
+        logger.warning("Trigger: {} ({})", UNCONFIRMED_DELIVERY_ERROR, delivery.id)
+        return
     try:
-        await _deliver_delivery(
+        trigger, response = await _deliver_delivery(
             store, delivery, submit_turn=submit_turn, is_channel_enabled=is_channel_enabled,
         )
-        store.complete_delivery(delivery)
     except asyncio.CancelledError as exc:
         store.retry_delivery(delivery, str(exc) or exc.__class__.__name__)
         _write_delivery_run_record(
             store, delivery, status="interrupted", error=str(exc) or exc.__class__.__name__,
         )
         raise
-    except _TerminalDeliveryError as exc:
-        store.record_delivery(
-            delivery.trigger_id, status="error", error=str(exc), run_at_ms=delivery.created_at_ms,
-        )
-        _write_delivery_run_record(store, delivery, status="error", error=str(exc))
-        store.complete_delivery(delivery)
-        logger.warning(
-            "Trigger: dropped delivery {} for {}: {}", delivery.id, delivery.trigger_id, exc,
-        )
-    except AutomationTurnError as exc:
+    except (_TerminalDeliveryError, AutomationTurnError) as exc:
         error = str(exc) or exc.__class__.__name__
-        store.record_delivery(
-            delivery.trigger_id, status="error", error=error, run_at_ms=delivery.created_at_ms,
-        )
-        _write_delivery_run_record(store, delivery, status="error", error=error)
-        store.complete_delivery(delivery)
+        _commit_delivery_result(store, delivery, status="error", error=error)
         logger.warning(
-            "Trigger: delivery {} for {} reached the agent but failed: {}",
+            "Trigger: terminal delivery failure {} for {}: {}",
             delivery.id, delivery.trigger_id, error,
         )
     except Exception as exc:
@@ -98,11 +100,67 @@ async def _run_delivery(
         )
         store.record_delivery(
             delivery.trigger_id, status="error", error=error, run_at_ms=delivery.created_at_ms,
+            delivery_id=delivery.id,
         )
         logger.exception(
             "Trigger: failed delivery {} for {}{}", delivery.id, delivery.trigger_id,
             "; queued retry" if retried else "; moved to failed queue",
         )
+    else:
+        _commit_delivery_result(store, delivery, trigger=trigger, status="ok", response=response)
+
+
+def _commit_delivery_result(
+    store: LocalTriggerStore,
+    delivery: TriggerDelivery,
+    *,
+    status: str,
+    trigger: LocalTrigger | None = None,
+    error: str | None = None,
+    response: str | None = None,
+) -> None:
+    """Commit execution outcome before writing the history projection or cleaning the queue."""
+    try:
+        store.write_delivery_run_record(
+            delivery, trigger=trigger, status=status, error=error, response=response,
+        )
+    except Exception as exc:
+        # Atomic replacement can succeed before a directory-fsync error. Reuse
+        # that receipt; an unconfirmed completed execution must never auto-replay.
+        try:
+            record = store.read_delivery_run_record(delivery)
+        except Exception:
+            record = None
+        if not record or record.get("status") not in {"ok", "error"}:
+            reason = (
+                "Delivery reached a terminal outcome but its result could not be saved; "
+                f"inspect the session before resubmitting: {exc}"
+            )
+            store.fail_delivery(delivery, reason)
+            store.record_delivery(
+                delivery.trigger_id, status="error", error=reason,
+                run_at_ms=delivery.created_at_ms, delivery_id=delivery.id,
+            )
+            logger.exception("Trigger: result save unconfirmed for {}", delivery.id)
+            return
+    else:
+        record = {"status": status, "error": error}
+    _settle_delivery_result(store, delivery, record)
+
+
+def _settle_delivery_result(
+    store: LocalTriggerStore, delivery: TriggerDelivery, record: dict[str, Any],
+) -> None:
+    try:
+        store.record_delivery(
+            delivery.trigger_id, status=record["status"], error=record.get("error"),
+            run_at_ms=delivery.created_at_ms, delivery_id=delivery.id,
+        )
+        store.complete_delivery(delivery)
+    except Exception as exc:
+        # Preserve the terminal receipt. The next claim retries only settlement.
+        store.retry_delivery(delivery, str(exc) or type(exc).__name__)
+        logger.exception("Trigger: result committed but settlement failed for {}", delivery.id)
 
 
 class _TerminalDeliveryError(RuntimeError):
@@ -115,7 +173,7 @@ async def _deliver_delivery(
     *,
     submit_turn: Callable[[InboundMessage], Awaitable[OutboundMessage | None]],
     is_channel_enabled: Callable[[str], bool],
-) -> None:
+) -> tuple[LocalTrigger, str]:
     trigger = store.get(delivery.trigger_id)
     if trigger is None:
         raise _TerminalDeliveryError("trigger not found")
@@ -134,18 +192,7 @@ async def _deliver_delivery(
         session_key_override=trigger.session_key,
     )
     response = await submit_turn(msg)
-    store.record_delivery(
-        trigger.id,
-        status="ok",
-        run_at_ms=delivery.created_at_ms,
-    )
-    _write_delivery_run_record(
-        store,
-        delivery,
-        trigger=trigger,
-        status="ok",
-        response=response.content if response else "",
-    )
+    return trigger, response.content if response else ""
 
 
 def _write_delivery_run_record(
@@ -173,7 +220,7 @@ def _write_delivery_run_record(
 
 
 def _delivery_metadata(trigger: LocalTrigger, delivery: TriggerDelivery) -> dict[str, Any]:
-    metadata = dict(trigger.origin_metadata or {})
+    metadata = automation_origin_metadata(trigger.origin_metadata)
     metadata["_runtime_input_source"] = "local_trigger"
     metadata[LOCAL_TRIGGER_META] = {
         "trigger_id": trigger.id,

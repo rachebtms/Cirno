@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from cirno_setup import apt
-from cirno_setup.backends import brew, homebrew
+from cirno_setup.backends import brew, homebrew, pip
 from cirno_setup.context import Context
 from cirno_setup.planner import Step
 from cirno_setup.policy import Policy
@@ -51,6 +51,7 @@ def test_apt_install_queries_and_final_verification_accept_unlimited(context, mo
         return subprocess.CompletedProcess(arguments, 0, stdout=output, stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     complete_setup(context, Recipe("apt", ("hello=2.0",)))
     assert sum(arguments[0] == "/usr/bin/apt-get" for arguments in calls) == 2
 
@@ -76,7 +77,7 @@ def test_python_install_and_import_verification_accept_unlimited(context, monkey
             if arguments[-2:] == ["cirno-memory", "embedding"]:
                 output = '["demo-package"]'
             else:
-                output = json.dumps([["demo-package", "1.0", [], []]])
+                output = pip.METADATA_PREFIX + json.dumps([["demo-package", "1.0", [], []]])
                 if not installed:
                     return subprocess.CompletedProcess(arguments, 1, stdout="", stderr="Not installed")
         else:
@@ -84,6 +85,7 @@ def test_python_install_and_import_verification_accept_unlimited(context, monkey
         return subprocess.CompletedProcess(arguments, 0, stdout=output, stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     packages = ("cirno-memory:embedding",) if provider == "extra" else ("demo-package",)
     commands = () if provider == "extra" else ("demo-cli",)
     complete_setup(context, Recipe(provider, packages, imports=("demo_package",), commands=commands, target=target))
@@ -105,6 +107,7 @@ def test_npm_install_and_metadata_verification_accept_unlimited(context, monkeyp
         return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     complete_setup(context, Recipe("npm", ("demo-npm@1.0",), commands=("demo-npm",)))
     assert len(calls) == 1
 
@@ -132,6 +135,7 @@ def test_homebrew_bootstrap_formula_and_repair_accept_unlimited(context, monkeyp
         return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     complete_setup(context, Recipe("homebrew"))
     recipe = Recipe("brew", ("tea",), commands=("tea",))
     complete_setup(context, recipe)

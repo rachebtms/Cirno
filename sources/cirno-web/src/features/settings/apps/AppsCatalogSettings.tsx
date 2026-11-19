@@ -14,7 +14,7 @@ export { DEFAULT_CUSTOM_MCP_FORM } from "./model/contracts";
 export function AppsCatalogSettings(options: AppsCatalogProps) {
   const { t } = useTranslation();
   const items = catalogEntries(options.cliApps, options.mcpPresets, options.filter, options.query);
-  const focused = options.cliFocusName ? options.cliApps?.apps.find(app => app.name === options.cliFocusName && app.installed) : null;
+  const focused = options.cliFocusName ? options.cliApps?.apps.find(app => app.name === options.cliFocusName && app.installed && app.available) : null;
   const error = options.cliError || options.mcpError;
   const message = error || (!focused ? options.cliMessage || options.mcpMessage : null);
   const loading = options.mcpPresetsLoading && !options.mcpPresets || options.filter !== "mcp" && options.cliAppsLoading && !options.cliApps;
@@ -29,6 +29,17 @@ export function AppsCatalogSettings(options: AppsCatalogProps) {
       </Tabs.List></Tabs.ListContainer></Tabs>}
     </div>
     {message && <Alert status={error ? "danger" : "success"} role={error ? "alert" : "status"}><Alert.Content><Alert.Description>{message}</Alert.Description></Alert.Content><Button isIconOnly size="sm" variant="ghost" aria-label={t("common.close")} onPress={options.onDismissStatus}><X size={16} /></Button></Alert>}
+    {options.filter === "mcp" && options.mcpPresets?.cleanup_pending?.map(name => (
+      <Alert key={`cleanup:${name}`} status="warning">
+        <Alert.Content><Alert.Description>{t("settings.mcp.cleanupPending", { name })}</Alert.Description></Alert.Content>
+        <Button variant="secondary" aria-label={`${t("settings.mcp.retryCleanup")}: ${name}`}
+          isPending={options.mcpActionKey === `remove:${name}`}
+          isDisabled={Boolean(options.mcpActionKey || options.mcpOAuthFlow)}
+          onPress={() => options.onMcpAction("remove", name, { cleanup_only: "true" })}>
+          {t("settings.mcp.retryCleanup")}
+        </Button>
+      </Alert>
+    ))}
     {focused && <CliReadyPanel app={focused} showBrandLogos={options.showBrandLogos} onBackToChat={options.onBackToChat} />}
     {options.requiresRestartPending && <Alert status="warning"><Alert.Content><Alert.Description>{t("settings.apps.restartRequired")}</Alert.Description></Alert.Content>
       {options.onRestart && <Button variant="secondary" isPending={options.isRestarting} onPress={options.onRestart}><RotateCw size={16} />{t("settings.actions.restart")}</Button>}</Alert>}

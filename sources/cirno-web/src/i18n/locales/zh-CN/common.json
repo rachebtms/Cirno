@@ -98,7 +98,7 @@
     },
     "network": {
       "useProxy": "使用代理",
-      "useProxyHelp": "使用高级设置中的共享代理。",
+      "useProxyHelp": "使用“网络与重试”中的共享代理。",
       "configureProxy": "配置代理",
       "sharedProxyScope": "供所有启用代理的功能共用。",
       "authentication": "认证（可选）",
@@ -168,6 +168,10 @@
           "label": "网页访问",
           "help": "允许搜索网页和读取网页内容"
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "单次网页响应上限（MiB）",
+          "help": "网页、图片或 Jina 返回内容的声明大小或解压后大小超过此值时停止读取。此限制独立于返回文字长度，重启后生效。"
+        },
         "tools_cli_apps_enable": {
           "label": "CLI 应用",
           "help": "允许安装、管理和运行 CLI 应用"
@@ -214,7 +218,7 @@
         },
         "network_proxy": {
           "label": "共享代理",
-          "help": "启用“使用代理”的功能共用此地址。127.0.0.1 指运行 cirno 的设备。"
+          "help": "启用“使用代理”的功能共用此地址。清空前请先关闭这些功能的“使用代理”开关。127.0.0.1 指运行 cirno 的设备。"
         },
         "tools_web_use_proxy": {
           "label": "使用代理",
@@ -474,7 +478,7 @@
         },
         "agents_defaults_router_tool_timeout_seconds": {
           "label": "Router 工具执行时间预算（秒）",
-          "help": "每轮 Router 普通工具执行的累计时间（1–3600 秒，默认 60），不计模型及审批等待。普通调用最多 9 次，中、大任务仍交给 Worker。重启后生效。"
+          "help": "每轮 Router 普通工具执行的累计时间（1–3600 秒，默认 60），不计模型及原生工具审批等待；PTC 程序的嵌套等待仍计时。普通调用最多 9 次，中、大任务仍交给 Worker。重启后生效。"
         },
         "agents_defaults_output_repetition_enabled": {
           "label": "重复输出保护",
@@ -733,6 +737,7 @@
       "presetName": "预设名称",
       "presetNameHelp": "名称不可重复。修改名称不会改变模型 ID。",
       "presetNameDuplicate": "已存在同名预设。",
+      "createdOrderFailed": "预设已创建，但更新调用顺序失败。可在预设列表中启用它以重试。{{error}}",
       "presetNamePlaceholder": "例如：快速写作",
       "advancedOptions": "高级选项",
       "requestAPI": "连接方式",
@@ -1060,7 +1065,11 @@
         "supabase": "查看和管理项目"
       },
       "editConfig": "编辑 MCP 配置",
-      "configObjectRequired": "MCP 配置必须是 JSON 对象。"
+      "configObjectRequired": "MCP 配置必须是 JSON 对象。",
+      "changePending": "另一项 MCP 更改正在处理中，请完成后再保存。",
+      "cleanupPending": "已移除的 MCP 服务器 {{name}} 仍有内容待清理。",
+      "retryCleanup": "重试清理",
+      "statusAuthorizationRequired": "需要登录授权"
     },
     "values": {
       "light": "浅色",
@@ -1877,6 +1886,7 @@
     "unarchiveDescription": "这些会话将重新显示在会话列表中。"
   },
   "deleteConfirm": {
+    "notConfirmed": "尚未确认会话已删除，请重试。",
     "title": "删除这个会话？",
     "titleMany": "删除这 {{count}} 个对话？",
     "description": "此操作无法撤销。",

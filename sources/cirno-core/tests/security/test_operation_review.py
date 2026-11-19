@@ -4,15 +4,19 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
+from cirno_core.agent.approval.service import OperationApproval, operation_access
 from cirno_core.agent.tools.context import RequestContext
 from cirno_core.agent.tools.filesystem import WriteFileTool
 from cirno_core.bus.events import INBOUND_META_TURN_ID
 from cirno_core.bus.queue import MessageBus
 from cirno_core.notifications.inbox import NotificationInbox
-from cirno_core.agent.approval.service import OperationApproval, operation_access
 from cirno_core.security.approval.store import ApprovalStore
-from cirno_core.security.workspace_access import bind_workspace_scope, build_workspace_scope, current_workspace_scope, reset_workspace_scope
+from cirno_core.security.workspace_access import (
+    bind_workspace_scope,
+    build_workspace_scope,
+    current_workspace_scope,
+    reset_workspace_scope,
+)
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.recovery.contracts import REQUEST_ORIGIN_METADATA_KEY
 
@@ -92,6 +96,70 @@ async def test_uncertain_waits_for_owner_and_grant_is_one_use(review):
     assert response.call_count == 2
 
 
+@pytest.mark.parametrize("status", ["paused", "stopped", "completed", "cancelled"])
+@pytest.mark.parametrize("approved", [False, True])
+async def test_late_approval_decision_keeps_a_suspended_or_closed_goal(review, status, approved):
+    from cirno_core.session.recovery.pending import pending_followups
+
+    service, request, response, target, sessions, bus = review
+    response.return_value.content = '{"decision":"human","reason":"Owner decision required"}'
+    await sessions.state.update_metadata(request.session_key, {
+        "goal_state": {"goal_id": "goal", "objective": "Write the file", "status": "active", "continuation_count": 2},
+    })
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    with pytest.raises(PermissionError, match="pending"):
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            pytest.fail("Pending operation executed")
+    before = (await sessions.state.read_header(request.session_key)).metadata["goal_state"]
+    identifier = before["approval_id"]
+    await sessions.state.update_metadata(request.session_key, {"goal_state": {**before, "status": status, "recap": "Keep stopped"}})
+    await service.decide(identifier, approved)
+    session = await sessions.state.get(request.session_key)
+    assert session.metadata["goal_state"]["status"] == status
+    assert session.metadata["goal_state"]["recap"] == "Keep stopped"
+    assert session.metadata["goal_state"]["continuation_count"] == 2
+    assert bus.inbound_size == 0 and not pending_followups(session)
+    assert service.store.get(identifier)["status"] == ("approved" if approved else "denied")
+    assert not service.store.pending_wakes()
+    assert not target.exists()
+    if approved and status in {"paused", "stopped"}:
+        from cirno_core.session.goal_state import resume_goal_state
+        await sessions.state.update_metadata(request.session_key, {
+            "goal_state": resume_goal_state(session.metadata["goal_state"]),
+        })
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            await tool.execute(path=str(target), content="hello")
+        assert service.store.get(identifier)["status"] == "used"
+        response.assert_awaited_once()
+
+
+@pytest.mark.parametrize("boundary", ["admission", "execution"])
+async def test_queued_approval_cannot_supersede_a_later_stop(review, boundary):
+    from cirno_core.agent.execution.session_turn import SessionTurn
+    from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+    from cirno_core.session.recovery.pending import pending_followups
+    from cirno_core.session.recovery.state import recovery_state_from_metadata
+
+    service, request, response, target, sessions, bus = review
+    response.return_value.content = '{"decision":"human","reason":"Owner decision required"}'
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    with pytest.raises(PermissionError, match="pending"):
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            pass
+    identifier = service.inbox.list()["items"][0]["data"]["approval_id"]
+    await service.decide(identifier, True)
+    queued = await bus.consume_inbound()
+    recovery = RecoveryCoordinator(sessions, bus)
+    await recovery.turn_stopped(request.session_key)
+    if boundary == "admission":
+        assert not await recovery.admit(queued)
+    else:
+        assert not await SessionTurn(SimpleNamespace(sessions=sessions)).current_goal(queued, request.session_key)
+    session = await sessions.state.get(request.session_key)
+    assert recovery_state_from_metadata(session.metadata)["reason"] == "user_stopped"
+    assert not pending_followups(session)
+
+
 async def test_replaced_session_cannot_consume_owner_grant(review):
     service, request, response, target, sessions, bus = review
     response.return_value.content = '{"decision":"human","reason":"Need confirmation"}'
@@ -154,8 +222,8 @@ async def test_review_is_enforced_at_shared_tool_boundary(review):
 
 
 async def test_script_content_changes_require_fresh_review(review):
-    from cirno_core.agent.tools.shell import ExecTool
     from cirno_core.agent.approval.reviewer import operation_evidence
+    from cirno_core.agent.tools.shell import ExecTool
 
     service, request, response, target, sessions, bus = review
     script = request.workspace / "run.py"
@@ -256,10 +324,11 @@ async def test_independent_review_uses_selected_preset_and_timeout(review, monke
 @pytest.mark.parametrize('mode', ['restricted', 'review', 'full'])
 async def test_nodes_execute_obeys_access_and_review(review, monkeypatch, mode):
     import json
-    from cirno_core.agent.tools.instance_features import NodeTool
-    from cirno_core.nodes.service import Nodes
-    from cirno_core.nodes.commands import CommandResult
+
     from cirno_core.agent.tools.context import request_context
+    from cirno_core.agent.tools.instance_features import NodeTool
+    from cirno_core.nodes.commands import CommandResult
+    from cirno_core.nodes.service import Nodes
     service, request, response, target, sessions, bus = review
     credential = Nodes().credentials.save(label='Research', kind='ssh', ssh={'host': 'lab.example', 'username': 'worker'}, node_enabled=True, agent_visible=True)
     node = Nodes().node(credential['id']).model_dump()
@@ -305,6 +374,7 @@ async def test_remote_script_requires_human_not_a_local_lookalike(review, monkey
 @pytest.mark.parametrize('kind', ['text', 'ssh'])
 async def test_credential_review_records_and_inbox_never_persist_secret_arguments(review, kind):
     import json
+
     from cirno_core.agent.tools.credential import CredentialTool
     service, request, response, target, sessions, bus = review
     secret = 'PRIVATE_REVIEW_VALUE_42'
@@ -325,3 +395,63 @@ def test_credential_review_digest_binds_redacted_values(tmp_path):
     assert 'first-secret' not in str(first)
     assert first['arguments'] == second['arguments']
     assert first != second
+
+
+@pytest.mark.parametrize("status", ["paused", "stopped", "completed", "cancelled"])
+async def test_unrelated_old_goal_does_not_block_approval_for_a_new_user_task(review, status):
+    service, request, response, target, sessions, bus = review
+    await sessions.state.update_metadata(request.session_key, {
+        "goal_state": {"goal_id": "old-goal", "objective": "Old task", "status": status},
+    })
+    response.return_value.content = '{"decision":"human","reason":"Owner decision required"}'
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    with pytest.raises(PermissionError, match="pending"):
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            pass
+    identifier = service.inbox.list()["items"][0]["data"]["approval_id"]
+    await service.decide(identifier, True)
+    assert bus.inbound_size == 1
+    assert (await sessions.state.read_header(request.session_key)).metadata["goal_state"]["status"] == status
+
+
+@pytest.mark.parametrize("boundary", ["admission", "execution"])
+@pytest.mark.parametrize("status", ["paused", "completed"])
+async def test_queued_goal_approval_rechecks_goal_status(review, boundary, status):
+    from cirno_core.agent.execution.session_turn import SessionTurn
+    from cirno_core.session.recovery.coordinator import RecoveryCoordinator
+    from cirno_core.session.recovery.pending import pending_followups
+
+    service, request, response, target, sessions, bus = review
+    await sessions.state.update_metadata(request.session_key, {
+        "goal_state": {"goal_id": "goal", "objective": "Write file", "status": "active"},
+    })
+    response.return_value.content = '{"decision":"human","reason":"Owner decision required"}'
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    with pytest.raises(PermissionError, match="pending"):
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            pass
+    identifier = service.inbox.list()["items"][0]["data"]["approval_id"]
+    await service.decide(identifier, True)
+    queued = await bus.consume_inbound()
+    metadata = (await sessions.state.read_header(request.session_key)).metadata
+    await sessions.state.update_metadata(request.session_key, {"goal_state": {**metadata["goal_state"], "status": status}})
+    if boundary == "admission":
+        assert not await RecoveryCoordinator(sessions, bus).admit(queued)
+    else:
+        assert not await SessionTurn(SimpleNamespace(sessions=sessions)).current_goal(queued, request.session_key)
+    assert not pending_followups(await sessions.state.get(request.session_key))
+
+
+async def test_approval_notices_retain_the_source_generation_before_and_after_decision(review):
+    service, request, response, target, *_ = review
+    response.return_value.content = '{"decision":"human","reason":"Owner decision required"}'
+    tool = WriteFileTool(workspace=request.workspace, allowed_dir=request.workspace)
+    with pytest.raises(PermissionError, match="pending"):
+        async with operation_access(tool, {"path": str(target), "content": "hello"}, request):
+            pytest.fail("Pending approval executed")
+    item = service.inbox.list()["items"][0]
+    assert item["data"].get("session_generation") == request.session_generation
+    await service.decide(item["data"]["approval_id"], True)
+    saved = service.inbox.get(item["id"])
+    assert saved["data"]["session_generation"] == request.session_generation
+    assert not target.exists()

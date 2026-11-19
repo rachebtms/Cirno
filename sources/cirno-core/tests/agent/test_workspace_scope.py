@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 from cirno_core.agent.context import ContextBuilder
 from cirno_core.agent.tools.cli_apps import CliAppsTool
 from cirno_core.agent.tools.context import RequestContext, ToolContext, request_context
@@ -131,7 +130,7 @@ def test_selected_websocket_project_is_visible_to_the_model(
     assert "Use it as the default root for project files" in prompt
 
 
-def test_workspace_scope_metadata_falls_back_for_stale_session(tmp_path: Path) -> None:
+def test_workspace_scope_metadata_preserves_a_missing_restricted_project(tmp_path: Path) -> None:
     scope = workspace_scope_from_metadata(
         {
             WORKSPACE_SCOPE_METADATA_KEY: {
@@ -143,8 +142,33 @@ def test_workspace_scope_metadata_falls_back_for_stale_session(tmp_path: Path) -
         default_restrict_to_workspace=False,
     )
 
-    assert scope.project_path == tmp_path.resolve()
-    assert scope.access_mode == "full"
+    assert scope.project_path == (tmp_path / "missing").resolve()
+    assert scope.access_mode == "restricted"
+    assert scope.restrict_to_workspace
+
+
+@pytest.mark.parametrize("raw", [
+    "invalid scope",
+    {"project_path": "relative/project", "access_mode": "restricted"},
+    {"access_mode": "invalid-mode"},
+    {"project_path": 0, "access_mode": "restricted"},
+    {"project_path": False, "access_mode": "restricted"},
+])
+def test_invalid_explicit_workspace_metadata_cannot_grant_default_full_access(tmp_path, raw):
+    with pytest.raises(WorkspaceScopeError):
+        workspace_scope_from_metadata(
+            {WORKSPACE_SCOPE_METADATA_KEY: raw},
+            default_workspace=tmp_path,
+            default_restrict_to_workspace=False,
+        )
+
+
+@pytest.mark.parametrize("metadata", [None, {}, {WORKSPACE_SCOPE_METADATA_KEY: None}])
+def test_legacy_unscoped_metadata_keeps_the_configured_default(tmp_path, metadata):
+    scope = workspace_scope_from_metadata(
+        metadata, default_workspace=tmp_path, default_restrict_to_workspace=False,
+    )
+    assert scope.project_path == tmp_path.resolve() and scope.access_mode == "full"
 
 
 @pytest.mark.asyncio
@@ -369,7 +393,7 @@ async def test_exec_full_scope_allows_explicit_cwd_outside_project(
     )
     token = bind_workspace_scope(scope)
     try:
-        result = await tool.execute(yield_time_ms=5000, 
+        result = await tool.execute(yield_time_ms=5000,
             command=(
                 f'{cmd_python} -c "from pathlib import Path; '
                 "Path('outside-marker.txt').write_text('ok')\""

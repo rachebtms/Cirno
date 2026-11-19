@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from cirno_core.session.keys import ROUTER_SESSION_KEY
 import json
 from typing import Any
 
+from loguru import logger
+
 from cirno_core.agent.hook import AgentHook, AgentHookContext
-from cirno_core.bus.outbound_events import ProgressEvent, StreamDeltaEvent, StreamEndEvent
 from cirno_core.bus.agent_events import NO_EVENTS, EventSink
-from cirno_core.utils.reasoning import IncrementalThinkExtractor, strip_think
+from cirno_core.bus.outbound_events import ProgressEvent, StreamDeltaEvent, StreamEndEvent
+from cirno_core.session.keys import ROUTER_SESSION_KEY
 from cirno_core.utils.progress_events import (
     build_tool_event_finish_payloads,
     build_tool_event_start_payload,
 )
-from loguru import logger
+from cirno_core.utils.reasoning import IncrementalThinkExtractor, strip_think
 
 
 class AgentProgressHook(AgentHook):
@@ -130,7 +131,10 @@ class AgentProgressHook(AgentHook):
                 thought = self._strip_think(context.response.content if context.response else None)
                 if thought:
                     await self._publish(ProgressEvent(content=thought))
-            tool_events = [build_tool_event_start_payload(tc) for tc in context.tool_calls]
+            tool_events = [
+                build_tool_event_start_payload(tc, activity=context.tool_activity.get(tc.id))
+                for tc in context.tool_calls
+            ]
             await self._publish(ProgressEvent(tool_hint=True, tool_events=tool_events))
         for tc in context.tool_calls:
             args_str = (

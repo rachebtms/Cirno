@@ -1,17 +1,17 @@
-from __future__ import annotations
 """CLI Apps helpers for the WebUI HTTP and message surfaces."""
 
+from __future__ import annotations
 
 import asyncio
 import re
-import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
 from cirno_core.apps.cli import CliAppError, CliAppManager, CliAppsRuntimeConfig
 from cirno_core.config.loader import load_config
-from loguru import logger
+from cirno_core.runtime.admission import RuntimeMaintenanceError
 
 QueryParams = dict[str, list[str]]
 
@@ -24,30 +24,6 @@ _CLI_APP_ATTACHMENT_KEYS = (
     "logo_url",
     "brand_color",
 )
-_CATALOG_REFRESH_RETRY_SECONDS = 60.0
-_catalog_refresh_task: asyncio.Task[None] | None = None
-_catalog_refresh_last_started = 0.0
-
-
-async def _refresh_catalog(manager: CliAppManager) -> None:
-    try:
-        await manager.registry.refresh_catalog_cache(force_refresh=True)
-    except Exception:
-        logger.exception("CLI Apps catalog refresh failed; retaining the cached catalog")
-
-
-def _start_catalog_refresh(manager: CliAppManager) -> bool:
-    global _catalog_refresh_last_started, _catalog_refresh_task
-    now = time.monotonic()
-    if _catalog_refresh_task is not None and not _catalog_refresh_task.done():
-        return True
-    if now - _catalog_refresh_last_started < _CATALOG_REFRESH_RETRY_SECONDS:
-        return False
-    _catalog_refresh_last_started = now
-    _catalog_refresh_task = asyncio.create_task(_refresh_catalog(manager))
-    return True
-
-
 def _clip_ws_string(value: Any, limit: int = 240) -> str | None:
     if not isinstance(value, str):
         return None
@@ -128,14 +104,23 @@ async def cli_apps_payload(
     *,
     installed_only: bool = False,
     config_path: Path | None = None,
+    start_refresh: Callable[[CliAppManager], bool] | None = None,
 ) -> dict[str, Any]:
+    """Read local state; detached refresh requires an explicit runtime owner."""
     # Configuration, cache reads and executable discovery can all block on disk.
     local = await asyncio.to_thread(_read_local, installed_only=installed_only, config_path=config_path)
     if not installed_only:
         # Refresh task/throttle state belongs to this event loop, not the reader.
-        local.payload["catalog_refresh_pending"] = (
-            _start_catalog_refresh(local.refresh_manager) if local.refresh_manager is not None else False
-        )
+        try:
+            pending = (
+                start_refresh(local.refresh_manager)
+                if start_refresh is not None and local.refresh_manager is not None else False
+            )
+        except RuntimeMaintenanceError:
+            # Maintenance can start while a read-only snapshot is in flight.
+            # Serve the snapshot without admitting a new cache writer.
+            pending = False
+        local.payload["catalog_refresh_pending"] = pending
     return local.payload
 
 

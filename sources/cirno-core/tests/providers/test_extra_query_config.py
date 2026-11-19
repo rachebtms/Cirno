@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from cirno_core.config.schema import Config
 from cirno_core.config.providers import ProviderConfig
+from cirno_core.config.schema import Config
 from cirno_core.providers.factory import provider_signature
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 
@@ -42,7 +42,8 @@ class TestExtraQueryInit:
 class TestExtraQueryBuildClient:
     """Verify extra_query flows into AsyncOpenAI default_query."""
 
-    def test_build_client_passes_default_query(self) -> None:
+    async def test_build_client_passes_default_query(self, monkeypatch) -> None:
+        monkeypatch.setattr("httpx.AsyncClient", MagicMock())
         mock_client = MagicMock()
         with patch(
             "cirno_core.providers.openai_compat_provider.AsyncOpenAI",
@@ -52,19 +53,20 @@ class TestExtraQueryBuildClient:
                 api_key="test",
                 extra_query={"api-version": "v1"},
             )
-            provider._build_client()
+            await provider._build_client()
 
         assert provider._client is mock_client
         assert mock_async_openai.call_args.kwargs["default_query"] == {"api-version": "v1"}
 
-    def test_build_client_passes_no_default_query_when_empty(self) -> None:
+    async def test_build_client_passes_no_default_query_when_empty(self, monkeypatch) -> None:
+        monkeypatch.setattr("httpx.AsyncClient", MagicMock())
         mock_client = MagicMock()
         with patch(
             "cirno_core.providers.openai_compat_provider.AsyncOpenAI",
             return_value=mock_client,
         ) as mock_async_openai:
             provider = OpenAICompatProvider(api_key="test")
-            provider._build_client()
+            await provider._build_client()
 
         assert provider._client is mock_client
         kwargs = mock_async_openai.call_args.kwargs

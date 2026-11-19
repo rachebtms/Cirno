@@ -394,7 +394,7 @@ async def test_settings_shutdown_joins_browser_authorization_and_releases_admiss
     monkeypatch.setattr("cirno_server.webui.mcp.oauth_api.validate_url_target", lambda _: (True, ""))
     cleanup_started, allow_cleanup = asyncio.Event(), asyncio.Event()
 
-    async def connect(_servers, _registry, *, oauth_handlers, network):
+    async def connect(_servers, _registry, *, oauth_handlers, network, config_path=None):
         handlers = oauth_handlers["linear"]
         await handlers.redirect_handler("https://accounts.example/authorize?state=settings")
         try:

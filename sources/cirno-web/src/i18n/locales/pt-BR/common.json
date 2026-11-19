@@ -168,6 +168,10 @@
           "label": "Acesso à web",
           "help": "Permite pesquisar na web e obter páginas."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "Tamanho máximo da resposta da página (MiB)",
+          "help": "Interrompe a leitura de páginas, imagens ou respostas do Jina quando o tamanho informado ou decodificado excede este limite. É separado do comprimento do texto retornado. Reinicie para aplicar."
+        },
         "tools_cli_apps_enable": {
           "label": "Apps CLI",
           "help": "Permite que o agente gerencie e execute aplicativos de linha de comando."
@@ -1060,7 +1064,11 @@
         "supabase": "Veja e gerencie projetos."
       },
       "editConfig": "Editar configuração MCP",
-      "configObjectRequired": "A configuração MCP deve ser um objeto JSON."
+      "configObjectRequired": "A configuração MCP deve ser um objeto JSON.",
+      "changePending": "Outra alteração de MCP está em andamento. Aguarde a conclusão e salve novamente.",
+      "cleanupPending": "Ainda há dados do servidor MCP removido {{name}} para limpar.",
+      "retryCleanup": "Tentar limpeza novamente",
+      "statusAuthorizationRequired": "Precisa entrar"
     },
     "values": {
       "light": "Claro",
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "Estas conversas voltarão à lista de conversas."
   },
   "deleteConfirm": {
+    "notConfirmed": "A exclusão da conversa não foi confirmada. Tente novamente.",
     "title": "Excluir esta conversa?",
     "titleMany": "Excluir {{count}} conversas?",
     "description": "Esta ação não pode ser desfeita.",

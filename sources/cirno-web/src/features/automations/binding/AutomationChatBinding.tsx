@@ -17,21 +17,29 @@ export type {
   ChangeAutomationChat,
 } from "./AutomationChatBindingView";
 
-export function AutomationChatBinding({
-  job,
-  token,
-  chatNames,
-  onSave,
-  children,
-  onBusyChange,
-}: {
+interface AutomationChatBindingProps {
   job: SessionAutomationJob;
   token: string;
   onSave: ChangeAutomationChat;
   chatNames?: AutomationChatNames;
   children: (picker: ReactNode) => ReactNode;
   onBusyChange?: (busy: boolean) => void;
-}) {
+}
+
+export function AutomationChatBinding(props: AutomationChatBindingProps) {
+  return (
+    <OwnedChatBinding key={JSON.stringify([props.token, props.job.id])} {...props} />
+  );
+}
+
+function OwnedChatBinding({
+  job,
+  token,
+  chatNames,
+  onSave,
+  children,
+  onBusyChange,
+}: AutomationChatBindingProps) {
   const [data, setData] = useState<AutomationChatsPayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);

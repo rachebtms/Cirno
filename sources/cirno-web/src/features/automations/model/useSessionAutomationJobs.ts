@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { fetchSessionAutomations } from "@/lib/api";
 import type { SessionAutomationJob } from "@/lib/contracts/automations";
+import { useLifetime } from "@/ui/resources/useLifetime";
 
 const AUTOMATIONS_REFRESH_MS = 3000;
 interface Snapshot {
@@ -16,6 +18,9 @@ export function useSessionAutomationJobs(
   sessionKey: string,
 ) {
   const pageVisible = usePageVisibility();
+  const { t } = useTranslation();
+  const owner = useMemo(() => ({ revision: 0, pending: false }), [token, sessionKey]);
+  const isCurrent = useLifetime(owner);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -28,8 +33,11 @@ export function useSessionAutomationJobs(
         : { token, sessionKey, jobs: null, error: null },
     );
     const refresh = async () => {
-      if (refreshing) return;
+      if (refreshing || owner.pending) return;
       refreshing = true;
+      const revision = ++owner.revision;
+      const ownsRead = () => !controller.signal.aborted && isCurrent()
+        && !owner.pending && owner.revision === revision;
       try {
         const next = await fetchSessionAutomations(
           token,
@@ -37,10 +45,10 @@ export function useSessionAutomationJobs(
           "",
           controller.signal,
         );
-        if (!controller.signal.aborted)
+        if (ownsRead())
           setSnapshot({ token, sessionKey, jobs: next.jobs, error: null });
       } catch (reason) {
-        if (!controller.signal.aborted)
+        if (ownsRead())
           setSnapshot((current) => ({
             token,
             sessionKey,
@@ -62,7 +70,27 @@ export function useSessionAutomationJobs(
       window.clearInterval(interval);
       window.removeEventListener("focus", refresh);
     };
-  }, [open, pageVisible, token, sessionKey]);
+  }, [open, pageVisible, token, sessionKey, owner, isCurrent]);
+  const mutate = useCallback(async (
+    operation: () => Promise<SessionAutomationJob[]>,
+  ): Promise<SessionAutomationJob[]> => {
+    if (!isCurrent()) throw new DOMException("Automation view is no longer active", "AbortError");
+    if (owner.pending) throw new Error(t("settings.automations.chat.schedulerBusy"));
+    owner.pending = true;
+    owner.revision += 1;
+    try {
+      const jobs = (await operation()).filter(
+        (job) => !job.protected && (
+          job.webui_session_key !== undefined ? job.webui_session_key : job.origin?.session_key
+        ) === sessionKey,
+      );
+      if (isCurrent()) setSnapshot({ token, sessionKey, jobs, error: null });
+      return jobs;
+    } finally {
+      owner.revision += 1;
+      owner.pending = false;
+    }
+  }, [isCurrent, owner, token, sessionKey, t]);
   useEffect(() => {
     if (!open || !pageVisible) return;
     setNow(Date.now());
@@ -78,5 +106,6 @@ export function useSessionAutomationJobs(
     loading: open && current?.jobs == null && !current?.error,
     loadError: current?.error ?? null,
     now,
+    mutate,
   };
 }

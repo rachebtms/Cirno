@@ -11,10 +11,13 @@ import asyncio
 import secrets
 import time
 from collections.abc import AsyncIterable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
+from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.media_decode import media_destination
+
 from cirno_server.channels.websocket.attachment_policy import (
     DOCUMENT_MIME_ALLOWED,
     MAX_VIDEOS_PER_MESSAGE,
@@ -53,6 +56,7 @@ class AttachmentStore:
         self,
         media_dir: Path,
         *,
+        media_root: Path | None = None,
         limits: AttachmentIngressLimits | None = None,
         max_pending: int = 128,
         max_pending_bytes: int = 128 * 1024 * 1024,
@@ -63,6 +67,9 @@ class AttachmentStore:
         if min(max_pending, max_pending_bytes, ttl_seconds, upload_timeout, upload_idle_timeout) <= 0:
             raise ValueError("Attachment store bounds must be positive")
         self.media_dir = media_dir
+        # Uploads may use a channel subdirectory; local references retain the
+        # owning instance's complete media exception, including other channels.
+        self.media_root = media_root if media_root is not None else media_dir
         self.limits = limits or AttachmentIngressLimits()
         self.max_pending = max_pending
         self.max_pending_bytes = max_pending_bytes
@@ -72,6 +79,7 @@ class AttachmentStore:
         self._entries: dict[str, StagedAttachment] = {}
         self._reserved_bytes = 0
         self._active = 0
+        self._active_paths: set[Path] = set()
         self._journal = media_dir / ".pending-attachments"
 
     async def upload(
@@ -108,20 +116,34 @@ class AttachmentStore:
         stored = False
         created = False
         marker_created = False
+        path_claimed = False
+        files = ExitStack()
         try:
-            self.media_dir.mkdir(parents=True, exist_ok=True)
             path = media_destination(
                 self.media_dir, mime,
                 filename=filename if mime in DOCUMENT_MIME_ALLOWED else None,
             )
-            self._journal.mkdir(parents=True, exist_ok=True)
-            (self._journal / path.name).touch(exist_ok=False)
-            marker_created = True
-            received = 0
-            # Exclusive creation prevents accidental overwrite or symlink following.
-            with path.open("xb") as output:
+            if path in self._active_paths:
+                raise FileExistsError(f"Attachment path is already in use: {path}")
+            self._active_paths.add(path)
+            path_claimed = True
+
+            def prepare_output():
+                nonlocal created, marker_created
+                self.media_dir.mkdir(parents=True, exist_ok=True)
+                self._journal.mkdir(parents=True, exist_ok=True)
+                (self._journal / path.name).touch(exist_ok=False)
+                marker_created = True
+                # Register the writer and ownership before returning to the
+                # awaiter: cancellation may arrive after the open succeeds.
+                output = files.enter_context(path.open("xb"))
                 created = True
-                async with asyncio.timeout(self.upload_timeout):
+                return output
+
+            received = 0
+            async with asyncio.timeout(self.upload_timeout):
+                try:
+                    output = await shield_and_drain(asyncio.to_thread(prepare_output))
                     iterator = aiter(chunks)
                     while True:
                         async with asyncio.timeout(self.upload_idle_timeout):
@@ -132,7 +154,11 @@ class AttachmentStore:
                         received += len(chunk)
                         if received > size:
                             raise AttachmentUploadError("Attachment exceeds declared size")
-                        output.write(chunk)
+                        await shield_and_drain(asyncio.to_thread(output.write, chunk))
+                finally:
+                    # Flush/close only after accepted writes have settled. Disk
+                    # cleanup must not race a cancelled executor operation.
+                    await shield_and_drain(asyncio.to_thread(files.close))
             if received != size:
                 raise AttachmentUploadError("Incomplete attachment body")
             reference = secrets.token_urlsafe(32)
@@ -142,14 +168,22 @@ class AttachmentStore:
             stored = True
             return reference
         finally:
-            self._active -= 1
-            if not stored:
-                self._reserved_bytes -= size
+            def remove_partial():
                 if path is not None:
                     if created:
                         path.unlink(missing_ok=True)
                     if marker_created:
                         (self._journal / path.name).unlink(missing_ok=True)
+
+            try:
+                if not stored:
+                    await shield_and_drain(asyncio.to_thread(remove_partial))
+            finally:
+                if path_claimed and path is not None:
+                    self._active_paths.discard(path)
+                self._active -= 1
+                if not stored:
+                    self._reserved_bytes -= size
 
     def inspect(self, references: list[str], *, owner: str) -> list[StagedAttachment]:
         """Validate a complete batch without consuming it, allowing send retries."""
@@ -203,7 +237,10 @@ class AttachmentStore:
         now = time.monotonic()
         # Crash remnants retain a marker; committed historical files never do.
         cutoff = time.time() - self.ttl_seconds - self.upload_timeout
+        owned_paths = self._active_paths | {entry.path for entry in self._entries.values()}
         for marker in self._journal.glob("*"):
+            if self.media_dir / marker.name in owned_paths:
+                continue
             if marker.is_file() and marker.stat().st_mtime < cutoff:
                 (self.media_dir / marker.name).unlink(missing_ok=True)
                 marker.unlink(missing_ok=True)

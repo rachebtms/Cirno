@@ -2,14 +2,16 @@
 
 import codecs
 import mimetypes
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
 from typing import Any
 from zipfile import BadZipFile, ZipFile
 
-from cirno_core.utils.model_messages import detect_image_mime
 from loguru import logger
+
+from cirno_core.utils.model_messages import detect_image_mime
 
 _MAX_TEXT_LENGTH = 200_000
 _MAX_EXTRACT_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -99,6 +101,35 @@ class DocumentLineSource:
     continuation: str | None = None
 
 
+class _OwnedDocumentLines(Iterator[LocatedDocumentLine]):
+    """Close the admitted parser even if its lazy line generator never starts."""
+
+    def __init__(self, lines: Iterator[LocatedDocumentLine], close_owner: Callable[[], None]):
+        self._lines = lines
+        self._close_owner = close_owner
+        self._closed = False
+
+    def __next__(self) -> LocatedDocumentLine:
+        if self._closed:
+            raise StopIteration
+        try:
+            return next(self._lines)
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            close = getattr(self._lines, "close", None)
+            if callable(close):
+                close()
+        finally:
+            self._close_owner()
+
+
 def extract_text(path: str | Path) -> str | None:
     """Extract text from a file.
 
@@ -179,14 +210,21 @@ def _open_pdf_line_source(path: Path, pages: str | None) -> DocumentLineSource:
         from pypdf import PdfReader
 
         reader = PdfReader(path, strict=False)
-        total_pages = len(reader.pages)
-        if total_pages == 0:
-            return DocumentLineSource(iter(()))
-        start, requested_end = _parse_pdf_page_range(pages, total_pages)
-    except PdfPageRangeError:
-        raise
     except Exception as e:
         raise DocumentExtractionError(f"failed to open PDF: {e!s}") from e
+    try:
+        total_pages = len(reader.pages)
+        start, requested_end = _parse_pdf_page_range(pages, total_pages) if total_pages else (0, -1)
+    except PdfPageRangeError:
+        reader.close()
+        raise
+    except Exception as e:
+        reader.close()
+        raise DocumentExtractionError(f"failed to open PDF: {e!s}") from e
+
+    if total_pages == 0:
+        reader.close()
+        return DocumentLineSource(iter(()))
 
     end = min(requested_end, start + _MAX_PDF_ATTACHMENT_PAGES - 1)
     continuation = None
@@ -235,7 +273,9 @@ def _open_pdf_line_source(path: Path, pages: str | None) -> DocumentLineSource:
                 )
             wrote_page = True
 
-    return DocumentLineSource(iter_lines(), continuation=continuation)
+    return DocumentLineSource(
+        _OwnedDocumentLines(iter_lines(), reader.close), continuation=continuation
+    )
 
 
 def _open_xlsx_line_source(path: Path) -> DocumentLineSource:
@@ -252,48 +292,45 @@ def _open_xlsx_line_source(path: Path) -> DocumentLineSource:
     def iter_lines() -> Iterator[LocatedDocumentLine]:
         extracted_line = 0
         wrote_document_content = False
-        try:
-            for worksheet in workbook.worksheets:
-                sheet_name = worksheet.title
-                # Producer-supplied dimensions can omit cells that are present in the XML.
-                worksheet.reset_dimensions()
-                wrote_header = False
-                for row_index, row in enumerate(worksheet.iter_rows(values_only=True), 1):
-                    cells = [str(cell) if cell is not None else "" for cell in row]
-                    row_text = "\t".join(cells)
-                    if not row_text.strip():
-                        continue
-                    column_starts: list[int] = []
-                    offset = 0
-                    for cell in cells:
-                        column_starts.append(offset)
-                        offset += len(cell) + 1
-                    if not wrote_header:
-                        if wrote_document_content:
-                            extracted_line += 1
-                            yield LocatedDocumentLine(
-                                "", extracted_line, "", searchable=False
-                            )
+        for worksheet in workbook.worksheets:
+            sheet_name = worksheet.title
+            # Producer-supplied dimensions can omit cells that are present in the XML.
+            worksheet.reset_dimensions()
+            wrote_header = False
+            for row_index, row in enumerate(worksheet.iter_rows(values_only=True), 1):
+                cells = [str(cell) if cell is not None else "" for cell in row]
+                row_text = "\t".join(cells)
+                if not row_text.strip():
+                    continue
+                column_starts: list[int] = []
+                offset = 0
+                for cell in cells:
+                    column_starts.append(offset)
+                    offset += len(cell) + 1
+                if not wrote_header:
+                    if wrote_document_content:
                         extracted_line += 1
                         yield LocatedDocumentLine(
-                            f"--- Sheet: {sheet_name} ---",
-                            extracted_line,
-                            "",
-                            searchable=False,
+                            "", extracted_line, "", searchable=False
                         )
-                        wrote_header = True
-                        wrote_document_content = True
                     extracted_line += 1
                     yield LocatedDocumentLine(
-                        row_text,
+                        f"--- Sheet: {sheet_name} ---",
                         extracted_line,
-                        f"sheet={sheet_name!r},row={row_index}",
-                        column_starts=tuple(column_starts),
+                        "",
+                        searchable=False,
                     )
-        finally:
-            workbook.close()
+                    wrote_header = True
+                    wrote_document_content = True
+                extracted_line += 1
+                yield LocatedDocumentLine(
+                    row_text,
+                    extracted_line,
+                    f"sheet={sheet_name!r},row={row_index}",
+                    column_starts=tuple(column_starts),
+                )
 
-    return DocumentLineSource(iter_lines())
+    return DocumentLineSource(_OwnedDocumentLines(iter_lines(), workbook.close))
 
 
 def _open_pptx_line_source(path: Path) -> DocumentLineSource:
@@ -462,40 +499,50 @@ def extract_pdf_pages(
     pages: str | None = None,
     max_pages: int = _MAX_PDF_ATTACHMENT_PAGES,
     max_chars: int = _MAX_TEXT_LENGTH,
+    cancelled: Event | None = None,
 ) -> PdfExtraction:
     """Extract a bounded PDF page range using the bundled pypdf reader."""
     from pypdf import PdfReader
 
+    if cancelled is not None and cancelled.is_set():
+        raise InterruptedError("PDF read cancelled")
     reader = PdfReader(path, strict=False)
-    total_pages = len(reader.pages)
-    if total_pages == 0:
-        return PdfExtraction("", 0, 0, -1)
+    try:
+        total_pages = len(reader.pages)
+        if total_pages == 0:
+            return PdfExtraction("", 0, 0, -1)
 
-    start, end = _parse_pdf_page_range(pages, total_pages)
-    end = min(end, start + max_pages - 1)
-    collector = _TextCollector(max_chars)
-    for index in range(start, end + 1):
-        page = reader.pages[index]
-        contents = page.get_contents()
-        if contents is not None:
-            stream_size = len(contents.get_data())
-            if stream_size > _MAX_PDF_CONTENT_STREAM_SIZE:
-                raise PdfSafetyError(
-                    f"page {index + 1} content stream exceeds "
-                    f"{_MAX_PDF_CONTENT_STREAM_SIZE // (1024 * 1024)} MB limit"
-                )
-        text = (page.extract_text() or "").strip()
-        if not text:
-            continue
-        page_text = f"--- Page {index + 1} ---\n{text}"
-        if collector.parts and collector.length + 2 + len(page_text) > max_chars:
-            # Leave this page for the next read instead of returning only its prefix.
-            end = index - 1
-            break
-        if not collector.add(page_text, separator="\n\n"):
-            end = index
-            break
-    return PdfExtraction(collector.render(), total_pages, start, end, truncated=collector.truncated)
+        start, end = _parse_pdf_page_range(pages, total_pages)
+        end = min(end, start + max_pages - 1)
+        collector = _TextCollector(max_chars)
+        for index in range(start, end + 1):
+            if cancelled is not None and cancelled.is_set():
+                raise InterruptedError("PDF read cancelled")
+            page = reader.pages[index]
+            contents = page.get_contents()
+            if contents is not None:
+                stream_size = len(contents.get_data())
+                if stream_size > _MAX_PDF_CONTENT_STREAM_SIZE:
+                    raise PdfSafetyError(
+                        f"page {index + 1} content stream exceeds "
+                        f"{_MAX_PDF_CONTENT_STREAM_SIZE // (1024 * 1024)} MB limit"
+                    )
+            text = (page.extract_text() or "").strip()
+            if not text:
+                continue
+            page_text = f"--- Page {index + 1} ---\n{text}"
+            if collector.parts and collector.length + 2 + len(page_text) > max_chars:
+                # Leave this page for the next read instead of returning only its prefix.
+                end = index - 1
+                break
+            if not collector.add(page_text, separator="\n\n"):
+                end = index
+                break
+        return PdfExtraction(collector.render(), total_pages, start, end, truncated=collector.truncated)
+    finally:
+        close = getattr(reader, "close", None)
+        if callable(close):
+            close()
 
 
 def _parse_pdf_page_range(pages: str | None, total_pages: int) -> tuple[int, int]:

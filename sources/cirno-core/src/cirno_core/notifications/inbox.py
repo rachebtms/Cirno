@@ -11,11 +11,38 @@ from contextlib import contextmanager
 from typing import Any
 
 from cirno_core.bus.events import OutboundMessage
+from cirno_core.config.paths import get_data_dir
 from cirno_core.notifications.contracts import NoticeDraft
 
-from cirno_core.config.paths import get_data_dir
-
 CATEGORIES = ("operations", "conversations", "system")
+
+
+def _revision(db) -> int:
+    return db.execute("SELECT revision FROM inbox_clock").fetchone()[0]
+
+
+def _advance_revision(db, identifier: str | None = None) -> int:
+    db.execute("UPDATE inbox_clock SET revision=revision+1")
+    revision = _revision(db)
+    if identifier is not None:
+        db.execute("INSERT OR REPLACE INTO notice_revisions VALUES (?,?)", (identifier, revision))
+    return revision
+
+
+def question_reply_id(content: str) -> str | None:
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    quote, separator, body = normalized.partition("\n\n")
+    if not separator or not body.strip():
+        return None
+    lines = quote.split("\n")
+    if len(lines) < 3 or lines[0] != "> [!QUOTE]" or any(
+        line != ">" and not line.startswith("> ") for line in lines[1:]
+    ):
+        return None
+    match = re.fullmatch(r"> <!-- cirno-question:([a-f0-9]{32}) -->", lines[1])
+    if match is None or not any(line[2:].strip() for line in lines[2:] if line.startswith("> ")):
+        return None
+    return match[1]
 
 
 class NotificationInbox:
@@ -39,6 +66,8 @@ class NotificationInbox:
                 )""")
                 db.execute("CREATE INDEX IF NOT EXISTS notice_category ON notices(category,seq)")
                 db.execute("CREATE TABLE IF NOT EXISTS telegram_pending (notice_id TEXT PRIMARY KEY, revision TEXT NOT NULL)")
+                db.execute("CREATE TABLE IF NOT EXISTS inbox_clock AS SELECT 0 AS revision")
+                db.execute("CREATE TABLE IF NOT EXISTS notice_revisions (id TEXT PRIMARY KEY, revision INTEGER NOT NULL)")
 
                 yield db
         finally:
@@ -51,13 +80,15 @@ class NotificationInbox:
         encoded = json.dumps(data or {}, ensure_ascii=False)
         with self.connect() as db:
             if kind == "question" and status == "cancelled":
-                db.execute("""UPDATE notices SET status='cancelled',read_at=?,
+                changed = db.execute("""UPDATE notices SET status='cancelled',read_at=?,
                     data=json_set(data,'$.cancellation_reason',?)
                     WHERE id=? AND session_key=? AND kind='question' AND status='pending'
                     AND (json_extract(data,'$.session_generation') IS NULL
                          OR json_extract(data,'$.session_generation')=?)""",
                     (now, (data or {}).get("reason", ""), identifier, session_key,
-                     (data or {}).get("session_generation")))
+                     (data or {}).get("session_generation"))).rowcount
+                if changed:
+                    _advance_revision(db, identifier)
                 return
             changed = db.execute("""INSERT INTO notices(id,category,kind,status,session_key,body,data,created_at)
                 VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
@@ -68,12 +99,14 @@ class NotificationInbox:
                         AND excluded.status='pending')""",
                 (identifier, category, kind, status, session_key, body[:8000], encoded, now)).rowcount
             if changed:
+                _advance_revision(db, identifier)
                 from uuid import uuid4
                 db.execute("INSERT INTO telegram_pending VALUES(?,?) ON CONFLICT(notice_id) DO UPDATE SET revision=excluded.revision", (identifier, uuid4().hex))
             # Pending actions remain until their original workflow resolves them.
             db.execute("""DELETE FROM notices WHERE status<>'pending' AND seq NOT IN
                 (SELECT seq FROM notices ORDER BY seq DESC LIMIT 10000)""")
             db.execute("DELETE FROM telegram_pending WHERE notice_id NOT IN (SELECT id FROM notices)")
+            db.execute("DELETE FROM notice_revisions WHERE id NOT IN (SELECT id FROM notices)")
 
     def queue_pending_actions(self):
         from uuid import uuid4
@@ -83,7 +116,11 @@ class NotificationInbox:
     def telegram_pending(self, since: int = 0) -> list[dict[str, Any]]:
         with self.connect() as db:
             db.execute("DELETE FROM telegram_pending WHERE notice_id IN (SELECT id FROM notices WHERE created_at<? AND NOT(category='operations' AND status='pending'))", (since,))
-            rows = db.execute("SELECT notices.*,telegram_pending.revision FROM telegram_pending JOIN notices ON notice_id=notices.id ORDER BY CASE WHEN category='operations' AND status='pending' THEN 0 ELSE 1 END,notices.seq LIMIT 50").fetchall()
+            rows = db.execute("""SELECT notices.*,telegram_pending.revision,
+                coalesce(notice_revisions.revision,0) AS notice_revision
+                FROM telegram_pending JOIN notices ON notice_id=notices.id
+                LEFT JOIN notice_revisions ON notice_revisions.id=notices.id
+                ORDER BY CASE WHEN category='operations' AND status='pending' THEN 0 ELSE 1 END,notices.seq LIMIT 50""").fetchall()
         return [{**dict(row), "data": json.loads(row["data"])} for row in rows]
 
     def telegram_queued(self, identifier: str, revision: str) -> None:
@@ -105,12 +142,18 @@ class NotificationInbox:
                 values.append(value)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with self.connect() as db:
+            # SELECT alone does not begin a sqlite3 transaction. Keep rows,
+            # counts and the notification cursor on the same read snapshot.
+            db.execute("BEGIN")
             rows = db.execute("SELECT * FROM notices" + where + " ORDER BY seq DESC LIMIT ?", (*values, limit + 1)).fetchall()
             unread = {name: 0 for name in CATEGORIES}
             unread.update({row[0]: row[1] for row in db.execute("SELECT category,count(*) FROM notices WHERE read_at IS NULL GROUP BY category")})
             latest = db.execute("SELECT coalesce(max(seq),0) FROM notices").fetchone()[0]
-        items = [{**dict(row), "data": json.loads(row["data"])} for row in rows[:limit]]
-        return {"items": items, "unread": unread, "latest_seq": latest,
+            revision = _revision(db)
+            identifiers = [row["id"] for row in rows[:limit]]
+            versions = dict(db.execute("SELECT id,revision FROM notice_revisions WHERE id IN (" + ",".join("?" for _ in identifiers) + ")", identifiers)) if identifiers else {}
+        items = [{**dict(row), "revision": versions.get(row["id"], 0), "data": json.loads(row["data"])} for row in rows[:limit]]
+        return {"items": items, "unread": unread, "latest_seq": latest, "revision": revision,
                 "next_before": items[-1]["seq"] if len(rows) > limit else None}
 
     def read(self, *, identifiers=None, category=None):
@@ -126,28 +169,49 @@ class NotificationInbox:
         if category:
             where += " AND category=?"
             values.append(category)
+        read_at = int(time.time() * 1000)
         with self.connect() as db:
-            db.execute("UPDATE notices SET read_at=? WHERE " + where, (int(time.time() * 1000), *values))
+            changed = db.execute("UPDATE notices SET read_at=? WHERE " + where, (read_at, *values)).rowcount
+            revision = _advance_revision(db) if changed else _revision(db)
+            # Return counts from the write transaction, even if a later page
+            # refresh fails. A separate list() could already see a newer write.
+            unread = {name: 0 for name in CATEGORIES}
+            unread.update({row[0]: row[1] for row in db.execute("SELECT category,count(*) FROM notices WHERE read_at IS NULL GROUP BY category")})
+        return {"read_at": read_at, "unread": unread, "revision": revision}
 
     def get(self, identifier):
         with self.connect() as db:
+            db.execute("BEGIN")
             row = db.execute("SELECT * FROM notices WHERE id=?", (identifier,)).fetchone()
+            version = db.execute("SELECT revision FROM notice_revisions WHERE id=?", (identifier,)).fetchone()
         if row is None:
             raise KeyError("Notification not found")
-        return {**dict(row), "data": json.loads(row["data"])}
+        return {**dict(row), "revision": version[0] if version else 0, "data": json.loads(row["data"])}
 
     def unavailable(self, identifier):
         with self.connect() as db:
-            db.execute("UPDATE notices SET status='unavailable' WHERE id=?", (identifier,))
+            if db.execute("UPDATE notices SET status='unavailable' WHERE id=? AND status<>'unavailable'", (identifier,)).rowcount:
+                _advance_revision(db, identifier)
 
-    def answer(self, session_key: str, content: str) -> None:
+    def answer(
+        self, session_key: str, content: str, *, session_generation: str | None = None,
+        retained_generation: bool = False,
+    ) -> bool:
         # This is the existing quoted-answer protocol; it marks no other session's question.
-        match = re.match(r"> \[!QUOTE\]\n> <!-- cirno-question:([a-f0-9]{32}) -->\n", content)
-        if match is None:
-            return
+        identifier = question_reply_id(content)
+        if identifier is None:
+            return False
         with self.connect() as db:
-            db.execute("UPDATE notices SET status='answered',read_at=? WHERE id=? AND session_key=? AND status='pending'",
-                       (int(time.time() * 1000), "question:" + match[1], session_key))
+            changed = db.execute("""UPDATE notices SET status='answered',read_at=?,
+                data=CASE WHEN ? THEN json_set(data,'$.session_generation',?) ELSE data END
+                WHERE id=? AND session_key=? AND status='pending'
+                AND (json_extract(data,'$.session_generation') IS NULL
+                     OR json_extract(data,'$.session_generation')=? OR ?)""",
+                (int(time.time() * 1000), retained_generation, session_generation,
+                 "question:" + identifier, session_key, session_generation, retained_generation)).rowcount
+            if changed:
+                _advance_revision(db, "question:" + identifier)
+            return bool(changed)
 
     def capture(self, message):
         notice = self.prepare(message)

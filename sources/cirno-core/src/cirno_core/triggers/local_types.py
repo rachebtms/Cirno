@@ -30,6 +30,7 @@ class TriggerRunRecord:
     run_at_ms: int
     status: TriggerStatus
     error: str | None = None
+    delivery_id: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TriggerRunRecord":
@@ -37,6 +38,7 @@ class TriggerRunRecord:
             run_at_ms=_int_or_zero(_get(data, "runAtMs", "run_at_ms", 0)),
             status=str(data.get("status") or "error"),  # type: ignore[arg-type]
             error=data.get("error"),
+            delivery_id=_get(data, "deliveryId", "delivery_id"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -44,6 +46,7 @@ class TriggerRunRecord:
             "runAtMs": self.run_at_ms,
             "status": self.status,
             "error": self.error,
+            "deliveryId": self.delivery_id,
         }
 
 

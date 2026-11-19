@@ -168,6 +168,10 @@
           "label": "Acceso web",
           "help": "Permite buscar en la web y obtener páginas."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "Tamaño máximo de respuesta de página (MiB)",
+          "help": "Detiene la lectura de páginas, imágenes o respuestas de Jina cuando el tamaño anunciado o decodificado supera este límite. Es independiente de la longitud del texto devuelto. Reinicia para aplicar."
+        },
         "tools_cli_apps_enable": {
           "label": "Apps CLI",
           "help": "Permite al agente gestionar y ejecutar aplicaciones de línea de comandos."
@@ -1260,7 +1264,11 @@
         "supabase": "Consulta y gestiona proyectos."
       },
       "editConfig": "Editar configuración MCP",
-      "configObjectRequired": "La configuración MCP debe ser un objeto JSON."
+      "configObjectRequired": "La configuración MCP debe ser un objeto JSON.",
+      "changePending": "Hay otro cambio de MCP en curso. Espera a que termine y vuelve a guardar.",
+      "cleanupPending": "Quedan datos por limpiar del servidor MCP eliminado {{name}}.",
+      "retryCleanup": "Reintentar limpieza",
+      "statusAuthorizationRequired": "Necesita sesión"
     },
     "legal": {
       "thirdPartyBrands": "Los nombres, logotipos y marcas de productos pertenecen a sus respectivos propietarios. Su uso es solo identificativo y no implica respaldo."
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "Estas conversaciones volverán a la lista de conversaciones."
   },
   "deleteConfirm": {
+    "notConfirmed": "No se confirmó la eliminación de la conversación. Inténtalo de nuevo.",
     "title": "¿Eliminar este chat?",
     "titleMany": "¿Eliminar {{count}} conversaciones?",
     "description": "Esta acción no se puede deshacer.",

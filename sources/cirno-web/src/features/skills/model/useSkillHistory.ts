@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { WebUIMutationTransport } from "@/lib/api";
 import { useMutation } from "@/ui/resources/useMutation";
+import { useLifetime } from "@/ui/resources/useLifetime";
 interface Validation {
   valid: boolean;
   errors: string[];
@@ -10,32 +11,41 @@ interface SkillHistory {
   versions: { revision: string; path: string; validation: Validation }[];
 }
 export function useSkillHistory(client: WebUIMutationTransport) {
-  const [draft, setDraft] = useState({ client, name: "" });
+  const owner = useMemo(() => ({ client, draft: { name: "" } }), [client]);
+  const isCurrent = useLifetime(owner);
+  const [selection, setSelection] = useState({ owner, draft: owner.draft });
+  const draft = selection.owner === owner ? selection.draft : owner.draft;
   const [snapshot, setSnapshot] = useState<{
-    client: WebUIMutationTransport;
-    name: string;
+    owner: typeof owner;
+    draft: typeof draft;
     result: SkillHistory;
   } | null>(null);
-  const mutation = useMutation(client),
-    name = draft.client === client ? draft.name : "";
+  const mutation = useMutation(owner),
+    name = draft.name;
   return {
     name,
     busy: mutation.busy,
     error: mutation.error,
-    result: snapshot?.client === client && snapshot.name === name ? snapshot.result : null,
+    result: snapshot?.owner === owner && snapshot.draft === draft ? snapshot.result : null,
     changeName: (name: string) => {
-      setDraft({ client, name });
+      if (!isCurrent()) return;
+      owner.draft = { name };
+      setSelection({ owner, draft: owner.draft });
       setSnapshot(null);
       mutation.clear();
     },
-    validate: () =>
-      mutation.run(
+    validate: () => {
+      if (!isCurrent() || owner.draft !== draft) return;
+      return mutation.run(
         () =>
           client.requestMutation<SkillHistory>("instance.action", {
             action: "skills.validate",
             values: { name },
           }),
-        (result) => setSnapshot({ client, name, result }),
-      ),
+        (result) => {
+          if (isCurrent() && owner.draft === draft) setSnapshot({ owner, draft, result });
+        },
+      );
+    },
   };
 }

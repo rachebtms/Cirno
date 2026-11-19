@@ -12,6 +12,7 @@ from cirno_core.session.display_history import HistoryFact, HistoryKind
 from cirno_core.session.model import Session
 from cirno_core.session.recovery.contracts import PENDING_USER_TURN_KEY, RUNTIME_CHECKPOINT_KEY
 from cirno_core.session.sqlite_store import SessionConflictError
+from cirno_core.session.types import CHILD_SESSION_GENERATION_REQUIRED_KEY
 
 from .operations import SessionOperations
 from .repository import SessionRepository
@@ -83,6 +84,7 @@ class SessionBranches:
                     raise ValueError("Agent and system inputs cannot be edited as human messages.")
                 target = session_prefix(source, key, index)
                 assert target is not None
+                target.metadata[CHILD_SESSION_GENERATION_REQUIRED_KEY] = True
                 for name in ("title", "title_user_edited", "session_handle"):
                     if name in source.metadata:
                         target.metadata[name] = deepcopy(source.metadata[name])

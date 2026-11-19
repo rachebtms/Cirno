@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import get_config_path
 from cirno_core.skills.metadata import BUILTIN_DOCUMENTS_DIR
 from cirno_core.skills.metadata import (
     BUILTIN_SKILLS_DIR as BUILTIN_SKILLS_DIR,
@@ -49,9 +50,13 @@ class SkillsLoader:
         builtin_skills_dir: Path | None = None,
         disabled_skills: set[str] | None = None,
         always_skills: set[str] | None = None,
+        *,
+        home: Path | None = None,
+        config_path: Path | None = None,
     ):
         self.workspace = workspace
-        self.home_skills = get_home_path() / "skills"
+        self.home_skills = (home if home is not None else get_home_path()).expanduser().resolve(strict=False) / "skills"
+        self.config_path = (config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
         self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
         self.disabled_skills = disabled_skills or set()
         self.always_skills = always_skills or set()
@@ -117,7 +122,7 @@ class SkillsLoader:
     def _discover_skills(self) -> list[dict[str, str]]:
         from cirno_core.agent.plugins import enabled_agent_plugin_skill_documents
 
-        plugin_skills = enabled_agent_plugin_skill_documents(self.workspace)
+        plugin_skills = enabled_agent_plugin_skill_documents(self.workspace, config_path=self.config_path)
         disabled = set(self.disabled_skills)
         skills = self._skill_entries_from_dir(self.home_skills, "home")
         seen_names = {entry["name"] for entry in skills}
@@ -177,11 +182,15 @@ class SkillsLoader:
 
     def get_skill_availability(self, name: str) -> tuple[bool, str]:
         """Return whether a skill can run and why not when it cannot."""
-        directory = get_home_path() / "skills" / name
+        directory = self.home_skills / name
         if directory.is_dir():
             from cirno_core.skills.history import snapshot_skill
 
-            validation = snapshot_skill(directory, document_content=self.load_skill(name))
+            try:
+                document = self.load_skill(name)
+                validation = snapshot_skill(directory, home=self.home_skills.parent, document_content=document)
+            except (OSError, UnicodeError) as error:
+                return False, f"SKILL.md: {error}"
             if validation is None:
                 return False, "SKILL.md is missing"
             if not validation["valid"]:
@@ -263,7 +272,10 @@ class SkillsLoader:
         snapshot = self._snapshot.get()
         if snapshot is not None and name in snapshot.metadata:
             return snapshot.metadata[name]
-        metadata = parse_skill_metadata(self.load_skill(name) or "")
+        try:
+            metadata = parse_skill_metadata(self.load_skill(name) or "")
+        except (OSError, UnicodeError):
+            metadata = None  # Missing/unreadable document text has no usable YAML metadata.
         if snapshot is not None:
             snapshot.metadata[name] = metadata
         return metadata

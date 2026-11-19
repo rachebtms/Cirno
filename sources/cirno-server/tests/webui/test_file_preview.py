@@ -1,8 +1,11 @@
 import base64
+import json
 from pathlib import Path
+from types import SimpleNamespace
+from urllib.parse import quote
 
 import pytest
-from cirno_core.security.workspace_access import default_workspace_scope
+from cirno_core.security.workspace_access import WorkspaceScopeError, default_workspace_scope
 from cirno_server.webui.file_preview import (
     WebUIFilePreviewError,
     file_preview_availability_payload,
@@ -13,6 +16,38 @@ from cirno_server.webui.file_preview import (
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII="
 )
+
+
+@pytest.mark.parametrize("probe", [False, True])
+def test_preview_reports_invalid_saved_workspace_policy(probe):
+    from cirno_server.webui.http.sessions import SessionsRoutes
+
+    def invalid_scope(key):
+        raise WorkspaceScopeError("invalid saved workspace policy")
+
+    server = SimpleNamespace(
+        check_api_token=lambda request: True,
+        workspaces=SimpleNamespace(scope_for_session_key=invalid_scope),
+    )
+    request = SimpleNamespace(path="/v0/sessions/websocket:bad/file-preview?path=notes.txt" + ("&probe=1" if probe else ""))
+    response = SessionsRoutes(server)._handle_file_preview(request, "websocket:bad")
+    assert response.status_code == (200 if probe else 400)
+    if probe:
+        assert json.loads(response.body) == {"available": False}
+    else:
+        assert "invalid saved workspace policy" in response.body.decode()
+
+
+@pytest.mark.parametrize("file_url", [False, True])
+@pytest.mark.parametrize("filename", ["research#notes.md", "research%23notes.md"])
+def test_encoded_file_name_keeps_literal_fragment_characters(tmp_path, filename, file_url):
+    source = tmp_path / filename
+    source.write_text("The correct file", encoding="utf-8")
+    target = source.as_uri() if file_url else quote(filename)
+    target += "?download=1#preview"
+    result = file_preview_payload(target, scope=default_workspace_scope(tmp_path, True))
+    assert result["path"] == str(source.resolve())
+    assert result["content"] == "The correct file"
 
 
 def test_file_reference_metadata_does_not_read_contents(tmp_path, monkeypatch) -> None:

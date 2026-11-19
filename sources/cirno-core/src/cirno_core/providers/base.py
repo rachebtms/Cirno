@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any, cast
 
+from cirno_core.providers.context_budget import CONTEXT_SAFETY_BUFFER as CONTEXT_SAFETY_BUFFER
 from cirno_core.providers.contracts import (
     LLMCallObserver,
     LLMResponse,
@@ -19,7 +20,6 @@ from cirno_core.providers.contracts import (
 )
 from cirno_core.providers.generation import GenerationSettings
 from cirno_core.providers.media_capabilities import MediaCapabilities
-from cirno_core.providers.context_budget import CONTEXT_SAFETY_BUFFER as CONTEXT_SAFETY_BUFFER
 from cirno_core.providers.requests import ProviderRequestExecutor
 from cirno_core.providers.retry import (
     ProviderRetryExecutor,
@@ -28,6 +28,7 @@ from cirno_core.providers.retry import (
 )
 from cirno_core.providers.timeouts import ProviderTimeouts
 from cirno_core.providers.usage_recorder import ProviderUsageRecorder
+
 
 class LLMProvider(ABC):
     """Base class for LLM providers."""
@@ -46,6 +47,7 @@ class LLMProvider(ABC):
         api_base: str | None = None,
         *,
         provider_name: str,
+        runtime_source: LLMProvider | None = None,
     ):
         runtime_provider_name = cast(object, provider_name)
         if not isinstance(runtime_provider_name, str) or not runtime_provider_name.strip():
@@ -53,18 +55,33 @@ class LLMProvider(ABC):
         self.api_key = api_key
         self.api_base = api_base
         self.provider_name = provider_name
-        self.retry_policy = replace(self.retry_policy)
-        configured_retries = os.environ.get("CIRNO_PROVIDER_MAX_RETRIES")
+        self.retry_policy = replace(
+            runtime_source.retry_policy if runtime_source is not None else self.retry_policy
+        )
+        configured_retries = (
+            os.environ.get("CIRNO_PROVIDER_MAX_RETRIES") if runtime_source is None else None
+        )
         if configured_retries is not None:
             retries = int(configured_retries)
-            if retries < 3:
-                raise ValueError("CIRNO_PROVIDER_MAX_RETRIES must be at least 3")
-            self.retry_policy.delays = tuple(min(2**attempt, 60) for attempt in range(retries))
-        self.timeouts = ProviderTimeouts()
-        self.generation: GenerationSettings = GenerationSettings()
+            if not 3 <= retries <= 20:
+                raise ValueError("CIRNO_PROVIDER_MAX_RETRIES must be between 3 and 20")
+            self.retry_policy.configure_retries(retries)
+        self.timeouts = replace(runtime_source.timeouts) if runtime_source is not None else ProviderTimeouts()
+        # Initialization must not dispatch to a wrapper's forwarding setter.
+        self._generation = runtime_source.generation if runtime_source is not None else GenerationSettings()
+        if runtime_source is not None:
+            self.media_capabilities = runtime_source.media_capabilities
         self.usage_recorder = ProviderUsageRecorder(self)
         self.request_executor = ProviderRequestExecutor(self)
         self.retry_executor = ProviderRetryExecutor(self)
+
+    @property
+    def generation(self) -> GenerationSettings:
+        return self._generation
+
+    @generation.setter
+    def generation(self, value: GenerationSettings) -> None:
+        self._generation = value
 
     @property
     def request_timeout_s(self) -> float:
@@ -191,6 +208,26 @@ class LLMProvider(ABC):
         _ = provider_context
         return await self.chat_stream(**kwargs)
 
+    def _generation_kwargs(
+        self, max_tokens: object, temperature: object, reasoning_effort: object,
+    ) -> dict[str, Any]:
+        """Resolve one settings snapshot for either retry entry point.
+
+        None retains numeric defaults but explicitly clears reasoning effort.
+        """
+        defaults = self.generation
+        return {
+            "max_tokens": (
+                defaults.max_tokens if max_tokens is self._SENTINEL or max_tokens is None else max_tokens
+            ),
+            "temperature": (
+                defaults.temperature if temperature is self._SENTINEL or temperature is None else temperature
+            ),
+            "reasoning_effort": (
+                defaults.reasoning_effort if reasoning_effort is self._SENTINEL else reasoning_effort
+            ),
+        }
+
     async def chat_stream_with_retry(
         self,
         messages: list[dict[str, Any]],
@@ -211,12 +248,6 @@ class LLMProvider(ABC):
         on_retry_status: RetryStatusCallback | None = None,
     ) -> LLMResponse:
         """Call chat_stream() with retry on transient provider failures."""
-        if max_tokens is self._SENTINEL or max_tokens is None:
-            max_tokens = self.generation.max_tokens
-        if temperature is self._SENTINEL or temperature is None:
-            temperature = self.generation.temperature
-        if reasoning_effort is self._SENTINEL:
-            reasoning_effort = self.generation.reasoning_effort
 
         has_streamed_content = False
 
@@ -237,9 +268,7 @@ class LLMProvider(ABC):
             messages=messages,
             tools=tools,
             model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            reasoning_effort=reasoning_effort,
+            **self._generation_kwargs(max_tokens, temperature, reasoning_effort),
             tool_choice=tool_choice,
             on_content_delta=_tracking_delta if on_content_delta is not None else None,
             on_thinking_delta=on_thinking_delta,
@@ -284,27 +313,16 @@ class LLMProvider(ABC):
     ) -> LLMResponse:
         """Call chat() with retry on transient provider failures.
 
-        Parameters default to ``self.generation`` when not explicitly passed,
-        so callers no longer need to thread temperature / max_tokens /
-        reasoning_effort through every layer. Explicit ``None`` is also
-        normalized to the provider's generation defaults so that downstream
-        ``_build_kwargs`` never sees ``None`` for ``max_tokens`` / ``temperature``
-        (which would crash ``max(1, max_tokens)``).
+        Omitted parameters use ``self.generation``. Explicit ``None`` also uses
+        the preset token limit or temperature; for reasoning effort it clears
+        the preset effort. Streaming requests use the same resolution rules.
         """
-        if max_tokens is self._SENTINEL or max_tokens is None:
-            max_tokens = self.generation.max_tokens
-        if temperature is self._SENTINEL or temperature is None:
-            temperature = self.generation.temperature
-        if reasoning_effort is self._SENTINEL:
-            reasoning_effort = self.generation.reasoning_effort
 
         kw: dict[str, Any] = dict(
             messages=messages,
             tools=tools,
             model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            reasoning_effort=reasoning_effort,
+            **self._generation_kwargs(max_tokens, temperature, reasoning_effort),
             tool_choice=tool_choice,
         )
         if provider_context is not None:

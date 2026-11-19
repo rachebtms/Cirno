@@ -183,15 +183,20 @@ class HistoryReader:
         )]
 
     def navigation(self) -> Iterator[tuple[int, int, HistoryFact]]:
-        """Read input/answer records only, never file diffs or tool result bodies."""
+        """Read input/answer bodies and text-free reasoning boundaries."""
         kinds = (HistoryKind.INPUT, HistoryKind.ANSWER, HistoryKind.ANSWER_SEGMENT,
-                 HistoryKind.ANSWER_FRAGMENT, HistoryKind.COMPLETION)
+                 HistoryKind.ANSWER_FRAGMENT, HistoryKind.COMPLETION,
+                 HistoryKind.REASONING_FRAGMENT, HistoryKind.REASONING_SEGMENT)
         for row in self._db.execute(
-            """SELECT turn_ordinal, position, record FROM history_entries
-               WHERE session_key=? AND kind IN (?, ?, ?, ?, ?) ORDER BY turn_ordinal, position""",
-            (self.key, *kinds),
+            """SELECT turn_ordinal, position, kind,
+                      CASE WHEN kind IN (?, ?) THEN NULL ELSE record END
+               FROM history_entries
+               WHERE session_key=? AND kind IN (?, ?, ?, ?, ?, ?, ?)
+               ORDER BY turn_ordinal, position""",
+            (HistoryKind.REASONING_FRAGMENT, HistoryKind.REASONING_SEGMENT, self.key, *kinds),
         ):
-            yield int(row[0]), int(row[1]), HistoryFact.decode(row[2])
+            fact = HistoryFact(HistoryKind(row[2])) if row[3] is None else HistoryFact.decode(row[3])
+            yield int(row[0]), int(row[1]), fact
 
     def pending_tail_facts(self) -> list[HistoryFact]:
         """Inspect interruption state without materializing a long-running turn."""
@@ -211,6 +216,15 @@ class HistoryReader:
             (*params, HistoryKind.FORK_BOUNDARY, HistoryKind.COMPACTION),
         ).fetchone()
         return [HistoryFact.decode(row[0])] if row is not None else []
+
+    def has_answer_ui(self, kind: str, identifier: str) -> bool:
+        """Locate one UI action without loading tool bodies or full answer history."""
+        return self._db.execute(
+            """SELECT 1 FROM history_entries WHERE session_key=? AND kind=?
+               AND json_extract(record,'$.content.agent_ui.kind')=?
+               AND json_extract(record,'$.content.agent_ui.data.id')=? LIMIT 1""",
+            (self.key, HistoryKind.ANSWER, kind, identifier),
+        ).fetchone() is not None
 
     def all_facts(self) -> list[HistoryFact]:
         return [HistoryFact.decode(row[0]) for row in self._db.execute(

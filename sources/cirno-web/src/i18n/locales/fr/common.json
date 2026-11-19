@@ -168,6 +168,10 @@
           "label": "Accès web",
           "help": "Autorise la recherche et la récupération de pages web."
         },
+        "tools_web_fetch_max_response_mb": {
+          "label": "Taille maximale des réponses de page (Mio)",
+          "help": "Arrête la lecture des pages, images ou réponses Jina si la taille annoncée ou décodée dépasse cette limite. Cette limite est distincte de la longueur du texte renvoyé. Redémarrez pour appliquer."
+        },
         "tools_cli_apps_enable": {
           "label": "Applications CLI",
           "help": "Autorise l’agent à gérer et à exécuter ces applications."
@@ -1260,7 +1264,11 @@
         "supabase": "Consultez et gérez les projets."
       },
       "editConfig": "Modifier la configuration MCP",
-      "configObjectRequired": "La configuration MCP doit être un objet JSON."
+      "configObjectRequired": "La configuration MCP doit être un objet JSON.",
+      "changePending": "Une autre modification MCP est en cours. Attendez la fin, puis enregistrez à nouveau.",
+      "cleanupPending": "Des données du serveur MCP supprimé {{name}} restent à nettoyer.",
+      "retryCleanup": "Réessayer le nettoyage",
+      "statusAuthorizationRequired": "Connexion requise"
     },
     "legal": {
       "thirdPartyBrands": "Les noms, logos et marques de produits appartiennent à leurs propriétaires respectifs. Leur utilisation sert uniquement à l'identification et n'implique aucune approbation."
@@ -1877,6 +1885,7 @@
     "unarchiveDescription": "Ces conversations réapparaîtront dans la liste des conversations."
   },
   "deleteConfirm": {
+    "notConfirmed": "La suppression de la conversation n’a pas été confirmée. Réessayez.",
     "title": "Supprimer cette discussion ?",
     "titleMany": "Supprimer {{count}} conversations ?",
     "description": "Cette action est irréversible.",

@@ -42,6 +42,18 @@ function expectSave(values: Record<string, unknown>) {
 }
 
 describe("Runtime configuration", () => {
+  it("automatically saves a configurable page response limit", async () => {
+    const initial = payload() as SettingsPayload;
+    initial.runtime_config = { ...initial.runtime_config, "tools.web.enable": true, "tools.web.fetch.max_response_mb": 16 };
+    render(<Harness page="browser" initial={initial} />);
+    const field = screen.getByRole("spinbutton", { name: "Maximum page response (MiB)" });
+    expect(field).toHaveValue(16);
+    expect(field).toHaveAttribute("min", "1");
+    expect(field).not.toHaveAttribute("max");
+    fireEvent.change(field, { target: { value: "32" } });
+    fireEvent.blur(field);
+    await expectSave({ "tools.web.fetch.max_response_mb": 32 });
+  });
   it("automatically saves the configurable Router tool time budget", async () => {
     render(<Harness page="execution" />);
     const field = screen.getByRole("spinbutton", { name: "Router tool time budget (seconds)" });

@@ -40,6 +40,8 @@ class SessionPoll:
     truncated_chars: int = 0
     output_incomplete: bool = False
     execution_error: str | None = None
+    # Offsets in output where omitted characters break textual continuity.
+    output_gaps: tuple[int, ...] = ()
 
     @property
     def failed(self) -> bool:

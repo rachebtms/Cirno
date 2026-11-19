@@ -73,9 +73,11 @@ export function useSettingsController({
     typeof window !== "undefined" && !isLoopbackHost(window.location.hostname);
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const settingsRef = useRef(settings);
+  const settingsRevisionRef = useRef(0);
   settingsRef.current = settings;
   const [loading, setLoading] = useState(() => initialSettings === null);
   const [error, setError] = useState<string | null>(null);
+  const [settingsReadError, setSettingsReadError] = useState<string | null>(null);
   const normalizedInitialSection = canonicalSettingsSection(initialSection);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>(normalizedInitialSection);
   const [pendingRestartSections, setPendingRestartSections] = useState<PendingRestartSections>(
@@ -117,8 +119,11 @@ export function useSettingsController({
       payload: SettingsPayload,
       options: { preserveAgentForm?: boolean; preserveCapabilityForms?: boolean } = {},
     ) => {
+      settingsRevisionRef.current += 1;
       settingsRef.current = payload;
       setSettings(payload);
+      setLoading(false);
+      setSettingsReadError(null);
       if (!options.preserveAgentForm) {
         const nextForm = agentDraftFromPayload(payload);
         setForm(nextForm);
@@ -170,25 +175,27 @@ export function useSettingsController({
     let cancelled = false;
     const showLoading = settings === null;
     const requestInitialSettings = latestInitialSettingsRef.current;
+    const revision = settingsRevisionRef.current;
+    const ownsRead = () => !cancelled && revision === settingsRevisionRef.current
+      && latestInitialSettingsRef.current === requestInitialSettings;
     const requestDrafts = draftsRef.current;
     if (showLoading) setLoading(true);
     fetchSettings(getToken())
       .then((payload) => {
-        if (!cancelled && latestInitialSettingsRef.current === requestInitialSettings) {
+        if (ownsRead()) {
           const current = draftsRef.current;
           applyPayload(payload, {
             preserveAgentForm: current.form !== requestDrafts.form,
             preserveCapabilityForms: current.networkSafetyForm !== requestDrafts.networkSafetyForm ||
               current.webSearchForm !== requestDrafts.webSearchForm,
           });
-          setError(null);
         }
       })
       .catch((err) => {
-        if (!cancelled && showLoading) setError((err as Error).message);
+        if (ownsRead() && showLoading) setSettingsReadError((err as Error).message);
       })
       .finally(() => {
-        if (!cancelled) {
+        if (ownsRead()) {
           setLoading(false);
         }
       });
@@ -329,7 +336,7 @@ export function useSettingsController({
     systemActions,
     activeSection,
     runtimeConfigState,
-    error,
+    error: error ?? settingsReadError,
     featureCatalog,
 
     loading,

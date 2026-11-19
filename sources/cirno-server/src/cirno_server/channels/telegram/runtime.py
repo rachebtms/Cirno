@@ -15,19 +15,9 @@ from cirno_core.bus.events import INBOUND_META_LOCAL_MEDIA, INBOUND_META_TURN_ID
 from cirno_core.bus.queue import MessageBus
 from cirno_core.command.builtin.catalog import build_help_text
 from cirno_core.config.network import NetworkConfig
-from cirno_core.config.paths import get_media_dir
 from cirno_core.session.keys import ROUTER_SESSION_KEY
+from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.logging_bridge import redirect_lib_logging
-from cirno_server.channels.base import BaseChannel
-from cirno_server.channels.telegram.binding import TelegramBinding
-from cirno_server.channels.telegram.config import TelegramConfig
-from cirno_server.channels.telegram.limits import (
-    TELEGRAM_REPLY_CONTEXT_MAX_LEN,
-)
-from cirno_server.channels.telegram.liveness import _LivenessTrackedRequest
-from cirno_server.channels.telegram.state import (
-    QueuedTelegramUpdate,
-)
 from telegram import (
     BotCommand,
     Message,
@@ -38,20 +28,22 @@ from telegram.error import InvalidToken, NetworkError, TimedOut
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
-# A healthy getUpdates long poll completes every ~10s even with no traffic;
-# PTB retries timeouts silently, so stalls must be detected here.
-POLL_STALE_SECONDS = 120.0
-POLL_WATCH_INTERVAL = 1.0
-RESTART_BACKOFF_INITIAL_SECONDS = 5.0
-RESTART_BACKOFF_MAX_SECONDS = 300.0
-
-
+from cirno_server.channels.base import BaseChannel
+from cirno_server.channels.telegram.binding import TelegramBinding
 from cirno_server.channels.telegram.commands import (
     _TELEGRAM_COMMAND_ALIASES,
     TELEGRAM_BUS_SLASH_COMMAND_RE,
     TELEGRAM_HYPHENATED_COMMAND_RE,
     TELEGRAM_MENU_SPECS,
     telegram_command_text,
+)
+from cirno_server.channels.telegram.config import TelegramConfig
+from cirno_server.channels.telegram.limits import (
+    TELEGRAM_REPLY_CONTEXT_MAX_LEN,
+)
+from cirno_server.channels.telegram.liveness import _LivenessTrackedRequest
+from cirno_server.channels.telegram.state import (
+    QueuedTelegramUpdate,
 )
 
 from .api import TelegramAPI
@@ -62,6 +54,13 @@ from .presence import TelegramPresence
 from .rich import TelegramRichMessages
 from .streams import TelegramStreams
 from .writer import TelegramStreamWriter
+
+# A healthy getUpdates long poll completes every ~10s even with no traffic;
+# PTB retries timeouts silently, so stalls must be detected here.
+POLL_STALE_SECONDS = 120.0
+POLL_WATCH_INTERVAL = 1.0
+RESTART_BACKOFF_INITIAL_SECONDS = 5.0
+RESTART_BACKOFF_MAX_SECONDS = 300.0
 
 
 class TelegramChannel(BaseChannel):
@@ -97,11 +96,15 @@ class TelegramChannel(BaseChannel):
         bus: MessageBus,
         *,
         network: NetworkConfig | None = None,
+        state_dir: Path | None = None,
     ):
         if isinstance(config, dict):
             config = TelegramConfig.model_validate(config)
         super().__init__(config, bus, network=network)
         self.config: TelegramConfig = config
+        self.binding = TelegramBinding(state_dir)
+        self.state_dir = self.binding.path.parent
+        self.media_dir = self.state_dir / "media" / "telegram"
         self._proxy = self.network.resolve_proxy(self.config.use_proxy)
         self._media_group_buffers: dict[str, dict[str, Any]] = {}
         self._media_group_tasks: dict[str, asyncio.Task[None]] = {}
@@ -117,21 +120,26 @@ class TelegramChannel(BaseChannel):
         self.writer = TelegramStreamWriter(self.api, self.rich)
         self.overflow = TelegramStreamOverflow(self.rich, self.writer)
         self.delivery = TelegramDelivery(
-            self.api, self.rich, self.presence, self.config, lambda: self.show_compaction_notices
+            self.api, self.rich, self.presence, self.config, lambda: self.show_compaction_notices,
+            state_dir=self.state_dir,
         )
         self.streams = TelegramStreams(
-            self.api, self.rich, self.presence, self.overflow, self.writer, self.config
+            self.api, self.rich, self.presence, self.overflow, self.writer, self.config,
+            state_dir=self.state_dir,
         )
         self._teardown_lock = asyncio.Lock()
 
     def is_allowed(self, sender_id: str) -> bool:
         """Admit only the personal account verified by the Web UI PIN."""
-        binding = TelegramBinding().status()
+        binding = self.binding.status()
         return bool(
             binding["bound"]
             and binding["enabled"]
             and str(sender_id).split("|", 1)[0] == binding["user_id"]
         )
+
+    async def check_sender(self, sender_id: str) -> bool:
+        return await asyncio.to_thread(self.is_allowed, sender_id)
 
     @staticmethod
     def _normalize_telegram_command(content: str) -> str:
@@ -411,7 +419,7 @@ class TelegramChannel(BaseChannel):
         sender_id = self._sender_id(user)
         if await self._try_bind(message=update.message, user=user):
             return
-        if not self.is_allowed(sender_id):
+        if not await self.check_sender(sender_id):
             await self._send_binding_instructions(update.message)
             return
         await update.message.reply_text(
@@ -428,7 +436,7 @@ class TelegramChannel(BaseChannel):
         sender_id = self._sender_id(user)
         if await self._try_bind(message=update.message, user=user):
             return
-        if not self.is_allowed(sender_id):
+        if not await self.check_sender(sender_id):
             await self._send_binding_instructions(update.message)
             return
         await update.message.reply_text(telegram_command_text(build_help_text()))
@@ -441,7 +449,7 @@ class TelegramChannel(BaseChannel):
 
     async def _try_bind(self, *, message: Message, user: User) -> bool:
         text = (message.text or "").strip()
-        if not text.startswith("/bind") and TelegramBinding().status()["bound"]:
+        if not text.startswith("/bind") and (await asyncio.to_thread(self.binding.status))["bound"]:
             return False
         match = re.fullmatch(r"(?:/bind(?:@\w+)?\s+)?(\d{8})", text)
         if match is None:
@@ -451,17 +459,23 @@ class TelegramChannel(BaseChannel):
                 )
                 return True
             return False
-        verified = TelegramBinding().verify(
-            match[1],
-            user_id=user.id,
-            chat_id=message.chat_id,
-            username=user.username or "",
-            language=getattr(user, "language_code", None) or "en",
-        )
-        if verified:
-            from cirno_core.notifications.inbox import NotificationInbox
+        def verify_and_queue():
+            verified = self.binding.verify(
+                match[1],
+                user_id=user.id,
+                chat_id=message.chat_id,
+                username=user.username or "",
+                language=getattr(user, "language_code", None) or "en",
+            )
+            if verified:
+                from cirno_core.notifications.inbox import NotificationInbox
 
-            NotificationInbox().queue_pending_actions()
+                NotificationInbox(self.state_dir).queue_pending_actions()
+            return verified
+
+        # A verified binding and its pending-action queue settle together even
+        # if channel shutdown cancels this update while storage is busy.
+        verified = await shield_and_drain(asyncio.to_thread(verify_and_queue))
         await message.reply_text(
             "Connected to your Router."
             if verified
@@ -549,7 +563,8 @@ class TelegramChannel(BaseChannel):
                 getattr(media_file, "mime_type", None),
                 getattr(media_file, "file_name", None),
             )
-            media_dir = get_media_dir("telegram")
+            media_dir = self.media_dir
+            await shield_and_drain(asyncio.to_thread(media_dir.mkdir, parents=True, exist_ok=True))
             unique_id = getattr(media_file, "file_unique_id", media_file.file_id)
             file_path = media_dir / f"{unique_id}{ext}"
             await file.download_to_drive(str(file_path))
@@ -658,7 +673,7 @@ class TelegramChannel(BaseChannel):
         sender_id = self._sender_id(user)
         if await self._try_bind(message=message, user=user):
             return
-        if not self.is_allowed(sender_id):
+        if not await self.check_sender(sender_id):
             await self._send_binding_instructions(message)
             return
 
@@ -697,7 +712,7 @@ class TelegramChannel(BaseChannel):
         sender_id = self._sender_id(user)
         if await self._try_bind(message=message, user=user):
             return
-        if not self.is_allowed(sender_id):
+        if not await self.check_sender(sender_id):
             await self._send_binding_instructions(message)
             return
 
@@ -886,7 +901,7 @@ class TelegramChannel(BaseChannel):
         if not chat_id or query_message.chat.type != "private":
             self.logger.warning("Callback query without chat_id")
             return
-        if not self.is_allowed(sender_id):
+        if not await self.check_sender(sender_id):
             return
         button_label = query.data or ""
         await query.answer()

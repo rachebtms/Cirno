@@ -1,10 +1,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from cirno_usage.types import LLMUsage
 from cirno_core.session.model_selection import SESSION_MODEL_PRESET_METADATA_KEY
 from cirno_core.session.recovery.contracts import RECOVERY_METADATA_KEY
 from cirno_server.webui.session_projection import WebUISessionProjection
+from cirno_usage.types import LLMUsage
 
 
 async def test_attach_fields_restore_session_runtime_metadata() -> None:
@@ -56,6 +56,9 @@ async def test_hydration_events_restore_goal_and_running_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sessions = MagicMock()
+    sessions.state.project_history = AsyncMock(
+        side_effect=lambda _key, project: project(MagicMock(revision=None)),
+    )
     sessions.state.read_metadata = AsyncMock(side_effect=lambda key, **kwargs: sessions.read_session_metadata(key, **kwargs))
     sessions.read_session_metadata.return_value = {
         "metadata": {
@@ -102,10 +105,13 @@ async def test_hydration_events_restore_goal_and_running_turn(
     )
 
 
-async def test_hydration_events_are_quiet_without_actionable_state(
+async def test_hydration_events_clear_stale_goal_without_actionable_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sessions = MagicMock()
+    sessions.state.project_history = AsyncMock(
+        side_effect=lambda _key, project: project(MagicMock(revision=None)),
+    )
     sessions.state.read_metadata = AsyncMock(side_effect=lambda key, **kwargs: sessions.read_session_metadata(key, **kwargs))
     sessions.read_session_metadata.return_value = {"metadata": {}}
     monkeypatch.setattr(
@@ -116,10 +122,10 @@ async def test_hydration_events_are_quiet_without_actionable_state(
     assert await WebUISessionProjection(sessions).hydration_events(
         "websocket:chat-1",
         "chat-1",
-    ) == ()
+    ) == ({"event": "goal_state", "chat_id": "chat-1", "goal_state": {"active": False}},)
 
 
-async def test_hydration_yields_during_metadata_read_and_reads_live_turn_on_loop(
+async def test_hydration_yields_during_metadata_read_and_projects_live_turn_off_loop(
     tmp_path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import asyncio
@@ -139,7 +145,7 @@ async def test_hydration_yields_during_metadata_read_and_reads_live_turn_on_loop
         return {"metadata": {}}
 
     def active_turn(_chat_id):
-        assert threading.get_ident() == loop_thread
+        assert threading.get_ident() != loop_thread
         return 42.5
 
     monkeypatch.setattr(sessions._store, "read_metadata", read_metadata)
@@ -159,7 +165,8 @@ async def test_hydration_yields_during_metadata_read_and_reads_live_turn_on_loop
     finally:
         release.set()
         events = await task
-    assert events[0]["status"] == "running"
+    assert events[0] == {"event": "goal_state", "chat_id": "chat-io", "goal_state": {"active": False}}
+    assert events[1]["status"] == "running"
 
 
 @pytest.mark.parametrize("status", ["active", "blocked", "paused", "waiting", "stopped"])
@@ -176,9 +183,16 @@ async def test_reconnection_retains_actionable_goal_states(status) -> None:
 
 
 @pytest.mark.parametrize("status", ["completed", "cancelled"])
-async def test_reconnection_does_not_restore_a_finished_goal(status) -> None:
+async def test_reconnection_clears_a_finished_goal(status) -> None:
     sessions = MagicMock()
     sessions.state.read_metadata = AsyncMock(return_value={"metadata": {
         "goal_state": {"status": status, "objective": "Finished task"},
     }})
-    assert await WebUISessionProjection(sessions).persisted_goal_state("websocket:worker") is None
+    assert await WebUISessionProjection(sessions).persisted_goal_state("websocket:worker") == {"active": False}
+
+
+async def test_missing_session_clears_cached_goal_but_absent_reader_does_not_guess() -> None:
+    sessions = MagicMock()
+    sessions.state.read_metadata = AsyncMock(return_value=None)
+    assert await WebUISessionProjection(sessions).persisted_goal_state("websocket:deleted") == {"active": False}
+    assert await WebUISessionProjection(None).persisted_goal_state("websocket:unknown") is None

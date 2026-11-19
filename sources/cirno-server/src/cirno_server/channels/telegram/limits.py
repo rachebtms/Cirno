@@ -3,8 +3,8 @@
 TELEGRAM_MAX_MESSAGE_LEN = 4000  # Telegram message character limit
 # Telegram's actual API limit is 4096; we split raw markdown at 4000 as a
 # safety margin for mid-stream edits (plain text).  On stream end, we split
-# raw markdown into chunks whose rendered HTML fits Telegram's true 4096-char
-# boundary so the final rendered message never overflows.
+# raw markdown into chunks whose displayed text after HTML entity parsing fits
+# the 4096-character boundary. Tags/attributes/entity spellings do not add text.
 TELEGRAM_HTML_MAX_LEN = 4096
 # Bot API rich messages accept up to 32,768 UTF-8 characters. Raw Markdown is
 # counted conservatively here; Python's str length counts Unicode code points,

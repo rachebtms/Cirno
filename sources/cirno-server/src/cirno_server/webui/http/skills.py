@@ -6,6 +6,10 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 
+from cirno_core.utils.cancellation import shield_and_drain
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.http_utils import http_error as _http_error
 from cirno_server.webui.http_utils import http_json_response as _http_json_response
 from cirno_server.webui.http_utils import parse_query as _parse_query
@@ -24,8 +28,6 @@ from cirno_server.webui.skills_marketplace import (
     search_marketplace_skills,
     trending_marketplace_skills,
 )
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 from .shared import _request_query
 
@@ -36,12 +38,15 @@ if TYPE_CHECKING:
 class SkillsRoutes:
     def __init__(self, server: ServerHTTPHandler) -> None:
         self.server = server
+        self._state_lock = asyncio.Lock()
 
     async def _load_webui_skills(self) -> dict[str, Any]:
         return await asyncio.to_thread(
             webui_skills_payload,
             self.server.skills_workspace_path,
             disabled_skills=set(self.server.disabled_skills),
+            home_path=self.server.settings.home_path,
+            config_path=self.server.settings.config.path,
         )
 
     async def _handle_webui_skills(self, request: WsRequest) -> Response:
@@ -60,6 +65,8 @@ class SkillsRoutes:
                 query,
                 self.server.skills_workspace_path,
                 provider=provider,
+                home_path=self.server.settings.home_path,
+                config_path=self.server.settings.config.path,
             )
         except SkillsMarketplaceError as exc:
             return _http_error(exc.status, exc.message)
@@ -76,6 +83,8 @@ class SkillsRoutes:
             payload = await trending_marketplace_skills(
                 self.server.skills_workspace_path,
                 provider=provider,
+                home_path=self.server.settings.home_path,
+                config_path=self.server.settings.config.path,
             )
         except SkillsMarketplaceError as exc:
             return _http_error(exc.status, exc.message)
@@ -116,6 +125,8 @@ class SkillsRoutes:
                     skill_id,
                     self.server.skills_workspace_path,
                     provider=provider,
+                    home_path=self.server.settings.home_path,
+                    config_path=self.server.settings.config.path,
                     version=version,
                 )
             except SkillsMarketplaceError as exc:
@@ -139,18 +150,9 @@ class SkillsRoutes:
         if raw_enabled not in {"true", "false"}:
             return _http_error(400, "enabled must be true or false")
         try:
-            action = self.server.settings.config.run_serialized(
-                lambda config_path: set_webui_skill_enabled(
-                    self.server.skills_workspace_path,
-                    name,
-                    enabled=raw_enabled == "true",
-                    disabled_skills=self.server.disabled_skills,
-                    config_path=config_path,
-                )
-            )
+            action = await self._mutate_skill(name, enabled=raw_enabled == "true")
         except SkillManagementError as exc:
             return _http_error(exc.status, exc.message)
-        self.server.skills_routes._apply_skill_state()
         return _http_json_response(
             {
                 **(await self.server.skills_routes._load_webui_skills()),
@@ -166,23 +168,38 @@ class SkillsRoutes:
             return _http_error(401, "Unauthorized")
         name = _query_first(_request_query(request), "name") or ""
         try:
-            action = self.server.settings.config.run_serialized(
-                lambda config_path: delete_webui_skill(
-                    self.server.skills_workspace_path,
-                    name,
-                    disabled_skills=self.server.disabled_skills,
-                    config_path=config_path,
-                )
-            )
+            action = await self._mutate_skill(name)
         except SkillManagementError as exc:
             return _http_error(exc.status, exc.message)
-        self.server.skills_routes._apply_skill_state()
         return _http_json_response(
             {
                 **(await self.server.skills_routes._load_webui_skills()),
                 "last_action": action,
             }
         )
+
+    async def _mutate_skill(self, name: str, *, enabled: bool | None = None) -> dict[str, Any]:
+        async def finish():
+            async with self._state_lock:
+                # Keep thread mutations private until the accepted commit and
+                # its runtime publication can be observed together on the loop.
+                disabled = set(self.server.disabled_skills)
+                def write(config_path):
+                    if enabled is None:
+                        return delete_webui_skill(
+                            self.server.skills_workspace_path, name, disabled_skills=disabled,
+                            config_path=config_path, home_path=self.server.settings.home_path,
+                        )
+                    return set_webui_skill_enabled(
+                        self.server.skills_workspace_path, name, enabled=enabled, disabled_skills=disabled,
+                        config_path=config_path, home_path=self.server.settings.home_path,
+                    )
+                action = await asyncio.to_thread(self.server.settings.config.run_serialized, write)
+                self.server.disabled_skills.clear()
+                self.server.disabled_skills.update(disabled)
+                self._apply_skill_state()
+                return action
+        return await shield_and_drain(finish())
 
     def _apply_skill_state(self) -> None:
         if self.server.skill_state_action is not None:
@@ -200,6 +217,8 @@ class SkillsRoutes:
             self.server.skills_workspace_path,
             name,
             disabled_skills=set(self.server.disabled_skills),
+            home_path=self.server.settings.home_path,
+            config_path=self.server.settings.config.path,
         )
         if payload is None:
             return _http_error(404, "skill not found")

@@ -13,6 +13,11 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, cast
 
+from loguru import logger
+from websockets.asyncio.client import ClientConnection, connect
+from websockets.exceptions import ConnectionClosed, InvalidStatus, ProxyError
+from websockets.protocol import State
+
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.errors import (
     is_retryable_rate_limit,
@@ -22,10 +27,7 @@ from cirno_core.providers.errors import (
 from cirno_core.providers.openai_responses.backend import ResponsesBackend
 from cirno_core.providers.openai_responses.parsing import ResponsesStreamCapture
 from cirno_core.providers.timeouts import ProviderTimeouts
-from loguru import logger
-from websockets.asyncio.client import ClientConnection, connect
-from websockets.exceptions import ConnectionClosed, InvalidStatus, ProxyError
-from websockets.protocol import State
+from cirno_core.utils.cancellation import shield_and_drain
 
 _TRANSPORT_FAILURE_LIMIT = 3
 
@@ -129,7 +131,7 @@ class ResponsesWebSocketSession:
         self._properties_fingerprint = None
         self._prefix_length = 0
         if connection is not None:
-            await connection.close()
+            await shield_and_drain(connection.close())
 
     async def request(
         self,
@@ -169,7 +171,7 @@ class ResponsesWebSocketSession:
                                 url.replace("https://", "wss://", 1).replace("http://", "ws://", 1),
                                 additional_headers=ws_headers,
                                 user_agent_header=headers.get("User-Agent"),
-                                proxy=proxy if proxy else True,
+                                proxy=proxy,
                                 ssl=verify if url.startswith("https://") else None,
                                 open_timeout=self.timeouts.request_s,
                                 close_timeout=2,

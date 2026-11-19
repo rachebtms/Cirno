@@ -17,7 +17,12 @@ export function TerminalTab({ client, cwd, terminalKey, active, onCloseReady }: 
   const preferences = usePreferences();
   const paletteRevision = useMemo(() => ({ theme, id: preferences.themeId, custom: preferences.customThemes }), [theme, preferences.themeId, preferences.customThemes]);
   const hosts = useTerminalHosts(client);
+  const [selectionClient, setSelectionClient] = useState(client);
   const [nodeId, setNodeId] = useState("local");
+  if (selectionClient !== client) {
+    setSelectionClient(client);
+    setNodeId("local");
+  }
   const session = useTerminalSession({ client, cwd, nodeId, terminalKey, active, onCloseReady, paletteRevision,
     exitedText: code => t("workspace.terminalExited", { code }) });
   const busy = session.phase === "connecting";

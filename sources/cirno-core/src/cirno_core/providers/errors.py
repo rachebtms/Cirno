@@ -359,8 +359,8 @@ def public_error_kind(response: LLMResponse) -> str:
         return kind
     if kind == "empty":
         return "invalid_response"
-    if response.error_status_code == 429:
+    if response.error_status_code == 429 or kind == "rate_limit":
         return "rate_limit"
-    if response.error_status_code is not None and response.error_status_code >= 500:
+    if kind == "server_error" or response.error_status_code is not None and response.error_status_code >= 500:
         return "server"
     return "unknown"

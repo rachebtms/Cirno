@@ -37,6 +37,9 @@ from cirno_core.skills.loader import SkillsLoader
 @pytest.fixture(autouse=True)
 def _isolate_plugin_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
+        "cirno_core.config.loader._current_config_path", tmp_path / "config" / "config.json"
+    )
+    monkeypatch.setattr(
         agent_plugins, "get_config_path", lambda: tmp_path / "config" / "config.json"
     )
 

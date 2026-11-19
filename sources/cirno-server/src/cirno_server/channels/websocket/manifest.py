@@ -3,7 +3,7 @@
 from cirno_server.channels._manifest import field
 from cirno_server.channels.contracts import ChannelSetupSpec
 from cirno_server.channels.plugin import ChannelPlugin
-from cirno_server.channels.websocket.validation import validate
+from cirno_server.channels.websocket.validation import validate, validate_config
 
 SETUP_SPEC = ChannelSetupSpec(
     fields={
@@ -15,6 +15,7 @@ SETUP_SPEC = ChannelSetupSpec(
     },
     official_url="http://127.0.0.1:8765",
     validator=validate,
+    validate_config=validate_config,
 )
 
 PLUGIN = ChannelPlugin(

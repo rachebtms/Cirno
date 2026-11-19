@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -157,3 +158,30 @@ def test_cli_app_tool_provides_context_only_for_attachment(tmp_path: Path) -> No
     assert attached is not None
     assert attached.source == "cli_apps"
     assert "CLI App Attachment: @drawio" in attached.content
+
+
+def test_cli_app_attachment_reads_do_not_block_other_conversations(tmp_path, monkeypatch):
+    async def exercise():
+        entered = asyncio.Event()
+        release = threading.Event()
+        loop = asyncio.get_running_loop()
+
+        def read_attachment(*args):
+            loop.call_soon_threadsafe(entered.set)
+            release.wait(0.25)
+            return ['CLI App Attachment: @research']
+
+        monkeypatch.setattr('cirno_core.agent.tools.cli_apps.runtime_lines_for_request', read_attachment)
+        tool = CliAppsTool(workspace=tmp_path)
+        task = asyncio.create_task(tool._provide_runtime_context(RequestContext(
+            channel='websocket', chat_id='chat', original_user_text='@research', workspace=tmp_path,
+        )))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            assert not task.done(), 'attachment disk reads blocked the service event loop'
+        finally:
+            release.set()
+            result = await task
+        assert result is not None and '@research' in result.content
+
+    asyncio.run(exercise())

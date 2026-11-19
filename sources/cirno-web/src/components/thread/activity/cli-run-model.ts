@@ -26,7 +26,7 @@ export function isCliRunTraceLine(line: string): boolean {
 }
 
 export function parseCliRunTrace(line: string, status: ToolRunStatus = "running"): CliRunSummary | null {
-  const match = /^([a-zA-Z0-9_.-]+)\((.*)\)$/.exec(line.trim());
+  const match = /^([a-zA-Z0-9_.-]+)\(([\s\S]*)\)$/.exec(line.trim());
   if (!match || !isCliRunTraceLine(line)) return null;
   const argsText = match[2].trim();
   let argsObject: unknown = {};

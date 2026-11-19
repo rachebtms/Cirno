@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from io import StringIO
 from collections import deque
 from collections.abc import Iterable, Mapping
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from cirno_memory.atomic import ensure_directory, publish_file
 from cirno_memory.paging import source_page
 
 if TYPE_CHECKING:
@@ -34,7 +36,7 @@ def write_evidence(
     preserve_system: bool,
     project_id: str | None = None,
 ) -> EvidenceFile:
-    directory.mkdir(parents=True, exist_ok=True)
+    ensure_directory(directory)
     temporary = directory / (uuid4().hex + ".tmp")
     digest = hashlib.sha256(session_key.encode())
     if project_id is not None:
@@ -53,9 +55,11 @@ def write_evidence(
                 count += 1
                 digest.update(line.encode())
                 recent.append(str(message.get("content", ""))[:1200])
+            stream.flush()
+            os.fsync(stream.fileno())
         identity = "source-" + digest.hexdigest()[:40]
         path = directory / f"{identity}.jsonl"
-        temporary.replace(path)
+        publish_file(temporary, path)
         return EvidenceFile(identity, path, count, "\n".join(recent))
     finally:
         temporary.unlink(missing_ok=True)

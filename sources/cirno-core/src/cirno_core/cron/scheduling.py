@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from cirno_core.config.timezone import detect_system_timezone
 from cirno_core.cron.types import CronSchedule
 
 
@@ -21,7 +22,7 @@ def next_run(schedule: CronSchedule, now_ms: int) -> int | None:
 
         from croniter import croniter
 
-        tz = ZoneInfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
+        tz = ZoneInfo(schedule.tz or detect_system_timezone())
         base_dt = datetime.fromtimestamp(now_ms / 1000, tz=tz)
         return int(croniter(schedule.expr, base_dt).get_next(datetime).timestamp() * 1000)
 

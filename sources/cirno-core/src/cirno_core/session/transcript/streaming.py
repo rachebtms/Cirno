@@ -68,7 +68,7 @@ def _compact_completed_stream_deltas(
             continue
         completed = dict(record)
         text = completed.get("text")
-        if not isinstance(text, str) or not text:
+        if not isinstance(text, str):
             completed["text"] = "".join(str(chunk.get("text") or "") for _, chunk in chunks)
         if include_projection_receipts:
             receipts = _projection_receipts([*(chunk for _, chunk in chunks), record])

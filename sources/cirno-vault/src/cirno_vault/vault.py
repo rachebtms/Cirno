@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
@@ -14,6 +15,29 @@ from cryptography.fernet import Fernet
 from filelock import FileLock
 
 _INIT_LOCK = threading.Lock()
+
+
+def _publish_key(path: Path) -> None:
+    temporary = path.with_name(".vault-key-" + uuid4().hex + ".tmp")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as file:
+            file.write(Fernet.generate_key())
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary, path)
+        if os.name != "nt":
+            descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                try:
+                    os.fsync(descriptor)
+                except OSError as error:
+                    if error.errno != errno.EINVAL:
+                        raise
+            finally:
+                os.close(descriptor)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 class CredentialVault:
@@ -29,25 +53,24 @@ class CredentialVault:
     def _open_locked(self):
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         key_path = self.directory / "vault.key"
-        try:
-            fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            pass
-        else:
-            with os.fdopen(fd, "wb") as file:
-                file.write(Fernet.generate_key())
-                file.flush()
-                os.fsync(file.fileno())
-        cipher = Fernet(key_path.read_bytes())
         path = self.directory / "vault.sqlite3"
+        if not key_path.exists():
+            if path.exists() and path.stat().st_size:
+                raise ValueError("Vault encryption key is missing; restore the original vault.key before accessing existing records")
+            _publish_key(key_path)
+        cipher = Fernet(key_path.read_bytes())
         db = sqlite3.connect(path)
-        path.chmod(0o600)
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, label TEXT NOT NULL, kind TEXT NOT NULL, encrypted BLOB NOT NULL, agent_visible INTEGER NOT NULL DEFAULT 0)"
-        )
-        if "agent_visible" not in {row[1] for row in db.execute("PRAGMA table_info(records)")}:
-            db.execute("ALTER TABLE records ADD COLUMN agent_visible INTEGER NOT NULL DEFAULT 0")
-            db.commit()
+        try:
+            path.chmod(0o600)
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, label TEXT NOT NULL, kind TEXT NOT NULL, encrypted BLOB NOT NULL, agent_visible INTEGER NOT NULL DEFAULT 0)"
+            )
+            if "agent_visible" not in {row[1] for row in db.execute("PRAGMA table_info(records)")}:
+                db.execute("ALTER TABLE records ADD COLUMN agent_visible INTEGER NOT NULL DEFAULT 0")
+                db.commit()
+        except BaseException:
+            db.close()
+            raise
         return db, cipher
 
     def list(self) -> dict:

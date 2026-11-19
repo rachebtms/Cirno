@@ -41,6 +41,8 @@ class SubagentStatus:
     created_at: float = field(default_factory=time.time)
     completed_at: float | None = None
     revision: int = 0
+    # Runtime write ownership; excluded from persisted/public task projections.
+    child_generation: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         """Serialize task observations without exposing ownership or resources."""

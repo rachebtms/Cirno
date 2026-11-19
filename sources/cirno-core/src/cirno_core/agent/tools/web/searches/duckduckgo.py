@@ -6,15 +6,16 @@ import asyncio
 import time
 from threading import Event, Lock
 from typing import Any, cast
-from urllib.parse import unquote, urlsplit
+
+from ddgs.exceptions import DDGSException
+from ddgs.exceptions import TimeoutException as DDGSTimeoutException
+from loguru import logger
 
 from cirno_core.agent.tools.base import ToolResult
 from cirno_core.agent.tools.context import tool_log_content_allowed
 from cirno_core.agent.tools.web.content import _format_results
 from cirno_core.agent.tools.web.context import SearchContext
-from ddgs.exceptions import DDGSException
-from ddgs.exceptions import TimeoutException as DDGSTimeoutException
-from loguru import logger
+from cirno_core.agent.tools.web.safety import _redact_search_error
 
 _DDGS_LOCK = Lock()
 
@@ -47,14 +48,10 @@ def _request(context: SearchContext, query: str, n: int, cancelled: Event, deadl
 
 
 def _failure_detail(error: Exception, context: SearchContext) -> str:
-    detail = str(error)
-    secrets = [context.config.api_key, context.proxy]
-    if context.proxy:
-        password = urlsplit(context.proxy).password
-        secrets.extend([password, unquote(password) if password else None])
-    for secret in secrets:
-        if secret:
-            detail = detail.replace(secret, "[redacted]")
+    detail = _redact_search_error(
+        str(error), api_key=context.config.api_key, proxy=context.proxy,
+        base_url=context.config.base_url,
+    )
     return f"{type(error).__name__}: {detail[:1000]}"
 
 

@@ -1,4 +1,3 @@
-from cirno_core.apps.cli import resources as cli_resources
 """End-to-end tests for the embedded webui's HTTP routes on the WebSocket channel."""
 
 import asyncio
@@ -14,16 +13,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from cirno_core.apps.cli import resources as cli_resources
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.cron.service import CronService
 from cirno_core.cron.types import CronJob, CronPayload, CronRunResult, CronSchedule
 from cirno_core.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY
-from cirno_core.session.model import Session
 from cirno_core.session.manager import SessionManager
+from cirno_core.session.model import Session
 from cirno_core.session.session_handles import SessionHandleResolver
 from cirno_core.skills.loader import SkillsLoader
 from cirno_core.triggers.invocation import invocation
 from cirno_core.triggers.local_store import LocalTriggerStore
+
 from cirno_server.channels.base import BaseChannel
 from cirno_server.channels.websocket.config import WebSocketConfig
 from cirno_server.channels.websocket.runtime import WebSocketChannel
@@ -964,6 +965,7 @@ async def test_cli_apps_routes_require_token_and_return_payload(
         *,
         installed_only: bool = False,
         config_path: Path | None = None,
+        start_refresh: Any = None,
     ) -> dict[str, Any]:
         return {
             "apps": [
@@ -1619,6 +1621,7 @@ async def test_cli_apps_route_supports_installed_only_payload(
         *,
         installed_only: bool = False,
         config_path: Path | None = None,
+        start_refresh: Any = None,
     ) -> dict[str, Any]:
         calls.append(installed_only)
         return {"apps": [], "installed_count": 0, "catalog_updated_at": None}

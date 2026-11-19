@@ -12,7 +12,7 @@ from cirno_server.webui.instance_api import instance_action
 @pytest.mark.asyncio
 async def test_personal_binding_round_trip(tmp_path, monkeypatch):
     binding = TelegramBinding(tmp_path)
-    monkeypatch.setattr(telegram_api, "TelegramBinding", lambda: binding)
+    monkeypatch.setattr(telegram_api, "TelegramBinding", lambda _state=None: binding)
 
     async def action(name, **values):
         return await instance_action({"action": f"telegram.{name}", "values": values}, sessions=None, bus=None)
@@ -49,17 +49,18 @@ async def test_slow_sqlite_read_does_not_block_ui_loop(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_accepted_write_settles_before_cancellation_returns(monkeypatch):
+@pytest.mark.parametrize("operation, action", [("update", "telegram.settings"), ("status", "telegram.status")])
+async def test_accepted_write_settles_before_cancellation_returns(monkeypatch, operation, action):
     started, released, completed = Event(), Event(), Event()
 
-    def update(self, values):
+    def accepted(self, values=None):
         started.set()
         assert released.wait(2)
         completed.set()
         return values
 
-    monkeypatch.setattr(TelegramBinding, "update", update)
-    task = asyncio.create_task(telegram_api.telegram_action("telegram.settings", {"enabled": False}))
+    monkeypatch.setattr(TelegramBinding, operation, accepted)
+    task = asyncio.create_task(telegram_api.telegram_action(action, {"enabled": False}))
     try:
         assert await asyncio.to_thread(started.wait, 1)
         task.cancel()

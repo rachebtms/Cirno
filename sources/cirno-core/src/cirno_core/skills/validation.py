@@ -38,18 +38,22 @@ def validate_skill(directory: Path, *, document_content: str | None = None) -> S
     document = directory / "SKILL.md"
     if not any(entry.path == document and entry.is_file for entry in entries):
         return {"valid": False, "errors": ["SKILL.md is missing", *errors]}
-    metadata = parse_skill_metadata(
-        document_content if document_content is not None else document.read_text(encoding="utf-8")
-    )
-    if metadata is None or not valid_skill_metadata(metadata, directory.name):
-        errors.append(
-            "SKILL.md needs matching name and a non-empty description in YAML frontmatter."
+    try:
+        metadata = parse_skill_metadata(
+            document_content if document_content is not None else document.read_text(encoding="utf-8")
         )
+    except UnicodeError as error:
+        errors.append(f"SKILL.md: {error}")
     else:
-        try:
-            parse_runtime_metadata(metadata)
-        except SkillMetadataError as error:
-            errors.append(str(error))
+        if metadata is None or not valid_skill_metadata(metadata, directory.name):
+            errors.append(
+                "SKILL.md needs matching name and a non-empty description in YAML frontmatter."
+            )
+        else:
+            try:
+                parse_runtime_metadata(metadata)
+            except SkillMetadataError as error:
+                errors.append(str(error))
     for entry in entries:
         path = entry.path
         if not entry.is_file:

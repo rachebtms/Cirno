@@ -113,17 +113,25 @@ class WebUICommandRouter:
 
     async def cleanup_connection(self, connection: ServerConnection) -> None:
         """Release command-owned state associated with one transport connection."""
-        chat_ids = self._transport.webui_connection_chats(connection)
+        chat_ids = dict.fromkeys((
+            *self._transport.webui_connection_chats(connection),
+            *self._temporary_chats.chat_ids_for_owner(connection),
+        ))
+        errors: list[Exception] = []
         for chat_id in chat_ids:
-            if self._temporary_chats.owns(connection, chat_id):
-                await self.discard_owned_chat(connection, chat_id)
-            else:
+            try:
+                if self._temporary_chats.owns(connection, chat_id):
+                    await self.discard_owned_chat(connection, chat_id)
+                else:
+                    self._transport.webui_detach(connection, chat_id)
+            except Exception as error:
+                errors.append(error)
                 self._transport.webui_detach(connection, chat_id)
-        for chat_id in self._temporary_chats.chat_ids_for_owner(connection):
-            await self.discard_owned_chat(connection, chat_id)
         self._transport.webui_clear_connection_default(connection)
         self.gateway.endpoint.discard_connection(connection)
         self.requests.discard_connection_if_idle(connection)
+        if errors:
+            raise errors[0]
 
     async def broadcast_webui_event(self, event: str, **fields: Any) -> None:
         for connection in tuple(self._webui_connections):

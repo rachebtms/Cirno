@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
+
 from cirno_core.config.balance import ProviderBalanceConfig
 
 
@@ -14,7 +15,7 @@ class BalanceQueryError(ValueError):
 
 
 def _amount(value: object) -> str:
-    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+    if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
         raise BalanceQueryError("The balance field is not a number")
     try:
         number = Decimal(str(value))
@@ -49,20 +50,24 @@ def query_balance(
     settings: ProviderBalanceConfig, *, provider_key: str | None,
     proxy: str | None = None, http_get: Callable[..., httpx.Response] = httpx.get,
 ) -> list[dict[str, str]]:
+    try:
+        endpoint = ProviderBalanceConfig.http_endpoint(settings.endpoint)
+    except ValueError:
+        raise BalanceQueryError("Invalid balance endpoint") from None
     headers = {"Accept": "application/json"}
     credential = settings.api_key or provider_key
     if credential:
         headers["Authorization"] = f"Bearer {credential}"
     try:
-        response = http_get(settings.endpoint, headers=headers, timeout=10.0,
-                            follow_redirects=False, **({"proxy": proxy, "trust_env": False} if proxy else {}))
+        response = http_get(endpoint, headers=headers, timeout=10.0,
+                            follow_redirects=False, trust_env=False, **({"proxy": proxy} if proxy else {}))
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
         raise BalanceQueryError(f"Balance request failed with HTTP {error.response.status_code}") from None
-    except httpx.HTTPError:
+    except (httpx.HTTPError, httpx.InvalidURL):
         raise BalanceQueryError("Could not reach the balance endpoint") from None
     try:
-        payload: Any = response.json()
+        payload: Any = response.json(parse_float=Decimal)
     except ValueError:
         raise BalanceQueryError("The balance endpoint did not return JSON") from None
     if settings.format == "json":

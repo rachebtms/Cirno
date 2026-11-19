@@ -144,12 +144,15 @@ class ExecTool(Tool):
         max_output_chars: int | None = None,
         max_output_tokens: int | None = None,
         max_runtime: int | None = None,
+        stdin: Literal["closed", "pipe"] | None = None,
         **kwargs: Any,
     ) -> str:
         command = command or cmd
         working_dir = working_dir or workdir
         if not command:
             return ToolResult.error("Error: Missing command. Provide command or cmd.")
+        if stdin not in (None, "closed", "pipe"):
+            return ToolResult.error("Error: stdin must be 'closed' or 'pipe'.")
         if max_output_chars is None:
             max_output_chars = max_output_tokens
 
@@ -167,7 +170,15 @@ class ExecTool(Tool):
             return ToolResult.error(f"Error: {exc}")
         if isinstance(prepared, str):
             return prepared
-        return await self._execute_session(prepared, yield_time_ms, max_output_chars)
+        return await self._execute_session(
+            prepared,
+            yield_time_ms,
+            max_output_chars,
+            stdin=(
+                asyncio.subprocess.DEVNULL if stdin == "closed"
+                else asyncio.subprocess.PIPE if stdin == "pipe" else None
+            ),
+        )
 
     async def execute_to_completion(self, command: str, working_dir: str) -> str:
         """Return the complete result for a trusted user shell command, without an agent observer."""
@@ -186,6 +197,7 @@ class ExecTool(Tool):
         max_output_chars: int | None,
         *,
         until_exit: bool = False,
+        stdin: int | None = None,
     ) -> str:
         try:
             session_id, poll = await self._session_manager.start(
@@ -205,7 +217,9 @@ class ExecTool(Tool):
                 ),
                 until_exit=until_exit,
                 stdin=(
-                    asyncio.subprocess.DEVNULL if yield_time_ms is None else asyncio.subprocess.PIPE
+                    stdin if stdin is not None
+                    else asyncio.subprocess.DEVNULL if yield_time_ms is None
+                    else asyncio.subprocess.PIPE
                 ),
                 idle_timeout=self._exec_config.idle_timeout,
                 idle_action=self._exec_config.idle_action,

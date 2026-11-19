@@ -7,17 +7,18 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, TypeVar
 
-from cirno_server.channels.telegram.formatting import (
-    markdown_to_telegram_html,
-    strip_md_block,
-    tool_hint_to_telegram_blockquote,
-)
 from telegram import (
     InlineKeyboardMarkup,
     Message,
     ReplyParameters,
 )
 from telegram.error import BadRequest, RetryAfter, TimedOut
+
+from cirno_server.channels.telegram.formatting import (
+    markdown_to_telegram_html,
+    strip_md_block,
+    tool_hint_to_telegram_blockquote,
+)
 
 if TYPE_CHECKING:
     from loguru import Logger
@@ -141,12 +142,14 @@ class TelegramAPI:
                 **kwargs,
             )
 
-    async def send_preview(self, chat_id: int, markdown: str, **kwargs: Any) -> Message:
+    async def send_preview(
+        self, chat_id: int, markdown: str, *, line_continuation: bool = False, **kwargs: Any,
+    ) -> Message:
         """A live legacy tail is plain text until its final formatting pass."""
         return await self.call_with_retry(
             self.connection.require_app().bot.send_message,
             chat_id=chat_id,
-            text=strip_md_block(markdown),
+            text=strip_md_block(markdown, line_continuation=line_continuation),
             **kwargs,
         )
 

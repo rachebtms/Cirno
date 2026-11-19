@@ -31,21 +31,24 @@ def rewrite_local_markdown_images(
             url = url[1:-1].strip()
         if not url or url.startswith(("/v0/media/", "#")):
             return None
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return None
         if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
             return None
         path_text = unquote(url)
         if Path(path_text).suffix.lower() not in _INLINE_MARKDOWN_MEDIA_EXTS:
             return None
-        candidate = Path(path_text).expanduser()
-        if not candidate.is_absolute():
-            candidate = workspace_path / candidate
         try:
+            candidate = Path(path_text).expanduser()
+            if not candidate.is_absolute():
+                candidate = workspace_path / candidate
             resolved = candidate.resolve(strict=False)
             resolved.relative_to(workspace_path)
-        except (OSError, ValueError):
-            return None
-        if not resolved.is_file():
+            if not resolved.is_file():
+                return None
+        except (OSError, ValueError, RuntimeError):
             return None
         signed = sign_path(resolved)
         return str(signed.get("url")) if signed and signed.get("url") else None

@@ -1,17 +1,23 @@
 """Browser identity operations backed by canonical conversation metadata."""
+import asyncio
+from pathlib import Path
+
 from cirno_core.bus.outbound_events import SessionUpdatedEvent
+from cirno_core.config.home import get_home_path
 from cirno_core.session.keys import ROUTER_CHAT_ID, ROUTER_SESSION_KEY
 from cirno_core.session.router_session import ensure_router_session
 from cirno_core.session.session_handles import SessionHandleResolver, normalize_session_handle
 from cirno_core.session.state.handles import SessionHandleConflictError
+from cirno_core.utils.cancellation import shield_and_drain
 
 from .store import AccountError
 
 
 class RouterIdentity:
-    def __init__(self, sessions, bus):
+    def __init__(self, sessions, bus, *, home: Path | None = None):
         self.sessions = sessions
         self.bus = bus
+        self.home = Path(home if home is not None else get_home_path()).expanduser().resolve(strict=False)
 
     async def validate_registration(self, name: object) -> None:
         try:
@@ -25,20 +31,25 @@ class RouterIdentity:
             raise AccountError("router_handle_taken", 409)
 
     async def initialize(self, handle: str, *, registration: bool = False) -> None:
+        await shield_and_drain(self._initialize(handle, registration=registration))
+
+    async def _initialize(self, handle: str, *, registration: bool) -> None:
         await ensure_router_session(self.sessions, handle=handle, initialize=registration)
         if registration:
-            import asyncio
             from cirno_core.profiles.awakening import initialize_awakening
-            await asyncio.to_thread(initialize_awakening)
+
+            await asyncio.to_thread(initialize_awakening, home=self.home)
 
     async def wake(self, language: str) -> bool:
         """Journal the owner's one-time wake request before scheduling execution."""
-        import asyncio
+        return await shield_and_drain(self._wake(language))
+
+    async def _wake(self, language: str) -> bool:
         from cirno_core.bus.events import InboundMessage
         from cirno_core.profiles.awakening import awakening_prompt
         from cirno_core.session.recovery.contracts import PENDING_FOLLOWUP_ID_KEY
 
-        if not await asyncio.to_thread(awakening_prompt):
+        if not await asyncio.to_thread(awakening_prompt, home=self.home):
             return False
         header = await self.sessions.state.read_header(ROUTER_SESSION_KEY)
         if header is None:
@@ -55,7 +66,7 @@ class RouterIdentity:
         )
         if await self.sessions.state.queue_followup(ROUTER_SESSION_KEY, message) is None:
             return False
-        await self.sessions.state.update_metadata(ROUTER_SESSION_KEY, {"awakening_started": True})
+        await self.sessions.state.update_metadata(ROUTER_SESSION_KEY, {"awakening_started": True}, expected_generation=header.generation)
         await self.bus.publish_inbound(message)
         return True
 

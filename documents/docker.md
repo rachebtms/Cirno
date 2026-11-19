@@ -6,7 +6,7 @@ The repository workflow `.github/workflows/container.yml` verifies, builds and p
 
 - Pull requests run frontend and backend checks and build AMD64 and ARM64 images on native runners for startup smoke tests. They do not log in to the registry or publish.
 - Pushes to `main` publish `main`, `latest` and a commit tag after verification succeeds.
-- Version tags such as `v0.2.19` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
+- Version tags such as `v0.2.20` publish version and major/minor tags. Prerelease tags stay identifiable by their full version.
 - `workflow_dispatch` allows a manual run from the Actions page.
 - Published images support `linux/amd64` and `linux/arm64`.
 
@@ -31,7 +31,7 @@ The example publishes only the Web UI port and persists the instance root. Model
 
 Open `http://localhost:8765`. On a new instance, the Web UI asks you to register the instance owner with a username and password (at least 10 characters, including an uppercase letter and a symbol). Registration closes after that account is created. Setup then offers theme selection and model provider/model configuration; model setup can be deferred to Settings. With a model connected, the Router starts a one-time introduction to learn its personality and how to address the owner. No terminal setup code or generated password is required. The instance root is mounted from `~/.cirno`: `config.json` holds configuration, `home/` holds profiles, memory and Skills, `state/` holds runtime data, and `workspace/` is the default task directory. Existing configuration is preserved on restart.
 
-To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.19`; otherwise track `latest`. Optional memory embeddings are disabled by default. The unified image installs optional tool and embedding components only when selected. Embedding inference stays disabled by default.
+To pin a release, change the image to `ghcr.io/rachebtms/cirno:0.2.20`; otherwise track `latest`. Optional memory embeddings are disabled by default. The unified image installs optional tool and embedding components only when selected. Embedding inference stays disabled by default.
 
 To update a registry deployment, pull the selected image tag and recreate the service. To build from a checkout instead, run `docker build -t cirno:local .` and change the Compose image to `cirno:local`.
 
@@ -51,7 +51,7 @@ registrations and custom health checks to the [versioned endpoints](development/
 The browser entry stays at `/`.
 
 1. Stop the service and back up the entire mounted instance directory. Also back up workspaces mounted outside that directory.
-2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.19`. Preserve your volumes, ports, environment and reverse-proxy network configuration.
+2. Change the Compose image to `ghcr.io/rachebtms/cirno:0.2.20`. Preserve your volumes, ports, environment and reverse-proxy network configuration.
 3. Pull and recreate the service:
 
    ```sh
@@ -62,7 +62,7 @@ The browser entry stays at `/`.
 
    If you use Compose overrides, pass the same `-f` files to each command. Optional tools are selected by Compose command-line arguments; there is no separate full/slim build or `-full` tag in the unified publishing workflow.
 
-4. Refresh the browser or installed Web app and check Settings → About for 0.2.19. Sign in with the existing account.
+4. Refresh the browser or installed Web app and check Settings → About for 0.2.20. Sign in with the existing account.
 
 Recreating the container interrupts its current process; do this between active operations. Saved progress remains in the instance volume. Packages and files written only into the old container's writable layer do not survive replacement. Selected setup components restore their required dependencies and reuse persistent tool packages and CLI configuration. Do not delete or replace the existing instance volume during an upgrade.
 
@@ -78,6 +78,15 @@ docker compose -f compose.yaml -f compose.rachebtms.yaml up -d
 
 The override sets `command: ["+presets.rachebtms", "--timeout", "1800", "--verify"]`. The image entrypoint is `cirno-setup --serve`: it installs and verifies the command-line selections, drops privileges, checks the service environment and then replaces itself with Cirno. `--verify` rechecks all selected dependencies after installation; `+rachebtms` is shorthand for this preset. Installation failures stop startup and are visible in container logs. Health becomes ready only after setup and service startup complete.
 
+Python readiness checks the required dependency closure and requested extras;
+an installed base dependency alone does not prove an undeclared extra exists.
+Malformed installed dependency metadata is reported as not ready, allowing the
+normal installation and verification flow to repair it. Declared Python, npm
+and Homebrew CLI files must also be executable. Verification does not change
+file permissions; the managed Homebrew installer can restore its script's owner
+execute bit without downloading the repository again. Startup stops if a
+required component remains unusable after installation.
+
 A minimal Compose service omits `command` entirely. To choose individual components:
 
 ```yaml
@@ -89,6 +98,12 @@ services:
 Installer options come before `--`; Cirno server arguments come after it, e.g. `command: ["+pip.pytest", "--timeout", "300", "--", "--port", "8765"]`. Package selections and installer timeout are not application settings and are never saved to `config.json`. Every recreation gets its selections from Compose. Existing installation receipts and caches record completed work, not a desired component list.
 
 For installation and verification without a setup command time limit, use `command: ["+presets.rachebtms", "--timeout", "0", "--verify"]`. Zero disables setup's installation and readiness-check limits, including the final verification pass; negative values are rejected. The default remains 1800 seconds per installation command, with readiness probes capped at 60 seconds when a positive timeout is selected. Download clients and package managers retain their own connection and retry rules.
+
+Setup terminates processes that remain in a failed command's process group after
+a timeout, interruption or nonzero exit. The original exit code and diagnostics
+are retained. A failed installation or verification does not leave ordinary
+same-group children continuing to install in the background; successful commands
+are not terminated by this failure cleanup.
 
 See [environment setup](setup.md) for namespaces, the preset, dependency resolution, privilege separation, caching and adding recipes. The former `-full` image tags are historical releases; they are no longer generated. When moving from an older full deployment, use the unified image with `+presets.rachebtms` in Compose. Keep the existing instance root; no additional persistent root is required. Previous user packages remain available.
 
@@ -107,6 +122,18 @@ Both architecture jobs first verify the minimal image, the research preset and p
 Compose publishes the Web interface on port 8765. The server health endpoint stays inside the container. New instances enable `channels.websocket.browserSetup` and use browser registration. The first person to register becomes the instance owner: keep a new deployment private until you have registered, and use HTTPS when sending credentials over an untrusted network.
 
 Owner credentials and browser sessions are stored in `state/webui-auth.sqlite3` under the instance root, outside the workspace. Passwords use salted scrypt hashes; session tokens are also hashed in storage. Login uses an HttpOnly, SameSite=Strict cookie with a 30-day lifetime. Signing out revokes that browser session. The account, sessions and onboarding progress survive service restarts.
+
+Once an account operation accepts its bounded request, cancellation waits for its
+local storage and Router bookkeeping to settle before releasing the writer.
+Queued Router renames and setup completion recheck the browser session after
+obtaining that writer; a revoked login cannot finish an older queued change.
+The account form serializes password changes, and an older status read cannot
+replace a Router name already confirmed by a successful save.
+
+First-awakening guidance stays in the Agent Home selected when the Router
+identity service was created. Clearing the Router conversation invalidates an
+older in-flight awakening request; that request cannot mark the replacement
+conversation as already awakened.
 
 An explicitly supplied `CIRNO_WEB_TOKEN` retains shared-password authentication for a new instance instead of browser registration. Existing `config.json` files keep their previous authentication mode. Changing that environment variable does not reset an existing account or password. Configure model credentials in the browser or reference environment variables in configuration.
 

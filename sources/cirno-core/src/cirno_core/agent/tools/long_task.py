@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -23,10 +23,12 @@ from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context
 from cirno_core.session.goal_state import (
     GOAL_STATE_KEY,
     MAX_GOAL_OBJECTIVE_CHARS,
+    RESUMABLE_GOAL_STATUSES,
     explicit_goal_requested,
     goal_resume_error,
     goal_state_raw,
     goal_state_runtime_lines,
+    goal_wait_deadline,
     parse_goal_state,
     resume_goal_state,
     sustained_goal_active,
@@ -111,7 +113,9 @@ class _GoalToolsMixin:
                 sess.key, change, expected_generation=sess.generation,
             )
             saved = True
-            await self._publish_goal_state_changed(sess.metadata)
+            await self._publish_goal_state_changed(
+                sess.metadata, session_generation=sess.generation
+            )
 
         try:
             await shield_and_drain(save_and_publish())
@@ -120,7 +124,9 @@ class _GoalToolsMixin:
             if revoke_permission and saved:
                 revoke_goal_mutation_permission()
 
-    async def _publish_goal_state_changed(self, metadata: dict[str, Any]) -> None:
+    async def _publish_goal_state_changed(
+        self, metadata: dict[str, Any], *, session_generation: str | None = None,
+    ) -> None:
         bus = self._bus
         rc = current_request_context()
         if bus is None or rc is None:
@@ -135,6 +141,7 @@ class _GoalToolsMixin:
                     chat_id=cid,
                     session_key=rc.session_key or f"{rc.channel}:{cid}",
                     metadata=dict(rc.metadata or {}),
+                    session_generation=session_generation or rc.session_generation,
                 ),
                 session_metadata=dict(metadata),
             )
@@ -276,7 +283,8 @@ class CreateGoalTool(Tool, _GoalToolsMixin):
             enum=_GOAL_ACTIONS,
         ),
         recap=StringSchema(
-            "Brief honest recap for the user. Required in practice for complete, cancel, and block.",
+            "Brief honest recap for the user. Required in practice for complete, cancel, and block. "
+            "For wait/continue, omit to preserve progress; an empty string clears it.",
             max_length=8000,
             nullable=True,
         ),
@@ -376,17 +384,24 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
             await self._save_goal_state(sess, blob)
             return "Goal settings updated; status and continuation count preserved."
         if normalized == "wait":
-            if wake_after_seconds is None or wake_after_seconds < 1:
-                return ToolResult.error("wait requires a positive wake_after_seconds")
             if prior.get("status") != "active":
                 return ToolResult.error("Only an active goal can wait.")
-            blob = {**prior, "status": "waiting", "wake_at": (datetime.now(timezone.utc) + timedelta(seconds=wake_after_seconds)).isoformat(), "recap": (recap or "").strip()}
+            try:
+                wake_at = goal_wait_deadline(wake_after_seconds)
+            except ValueError as error:
+                return ToolResult.error(str(error))
+            blob = {
+                **prior, "status": "waiting", "wake_at": wake_at,
+                **({"recap": recap.strip()} if recap is not None else {}),
+            }
             await self._save_goal_state(sess, blob)
             return "Goal waiting; Cirno will wake it at " + blob["wake_at"]
         if normalized == "continue":
             if prior.get("status") != "active":
                 return ToolResult.error("Only an active goal can continue.")
-            await self._save_goal_state(sess, {**prior, "recap": (recap or "").strip()})
+            await self._save_goal_state(
+                sess, {**prior, **({"recap": recap.strip()} if recap is not None else {})}
+            )
             return "Progress saved; continue working."
         if normalized in {"pause", "resume", "stop", "delete"}:
             if normalized in {"resume", "delete"} and not self._goal_mutation_allowed():
@@ -397,10 +412,17 @@ class UpdateGoalTool(Tool, _GoalToolsMixin):
                 return "Goal deleted."
             if normalized in {"pause", "stop"}:
                 if status == "stopped" or normalized == "pause" and status == "paused":
+                    if recap is not None or continuation_limit is not None:
+                        blob = dict(prior)
+                        if recap is not None:
+                            blob["recap"] = recap.strip()
+                        await self._save_goal_state(sess, blob)
                     return "Goal already stopped." if status == "stopped" else "Goal already paused."
-                if status not in {"active", "waiting", "paused"}:
-                    return ToolResult.error("Only an active, waiting or paused Goal can be paused or stopped.")
+                if status not in {"active", *RESUMABLE_GOAL_STATUSES}:
+                    return ToolResult.error("Only an unfinished Goal can be paused or stopped.")
                 blob = {**prior, "status": "stopped" if normalized == "stop" else "paused", "paused_at": _iso_now()}
+                if recap is not None:
+                    blob["recap"] = recap.strip()
             else:
                 error = goal_resume_error(prior)
                 if error:

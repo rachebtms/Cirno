@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CirnoClient } from "@/lib/cirno-client";
+import { useLayoutEffect } from "react";
 import { useCredentialVault } from "@/features/credentials/model/useCredentialVault";
 
 const record = { id: "account", label: "Research account", kind: "password" as const };
@@ -18,6 +19,68 @@ function mount(request: ReturnType<typeof vi.fn>) {
 }
 
 describe("credential data ownership", () => {
+  it("discards a late reveal while preserving an edited draft across hide and show", async () => {
+    const reveal = pending<{ value: string }>();
+    const request = server(payload => payload.action === "credentials.reveal" ? reveal.promise : undefined);
+    const view = mount(request);
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    act(() => view.result.current.begin(record));
+    act(() => view.result.current.update({ label: "Edited label" }));
+    let showing!: Promise<void>;
+    act(() => { showing = view.result.current.reveal(); });
+    view.rerender({ active: false, currentClient: view.client });
+    view.rerender({ active: true, currentClient: view.client });
+    await act(async () => { reveal.resolve({ value: "hidden-old-secret" }); await showing; });
+    expect(view.result.current.draft?.label).toBe("Edited label");
+    expect(view.result.current.draft?.value).toBe("");
+    expect(view.result.current.secretVisible).toBe(false);
+  });
+
+  it("lets a replacement account save without waiting for the old account and retains its busy state", async () => {
+    const first = pending<unknown>(), second = pending<unknown>();
+    const request = server(payload => payload.action === "credentials.save" ? first.promise : undefined);
+    const nextRequest = server(payload => payload.action === "credentials.save" ? second.promise : undefined);
+    const view = mount(request);
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    act(() => { view.result.current.begin(); });
+    act(() => view.result.current.update({ label: "First", value: "first-fixture" }));
+    let firstSave!: Promise<void>, secondSave!: Promise<void>;
+    act(() => { firstSave = view.result.current.save(); });
+    const nextClient = { requestMutation: nextRequest } as unknown as CirnoClient;
+    view.rerender({ active: true, currentClient: nextClient });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    act(() => view.result.current.begin());
+    act(() => view.result.current.update({ label: "Second", value: "second-fixture" }));
+    act(() => { secondSave = view.result.current.save(); });
+    const submitted = nextRequest.mock.calls.filter(([, payload]) => payload.action === "credentials.save").length;
+    try {
+      await act(async () => { first.resolve({ ok: true }); await firstSave; });
+      expect(submitted).toBe(1);
+      expect(view.result.current.busy).toBe(true);
+      expect(view.result.current.draft?.label).toBe("Second");
+    } finally {
+      await act(async () => { first.resolve({ ok: true }); second.resolve({ ok: true }); await Promise.all([firstSave, secondSave]); });
+    }
+  });
+
+  it("hides a previous account's revealed value before layout effects observe the replacement", async () => {
+    const firstRequest = server(payload => payload.action === "credentials.reveal" ? Promise.resolve({ value: "first-secret" }) : undefined);
+    const firstClient = { requestMutation: firstRequest } as unknown as CirnoClient;
+    const nextClient = { requestMutation: server() } as unknown as CirnoClient;
+    const observed = vi.fn();
+    const view = renderHook(({ client }) => {
+      const vault = useCredentialVault(client, true);
+      useLayoutEffect(() => { observed(client, vault.draft, vault.secretVisible); }, [client]);
+      return vault;
+    }, { initialProps: { client: firstClient } });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    act(() => view.result.current.begin(record));
+    await act(() => view.result.current.reveal());
+    expect(view.result.current.draft?.value).toBe("first-secret");
+    view.rerender({ client: nextClient });
+    expect(observed).toHaveBeenLastCalledWith(nextClient, null, false);
+  });
+
   it("lists metadata without fetching secrets and exposes list failures with a retry", async () => {
     let failed = true;
     const request = server(payload => payload.action === "credentials.list" && failed ? Promise.reject("Vault is locked") : undefined);

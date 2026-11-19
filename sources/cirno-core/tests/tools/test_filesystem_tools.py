@@ -11,6 +11,26 @@ from cirno_core.agent.tools.filesystem import (
 )
 
 
+async def test_write_path_resolution_and_skill_snapshot_run_off_event_loop(tmp_path, monkeypatch):
+    import threading
+
+    tool = WriteFileTool(workspace=tmp_path)
+    original = tool._resolve_write
+    event_loop_thread = threading.get_ident()
+    resolved = []
+
+    def resolve(path):
+        assert threading.get_ident() != event_loop_thread
+        resolved.append(path)
+        return original(path)
+
+    monkeypatch.setattr(tool, "_resolve_write", resolve)
+    result = await tool.execute(path="notes.md", content="Saved once")
+    assert result.startswith("Successfully wrote")
+    assert resolved == ["notes.md"]
+    assert (tmp_path / "notes.md").read_text() == "Saved once"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
 @pytest.mark.parametrize("operation", ["write", "edit_new", "edit_empty"])
@@ -326,6 +346,58 @@ class TestListDirTool:
         # Ignored dirs should not appear
         assert ".git" not in result
         assert "node_modules" not in result
+
+    async def test_recursive_prunes_ignored_trees_and_scans_off_event_loop(self, tool, populated_dir, monkeypatch):
+        import os
+        import threading
+
+        original = os.scandir
+        event_loop_thread = threading.get_ident()
+        visited = []
+
+        def scan(path):
+            assert threading.get_ident() != event_loop_thread
+            assert path.name not in {".git", "node_modules"}
+            visited.append(path)
+            return original(path)
+
+        monkeypatch.setattr("cirno_core.agent.tools.filesystem.listing.os.scandir", scan)
+        result = await tool.execute(path=str(populated_dir), recursive=True, max_entries=2)
+        assert visited == [populated_dir, populated_dir / "src"]
+        assert result.replace("\\", "/") == "README.md\nsrc/\n\n(truncated, showing first 2 of 4 entries)"
+
+    async def test_listing_cancellation_drains_scan_worker(self, tool, tmp_path, monkeypatch):
+        import asyncio
+        import threading
+
+        started, stopped = threading.Event(), threading.Event()
+
+        def scan(path, cancelled):
+            started.set()
+            assert cancelled.wait(2), "scan worker did not receive cancellation"
+            stopped.set()
+            raise InterruptedError("cancelled")
+
+        monkeypatch.setattr(tool, "_entries", scan)
+        task = asyncio.create_task(tool.execute(path=str(tmp_path), recursive=True))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert stopped.is_set()
+        finally:
+            task.cancel()
+
+    async def test_recursive_does_not_follow_directory_symlinks(self, tool, tmp_path):
+        root = tmp_path / "root"
+        root.mkdir()
+        try:
+            (root / "loop").symlink_to(root, target_is_directory=True)
+        except OSError:
+            pytest.skip("directory symlinks unavailable")
+        result = await tool.execute(path=str(root), recursive=True)
+        assert result == "loop/"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("relative_root", ["build", "build/project"])

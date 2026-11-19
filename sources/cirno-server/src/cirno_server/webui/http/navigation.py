@@ -6,10 +6,11 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from cirno_core.command.builtin.catalog import builtin_command_palette
-from cirno_server.webui.http_utils import http_error as _http_error
-from cirno_server.webui.http_utils import http_json_response as _http_json_response
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
+
+from cirno_server.webui.http_utils import http_error as _http_error
+from cirno_server.webui.http_utils import http_json_response as _http_json_response
 
 from .shared import _NO_STORE_HEADERS, _is_websocket_channel_session_key, _mutation_payload
 
@@ -33,7 +34,7 @@ class NavigationRoutes:
                 connection, request, got.rsplit("/", 1)[-1]
             )
         if got == "/v0/workspaces/favorite":
-            return self.server.files_routes._handle_workspace_favorite(connection, request)
+            return await self.server.files_routes._handle_workspace_favorite(connection, request)
         if got == "/v0/workspaces/resolve-project":
             return await self.server.files_routes._handle_workspace_resolve_project(
                 connection, request

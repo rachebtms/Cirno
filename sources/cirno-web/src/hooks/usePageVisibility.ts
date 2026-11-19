@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+
+export const SurfaceVisibilityContext = createContext(true);
 
 function pageIsVisible(): boolean {
   return typeof document === "undefined" || document.visibilityState !== "hidden";
@@ -6,6 +8,7 @@ function pageIsVisible(): boolean {
 
 /** Keep background tabs quiet while resuming work immediately on return. */
 export function usePageVisibility(): boolean {
+  const surfaceVisible = useContext(SurfaceVisibilityContext);
   const [visible, setVisible] = useState(pageIsVisible);
 
   useEffect(() => {
@@ -14,5 +17,5 @@ export function usePageVisibility(): boolean {
     return () => document.removeEventListener("visibilitychange", update);
   }, []);
 
-  return visible;
+  return visible && surfaceVisible;
 }

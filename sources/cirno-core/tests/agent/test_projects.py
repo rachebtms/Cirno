@@ -83,6 +83,30 @@ async def test_unassign_and_explicit_membership_errors(projects):
     assert (await sessions.state.read_metadata("websocket:worker"))["metadata"]["project_id"] is None
 
 
+@pytest.mark.parametrize('values', [{}, {'project_id': ''}, {'project_id': False}, {'project_id': 0}])
+async def test_invalid_project_assignment_cannot_silently_remove_membership(projects, values):
+    sessions, bus, registry = projects
+    project = (await call(registry, 'create', name='Keep membership'))['project']
+    await sessions.projects.action('assign', {'session_key': 'websocket:worker', 'project_id': project['id']})
+    with pytest.raises(ValueError, match='[Pp]roject'):
+        await instance_action({'action': 'projects.assign', 'values': {
+            'session_key': 'websocket:worker', **values,
+        }}, sessions=sessions, bus=bus)
+    metadata = (await sessions.state.read_metadata('websocket:worker'))['metadata']
+    assert metadata['project_id'] == project['id']
+
+
+@pytest.mark.parametrize('identifier', ['', False, 0])
+async def test_invalid_project_save_identity_cannot_create_a_different_project(projects, identifier):
+    sessions, bus, registry = projects
+    project = (await call(registry, 'create', name='Existing'))['project']
+    with pytest.raises(ValueError, match='Project'):
+        await instance_action({'action': 'projects.save', 'values': {
+            'id': identifier, 'name': 'Must not become another project',
+        }}, sessions=sessions, bus=bus)
+    assert (await sessions.projects.action('list', {}))['projects'] == [project]
+
+
 async def test_ordinary_and_stale_cirno_cannot_manage_projects(projects):
     sessions, _, registry = projects
     assert "project" not in conversation_tools(registry, "websocket:worker").tool_names
@@ -109,14 +133,14 @@ async def test_cancelled_deletion_finishes_cleanup_before_stopping(projects, mon
     project = (await call(registry, "create", name="Research"))["project"]
     await sessions.projects.action("assign", {"session_key": "websocket:worker", "project_id": project["id"]})
     entered, release = asyncio.Event(), asyncio.Event()
-    original = sessions.projects._assign
+    original = sessions.projects._detach_project
 
-    async def held(values):
+    async def held(key, identifier):
         entered.set()
         await release.wait()
-        await original(values)
+        await original(key, identifier)
 
-    monkeypatch.setattr(sessions.projects, "_assign", held)
+    monkeypatch.setattr(sessions.projects, "_detach_project", held)
     deletion = asyncio.create_task(sessions.projects.action("delete", {"id": project["id"]}))
     await entered.wait()
     deletion.cancel()
@@ -156,6 +180,39 @@ async def test_conversation_creation_and_project_deletion_share_membership_owner
     with pytest.raises(ValueError, match="Project not found"):
         await sessions.projects.open_conversation("websocket:late-worker", {}, project["id"])
     assert await sessions.state.read_header("websocket:late-worker") is None
+
+
+@pytest.mark.parametrize('change', ['delete', 'reset', 'reassign'])
+async def test_project_deletion_handles_conversations_changed_during_cleanup(projects, monkeypatch, change):
+    sessions, _, registry = projects
+    project = (await call(registry, 'create', name='Research'))['project']
+    other = (await call(registry, 'create', name='Other project'))['project'] if change == 'reassign' else None
+    key = 'websocket:worker'
+    await sessions.projects.action('assign', {'session_key': key, 'project_id': project['id']})
+    original = sessions.state.mutate_metadata
+    changed = False
+
+    async def race(target, update, **kwargs):
+        nonlocal changed
+        if target == key and not changed:
+            changed = True
+            if change == 'delete':
+                await sessions.state.delete(key)
+            elif change == 'reset':
+                await sessions.state.reset(key)
+            else:
+                await original(key, lambda metadata: metadata.update(project_id=other['id']))
+        return await original(target, update, **kwargs)
+
+    monkeypatch.setattr(sessions.state, 'mutate_metadata', race)
+    await sessions.projects.action('delete', {'id': project['id']})
+    assert changed
+    assert (await sessions.projects.action('list', {}))['projects'] == ([other] if other else [])
+    header = await sessions.state.read_header(key)
+    if change == 'delete':
+        assert header is None
+    else:
+        assert header is not None and header.metadata['project_id'] == (other['id'] if other else None)
 
 
 @pytest.mark.parametrize("identifier", ["", 42, [], {}])

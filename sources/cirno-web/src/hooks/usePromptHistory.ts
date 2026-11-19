@@ -4,7 +4,7 @@ import { fetchPromptPage, fetchWebuiThread } from "@/lib/api";
 import { projectThreadEvents } from "@/lib/thread-event-projection";
 import { projectWebuiThreadMessages } from "@/lib/thread-display-projection";
 import { isModelCommandText } from "@/lib/format";
-import { isSystemCommandTurnId } from "@/lib/cirno-client";
+import { isSystemCommandTurnId } from "@/lib/client-run-observation";
 import type { WebuiThreadPersistedPayload } from "@/lib/contracts/history";
 import type { UIMessage } from "@/lib/contracts/messages";
 import { PromptDirectorySource } from "@/features/prompt-history/source";

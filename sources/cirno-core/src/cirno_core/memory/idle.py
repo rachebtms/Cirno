@@ -1,10 +1,12 @@
 """One bounded memory-maintenance pass in idle slots; no extra scheduler process."""
 import asyncio
+import sqlite3
 import time
 
-from cirno_core.config.home import get_home_path
 from cirno_memory.repository import MemoryRepository
 from loguru import logger
+
+from cirno_core.config.home import get_home_path
 
 
 class MemoryIdleCoordinator:
@@ -25,5 +27,5 @@ class MemoryIdleCoordinator:
                 repo.reconcile(limit=self.config.agents.defaults.memory.index_scan_batch)
             try:
                 await asyncio.to_thread(maintain)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, sqlite3.DatabaseError) as exc:
                 logger.warning("Memory maintenance: {}", exc)

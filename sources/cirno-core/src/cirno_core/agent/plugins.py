@@ -13,9 +13,10 @@ from typing import cast
 from loguru import logger
 from pydantic import ValidationError
 
-from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
 from cirno_core.config.loader import get_config_path
 from cirno_core.config.tools import MCPServerConfig
+from cirno_core.skills.metadata import parse_skill_metadata, valid_skill_metadata
+from cirno_core.utils.atomic_file import atomic_write_text
 
 AGENT_PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 AGENT_PLUGIN_MCP_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
@@ -40,6 +41,8 @@ class _PackageSnapshot:
     root: Path
     fingerprint: str
     skill_dirs: tuple[Path, ...]
+    activation_path: Path
+    plugin_name: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,19 +92,20 @@ def _installed_plugins(workspace: Path) -> list[AgentPlugin]:
     return [plugin for plugin in plugins.values() if plugin is not None]
 
 
-def enabled_agent_plugin_skills(workspace: Path) -> list[tuple[str, Path]]:
+def enabled_agent_plugin_skills(workspace: Path, *, config_path: Path | None = None) -> list[tuple[str, Path]]:
     """Verify and return skills from plugins the user has explicitly enabled."""
-    return [(skill.name, skill.path) for skill in enabled_agent_plugin_skill_documents(workspace)]
+    return [(skill.name, skill.path) for skill in enabled_agent_plugin_skill_documents(workspace, config_path=config_path)]
 
 
-def enabled_agent_plugin_skill_documents(workspace: Path) -> list[AgentPluginSkill]:
+def enabled_agent_plugin_skill_documents(workspace: Path, *, config_path: Path | None = None) -> list[AgentPluginSkill]:
     """Return documents using the same bytes that passed package activation."""
+    config_path = _configuration_path(config_path)
     skills: list[AgentPluginSkill] = []
     packages: list[_PackageSnapshot] = []
     for plugin in _installed_plugins(workspace):
         skill_files = _plugin_skill_files(plugin.name, plugin.root)
         documents: dict[Path, bytes | None] = {path: None for _name, path in skill_files}
-        fingerprint = _enabled_package_fingerprint(workspace, plugin, documents=documents)
+        fingerprint = _enabled_package_fingerprint(workspace, plugin, documents=documents, config_path=config_path)
         if fingerprint is None:
             continue
         plugin_skills: list[AgentPluginSkill] = []
@@ -123,10 +127,12 @@ def enabled_agent_plugin_skill_documents(workspace: Path) -> list[AgentPluginSki
                     root=plugin.root,
                     fingerprint=fingerprint,
                     skill_dirs=tuple(skill.path.parent for skill in plugin_skills),
+                    activation_path=_plugin_data_dir(workspace, plugin.name, create=False, config_path=config_path) / "enabled",
+                    plugin_name=plugin.name,
                 )
             )
 
-    key = _skill_cache_key(workspace)
+    key = _skill_cache_key(workspace, config_path=config_path)
     _SKILL_CACHE[key] = _SkillCacheEntry(
         tuple((skill.name, skill.path) for skill in skills), tuple(packages)
     )
@@ -137,12 +143,14 @@ def enabled_agent_plugin_skill_dirs(
     workspace: Path,
     *,
     requested_path: str | Path | None = None,
+    config_path: Path | None = None,
 ) -> tuple[Path, ...]:
     """Return skill roots authorized for one read, revalidating their package."""
-    key = _skill_cache_key(workspace)
+    config_path = _configuration_path(config_path)
+    key = _skill_cache_key(workspace, config_path=config_path)
     cached = _SKILL_CACHE.get(key)
     if cached is None:
-        enabled_agent_plugin_skills(workspace)
+        enabled_agent_plugin_skills(workspace, config_path=config_path)
         cached = _SKILL_CACHE.get(key)
     if cached is None:
         return ()
@@ -158,11 +166,15 @@ def enabled_agent_plugin_skill_dirs(
         if target is None
         or any(target == root or target.is_relative_to(root) for root in package.skill_dirs)
     )
-    if any(_package_fingerprint(package.root) != package.fingerprint for package in packages):
+    if any(
+        not _cached_activation_matches(package, workspace=workspace, config_path=config_path)
+        or _package_fingerprint(package.root) != package.fingerprint
+        for package in packages
+    ):
         # Re-run the full activation check so a changed package loses its
         # marker and cannot become readable again through this cache.
-        _invalidate_skill_cache(workspace)
-        enabled_agent_plugin_skills(workspace)
+        _invalidate_skill_cache(workspace, config_path=config_path)
+        enabled_agent_plugin_skills(workspace, config_path=config_path)
         return ()
 
     if target is None:
@@ -175,32 +187,58 @@ def enabled_agent_plugin_skill_dirs(
     )
 
 
-def _skill_cache_key(workspace: Path) -> tuple[Path, Path]:
+def _cached_activation_matches(package: _PackageSnapshot, *, workspace: Path, config_path: Path) -> bool:
+    try:
+        workspace = workspace.expanduser().resolve()
+        plugins_root = _contained(workspace / "plugins", workspace, directory=True)
+        if plugins_root is None or _contained(package.root, plugins_root, directory=True) != package.root:
+            return False
+        directory = _plugin_data_dir(workspace, package.plugin_name, create=False, config_path=config_path)
+        if directory / "enabled" != package.activation_path:
+            return False
+        marker = package.activation_path.read_text(encoding="utf-8")
+    except (OSError, RuntimeError, UnicodeError):
+        return False
+    expected = json.dumps(
+        {"fingerprint": package.fingerprint, "root": str(package.root)},
+        separators=(",", ":"), sort_keys=True,
+    )
+    return marker == expected
+
+
+def _configuration_path(config_path: Path | None) -> Path:
+    return (config_path if config_path is not None else get_config_path()).expanduser().resolve(strict=False)
+
+
+def _skill_cache_key(workspace: Path, *, config_path: Path | None = None) -> tuple[Path, Path]:
     return (
         workspace.expanduser().resolve(),
-        get_config_path().expanduser().resolve(),
+        (config_path if config_path is not None else get_config_path()).expanduser().resolve(),
     )
 
 
-def _invalidate_skill_cache(workspace: Path) -> None:
-    _SKILL_CACHE.pop(_skill_cache_key(workspace), None)
+def _invalidate_skill_cache(workspace: Path, *, config_path: Path | None = None) -> None:
+    _SKILL_CACHE.pop(_skill_cache_key(workspace, config_path=config_path), None)
 
 
 def _package_fingerprint(
     root: Path, *, documents: dict[Path, bytes | None] | None = None,
 ) -> str | None:
     """Hash package paths, link targets, and file contents."""
-    digest = sha256()
+    digest = sha256(b"cirno-agent-plugin-tree-v2\0")
     try:
         for candidate in sorted(root.rglob("*")):
             relative = candidate.relative_to(root).as_posix()
-            digest.update(relative.encode())
+            encoded_path = relative.encode()
+            digest.update(len(encoded_path).to_bytes(8, "big") + encoded_path)
             if candidate.is_symlink():
                 digest.update(b"\0link\0")
-                digest.update(candidate.readlink().as_posix().encode())
+                target = candidate.readlink().as_posix().encode()
+                digest.update(len(target).to_bytes(8, "big") + target)
             elif candidate.is_file():
                 content = candidate.read_bytes()
                 digest.update(b"\0file\0")
+                digest.update(len(content).to_bytes(8, "big"))
                 digest.update(content)
                 if documents is not None and candidate in documents:
                     documents[candidate] = content
@@ -248,16 +286,18 @@ def _load_manifest(plugin_root: Path) -> AgentPlugin | None:
 def agent_plugin_mcp_servers(
     workspace: Path,
     configured: dict[str, MCPServerConfig] | None = None,
+    *, config_path: Path | None = None,
 ) -> dict[str, MCPServerConfig]:
     """Merge explicitly enabled plugin MCP servers with user configuration.
 
     User configuration wins on the unlikely event of a namespaced collision.
     """
+    config_path = _configuration_path(config_path)
     servers: dict[str, MCPServerConfig] = {}
     for plugin in _installed_plugins(workspace):
-        if not _enabled(workspace, plugin):
+        if not _enabled(workspace, plugin, config_path=config_path):
             continue
-        plugin_servers = _plugin_mcp_servers(workspace, plugin)
+        plugin_servers = _plugin_mcp_servers(workspace, plugin, config_path=config_path)
         for name, server in plugin_servers.items():
             # ``--`` cannot occur in a valid plugin identity, so multi-server
             # namespaces cannot collide with a single-server plugin name.
@@ -269,34 +309,36 @@ def agent_plugin_mcp_servers(
     return servers | configured
 
 
-def discover_agent_plugins(workspace: Path) -> list[AgentPlugin]:
+def discover_agent_plugins(workspace: Path, *, config_path: Path | None = None) -> list[AgentPlugin]:
     """Return component and lifecycle state for discovered plugins."""
+    config_path = _configuration_path(config_path)
     return [
         replace(
             plugin,
-            mcp_servers=tuple(sorted(_plugin_mcp_servers(workspace, plugin))),
-            enabled=_enabled(workspace, plugin),
+            mcp_servers=tuple(sorted(_plugin_mcp_servers(workspace, plugin, config_path=config_path))),
+            enabled=_enabled(workspace, plugin, config_path=config_path),
         )
         for plugin in _installed_plugins(workspace)
     ]
 
 
-def set_agent_plugin_enabled(workspace: Path, name: str, enabled: bool) -> None:
+def set_agent_plugin_enabled(workspace: Path, name: str, enabled: bool, *, config_path: Path | None = None) -> None:
     """Enable or disable one installed plugin."""
+    config_path = _configuration_path(config_path)
     plugin = next((item for item in _installed_plugins(workspace) if item.name == name), None)
     if plugin is None:
         raise ValueError(f"unknown Agent Plugin '{name}'")
-    data = _plugin_data_dir(workspace, plugin.name, create=True)
+    data = _plugin_data_dir(workspace, plugin.name, create=True, config_path=config_path)
     marker = data / "enabled"
     if enabled:
         activation = _activation_marker(plugin)
         if activation is None:
             raise RuntimeError(f"Agent Plugin '{name}' changed while it was being enabled")
-        marker.write_text(activation, encoding="utf-8")
+        atomic_write_text(marker, activation)
         marker.chmod(0o600)
     else:
         marker.unlink(missing_ok=True)
-    _invalidate_skill_cache(workspace)
+    _invalidate_skill_cache(workspace, config_path=config_path)
 
 
 def _string(value: object) -> str:
@@ -336,7 +378,7 @@ def _plugin_logo(value: object, plugin_root: Path) -> str | None:
     return None
 
 
-def _plugin_mcp_servers(workspace: Path, plugin: AgentPlugin) -> dict[str, MCPServerConfig]:
+def _plugin_mcp_servers(workspace: Path, plugin: AgentPlugin, *, config_path: Path | None = None) -> dict[str, MCPServerConfig]:
     payload = _read_object(plugin.root / "mcp.json", plugin.root)
     if payload is None:
         return {}
@@ -349,7 +391,7 @@ def _plugin_mcp_servers(workspace: Path, plugin: AgentPlugin) -> dict[str, MCPSe
         logger.warning("Ignoring invalid MCP component for Agent Plugin '{}'", plugin.name)
         return {}
 
-    data = _plugin_data_dir(workspace, plugin.name, create=True)
+    data = _plugin_data_dir(workspace, plugin.name, create=True, config_path=config_path)
     servers: dict[str, MCPServerConfig] = {}
     for name, raw in cast(dict[str, object], raw_servers).items():
         if not name or len(name) > 128 or any(ord(char) < 32 for char in name):
@@ -429,9 +471,9 @@ def _expand(value: str, root: Path, data: Path) -> str:
     return value.replace("${PLUGIN_ROOT}", str(root)).replace("${PLUGIN_DATA}", str(data))
 
 
-def _plugin_data_dir(workspace: Path, name: str, *, create: bool) -> Path:
+def _plugin_data_dir(workspace: Path, name: str, *, create: bool, config_path: Path | None = None) -> Path:
     workspace_id = sha256(str(workspace.expanduser().resolve()).encode()).hexdigest()[:12]
-    current = get_config_path().expanduser().resolve().parent / "state"
+    current = (config_path if config_path is not None else get_config_path()).expanduser().resolve().parent / "state"
     for segment in ("plugin-data", workspace_id, name):
         path = current / segment
         if create:
@@ -450,9 +492,10 @@ def _plugin_data_dir(workspace: Path, name: str, *, create: bool) -> Path:
 
 def _enabled_package_fingerprint(
     workspace: Path, plugin: AgentPlugin, *, documents: dict[Path, bytes | None] | None = None,
+    config_path: Path | None = None,
 ) -> str | None:
     """Return the content fingerprint when this exact package is enabled."""
-    marker = _plugin_data_dir(workspace, plugin.name, create=False) / "enabled"
+    marker = _plugin_data_dir(workspace, plugin.name, create=False, config_path=config_path) / "enabled"
     try:
         if not marker.is_file():
             return None
@@ -460,7 +503,7 @@ def _enabled_package_fingerprint(
         activation = _activation_marker(plugin, documents=documents)
         if activation is None:
             marker.unlink(missing_ok=True)
-            _invalidate_skill_cache(workspace)
+            _invalidate_skill_cache(workspace, config_path=config_path)
             return None
         payload = cast(dict[str, object], json.loads(activation))
         fingerprint = payload.get("fingerprint")
@@ -469,19 +512,19 @@ def _enabled_package_fingerprint(
         if current == activation:
             return fingerprint
         if current == str(plugin.root):
-            marker.write_text(activation, encoding="utf-8")
+            atomic_write_text(marker, activation)
             marker.chmod(0o600)
             return fingerprint
         marker.unlink(missing_ok=True)
-        _invalidate_skill_cache(workspace)
+        _invalidate_skill_cache(workspace, config_path=config_path)
         return None
-    except (OSError, json.JSONDecodeError):
-        _invalidate_skill_cache(workspace)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        _invalidate_skill_cache(workspace, config_path=config_path)
         return None
 
 
-def _enabled(workspace: Path, plugin: AgentPlugin) -> bool:
-    return _enabled_package_fingerprint(workspace, plugin) is not None
+def _enabled(workspace: Path, plugin: AgentPlugin, *, config_path: Path | None = None) -> bool:
+    return _enabled_package_fingerprint(workspace, plugin, config_path=config_path) is not None
 
 
 def _activation_marker(

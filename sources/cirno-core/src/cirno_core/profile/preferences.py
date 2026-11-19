@@ -53,6 +53,12 @@ class PreferencesRepository:
             return self._snapshot(db)
 
     def update(self, patch: dict, expected_revision: int | None = None) -> dict:
+        if not isinstance(patch, dict):
+            raise ValueError("Preference patch must be a JSON object")
+        if expected_revision is not None and (
+            isinstance(expected_revision, bool) or not isinstance(expected_revision, int) or expected_revision < 0
+        ):
+            raise ValueError("Preference revision must be a non-negative integer")
         with self.lock, self._open() as db:
             db.execute("BEGIN IMMEDIATE")
             current = self._snapshot(db)

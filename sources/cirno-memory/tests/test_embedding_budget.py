@@ -50,8 +50,8 @@ def test_blocked_input_and_partial_response_cannot_bypass_timeout(program):
 
 
 def test_api_batches_share_one_budget_and_expired_work_is_not_sent(monkeypatch):
-    import cirno_memory.embedding_budget as budget
     import cirno_memory.embedding_api as api
+    import cirno_memory.embedding_budget as budget
     clock = [0.0]
     monkeypatch.setattr(budget.time, "monotonic", lambda: clock[0])
     original = httpx.Client
@@ -95,7 +95,7 @@ def test_cached_vector_scoring_obeys_the_whole_search_deadline(tmp_path, monkeyp
     clock = [0.0]
     monkeypatch.setattr(budget.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(embedding, "EmbeddingWorker", Worker)
-    monkeypatch.setattr(embedding, "_fingerprint", lambda _: "test")
+    monkeypatch.setattr(embedding, "_fingerprint", lambda _, **_kwargs: "test")
     repo = MemoryRepository(tmp_path)
     repo.save("marker evidence", source="test:result", session_key="a", layer="knowledge")
     config = MemoryConfig(embedding_enabled=True, embedding_timeout_seconds=1)

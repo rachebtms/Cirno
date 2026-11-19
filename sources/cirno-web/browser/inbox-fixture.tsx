@@ -16,9 +16,18 @@ export function InboxFixture() {
       { category: "system", kind: "compaction", body: "Conversation checkpoint saved." },
     ].map((item, index) => ({ ...item, id: String(index + 1), seq: index + 1, category: item.category as InboxCategory,
       session_key: "websocket:b1ec9323-2155-5f24-bc56-1da2f59aeecb", status: "pending", data: item.data ?? {}, created_at: 1793948400000, read_at: null }));
-    return { status: "open", onStatus: () => () => {}, requestMutation: async (_method: string, args: { action: string; values: { category?: string } }) => {
-      if (args.action === "inbox.read") items = items.map(item => ({ ...item, read_at: Date.now() }));
-      return { items: items.filter(item => !args.values?.category || item.category === args.values.category), unread: { operations: 1, conversations: 1, system: 2 }, latest_seq: 4, next_before: null };
+    const unread = () => Object.fromEntries(["operations", "conversations", "system"].map(category =>
+      [category, items.filter(item => item.category === category && item.read_at === null).length]));
+    return { status: "open", onStatus: () => () => {}, requestMutation: async (_method: string, args: { action: string; values: { category?: string; ids?: string[]; id?: string } }) => {
+      if (args.action === "inbox.open") return { session_key: items.find(item => item.id === args.values.id)?.session_key ?? null };
+      if (args.action === "inbox.read") {
+        const read_at = Date.now();
+        items = items.map(item => (!args.values.ids || args.values.ids.includes(item.id))
+          && (!args.values.category || item.category === args.values.category)
+          ? { ...item, read_at: item.read_at ?? read_at } : item);
+        return { ok: true, read_at, unread: unread() };
+      }
+      return { items: items.filter(item => !args.values?.category || item.category === args.values.category), unread: unread(), latest_seq: 4, next_before: null };
     } } as unknown as CirnoClient;
   }, []);
   return <ClientProvider client={client} token="fixture"><InboxProvider>

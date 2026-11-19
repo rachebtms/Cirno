@@ -114,6 +114,7 @@ export const RUNTIME_CONFIG_FIELDS: RuntimeConfigField[] = [
   { group: "tools", path: "tools.file.enable", kind: "boolean" },
   { group: "tools", path: "tools.cli_apps.enable", kind: "boolean" },
   { group: "web", path: "tools.web.enable", kind: "boolean" },
+  { group: "web", path: "tools.web.fetch.max_response_mb", kind: "number", min: 1 },
   { group: "tools", path: "tools.my.enable", kind: "boolean" },
   { group: "tools", path: "tools.my.allow_set", kind: "boolean", when: { path: "tools.my.enable", value: true } },
   { group: "shell", path: "tools.exec.max_runtime", kind: "duration", min: 0 },

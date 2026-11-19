@@ -1,12 +1,40 @@
 """Memory retention and optional embedding configuration."""
 
 import os
-from pathlib import Path
-from pathlib import PurePosixPath
+import re
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 from pydantic.alias_generators import to_camel
+
+_ENV_REF_PATTERN = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+
+
+def normalize_embedding_api_base(value: str, *, allow_env_refs: bool = False) -> str:
+    """Keep raw references on disk; validate their resolved URL before use."""
+    if _ENV_REF_PATTERN.search(value):
+        if allow_env_refs:
+            return value
+        raise ValueError("Resolve embedding API URL environment references before retrieval")
+    if value:
+        from urllib.parse import urlsplit
+
+        try:
+            parsed = urlsplit(value)
+            valid = (
+                parsed.scheme in {"http", "https"} and parsed.hostname
+                and parsed.port != 0
+                and parsed.username is None and parsed.password is None
+                and "?" not in value and "#" not in value
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError(
+                "Use an http(s) embedding API URL with a valid port and without credentials, query or fragment"
+            )
+    return value.rstrip("/")
 
 
 class MemoryConfig(BaseModel):
@@ -60,19 +88,4 @@ class MemoryConfig(BaseModel):
     @field_validator("embedding_api_base")
     @classmethod
     def _embedding_api_url(cls, value: str) -> str:
-        if value:
-            from urllib.parse import urlsplit
-
-            parsed = urlsplit(value)
-            if (
-                parsed.scheme not in {"http", "https"}
-                or not parsed.hostname
-                or parsed.username
-                or parsed.password
-                or parsed.query
-                or parsed.fragment
-            ):
-                raise ValueError(
-                    "Use an http(s) embedding API URL without credentials, query or fragment"
-                )
-        return value.rstrip("/")
+        return normalize_embedding_api_base(value, allow_env_refs=True)

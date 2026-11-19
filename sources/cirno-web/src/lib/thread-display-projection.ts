@@ -1,5 +1,5 @@
 import { isModelCommandResponseText, isModelCommandText } from "@/lib/format";
-import { isSystemCommandTurnId } from "@/lib/cirno-client";
+import { isSystemCommandTurnId } from "@/lib/client-run-observation";
 import { scrubSubagentUiMessages } from "@/lib/subagent-channel-display";
 import type { UIMessage } from "@/lib/contracts/messages";
 

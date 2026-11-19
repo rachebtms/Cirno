@@ -28,7 +28,7 @@ async def search(context: SearchContext, query: str, n: int) -> str:
                 endpoint,
                 params={"q": query, "format": "json"},
                 headers={"User-Agent": context.user_agent},
-                timeout=10.0,
+                timeout=float(context.config.timeout),
             )
             r.raise_for_status()
         return _format_results(query, r.json().get("results", []), n)

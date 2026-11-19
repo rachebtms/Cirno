@@ -43,9 +43,10 @@ function extractImageFilesFromDrop(
 export interface UseClipboardAndDropApi {
   /** Whether a drag is currently hovering the drop zone (toggle dragover UI). */
   isDragging: boolean;
+  /** Reports attached files without necessarily consuming accompanying text. */
   onPaste: (
     event: React.ClipboardEvent,
-  ) => void;
+  ) => boolean;
   onDragEnter: (event: React.DragEvent) => void;
   onDragOver: (event: React.DragEvent) => void;
   onDragLeave: (event: React.DragEvent) => void;
@@ -67,11 +68,12 @@ export function useClipboardAndDrop(
   const onPaste = useCallback(
     (event: React.ClipboardEvent) => {
       const files = extractImageFilesFromPaste(event);
-      if (files.length === 0) return;
-      // Consume only when an attachment is actually present; plain-text paste
-      // still reaches the textarea unmolested.
-      event.preventDefault();
+      if (files.length === 0) return false;
+      // Let accompanying text reach the textarea. The return value prevents
+      // the caller from separately interpreting that text as another file path.
+      if (!event.clipboardData.getData("text/plain")) event.preventDefault();
       onImageFiles(files);
+      return true;
     },
     [onImageFiles],
   );
@@ -100,9 +102,9 @@ export function useClipboardAndDrop(
     (event: React.DragEvent) => {
       dragDepth.current = 0;
       setIsDragging(false);
+      if (event.dataTransfer.files.length > 0) event.preventDefault();
       const files = extractImageFilesFromDrop(event);
       if (files.length === 0) return;
-      event.preventDefault();
       onImageFiles(files);
     },
     [onImageFiles],

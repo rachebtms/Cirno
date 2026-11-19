@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
@@ -20,6 +21,7 @@ from cirno_core.agent.tools.runtime_control import (
     RuntimeSnapshot,
 )
 from cirno_core.agent.tools.self_config import MyToolConfig
+from cirno_core.session.sqlite_store import SessionConflictError
 
 if TYPE_CHECKING:
     from cirno_core.agent.tools.context import ToolContext
@@ -189,7 +191,7 @@ class MyTool(Tool):
                 return None, f"'{part}' is not accessible"
             if part.lower() in self._SENSITIVE_NAMES:
                 return None, f"'{part}' is not accessible"
-        obj: object = snapshot.as_mapping()
+        obj: object = {"scratchpad": snapshot.scratchpad} if path.startswith("scratchpad.") else snapshot.as_mapping()
         for part in parts:
             if not _is_string_mapping(obj):
                 return None, f"'{part}' not found"
@@ -379,11 +381,18 @@ class MyTool(Tool):
             return ToolResult.error("Error: 'model_preset' must be a non-empty string")
         name = value.strip()
         session_key = current_request_session_key()
+        request = current_request_context()
         old = self._runtime_control.snapshot().model_preset
         try:
             runtime = await self._runtime_control.set_model_preset(
                 name,
                 session_key=session_key,
+                expected_generation=request.session_generation if request is not None else None,
+            )
+        except SessionConflictError:
+            return ToolResult.error(
+                "Error: the conversation was deleted or replaced; model preset was not changed. "
+                "Read the current conversation before trying again."
             )
         except (KeyError, ValueError) as exc:
             message = str(exc.args[0]) if exc.args else str(exc)
@@ -447,12 +456,16 @@ class MyTool(Tool):
             return ToolResult.error(
                 f"Error: '{key}' expects {old_t.__name__}, got {new_t.__name__}"
             )
-        if key == "provider_retry_mode":
-            self._runtime_control.set_provider_retry_mode(cast(str, value))
-        elif key == "max_tool_result_chars":
-            self._runtime_control.set_max_tool_result_chars(cast(int, value))
-        else:
-            raise AssertionError(f"Unhandled runtime command: {key}")
+        try:
+            if key == "provider_retry_mode":
+                self._runtime_control.set_provider_retry_mode(cast(str, value))
+            elif key == "max_tool_result_chars":
+                self._runtime_control.set_max_tool_result_chars(cast(int, value))
+            else:
+                raise AssertionError(f"Unhandled runtime command: {key}")
+        except ValueError as exc:
+            self._audit("modify", f"REJECTED {key}: {exc}")
+            return ToolResult.error(f"Error: {exc}")
         self._audit("modify", f"{key}: {old!r} -> {value!r}")
         return f"Set {key} = {value!r} (was {old!r})"
 
@@ -472,7 +485,7 @@ class MyTool(Tool):
             )
         except ValueError as exc:
             self._audit("modify", f"REJECTED {key}: max keys ({self._MAX_RUNTIME_KEYS}) reached")
-            return ToolResult.error(f"Error: {exc}. Remove unused keys first.")
+            return ToolResult.error(f"Error: {exc}. Reuse an existing scratchpad key.")
         self._audit("modify", f"scratchpad.{key} = {value!r}")
         return f"Set scratchpad.{key} = {value!r}"
 
@@ -480,6 +493,8 @@ class MyTool(Tool):
     def _validate_json_safe(cls, value: Any, depth: int = 0) -> str | None:
         if depth > 10:
             return "value nesting too deep (max 10 levels)"
+        if isinstance(value, float) and not math.isfinite(value):
+            return "numbers must be finite JSON values"
         if isinstance(value, (str, int, float, bool, type(None))):
             return None
         if isinstance(value, list):

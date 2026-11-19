@@ -8,7 +8,11 @@ import { CreateEntryDialog } from "./CreateEntryDialog";
 
 export function DirectoryView({ model, onOpenFile }: { model: DirectoryModel; onOpenFile: (path: string) => void }) {
   const { t } = useTranslation();
-  const [creating, setCreating] = useState<FileEntry["kind"] | null>(null);
+  const [creating, setCreating] = useState<{ kind: FileEntry["kind"]; owner: DirectoryModel["owner"]; path: string } | null>(null);
+  if (creating && (creating.owner !== model.owner || creating.path !== model.directory?.path)) setCreating(null);
+  const create = (kind: FileEntry["kind"]) => {
+    if (model.directory) setCreating({ kind, owner: model.owner, path: model.directory.path });
+  };
   const open = (entry: FileEntry) => entry.kind === "directory" ? model.navigate(entry.path) : onOpenFile(entry.path);
   return <section className="files-directory" aria-label={t("workspace.files")} aria-busy={model.loading}>
     <header className="files-toolbar">
@@ -31,8 +35,8 @@ export function DirectoryView({ model, onOpenFile }: { model: DirectoryModel; on
       {!model.loading && !model.directory?.entries.length && !model.error && <p className="files-empty">{t("files.empty")}</p>}
       {model.directory?.truncated && <p className="files-empty">{t("files.limited")}</p>}
     </div>
-    <footer className="files-footer"><Button variant="ghost" isDisabled={!model.directory || model.loading} onPress={() => setCreating("file")}><FilePlus size={17} />{t("files.newFile")}</Button>
-      <Button variant="ghost" isDisabled={!model.directory || model.loading} onPress={() => setCreating("directory")}><FolderPlus size={17} />{t("files.newFolder")}</Button></footer>
-    {creating && <CreateEntryDialog kind={creating} directory={model} onClose={() => setCreating(null)} onCreated={open} />}
+    <footer className="files-footer"><Button variant="ghost" isDisabled={!model.directory || model.loading} onPress={() => create("file")}><FilePlus size={17} />{t("files.newFile")}</Button>
+      <Button variant="ghost" isDisabled={!model.directory || model.loading} onPress={() => create("directory")}><FolderPlus size={17} />{t("files.newFolder")}</Button></footer>
+    {creating && <CreateEntryDialog kind={creating.kind} directory={model} onClose={() => setCreating(null)} onCreated={open} />}
   </section>;
 }

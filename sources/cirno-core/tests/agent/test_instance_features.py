@@ -54,6 +54,50 @@ async def control(sessions, action, **values):
         return await UpdateGoalTool(sessions).execute(action=action, **values)
 
 
+@pytest.mark.parametrize('action', ['pause', 'stop'])
+@pytest.mark.parametrize('initial', ['active', 'waiting', 'blocked'])
+async def test_goal_suspend_preserves_the_supplied_progress(sessions, action, initial):
+    await sessions.state.update_metadata('websocket:one', {'goal_state': {
+        'goal_id': 'same-task', 'status': initial, 'objective': 'Research safely',
+        'recap': 'Old milestone', 'wake_at': '2030-01-01T00:00:00Z',
+    }})
+    with context(), goal_mutation_permission(False):
+        result = await UpdateGoalTool(sessions).execute(action=action, recap='Verified results saved; await the next reading window')
+    assert not getattr(result, 'is_error', False), result
+    saved = (await sessions.state.read_metadata('websocket:one'))['metadata']['goal_state']
+    assert saved['goal_id'] == 'same-task'
+    assert saved['status'] == ('paused' if action == 'pause' else 'stopped')
+    assert saved['recap'] == 'Verified results saved; await the next reading window'
+    assert 'wake_at' not in saved
+
+
+@pytest.mark.parametrize('action,status', [('pause', 'paused'), ('stop', 'stopped')])
+async def test_repeated_goal_suspend_can_refresh_or_clear_progress_without_resuming(sessions, action, status):
+    await sessions.state.update_metadata('websocket:one', {'goal_state': {
+        'goal_id': 'same-task', 'status': status, 'objective': 'Research safely', 'recap': 'Old milestone',
+    }, '_sustained_goal_continuation_rounds': 3})
+    for progress in ('Latest verified milestone', None, ''):
+        with context(), goal_mutation_permission(False):
+            await UpdateGoalTool(sessions).execute(action=action, recap=progress)
+        metadata = (await sessions.state.read_metadata('websocket:one'))['metadata']
+        saved = metadata['goal_state']
+        assert saved['goal_id'] == 'same-task' and saved['status'] == status
+        assert saved['recap'] == ('Latest verified milestone' if progress is None else progress)
+        assert metadata['_sustained_goal_continuation_rounds'] == 3
+
+
+@pytest.mark.parametrize('change', ['reset', 'delete'])
+async def test_obsolete_conversation_cannot_create_a_worker(sessions, change):
+    source = await sessions.state.read_header('websocket:one')
+    await getattr(sessions.state, change)(source.key)
+    before = await sessions.state.list_metadata()
+    request = RequestContext(channel='websocket', chat_id='one', session_key=source.key, session_generation=source.generation)
+    with request_context(request):
+        result = await CreateSessionTool(sessions).execute(title='Stale delegation', objective='Must not start')
+    assert getattr(result, 'is_error', False), result
+    assert await sessions.state.list_metadata() == before
+
+
 async def test_goal_controls_keep_counters_wait_and_replace_identity(sessions):
     with context(), goal_mutation_permission(True):
         await CreateGoalTool(sessions, continuation_limit=7).execute(objective='Produce a verified file')

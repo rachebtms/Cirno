@@ -188,10 +188,15 @@ class AgentLoop:
         idle_compact_min_tokens: int = 32_000,
         idle_compact_keep_recent_tokens: int = 8_000,
         recovery_admission: RecoveryAdmission | None = None,
+        source_config_path: Path | None = None,
     ):
         from cirno_core.config.tools import ToolsConfig
 
         _tc = tools_config or ToolsConfig()
+        if source_config_path is None and provider_snapshot_loader is not None:
+            from cirno_core.config.loader import get_config_path
+
+            source_config_path = get_config_path()
         defaults = AgentDefaults()
         self.bus = bus
         self.recovery_admission = recovery_admission
@@ -253,7 +258,9 @@ class AgentLoop:
         self._hook_factories: list[AgentTurnHookFactory] = hook_factories or []
 
         self.release_archived_runtime = False
-        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills, always_skills=always_skills)
+        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills, always_skills=always_skills, source_config_path=source_config_path)
+        if source_config_path is not None:
+            self.context.memory.dream.source_config_path = Path(source_config_path).expanduser().resolve(strict=False)
         self.context.router_tool_timeout_seconds = router_tool_timeout_seconds
         self.sessions = session_manager or SessionManager(workspace)
         self.models = ConversationModels(
@@ -306,6 +313,7 @@ class AgentLoop:
             max_concurrent_subagents=max_concurrent_subagents,
             consolidator=self.consolidator,
             session_manager=self.sessions,
+            source_config_path=source_config_path,
         )
         self._running = False
         self._runtime_context_providers: list[RuntimeContextProvider] = []
@@ -364,7 +372,9 @@ class AgentLoop:
         self.memory_idle_callback: Callable[[], Awaitable[None]] | None = None
         if model_preset:
             self.set_model_preset(model_preset, publish_update=False)
-        self._register_default_tools(provider_snapshot_loader=provider_snapshot_loader)
+        self._register_default_tools(
+            provider_snapshot_loader=provider_snapshot_loader, source_config_path=source_config_path,
+        )
         self.commands = CommandRouter()
         register_builtin_commands(self.commands)
 
@@ -443,6 +453,7 @@ class AgentLoop:
             provider_snapshot_loader=provider_snapshot_loader,
             preset_snapshot_loader=preset_snapshot_loader,
             tool_registry=tool_registry,
+            source_config_path=extra.pop("source_config_path", config.source_path),
             **extra,
         )
         loop.context.memory_context_tokens = defaults.memory.context_tokens
@@ -475,9 +486,14 @@ class AgentLoop:
     def _sync_subagent_runtime_limits(self) -> None:
         """Keep subagent runtime limits aligned with mutable loop settings."""
         self.subagents.limits.max_iterations = self.max_iterations
+        self.subagents.limits.max_tool_result_chars = self.max_tool_result_chars
 
     def set_runtime_max_iterations(self, value: int) -> None:
         self.max_iterations = value
+        self._sync_subagent_runtime_limits()
+
+    def set_runtime_max_tool_result_chars(self, value: int) -> None:
+        self.max_tool_result_chars = value
         self._sync_subagent_runtime_limits()
 
     def invalidate_runtime_config(self) -> None:
@@ -493,8 +509,10 @@ class AgentLoop:
     ) -> LLMRuntime:
         return await self.models.for_session(session, recover_removed=recover_removed)
 
-    async def set_session_model_preset(self, session_key: str, name: str) -> LLMRuntime:
-        return await self.models.select_session(session_key, name)
+    async def set_session_model_preset(
+        self, session_key: str, name: str, *, expected_generation: str | None = None,
+    ) -> LLMRuntime:
+        return await self.models.select_session(session_key, name, expected_generation=expected_generation)
 
 
     def set_model_preset(
@@ -514,6 +532,7 @@ class AgentLoop:
         self,
         *,
         provider_snapshot_loader: Callable[..., ProviderSnapshot] | None,
+        source_config_path: Path | None = None,
     ) -> None:
         """Register the default set of tools via plugin loader."""
         from cirno_core.agent.approval.service import OperationApproval
@@ -522,7 +541,8 @@ class AgentLoop:
         from cirno_core.agent.tools.loader import ToolLoader
 
         self.operation_approval = OperationApproval(
-            self.sessions, self.bus, model_resolver=self.runtime_resolver
+            self.sessions, self.bus, model_resolver=self.runtime_resolver,
+            source_config_path=self.context.memory.dream.source_config_path,
         )
         self.conversation_control = ConversationControl(self)
         runtime_control = AgentRuntimeControl(self)
@@ -541,7 +561,10 @@ class AgentLoop:
             exec_session_manager=self._exec_session_manager,
             sessions=self.sessions,
             provider_snapshot_loader=provider_snapshot_loader,
+            source_config_path=source_config_path,
             timezone=self.context.timezone or "UTC",
+            home_path=self.context.memory.workspace,
+            instance_config_path=self.context.memory.dream.source_config_path,
             workspace_sandbox=self.workspace_scopes.sandbox_status,
             runtime_control=runtime_control,
             conversation_control=self.conversation_control,

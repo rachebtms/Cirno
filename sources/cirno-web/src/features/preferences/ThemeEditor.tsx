@@ -114,7 +114,7 @@ export function ThemeEditor({
           <Button variant="ghost" type="button" onClick={onCancel}>
             {t("files.cancel")}
           </Button>
-          <Button disabled={!valid || !readable || !theme.name.trim()}>
+          <Button type="submit" disabled={!valid || !readable || !theme.name.trim()}>
             {t("themes.save")}
           </Button>
         </div>

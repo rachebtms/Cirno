@@ -6,6 +6,7 @@ import {
   type DisplayPreferences,
   type OwnerPreferences,
   type PreferencesSnapshot,
+  type ThemePair,
 } from "./contracts";
 export * from "./contracts";
 
@@ -24,12 +25,13 @@ let server: PreferencesSnapshot = {
 };
 let current = server.values;
 let status = { saving: false, error: "" };
-let pending: Partial<OwnerPreferences>[] = [];
+interface PendingPreference {
+  patch: Partial<OwnerPreferences>;
+  themeBase?: string;
+  acknowledge: (saved: boolean) => void;
+}
+let pending: PendingPreference[] = [];
 let sink: Save | null = null;
-const acknowledgments = new Map<
-  Partial<OwnerPreferences>,
-  (saved: boolean) => void
->();
 let draining = false;
 let syncEpoch = 0;
 const listeners = new Set<() => void>();
@@ -43,9 +45,15 @@ export const readOwnerPreferences = () => current;
 export const readPreferences = (): DisplayPreferences => current;
 export const readPreferenceStatus = () => status;
 export const readThemes = () => server.themes;
+function themeSignature(themes: readonly ThemePair[]) {
+  return JSON.stringify(themes.map(theme => [
+    theme.id, theme.name,
+    ...[theme.light, theme.dark].map(palette => Object.entries(palette).sort(([a], [b]) => a.localeCompare(b))),
+  ]));
+}
 function publish() {
   current = pending.reduce<OwnerPreferences>(
-    (values, patch) => ({ ...values, ...patch }),
+    (values, entry) => ({ ...values, ...entry.patch }),
     server.values,
   );
   for (const listener of listeners) listener();
@@ -63,23 +71,25 @@ async function drain() {
     while (pending.length && sink) {
       status = { saving: true, error: status.error };
       publish();
-      const patch = pending[0];
+      const entry = pending[0];
+      const patch = entry.patch;
       try {
+        if (entry.themeBase !== undefined && entry.themeBase !== themeSignature(server.values.customThemes)) {
+          throw new Error("Preferences changed on another device. Reload before saving this theme.");
+        }
         const saved = await sink(
           patch,
-          patch.customThemes ? server.revision : undefined,
+          entry.themeBase !== undefined ? server.revision : undefined,
         );
         if (epoch !== syncEpoch) return;
         pending.shift();
-        acknowledgments.get(patch)?.(true);
-        acknowledgments.delete(patch);
+        entry.acknowledge(true);
         if (saved.revision >= server.revision) server = saved;
         status = { saving: pending.length > 0, error: status.error };
       } catch (error) {
         if (epoch !== syncEpoch) return;
         pending.shift();
-        acknowledgments.get(patch)?.(false);
-        acknowledgments.delete(patch);
+        entry.acknowledge(false);
         status = {
           saving: false,
           error: error instanceof Error ? error.message : String(error),
@@ -96,11 +106,15 @@ async function drain() {
 }
 export function patchPreferences(
   patch: Partial<OwnerPreferences>,
+  options?: { customThemesBase?: readonly ThemePair[] },
 ): Promise<boolean> {
-  const receipt = new Promise<boolean>((resolve) =>
-    acknowledgments.set(patch, resolve),
-  );
-  pending.push(patch);
+  let acknowledge!: (saved: boolean) => void;
+  const receipt = new Promise<boolean>(resolve => { acknowledge = resolve; });
+  pending.push({
+    patch: structuredClone(patch),
+    ...(patch.customThemes !== undefined ? { themeBase: themeSignature(options?.customThemesBase ?? current.customThemes) } : {}),
+    acknowledge,
+  });
   status = { ...status, error: "" };
   publish();
   void drain();
@@ -155,8 +169,7 @@ export function connectPreferences(client: PreferencesConnection) {
 
 export function clearOwnerPreferences() {
   syncEpoch += 1;
-  for (const resolve of acknowledgments.values()) resolve(false);
-  acknowledgments.clear();
+  for (const entry of pending) entry.acknowledge(false);
   server = {
     revision: 0,
     values: DEFAULT_OWNER_PREFERENCES,

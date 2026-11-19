@@ -131,3 +131,55 @@ def test_named_pipe_is_an_invalid_history_entry_without_being_opened(tmp_path, s
     assert not snapshot["valid"]
     assert any("events is not a regular file" in error for error in snapshot["errors"])
     assert not (Path(snapshot["path"]) / "events").exists()
+
+
+def test_invalid_utf8_skill_document_is_retained_with_a_validation_error(tmp_path, skill):
+    document = skill / 'SKILL.md'
+    document.write_bytes(b'\xff\xfe invalid text')
+    result = history.inspect_skill('example', 'validate', tmp_path / 'home')
+    assert not result['validation']['valid']
+    assert any('SKILL.md' in error and 'decode' in error for error in result['validation']['errors'])
+    assert (Path(result['version']['path']) / 'SKILL.md').read_bytes() == document.read_bytes()
+
+
+def test_invalid_utf8_skill_does_not_disable_other_fixed_skills(tmp_path, skill, monkeypatch):
+    from cirno_core.skills.loader import SkillsLoader
+
+    home = tmp_path / 'home'
+    monkeypatch.setattr('cirno_core.skills.loader.get_home_path', lambda: home)
+    (skill / 'SKILL.md').write_bytes(b'\xff\xfe invalid text')
+    healthy = home / 'skills/healthy'
+    healthy.mkdir()
+    (healthy / 'SKILL.md').write_text('---\nname: healthy\ndescription: Valid procedure\n---\nUse it.\n')
+    loader = SkillsLoader(tmp_path, builtin_skills_dir=tmp_path / 'empty', always_skills={'healthy', 'example'})
+    assert loader.get_always_skills() == ['healthy']
+    available, reason = loader.get_skill_availability('example')
+    assert not available and 'decode' in reason
+
+
+def test_unreadable_skill_subtree_is_unavailable_without_disabling_other_skills(tmp_path, skill, monkeypatch):
+    from cirno_core.skills.loader import SkillsLoader
+
+    home = tmp_path / 'home'
+    monkeypatch.setattr('cirno_core.skills.loader.get_home_path', lambda: home)
+    monkeypatch.setattr(history, 'get_home_path', lambda: home)
+    healthy = home / 'skills/healthy'
+    healthy.mkdir()
+    (healthy / 'SKILL.md').write_text('---\nname: healthy\ndescription: Valid procedure\n---\nUse it.\n')
+    first = history.snapshot_skill(skill, home)
+    blocked = skill / 'private'
+    blocked.mkdir()
+    original = os.scandir
+
+    def scandir(path):
+        if not isinstance(path, int) and Path(path) == blocked:
+            raise PermissionError(errno.EACCES, 'Cannot scan Skill subtree', str(blocked))
+        return original(path)
+
+    monkeypatch.setattr(os, 'scandir', scandir)
+    loader = SkillsLoader(tmp_path, builtin_skills_dir=tmp_path / 'empty', always_skills={'healthy', 'example'})
+    assert loader.get_always_skills() == ['healthy']
+    available, reason = loader.get_skill_availability('example')
+    assert not available and 'Cannot scan Skill subtree' in reason
+    assert len(history.skill_versions('example', home)) == 1
+    assert Path(first['path']).is_dir()

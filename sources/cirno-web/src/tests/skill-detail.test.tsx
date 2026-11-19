@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { SkillDetailDialog } from "@/features/skills/ui/SkillDetailDialog";
@@ -6,6 +6,7 @@ import { deleteSkill, fetchSkillDetail, updateSkillEnabled } from "@/lib/api";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { SkillDetail } from "@/lib/contracts/skills";
 import { ClientProvider } from "@/providers/ClientProvider";
+import i18n from "@/i18n";
 
 vi.mock("@/lib/api", () => ({
   fetchSkillDetail: vi.fn(), deleteSkill: vi.fn(), updateSkillEnabled: vi.fn(),
@@ -55,4 +56,25 @@ it("reports a failed copy and clears the error after a successful retry", async 
   fireEvent.click(button);
   await waitFor(() => expect(screen.queryByText("Could not copy the command.")).not.toBeInTheDocument());
   expect(copyTextToClipboard).toHaveBeenNthCalledWith(2, "brew install gh");
+});
+
+it("cancels a deletion without writing and keeps a failed confirmation available for retry", async () => {
+  renderDetail(detail);
+  const remove = await screen.findByRole("button", { name: i18n.t("settings.skills.deleteAction") });
+  await waitFor(() => expect(remove).toBeEnabled());
+  fireEvent.click(remove);
+  const first = await screen.findByRole("alertdialog");
+  fireEvent.click(within(first).getByRole("button", { name: i18n.t("common.cancel") }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  expect(deleteSkill).not.toHaveBeenCalled();
+
+  vi.mocked(deleteSkill).mockRejectedValueOnce(new Error("Skill directory is read-only"))
+    .mockResolvedValueOnce({ skills: [], last_action: { name: detail.name, deleted: true, enabled: false } });
+  fireEvent.click(remove);
+  const confirmation = await screen.findByRole("alertdialog");
+  fireEvent.click(within(confirmation).getByRole("button", { name: i18n.t("settings.skills.deleteConfirmAction") }));
+  expect(await within(confirmation).findByRole("alert")).toHaveTextContent("Skill directory is read-only");
+  fireEvent.click(within(confirmation).getByRole("button", { name: i18n.t("settings.skills.deleteConfirmAction") }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  expect(deleteSkill).toHaveBeenCalledTimes(2);
 });

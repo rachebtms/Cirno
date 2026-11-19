@@ -54,7 +54,7 @@ class ControlSessionTool(_SupervisionTool):
     action=StringSchema("get reads the Goal. create creates one; set explicitly replaces its objective. update edits recap, summary or continuation limit without resetting status/count. stop/pause/wait suspend work; resume restores paused/stopped/waiting/blocked Goals, sharing conversation Continue recovery checks; repeated admitted resumes do not queue again; delete removes the Goal. Only the executing conversation declares completion.", enum=("get", "create", "set", "update", "stop", "pause", "resume", "delete", "wait")),
     objective=StringSchema("Required for create/set; authorized objective with completion criteria.", max_length=MAX_GOAL_OBJECTIVE_CHARS),
     ui_summary=StringSchema("Short Goal display label.", max_length=120),
-    recap=StringSchema("Saved progress and next step.", max_length=4000),
+    recap=StringSchema("Saved progress and next step. Omit on wait/update to preserve it; an empty string clears it.", max_length=4000),
     continuation_limit=IntegerSchema(description="Optional automatic continuation limit; 0 is unlimited. Omit to retain the configured value.", minimum=0),
     wake_after_seconds=IntegerSchema(description="Required for wait; seconds before the Goal wakes.", minimum=1),
     required=["to", "action"],

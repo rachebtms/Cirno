@@ -10,6 +10,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from loguru import logger
+
 from cirno_core.bus.agent_events import RetryStatusEvent
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import (
@@ -24,7 +26,6 @@ from cirno_core.providers.errors import is_billing_error, public_error_kind, res
 from cirno_core.providers.generation import GenerationSettings
 from cirno_core.providers.oauth_catalog_cache import oauth_catalog_auth_rejected
 from cirno_core.providers.registry import find_by_name
-from loguru import logger
 
 # Circuit breaker tuned to match OpenAICompatProvider's Responses API breaker.
 _PRIMARY_FAILURE_THRESHOLD = 3
@@ -142,10 +143,8 @@ class FallbackProvider(LLMProvider):
         primary_context_window_tokens: int | None = None,
         fallback_preset_names: list[str | None] | None = None,
     ):
-        primary_generation = primary.generation
         self._primary = primary
-        super().__init__(provider_name=primary.provider_name)
-        self._primary.generation = primary_generation
+        super().__init__(provider_name=primary.provider_name, runtime_source=primary)
         self._fallback_presets = list(fallback_presets)
         self._fallback_preset_names = tuple(
             fallback_preset_names or [None] * len(fallback_presets)
@@ -500,7 +499,7 @@ class FallbackProvider(LLMProvider):
                 self._primary_tripped_at = None
                 return response
             primary_response = response
-            primary_error = (response.content or primary_error)[:120]
+            primary_error = public_error_kind(response)
 
             if has_streamed is not None and has_streamed[0]:
                 recoverable_stream = (response.error_kind or "").lower() in {"timeout", "invalid_response"}
@@ -525,7 +524,7 @@ class FallbackProvider(LLMProvider):
                 logger.warning(
                     "Primary model '{}' failed with non-fallbackable error: {}",
                     primary_model,
-                    (response.content or "")[:120],
+                    public_error_kind(response),
                 )
                 return response
 
@@ -579,7 +578,8 @@ class FallbackProvider(LLMProvider):
                 fallback_provider = self._provider_factory(fallback)
             except Exception as exc:
                 logger.warning(
-                    "Failed to create provider for fallback '{}': {}", fallback_model, exc
+                    "Failed to create provider for fallback '{}': {}",
+                    fallback_model, type(exc).__name__,
                 )
                 continue
 
@@ -652,7 +652,7 @@ class FallbackProvider(LLMProvider):
             logger.warning(
                 "Fallback '{}' also failed: {}",
                 fallback_model,
-                (fallback_response.content or "")[:120],
+                public_error_kind(fallback_response),
             )
 
         logger.warning(

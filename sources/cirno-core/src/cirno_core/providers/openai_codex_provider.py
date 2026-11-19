@@ -14,11 +14,14 @@ from typing import Any, cast
 from uuid import uuid4
 
 import httpx
+from loguru import logger
+from oauth_cli_kit.providers import OPENAI_CODEX_PROVIDER
+
 from cirno_core import __version__
 from cirno_core.bus.agent_events import NO_EVENTS, ContextCompactionEvent
 from cirno_core.providers.base import LLMProvider
-from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.providers.catalog.contracts import ProviderModelSpec
+from cirno_core.providers.context_budget import ContextBudget
 from cirno_core.providers.contracts import (
     LLMResponse,
     ProviderCallContext,
@@ -26,6 +29,7 @@ from cirno_core.providers.contracts import (
 )
 from cirno_core.providers.errors import (
     RETRYABLE_STATUS_CODES,
+    ModelStreamProtocolError,
     extract_error_type_code,
     is_retryable_rate_limit,
     retry_after_headers,
@@ -38,13 +42,16 @@ from cirno_core.providers.oauth_catalog_cache import (
     OAuthModelCatalog,
     OAuthModelCatalogSnapshot,
     oauth_catalog_auth_rejected,
+    oauth_catalog_identity,
 )
+from cirno_core.providers.oauth_storage import available_codex_token as get_codex_token
 from cirno_core.providers.oauth_storage import token_storage
 from cirno_core.providers.openai_responses import (
     ResponsesBackend,
     ResponsesWebSocketOptions,
     responses_state_matches,
 )
+from cirno_core.providers.openai_responses.errors import ResponsesAPIError
 from cirno_core.providers.openai_responses.state import (
     responses_compaction_items,
     without_response_item_ids,
@@ -54,9 +61,6 @@ from cirno_core.providers.registry import find_by_name
 from cirno_core.providers.timeouts import ProviderTimeouts
 from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.token_estimation import estimate_prompt_tokens
-from loguru import logger
-from cirno_core.providers.oauth_storage import available_codex_token as get_codex_token
-from oauth_cli_kit.providers import OPENAI_CODEX_PROVIDER
 
 DEFAULT_CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_OPENAI_CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
@@ -197,7 +201,11 @@ class OpenAICodexProvider(LLMProvider):
                                   provider_context.output_reserve_percent).input_limit,
                 )
         try:
-            token = await asyncio.to_thread(get_codex_token, proxy=self.proxy, storage=token_storage("openai_codex", OPENAI_CODEX_PROVIDER.token_filename))
+            token = await shield_and_drain(asyncio.to_thread(
+                get_codex_token,
+                proxy=self.proxy,
+                storage=token_storage("openai_codex", OPENAI_CODEX_PROVIDER.token_filename),
+            ))
             headers = _build_headers(
                 cast(str, token.account_id),
                 token.access,
@@ -544,6 +552,8 @@ def _codex_error_details(raw: str) -> tuple[str | None, str | None]:
 
 def _codex_error_response(exc: Exception) -> LLMResponse:
     """Convert Codex transport/API failures into actionable, retryable metadata."""
+    if isinstance(exc, ResponsesAPIError):
+        return exc.to_response()
     if isinstance(exc, RuntimeError) and _codex_login_required(exc):
         return LLMResponse(
             content="OpenAI Codex authorization expired. Please sign in again.",
@@ -559,7 +569,10 @@ def _codex_error_response(exc: Exception) -> LLMResponse:
     default_detail: str | None = None
     should_retry: bool | None = getattr(exc, "should_retry", None)
 
-    if isinstance(exc, (httpx.TimeoutException, asyncio.TimeoutError)):
+    if isinstance(exc, ModelStreamProtocolError):
+        error_kind = "invalid_response"
+        should_retry = True
+    elif isinstance(exc, (httpx.TimeoutException, asyncio.TimeoutError)):
         error_kind = "timeout"
         default_detail = "timed out waiting for response"
         should_retry = True if should_retry is None else should_retry
@@ -645,8 +658,7 @@ def get_openai_codex_model_catalog(
 ) -> OAuthModelCatalogSnapshot:
     storage = token_storage("openai_codex", OPENAI_CODEX_PROVIDER.token_filename)
     token = storage.load()
-    account_id = getattr(token, "account_id", None)
-    account_key = _catalog_account_key(account_id)
+    account_key = oauth_catalog_identity(token)
     cache_key = f"{storage.get_token_path()}\0{account_key}\0{proxy or ''}"
     return _OPENAI_CODEX_MODEL_CATALOG.get(cache_key=cache_key, proxy=proxy, refresh=refresh)
 
@@ -684,7 +696,7 @@ def _fetch_openai_codex_models(proxy: str | None) -> tuple[ProviderModelSpec, ..
     account_id = getattr(token, "account_id", None)
     if not isinstance(account_id, str) or not account_id:
         raise RuntimeError("OpenAI Codex OAuth token has no account ID")
-    client_kwargs: dict[str, Any] = {"timeout": 10.0, "follow_redirects": False}
+    client_kwargs: dict[str, Any] = {"timeout": 10.0, "follow_redirects": False, "trust_env": False}
     if proxy:
         client_kwargs.update(proxy=proxy, trust_env=False)
     with httpx.Client(**client_kwargs) as client:
@@ -755,11 +767,6 @@ def _oauth_fallback_models(provider_name: str) -> tuple[ProviderModelSpec, ...]:
     spec = find_by_name(provider_name)
     assert spec is not None
     return spec.builtin_models
-
-
-def _catalog_account_key(account_id: object) -> str:
-    value = account_id if isinstance(account_id, str) else ""
-    return hashlib.sha256(value.encode()).hexdigest()[:16] if value else "anonymous"
 
 
 def _catalog_first_text(row: dict[str, Any], *keys: str) -> str:

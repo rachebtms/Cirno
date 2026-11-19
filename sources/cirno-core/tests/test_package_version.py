@@ -65,3 +65,17 @@ def test_workspace_packages_and_frontend_lockfile_share_one_version() -> None:
     frontend = json.loads((root / "sources/cirno-web/package.json").read_text())
     lock = json.loads((root / "sources/cirno-web/package-lock.json").read_text())
     assert frontend["version"] == lock["version"] == lock["packages"][""]["version"] == expected
+
+
+def test_upgrade_registry_reaches_current_source_version() -> None:
+    from cirno_server.maintenance.migrations.registry import MIGRATIONS
+
+    root = Path(__file__).resolve().parents[3]
+    expected = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+    current = "0.1.6"
+    visited: set[str] = set()
+    while current != expected:
+        assert current not in visited, f"Migration cycle at {current}"
+        visited.add(current)
+        assert current in MIGRATIONS, f"Missing migration from {current} to {expected}"
+        current = MIGRATIONS[current].target_version

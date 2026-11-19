@@ -6,7 +6,10 @@ const MAX_ENTRIES = 4;
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /** Short-lived, in-memory only. The caller owns one resource per session/loader. */
-export function createFilePreviewResource(fetchPreview: (path: string) => Promise<FilePreviewPayload>) {
+export function createFilePreviewResource(
+  fetchPreview: (path: string) => Promise<FilePreviewPayload>,
+  isCurrent: () => boolean = () => true,
+) {
   const entries = new Map<string, {
     payload?: FilePreviewPayload;
     pending?: Promise<FilePreviewPayload>;
@@ -14,10 +17,12 @@ export function createFilePreviewResource(fetchPreview: (path: string) => Promis
     bytes: number;
   }>();
   const peek = (path: string) => {
+    if (!isCurrent()) return undefined;
     const entry = entries.get(path);
     return entry?.payload && Date.now() - entry.loadedAt < RETAIN_MS ? entry.payload : undefined;
   };
   const load = (path: string): Promise<FilePreviewPayload> => {
+    if (!isCurrent()) return Promise.reject(new Error("File preview context changed"));
     const existing = entries.get(path);
     if (existing?.pending) return existing.pending;
     if (existing?.payload && Date.now() - existing.loadedAt < FRESH_MS) {
@@ -28,7 +33,11 @@ export function createFilePreviewResource(fetchPreview: (path: string) => Promis
     entries.delete(path);
     entries.set(path, entry);
     while (entries.size > MAX_ENTRIES) entries.delete(entries.keys().next().value!);
-    entry.pending = Promise.resolve().then(() => fetchPreview(path)).then((payload) => {
+    entry.pending = Promise.resolve().then(() => {
+      if (!isCurrent()) throw new Error("File preview context changed");
+      return fetchPreview(path);
+    }).then((payload) => {
+      if (!isCurrent()) throw new Error("File preview context changed");
       // An evicted request may finish, but must not put its data back into the cache.
       if (entries.get(path) === entry) {
         entry.payload = payload;
@@ -43,7 +52,7 @@ export function createFilePreviewResource(fetchPreview: (path: string) => Promis
         }
       }
       return payload;
-    }, (error: unknown) => {
+    }).catch((error: unknown) => {
       if (entries.get(path) === entry) entries.delete(path);
       throw error;
     });

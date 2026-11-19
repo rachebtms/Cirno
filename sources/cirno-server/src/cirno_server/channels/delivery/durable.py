@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, TypeVar
 
 from cirno_core.bus.delivery import ChannelNotReadyError, DeliveryRejectedError
 from cirno_core.bus.events import OutboundMessage
@@ -15,14 +14,12 @@ from cirno_core.security.workspace_access import WorkspaceScopeResolver
 from cirno_core.security.workspace_policy import resolve_allowed_path
 from cirno_core.session.manager import SessionManager
 from cirno_core.utils.cancellation import shield_and_drain
+from cirno_core.utils.thread_io import SerializedThreadIO
 from loguru import logger
 
 from cirno_server.channels.base import BaseChannel
 from cirno_server.channels.delivery.events import send_event
 from cirno_server.channels.outbox import DeliveryOutbox, DeliveryStatus
-
-_T = TypeVar("_T")
-
 
 class DurableDelivery:
     def __init__(
@@ -37,14 +34,8 @@ class DurableDelivery:
         self.sessions = sessions
         self.config = config
         self.outbox = DeliveryOutbox(config_path.parent / "state" / "delivery" / "outbox.sqlite3")
-        self._io_lock = asyncio.Lock()
+        self._io = SerializedThreadIO()
         bus.outbound_recorder = self.record
-
-    async def _io(self, operation: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
-        # The outbox has one runtime owner. Serialize its initialization and
-        # writes, and retain the lock until an accepted worker has settled.
-        async with self._io_lock:
-            return await shield_and_drain(asyncio.to_thread(operation, *args, **kwargs))
 
     def record(self, msg: OutboundMessage) -> Awaitable[None] | None:
         if msg.delivery is None:

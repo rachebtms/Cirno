@@ -23,7 +23,7 @@ from cirno_core.agent.subagents.contracts import (
 from cirno_core.agent.subagents.execution import SubagentExecution
 from cirno_core.agent.subagents.reports import SubagentReports
 from cirno_core.agent.subagents.sessions import SubagentSessions
-from cirno_core.agent.subagents.status import SubagentStatus
+from cirno_core.agent.subagents.status import SubagentSessionError, SubagentStatus
 from cirno_core.agent.subagents.task import SubagentTask
 from cirno_core.agent.subagents.tools import SubagentTools
 from cirno_core.agent.tools.base import ToolResult
@@ -39,6 +39,7 @@ from cirno_core.security.workspace_access import (
 )
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.model import Session, SessionPolicy
+from cirno_core.session.types import PARENT_SESSION_GENERATION_KEY
 from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.llm_runtime import LLMRuntime
 
@@ -65,6 +66,7 @@ class SubagentManager:
         network_config: NetworkConfig | None = None,
         session_manager: SessionManager | None = None,
         output_repetition: OutputRepetitionConfig | None = None,
+        source_config_path: Path | None = None,
     ):
         if cast(object, consolidator) is None:
             raise TypeError("SubagentManager requires a consolidator")
@@ -78,6 +80,7 @@ class SubagentManager:
         self.tools = SubagentTools(
             workspace, tools_config or ToolsConfig(), network_config or NetworkConfig(),
             restrict_to_workspace, set(disabled_skills or []), set(always_skills or []),
+            source_config_path=source_config_path,
         )
         self.max_concurrent_subagents = (
             max_concurrent_subagents
@@ -110,14 +113,20 @@ class SubagentManager:
     ) -> None:
         status.revision += 1
         if self.sessions is not None and not await self.sessions.save(status):
-            return
+            raise SubagentSessionError("Task status could not be saved: its session is no longer available")
         self._publish_status(status)
 
     def _publish_status(self, status: SubagentStatus) -> None:
-        origin = self._tasks[status.task_id].origin
+        record = self._tasks.get(status.task_id)
+        if record is None:
+            # A receipt write can finish after terminal cleanup released the
+            # task. Its terminal event already owns the public observation.
+            return
+        origin = record.origin
         self.bus.publish_nowait(SubagentTaskChanged(
             context=RuntimeEventContext(
                 channel=origin["channel"], chat_id=origin["chat_id"], session_key=status.owner,
+                session_generation=origin.get("session_generation"),
             ),
             task_id=status.task_id,
         ))
@@ -151,8 +160,37 @@ class SubagentManager:
     async def _finish(self, record: SubagentTask,
                 cleanup_error: str | None = None) -> SubagentOutcome:
         outcome = record.finish(self.limits.max_tool_result_chars, cleanup_error)
-        await self._save_transcript(record)
-        await self._save_status(record.status)
+        persistence_failures: list[str] = []
+        original_error = record.status.error
+
+        def failed(component: str, exc: Exception) -> None:
+            nonlocal outcome
+            persistence_failures.append(component)
+            message = (
+                f"Task {' and '.join(persistence_failures)} could not be saved. "
+                "Inspect the retained output before retrying; do not repeat completed work."
+            )
+            status = record.status
+            status.state = status.phase = "error"
+            status.stop_reason = "persistence_failed"
+            status.error = "; ".join(filter(None, (original_error, message)))[:self.limits.max_tool_result_chars]
+            status.partial = bool(status.result)
+            outcome = SubagentOutcome("error", status.result or message, status.stop_reason, status.error)
+            logger.opt(exception=record.session.policy.log_content).error(
+                "Subagent [{}] could not save {}: {}", status.task_id, component,
+                exc if record.session.policy.log_content else type(exc).__name__,
+            )
+
+        try:
+            await self._save_transcript(record)
+        except Exception as exc:
+            failed("history", exc)
+        # Keep the terminal fact independent of history persistence. A failed
+        # status write must also leave a truthful live result and report.
+        try:
+            await self._save_status(record.status)
+        except Exception as exc:
+            failed("status", exc)
         self._terminal_statuses[record.status.task_id] = record.snapshot()
         while len(self._terminal_statuses) > self.MAX_TERMINAL:
             del self._terminal_statuses[next(iter(self._terminal_statuses))]
@@ -160,11 +198,18 @@ class SubagentManager:
 
     async def _drain_inbox(self, record: SubagentTask) -> list[dict[str, str]]:
         record.raise_if_stopping()
-        snapshot, record.inbox = record.inbox, []
-        for message_id, _ in snapshot:
-            record.status.receipts[message_id] = "delivered"
+        snapshot = list(record.inbox)
         if snapshot:
+            # A failed or cancelled save must leave the accepted messages
+            # available for terminal undelivered receipts, not lose their bodies.
             await self._save_status(record.status)
+            record.raise_if_stopping()
+            identifiers = {message_id for message_id, _ in snapshot}
+            record.inbox = [item for item in record.inbox if item[0] not in identifiers]
+            for message_id in identifiers:
+                record.status.receipts[message_id] = "delivered"
+            record.status.revision += 1
+            self._publish_status(record.status)
         return [{"role": "user", "content": content} for _, content in snapshot]
 
     def _owned_status(self, task_id: str, owner: str | None) -> SubagentStatus:
@@ -173,7 +218,9 @@ class SubagentManager:
         if status is None and record is not None and record.status.finished_at is None:
             status = record.status
         if self.sessions is not None and owner:
-            if not self.sessions.exists(owner) or not self.sessions.contains(task_id, owner):
+            if not self.sessions.exists(owner) or not self.sessions.contains(
+                task_id, owner, child_generation=status.child_generation if status is not None else None,
+            ):
                 raise SubagentControlError("task unavailable")
             if status is None:
                 status = self.sessions.status(task_id, owner)
@@ -186,16 +233,19 @@ class SubagentManager:
         return deepcopy(self._owned_status(task_id, owner))
 
     def accepts_result(self, msg: InboundMessage, owner: str) -> bool:
-        """Reject a completion whose owning child was removed after publication."""
+        """Reject a completion whose child was removed or replaced after publication."""
         task_id = msg.metadata.get("subagent_task_id")
         if msg.sender_id != "subagent" or not isinstance(task_id, str) or self.sessions is None:
             return True
-        return self.sessions.contains(task_id, owner)
+        generation = msg.metadata.get("subagent_child_generation")
+        if generation is not None and not isinstance(generation, str):
+            return False
+        return self.sessions.contains(task_id, owner, child_generation=generation)
 
     def read_session(self, task_id: str, owner: str) -> tuple[SubagentStatus, Session]:
         """Return task status and detached history through the ownership boundary."""
         status = self.check(task_id, owner)
-        child = self.sessions.snapshot(task_id, owner) if self.sessions is not None else None
+        child = self.sessions.snapshot(task_id, owner, child_generation=status.child_generation) if self.sessions is not None else None
         if child is None:
             raise SubagentControlError("task unavailable")
         return status, child
@@ -208,20 +258,40 @@ class SubagentManager:
             raise SubagentControlError("task is not accepting messages")
         if not message or not message.strip() or len(message.encode("utf-8")) > self.MAX_MESSAGE_BYTES:
             raise SubagentControlError("message must contain text and be at most 8192 UTF-8 bytes")
-        record = self._tasks[task_id]
+        record = self._tasks.get(task_id)
+        if record is None:
+            raise SubagentControlError("Task has no live execution in this runtime; it cannot accept messages")
         if len(record.inbox) >= self.MAX_INBOX or len(status.receipts) >= self.MAX_MESSAGES:
             raise SubagentControlError("task message capacity reached")
         message_id = str(uuid.uuid4())
         record.inbox.append((message_id, message))
         status.receipts[message_id] = "accepted"
-        await self._save_status(status)
-        return {"task_id": task_id, "message_id": message_id,
-                "receipt": "accepted", "delivered": False}
+        receipt: SubagentMessageReceipt = {
+            "task_id": task_id, "message_id": message_id, "receipt": "accepted", "delivered": False,
+        }
+        try:
+            await self._save_status(status)
+        except Exception as exc:
+            # The live queue already accepted this message and may have handed
+            # it to execution while saving. A generic failure invites a duplicate.
+            receipt["persisted"] = False
+            receipt["warning"] = (
+                "Message accepted by the live task, but its receipt could not be saved. "
+                "Do not resend solely because of this warning; check the task's message receipts. "
+                "Unsaved receipts may be lost on restart."
+            )
+            logger.opt(exception=record.session.policy.log_content).warning(
+                "Subagent [{}] accepted message but could not save its receipt: {}", task_id,
+                exc if record.session.policy.log_content else type(exc).__name__,
+            )
+        return receipt
 
     async def cancel(self, task_id: str, owner: str | None) -> SubagentStatus:
         """Stop an owned task and return its detached state after the bounded wait."""
         status = self._owned_status(task_id, owner)
         record = self._tasks.get(task_id)
+        if record is None and status.state in {"queued", "running", "stopping"}:
+            raise SubagentControlError("Task has no live execution in this runtime; no stop was performed")
         if record is not None and record.status.finished_at is None:
             await self._cancel_task(record)
             status = record.status
@@ -268,7 +338,9 @@ class SubagentManager:
             return {}
         statuses = self.sessions.load(session_key) if include_history and self.sessions is not None else {}
         for task_id, status in runtime.items():
-            if self.sessions is not None and not self.sessions.contains(task_id, session_key):
+            if self.sessions is not None and not self.sessions.contains(
+                task_id, session_key, child_generation=status.child_generation,
+            ):
                 continue
             persisted = statuses.get(task_id)
             if persisted is None or status.revision >= persisted.revision:
@@ -340,6 +412,7 @@ class SubagentManager:
             if self.sessions is not None:
                 await self.sessions.sessions.state.delete(child.key, expected_generation=child.generation)
             raise SubagentControlError("subagent manager is closed")
+        status.child_generation = child.generation
         record = SubagentTask(
             status=status,
             session=child,
@@ -347,6 +420,7 @@ class SubagentManager:
             origin={
                 "channel": origin_channel, "chat_id": origin_chat_id,
                 "session_key": owner, "llm_usage_source": current_llm_usage_source(),
+                "session_generation": child.metadata.get(PARENT_SESSION_GENERATION_KEY),
             },
             origin_message_id=origin_message_id,
             workspace_scope=workspace_scope,
@@ -498,6 +572,7 @@ class SubagentManager:
                 "ok" if outcome.state == "done" else outcome.state, record.origin_message_id,
                 receipts=dict(status.receipts),
                 stop_reason=status.stop_reason, error=status.error, partial_result=status.partial,
+                child_generation=status.child_generation,
             )
         if outcome.state == "cancelled":
             raise asyncio.CancelledError

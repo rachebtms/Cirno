@@ -4,6 +4,8 @@ from __future__ import annotations
 import math
 
 import httpx
+
+from cirno_memory.config import normalize_embedding_api_base
 from cirno_memory.embedding_budget import EmbeddingBudget
 
 
@@ -19,6 +21,9 @@ class APIEmbeddingWorker:
     def __enter__(self):
         if not self.config.embedding_api_base or not self.config.embedding_api_model.strip():
             raise ValueError("Configure the embedding API base URL and model in Memory retrieval settings")
+        self.endpoint = normalize_embedding_api_base(self.config.embedding_api_base)
+        if not self.endpoint.endswith("/embeddings"):
+            self.endpoint += "/embeddings"
         headers = {"Authorization": "Bearer " + self.config.embedding_api_key} if self.config.embedding_api_key else {}
         self.client = httpx.Client(timeout=self.config.embedding_timeout_seconds, headers=headers, follow_redirects=False)
         return self
@@ -43,10 +48,7 @@ class APIEmbeddingWorker:
             more = stop < count
         if not texts:
             return {"vectors": [], "chunks": chunks, "has_more": more}
-        endpoint = self.config.embedding_api_base.rstrip("/")
-        if not endpoint.endswith("/embeddings"):
-            endpoint += "/embeddings"
-        with self.client.stream("POST", endpoint, timeout=self.budget.remaining(), json={"model": self.config.embedding_api_model, "input": texts, "encoding_format": "float"}) as response:
+        with self.client.stream("POST", self.endpoint, timeout=self.budget.remaining(), json={"model": self.config.embedding_api_model, "input": texts, "encoding_format": "float"}) as response:
             self.budget.remaining()
             if response.status_code != 200:
                 raise ValueError(f"Embedding API returned HTTP {response.status_code}; check its address, credentials and model")
@@ -66,11 +68,21 @@ class APIEmbeddingWorker:
             if not isinstance(row, dict) or type(row.get("index")) is not int or row['index'] in indexed:
                 raise ValueError("Embedding API returned invalid vector indices")
             vector = row.get("embedding")
-            if not isinstance(vector, list) or not vector or len(vector) > 65536 or any(type(value) not in (int, float) or not math.isfinite(value) for value in vector):
+            if not isinstance(vector, list) or not vector or len(vector) > 65536 or any(type(value) not in (int, float) for value in vector):
                 raise ValueError("Embedding API must return finite numeric float vectors")
-            norm = math.sqrt(sum(value * value for value in vector))
-            if not norm or not math.isfinite(norm):
+            try:
+                vector = [float(value) for value in vector]
+            except OverflowError:
+                raise ValueError("Embedding API must return finite numeric float vectors") from None
+            if any(not math.isfinite(value) for value in vector):
+                raise ValueError("Embedding API must return finite numeric float vectors")
+            scale = max(abs(value) for value in vector)
+            if not scale:
                 raise ValueError("Embedding API returned an invalid vector norm")
+            # Scale first: directly squaring finite values can overflow or
+            # underflow even when their normalized vector is well-defined.
+            vector = [value / scale for value in vector]
+            norm = math.sqrt(sum(value * value for value in vector))
             if self.dimensions is not None and self.dimensions != len(vector):
                 raise ValueError("Embedding API changed vector dimensions during indexing")
             self.dimensions = len(vector)

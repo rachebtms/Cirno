@@ -66,6 +66,16 @@ class AutomationTurnCoordinator:
         finally:
             self._waiters.pop(turn_id, None)
             self._pending_messages_by_turn_id.pop(turn_id, None)
+            if not future.done():
+                future.cancel()
+            elif not future.cancelled():
+                future.exception()  # Observe an early completion if enqueue itself failed.
+            # Cron and local triggers share this queue. Remove only this
+            # coordinator's submission, preserving other kinds and FIFO order.
+            for key, queued in list(self.deferred_queues.items()):
+                queued[:] = [item for item in queued if self._turn_id(item) != turn_id]
+                if not queued:
+                    self.deferred_queues.pop(key, None)
 
     def defer_if_active(
         self,

@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useClient } from "@/providers/ClientProvider";
+import { SurfaceVisibilityContext } from "@/hooks/usePageVisibility";
+import { useLifetime } from "@/ui/resources/useLifetime";
+import { markInboxItemsRead } from "./read-receipt";
 import { INBOX_CATEGORIES, useInbox, type InboxCategory, type InboxNotice, type InboxPage } from "./store";
 function categoryFromLocation() {
   const value = new URLSearchParams(location.hash.split("?")[1]).get("category");
@@ -9,26 +12,37 @@ function categoryFromLocation() {
 export function useInboxFeed(onSelect: (key: string) => void, returnKey?: string | null) {
   const { t } = useTranslation();
   const { client } = useClient();
+  const isCurrent = useLifetime(client);
+  const pageOwner = useRef(isCurrent);
+  const ownsPage = pageOwner.current === isCurrent;
   const inbox = useInbox();
+  const visible = useContext(SurfaceVisibilityContext);
   const [category, setCategory] = useState(categoryFromLocation);
   const [page, setPage] = useState<InboxPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const categoryRef = useRef(category);
-  categoryRef.current = category;
+  const viewRef = useRef({ client, category, connected: inbox.connected, visible });
+  if (viewRef.current.client !== client || viewRef.current.category !== category
+      || viewRef.current.connected !== inbox.connected || viewRef.current.visible !== visible) {
+    viewRef.current = { client, category, connected: inbox.connected, visible };
+  }
+  useEffect(() => () => { viewRef.current = { ...viewRef.current }; }, []);
+  const actionPending = useRef<{ owner: () => boolean } | null>(null);
   useEffect(() => {
     const changed = () => setCategory(categoryFromLocation());
     addEventListener("hashchange", changed);
     return () => removeEventListener("hashchange", changed);
   }, []);
   useEffect(() => {
-    if (!inbox.connected) return;
+    if (pageOwner.current !== isCurrent) setBusy(null);
+    pageOwner.current = isCurrent;
     let active = true;
     setPage(null); setError(null);
-    inbox.load(category).then(page => { if (active) setPage(page); })
-      .catch(reason => { if (active) setError(String(reason)); });
+    if (!inbox.connected) return;
+    inbox.load(category).then(page => { if (active && isCurrent()) setPage(page); })
+      .catch(reason => { if (active && isCurrent()) setError(String(reason)); });
     return () => { active = false; };
-  }, [category, inbox.connected, inbox.load]);
+  }, [category, inbox.connected, inbox.load, isCurrent]);
   useEffect(() => {
     setPage(current => {
       if (!current) return current;
@@ -39,8 +53,14 @@ export function useInboxFeed(onSelect: (key: string) => void, returnKey?: string
     });
   }, [inbox.snapshot, category]);
   async function run(id: string, action: () => Promise<void>) {
+    if (!isCurrent() || actionPending.current?.owner === isCurrent) return;
+    const operation = { owner: isCurrent };
+    actionPending.current = operation;
+    const view = viewRef.current;
     setBusy(id); setError(null);
-    try { await action(); } catch (reason) { setError(String(reason)); } finally { setBusy(null); }
+    try { await action(); }
+    catch (reason) { if (isCurrent() && view === viewRef.current) setError(String(reason)); }
+    finally { if (actionPending.current === operation) { actionPending.current = null; if (isCurrent()) setBusy(null); } }
   }
   function selectCategory(key: string) {
     const params = new URLSearchParams(location.hash.split("?")[1]);
@@ -50,29 +70,34 @@ export function useInboxFeed(onSelect: (key: string) => void, returnKey?: string
     setCategory(key === "all" ? undefined : key as InboxCategory);
   }
   async function markRead(ids?: string[], selectedCategory?: InboxCategory) {
-    await inbox.markRead(ids, selectedCategory);
+    const view = viewRef.current;
+    const receipt = await inbox.markRead(ids, selectedCategory);
+    if (!isCurrent() || receipt?.revision === undefined && view !== viewRef.current) return;
     // The shared snapshot contains only the latest page, while this view can
     // retain older pages. Apply the successful write to those rows as well.
-    setPage(current => current && ({ ...current, items: current.items.map(notice =>
-      (!ids || ids.includes(notice.id)) && (!selectedCategory || notice.category === selectedCategory)
-        ? { ...notice, read_at: notice.read_at ?? Date.now() } : notice) }));
+    setPage(current => current && ({ ...current, items: markInboxItemsRead(current.items, receipt ?? { read_at: Date.now() }, ids, selectedCategory) }));
   }
   const open = (notice: InboxNotice) => run(notice.id, async () => {
+    const view = viewRef.current;
     const target = await client.requestMutation<{ session_key: string | null }>("instance.action", { action: "inbox.open", values: { id: notice.id } });
+    if (view !== viewRef.current) return;
     await markRead([notice.id]);
+    if (view !== viewRef.current) return;
     if (!target.session_key) throw new Error(t("inbox.conversationUnavailable"));
     onSelect(target.session_key);
   });
   const decide = (notice: InboxNotice, approved: boolean) => run(notice.id, async () => {
+    const view = viewRef.current;
     await client.requestMutation("instance.action", { action: "approvals.decide", values: { id: notice.data.approval_id, approved } });
+    if (!isCurrent() || view !== viewRef.current) return;
     await inbox.refresh();
   });
   const more = () => run("more", async () => {
     const before = page?.next_before;
     if (!before) return;
-    const requested = category;
-    const next = await inbox.load(requested, before);
-    if (requested !== categoryRef.current) return;
+    const view = viewRef.current;
+    const next = await inbox.load(category, before);
+    if (view !== viewRef.current) return;
     setPage(current => {
       if (!current) return current;
       const existing = new Set(current.items.map(notice => notice.id));
@@ -80,11 +105,11 @@ export function useInboxFeed(onSelect: (key: string) => void, returnKey?: string
     });
   });
   const refresh = () => run("refresh", async () => {
-    const requested = category;
-    const [, next] = await Promise.all([inbox.refresh(), inbox.load(requested)]);
-    if (requested === categoryRef.current) setPage(next);
+    const view = viewRef.current;
+    const [, next] = await Promise.all([inbox.refresh(), inbox.load(category)]);
+    if (view === viewRef.current) setPage(next);
   });
-  return { page, category, busy, error: error ?? inbox.error, unread: inbox.snapshot.unread, selectCategory, open, decide, more,
+  return { page: ownsPage ? page : null, category, busy: ownsPage ? busy : null, error: (ownsPage ? error : null) ?? inbox.error, unread: inbox.snapshot.unread, selectCategory, open, decide, more,
     refresh, markRead: (notice: InboxNotice) => run(notice.id, () => markRead([notice.id])),
     markAllRead: () => run("read", () => markRead(undefined, category)) };
 }

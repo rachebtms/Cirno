@@ -32,6 +32,7 @@ class SubagentReports:
         stop_reason: str | None = None,
         error: str | None = None,
         partial_result: bool = False,
+        child_generation: str | None = None,
     ) -> None:
         """Announce the subagent result to the main agent via the message bus."""
         status_text = {
@@ -58,7 +59,9 @@ class SubagentReports:
         # being dispatched as a competing independent task.
         override = origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}"
         if self.sessions is not None and (
-            not self.sessions.exists(override) or not self.sessions.contains(task_id, override)
+            not self.sessions.exists(override) or not self.sessions.contains(
+                task_id, override, child_generation=child_generation,
+            )
         ):
             return
         metadata: dict[str, Any] = {
@@ -69,6 +72,8 @@ class SubagentReports:
             "subagent_partial": partial_result,
         }
         metadata["subagent_message_receipts"] = receipts or {}
+        if child_generation is not None:
+            metadata["subagent_child_generation"] = child_generation
         if receipts:
             announce_content += "\nMessage receipts: " + json.dumps(receipts)
         if origin_message_id:
@@ -80,6 +85,7 @@ class SubagentReports:
             content=announce_content,
             session_key_override=override,
             require_existing_session=True,
+            session_generation=origin.get("session_generation"),
             metadata=metadata,
         )
 

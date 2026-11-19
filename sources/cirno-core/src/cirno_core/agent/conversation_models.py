@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from loguru import logger
+
 from cirno_core.agent.model_runtime import ModelRuntimeResolver
 from cirno_core.bus.runtime_events import RuntimeEventPublisher
 from cirno_core.session.manager import SessionManager
@@ -13,7 +15,6 @@ from cirno_core.session.model_selection import (
     model_preset_from_metadata,
 )
 from cirno_core.utils.llm_runtime import LLMRuntime
-from loguru import logger
 
 
 class ConversationModels:
@@ -93,13 +94,16 @@ class ConversationModels:
         self,
         session_key: str,
         name: str,
+        *,
+        expected_generation: str | None = None,
     ) -> LLMRuntime:
         """Validate and persist one session's preset selection without blocking."""
         runtime = self.resolver.resolve_preset(name)
         await self.sessions.state.update_metadata(
             session_key,
             {SESSION_MODEL_PRESET_METADATA_KEY: runtime.model_preset},
-            create_if_missing=True,
+            expected_generation=expected_generation,
+            create_if_missing=expected_generation is None,
         )
         return runtime
 

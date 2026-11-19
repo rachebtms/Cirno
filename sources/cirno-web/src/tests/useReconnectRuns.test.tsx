@@ -80,6 +80,100 @@ afterEach(() => {
 });
 
 describe("durable run recovery", () => {
+  it("ignores a late generation response after another viewer replaces the cached history", async () => {
+    const key = "websocket:inactive";
+    webuiThreadCache.set(key, { ...completedThread(), history_generation: "a" });
+    let resolveRead!: (value: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise<Response>(resolve => { resolveRead = resolve; })));
+    const { client, running, reopen, close } = setup();
+    try {
+      running();
+      await reopen();
+      const newest = { ...completedThread("inactive", "newest"), history_generation: "c", active_turn_id: "newest",
+        completed_turn_ids: [], has_pending_tool_calls: true };
+      webuiThreadCache.set(key, newest);
+      running("inactive", "newest", 456);
+      await act(async () => { resolveRead(response({ ...completedThread(), history_generation: "b" })); });
+      expect(webuiThreadCache.get(key)).toBe(newest);
+      expect(client.getRunState("inactive").active).toBe(true);
+      expect(client.getRunTurnId("inactive")).toBe("newest");
+      expect(client.getRunStartedAt("inactive")).toBe(456);
+    } finally { close(); }
+  });
+
+  it("retires an inactive chat's stale run when reconnect discovers a new empty generation", async () => {
+    const previous = { ...completedThread(), history_generation: "a" };
+    webuiThreadCache.set("websocket:inactive", previous);
+    const body = { ...previous, history_generation: "b", events: [], completed_turn_ids: [], has_pending_tool_calls: false };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(body)));
+    const { client, running, reopen, close } = setup();
+    try {
+      running();
+      await reopen();
+      await act(async () => {});
+      expect(client.getRunState("inactive").active).toBe(false);
+      expect(client.hasUnsettledRun("inactive")).toBe(false);
+      expect(webuiThreadCache.get("websocket:inactive")?.history_generation).toBe("b");
+      expect(client.isHistoryGenerationRetired("inactive", "a")).toBe(true);
+    } finally { close(); }
+  });
+
+  it("does not publish a rejected unrelated history page into the shared cache", async () => {
+    const key = "websocket:inactive";
+    const current = completedThread("inactive", "current");
+    current.events = current.events.slice(0, 1);
+    current.completed_turn_ids = [];
+    current.has_pending_tool_calls = true;
+    current.active_turn_id = "current";
+    current.revision = "current-page";
+    const stale = { ...completedThread("inactive", "unrelated"), revision: "rejected-page" };
+    webuiThreadCache.set(key, current);
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 304 }))
+      .mockResolvedValueOnce(response(stale));
+    vi.stubGlobal("fetch", fetchMock);
+    const { client, sockets, close } = setup();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ClientProvider client={client} token="renewed-token">{children}</ClientProvider>
+    );
+    const stream = renderHook(() => useCirnoStream("inactive", [], false, undefined, undefined, [], { key }), { wrapper });
+    try {
+      await act(async () => {});
+      act(() => sockets.at(-1)!.receive({ event: "delta", chat_id: "inactive", turn_id: "current",
+        turn_seq: 2, stream_id: "current-answer", text: "Current live answer" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+      await act(async () => { stream.result.current.refreshHistory(); });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(stream.result.current.messages.some(message => message.content === "Current live answer")).toBe(true);
+      expect(stream.result.current.messages.some(message => message.turnId === "unrelated")).toBe(false);
+      expect(webuiThreadCache.get(key)?.revision).toBe("current-page");
+    } finally { stream.unmount(); close(); }
+  });
+
+  it.each(["active", "already-finished"])("settles completed older turns while reconnecting to a newer %s turn", async (timing) => {
+    const body = completedThread("inactive", "older");
+    body.completed_turn_ids = ["older"];
+    body.has_pending_tool_calls = true;
+    body.active_turn_id = "newer";
+    body.events.push({ event: "user_message", chat_id: "inactive", turn_id: "newer", text: "Next step", starts_turn: true });
+    let resolveRead!: (value: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRead = resolve; })));
+    const { client, sockets, running, reopen, close } = setup();
+    running("inactive", "older", 100);
+    running("inactive", "newer", 200);
+    await reopen();
+    const finish = () => act(() => sockets.at(-1)!.receive({ event: "turn_end", chat_id: "inactive", turn_id: "newer" }));
+    if (timing === "already-finished") finish();
+    await act(async () => { resolveRead(response(body)); });
+    if (timing === "active") {
+      expect(client.getRunState("inactive").active).toBe(true);
+      expect(client.getRunStartedAt("inactive")).toBe(200);
+      finish();
+    } else expect(webuiThreadCache.get("websocket:inactive")).toBeUndefined();
+    expect(client.getRunState("inactive").active).toBe(false);
+    expect(client.hasUnsettledRun("inactive")).toBe(false);
+    close();
+  });
+
   it("bounds recovery reads while draining all chats and preserving a newer queued turn", async () => {
     const reads: Array<{ chatId: string; resolve: (value: Response) => void }> = [];
     let active = 0;

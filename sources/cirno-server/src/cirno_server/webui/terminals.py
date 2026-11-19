@@ -12,7 +12,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from cirno_core.config.paths import get_data_dir
 from cirno_core.nodes.service import Nodes
+from cirno_core.storage.instance import InstanceData
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 @dataclass
@@ -27,12 +30,17 @@ class TerminalSession:
     )
     eof: bool = False
     error: str | None = None
+    input_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    input_waiter: asyncio.Future[None] | None = field(default=None, repr=False)
 
 
 class Terminals:
-    def __init__(self):
+    def __init__(self, *, state_dir: Path | None = None):
+        self.state_dir = (state_dir if state_dir is not None else get_data_dir()).expanduser().resolve(strict=False)
         self.sessions: dict[str, TerminalSession] = {}
         self._creation_lock = asyncio.Lock()
+        self._shutdown_generation = 0
+        self._shutdowns = 0
 
     async def create(
         self,
@@ -43,22 +51,27 @@ class Terminals:
         rows: int = 30,
         key: str | None = None,
     ) -> dict:
+        if self._shutdowns:
+            raise ValueError("Terminals are shutting down; retry after the server restarts")
         identifier = str(UUID(key)) if key is not None else str(uuid4())
+        generation = self._shutdown_generation
         # A browser tab keeps its identity across reloads. Serialize admission so
         # retrying the same connection cannot leave a second, unreachable shell.
         async with self._creation_lock:
+            if self._shutdowns or generation != self._shutdown_generation:
+                raise ValueError("Terminals are shutting down; retry after the server restarts")
             existing = self.sessions.get(identifier)
             if existing is not None:
                 return {"id": identifier, "label": existing.label}
             if len(self.sessions) >= 12:
                 raise ValueError("Close a terminal before opening another (12 terminal limit)")
-            return await self._create(
+            return await shield_and_drain(self._create(
                 cwd=cwd,
                 node_id=node_id,
                 cols=cols,
                 rows=rows,
                 identifier=identifier,
-            )
+            ))
 
     async def _create(
         self,
@@ -74,13 +87,14 @@ class Terminals:
         if len(self.sessions) >= 12:
             raise ValueError("Close a terminal before opening another (12 terminal limit)")
         import pty
+
         from cirno_core.nodes.shell import remote_shell
 
         args = [os.environ.get("SHELL") or "/bin/sh", "-l"]
         env = {**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor"}
         label = "Local"
         if node_id:
-            nodes = await asyncio.to_thread(Nodes)
+            nodes = await asyncio.to_thread(lambda: Nodes(InstanceData(self.state_dir)))
             node = await asyncio.to_thread(nodes.node, node_id)
             args = [
                 *(await asyncio.to_thread(nodes.arguments, node)),
@@ -117,7 +131,6 @@ class Terminals:
             raise
         finally:
             os.close(slave)
-        os.set_blocking(master, False)
         session = TerminalSession(process, master, label)
         self.sessions[identifier] = session
         loop = asyncio.get_running_loop()
@@ -143,9 +156,13 @@ class Terminals:
                 session.output = session.output[excess:]
                 session.offset += excess
 
-        loop.add_reader(master, read)
-
-        self.resize(identifier, cols, rows)
+        try:
+            os.set_blocking(master, False)
+            loop.add_reader(master, read)
+            self.resize(identifier, cols, rows)
+        except BaseException:
+            await shield_and_drain(self._close(identifier))
+            raise
         return {"id": identifier, "label": label}
 
     def get(self, identifier: str) -> TerminalSession:
@@ -169,27 +186,34 @@ class Terminals:
         if not isinstance(data, str) or len(data.encode()) > 65536:
             raise ValueError("Terminal input exceeds 64 KiB")
         session = self.get(identifier)
-        pending = memoryview(data.encode())
-        loop = asyncio.get_running_loop()
-        while pending:
-            if self.sessions.get(identifier) is not session:
-                raise KeyError("Terminal was closed")
-            try:
-                count = os.write(session.master, pending)
-                pending = pending[count:]
-            except BlockingIOError:
-                ready = loop.create_future()
-
-                def writable():
-                    if not ready.done():
-                        ready.set_result(None)
-
-                loop.add_writer(session.master, writable)
+        # Connections can share the same restored terminal tab. A partial
+        # write owns both its remaining bytes and the fd readiness callback.
+        async with session.input_lock:
+            pending = memoryview(data.encode())
+            loop = asyncio.get_running_loop()
+            while pending:
+                if self.sessions.get(identifier) is not session:
+                    raise KeyError("Terminal was closed")
                 try:
-                    async with asyncio.timeout(5):
-                        await ready
-                finally:
-                    loop.remove_writer(session.master)
+                    count = os.write(session.master, pending)
+                    pending = pending[count:]
+                except BlockingIOError:
+                    ready = loop.create_future()
+                    session.input_waiter = ready
+
+                    def writable():
+                        if not ready.done():
+                            ready.set_result(None)
+
+                    loop.add_writer(session.master, writable)
+                    try:
+                        async with asyncio.timeout(5):
+                            await ready
+                    finally:
+                        if self.sessions.get(identifier) is session:
+                            loop.remove_writer(session.master)
+                        if session.input_waiter is ready:
+                            session.input_waiter = None
         return {"ok": True}
 
     def resize(self, identifier: str, cols: int, rows: int) -> dict:
@@ -206,13 +230,18 @@ class Terminals:
         # Closing a tab while its shell is still starting must wait for that
         # admission, rather than leaving a newly spawned shell without a tab.
         async with self._creation_lock:
-            return await self._close(identifier)
+            return await shield_and_drain(self._close(identifier))
 
     async def _close(self, identifier: str) -> dict:
         session = self.sessions.pop(identifier, None)
         if session is None:
             return {"ok": True}
-        asyncio.get_running_loop().remove_reader(session.master)
+        loop = asyncio.get_running_loop()
+        loop.remove_reader(session.master)
+        loop.remove_writer(session.master)
+        if session.input_waiter is not None and not session.input_waiter.done():
+            session.input_waiter.set_exception(KeyError("Terminal was closed"))
+        session.input_waiter = None
         if session.process.returncode is None:
             try:
                 os.killpg(session.process.pid, signal.SIGKILL)
@@ -223,5 +252,17 @@ class Terminals:
         return {"ok": True}
 
     async def close_all(self):
-        for identifier in list(self.sessions):
-            await self.close(identifier)
+        self._shutdown_generation += 1
+        self._shutdowns += 1
+
+        async def finish():
+            try:
+                # Snapshot only after accepted admissions have settled. Queued
+                # creates from the previous generation cannot escape shutdown.
+                async with self._creation_lock:
+                    for identifier in list(self.sessions):
+                        await self._close(identifier)
+            finally:
+                self._shutdowns -= 1
+
+        await shield_and_drain(finish())

@@ -13,6 +13,8 @@ from collections.abc import Awaitable, Callable, Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from cirno_usage.types import LLMUsage
+from loguru import logger
+
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.providers.errors import (
@@ -21,9 +23,13 @@ from cirno_core.providers.errors import (
     retry_after_text,
 )
 from cirno_core.providers.images import prepare_message_images
-from cirno_core.providers.messages import content_as_blocks, sanitize_empty_content, tool_cache_marker_indices
+from cirno_core.providers.messages import (
+    content_as_blocks,
+    sanitize_empty_content,
+    tool_cache_marker_indices,
+)
 from cirno_core.providers.tool_calls import ToolCallRequest, tool_arguments_object_for_replay
-from loguru import logger
+from cirno_core.utils.cancellation import shield_and_drain
 
 if TYPE_CHECKING:
     from cirno_core.providers.catalog.contracts import ProviderSpec
@@ -120,8 +126,7 @@ class AnthropicProvider(LLMProvider):
             client_kw["default_headers"] = extra_headers
         if extra_query:
             client_kw["default_query"] = extra_query
-        if proxy:
-            client_kw["http_client"] = DefaultAsyncHttpxClient(proxy=proxy, trust_env=False)
+        client_kw["http_client"] = DefaultAsyncHttpxClient(proxy=proxy or None, trust_env=False)
         # Keep retries centralized in LLMProvider._run_with_retry to avoid retry amplification.
         client_kw["max_retries"] = 0
         self._client = AsyncAnthropic(**client_kw)
@@ -333,6 +338,12 @@ class AnthropicProvider(LLMProvider):
                         "thinking": thinking_block.get("thinking", ""),
                         "signature": thinking_block.get("signature", ""),
                     })
+                elif thinking_block.get("type") == "redacted_thinking" and isinstance(
+                    thinking_block.get("data"), str,
+                ):
+                    blocks.append({
+                        "type": "redacted_thinking", "data": thinking_block["data"],
+                    })
 
         if isinstance(content, str) and content:
             blocks.append({"type": "text", "text": content})
@@ -539,14 +550,14 @@ class AnthropicProvider(LLMProvider):
         tool_choice: str | dict[str, Any] | None,
         thinking_enabled: bool = False,
     ) -> dict[str, Any] | None:
+        if tool_choice == "none":
+            return {"type": "none"}
         if thinking_enabled:
             return {"type": "auto"}
         if tool_choice is None or tool_choice == "auto":
             return {"type": "auto"}
         if tool_choice == "required":
             return {"type": "any"}
-        if tool_choice == "none":
-            return None
         if isinstance(tool_choice, dict):
             name = tool_choice.get("function", {}).get("name")
             if name:
@@ -723,6 +734,8 @@ class AnthropicProvider(LLMProvider):
                     "thinking": block.thinking,
                     "signature": getattr(block, "signature", ""),
                 })
+            elif block.type == "redacted_thinking":
+                thinking_blocks.append({"type": "redacted_thinking", "data": block.data})
 
         stop_map = {"tool_use": "tool_calls", "end_turn": "stop", "max_tokens": "length"}
         finish_reason = stop_map.get(response.stop_reason or "", response.stop_reason or "stop")
@@ -903,4 +916,4 @@ class AnthropicProvider(LLMProvider):
         return self.default_model
 
     async def aclose(self) -> None:
-        await self._client.close()
+        await shield_and_drain(self._client.close())

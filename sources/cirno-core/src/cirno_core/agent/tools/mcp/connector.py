@@ -5,25 +5,28 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 from contextlib import AsyncExitStack, suppress
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from loguru import logger
+
 from cirno_core.agent.tools.registry import ToolRegistry
 from cirno_core.config.network import NetworkConfig
 from cirno_core.security.network import (
     validate_url_target,
 )
 from cirno_core.utils.cancellation import shield_and_drain, task_is_cancelling
-from loguru import logger
 
 if TYPE_CHECKING:
     from cirno_core.agent.tools.mcp_oauth import MCPOAuthHandlers
     from cirno_core.config.tools import MCPServerConfig
 
-from cirno_core.agent.tools.mcp.connections import close_mcp_connections, OwnedMCPConnection
+from cirno_core.agent.tools.mcp.connections import OwnedMCPConnection, close_mcp_connections
 from cirno_core.agent.tools.mcp.contracts import MCPConnection
 from cirno_core.agent.tools.mcp.discovery import register_capabilities
 from cirno_core.agent.tools.mcp.errors import _log_mcp_connection_failure, _redact_url
+from cirno_core.agent.tools.mcp.headers import merge_mcp_headers
 from cirno_core.agent.tools.mcp.http import (
     _HTTP_READ_TIMEOUT,
     _HTTP_TIMEOUT,
@@ -33,7 +36,7 @@ from cirno_core.agent.tools.mcp.http import (
 )
 from cirno_core.agent.tools.mcp.progress import _filter_malformed_mcp_progress_notifications
 from cirno_core.agent.tools.mcp.registrations import _unregister_server_tools
-from cirno_core.agent.tools.mcp.stdio import _normalize_windows_stdio_command
+from cirno_core.agent.tools.mcp.stdio import _normalize_windows_stdio_command, locate_stdio_command
 
 
 async def connect_mcp_servers(
@@ -42,6 +45,7 @@ async def connect_mcp_servers(
     *,
     oauth_handlers: Mapping[str, MCPOAuthHandlers] | None = None,
     network: NetworkConfig | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, MCPConnection]:
     """Connect to configured MCP servers and register their tools, resources, prompts.
 
@@ -62,20 +66,13 @@ async def connect_mcp_servers(
         name: str, cfg: MCPServerConfig, server_stack: AsyncExitStack
     ) -> bool:
         try:
-            transport_type = cfg.type
+            transport_type = cfg.transport_type
             if not transport_type:
-                if cfg.command:
-                    transport_type = "stdio"
-                elif cfg.url:
-                    transport_type = (
-                        "sse" if cfg.url.rstrip("/").endswith("/sse") else "streamableHttp"
-                    )
-                else:
-                    logger.warning("MCP server '{}': no command or url configured, skipping", name)
-                    return False
+                logger.warning("MCP server '{}': no command or url configured, skipping", name)
+                return False
 
             if transport_type in {"sse", "streamableHttp"}:
-                ok, error = validate_url_target(cfg.url)
+                ok, error = await asyncio.to_thread(validate_url_target, cfg.url)
                 if not ok:
                     logger.warning(
                         "MCP server '{}': blocked unsafe URL {} ({})",
@@ -107,14 +104,20 @@ async def connect_mcp_servers(
                         name,
                         cfg.url,
                         (oauth_handlers or {}).get(name),
+                        **({"config_path": config_path} if config_path is not None else {}),
                     )
                 except MCPAuthorizationRequiredError:
                     logger.info("MCP server '{}': waiting for browser authorization", name)
                     return False
 
             if transport_type == "stdio":
+                executable = await asyncio.to_thread(
+                    locate_stdio_command, cfg.command, cwd=cfg.cwd, env=cfg.env,
+                )
+                if executable is None:
+                    raise FileNotFoundError("MCP executable is unavailable in its configured working directory/PATH")
                 command, args, env = _normalize_windows_stdio_command(
-                    cfg.command,
+                    executable,
                     cfg.args,
                     cfg.env or None,
                 )
@@ -137,11 +140,11 @@ async def connect_mcp_servers(
                     timeout: httpx.Timeout | None = None,
                     auth: httpx.Auth | None = None,
                 ) -> httpx.AsyncClient:
-                    merged_headers = {
-                        "Accept": "application/json, text/event-stream",
-                        **(cfg.headers or {}),
-                        **(headers or {}),
-                    }
+                    merged_headers = merge_mcp_headers(
+                        {"Accept": "application/json, text/event-stream"},
+                        cfg.headers,
+                        headers,
+                    )
                     return httpx.AsyncClient(
                         headers=merged_headers or None,
                         event_hooks={"request": [_validate_mcp_request_url]},
@@ -167,7 +170,7 @@ async def connect_mcp_servers(
                     return False
 
                 http_client_kwargs: dict[str, Any] = {
-                    "headers": cfg.headers or None,
+                    "headers": merge_mcp_headers(cfg.headers) or None,
                     "event_hooks": {"request": [_validate_mcp_request_url]},
                     "follow_redirects": True,
                     # Read must outlast the tool call itself; otherwise a slow tool

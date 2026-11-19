@@ -169,3 +169,24 @@ it("refuses to dispose an editor when its in-flight save fails", async () => {
   expect(editor).toHaveValue("# Keep the failed save");
   expect(screen.getByRole("alert")).toHaveTextContent("Save connection lost");
 });
+
+it("asks before a preview reload can replace another view's unsaved draft", async () => {
+  const requestMutation = vi.fn(async () => file);
+  const client = { requestMutation } as unknown as CirnoClient;
+  render(<FileDocumentsProvider>
+    <div data-testid="editor"><FileDocumentView client={client} path={file.path} sessionKey="websocket:test" /></div>
+    <div data-testid="preview"><FileDocumentView client={client} path={file.path} sessionKey="websocket:test" preview /></div>
+  </FileDocumentsProvider>);
+  const editor = await screen.findByRole("textbox", { name: "File contents" });
+  fireEvent.change(editor, { target: { value: "# Unsaved research notes" } });
+  fireEvent.click(within(screen.getByTestId("preview")).getByRole("button", { name: "Reload file" }));
+  const warning = await screen.findByRole("alertdialog");
+  expect(editor).toHaveValue("# Unsaved research notes");
+  expect(requestMutation).toHaveBeenCalledTimes(1);
+  fireEvent.click(within(warning).getByRole("button", { name: "Cancel" }));
+  expect(editor).toHaveValue("# Unsaved research notes");
+  fireEvent.click(within(screen.getByTestId("preview")).getByRole("button", { name: "Reload file" }));
+  fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Discard changes" }));
+  await waitFor(() => expect(editor).toHaveValue(file.content));
+  expect(requestMutation).toHaveBeenCalledTimes(2);
+});

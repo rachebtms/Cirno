@@ -43,6 +43,20 @@ async def goal(sessions):
     return (await sessions.state.read_metadata("websocket:worker"))["metadata"].get("goal_state")
 
 
+@pytest.mark.parametrize("status", ["paused", "blocked"])
+async def test_router_can_stop_an_unfinished_goal_and_save_progress(supervision, status):
+    loop, sessions, handle, admitted, _ = supervision
+    await sessions.state.update_metadata("websocket:worker", {"goal_state": {
+        "goal_id": "same-task", "status": status, "objective": "Research safely", "recap": "Old milestone",
+    }})
+    result = await loop.tools.get("control_goal").execute(to=handle, action="stop", recap="Verified files saved")
+    assert not getattr(result, "is_error", False), result
+    saved = await goal(sessions)
+    assert saved["status"] == "stopped" and saved["goal_id"] == "same-task"
+    assert saved["recap"] == "Verified files saved"
+    admitted.assert_not_awaited()
+
+
 @pytest.mark.parametrize("state", ["active", "waiting", "paused", "blocked", "stopped"])
 async def test_list_includes_idle_workers_with_unfinished_goals(supervision, state):
     loop, sessions, _, _, _ = supervision

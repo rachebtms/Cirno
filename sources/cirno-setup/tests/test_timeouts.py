@@ -25,6 +25,7 @@ def test_install_and_readiness_checks_use_the_selected_timeout(tmp_path, monkeyp
         return subprocess.CompletedProcess(arguments, 0, stdout="ready", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     context.run(["fixture-install"])
     assert context.probe(["fixture-check"])
     assert calls == [install, check]
@@ -62,6 +63,7 @@ def test_environment_cleanup_and_home_ownership_use_setup_timeout(tmp_path, monk
         return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     initialize(context)
     prepare_home(context)
     assert len(calls) == 3  # legacy-path cleanup, pip readiness, ownership
@@ -115,6 +117,7 @@ def test_cli_zero_timeout_reaches_install_and_both_verification_passes(tmp_path,
         verify=lambda context, recipe: Verification(context.probe(["fixture-check"])),
     )
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     monkeypatch.setattr(backends, "backend", lambda name: backend)
     assert cli.main(["+pip.pytest", "--timeout", "0", "--verify"]) == 0
     assert calls == ["fixture-check", "fixture-install", "fixture-check", "fixture-check"]

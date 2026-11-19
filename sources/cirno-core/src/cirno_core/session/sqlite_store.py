@@ -13,8 +13,13 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from cirno_core.providers.contracts import ProviderConversationState
-from cirno_core.storage.records import decode_record
 from cirno_core.session.archive_contract import ArchiveWriter
+from cirno_core.session.contracts import (
+    MessageProjection,
+    SessionInfo,
+    SessionMetadataPayload,
+    SessionPayload,
+)
 from cirno_core.session.display_history import (
     HistoryFact,
     HistoryKind,
@@ -23,10 +28,10 @@ from cirno_core.session.display_history import (
 )
 from cirno_core.session.history_visibility import is_hidden_history_message
 from cirno_core.session.model import Session
-from cirno_core.session.contracts import MessageProjection, SessionInfo, SessionMetadataPayload, SessionPayload
 from cirno_core.session.previews import message_preview_text, metadata_title
 from cirno_core.session.summary import is_summary_checkpoint
 from cirno_core.session.types import PARENT_SESSION_KEY
+from cirno_core.storage.records import decode_record
 
 _CHECKPOINT = "runtime_checkpoint"
 _INPUTS = ("pending_user_followups",)
@@ -433,6 +438,19 @@ class SqliteSessionStore:
         with self.transaction(write=False) as db:
             row = db.execute("SELECT generation, revision FROM sessions WHERE key=?", (key,)).fetchone()
             return (str(row[0]), int(row[1])) if row is not None else None
+
+    def has_content(self, key: str) -> bool:
+        """Detect history, recovery or inbox use without decoding record bodies."""
+        with self.transaction(write=False) as db:
+            for table in (
+                "messages", "history_turns", "runtime_archives", "pending_inputs",
+                "checkpoints", "inbox_receipts",
+            ):
+                if db.execute(
+                    f"SELECT 1 FROM {table} WHERE session_key=? LIMIT 1", (key,),
+                ).fetchone() is not None:
+                    return True
+            return False
 
     def read_metadata(self, key: str, *, include_runtime: bool = True) -> SessionMetadataPayload | None:
         with self.transaction(write=False) as db:

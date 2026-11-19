@@ -14,6 +14,7 @@ from typing import Any
 
 from cirno_setup.environment import TOOL_ENV_KEYS
 from cirno_setup.policy import Policy
+from cirno_setup.process import run_command
 
 
 def fingerprint(value: Any) -> str:
@@ -120,7 +121,7 @@ class Context:
         env_override: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         print(f"[tools] {' '.join(arguments)}", flush=True)
-        return subprocess.run(
+        return run_command(
             arguments,
             env={**self.environment(), **(env_override or {})},
             timeout=self.policy.subprocess_timeout(),
@@ -139,7 +140,7 @@ class Context:
         self, arguments: list[str], *, env_override: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         try:
-            return subprocess.run(
+            return run_command(
                 arguments,
                 env={**self.environment(), **(env_override or {})},
                 timeout=self.policy.subprocess_timeout(maximum=60),

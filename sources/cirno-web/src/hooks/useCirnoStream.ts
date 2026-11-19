@@ -108,6 +108,8 @@ export function useCirnoStream(
   ) => SubmittedTurn | null;
   stop: () => Promise<void>;
   history: ThreadPaging;
+  /** Identity for local acknowledgements; replaced on reset or conversation change. */
+  historyOwner: object;
   refreshHistory: () => void;
   resetHistory: (keepTurnId?: string) => void;
   loadOlder: () => Promise<void>;
@@ -376,6 +378,10 @@ export function useCirnoStream(
       const decision = ownRead ? read : owner.begin(seed ? "initial" : "latest");
       const canonical = body ? persistedCanonicalRunState(body) : null;
       const historyChatId = chatId ?? (historyKey.startsWith("websocket:") ? historyKey.slice(10) : null);
+      const historyGeneration = body?.history_generation;
+      if (historyChatId && historyGeneration && client.isHistoryGenerationRetired(historyChatId, historyGeneration)) {
+        owner.finishRead(decision); publishHistory(); return;
+      }
       if (historyChatId && canonical?.snapshot.activeTurnId
         && client.isRunCompleted(historyChatId, canonical.snapshot.activeTurnId)) {
         // An HTTP snapshot captured before a received terminal fact cannot
@@ -387,11 +393,26 @@ export function useCirnoStream(
       }
       const settle = chatId && canonical && !canonical.snapshot.hasPendingToolCalls
         && client.canReconcileCanonicalCompletion(chatId, generation, canonical.completedTurnIds, canonical.snapshot);
+      const previousHistoryGeneration = owner.historyGeneration;
       const accepted = owner.accept(body, decision);
-      // Commit the received owner before cache listeners/ledger callbacks can reenter.
+      // Commit the received owner before ledger/cache callbacks can reenter.
       setMessages(owner.messages);
+      if (accepted && historyChatId && historyGeneration) {
+        client.rememberHistoryGeneration(historyChatId, historyGeneration);
+        if (previousHistoryGeneration !== null && previousHistoryGeneration !== historyGeneration && canonical) {
+          cancelOlderRead();
+          const observed = new Set(canonical.snapshot.observedTurnIds);
+          const extraRetained = owner.messages.flatMap(row => row.role === "user" && row.turnId
+            && (row.deliveryStatus === "sending" || !observed.has(row.turnId)) ? [row.turnId] : []);
+          const keepLifecycle = client.replaceHistoryRuns(historyChatId, canonical.snapshot, canonical.completedTurnIds, extraRetained);
+          historyRunGenerationRef.current = { chatId, generation: client.getRunGeneration(historyChatId) };
+          if (!keepLifecycle) {
+            setGoalState(undefined); setRecoveryState(null); setRetryStatus(null); setStreamError(null);
+          }
+        }
+      }
       if (accepted && chatId) messageCache?.set(chatId, owner.save());
-      if (ownRead) {
+      if (ownRead && accepted) {
         publishing = true;
         if (body) webuiThreadCache.set(historyKey, body);
         else webuiThreadCache.delete(historyKey);
@@ -960,6 +981,7 @@ export function useCirnoStream(
     send,
     stop,
     history: historyState,
+    historyOwner: transcriptRef.current.historyOwner,
     refreshHistory,
     resetHistory,
     loadOlder,

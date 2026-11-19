@@ -16,6 +16,10 @@ Tool operation names and conversation-level selection are described in
 shared domain services, rather than maintaining separate retrieval or validation
 implementations.
 
+Use the shared [frontend resource ownership](../architecture/frontend-resources.md)
+helpers for view-scoped state and requests. Keep domain state transitions in the
+feature; keep activation invalidation in the resource layer.
+
 ## Checks
 
 From the repository root:
@@ -33,6 +37,14 @@ python -m pytest -q -n 2
 ```
 
 Use focused tests during development and the full checks for release changes. Release tests install the real wheels outside the checkout and serve their bundled Web UI. Run browser layout and interaction checks with `npm --prefix sources/cirno-web run test:browser` after installing Playwright Chromium. Test output and local performance records belong in ignored `references/`, not current product guides. Run `cirno` for the backend and `npm --prefix sources/cirno-web run dev` for frontend hot reload.
+
+Group regression cases by observable contract, such as resource ownership or
+commit acknowledgement, rather than creating a file for each reported incident.
+Keep domain fixtures explicit; share identical timing primitives such as
+`src/tests/helpers/deferred.ts` instead of copying promise controllers between
+suites. A deterministic fake should control the boundary under test without
+starting a real provider, listener or external installer. Keep existing behavior
+assertions when refactoring and add coverage at the shared boundary being moved.
 
 `npm --prefix sources/cirno-web run gallery` opens the standalone component
 gallery. Its `lang` and `theme` URL parameters preserve view choices without

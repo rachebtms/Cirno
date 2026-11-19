@@ -43,7 +43,7 @@ async def test_maybe_continue_turn_queues_internal_message():
     ]
     pending: asyncio.Queue[InboundMessage] = asyncio.Queue()
     ctx = SimpleNamespace(
-        session=SimpleNamespace(metadata=meta),
+        session=SimpleNamespace(metadata=meta, generation="admitted-generation"),
         msg=InboundMessage(
             channel="feishu",
             sender_id="u1",
@@ -73,6 +73,8 @@ async def test_maybe_continue_turn_queues_internal_message():
     assert await maybe_continue_turn(ctx, session_metadata=ctx.session.metadata) is True
 
     queued = pending.get_nowait()
+    assert queued.require_existing_session is True
+    assert queued.session_generation == "admitted-generation"
     assert queued.sender_id == "system:continuation"
     assert queued.metadata[INTERNAL_CONTINUATION_META] is True
     assert queued.metadata[INTERNAL_CONTINUATION_KIND_META] == "sustained_goal"

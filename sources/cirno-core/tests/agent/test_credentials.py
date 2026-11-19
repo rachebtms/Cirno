@@ -75,7 +75,7 @@ def test_running_job_preserves_connection_and_credential_until_resolved(credenti
 
 
 async def test_agent_can_store_ssh_but_cannot_enroll_it(monkeypatch, credentials):
-    monkeypatch.setattr('cirno_core.agent.tools.credential.Credentials', lambda **kwargs: Credentials(credentials.data, **kwargs))
+    monkeypatch.setattr('cirno_core.agent.tools.credential.Credentials', lambda data=None, **kwargs: Credentials(credentials.data, **kwargs))
     result = await CredentialTool().execute(action='store', label='Agent SSH', kind='ssh', ssh={"host": "host.example", "username": "owner", "node_enabled": True})
     identifier = json.loads(result)['id']
     assert credentials.vault.metadata(identifier)['agent_visible']
@@ -101,7 +101,7 @@ async def test_node_listing_and_review_expose_metadata_without_connection_secret
     credentials.data.save("node_jobs", {"node_id": record["id"], "state": "completed",
                                        "command": "echo command-secret", "output": "output-secret",
                                        "error": "error-secret", "check_error": "check-secret", "checked_at": "2026-11-10T00:10:00Z", "created_at": "2026-11-10T00:00:00Z"})
-    monkeypatch.setattr('cirno_core.agent.tools.instance_features.Nodes', lambda **kwargs: Nodes(credentials.data, **kwargs))
+    monkeypatch.setattr('cirno_core.agent.tools.instance_features.Nodes', lambda data=None, **kwargs: Nodes(credentials.data, **kwargs))
     monkeypatch.setattr('cirno_core.nodes.service.Nodes', lambda **kwargs: Nodes(credentials.data, **kwargs))
     result = json.loads(await NodeTool().execute(action="list"))
     review = operation_evidence("node", {"node_id": record["id"], "command": "uptime"}, credentials.data.state_dir)
@@ -136,7 +136,7 @@ def test_agent_reads_visible_credentials_and_respects_revocation(credentials):
 async def test_explicit_credential_read_returns_only_authorized_secret(monkeypatch, credentials, kind):
     from cirno_core.agent.tools.naming import definitions
 
-    monkeypatch.setattr("cirno_core.agent.tools.credential.Credentials", lambda **kwargs: Credentials(credentials.data, **kwargs))
+    monkeypatch.setattr("cirno_core.agent.tools.credential.Credentials", lambda data=None, **kwargs: Credentials(credentials.data, **kwargs))
     fields = {"ssh": {"host": "gpu.example", "username": "worker", "password": "read-secret", "auth_method": "password"}} if kind == "ssh" else {"value": "read-secret", "username": "worker"}
     record = credentials.save(label="Readable", kind=kind, agent_visible=True, **fields)
     tool = CredentialTool()
@@ -169,8 +169,8 @@ async def test_ipv6_transfers_and_auth_environment_use_the_saved_connection(cred
 
 @pytest.mark.skipif(os.name != "posix", reason="OpenSSH askpass uses a POSIX shell helper")
 def test_password_helpers_share_an_executable_without_sharing_values(credentials):
-    from concurrent.futures import ThreadPoolExecutor
     import subprocess
+    from concurrent.futures import ThreadPoolExecutor
     nodes = Nodes(credentials.data)
     with ThreadPoolExecutor(max_workers=8) as workers:
         environments = list(workers.map(nodes.environment, [f'password-{i}' for i in range(16)]))
@@ -197,7 +197,7 @@ def test_ssh_directory_survives_nested_edits_and_node_enrollment(credentials):
 
 
 async def test_agent_can_store_and_update_ssh_startup_directory(monkeypatch, credentials):
-    monkeypatch.setattr("cirno_core.agent.tools.credential.Credentials", lambda **kwargs: Credentials(credentials.data, **kwargs))
+    monkeypatch.setattr("cirno_core.agent.tools.credential.Credentials", lambda data=None, **kwargs: Credentials(credentials.data, **kwargs))
     tool = CredentialTool()
     assert "working_directory" in tool.parameters["properties"]["ssh"]["properties"]
     result = json.loads(await tool.execute(action="store", label="SSH", kind="ssh", ssh={"host": "gpu.example", "username": "worker", "working_directory": "/research"}))

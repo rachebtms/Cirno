@@ -32,7 +32,11 @@ export function ChannelInstanceIdentity({
       <div>
         <h4>{channelInstanceName(instance)}</h4>
         <span>
-          {channelStatusLabel({ ...feature, ...instance }, (key, fallback) =>
+          {channelStatusLabel({
+            ...feature, ...instance,
+            runtime_status: instance.runtime_status,
+            running: instance.running,
+          }, (key, fallback) =>
             t(key, { defaultValue: fallback }),
           )}
         </span>

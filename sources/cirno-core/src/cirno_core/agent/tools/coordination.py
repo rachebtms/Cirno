@@ -106,7 +106,11 @@ class CreateSessionTool(Tool):
         request = current_request_context()
         if request is None or not request.session_key:
             return ToolResult.error("An owning conversation is required.")
-        source = await self.sessions.state.read_metadata(request.session_key)
+        source = await self.sessions.state.read_header(request.session_key)
+        if source is None or (
+            request.session_generation is not None and source.generation != request.session_generation
+        ):
+            return ToolResult.error("The owning conversation was deleted or replaced; no Worker was created.")
         metadata = {"title": title, "project_id": project_id, "delegated_by": request.session_key, "webui": True}
         metadata["delegation_source"] = {
             "session_key": request.session_key, "turn_id": request.turn_id,
@@ -114,8 +118,8 @@ class CreateSessionTool(Tool):
             "text": (request.original_user_text or "")[:4000],
             "truncated": len(request.original_user_text or "") > 4000,
         }
-        if source and source["metadata"].get("workspace_scope"):
-            metadata["workspace_scope"] = source["metadata"]["workspace_scope"]
+        if source.metadata.get("workspace_scope"):
+            metadata["workspace_scope"] = source.metadata["workspace_scope"]
         if objective.strip():
             metadata["goal_state"] = {
                 "goal_id": uuid4().hex,

@@ -21,6 +21,7 @@ class StreamBuf:
     last_edit: float = 0.0
     stream_id: str | None = None
     delivery_error: str | None = None
+    line_continuation: bool = False
 
     def require_deliverable(self) -> None:
         if self.delivery_error is not None:

@@ -35,6 +35,94 @@ def test_question_read_is_not_answer_and_cross_session_quote_cannot_resolve(inbo
     assert inbox.list()["unread"]["operations"] == 0
 
 
+@pytest.mark.parametrize('tail', [
+    '> Which value?', '> Which value?\n\n', '> Which value?\n\n  \t\n',
+    'Which value?\n\nA',
+])
+def test_question_quote_without_a_valid_answer_keeps_notification_pending(inbox, tail):
+    question(inbox)
+    inbox.answer('websocket:one', '> [!QUOTE]\n> <!-- cirno-question:' + 'a' * 32 + ' -->\n' + tail)
+    assert inbox.get('question:' + 'a' * 32)['status'] == 'pending'
+
+
+@pytest.mark.parametrize('newline', ['\n', '\r\n'])
+def test_question_answers_accept_quoted_comparison_text_and_windows_newlines(inbox, newline):
+    question(inbox)
+    content = '\n'.join(['> [!QUOTE]', '> <!-- cirno-question:' + 'a' * 32 + ' -->', '> >', '', ' A '])
+    inbox.answer('websocket:one', content.replace('\n', newline))
+    assert inbox.get('question:' + 'a' * 32)['status'] == 'answered'
+
+
+async def test_question_answer_cannot_resolve_a_different_session_generation(inbox, tmp_path):
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.bus.runtime_events import RuntimeEventContext, UserInputAccepted
+    from cirno_server.channels.delivery.inbox import InboxDelivery
+
+    identifier = 'question:' + 'b' * 32
+    inbox.record(identifier, 'operations', 'question', status='pending',
+                 session_key='websocket:one', data={'session_generation': 'original'})
+    delivery = InboxDelivery(MessageBus(), tmp_path / 'config.json', None, lambda name: None)
+    text = '> [!QUOTE]\n> <!-- cirno-question:' + 'b' * 32 + ' -->\n> Which value?\n\nA'
+    try:
+        await delivery.answer(UserInputAccepted(RuntimeEventContext(
+            channel='websocket', chat_id='one', session_key='websocket:one', session_generation='replacement',
+        ), text))
+        assert inbox.get(identifier)['status'] == 'pending'
+        await delivery.answer(UserInputAccepted(RuntimeEventContext(
+            channel='websocket', chat_id='one', session_key='websocket:one', session_generation='original',
+        ), text))
+        assert inbox.get(identifier)['status'] == 'answered'
+    finally:
+        delivery.close()
+
+
+@pytest.mark.parametrize('retain_question', [True, False], ids=['edit-later-input', 'clear-history'])
+async def test_replaced_generation_can_answer_only_a_question_retained_in_history(inbox, tmp_path, retain_question):
+    from cirno_core.bus.events import INBOUND_META_TURN_ID
+    from cirno_core.bus.queue import MessageBus
+    from cirno_core.bus.runtime_events import RuntimeEventContext, UserInputAccepted
+    from cirno_core.session.manager import SessionManager
+    from cirno_core.session.presentation_history import fact_from_record
+    from cirno_server.channels.delivery.inbox import InboxDelivery
+
+    key, question_id = 'websocket:one', 'c' * 32
+    sessions = SessionManager(tmp_path / 'workspace', sessions_root=tmp_path / 'sessions')
+    source = await sessions.state.import_messages(key, [
+        {'role': 'user', 'content': 'First request', INBOUND_META_TURN_ID: 'first'},
+        {'role': 'assistant', 'content': 'Which value?'},
+        {'role': 'user', 'content': 'Later request', INBOUND_META_TURN_ID: 'later'},
+        {'role': 'assistant', 'content': 'Later answer'},
+    ])
+    await sessions.state.append_history(key, [
+        fact_from_record({'event': 'user', 'text': 'First request', 'turn_id': 'first'}),
+        fact_from_record({'event': 'message', 'text': 'Which value?', 'turn_id': 'first',
+                          'agent_ui': {'kind': 'user_question', 'data': {'id': question_id}}}),
+        fact_from_record({'event': 'user', 'text': 'Later request', 'turn_id': 'later'}),
+        fact_from_record({'event': 'message', 'text': 'Later answer', 'turn_id': 'later'}),
+    ], expected_generation=source.generation)
+    inbox.record('question:' + question_id, 'operations', 'question', status='pending',
+                 session_key=key, data={'session_generation': source.generation})
+    delivery = InboxDelivery(MessageBus(), tmp_path / 'config.json', sessions, lambda name: None)
+    try:
+        if retain_question:
+            await sessions.state.edit_user_input(key, 'later', 'Edited later request')
+        else:
+            await sessions.state.reset(key)
+        current = await sessions.state.read_header(key)
+        assert current.generation != source.generation
+        await delivery.answer(UserInputAccepted(RuntimeEventContext(
+            channel='websocket', chat_id='one', session_key=key, session_generation=current.generation,
+        ), '> [!QUOTE]\n> <!-- cirno-question:' + question_id + ' -->\n> Which value?\n\nA'))
+        notice = inbox.get('question:' + question_id)
+        assert notice['status'] == ('answered' if retain_question else 'pending')
+        assert notice['data']['session_generation'] == (
+            current.generation if retain_question else source.generation
+        )
+    finally:
+        delivery.close()
+        await sessions.state.aclose()
+
+
 def test_compaction_keeps_error_and_deduplicates_lifecycle(inbox):
     for phase, error in (("started", None), ("failed", "provider connection refused"), ("failed", "provider connection refused")):
         inbox.capture(OutboundMessage(channel="websocket", chat_id="one", content="", event=ContextCompactionEvent("same", phase, error=error)))
@@ -170,3 +258,30 @@ def test_failed_turns_are_system_events_not_work_reports(inbox):
     notice = inbox.list(category="system")["items"][0]
     assert notice["kind"] == "turn"
     assert notice["body"] == "Configure a model"
+
+
+@pytest.mark.parametrize("missing_record", [False, True])
+async def test_legacy_approval_notice_does_not_open_replacement_conversation(inbox, tmp_path, missing_record):
+    from types import SimpleNamespace
+
+    from cirno_core.security.approval.store import ApprovalStore
+    from cirno_core.session.manager import SessionManager
+
+    sessions = SessionManager(tmp_path / "workspace", sessions_root=tmp_path / "sessions")
+    key = "websocket:approval-source"
+    try:
+        header = await sessions.state.get_header(key)
+        request = SimpleNamespace(session_key=key, session_generation=header.generation, turn_id="turn")
+        identifier = "missing" if missing_record else ApprovalStore().record(
+            "fingerprint", request, {"tool": "fixture", "arguments": {}}, "pending", "decision",
+        )["id"]
+        inbox.record("approval:" + identifier, "operations", "approval", session_key=key,
+                     status="pending", data={"approval_id": identifier})
+        payload = {"action": "inbox.open", "values": {"id": "approval:" + identifier}}
+        if not missing_record:
+            assert (await instance_action(payload, sessions=sessions, bus=None))["session_key"] == key
+            await sessions.state.reset(key)
+        assert (await instance_action(payload, sessions=sessions, bus=None))["session_key"] is None
+        assert inbox.get("approval:" + identifier)["status"] == "unavailable"
+    finally:
+        await sessions.state.aclose()

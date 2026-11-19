@@ -75,6 +75,8 @@ export interface CirnoFeaturesPayload {
     ok: boolean;
     message: string;
     enabled?: boolean;
+    dependencies_installed?: boolean;
+    hot_reload?: boolean;
   };
 }
 

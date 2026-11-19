@@ -9,6 +9,7 @@ interface PresetDrag {
   grabOffset: number;
   active: boolean;
   keys: string[];
+  keySignature: string;
 }
 
 export function useModelPresetDrag({
@@ -25,6 +26,7 @@ export function useModelPresetDrag({
   const positions = useRef<Map<string, DOMRect> | null>(null);
   const animations = useRef(new Map<string, Animation>());
   const [preview, setPreview] = useState<{ key: string; keys: string[] } | null>(null);
+  const keySignature = JSON.stringify(keys);
 
   const surfaces = () => Array.from(
     listRef.current?.querySelectorAll<HTMLElement>("[data-preset-sort-surface]") ?? [],
@@ -49,6 +51,13 @@ export function useModelPresetDrag({
   };
 
   useLayoutEffect(() => {
+    // Live settings may remove or reorder cards while the pointer is down.
+    // Retire the old gesture before its frame touches a detached surface or
+    // its eventual pointer-up submits keys from an obsolete call order.
+    if (drag.current && (disabled || drag.current.keySignature !== keySignature)) {
+      finish(false);
+      return;
+    }
     const previous = positions.current;
     if (!previous) return;
     positions.current = null;
@@ -81,7 +90,7 @@ export function useModelPresetDrag({
       }, { once: true });
     }
     followPointer();
-  }, [preview]);
+  }, [preview, disabled, keySignature]);
 
   useEffect(() => () => {
     if (frame.current !== undefined) cancelAnimationFrame(frame.current);
@@ -107,17 +116,17 @@ export function useModelPresetDrag({
     previewKeys: preview?.keys ?? keys,
     draggedKey: preview?.key,
     start: (event: PointerEvent, key: string) => {
-      if (disabled || event.button !== 0 || !keys.includes(key)
+      if (drag.current || disabled || event.button !== 0 || !keys.includes(key)
         || (event.target as HTMLElement).closest('[role="switch"]')) return;
       const surface = surfaces().find((element) => element.dataset.presetSortSurface === key)!;
       drag.current = {
         key, surface, pointerId: event.pointerId, startY: event.clientY, pointerY: event.clientY,
         grabOffset: event.clientY - surface.getBoundingClientRect().top,
-        active: false, keys,
+        active: false, keys, keySignature,
       };
     },
     listProps: {
-      onPointerDownCapture: () => { suppressClick.current = false; },
+      onPointerDownCapture: () => { if (!drag.current) suppressClick.current = false; },
       onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
         const current = drag.current;
         if (!current || current.pointerId !== event.pointerId || disabled) return;
@@ -149,9 +158,9 @@ export function useModelPresetDrag({
         }
         followPointer();
       },
-      onPointerUp: () => finish(true),
-      onPointerCancel: () => finish(false),
-      onLostPointerCapture: () => finish(false),
+      onPointerUp: (event: PointerEvent) => { if (event.pointerId === drag.current?.pointerId) finish(true); },
+      onPointerCancel: (event: PointerEvent) => { if (event.pointerId === drag.current?.pointerId) finish(false); },
+      onLostPointerCapture: (event: PointerEvent) => { if (event.pointerId === drag.current?.pointerId) finish(false); },
       onClickCapture: (event: MouseEvent) => {
         if (!suppressClick.current) return;
         event.preventDefault();

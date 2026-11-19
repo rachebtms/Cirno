@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from itertools import islice
 from pathlib import Path
 
 _MAX_TOOL_OUTPUT_CHARS = 12_000
@@ -65,13 +67,20 @@ def _truncate(text: str, limit: int = _MAX_TOOL_OUTPUT_CHARS) -> str:
 def _iter_artifact_candidates(cwd: Path) -> list[Path]:
     if not cwd.is_dir():
         return []
+    root = cwd.resolve(strict=False)
     out: list[Path] = []
     stack = [cwd]
     scanned = 0
     while stack and scanned < _MAX_ARTIFACT_SCAN_PATHS:
         directory = stack.pop()
         try:
-            entries = sorted(directory.iterdir(), key=lambda path: path.name.lower())
+            # Path.iterdir()/sorted can materialize an entire large directory
+            # before the budget is checked. Bound the underlying enumeration.
+            with os.scandir(directory) as stream:
+                entries = sorted(
+                    (Path(entry.path) for entry in islice(stream, _MAX_ARTIFACT_SCAN_PATHS - scanned)),
+                    key=lambda path: path.name.lower(),
+                )
         except OSError:
             continue
         for path in entries:
@@ -79,13 +88,16 @@ def _iter_artifact_candidates(cwd: Path) -> list[Path]:
                 break
             scanned += 1
             try:
+                resolved = path.resolve(strict=False)
+                if not resolved.is_relative_to(root):
+                    continue
                 if path.is_dir() and not path.is_symlink():
                     if path.name not in _ARTIFACT_IGNORE_DIRS:
                         stack.append(path)
                     continue
                 if path.is_file() and path.suffix.lower() in _ARTIFACT_EXTENSIONS:
-                    out.append(path.resolve(strict=False))
-            except OSError:
+                    out.append(resolved)
+            except (OSError, RuntimeError):
                 continue
     return out
 

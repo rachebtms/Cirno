@@ -31,7 +31,8 @@ def merge_identical(source: Path, target: Path) -> None:
         return
     if source.is_symlink() and target.is_symlink() and source.readlink() == target.readlink():
         return
-    if source.is_file() and target.is_file() and filecmp.cmp(source, target, shallow=False):
+    if (not source.is_symlink() and not target.is_symlink()
+            and source.is_file() and target.is_file() and filecmp.cmp(source, target, shallow=False)):
         return
     raise ValueError(f"Conflicting migration artifact: {source} and {target}")
 

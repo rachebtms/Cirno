@@ -179,6 +179,8 @@ def _serialize_job(
         return payload
 
     payload["protected"] = job.payload.kind == "system_event"
+    bound_key = job.payload.session_key or ""
+    payload["webui_session_key"] = bound_key if is_webui_session_key(bound_key) else None
     payload["delete_after_run"] = job.delete_after_run
     payload["created_at_ms"] = job.created_at_ms
     payload["updated_at_ms"] = job.updated_at_ms
@@ -188,6 +190,7 @@ def _serialize_job(
         session_key = record.session_key or job.payload.session_key or ""
         run_history.append({
             "run_at_ms": record.run_at_ms,
+            "run_id": record.run_id,
             "status": record.status,
             "duration_ms": record.duration_ms,
             "error": record.error,
@@ -245,6 +248,8 @@ def _serialize_trigger(
         return payload
 
     payload["protected"] = False
+    bound_key = trigger.session_key or ""
+    payload["webui_session_key"] = bound_key if is_webui_session_key(bound_key) else None
     payload["delete_after_run"] = False
     payload["created_at_ms"] = trigger.created_at_ms
     payload["updated_at_ms"] = trigger.updated_at_ms
@@ -255,6 +260,7 @@ def _serialize_trigger(
             "run_history": [
                 {
                     "run_at_ms": record.run_at_ms,
+                    "run_id": record.delivery_id,
                     "status": record.status,
                     "duration_ms": 0,
                     "error": record.error,

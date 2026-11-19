@@ -61,13 +61,23 @@ class ProviderConversationState:
 
     def to_private_record(self) -> dict[str, Any]:
         """Serialize for the private session sidecar, never for public history."""
+        from cirno_vault.redaction import tool_history
+
+        payload = deepcopy(self.payload)
+        items = payload.get("items")
+        # Pending Chat results may refer to a call in earlier Responses items.
+        item_count = len(items) if isinstance(items, list) else 0
+        history = [*(items if isinstance(items, list) else []), *deepcopy(self.pending_messages)]
+        durable = tool_history(history)
+        if isinstance(items, list):
+            payload["items"] = durable[:item_count]
         return {
             "kind": self.kind,
             "provider": self.provider,
             "model": self.model,
             "version": self.version,
-            "payload": deepcopy(self.payload),
-            "pending_messages": deepcopy(self.pending_messages),
+            "payload": payload,
+            "pending_messages": durable[item_count:],
         }
 
     @classmethod

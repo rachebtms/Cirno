@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from cirno_core.nodes.shell import remote_shell
 from cirno_core.nodes.policy import TERMINAL_JOB_STATES
+from cirno_core.nodes.shell import remote_shell
 from cirno_core.utils.cancellation import shield_and_drain
 
 if TYPE_CHECKING:
@@ -138,7 +138,7 @@ class NodeJobs:
                 if current["state"] in TERMINAL_JOB_STATES or current.get("check_started_at", "") > started.isoformat():
                     return current
                 return {**current, "check_started_at": started.isoformat(), "check_error": str(error) or type(error).__name__}
-            await asyncio.to_thread(self.nodes.data.update, "node_jobs", job["id"], update)
+            await shield_and_drain(asyncio.to_thread(self.nodes.data.update, "node_jobs", job["id"], update))
 
     async def _observe(self, job: dict, status: str, started: datetime, *, output: str | None = None, stop=False) -> dict:
         unknown = "submission_unknown" if job["state"] in {"submitting", "submission_unknown"} else "unknown"

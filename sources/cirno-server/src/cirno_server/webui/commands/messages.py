@@ -288,7 +288,18 @@ class WebUIMessageIntake:
         if temporary_policy is None or temporary_policy.hydrate_transcript:
             await self._outbound.hydrate(chat_id)
 
+        # A trusted, attachment-free stop only cancels work. It must remain
+        # available when saved workspace policy or preference storage is broken,
+        # and must not persist a replacement scope from the client envelope.
+        stop_control = (
+            envelope.get("webui") is True
+            and connection in self._webui_connections
+            and content.strip().lower() == "/stop"
+            and not attachments.order
+        )
         scope = (
+            self._workspaces.restricted_default_scope()
+            if stop_control else
             temporary_policy.workspace_scope
             if temporary_policy is not None
             else (
@@ -358,33 +369,8 @@ class WebUIMessageIntake:
             )
             if session_mentions:
                 metadata["session_mentions"] = session_mentions
-        metadata[WORKSPACE_SCOPE_METADATA_KEY] = scope.metadata()
-        # Revalidate after all asynchronous scope/hydration work. Commit before
-        # persisting paths, with no intervening await, so expiry cannot remove
-        # files referenced by the canonical transcript.
-        try:
-            committed = await commit_message_attachments(
-                attachments,
-                scope=scope,
-                store=self._uploads.store,
-                owner=upload_owner,
-            )
-        except (ValueError, WebUIFilePreviewError) as exc:
-            await self._transport.webui_send_event(
-                connection,
-                "error",
-                detail="attachment_rejected",
-                reason=str(exc),
-                **rejection_fields,
-            )
-            return
-        media_paths, local, uploaded = committed.paths, committed.local, committed.uploaded
-        if local:
-            metadata[INBOUND_META_LOCAL_MEDIA] = [item["path"] for item in local]
-        if temporary_policy is not None:
-            self._temporary_chats.register_media(
-                connection, chat_id, [str(item.path) for item in uploaded]
-            )
+        if not stop_control:
+            metadata[WORKSPACE_SCOPE_METADATA_KEY] = scope.metadata()
         is_webui = metadata.get("webui") is True
         queued_owner = None
         if is_webui and not is_user_shell and builtin_command_starts_agent_turn(content):
@@ -411,7 +397,7 @@ class WebUIMessageIntake:
         execution_generation: str | None = None
         execution_created = False
         try:
-            if not restart_control:
+            if not restart_control and not stop_control:
                 admission = await self.workspace_scope_or_error(
                     connection,
                     lambda: self._workspaces.persist_scope(
@@ -442,14 +428,40 @@ class WebUIMessageIntake:
                         execution_session_key,
                         {},
                     )
+            # Workspace admission may fail or outlast an upload's staging lease.
+            # Revalidate and commit only now, before writing paths to history.
+            try:
+                committed = await commit_message_attachments(
+                    attachments,
+                    scope=scope,
+                    store=self._uploads.store,
+                    owner=upload_owner,
+                )
+            except (ValueError, WebUIFilePreviewError) as exc:
+                await self._transport.webui_send_event(
+                    connection,
+                    "error",
+                    detail="attachment_rejected",
+                    reason=str(exc),
+                    **rejection_fields,
+                )
+                return
+            media_paths, local, uploaded = committed.paths, committed.local, committed.uploaded
+            if local:
+                metadata[INBOUND_META_LOCAL_MEDIA] = [item["path"] for item in local]
+            if temporary_policy is not None:
+                self._temporary_chats.register_media(
+                    connection, chat_id, [str(item.path) for item in uploaded]
+                )
             if session_generation is not None:
                 metadata[HISTORY_GENERATION_METADATA_KEY] = session_generation
             if (
                 is_webui
                 and not restart_control
+                and not stop_control
                 and (temporary_policy is None or temporary_policy.persist_transcript)
             ):
-                await self._transcripts.append_user_message(
+                saved = await self._transcripts.append_user_message(
                     chat_id,
                     content,
                     metadata=metadata,
@@ -458,6 +470,16 @@ class WebUIMessageIntake:
                     mcp_presets=mcp_presets or None,
                     session_mentions=session_mentions or None,
                 )
+                # /stop is deliberately absent from ordinary user history.
+                if not saved and not (content.strip() == "/stop" and not media_paths):
+                    await self._transport.webui_send_event(
+                        connection,
+                        "error",
+                        detail="message_rejected",
+                        reason="The server could not save this message. Your draft has been retained; retry after checking the server logs.",
+                        **rejection_fields,
+                    )
+                    return
             if trusted_webui:
                 context_blocks: list[RuntimeContextBlock] = []
                 if not is_user_shell and envelope.get("intent") == "create_automation":
@@ -501,21 +523,22 @@ class WebUIMessageIntake:
                 self._accepted_messages[(chat_id, turn_id)] = time.monotonic() + 600
                 if len(self._accepted_messages) > 1024:
                     del self._accepted_messages[next(iter(self._accepted_messages))]
-        except BaseException:
-            await self._workspaces.rollback_scope_admission(
-                execution_session_key,
-                execution_generation,
-                created=execution_created,
-            )
-            await self._workspaces.rollback_scope_admission(
-                admission_session_key,
-                session_generation,
-                created=session_created,
-            )
-            raise
         finally:
-            if not accepted and queued_owner is not None:
-                clear_websocket_turn_if_current(chat_id, queued_owner)
+            if not accepted:
+                try:
+                    await self._workspaces.rollback_scope_admission(
+                        execution_session_key,
+                        execution_generation,
+                        created=execution_created,
+                    )
+                    await self._workspaces.rollback_scope_admission(
+                        admission_session_key,
+                        session_generation,
+                        created=session_created,
+                    )
+                finally:
+                    if queued_owner is not None:
+                        clear_websocket_turn_if_current(chat_id, queued_owner)
 
         media = (
             self._media.augment_transcript_user_media(

@@ -10,21 +10,28 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import httpx
+from cirno_core import __version__
+from cirno_core.config.loader import get_config_path, load_config, save_config
+from cirno_core.config.schema import Config
+from cirno_core.utils.atomic_file import atomic_write_bytes, read_atomic_bytes
+from cirno_core.utils.file_transactions import file_write_transaction
+
 import cirno_server.webui.settings.models.catalog as model_catalog
 import cirno_server.webui.settings.models.mutations as model_mutations
 import cirno_server.webui.settings.models.payload as model_payload
 import cirno_server.webui.settings.providers.mutations as provider_mutations
 import cirno_server.webui.settings.providers.oauth as provider_oauth
-import httpx
-from cirno_core import __version__
-from cirno_core.config.loader import get_config_path, load_config, save_config
-from cirno_core.config.schema import Config
 from cirno_server.webui.settings import capabilities as capabilities
 from cirno_server.webui.settings import contracts as contracts
 from cirno_server.webui.settings import runtime as runtime
 from cirno_server.webui.settings import system as system
 from cirno_server.webui.settings.contracts import QueryParams, WebUISettingsError
-from cirno_server.webui.workspaces import write_webui_default_access_mode
+from cirno_server.webui.workspaces import (
+    read_webui_default_access_mode,
+    webui_workspace_state_path,
+    write_webui_default_access_mode,
+)
 
 if TYPE_CHECKING:
     from cirno_server.webui.settings.services import WebUIOAuthFlowRegistry
@@ -280,19 +287,65 @@ def update_network_safety_settings(
     *,
     config_path: Path | None = None,
 ) -> dict[str, Any]:
-    config = _load_settings_config(config_path)
-    changed, default_access_mode = capabilities.update_network_safety_settings(
-        config,
-        query,
-    )
-    if changed:
-        _save_settings_config(config, config_path)
-    if default_access_mode is not None:
+    path = _settings_config_path(config_path)
+    config_path = path
+    state_dir = path.expanduser().resolve(strict=False).parent / "state"
+    preferences = webui_workspace_state_path(state_dir=state_dir)
+
+    def snapshot(target: Path) -> bytes | None:
         try:
-            write_webui_default_access_mode(default_access_mode)
-        except ValueError as exc:
-            raise WebUISettingsError(str(exc)) from exc
-    return settings_payload(requires_restart=changed, config_path=config_path)
+            return read_atomic_bytes(target)
+        except FileNotFoundError:
+            return None
+
+    # The settings service owns the config-file lock. Share the preference
+    # writer's in-process lock through comparison, publication and rollback so
+    # a recent/favorite-folder update cannot be overwritten by this rollback.
+    with file_write_transaction([path, preferences]):
+        config = _load_settings_config(config_path)
+        changed, default_access_mode = capabilities.update_network_safety_settings(config, query)
+        try:
+            read_webui_default_access_mode(state_dir=state_dir)
+            before = {target: snapshot(target) for target in (path, preferences)}
+        except (OSError, ValueError) as exc:
+            raise WebUISettingsError(
+                "Could not read existing network settings; no changes were saved.", status=500,
+            ) from exc
+        attempted: list[Path] = []
+        try:
+            if changed:
+                attempted.append(path)
+                _save_settings_config(config, config_path)
+            if default_access_mode is not None:
+                attempted.append(preferences)
+                write_webui_default_access_mode(default_access_mode, state_dir=state_dir)
+            return settings_payload(requires_restart=changed, config_path=config_path)
+        except Exception as exc:
+            failures: list[str] = []
+            for target in reversed(attempted):
+                try:
+                    original = before[target]
+                    try:
+                        unchanged = snapshot(target) == original
+                    except OSError:
+                        unchanged = False
+                    if unchanged:
+                        continue
+                    if original is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        atomic_write_bytes(target, original)
+                except OSError:
+                    failures.append(target.name)
+            if failures:
+                detail = (
+                    "Network settings save failed and rollback was incomplete for "
+                    + ", ".join(failures)
+                    + ". Some changes may already be saved; check those files before retrying."
+                )
+            else:
+                detail = "Could not save network settings; previous settings files were restored."
+            raise WebUISettingsError(detail, status=500) from exc
 
 
 def update_web_search_settings(

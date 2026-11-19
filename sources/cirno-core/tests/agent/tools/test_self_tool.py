@@ -71,6 +71,47 @@ def _make_tool(loop=None):
     return MyTool(runtime_control=AgentRuntimeControl(loop))
 
 
+async def test_scratchpad_values_can_be_read_by_the_returned_dot_path():
+    tool = _make_tool()
+    saved = await tool.execute(action="set", key="progress", value={"step": {"completed": 3}})
+    assert "scratchpad.progress" in saved
+    result = await tool.execute(action="check", key="scratchpad.progress.step.completed")
+    assert not getattr(result, "is_error", False), result
+    assert result.endswith(": 3")
+    assert "not accessible" in await tool.execute(action="check", key="scratchpad.progress.__class__")
+
+
+async def test_scratchpad_takes_ownership_of_mutable_values():
+    tool = _make_tool()
+    value = {"steps": ["accepted"]}
+    await tool.execute(action="set", key="progress", value=value)
+    value["steps"].append("not saved")
+    assert tool._runtime_control.snapshot().scratchpad["progress"] == {"steps": ["accepted"]}
+
+
+@pytest.mark.parametrize("number", [float("nan"), float("inf"), float("-inf")])
+async def test_scratchpad_rejects_nonfinite_json_values_without_overwriting(number):
+    tool = _make_tool()
+    await tool.execute(action="set", key="progress", value={"completed": 3})
+    result = await tool.execute(action="set", key="progress", value={"completed": number})
+    assert getattr(result, "is_error", False), result
+    assert tool._runtime_control.snapshot().scratchpad["progress"] == {"completed": 3}
+
+
+@pytest.mark.parametrize('key,value,expected', [
+    ('provider_retry_mode', 'always', 'standard'),
+    ('provider_retry_mode', '', 'standard'),
+    ('provider_retry_mode', 'none', 'standard'),
+    ('max_tool_result_chars', 0, 16000),
+    ('max_tool_result_chars', -1, 16000),
+])
+async def test_runtime_set_rejects_invalid_setting_values_without_mutation(key, value, expected):
+    tool = _make_tool()
+    result = await tool.execute(action='set', key=key, value=value)
+    assert getattr(result, 'is_error', False), result
+    assert getattr(tool._runtime_control.snapshot(), key) == expected
+
+
 @pytest.mark.asyncio
 async def test_runtime_check_after_router_exhaustion_keeps_snapshot_access_rules():
     from cirno_core.agent.hook import AgentHook, AgentHookContext

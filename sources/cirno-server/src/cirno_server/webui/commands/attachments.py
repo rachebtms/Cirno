@@ -74,7 +74,7 @@ async def commit_message_attachments(
     owner: str,
 ) -> CommittedAttachments:
     local = [
-        await asyncio.to_thread(inspect_local_attachment, path, scope=scope, limits=store.limits)
+        await asyncio.to_thread(inspect_local_attachment, path, scope=scope, limits=store.limits, media_root=store.media_root)
         for path in attachments.local_paths
     ]
     uploaded = store.inspect(attachments.references, owner=owner) if attachments.references else []

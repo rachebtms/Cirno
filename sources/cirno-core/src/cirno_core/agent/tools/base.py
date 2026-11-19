@@ -201,10 +201,12 @@ class ToolResult(str):
     """String-compatible tool output with structured status."""
 
     is_error: bool
+    sensitive: bool
 
-    def __new__(cls, content: str, *, is_error: bool = False) -> ToolResult:
+    def __new__(cls, content: str, *, is_error: bool = False, sensitive: bool = False) -> ToolResult:
         obj = str.__new__(cls, content)
         obj.is_error = is_error
+        obj.sensitive = sensitive
         return obj
 
     @classmethod

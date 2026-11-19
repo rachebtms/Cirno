@@ -40,6 +40,7 @@ export function ChannelCard({
   const checked =
     feature.capabilities?.includes("always_enabled") ||
     (pending ?? channelToggleChecked(feature));
+  const active = channelToggleChecked(feature);
   const disabled = Boolean(actionKey) || restartRequired || isRestarting;
   return (
     <Card className="channel-card">
@@ -62,7 +63,7 @@ export function ChannelCard({
               </span>
             </span>
           </Button>
-          {!feature.installed ? (
+          {!feature.installed && !active ? (
             <Button
               variant="secondary"
               size="sm"
@@ -79,7 +80,7 @@ export function ChannelCard({
               <Download size={16} />
               {t("settings.channels.install")}
             </Button>
-          ) : feature.restart_pending ? (
+          ) : feature.restart_pending && !active ? (
             <Button
               variant="secondary"
               size="sm"
@@ -96,7 +97,10 @@ export function ChannelCard({
               labelHidden
               selected={Boolean(checked)}
               disabled={
-                disabled || feature.capabilities?.includes("always_enabled")
+                Boolean(actionKey) ||
+                isRestarting ||
+                (restartRequired && !active) ||
+                feature.capabilities?.includes("always_enabled")
               }
               onChange={(enabled) => {
                 if (enabled && feature.configured === false) onSelect(true);

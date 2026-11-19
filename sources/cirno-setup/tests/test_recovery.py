@@ -86,6 +86,7 @@ def test_broken_managed_executable_is_a_failed_probe(context, monkeypatch):
         raise OSError("Exec format error")
 
     monkeypatch.setattr(subprocess, "run", broken)
+    monkeypatch.setattr("cirno_setup.context.run_command", broken)
     assert not context.probe(["/broken/tool", "--version"])
 
 
@@ -140,6 +141,7 @@ def test_embedding_download_reuses_verified_files_and_repairs_license(tmp_path, 
         return subprocess.CompletedProcess(arguments, 0)
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr("cirno_setup.context.run_command", run)
     main(tmp_path)
     assert len(calls) == len(entries)
     main(tmp_path)

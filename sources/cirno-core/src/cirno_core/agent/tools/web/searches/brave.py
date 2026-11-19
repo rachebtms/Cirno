@@ -31,7 +31,7 @@ async def search(context: SearchContext, query: str, n: int) -> str:
                     "https://api.search.brave.com/res/v1/web/search",
                     params={"q": query, "count": n},
                     headers=headers,
-                    timeout=10.0,
+                    timeout=float(context.config.timeout),
                 )
                 if r.status_code != 429:
                     break

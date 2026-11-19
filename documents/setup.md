@@ -49,6 +49,10 @@ Standalone invocations install and verify, then exit unless `--serve` is present
 
 Setup checks installed components and verifies each newly installed dependency by default. `--verify` adds a second serial pass over every selected dependency after all installations finish, including reused components. This catches a later installation breaking an earlier dependency. A failed check reports the component and reason, records a failed status and prevents server startup. `+rachebtms` is shorthand for `+presets.rachebtms`; both expand to the same deduplicated plan. `+all` (alias of `+presets.all`) selects every built-in recipe and its dependencies, including all presets. The catalogue is discovered automatically, so newly added components are covered without updating a separate list. It does not mean every possible third-party pip/npm/APT package. This exhaustive environment is mainly for Actions; ordinary deployments can keep using explicit selections or `+rachebtms`.
 
+Python readiness checks each requested distribution's base dependency closure and selected extras, including version constraints and cycles. Unrequested extras remain optional. Import-time messages are kept separate from the metadata record, so a library banner or shutdown message does not corrupt verification. npm readiness parses package metadata for both pinned and unpinned selections; incomplete metadata triggers the normal installation/verification path instead of looking ready or aborting the check.
+
+On Linux, an expired command deadline or Ctrl+C terminates its process group and drains its output, including a child that outlived the original command. `--timeout 0` still removes the deadline. Package changes completed before interruption are not rolled back.
+
 Browser readiness also honors `--timeout 0`: its Playwright launch check has no launch deadline in unlimited mode. Positive values retain the browser check's 30-second launch ceiling within the setup probe budget.
 
 Environment initialization and container-home ownership commands use the same command timeout policy, including unlimited mode. An initialization failure prevents service startup.

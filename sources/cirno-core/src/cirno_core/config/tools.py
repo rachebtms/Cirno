@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import AliasChoices, Field
+
 from cirno_core.agent.tools.cli_apps_config import CliAppsToolConfig
 from cirno_core.agent.tools.filesystem_config import FileToolsConfig
 from cirno_core.agent.tools.self_config import MyToolConfig
 from cirno_core.agent.tools.shell_config import ExecToolConfig
 from cirno_core.agent.tools.web_config import WebToolsConfig
 from cirno_core.config.base import Base
-from pydantic import AliasChoices, Field
 
 
 class MCPServerConfig(Base):
@@ -29,6 +30,17 @@ class MCPServerConfig(Base):
     enabled_tools: list[str] = Field(
         default_factory=lambda: ["*"]
     )  # Only register these tools; accepts raw MCP names or wrapped mcp_<server>_<tool> names; ["*"] = all capabilities (tools, resources, prompts); any restriction = only listed tools, no resources/prompts
+
+    @property
+    def transport_type(self) -> str | None:
+        """Select the same transport for runtime connection and settings checks."""
+        if self.type:
+            return self.type
+        if self.command:
+            return "stdio"
+        if self.url:
+            return "sse" if self.url.rstrip("/").endswith("/sse") else "streamableHttp"
+        return None
 
 
 class ToolsConfig(Base):

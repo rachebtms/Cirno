@@ -27,10 +27,11 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import httpx
-from cirno_core.config.paths import get_data_dir
-from cirno_core.utils.atomic_file import atomic_write_text as _atomic_write_text
 from filelock import FileLock
 from loguru import logger
+
+from cirno_core.config.paths import get_data_dir
+from cirno_core.utils.atomic_file import atomic_write_text as _atomic_write_text
 
 XAI_OAUTH_ISSUER = "https://auth.x.ai"
 XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
@@ -61,6 +62,10 @@ class XAIOAuthError(RuntimeError):
 
 class XAIOAuthReauthRequiredError(XAIOAuthError):
     """No usable login remains; an explicit sign-in is required."""
+
+
+class XAIOAuthInputError(XAIOAuthError):
+    """Pasted input can be corrected without discarding the pending login."""
 
 
 @dataclass(frozen=True)
@@ -181,7 +186,9 @@ class XAIOAuthLoginFlow:
 
         callback: _CallbackResult | None
         if authorization_code is not None:
-            callback = _CallbackResult(code=authorization_code.strip())
+            callback = _parse_authorization_response(
+                authorization_code, redirect_uri=self.redirect_uri, expected_state=self._state,
+            )
         else:
             try:
                 callback = self._result_queue.get_nowait()
@@ -524,14 +531,13 @@ def _make_callback_server(
             code = _first(params, "code")
             received_state = _first(params, "state")
             error = _first(params, "error_description") or _first(params, "error")
-            if code and received_state and hmac.compare_digest(received_state, expected_state):
+            if not received_state or not received_state.isascii() or not hmac.compare_digest(received_state, expected_state):
+                self.send_error(HTTPStatus.BAD_REQUEST, "OAuth callback does not match this sign-in.")
+                return
+            if code:
                 result = _CallbackResult(code=code, state=received_state)
                 title = "Signed in to xAI"
                 message = "You can close this tab and return to cirno."
-            elif code:
-                result = _CallbackResult(error="OAuth state mismatch")
-                title = "Sign-in failed"
-                message = "The sign-in response could not be verified. Return to cirno and retry."
             else:
                 result = _CallbackResult(error=error or "access denied")
                 title = "Access denied"
@@ -581,6 +587,40 @@ def _serve_callback_server(
 def _first(params: dict[str, list[str]], key: str) -> str | None:
     values = params.get(key)
     return values[0] if values else None
+
+
+def _parse_authorization_response(
+    raw: str, *, redirect_uri: str, expected_state: str,
+) -> _CallbackResult:
+    value = raw.strip()
+    if not value:
+        raise XAIOAuthInputError("Paste the final callback URL or authorization code.")
+    if "://" not in value:
+        return _CallbackResult(code=value)
+    try:
+        parsed, target = urlsplit(value), urlsplit(redirect_uri)
+        matches_target = (
+            parsed.scheme == target.scheme
+            and parsed.hostname == target.hostname
+            and parsed.port == target.port
+            and parsed.path == target.path
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+        )
+    except ValueError:
+        matches_target = False
+    if not matches_target:
+        raise XAIOAuthInputError("The callback URL does not match this sign-in. Copy the latest full URL.")
+    params = parse_qs(parsed.query)
+    state = _first(params, "state")
+    if not state or not state.isascii() or not hmac.compare_digest(state, expected_state):
+        raise XAIOAuthInputError("The callback URL does not belong to this sign-in. Copy the latest full URL.")
+    code = _first(params, "code")
+    error = _first(params, "error_description") or _first(params, "error")
+    if not code and not error:
+        raise XAIOAuthInputError("The callback URL has no authorization result. Finish signing in first.")
+    return _CallbackResult(code=code, state=state, error=error)
 
 
 def _callback_page(title: str, message: str) -> str:
@@ -682,7 +722,7 @@ def _token_payload(response: httpx.Response) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise XAIOAuthError("xAI sign-in returned no access token.")
     token_payload = cast(dict[str, Any], payload)
-    if not isinstance(token_payload.get("access_token"), str):
+    if not isinstance(token_payload.get("access_token"), str) or not token_payload["access_token"]:
         raise XAIOAuthError("xAI sign-in returned no access token.")
     return token_payload
 
@@ -751,7 +791,7 @@ def _oauth_http_error(response: httpx.Response, action: str) -> XAIOAuthError:
 
 
 def _http_client(proxy: str | None) -> httpx.Client:
-    kwargs: dict[str, Any] = {"timeout": _HTTP_TIMEOUT_S}
+    kwargs: dict[str, Any] = {"timeout": _HTTP_TIMEOUT_S, "trust_env": False}
     if proxy:
         kwargs.update(proxy=proxy, trust_env=False)
     return httpx.Client(**kwargs)

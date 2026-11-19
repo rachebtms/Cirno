@@ -9,7 +9,7 @@ from typing import Any
 
 from cirno_core.session.model import Session, SessionPolicy
 from cirno_core.session.sqlite_store import SessionConflictError
-from cirno_core.session.types import PARENT_SESSION_KEY
+from cirno_core.session.types import PARENT_SESSION_GENERATION_KEY, PARENT_SESSION_KEY
 
 from .operations import SessionOperations
 from .repository import SessionRepository
@@ -174,6 +174,7 @@ class SessionAccess:
                 )
                 child = Session(key=key, policy=effective, metadata=values)
                 child.metadata[PARENT_SESSION_KEY] = parent_key
+                child.metadata[PARENT_SESSION_GENERATION_KEY] = parent.generation
                 child.add_message("user", content)
                 self.repository.commit(child)
                 return child

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import socket
+from contextlib import asynccontextmanager
 from unittest.mock import patch
 
 import cirno_core.agent.tools.web.fetch as web_fetch
 import cirno_core.agent.tools.web.network as web_network
+import httpx
 import pytest
 from cirno_core.agent.tools.web.fetch import WebFetchTool
 from cirno_core.agent.tools.web.safety import _redact_url_for_log, _url_carries_credentials
@@ -33,17 +35,16 @@ class _RecordingJinaClient:
 
     async def get(self, url, **kwargs):
         _RecordingJinaClient.requested.append(url)
+        return httpx.Response(200, request=httpx.Request("GET", url),
+                              json={"data": {"title": "T", "content": "body", "url": url}})
 
-        class _Response:
-            status_code = 200
-
-            def raise_for_status(self):
-                pass
-
-            def json(self):
-                return {"data": {"title": "T", "content": "body", "url": url}}
-
-        return _Response()
+    @asynccontextmanager
+    async def stream(self, _method, url, **kwargs):
+        response = await self.get(url, **kwargs)
+        try:
+            yield response
+        finally:
+            await response.aclose()
 
 
 @pytest.fixture
@@ -160,16 +161,16 @@ async def test_execute_fetches_credential_urls_locally(monkeypatch) -> None:
     tool = WebFetchTool()
     requested: list[str] = []
 
-    class FakeStreamResponse:
-        status_code = 200
-        headers = {"content-type": "text/html"}
-        url = "https://example.com/download"
+    class FakeStreamResponse(httpx.Response):
+        def __init__(self):
+            super().__init__(200, request=httpx.Request("GET", "https://example.com/download"),
+                             headers={"content-type": "text/html"}, text="<html><p>ok</p></html>")
 
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
-            return False
+            await self.aclose()
 
     class FakeResponse:
         status_code = 200
@@ -219,21 +220,21 @@ async def test_execute_does_not_send_redirected_credential_url_to_jina(monkeypat
     short_url = "https://example.com/short"
     signed_url = "https://cdn.example.com/file?token=secret"
 
-    class FakeStreamResponse:
+    class FakeStreamResponse(httpx.Response):
         def __init__(self, url: str):
-            self.url = url
-            self.status_code = 302 if url == short_url else 200
-            self.headers = (
+            headers = (
                 {"location": signed_url}
                 if url == short_url
                 else {"content-type": "text/html"}
             )
+            super().__init__(302 if url == short_url else 200, headers=headers,
+                             request=httpx.Request("GET", url), text="<html><p>ok</p></html>")
 
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
-            return False
+            await self.aclose()
 
     class FakeResponse:
         status_code = 200

@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 from cirno_core.bus.events import InboundMessage
 from cirno_core.command.builtin.control import cmd_stop
 from cirno_core.command.router import CommandContext
@@ -40,7 +39,7 @@ async def test_stop_surfaces_failed_cleanup_after_stopping_owned_resources(loop_
         assert caught.value is problem
         subagents.assert_awaited_once_with(key)
         processes.assert_awaited_once_with(key)
-        stopped.assert_awaited_once_with(key)
+        stopped.assert_awaited_once_with(key, expected_generation=(await loop.sessions.state.read_header(key)).generation)
         assert key not in loop._active_tasks
     finally:
         await asyncio.gather(task, return_exceptions=True)
@@ -76,7 +75,7 @@ async def test_cancelled_stop_caller_still_settles_the_accepted_stop(loop_factor
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(stop, 3)
         assert task.cancelled()
-        stopped.assert_awaited_once_with(key)
+        stopped.assert_awaited_once_with(key, expected_generation=(await loop.sessions.state.read_header(key)).generation)
         assert key not in loop._active_tasks
     finally:
         release.set()
@@ -120,7 +119,7 @@ async def test_stop_attempts_every_owned_cleanup_before_reporting_an_operation_f
     if failed_stage == "session_read":
         monkeypatch.setattr(loop.sessions.state, "read", AsyncMock(side_effect=problem))
     elif failed_stage == "goal_write":
-        monkeypatch.setattr(loop.sessions.state, "update_metadata", AsyncMock(side_effect=problem))
+        monkeypatch.setattr(loop.sessions.state, "mutate_metadata", AsyncMock(side_effect=problem))
     try:
         with pytest.raises(OSError) as caught:
             await loop.cancel_session_work(key)
@@ -129,7 +128,7 @@ async def test_stop_attempts_every_owned_cleanup_before_reporting_an_operation_f
         children.assert_awaited_once_with(key)
         processes.assert_awaited_once_with(key)
         if failed_stage != "session_read":
-            stopped.assert_awaited_once_with(key)
+            stopped.assert_awaited_once_with(key, expected_generation=(await loop.sessions.state.read_header(key)).generation)
         assert key not in loop._active_tasks
     finally:
         task.cancel()

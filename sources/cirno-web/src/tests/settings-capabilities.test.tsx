@@ -69,6 +69,31 @@ describe("Settings capabilities", () => {
     );
   });
 
+  it("retains a rejected network settings draft and can retry before leaving", async () => {
+    const payload = settingsPayload();
+    const message = "Could not save network settings; previous settings files were restored.";
+    requestMutationMock.mockRejectedValueOnce(new Error(message)).mockResolvedValueOnce({
+      ...payload,
+      advanced: { ...payload.advanced, webui_allow_local_service_access: false },
+      requires_restart: true,
+      restart_required_sections: ["runtime"],
+    });
+    const view = renderSettingsView({ initialSection: "advanced", initialSettings: payload });
+    fireEvent.click(screen.getByRole("switch", { name: "Local services" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByRole("switch", { name: "Local services" })).not.toBeChecked();
+    const leave = vi.fn();
+    act(() => view.requestExit(leave));
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Restart later" }));
+    await waitFor(() => expect(leave).toHaveBeenCalledOnce());
+    expect(requestMutationMock).toHaveBeenCalledTimes(2);
+    expect(requestMutationMock).toHaveBeenLastCalledWith(
+      "settings.network_safety.update",
+      { webui_allow_local_service_access: false, webui_default_access_mode: "default" },
+      20_000,
+    );
+  });
+
   it("saves the web proxy switch separately from the shared address in Network & retries", async () => {
     let payload = { ...settingsPayload(), runtime_config: {
       "tools.web.enable": false, "tools.web.use_proxy": false,
@@ -208,6 +233,35 @@ describe("Settings capabilities", () => {
     ));
   });
 
+  it.each([false, true])("saves the current Olostep draft once when installation enables autosave (edited=%s)", async edited => {
+    const payload = settingsPayload();
+    payload.web_search.providers.push({ name: "olostep", label: "Olostep", credential: "api_key" });
+    const saved = { ...payload, web_search: { ...payload.web_search, provider: "olostep", api_key_hint: "saved-key" } };
+    let finishInstall!: (value: unknown) => void;
+    const installing = new Promise(resolve => { finishInstall = resolve; });
+    requestMutationMock.mockImplementation((method: string) => method === "settings.feature.enable" ? installing : Promise.resolve(saved));
+    renderSettingsView({ initialSection: "browser", initialSettings: payload });
+    await openPopover(screen.getByRole("button", { name: /DuckDuckGo/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "Olostep" }));
+    fireEvent.change(screen.getByPlaceholderText("Enter API key"), { target: { value: "fixture-key" } });
+    const install = screen.getByRole("button", { name: "Install and enable" });
+    await userEvent.setup().click(install);
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
+      "settings.feature.enable", { name: "olostep" }, expect.any(Number),
+    ));
+    if (edited) {
+      const key = screen.getByPlaceholderText("Enter API key");
+      fireEvent.change(key, { target: { value: "new-fixture-key" } });
+      fireEvent.blur(key);
+    }
+    await act(async () => finishInstall({ features: [{ name: "olostep", installed: true }], enabled_count: 1 }));
+    expect(await screen.findByPlaceholderText("saved-key")).toBeVisible();
+    expect(requestMutationMock.mock.calls.filter(([method]) => method === "settings.web_search.update")).toHaveLength(1);
+    expect(requestMutationMock).toHaveBeenCalledWith("settings.web_search.update", expect.objectContaining({
+      api_key: edited ? "new-fixture-key" : "fixture-key",
+    }), 20_000);
+  });
+
   it("explains an empty numeric field and keeps configuration open until it can be saved", async () => {
     const payload = { ...settingsPayload(), runtime_config: { "tools.web.enable": true } };
     renderSettingsView({ initialSection: "capabilities", initialSettings: payload });
@@ -256,5 +310,46 @@ describe("Settings capabilities", () => {
     await waitFor(() => expect(requestMutationMock).toHaveBeenLastCalledWith(
       "settings.web_search.update", expect.objectContaining({ api_key: "latest-key" }), 20_000,
     ));
+  });
+
+  it("clears a saved optional search key only after an explicit empty edit", async () => {
+    const payload = settingsPayload();
+    payload.web_search = {
+      ...payload.web_search, provider: "keenable", api_key_hint: "saved-key",
+      providers: [...payload.web_search.providers, { name: "keenable", label: "Keenable", credential: "optional_api_key" }],
+    };
+    requestMutationMock.mockResolvedValue({ ...payload, web_search: { ...payload.web_search, api_key_hint: null } });
+    renderSettingsView({ initialSection: "browser", initialSettings: payload });
+    const field = screen.getByPlaceholderText("saved-key").closest<HTMLElement>('[data-slot="textfield"]')!;
+    fireEvent.click(within(field).getByRole("button", { name: "Edit" }));
+    const key = field.querySelector("input")!;
+    await act(async () => {});
+    expect(requestMutationMock).not.toHaveBeenCalled();
+    fireEvent.focus(key);
+    fireEvent.change(key, { target: { value: "unsaved-draft" } });
+    fireEvent.change(key, { target: { value: "" } });
+    fireEvent.blur(key);
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
+      "settings.web_search.update",
+      { provider: "keenable", api_key: "", max_results: 5, timeout: 30, use_jina_reader: true },
+      20_000,
+    ));
+    expect(screen.queryByPlaceholderText("saved-key")).not.toBeInTheDocument();
+  });
+
+  it("offers a direct delete action for a saved optional search key", async () => {
+    const payload = settingsPayload();
+    payload.web_search = {
+      ...payload.web_search, provider: "keenable", api_key_hint: "saved-key",
+      providers: [...payload.web_search.providers, { name: "keenable", label: "Keenable", credential: "optional_api_key" }],
+    };
+    requestMutationMock.mockResolvedValue({ ...payload, web_search: { ...payload.web_search, api_key_hint: null } });
+    renderSettingsView({ initialSection: "browser", initialSettings: payload });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledWith(
+      "settings.web_search.update", expect.objectContaining({ provider: "keenable", api_key: "" }), 20_000,
+    ));
+    await waitFor(() => expect(screen.queryByPlaceholderText("saved-key")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   });
 });

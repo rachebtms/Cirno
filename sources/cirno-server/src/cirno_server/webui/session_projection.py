@@ -5,12 +5,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from cirno_core.agent.subagents.contracts import SubagentControlError
-from cirno_usage.types import LLMUsage
 from cirno_core.session.goal_state import goal_state_ws_blob
 from cirno_core.session.model_selection import model_preset_from_metadata
 from cirno_core.session.recovery.state import recovery_state_from_metadata
 from cirno_core.session.state import SessionState
-from cirno_core.session.webui_turns.activity import websocket_turn_id, websocket_turn_wall_started_at
+from cirno_core.session.webui_turns.activity import (
+    websocket_turn_id,
+    websocket_turn_snapshot,
+    websocket_turn_wall_started_at,
+)
+from cirno_usage.types import LLMUsage
 from loguru import logger as default_logger
 
 if TYPE_CHECKING:
@@ -85,7 +89,15 @@ class WebUISessionProjection:
                     "goal_state": goal_state,
                 }
             )
-        active_turn = self.active_turn_status(chat_id)
+        if self._sessions is not None:
+            active_turn = await self._sessions.state.project_history(
+                session_key,
+                lambda history: self.active_turn_status(
+                    chat_id, history_generation=history.revision[0] if history.revision is not None else None,
+                ),
+            )
+        else:
+            active_turn = self.active_turn_status(chat_id)
         if active_turn is not None:
             started_at, turn_id = active_turn
             event: dict[str, Any] = {
@@ -100,20 +112,22 @@ class WebUISessionProjection:
         return tuple(events)
 
     async def persisted_goal_state(self, session_key: str) -> dict[str, Any] | None:
-        """Return an actionable persisted goal state for reconnect hydration."""
+        """Return the authoritative goal snapshot, including clearing stale client state."""
         if self._sessions is None:
             return None
         snapshot = await self._sessions.state.read_metadata(session_key, include_runtime=False)
         raw_metadata = snapshot.get("metadata") if snapshot is not None else None
         metadata = cast(dict[str, Any], raw_metadata) if isinstance(raw_metadata, dict) else {}
-        goal_state = goal_state_ws_blob(metadata)
-        if not goal_state.get("active") and goal_state.get("status") not in {"blocked", "paused", "waiting", "stopped"}:
-            return None
-        return goal_state
+        return goal_state_ws_blob(metadata)
 
     @staticmethod
-    def active_turn_status(chat_id: str) -> tuple[float, str | None] | None:
+    def active_turn_status(
+        chat_id: str, *, history_generation: str | None = None,
+    ) -> tuple[float, str | None] | None:
         """Return same-process running-turn state for reconnect hydration."""
+        if history_generation is not None:
+            started_at, turn_id, _ = websocket_turn_snapshot(chat_id, history_generation=history_generation)
+            return (started_at, turn_id) if started_at is not None else None
         started_at = websocket_turn_wall_started_at(chat_id)
         if started_at is None:
             return None

@@ -42,9 +42,9 @@ class WebUIFilePreviewError(ValueError):
         self.message = message
 
 
-def file_reference_payload(raw_path: str | None, *, scope: WorkspaceScope) -> dict[str, str | None]:
+def file_reference_payload(raw_path: str | None, *, scope: WorkspaceScope, media_root: Path | None = None) -> dict[str, str | None]:
     """Resolve copyable paths through the preview policy without reading file contents."""
-    resolved = resolve_file_path(raw_path, scope=scope)
+    resolved = resolve_file_path(raw_path, scope=scope, media_root=media_root)
     try:
         relative = resolved.relative_to(scope.project_path).as_posix()
     except ValueError:
@@ -60,10 +60,11 @@ def file_preview_payload(
     literal: bool = False,
     editing: bool = False,
     media_url: Callable[[Path], str] | None = None,
+    media_root: Path | None = None,
 ) -> dict[str, Any]:
     """Return a bounded source or raster preview within the session workspace scope."""
 
-    resolved = resolve_file_path(raw_path, scope=scope, literal=literal)
+    resolved = resolve_file_path(raw_path, scope=scope, literal=literal, media_root=media_root)
 
     video_mime = mimetypes.guess_type(resolved.name)[0]
     if media_url is not None and video_mime in VIDEO_PREVIEW_MIMES:
@@ -127,10 +128,11 @@ def file_preview_availability_payload(
     raw_path: str | None,
     *,
     scope: WorkspaceScope,
+    media_root: Path | None = None,
 ) -> dict[str, bool]:
     """Probe a readable source or raster candidate without loading it fully."""
 
-    resolved = resolve_file_path(raw_path, scope=scope)
+    resolved = resolve_file_path(raw_path, scope=scope, media_root=media_root)
     if mimetypes.guess_type(resolved.name)[0] in VIDEO_PREVIEW_MIMES:
         return {"available": True}
     try:
@@ -149,6 +151,7 @@ def file_preview_availability_payload(
 
 def resolve_file_path(
     raw_path: str | None, *, scope: WorkspaceScope, literal: bool = False,
+    media_root: Path | None = None,
 ) -> Path:
     path = (raw_path or "") if literal else _clean_preview_path(raw_path)
     if not path:
@@ -157,7 +160,7 @@ def resolve_file_path(
         raise WebUIFilePreviewError(400, "path is too long")
 
     try:
-        extra_roots = [get_media_dir()] if scope.restrict_to_workspace else None
+        extra_roots = [media_root if media_root is not None else get_media_dir()] if scope.restrict_to_workspace else None
         resolved = resolve_allowed_path(
             path,
             workspace=scope.project_path,
@@ -191,8 +194,9 @@ def _clean_preview_path(raw_path: str | None) -> str:
         if re.match(r"^/[A-Za-z]:[\\/]", value):
             value = value[1:]
     else:
-        value = unquote(value)
-    value = value.split("?", 1)[0].split("#", 1)[0].strip()
+        # Separate URL syntax before decoding escaped filename characters.
+        value = unquote(value.split("?", 1)[0].split("#", 1)[0])
+    value = value.strip()
     if not re.match(r"^[A-Za-z]:[\\/]", value):
         value = re.sub(r":\d+(?::\d+)?$", "", value)
     return value
@@ -239,10 +243,11 @@ def preview_request_payload(
     raw_path: str | None, *, scope: WorkspaceScope,
     metadata_only: bool = False, probe: bool = False,
     media_url: Callable[[Path], str] | None = None,
+    media_root: Path | None = None,
 ) -> dict[str, Any]:
     """Resolve one HTTP or connection-owned preview using the same file policy."""
     if metadata_only:
-        return file_reference_payload(raw_path, scope=scope)
+        return file_reference_payload(raw_path, scope=scope, media_root=media_root)
     if probe:
-        return file_preview_availability_payload(raw_path, scope=scope)
-    return file_preview_payload(raw_path, scope=scope, media_url=media_url)
+        return file_preview_availability_payload(raw_path, scope=scope, media_root=media_root)
+    return file_preview_payload(raw_path, scope=scope, media_url=media_url, media_root=media_root)

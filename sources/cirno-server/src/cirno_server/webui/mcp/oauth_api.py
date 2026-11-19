@@ -9,6 +9,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import SplitResult, parse_qs, urlsplit, urlunsplit
 
@@ -20,6 +21,8 @@ from cirno_core.config.network import NetworkConfig
 from cirno_core.config.tools import MCPServerConfig
 from cirno_core.runtime.admission import RuntimeAdmission
 from cirno_core.security.network import validate_url_target
+from cirno_core.utils.cancellation import shield_and_drain, task_is_cancelling
+
 from cirno_server.webui.http_utils import is_loopback_host
 
 McpReload = Callable[[], Awaitable[dict[str, Any]]]
@@ -104,9 +107,11 @@ def prepare_mcp_oauth_redirect_uri(redirect_uri: str) -> tuple[str, bool]:
 class McpOAuthManager:
     """Own short-lived browser flows while the gateway process is running."""
 
-    def __init__(self, admission: RuntimeAdmission) -> None:
+    def __init__(self, admission: RuntimeAdmission, *, config_path: Path | None = None) -> None:
         self._admission = admission
+        self._config_path = config_path.expanduser().resolve(strict=False) if config_path is not None else None
         self._flows: dict[str, _McpOAuthFlow] = {}
+        self._start_lock = asyncio.Lock()
         self._states: dict[str, str] = {}
         self._tasks: set[asyncio.Task[bool]] = set()
         self._cleanup_tasks: set[asyncio.Task[None]] = set()
@@ -148,38 +153,40 @@ class McpOAuthManager:
         self._admission.check()
         self._prune()
         redirect_uri, manual_callback = prepare_mcp_oauth_redirect_uri(redirect_uri)
-        await self._cancel_name(name)
-        self._admission.check()
-        if self._remove_pending_work is None:
-            self._remove_pending_work = self._admission.register_pending_work(
-                lambda: bool(self._tasks or self._cleanup_tasks),
-            )
+        # Replacement must also serialize through a previous flow's awaited cleanup.
+        async with self._start_lock:
+            await self._cancel_name(name)
+            self._admission.check()
+            if self._remove_pending_work is None:
+                self._remove_pending_work = self._admission.register_pending_work(
+                    lambda: bool(self._tasks or self._cleanup_tasks),
+                )
 
-        loop = asyncio.get_running_loop()
-        now = time.monotonic()
-        flow = _McpOAuthFlow(
-            flow_id=secrets.token_urlsafe(24),
-            name=name,
-            cfg=cfg.model_copy(deep=True),
-            network=(network or NetworkConfig()).model_copy(deep=True),
-            redirect_uri=redirect_uri,
-            manual_callback=manual_callback,
-            expires_at=now + _FLOW_TTL_S,
-            callback_result=loop.create_future(),
-        )
-        self._flows[flow.flow_id] = flow
-        handlers = MCPOAuthHandlers(
-            redirect_uri=redirect_uri,
-            redirect_handler=lambda url: self._receive_authorization_url(flow, url),
-            callback_handler=lambda: self._wait_for_callback(flow),
-            reset_credentials=reset_credentials,
-        )
-        flow.task = asyncio.create_task(
-            self._connect_and_reload(flow, handlers, reload_mcp),
-            name=f"mcp-oauth:{name}",
-        )
-        self._tasks.add(flow.task)
-        flow.task.add_done_callback(self._flow_finished)
+            loop = asyncio.get_running_loop()
+            now = time.monotonic()
+            flow = _McpOAuthFlow(
+                flow_id=secrets.token_urlsafe(24),
+                name=name,
+                cfg=cfg.model_copy(deep=True),
+                network=(network or NetworkConfig()).model_copy(deep=True),
+                redirect_uri=redirect_uri,
+                manual_callback=manual_callback,
+                expires_at=now + _FLOW_TTL_S,
+                callback_result=loop.create_future(),
+            )
+            self._flows[flow.flow_id] = flow
+            handlers = MCPOAuthHandlers(
+                redirect_uri=redirect_uri,
+                redirect_handler=lambda url: self._receive_authorization_url(flow, url),
+                callback_handler=lambda: self._wait_for_callback(flow),
+                reset_credentials=reset_credentials,
+            )
+            flow.task = asyncio.create_task(
+                self._connect_and_reload(flow, handlers, reload_mcp),
+                name=f"mcp-oauth:{name}",
+            )
+            self._tasks.add(flow.task)
+            flow.task.add_done_callback(self._flow_finished)
 
         ready_waiter = asyncio.create_task(flow.authorization_ready.wait())
         try:
@@ -300,7 +307,7 @@ class McpOAuthManager:
         ):
             flow.error = "The MCP server returned an unsafe authorization URL."
             raise McpOAuthError(flow.error)
-        ok, _error = validate_url_target(authorization_url)
+        ok, _error = await asyncio.to_thread(validate_url_target, authorization_url)
         if not ok:
             flow.error = "The MCP server returned an unsafe authorization URL."
             raise McpOAuthError(flow.error)
@@ -354,6 +361,7 @@ class McpOAuthManager:
                 ToolRegistry(),
                 oauth_handlers={flow.name: handlers},
                 network=flow.network,
+                **({"config_path": self._config_path} if self._config_path is not None else {}),
             )
             if flow.name not in connections:
                 await self._close_connections(connections)
@@ -460,8 +468,17 @@ class McpOAuthManager:
         if task is not None and not task.done():
             if not task.cancelling():
                 task.cancel()
-            with suppress(BaseException):
-                await task
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                if task_is_cancelling():
+                    # A replacement request can be cancelled while the old
+                    # transport is still closing. Preserve cleanup ownership and
+                    # propagate the request cancellation instead of starting anew.
+                    await shield_and_drain(asyncio.gather(task, return_exceptions=True))
+                    raise
+            except Exception:
+                pass  # Terminal flow errors remain visible through its payload.
 
     def _prune(self) -> None:
         now = time.monotonic()

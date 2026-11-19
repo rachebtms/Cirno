@@ -88,9 +88,19 @@ class SessionOperations:
         *,
         operation_name: str | None = None,
         write: bool = True,
+        acknowledge: Callable[[_T], None] | None = None,
     ) -> _T:
+        """Run admitted work and acknowledge its result before releasing ownership.
+
+        Acknowledgement runs on the event loop, only after successful work. It
+        must be synchronous: use it to refresh an owner draft or local receipt,
+        not to start another admitted operation.
+        """
         async def run() -> _T:
-            return await self.run(operation, write=write)
+            result = await self.run(operation, write=write)
+            if acknowledge is not None:
+                acknowledge(result)
+            return result
 
         return await self.submit(
             key,

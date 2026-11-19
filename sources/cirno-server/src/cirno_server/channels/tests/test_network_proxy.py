@@ -71,7 +71,7 @@ def test_runtime_refuses_proxy_opt_in_without_shared_address(name) -> None:
     pytest.importorskip(f"cirno_server.channels.{name}.runtime", exc_type=ImportError)
     channel_cls = load_channel_plugin(name).load_channel_class()
 
-    with pytest.raises(ValueError, match="Advanced"):
+    with pytest.raises(ValueError, match="Network & retries"):
         channel_cls({"useProxy": True}, MessageBus(), network=NetworkConfig())
 
 

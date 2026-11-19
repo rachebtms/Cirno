@@ -21,6 +21,42 @@ afterEach(() => {
 });
 
 describe("CirnoClient", () => {
+  it("replaces history run owners while retaining an unconfirmed local input", () => {
+    const client = new CirnoClient({ url: "ws://test", reconnect: false,
+      socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+    client.connect(); lastSocket().fakeOpen();
+    lastSocket().fakeMessage({ event: "goal_status", chat_id: "replacement", status: "running", started_at: 100, turn_id: "old" });
+    expect(client.sendMessage("replacement", "New input", undefined, { turnId: "local" })).toBe(true);
+    client.replaceHistoryRuns("replacement", { observedTurnIds: [], hasPendingToolCalls: false, activeTurnId: null }, []);
+    expect(client.getRunState("replacement")).toMatchObject({ active: true, latestTurnId: "local" });
+    lastSocket().fakeMessage({ event: "goal_status", chat_id: "replacement", status: "running", started_at: 100, turn_id: "old" });
+    expect(client.getRunTurnId("replacement")).toBe("local");
+    lastSocket().fakeMessage({ event: "turn_end", chat_id: "replacement", turn_id: "local" });
+    expect(client.hasUnsettledRun("replacement")).toBe(false);
+    client.close();
+  });
+
+  it.each(["fence", "partial-reconcile"])("settles an explicitly completed older owner through %s while the next turn remains active", (method) => {
+    const client = new CirnoClient({ url: "ws://test", reconnect: false,
+      socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket });
+    client.connect();
+    lastSocket().fakeOpen();
+    const chatId = "chat-partial-completion";
+    lastSocket().fakeMessage({ event: "goal_status", chat_id: chatId, status: "running", started_at: 100, turn_id: "older" });
+    const generation = client.getRunGeneration(chatId);
+    lastSocket().fakeMessage({ event: "goal_status", chat_id: chatId, status: "running", started_at: 200, turn_id: "newer" });
+    if (method === "fence") client.fenceCanonicalCompletedTurns(chatId, ["older"]);
+    else expect(client.reconcileCanonicalCompletion(chatId, generation, ["older"], {
+      observedTurnIds: ["older", "newer"], hasPendingToolCalls: true, activeTurnId: "newer", completionIdsProvided: true,
+    })).toBe(false);
+    expect(client.getRunState(chatId).active).toBe(true);
+    expect(client.getRunStartedAt(chatId)).toBe(200);
+    lastSocket().fakeMessage({ event: "turn_end", chat_id: chatId, turn_id: "newer" });
+    expect(client.getRunState(chatId).active).toBe(false);
+    expect(client.hasUnsettledRun(chatId)).toBe(false);
+    client.close();
+  });
+
   it("notifies ready consumers after server ready frames, including reconnects", async () => {
     const client = new CirnoClient({ url: "ws://test?token=fixture-token", socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket });
     const ready = vi.fn();
@@ -1491,7 +1527,7 @@ describe("CirnoClient", () => {
     },
   );
 
-  it("settles running status without a start timestamp", () => {
+  it.each(["identified", "anonymous"])("keeps %s running status active without a start timestamp", (identity) => {
     const client = new CirnoClient({
       url: "ws://test", reconnect: false,
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
@@ -1499,18 +1535,23 @@ describe("CirnoClient", () => {
     client.connect();
     const socket = lastSocket();
     socket.fakeOpen();
-    client.sendMessage("chat-legacy", "task", undefined, { turnId: "turn-legacy" });
-    expect(client.hasUnsettledRun("chat-legacy")).toBe(true);
+    const turnId = identity === "identified" ? "turn-legacy" : undefined;
+    if (turnId) client.sendMessage("chat-legacy", "task", undefined, { turnId });
     const completed = vi.fn();
     client.onRunCompletion(completed);
     socket.fakeMessage({
-      event: "goal_status", chat_id: "chat-legacy", turn_id: "turn-legacy", status: "running",
+      event: "goal_status", chat_id: "chat-legacy", turn_id: turnId, status: "running",
     });
 
+    expect(completed).not.toHaveBeenCalled();
+    expect(client.getRunState("chat-legacy").active).toBe(true);
+    expect(client.getRunStartedAt("chat-legacy")).toBeNull();
+    if (turnId) expect(client.isRunCompleted("chat-legacy", turnId)).toBe(false);
+    socket.fakeMessage({ event: "turn_end", chat_id: "chat-legacy", turn_id: turnId });
     expect(completed).toHaveBeenCalledWith("chat-legacy");
-    expect(client.isRunCompleted("chat-legacy", "turn-legacy")).toBe(true);
+    expect(client.getRunState("chat-legacy").active).toBe(false);
     expect(client.hasUnsettledRun("chat-legacy")).toBe(false);
-    expect(client.getRunTurnId("chat-legacy")).toBe("turn-legacy");
+    if (turnId) expect(client.isRunCompleted("chat-legacy", turnId)).toBe(true);
     client.close();
   });
 
@@ -2036,6 +2077,40 @@ describe("CirnoClient", () => {
     client.close();
   });
 
+  it.each(["/model fast", "/restart", "/clear"])("never replays a failed silent command after reconnect: %s", async (command) => {
+    const client = new CirnoClient({ url: "ws://test", reconnect: false,
+      socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+    client.connect();
+    const socket = lastSocket();
+    const rejected = expect(client.sendSystemCommand("chat-control", command, 1_000)).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await rejected;
+    socket.fakeOpen();
+    expect(socket.sent.map(raw => JSON.parse(raw)).filter(frame => frame.type === "message")).toEqual([]);
+    client.close();
+  });
+
+  it.each(["write failure", "unconfirmed"])("does not replay live controls after %s", async failure => {
+    const client = new CirnoClient({ url: "ws://test",
+      socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+    client.connect();
+    const socket = lastSocket();
+    socket.fakeOpen();
+    if (failure === "write failure") {
+      vi.spyOn(socket, "send").mockImplementationOnce(() => { throw new Error("send failed"); });
+    }
+    const rejected = expect(client.sendSystemCommand("chat-control", "/clear", 1_000)).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await rejected;
+    expect(socket.sent.map(raw => JSON.parse(raw)).filter(frame => frame.type === "message"))
+      .toHaveLength(failure === "write failure" ? 0 : 1);
+    socket.close();
+    await vi.advanceTimersByTimeAsync(1_000);
+    lastSocket().fakeOpen();
+    expect(lastSocket().sent.map(raw => JSON.parse(raw)).filter(frame => frame.type === "message")).toEqual([]);
+    client.close();
+  });
+
   it("sends selected assistant text as separate quoted context", () => {
     const client = new CirnoClient({
       url: "ws://test",
@@ -2420,6 +2495,29 @@ describe("CirnoClient", () => {
 
 
 describe("binary attachment transport", () => {
+  it.each(["timeout", "disconnect"])("drops a failed attachment envelope before reconnect after %s", async failure => {
+    const client = new CirnoClient({ url: "ws://test",
+      socketFactory: url => new FakeSocket(url) as unknown as WebSocket });
+    try {
+      client.connect();
+      const socket = lastSocket();
+      socket.fakeOpen();
+      const send = vi.spyOn(socket, "send").mockImplementationOnce(() => { throw new Error("send failed"); });
+      const draft = [{ path: "/workspace/note.txt", name: "note.txt" }];
+      const rejected = expect(client.sendAttachments("chat", "Keep my draft", draft, { turnId: "failed-attachment" })).rejects.toThrow();
+      await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+      if (failure === "disconnect") socket.close();
+      else await vi.advanceTimersByTimeAsync(30_000);
+      await rejected;
+      expect(draft[0].path).toBe("/workspace/note.txt");
+      if (failure !== "disconnect") socket.close();
+      await vi.advanceTimersByTimeAsync(1_000);
+      lastSocket().fakeOpen();
+      expect(lastSocket().sent.map(raw => JSON.parse(raw)).filter(frame => frame.type === "message")).toEqual([]);
+      expect(client.getRunState("chat").active).toBe(false);
+    } finally { client.close(); }
+  });
+
   it("keeps a progressing HTTP upload alive beyond the old 65-second limit", async () => {
     const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
       const controller = new AbortController();

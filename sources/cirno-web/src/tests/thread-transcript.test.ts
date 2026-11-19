@@ -42,6 +42,59 @@ function receive(thread: ThreadTranscript, ...events: ThreadProjectionEvent[]): 
 }
 
 describe("ThreadTranscript admission", () => {
+  it("adopts an explicitly replaced empty history and rejects a retired generation", () => {
+    const thread = new ThreadTranscript();
+    const before = history([input("old", "Deleted question")], { history_generation: "generation-a" });
+    expect(thread.accept(before, thread.begin("initial"))).toBe(true);
+    receive(thread, { ...at("old", 2), event: "delta", stream_id: "old-answer", text: "Deleted live answer" });
+    const owner = thread.historyOwner;
+    const stale = thread.begin("latest");
+    const replacement = history([], { history_generation: "generation-b", has_pending_tool_calls: false });
+    expect(thread.accept(replacement, thread.begin("latest"))).toBe(true);
+    expect(thread.messages).toEqual([]);
+    expect(thread.historyOwner).not.toBe(owner);
+    expect(thread.accept(before, stale)).toBe(false);
+    expect(thread.accept(history([], { history_generation: "unrelated-late-generation" }), stale)).toBe(false);
+    expect(thread.accept(before, thread.begin("latest"))).toBe(false);
+    expect(thread.messages).toEqual([]);
+    const restored = new ThreadTranscript([], thread.save());
+    expect(restored.accept(before, restored.begin("latest"))).toBe(false);
+  });
+
+  it("keeps a new generation's live foreground while dropping the previous generation", () => {
+    const thread = new ThreadTranscript();
+    expect(thread.accept(history([input("old", "Deleted")], { history_generation: "a" }), thread.begin("initial"))).toBe(true);
+    const read = thread.begin("latest");
+    receive(thread, input("new", "Replacement"),
+      { ...at("new", 2), event: "delta", stream_id: "new-answer", text: "Current " });
+    const activeId = thread.messages.at(-1)?.id;
+    expect(thread.accept(history([input("new", "Replacement")], {
+      history_generation: "b", has_pending_tool_calls: true, active_turn_id: "new",
+    }), read)).toBe(true);
+    receive(thread, { ...at("new", 3), event: "delta", stream_id: "new-answer", text: "continues" });
+    expect(thread.messages.map(row => row.content)).toEqual(["Replacement", "Current continues"]);
+    expect(thread.messages.at(-1)?.id).toBe(activeId);
+  });
+
+  it("rejects an older page whose generation differs from the current history", () => {
+    const thread = new ThreadTranscript();
+    const current = history([input("current", "Current")], { history_generation: "b",
+      page: { before_cursor: "cursor", has_more_before: true } });
+    expect(thread.accept(current, thread.begin("initial"))).toBe(true);
+    expect(thread.accept(history([input("old", "Deleted")], { history_generation: "a",
+      page: { before_cursor: null, has_more_before: false } }), thread.begin("older"))).toBe(false);
+    expect(thread.messages.map(row => row.content)).toEqual(["Current"]);
+  });
+
+  it("preserves a new local input submitted during a replacement history read", () => {
+    const thread = new ThreadTranscript();
+    expect(thread.accept(history([input("old", "Deleted")], { history_generation: "a" }), thread.begin("initial"))).toBe(true);
+    const read = thread.begin("latest");
+    receive(thread, input("local", "Newly submitted input"));
+    expect(thread.accept(history([], { history_generation: "b", has_pending_tool_calls: false }), read)).toBe(true);
+    expect(thread.messages.map(row => row.content)).toEqual(["Newly submitted input"]);
+  });
+
   it.each(["succeeded", "failed", "cancelled"] as const)("reconciles one idle compaction across live phases and history (%s)", (phase) => {
     const thread = new ThreadTranscript();
     const base = [

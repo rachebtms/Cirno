@@ -7,6 +7,21 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
 });
 const form = { extraHeaders: "", extraQuery: "", extraBody: "{}" };
+it.each(["extra_headers", "extra_body"] as const)(
+  "localizes a missing saved secret for %s and preserves its draft",
+  async field => {
+    await i18n.changeLanguage("zh-CN");
+    const save = vi.fn().mockRejectedValueOnce(new ApiError(400,
+      "No saved secret matches this mask. Enter the actual value or remove the entry."));
+    render(<ProviderParameterFields fields={[field]} form={form} onChange={vi.fn()} onSave={save} />);
+    const editor = screen.getByRole("textbox");
+    fireEvent.change(editor, { target: { value: '{"api_token":"••••••••"}' } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("掩码没有对应的已保存密钥");
+    expect(editor).toHaveValue('{"api_token":"••••••••"}');
+    expect(editor).toBeEnabled();
+  },
+);
 it.each([
   { field: "extra_headers", key: "extraHeaders", title: "请求头" },
   { field: "extra_query", key: "extraQuery", title: "查询参数" },

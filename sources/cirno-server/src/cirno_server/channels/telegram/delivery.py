@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,18 +13,21 @@ from cirno_core.bus.agent_events import ContextCompactionEvent
 from cirno_core.bus.delivery import ChannelNotReadyError
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.outbound_events import ProgressEvent
+from cirno_core.config.paths import get_data_dir
 from cirno_core.security.network import validate_url_target
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyParameters,
+)
+
 from cirno_server.channels.telegram.commands import (
     telegram_command_text,
 )
 from cirno_server.channels.telegram.config import TelegramConfig
 from cirno_server.channels.telegram.formatting import (
-    split_telegram_markdown,
-)
-from telegram import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    ReplyParameters,
+    iter_telegram_markdown_html_fragments,
+    tool_hint_to_telegram_blockquote,
 )
 
 from . import limits
@@ -41,6 +45,7 @@ class TelegramDelivery:
     presence: TelegramPresence
     config: TelegramConfig
     show_compaction_notices: Callable[[], bool]
+    state_dir: Path = field(default_factory=get_data_dir, kw_only=True)
     compaction: TelegramCompactionNotices = field(init=False)
 
     def __post_init__(self) -> None:
@@ -52,7 +57,7 @@ class TelegramDelivery:
             msg.event.notify or self.show_compaction_notices()
         ):
             return
-        chat_id = personal_chat_id(msg.chat_id, msg.metadata)
+        chat_id = await asyncio.to_thread(personal_chat_id, msg.chat_id, msg.metadata, state_dir=self.state_dir)
         app = await self.api.connection.wait_for_app()
         if app is None:
             raise ChannelNotReadyError("Telegram bot not running")
@@ -113,7 +118,7 @@ class TelegramDelivery:
 
                 # Telegram Bot API accepts HTTP(S) URLs directly for media params.
                 if self.is_remote_media_url(media_path):
-                    ok, error = validate_url_target(media_path)
+                    ok, error = await asyncio.to_thread(validate_url_target, media_path)
                     if not ok:
                         raise ValueError(f"unsafe media URL: {error}")
                     await self.api.call_with_retry(
@@ -126,7 +131,7 @@ class TelegramDelivery:
                     )
                     continue
 
-                media_bytes = Path(media_path).read_bytes()
+                media_bytes = await asyncio.to_thread(Path(media_path).read_bytes)
                 filename = Path(media_path).name
                 send_kwargs = {param: media_bytes, "filename": filename}
                 await self.api.call_with_retry(
@@ -190,16 +195,17 @@ class TelegramDelivery:
                 if rich_ok:
                     return
 
-            chunks = split_telegram_markdown(text, limits.TELEGRAM_MAX_MESSAGE_LEN)
-            for i, chunk in enumerate(chunks):
-                is_last = i == len(chunks) - 1
-                await self.api.send_text(
+            chunks = iter_telegram_markdown_html_fragments(
+                text, limits.TELEGRAM_HTML_MAX_LEN,
+                render=tool_hint_to_telegram_blockquote if render_as_blockquote else None,
+            )
+            for chunk, html in chunks:
+                await self.api.send_formatted(
                     chat_id,
-                    chunk,
-                    reply_params,
-                    thread_kwargs,
-                    render_as_blockquote=render_as_blockquote,
-                    reply_markup=reply_markup if is_last else None,
+                    chunk.markdown, html,
+                    reply_parameters=reply_params,
+                    reply_markup=reply_markup if not chunk.remainder.strip() else None,
+                    **thread_kwargs,
                 )
 
     @staticmethod

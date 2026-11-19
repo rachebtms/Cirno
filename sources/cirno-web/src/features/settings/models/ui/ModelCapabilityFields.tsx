@@ -1,7 +1,8 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Button, Description, Label, ListBox, Select } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { useClient } from "@/providers/ClientProvider";
+import { useMutation } from "@/ui/resources/useMutation";
 import type { AgentSettingsDraft } from "../modelDraft";
 import { probeModelCapabilities, type CapabilityResults } from "../probeModelCapabilities";
 
@@ -9,18 +10,30 @@ export function ModelCapabilityFields({ form, setForm, disabled, onBusyChange, p
   presetId?: string; form: AgentSettingsDraft; setForm: Dispatch<SetStateAction<AgentSettingsDraft>>; disabled: boolean; onBusyChange: (busy: boolean) => void;
 }) {
   const { t } = useTranslation(), { client } = useClient();
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [results, setResults] = useState<CapabilityResults>({});
+  const owner = useMemo(() => ({ client, presetId, provider: form.provider, model: form.model,
+    api: form.api, reasoningEffort: form.reasoningEffort,
+    extraHeaders: form.extraHeaders, extraBody: form.extraBody, extraQuery: form.extraQuery,
+  }), [client, presetId, form.provider, form.model,
+    form.api, form.reasoningEffort, form.extraHeaders, form.extraBody, form.extraQuery]);
+  const probe = useMutation(owner);
+  const { busy, error } = probe;
+  const [receipt, setReceipt] = useState<{ owner: typeof owner; results: CapabilityResults } | null>(null);
+  const results = receipt?.owner === owner ? receipt.results : {};
+  useEffect(() => {
+    onBusyChange(busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
   const tr = (key: string) => t(`settings.models.capabilities.${key}`);
   async function test() {
-    setBusy(true); onBusyChange(true); setError("");
-    try {
-      const result = await probeModelCapabilities(client, { ...form, imageInput: null, videoInput: null }, presetId);
-      setResults(result);
-      setForm(current => current.provider === form.provider && current.model === form.model
-        ? { ...current, imageInput: result.image?.supported ?? null, videoInput: result.video?.supported ?? null } : current);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setBusy(false); onBusyChange(false); }
+    if (disabled) return;
+    await probe.run(
+      () => probeModelCapabilities(client, { ...form, imageInput: null, videoInput: null }, presetId),
+      result => {
+        setReceipt({ owner, results: result });
+        setForm(current => current.provider === form.provider && current.model === form.model
+          ? { ...current, imageInput: result.image?.supported ?? null, videoInput: result.video?.supported ?? null } : current);
+      },
+    );
   }
   return <fieldset className="model-preset-fields border-t border-border pt-4" disabled={disabled || busy}>
     <legend className="sr-only">{tr("title")}</legend><h3 className="text-sm font-medium text-foreground">{tr("title")}</h3><Description>{tr("help")}</Description>

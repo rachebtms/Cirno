@@ -23,6 +23,9 @@ def sanitize_empty_content(messages: list[dict[str, Any]]) -> list[dict[str, Any
     for raw_msg in messages:
         msg = {key: value for key, value in raw_msg.items() if key != "_meta"}
         content = msg.get("content")
+        if isinstance(content, dict):
+            content = [content]
+            msg["content"] = content
 
         if isinstance(content, str) and not content:
             clean = dict(msg)
@@ -59,12 +62,6 @@ def sanitize_empty_content(messages: list[dict[str, Any]]) -> list[dict[str, Any
                     clean["content"] = "(empty)"
                 result.append(clean)
                 continue
-
-        if isinstance(content, dict):
-            clean = dict(msg)
-            clean["content"] = [content]
-            result.append(clean)
-            continue
 
         result.append(msg)
     # Defense-in-depth: scrub lone UTF-16 surrogates from every string leaf.

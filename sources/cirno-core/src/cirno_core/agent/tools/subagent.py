@@ -51,7 +51,8 @@ if TYPE_CHECKING:
     ),
     message=StringSchema(
         "Required for send: text, at most 8192 UTF-8 bytes. Accepted means queued, not delivered. "
-        "Delivery receipts mean injected into the task transcript, not that the task acted on the message.",
+        "Delivery receipts mean injected into the task transcript, not that the task acted on the message. "
+        "An accepted response with persisted=false remains queued live; check receipts before resending.",
         max_length=8192,
     ),
     required=["action"],

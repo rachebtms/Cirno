@@ -51,6 +51,7 @@ export function createAppSections(bindings: SettingsComposition): SectionRendere
           onDismissStatus={() => {
             systemState.setCliAppsMessage(null);
             systemState.setCliAppsError(null);
+            systemState.setCliAppsReadError(null);
             systemState.setMcpMessage(null);
             systemState.setMcpError(null);
           }}

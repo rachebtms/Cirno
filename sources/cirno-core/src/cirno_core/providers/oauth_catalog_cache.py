@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -9,8 +10,9 @@ from dataclasses import dataclass, replace
 from typing import Literal, cast
 
 import httpx
-from cirno_core.providers.catalog.contracts import ProviderModelSpec
 from loguru import logger
+
+from cirno_core.providers.catalog.contracts import ProviderModelSpec
 
 CatalogSource = Literal["remote", "cache", "stale", "fallback"]
 CatalogErrorKind = Literal["auth_required", "unavailable"]
@@ -18,6 +20,17 @@ CatalogErrorKind = Literal["auth_required", "unavailable"]
 
 class OAuthCatalogAuthRequiredError(RuntimeError):
     """The provider's credentials are missing or were explicitly rejected."""
+
+
+def oauth_catalog_identity(token: object) -> str:
+    """Keep absent logins distinct from legacy credentials without account IDs."""
+    access = getattr(token, "access", None)
+    if not isinstance(access, str) or not access:
+        return "unauthenticated"
+    account = getattr(token, "account_id", None)
+    if isinstance(account, str) and account:
+        return "account:" + hashlib.sha256(account.encode()).hexdigest()
+    return "credential:" + hashlib.sha256(access.encode()).hexdigest()
 
 
 def oauth_catalog_auth_rejected(status: int, payload: object = None) -> bool:

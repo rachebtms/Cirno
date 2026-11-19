@@ -10,9 +10,11 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
+from cirno_core.config.providers import ProviderConfig
 from cirno_core.config.schema import Config
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
+from cirno_server.channels.contracts import channel_field_value
 from cirno_server.webui.settings.contracts import WebUISettingsError
 from cirno_server.webui.settings.requests import redact_request_secrets
 
@@ -123,6 +125,7 @@ RUNTIME_CONFIG_PATHS = (
     "tools.ssrf_whitelist",
     "tools.max_outgoing_session_messages_per_minute",
     "tools.web.enable",
+    "tools.web.fetch.max_response_mb",
     "network.proxy",
     "tools.web.use_proxy",
     "tools.web.user_agent",
@@ -154,6 +157,18 @@ def runtime_restart_values(config: Config) -> dict[str, str]:
         for path in RUNTIME_CONFIG_PATHS if path not in LIVE_CONTEXT_PATHS
         for parent, leaf in [_parent(config, path)]
     }
+
+
+def _uses_shared_proxy(config: Config) -> bool:
+    if config.tools.web.use_proxy or any(server.use_proxy for server in config.tools.mcp_servers.values()):
+        return True
+    if any(isinstance(provider, ProviderConfig) and provider.use_proxy for _, provider in config.providers):
+        return True
+    for section in (config.channels.model_extra or {}).values():
+        value = channel_field_value(section, "useProxy")
+        if value is True or str(value).strip().lower() in {"1", "true", "yes", "on", "granted"}:
+            return True
+    return False
 
 
 def update_runtime_config(
@@ -235,7 +250,9 @@ def update_runtime_config(
                     re.compile(pattern)
                 except re.error:
                     raise WebUISettingsError(f"{path}: invalid regular expression") from None
-    if values.get("tools.web.use_proxy") is True:
+    # The candidate retains runtime-only OAuth provider fields omitted by
+    # model_dump; those consumers still require the shared proxy too.
+    if values.get("tools.web.use_proxy") is True or "network.proxy" in values and _uses_shared_proxy(candidate):
         try:
             validated.network.resolve_proxy(True)
         except ValueError as exc:

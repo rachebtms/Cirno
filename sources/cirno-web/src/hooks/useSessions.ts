@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useClient } from "@/providers/ClientProvider";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import { useCirnoStream } from "@/hooks/useCirnoStream";
 import {
   deleteSession as apiDeleteSession,
@@ -36,33 +37,41 @@ export function useSessions(): {
   getSessionAutomations: (key: string) => Promise<SessionAutomationJob[]>;
 } {
   const { client, token } = useClient();
+  const owner = useMemo(() => ({ client, token: "", revision: 0, optimisticKeys: new Set<string>(), refreshPending: false, refreshInFlight: null as Promise<void> | null }), [client]);
+  owner.token = token;
+  const current = useLifetime(owner);
+  const requireCurrent = useCallback(() => { if (!current()) throw new Error("Conversation connection changed"); }, [current]);
   const [sessions, setSessions] = useState<ChatSummary[]>(readReloadSessions);
   const [loadedOnce, setLoadedOnce] = useState(() => sessions.length > 0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const tokenRef = useRef(token);
-  const optimisticKeysRef = useRef<Set<string>>(new Set());
-  const refreshPendingRef = useRef(false);
-  const refreshInFlightRef = useRef<Promise<void> | null>(null);
-  tokenRef.current = token;
+  const [stateOwner, setStateOwner] = useState(owner);
+  if (stateOwner !== owner) {
+    setStateOwner(owner); setSessions([]); setLoadedOnce(false); setLoading(true); setError(null);
+  }
 
   useEffect(() => {
-    if (sessions.length || !loading) writeReloadCache("sessions", sessions.slice(0, 200));
-  }, [sessions, loading]);
+    if (current() && (sessions.length || !loading)) writeReloadCache("sessions", sessions.slice(0, 200));
+  }, [sessions, loading, current]);
 
   const refresh = useCallback((): Promise<void> => {
-    refreshPendingRef.current = true;
-    if (refreshInFlightRef.current) return refreshInFlightRef.current;
+    if (!current()) return Promise.resolve();
+    owner.refreshPending = true;
+    if (owner.refreshInFlight) return owner.refreshInFlight;
     const request = (async () => {
       setLoading(true);
       try {
-        while (refreshPendingRef.current) {
-          refreshPendingRef.current = false;
+        while (current() && owner.refreshPending) {
+          owner.refreshPending = false;
           try {
-            const rows = await listSessions(tokenRef.current);
+            const revision = owner.revision;
+            const rows = await listSessions(owner.token);
+            if (!current()) return;
+            if (revision !== owner.revision) { owner.refreshPending = true; continue; }
             setLoadedOnce(true);
             const serverKeys = new Set(rows.map((row) => row.key));
             setSessions((prev) => {
+              if (!current()) return prev;
               const byKey = new Map(prev.map((row) => [row.key, row]));
               const next = [
                 ...rows.map((row) => {
@@ -71,28 +80,28 @@ export function useSessions(): {
                 }),
                 ...prev.filter(
                   (session) =>
-                    optimisticKeysRef.current.has(session.key)
+                    owner.optimisticKeys.has(session.key)
                     && !serverKeys.has(session.key),
                 ),
               ];
               return next.length === prev.length && next.every((row, index) => row === prev[index]) ? prev : next;
             });
-            for (const key of Array.from(optimisticKeysRef.current)) {
-              if (serverKeys.has(key)) optimisticKeysRef.current.delete(key);
+            for (const key of Array.from(owner.optimisticKeys)) {
+              if (serverKeys.has(key)) owner.optimisticKeys.delete(key);
             }
             setError(null);
           } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
+            if (current()) setError(e instanceof Error ? e.message : String(e));
           }
         }
       } finally {
-        refreshInFlightRef.current = null;
-        setLoading(false);
+        owner.refreshInFlight = null;
+        if (current()) setLoading(false);
       }
     })();
-    refreshInFlightRef.current = request;
+    owner.refreshInFlight = request;
     return request;
-  }, []);
+  }, [owner, current]);
 
   useEffect(() => {
     void refresh();
@@ -119,12 +128,15 @@ export function useSessions(): {
     projectId?: string | null,
     ptcMode = false,
   ): Promise<string> => {
+    requireCurrent();
     const chatId = await client.newChat(CHAT_CREATE_TIMEOUT_MS, workspaceScope, projectId, ptcMode);
+    requireCurrent();
     const key = `websocket:${chatId}`;
-    optimisticKeysRef.current.add(key);
+    owner.optimisticKeys.add(key);
+    owner.revision++;
     // Optimistic insert; a subsequent refresh will replace it with the
     // authoritative row once the server persists the session.
-    setSessions((prev) => [
+    setSessions((prev) => !current() ? prev : [
       {
         key,
         channel: "websocket",
@@ -142,22 +154,25 @@ export function useSessions(): {
       ...prev.filter((s) => s.key !== key),
     ]);
     return chatId;
-  }, [client]);
+  }, [client, owner, current, requireCurrent]);
 
   const forkChat = useCallback(async (
     sourceChatId: string,
     beforeUserIndex: number,
     title?: string,
   ): Promise<string> => {
+    requireCurrent();
     const chatId = await client.forkChat(
       sourceChatId,
       beforeUserIndex,
       title,
       CHAT_CREATE_TIMEOUT_MS,
     );
+    requireCurrent();
     const key = `websocket:${chatId}`;
-    optimisticKeysRef.current.add(key);
-    setSessions((prev) => [
+    owner.optimisticKeys.add(key);
+    owner.revision++;
+    setSessions((prev) => !current() ? prev : [
       {
         key,
         channel: "websocket",
@@ -171,27 +186,32 @@ export function useSessions(): {
       ...prev.filter((s) => s.key !== key),
     ]);
     return chatId;
-  }, [client]);
+  }, [client, owner, current, requireCurrent]);
 
   const deleteChat = useCallback(
     async (key: string, options?: { deleteAutomations?: boolean }) => {
-      const optimistic = optimisticKeysRef.current.has(key);
+      requireCurrent();
+      const optimistic = owner.optimisticKeys.has(key);
       const result = await apiDeleteSession(client, key, options);
+      requireCurrent();
       if (result.blocked_by_automations || (!result.deleted && !optimistic)) return result;
-      optimisticKeysRef.current.delete(key);
+      owner.optimisticKeys.delete(key);
+      owner.revision++;
       webuiThreadCache.delete(key);
-      setSessions((prev) => prev.filter((s) => s.key !== key));
+      setSessions((prev) => current() ? prev.filter((s) => s.key !== key) : prev);
       // The gateway may have restarted and forgotten an unpersisted chat's
       // draft scope, but removing that optimistic session is still a deletion.
       return result.deleted ? result : { ...result, deleted: true };
     },
-    [client],
+    [client, owner, current, requireCurrent],
   );
 
   const getSessionAutomations = useCallback(async (key: string) => {
-    const result = await fetchSessionAutomations(tokenRef.current, key);
+    requireCurrent();
+    const result = await fetchSessionAutomations(owner.token, key);
+    requireCurrent();
     return result.jobs;
-  }, []);
+  }, [owner, requireCurrent]);
 
   return {
     sessions,

@@ -136,7 +136,7 @@ def test_xai_catalog_fetches_remote_models_and_reuses_capability_metadata(
     assert request.headers["X-XAI-Token-Auth"] == "xai-grok-cli"
     assert request.headers["x-userid"] == "user-42"
     assert request.headers["x-email"] == "user@example.com"
-    assert captured["kwargs"] == {"timeout": 10.0, "follow_redirects": False}
+    assert captured["kwargs"] == {"timeout": 10.0, "follow_redirects": False, "trust_env": False}
     assert get_oauth_model_catalog("xai_grok").source == "cache"
 
 

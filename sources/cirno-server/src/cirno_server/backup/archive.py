@@ -12,14 +12,17 @@ from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from cirno_core import __version__
+from cirno_core.config.home import get_default_workspace, get_home_path
 
 FORMAT = "cirno-instance-backup"
 MANIFEST = "cirno-backup.json"
 
 
 class Backups:
-    def __init__(self, config_path: Path):
-        self.config_path = config_path.resolve()
+    def __init__(self, config_path: Path, *, home_path: Path | None = None):
+        self.config_path = config_path.expanduser().resolve()
+        self.home_path = Path(home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False)
+        self.default_workspace = Path(get_default_workspace()).expanduser().resolve(strict=False)
         self.root = self.config_path.parent
         self.store = self.root / "state" / "backups"
 
@@ -27,6 +30,7 @@ class Backups:
         from cirno_core.config.loader import load_config
         from cirno_core.storage.instance import InstanceData
         from cirno_core.utils.tool_environment import TOOL_ENV_KEYS
+
         from cirno_server.webui.workspaces import read_webui_workspace_state
 
         rows = {}
@@ -47,12 +51,15 @@ class Backups:
                     "directory": path.is_dir(),
                 }
 
-        from cirno_core.config.home import get_home_path
-
         config = load_config(self.config_path)
-        add(get_home_path(), "tools")
-        add(config.agents.defaults.workspace, "workspace")
-        saved = read_webui_workspace_state()
+        workspace = (
+            Path(config.agents.defaults.workspace).expanduser()
+            if "workspace" in config.agents.defaults.model_fields_set
+            else self.default_workspace
+        )
+        add(self.home_path, "tools")
+        add(workspace, "workspace")
+        saved = read_webui_workspace_state(state_dir=self.root / "state")
         for raw in saved["recent_projects"] + saved["favorite_projects"]:
             add(raw, "workspace")
         if sessions:
@@ -92,7 +99,7 @@ class Backups:
             if options.exists()
             else [
                 str(p.resolve())
-                for p in (get_home_path(), Path(config.agents.defaults.workspace).expanduser())
+                for p in (self.home_path, workspace)
                 if p.exists() and not p.resolve().is_relative_to(self.root)
             ]
         )
@@ -171,7 +178,7 @@ class Backups:
             if options.exists():
                 archive.add(options, arcname=name + "/folders.json")
             return
-        if instance and (path.name.endswith(".lock") or path.name == ".docker-bootstrap.lock"):
+        if instance and self._runtime_lock(path):
             return
         if path.name.endswith(("-wal", "-shm")) and _is_sqlite(path.with_name(path.name[:-4])):
             return  # Its committed contents are already in the SQLite snapshot.
@@ -194,6 +201,23 @@ class Backups:
                 archive.add(path, arcname=name, recursive=False)
         else:
             raise ValueError(f"Cannot back up special file: {path}")
+
+    def _runtime_lock(self, path):
+        """Classify owned lock paths, never user dependency files by suffix."""
+        relative = path.relative_to(self.root).as_posix()
+        if relative in {
+            self.config_path.name + ".lock", ".docker-bootstrap.lock",
+            "state/run/gateway.json.lock", "state/run/gateway.json.transition.lock",
+            "state/tools/setup.lock", "state/tools/apt/record.lock", "state/credentials/records.lock",
+            "state/migrations/.lock", "state/triggers/.lock", "state/cron.lock",
+            "home/memory/.history.lock",
+        }:
+            return True
+        parts = path.relative_to(self.root).parts
+        return (
+            len(parts) == 4 and parts[:2] == ("home", "skills-history") and parts[-1] == ".lock"
+            or parts[:2] == ("state", "providers") and path.name.endswith(".operation.lock")
+        )
 
     def inspect(self, uploaded: Path):
         """Validate first, then extract without following archive-provided symlinks."""
@@ -282,6 +306,7 @@ class Backups:
             ):
                 raise ValueError("Unsafe configuration filename.")
             _validate_instance(stage / "instance", config_name)
+            _validate_extras(stage, manifest["extras"])
             (stage / MANIFEST).write_text(json.dumps(manifest))
             return {"id": stage.name, **manifest}
         except BaseException:
@@ -294,6 +319,7 @@ class Backups:
         stage = self._stage(identifier)
         manifest = json.loads((stage / MANIFEST).read_text())
         _validate_instance(stage / "instance", manifest["config_name"])
+        _validate_extras(stage, manifest["extras"])
         if not isinstance(extra_targets, dict) or extra_targets.keys() - {
             item["archive"] for item in manifest["extras"]
         }:
@@ -358,6 +384,7 @@ class Backups:
         manifest = json.loads((stage / MANIFEST).read_text())
         source = stage / "instance"
         _validate_instance(source, manifest["config_name"])
+        _validate_extras(stage, manifest["extras"])
         # External folders are merged, never pruned. A failure keeps the live instance intact.
         for item in plan["extras"]:
             _merge(stage / item["source"], Path(item["target"]))
@@ -393,6 +420,22 @@ class Backups:
         path.unlink()
         shutil.rmtree(stage)
         return True
+
+
+def _validate_extras(stage, extras):
+    if not isinstance(extras, list):
+        raise ValueError("Invalid extra-folder manifest.")
+    for index, item in enumerate(extras):
+        if (
+            not isinstance(item, dict)
+            or item.get("archive") != f"extras/{index}"
+            or not isinstance(item.get("directory"), bool)
+            or not isinstance(item.get("path"), str)
+        ):
+            raise ValueError("Invalid extra-folder manifest.")
+        source = stage / item["archive"]
+        if source.is_symlink() or not (source.is_dir() if item["directory"] else source.is_file()):
+            raise ValueError("Staged extra-folder source is missing or has the wrong type; upload the backup again.")
 
 
 def _validate_instance(source, config_name):
@@ -447,22 +490,70 @@ def _remove(path):
 def _merge(source, target, *, sqlite_snapshot=True):
     if source.is_dir() and not source.is_symlink():
         if target.is_symlink() or target.exists() and not target.is_dir():
-            _remove(target)
-        target.mkdir(parents=True, exist_ok=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            staged = target.parent / (".cirno-restore-" + uuid4().hex + ".tmp")
+            try:
+                _merge(source, staged, sqlite_snapshot=sqlite_snapshot)
+                _publish_restore_path(staged, target)
+            finally:
+                if staged.exists() or staged.is_symlink():
+                    _remove(staged)
+            return
+        target.mkdir(parents=True, exist_ok=True, mode=0o700)
         for child in source.iterdir():
             _merge(child, target / child.name, sqlite_snapshot=sqlite_snapshot)
         shutil.copystat(source, target)
     else:
         target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists() or target.is_symlink():
-            _remove(target)
-        if source.is_symlink():
-            target.symlink_to(os.readlink(source))
-        else:
-            if sqlite_snapshot and _is_sqlite(source):
-                for suffix in ("-wal", "-shm"):
-                    target.with_name(target.name + suffix).unlink(missing_ok=True)
-            shutil.copy2(source, target)
+        temporary = target.parent / (".cirno-restore-" + uuid4().hex + ".tmp")
+        try:
+            if source.is_symlink():
+                temporary.symlink_to(os.readlink(source))
+            else:
+                # Finish the file copy before touching an existing extra file.
+                # A read, permission or disk error must retain its old bytes.
+                temporary.touch(mode=0o600, exist_ok=False)
+                shutil.copy2(source, temporary)
+            _publish_restore_path(temporary, target, sqlite_snapshot=sqlite_snapshot and _is_sqlite(temporary))
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def _publish_restore_path(staged, target, *, sqlite_snapshot=False):
+    """Retain conflicting targets and sidecars until publication succeeds."""
+    displaced = []
+
+    def move_aside(path):
+        if path.exists() or path.is_symlink():
+            saved = path.parent / (".cirno-original-" + uuid4().hex + ".tmp")
+            path.replace(saved)
+            displaced.append((path, saved))
+
+    try:
+        staged_directory = staged.is_dir() and not staged.is_symlink()
+        target_directory = target.is_dir() and not target.is_symlink()
+        if staged_directory or target_directory:
+            move_aside(target)
+        if sqlite_snapshot:
+            for suffix in ("-wal", "-shm"):
+                move_aside(target.with_name(target.name + suffix))
+        staged.replace(target)
+    except BaseException as error:
+        if staged.exists() or staged.is_symlink():
+            failures = []
+            for original, saved in reversed(displaced):
+                try:
+                    saved.replace(original)
+                except OSError:
+                    failures.append(str(saved))
+            if failures:
+                raise OSError("Restore publication failed; prior data remains at " + ", ".join(failures)) from error
+        # A rename may already have completed when interruption is delivered.
+        # Never attach the previous database's sidecars to the new database.
+        raise
+    else:
+        for _, saved in displaced:
+            _remove(saved)
 
 
 def _is_sqlite(path):

@@ -155,7 +155,7 @@ export function describeGenericToolRun(
 }
 
 function parseCall(line: string): { name: string; args: unknown } | null {
-  const match = /^([a-zA-Z0-9_.-]+)\((.*)\)$/.exec(line.trim());
+  const match = /^([a-zA-Z0-9_.-]+)\(([\s\S]*)\)$/.exec(line.trim());
   if (!match) return null;
   const name = compactToolName(match[1]);
   let args: unknown;

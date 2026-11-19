@@ -85,6 +85,30 @@ export function useChannelActions(
         result.can_enable ? "info" : "danger",
       );
   };
+  const showActionResult = (
+    payload: CirnoFeaturesPayload | undefined,
+    success?: string,
+  ) => {
+    const action = payload?.last_action;
+    const applied = payload?.features.find((item) => item.name === feature.name);
+    if (action?.ok === false) {
+      feedback(
+        channelValidationMessage(action.message || t("settings.channels.runtimeFailed"), t),
+        "danger",
+      );
+    } else if (
+      action?.hot_reload === false ||
+      applied?.restart_pending ||
+      (payload?.requires_restart &&
+        action?.hot_reload !== true &&
+        applied?.runtime_status !== "running" &&
+        applied?.runtime_status !== "starting")
+    ) {
+      feedback(action?.message || t("settings.channels.restartRequired"), "info");
+    } else if (success) {
+      feedback(success, "success");
+    }
+  };
   return {
     mutation,
     isCurrent: validation.isCurrent,
@@ -135,7 +159,10 @@ export function useChannelActions(
         return mutation.run(async () => {
           begin("disable");
           return service.disable();
-        }, onFeaturesUpdate);
+        }, (payload) => {
+          onFeaturesUpdate(payload);
+          showActionResult(payload);
+        });
       const errors = channelRequirementErrors(
         layout.fields,
         setup.requirements ?? [],
@@ -166,7 +193,10 @@ export function useChannelActions(
           showValidation(result);
           if (payload) {
             acknowledge(payload, snapshot);
-            feedback(t("settings.channels.checkedAndEnabled"), "success");
+            showActionResult(
+              payload.cirno_features,
+              t("settings.channels.checkedAndEnabled"),
+            );
           }
         },
       );

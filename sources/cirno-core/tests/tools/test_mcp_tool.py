@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import threading
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock
@@ -71,6 +73,8 @@ def _clear_proxy_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def _fake_mcp_module(
     monkeypatch: pytest.MonkeyPatch, fake_mcp_runtime: dict[str, object | None]
 ) -> None:
+    # The fake SDK represents launchable fixture commands, not host binaries.
+    monkeypatch.setattr(mcp_connector, "locate_stdio_command", lambda command, **_context: command)
     mod = ModuleType("mcp")
     mod.types = SimpleNamespace(
         TextContent=_FakeTextContent,
@@ -350,6 +354,44 @@ def test_wrapper_preserves_non_nullable_unions() -> None:
         {"type": "string"},
         {"type": "integer"},
     ]
+
+
+@pytest.mark.parametrize("keyword", ["default", "examples", "enum", "const"])
+def test_schema_normalization_keeps_literal_ref_fields_in_instance_data(keyword):
+    literal = {"$ref": "#/properties/template", "properties": {"example": {"$ref": "#"}}}
+    value = [literal] if keyword in {"examples", "enum"} else literal
+    schema = {"type": "object", "properties": {
+        "template": {"type": "object", "properties": {"name": {"type": "string"}}},
+        "payload": {"type": "object", keyword: value},
+    }}
+    original = deepcopy(schema)
+    wrapper = MCPToolWrapper(SimpleNamespace(), "fixture", SimpleNamespace(
+        name="literal", description="Literal object payload", inputSchema=schema,
+    ))
+    projected = wrapper.parameters["properties"]["payload"][keyword]
+    assert projected == value
+    # Downstream schema edits must not mutate the server's source metadata.
+    item = projected[0] if isinstance(projected, list) else projected
+    item["$ref"] = "edited downstream"
+    assert schema == original
+
+
+@pytest.mark.parametrize("keyword", ["additionalProperties", "allOf", "patternProperties"])
+def test_ref_hoisting_still_preserves_actual_structural_schema_constraints(keyword):
+    reference = {"$ref": "#/properties/template"}
+    node = [reference] if keyword == "allOf" else {"^item$": reference} if keyword == "patternProperties" else reference
+    wrapper = MCPToolWrapper(SimpleNamespace(), "fixture", SimpleNamespace(
+        name="structural", description="Structural schema constraints", inputSchema={
+            "type": "object", "properties": {
+                "template": {"type": "string", "minLength": 3},
+                "payload": {"type": "object", keyword: node},
+            },
+        },
+    ))
+    projected = wrapper.parameters["properties"]["payload"][keyword]
+    target = projected[0] if keyword == "allOf" else projected["^item$"] if keyword == "patternProperties" else projected
+    assert target["$ref"].startswith("#/$defs/")
+    assert wrapper.parameters["$defs"][target["$ref"].removeprefix("#/$defs/")] == {"type": "string", "minLength": 3}
 
 
 def test_wrapper_normalizes_nullable_property_type_union() -> None:
@@ -692,8 +734,76 @@ async def test_execute_persists_image_block_as_artifact(tmp_path: Path) -> None:
     assert Path(artifact["path"]).is_file()
     # The base64 payload must NOT leak into the model-facing result.
     assert _PNG_B64 not in result
-    assert "message.media" in payload["next_step"]
+    assert "user.message" in payload["next_step"]
+    assert "media array" in payload["next_step"]
     assert "regular conversations" in payload["next_step"]
+
+
+async def test_image_storage_leaves_event_loop_responsive_and_preserves_request_context(tmp_path, monkeypatch):
+    loop = asyncio.get_running_loop()
+    release = threading.Event()
+    stored = tmp_path / "fixture-artifact.txt"
+    call = AsyncMock(return_value=SimpleNamespace(content=[_FakeImageContent(_PNG_B64)]))
+    wrapper = _make_wrapper(SimpleNamespace(call_tool=call))
+
+    def store(_data_url, _arguments):
+        from cirno_core.agent.tools.context import current_request_context
+        context = current_request_context()
+        assert context.session_key == "websocket:fixture"
+        loop.call_soon_threadsafe(release.set)
+        assert release.wait(1), "Artifact storage blocked the event loop"
+        stored.write_text("Stored once", encoding="utf-8")
+        return {"path": str(stored), "mime": "image/png"}
+
+    monkeypatch.setattr(wrapper, "_store_image_block", store)
+    with request_context(RequestContext("websocket", "fixture", session_key="websocket:fixture")):
+        result = await wrapper.execute()
+    assert not is_tool_error_result(result)
+    assert json.loads(result)["artifacts"][0]["path"] == str(stored)
+    assert stored.read_text() == "Stored once"
+    call.assert_awaited_once()
+
+
+@pytest.mark.parametrize("fails", [False, True])
+async def test_cancelled_image_storage_settles_before_task_owner_exits(tmp_path, monkeypatch, fails):
+    loop = asyncio.get_running_loop()
+    loop_thread = threading.get_ident()
+    entered = asyncio.Event()
+    release = threading.Event()
+    completed = threading.Event()
+    stored = tmp_path / "accepted-artifact.txt"
+    call = AsyncMock(return_value=SimpleNamespace(content=[_FakeImageContent(_PNG_B64)]))
+    wrapper = _make_wrapper(SimpleNamespace(call_tool=call))
+
+    def store(_data_url, _arguments):
+        loop.call_soon_threadsafe(entered.set)
+        assert threading.get_ident() != loop_thread, "Artifact storage ran on the event loop"
+        try:
+            assert release.wait(2), "Fixture did not release storage"
+            stored.write_text("Accepted artifact write finished", encoding="utf-8")
+            if fails:
+                raise OSError("Fixture late write failure")
+            return {"path": str(stored), "mime": "image/png"}
+        finally:
+            completed.set()
+
+    monkeypatch.setattr(wrapper, "_store_image_block", store)
+    operation = asyncio.create_task(wrapper.execute())
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        operation.cancel()
+        await asyncio.sleep(0)
+        operation.cancel()
+        await asyncio.sleep(0)
+        pending = not operation.done()
+    finally:
+        release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await operation
+    assert pending
+    assert completed.is_set()
+    assert stored.read_text() == "Accepted artifact write finished"
+    call.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -2595,3 +2705,52 @@ async def test_stdio_cannot_opt_into_shared_proxy(monkeypatch) -> None:
     assert connections == {}
     assert registry.tool_names == []
     stdio_client.assert_not_called()
+
+
+@pytest.mark.parametrize("text", [None, "Readable explanation", '{"measurements":[42,43],"unit":"K"}'])
+async def test_structured_tool_result_is_retained_without_duplicate_json_text(text):
+    structured = {"measurements": [42, 43], "unit": "K"}
+    session = SimpleNamespace(call_tool=AsyncMock(return_value=SimpleNamespace(
+        content=[_FakeTextContent(text)] if text else [], structuredContent=structured,
+    )))
+    result = await _make_wrapper(session).execute()
+    payload = json.loads(result)
+    if text == "Readable explanation":
+        assert payload == {"text": text, "structured_content": structured}
+    else:
+        assert payload == structured
+    assert result.count('"measurements"') == 1
+
+
+async def test_structured_error_keeps_error_status_and_details():
+    session = SimpleNamespace(call_tool=AsyncMock(return_value=SimpleNamespace(
+        content=[], structuredContent={"reason": "Validation failed", "retryable": False}, isError=True,
+    )))
+    result = await _make_wrapper(session).execute()
+    assert is_tool_error_result(result)
+    assert json.loads(result)["reason"] == "Validation failed"
+
+
+async def test_structured_image_result_keeps_artifacts_without_duplicating_data(tmp_path):
+    from cirno_core.config.loader import set_config_path
+
+    set_config_path(tmp_path / "config.json")
+    structured = {"label": "Measured figure"}
+    session = SimpleNamespace(call_tool=AsyncMock(return_value=SimpleNamespace(
+        content=[_FakeImageContent(_PNG_B64, "image/png"), _FakeTextContent(json.dumps(structured))],
+        structuredContent=structured,
+    )))
+    result = await _make_wrapper(session).execute()
+    payload = json.loads(result)
+    assert Path(payload["artifacts"][0]["path"]).is_file()
+    assert payload["structured_content"] == structured
+    assert result.count("Measured figure") == 1
+    assert _PNG_B64 not in result
+
+
+async def test_structured_booleans_are_not_deduplicated_against_text_numbers():
+    session = SimpleNamespace(call_tool=AsyncMock(return_value=SimpleNamespace(
+        content=[_FakeTextContent('{"value":1}')], structuredContent={"value": True},
+    )))
+    payload = json.loads(await _make_wrapper(session).execute())
+    assert payload == {"text": '{"value":1}', "structured_content": {"value": True}}

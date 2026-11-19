@@ -19,9 +19,12 @@ Two modes are supported, selected automatically:
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
+
+from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import (
@@ -36,7 +39,9 @@ from cirno_core.providers.errors import (
 )
 from cirno_core.providers.messages import sanitize_empty_content
 from cirno_core.providers.openai_responses import ResponsesBackend, responses_state_matches
-from openai import AsyncOpenAI
+from cirno_core.providers.openai_responses.errors import ResponsesAPIError
+from cirno_core.providers.timeouts import ProviderTimeouts
+from cirno_core.utils.cancellation import shield_and_drain
 
 _AZURE_OPENAI_SCOPE = "https://cognitiveservices.azure.com/.default"
 
@@ -54,7 +59,10 @@ class _AzureTokenProvider:
     ``azure-identity`` is not installed.
     """
 
-    def __init__(self, scope: str = _AZURE_OPENAI_SCOPE) -> None:
+    def __init__(
+        self, scope: str = _AZURE_OPENAI_SCOPE, *, proxy: str | None = None,
+        timeouts: ProviderTimeouts | None = None,
+    ) -> None:
         try:
             from azure.identity.aio import DefaultAzureCredential
         except ImportError as exc:
@@ -64,11 +72,17 @@ class _AzureTokenProvider:
             ) from exc
 
         self._scope = scope
-        self._credential = DefaultAzureCredential()
+        self._timeouts = timeouts if timeouts is not None else ProviderTimeouts()
+        self._credential = DefaultAzureCredential(
+            use_env_settings=False,
+            proxies={"http": proxy, "https": proxy} if proxy else None,
+        )
 
     async def __call__(self) -> str:
         """Return a bearer token for the configured scope."""
-        access_token = await self._credential.get_token(self._scope)
+        access_token = await asyncio.wait_for(
+            self._credential.get_token(self._scope), timeout=self._timeouts.request_s,
+        )
         return access_token.token
 
     async def aclose(self) -> None:
@@ -97,6 +111,7 @@ class AzureOpenAIProvider(LLMProvider):
         api_base: str = "",
         default_model: str = "gpt-5.2-chat",
         *,
+        proxy: str | None = None,
         provider_name: str = "azure_openai",
     ):
         super().__init__(api_key, api_base, provider_name=provider_name)
@@ -120,16 +135,20 @@ class AzureOpenAIProvider(LLMProvider):
         if api_key:
             client_api_key = api_key
         else:
-            self._token_provider = _AzureTokenProvider()
+            self._token_provider = _AzureTokenProvider(proxy=proxy, timeouts=self.timeouts)
             client_api_key = self._token_provider
 
         # SDK client targeting the Azure Responses API endpoint
-        base_url = f"{api_base.rstrip('/')}/openai/v1/"
+        base_url = api_base.rstrip("/")
+        if not base_url.endswith("/openai/v1"):
+            base_url += "/v1" if base_url.endswith("/openai") else "/openai/v1"
+        base_url += "/"
         self._client = AsyncOpenAI(
             api_key=client_api_key,
             base_url=base_url,
             default_headers={"x-session-affinity": uuid.uuid4().hex},
             max_retries=0,
+            http_client=DefaultAsyncHttpxClient(proxy=proxy or None, trust_env=False),
         )
 
     # ------------------------------------------------------------------
@@ -137,14 +156,17 @@ class AzureOpenAIProvider(LLMProvider):
     # ------------------------------------------------------------------
 
     async def aclose(self) -> None:
-        try:
-            await self._responses.aclose()
-        finally:
+        async def settle() -> None:
             try:
-                await self._client.close()
+                await self._responses.aclose()
             finally:
-                if self._token_provider is not None:
-                    await self._token_provider.aclose()
+                try:
+                    await self._client.close()
+                finally:
+                    if self._token_provider is not None:
+                        await self._token_provider.aclose()
+
+        await shield_and_drain(settle())
 
     @staticmethod
     def _supports_temperature(
@@ -227,6 +249,8 @@ class AzureOpenAIProvider(LLMProvider):
 
     @staticmethod
     def _handle_error(e: Exception) -> LLMResponse:
+        if isinstance(e, ResponsesAPIError):
+            return e.to_response()
         response = getattr(e, "response", None)
         body = getattr(e, "body", None) or getattr(response, "text", None)
         body_text = str(body).strip() if body is not None else ""

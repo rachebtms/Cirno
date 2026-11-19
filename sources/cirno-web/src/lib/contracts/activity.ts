@@ -30,6 +30,9 @@ export interface ToolProgressEvent {
   phase?: "start" | "end" | "error" | string;
   call_id?: string;
   name?: string;
+  /** Presentation identity supplied by the wrapper; wire names may be ambiguous or hashed. */
+  mcp_server?: string;
+  mcp_tool?: string;
   arguments?: unknown;
   result?: unknown;
   error?: unknown;

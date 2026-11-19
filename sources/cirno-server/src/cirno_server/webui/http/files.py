@@ -6,14 +6,16 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from cirno_core.security.workspace_access import WorkspaceScopeError
+from cirno_core.utils.cancellation import shield_and_drain
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.file_preview import WebUIFilePreviewError
 from cirno_server.webui.http_utils import http_error as _http_error
 from cirno_server.webui.http_utils import http_json_response as _http_json_response
 from cirno_server.webui.http_utils import parse_query as _parse_query
 from cirno_server.webui.http_utils import query_first as _query_first
 from cirno_server.webui.workspace_browser import browse_workspace_directories
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 from .shared import _NO_STORE_HEADERS, _is_websocket_channel_session_key, _mutation_payload
 
@@ -104,19 +106,20 @@ class FilesRoutes:
             )
         )
 
-    def _handle_workspace_favorite(self, connection: Any, request: WsRequest) -> Response:
+    async def _handle_workspace_favorite(self, connection: Any, request: WsRequest) -> Response:
         if not self.server.check_api_token(request):
             return _http_error(401, "Unauthorized")
         if not self.server.workspace_project_selection_available(connection):
             return _http_error(403, "project selection is unavailable for this connection")
         payload = _mutation_payload(request) or {}
         try:
-            favorites = self.server.workspaces.set_favorite_project(
-                payload.get("path"), payload.get("pinned")
-            )
+            favorites = await shield_and_drain(asyncio.to_thread(
+                self.server.workspaces.set_favorite_project,
+                payload.get("path"), payload.get("pinned"),
+            ))
         except WorkspaceScopeError as exc:
             return _http_error(exc.status, exc.message)
-        except OSError:
+        except (OSError, ValueError):
             return _http_error(500, "could not save favorite folders")
         return _http_json_response({"favorite_projects": favorites})
 
@@ -129,9 +132,13 @@ class FilesRoutes:
             return _http_error(403, "project selection is unavailable for this connection")
         payload = _mutation_payload(request) or {}
         try:
-            project = self.server.workspaces.resolve_project(payload.get("path"))
+            project = await shield_and_drain(asyncio.to_thread(
+                self.server.workspaces.resolve_project, payload.get("path"),
+            ))
         except WorkspaceScopeError as exc:
             return _http_error(exc.status, exc.message)
+        except (OSError, ValueError):
+            return _http_error(500, "could not save recent folders")
         return _http_json_response(project)
 
     async def _handle_workspace_directories(self, connection: Any, request: WsRequest) -> Response:

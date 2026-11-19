@@ -131,3 +131,17 @@ def test_timeout_reaps_owned_child(tmp_path, monkeypatch):
     if os.name == "posix":
         with pytest.raises(ProcessLookupError):
             os.kill(processes[0].pid, 0)
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='POSIX package-manager process groups')
+def test_management_timeout_reaps_package_manager_children(tmp_path):
+    import subprocess
+
+    manager = CliAppManager(workspace=tmp_path, data_dir=tmp_path / 'state')
+    effect = tmp_path / 'late-install-effect'
+    child = f'import time; from pathlib import Path; time.sleep(0.5); Path({str(effect)!r}).touch()'
+    parent = f'import subprocess,sys,time; subprocess.Popen([sys.executable,"-c",{child!r}]); print("spawned",flush=True); time.sleep(3)'
+    with pytest.raises(subprocess.TimeoutExpired):
+        manager.commands._run_argv([sys.executable, '-c', parent], timeout=0.3)
+    time.sleep(0.55)
+    assert not effect.exists(), 'Timed-out package-manager child kept performing install effects'

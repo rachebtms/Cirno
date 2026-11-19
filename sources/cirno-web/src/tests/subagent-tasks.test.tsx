@@ -16,10 +16,15 @@ import type { InboundEvent } from "@/lib/contracts/events";
 import type { SubagentTaskSnapshot, UIMessage } from "@/lib/contracts/messages";
 
 const requestMutation = vi.fn();
+const sessionHandlers = new Set<(chatId: string, scope?: string) => void>();
 const chatHandlers = new Map<string, Set<(event: InboundEvent) => void>>();
 const statusHandlers = new Set<(status: ConnectionStatus) => void>();
 const client = {
   requestMutation,
+  onSessionUpdate: vi.fn((handler: (chatId: string, scope?: string) => void) => {
+    sessionHandlers.add(handler);
+    return () => { sessionHandlers.delete(handler); };
+  }),
   onChat: vi.fn((chatId: string, handler: (event: InboundEvent) => void) => {
     const handlers = chatHandlers.get(chatId) ?? new Set();
     chatHandlers.set(chatId, handlers);
@@ -103,6 +108,7 @@ describe("session-owned task UI", () => {
     client.onStatus.mockClear();
     chatHandlers.clear();
     statusHandlers.clear();
+    sessionHandlers.clear();
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => response([task()])));
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); clearOwnerPreferences(); });
@@ -767,6 +773,7 @@ describe("session-owned task UI", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(chatHandlers.get("a")?.size).toBe(0);
     expect(statusHandlers.size).toBe(0);
+    expect(sessionHandlers.size).toBe(0);
   });
 
   it("reports a failed header stop and lets the user retry without closing details", async () => {
@@ -821,6 +828,82 @@ describe("session-owned task UI", () => {
     await act(async () => { fireEvent(window, new Event("focus")); });
     expect(within(list).getByRole("button", { name: /Config check Completed/ })).toBeVisible();
     expect(screen.getByTestId("subagent-task-dock-trigger")).toHaveTextContent("Completed: 1");
+  });
+
+  it("removes retired tasks and closes their details after an authoritative empty snapshot", async () => {
+    await preloadMarkdownText();
+    const user = userEvent.setup();
+    render(layout());
+    const list = await openTaskList(user);
+    await user.click(within(list).getByRole("button", { name: /Config check Running/ }));
+    expect(screen.getByRole("dialog", { name: "Config check" })).toBeVisible();
+    vi.mocked(fetch).mockImplementation(async () => response([]));
+    await act(async () => { fireEvent(window, new Event("focus")); });
+    expect(screen.queryByTestId("subagent-task-dock-trigger")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("Config check")).not.toBeInTheDocument();
+  });
+
+  it.each([false, true])("keeps task events newer than a pending full snapshot (new task=%s)", async newTask => {
+    const user = userEvent.setup();
+    render(layout());
+    await screen.findByTestId("subagent-task-dock-trigger");
+    let complete!: (value: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    act(() => { fireEvent(window, new Event("focus")); });
+    emitTask(task({ task_id: newTask ? "task-2" : "task-1", revision: 2, label: "Late observation" }));
+    await act(async () => { complete(response([])); });
+    const list = await openTaskList(user);
+    expect(within(list).getByRole("button", { name: /Late observation Running/ })).toBeVisible();
+    expect(screen.getByTestId("subagent-task-dock-trigger")).toHaveTextContent("Running: 1");
+    if (newTask) expect(within(list).queryByText("Config check")).not.toBeInTheDocument();
+  });
+
+  it("does not restore a retired task from a late cancellation receipt", async () => {
+    let complete!: (value: SubagentTaskSnapshot) => void;
+    requestMutation.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const user = userEvent.setup();
+    render(layout());
+    const list = await openTaskList(user);
+    await user.click(within(list).getByRole("button", { name: "Stop Config check" }));
+    vi.mocked(fetch).mockImplementation(async () => response([]));
+    await act(async () => { fireEvent(window, new Event("focus")); });
+    const removedBeforeReceipt = screen.queryByTestId("subagent-task-dock-trigger") === null;
+    await act(async () => { complete(task({ revision: 2, state: "cancelled", completed_at: 105 })); });
+    expect(removedBeforeReceipt).toBe(true);
+    expect(screen.queryByTestId("subagent-task-dock-trigger")).not.toBeInTheDocument();
+    expect(screen.queryByText("Config check")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Subtasks" })).not.toBeInTheDocument();
+  });
+
+  it("retires cached tasks on a same-session reset and rejects the previous generation's read", async () => {
+    const user = userEvent.setup();
+    render(layout());
+    await screen.findByTestId("subagent-task-dock-trigger");
+    let complete!: (value: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    act(() => { fireEvent(window, new Event("focus")); });
+    const replacement = task({ task_id: "replacement-task", revision: 2, label: "Replacement work" });
+    vi.mocked(fetch).mockImplementation(async () => response([replacement]));
+    act(() => { sessionHandlers.forEach(handler => handler("a", "reset")); });
+    const clearedBeforeOldRead = screen.queryByTestId("subagent-task-dock-trigger") === null;
+    emitTask(replacement);
+    await act(async () => { complete(response([task()])); });
+    const list = await openTaskList(user);
+    expect(clearedBeforeOldRead).toBe(true);
+    expect(within(list).queryByText("Config check")).not.toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: /Replacement work Running/ })).toBeVisible();
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("leaves owned tasks alone for unrelated session updates", async () => {
+    render(layout());
+    await screen.findByTestId("subagent-task-dock-trigger");
+    act(() => {
+      sessionHandlers.forEach(handler => { handler("b", "reset"); handler("a", "metadata"); });
+    });
+    expect(screen.getByTestId("subagent-task-dock-trigger")).toHaveTextContent("Running: 1");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("discards reads from the previous session after switching", async () => {

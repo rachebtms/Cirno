@@ -50,6 +50,11 @@ def exec_parameters(config: ExecToolConfig) -> dict[str, Any]:
             default=False,
             nullable=True,
         ),
+        stdin=StringSchema(
+            "Child input: closed disables input; pipe allows later shell.session writes. "
+            "Omit for legacy behavior (pipe when yield_time_ms is supplied).",
+            enum=["closed", "pipe"],
+        ),
         yield_time_ms=IntegerSchema(
             description="Return after this many milliseconds if still running (default 1000, max 30000); execution continues.",
             minimum=0,

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 from uuid import uuid4
 
+from loguru import logger
+
 from cirno_core.bus.agent_events import (
     NO_EVENTS,
     CompactionReason,
@@ -15,19 +17,19 @@ from cirno_core.bus.agent_events import (
     EventSink,
 )
 from cirno_core.memory.archiver import MemoryArchiver
-from cirno_core.memory.store import MemoryStore
 from cirno_core.memory.consolidation_result import ConsolidationCheckpoint
+from cirno_core.memory.store import MemoryStore
 from cirno_core.memory.working_state import (
     EvidenceCheckpoint,
 )
-from cirno_core.providers.contracts import ProviderConversationState
 from cirno_core.providers.context_budget import ContextBudget
-from cirno_core.session.model import Session
+from cirno_core.providers.contracts import ProviderConversationState
 from cirno_core.session.manager import SessionManager
+from cirno_core.session.model import Session
 from cirno_core.session.summary import is_summary_checkpoint, session_summary_from_metadata
-from cirno_core.utils.token_estimation import estimate_message_tokens, estimate_prompt_tokens_chain
+from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.text import truncate_text_to_tokens
-from loguru import logger
+from cirno_core.utils.token_estimation import estimate_message_tokens, estimate_prompt_tokens_chain
 
 if TYPE_CHECKING:
     from cirno_core.utils.llm_runtime import LLMRuntime
@@ -230,6 +232,7 @@ class Consolidator:
                     compaction_id=compaction_id, phase="started", notify=notify, reason=reason
                 ),
             )
+            checkpoint_saved = False
             try:
                 summary = await self.archive_session(
                     session,
@@ -237,23 +240,34 @@ class Consolidator:
                     runtime=runtime,
                 )
                 if summary:
-                    await self.sessions.state.commit_summary(
-                        session,
-                        summary,
-                        archive_end=archive_end,
-                    )
+                    async def commit_checkpoint() -> None:
+                        nonlocal checkpoint_saved
+                        await self.sessions.state.commit_summary(
+                            session,
+                            summary,
+                            archive_end=archive_end,
+                        )
+                        checkpoint_saved = True
+
+                    # Storage drains an admitted write on cancellation. Keep its
+                    # acknowledgement too, so the report reflects the actual commit.
+                    await shield_and_drain(commit_checkpoint())
             except (Exception, asyncio.CancelledError) as exc:
-                await events.emit(
+                await shield_and_drain(events.emit(
                     ContextCompactionEvent(
                         compaction_id=compaction_id,
-                        phase="cancelled" if isinstance(exc, asyncio.CancelledError) else "failed",
+                        phase="succeeded" if checkpoint_saved else "cancelled"
+                        if isinstance(exc, asyncio.CancelledError) else "failed",
                         notify=notify,
                         reason=reason,
                         error=None
                         if isinstance(exc, asyncio.CancelledError)
                         else f"{type(exc).__name__}: {exc}"[:1000],
+                        context_window_tokens=runtime.context_window_tokens if checkpoint_saved else None,
+                        evidence_checkpoint=checkpoint_saved and isinstance(summary, EvidenceCheckpoint),
+                        learning_failure=getattr(summary, "learning_failure", None) if checkpoint_saved else None,
                     ),
-                )
+                ))
                 raise
             if not summary:
                 await events.emit(
@@ -267,25 +281,36 @@ class Consolidator:
                 )
                 return None
 
-            compacted_session = await self.sessions.state.get(session_key)
-            context_tokens, _ = await asyncio.to_thread(
-                self.estimate_session_prompt_tokens,
-                compacted_session,
-                runtime=runtime,
-            )
-            await events.emit(
-                ContextCompactionEvent(
-                    compaction_id=compaction_id,
-                    phase="succeeded",
-                    notify=notify,
-                    reason=reason,
-                    context_tokens=context_tokens,
-                    context_window_tokens=runtime.context_window_tokens,
-                    context_estimated=True,
-                    evidence_checkpoint=isinstance(summary, EvidenceCheckpoint),
-                    learning_failure=getattr(summary, "learning_failure", None),
-                ),
-            )
+            context_tokens = None
+            try:
+                compacted_session = await self.sessions.state.get(session_key)
+                context_tokens, _ = await asyncio.to_thread(
+                    self.estimate_session_prompt_tokens,
+                    compacted_session,
+                    runtime=runtime,
+                )
+            except Exception as error:
+                # Accounting is optional; the checkpoint above is already durable.
+                logger.warning(
+                    "Context estimate unavailable after saved checkpoint for {}: {}: {}",
+                    session_key, type(error).__name__, error,
+                )
+            finally:
+                # Even cancellation during accounting must settle the committed
+                # checkpoint's lifecycle before it propagates to the caller.
+                await shield_and_drain(events.emit(
+                    ContextCompactionEvent(
+                        compaction_id=compaction_id,
+                        phase="succeeded",
+                        notify=notify,
+                        reason=reason,
+                        context_tokens=context_tokens,
+                        context_window_tokens=runtime.context_window_tokens,
+                        context_estimated=True if context_tokens is not None else None,
+                        evidence_checkpoint=isinstance(summary, EvidenceCheckpoint),
+                        learning_failure=getattr(summary, "learning_failure", None),
+                    ),
+                ))
 
             logger.info(
                 "Idle-session compact for {}: archived={}, visible={}, retained={}, summary={}",

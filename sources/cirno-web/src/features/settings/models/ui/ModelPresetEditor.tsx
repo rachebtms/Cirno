@@ -64,7 +64,7 @@ export function ModelPresetEditor({
               className="model-preset-form"
             >
               <Modal.Body>
-                <fieldset disabled={probing} className="model-preset-fields min-w-0 border-0 p-0">
+                <fieldset disabled={probing || options.creatingSaving} className="model-preset-fields min-w-0 border-0 p-0">
                   <PresetConnectionFields model={model} options={options} />
                   {options.settings.model_capability_testing_supported && <ModelCapabilityFields key={`${options.editingPresetId}:${form.provider}:${form.model}`} presetId={creating ? undefined : options.editingPresetId} form={form} setForm={setForm} disabled={busy} onBusyChange={setProbing} />}
                   <Accordion
@@ -121,6 +121,7 @@ export function ModelPresetEditor({
                             <>
                               <Description>{t("settings.models.requestOverridesHint")}</Description>
                               <ProviderParameterFields
+                                owner={JSON.stringify([creating, options.editingPresetId])}
                                 inherit
                                 draft={creating}
                                 disabled={options.saving || (!creating && options.dirty)}

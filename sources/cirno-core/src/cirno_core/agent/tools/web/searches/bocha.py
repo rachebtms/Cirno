@@ -6,11 +6,13 @@ import os
 from typing import Any, cast
 
 import httpx
+from loguru import logger
+
 from cirno_core.agent.tools.base import ToolResult
 from cirno_core.agent.tools.web.content import _format_results
 from cirno_core.agent.tools.web.context import SearchContext
+from cirno_core.agent.tools.web.safety import _redact_search_error
 from cirno_core.agent.tools.web.searches import duckduckgo
-from loguru import logger
 
 _BOCHA_SEARCH_API_URL = "https://api.bochaai.com/v1/web-search"
 
@@ -63,8 +65,12 @@ async def search(context: SearchContext, query: str, n: int, freshness: str = "n
         ]
         return _format_results(query, items, n)
     except httpx.HTTPStatusError as e:
+        detail = _redact_search_error(
+            e.response.text, api_key=api_key, proxy=context.proxy,
+            base_url=context.config.base_url,
+        )
         return ToolResult.error(
-            f"Error: Bocha search HTTP {e.response.status_code}: {e.response.text[:200]}"
+            f"Error: Bocha search HTTP {e.response.status_code}: {detail[:200]}"
         )
     except Exception as e:
         return ToolResult.error(f"Error: {e}")

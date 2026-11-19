@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Any, cast
 
 import httpx
-from cirno_core.apps.cli import contracts, records, resources
 from loguru import logger
+
+from cirno_core.apps.cli import contracts, records, resources
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 def _now() -> float:
@@ -96,9 +98,9 @@ class RegistryCatalog:
                 return data
             raise
 
-        await asyncio.to_thread(
+        await shield_and_drain(asyncio.to_thread(
             records._write_json, cache_path, {"_cached_at": _now(), "data": fetched}
-        )
+        ))
         return fetched
 
     async def refresh_catalog_cache(self, *, force_refresh: bool = False) -> None:

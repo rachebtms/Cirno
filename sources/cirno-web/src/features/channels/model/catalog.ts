@@ -4,6 +4,7 @@ import type {
   CirnoFeaturesPayload,
 } from "@/lib/contracts/channels";
 import { localizedChannelDisplayName } from "@/features/channels/model/presentation";
+import { channelToggleChecked } from "./status";
 export type ChannelFilter = "all" | "enabled";
 export function channelCatalog(
   payload: CirnoFeaturesPayload | null,
@@ -27,7 +28,8 @@ export function defaultChannelFilter(
 ): ChannelFilter {
   return channels.some(
     (feature) =>
-      feature.enabled && !feature.capabilities?.includes("always_enabled"),
+      (feature.enabled || channelToggleChecked(feature)) &&
+      !feature.capabilities?.includes("always_enabled"),
   )
     ? "enabled"
     : "all";
@@ -41,7 +43,7 @@ export function channelGroups(
   const text = query.trim().toLocaleLowerCase();
   const visible = channels.filter(
     (feature) =>
-      (filter === "all" || feature.enabled) &&
+      (filter === "all" || feature.enabled || channelToggleChecked(feature)) &&
       `${feature.name} ${localizedChannelDisplayName(feature, t)}`
         .toLocaleLowerCase()
         .includes(text),

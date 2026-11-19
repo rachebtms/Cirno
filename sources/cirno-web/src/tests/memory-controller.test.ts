@@ -252,3 +252,28 @@ it("continues successful bounded retry batches sequentially", async () => {
   expect(result.current.scanned).toBe(12);
   expect(result.current.error).toBeNull();
 });
+
+it.each(["reindex", "retry"] as const)("refreshes committed %s progress when a later request fails", async (action) => {
+  let calls = 0;
+  const fixture = service(() => {
+    if (++calls > 1) throw new Error("Later batch failed");
+    return { scanned: 100, retried: 10, has_more: true };
+  });
+  const changed = vi.fn().mockResolvedValue(undefined);
+  const { result } = renderHook(() => useMemoryMaintenance(fixture.api, changed));
+  await act(() => result.current.run(action));
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(result.current.scanned).toBe(action === "reindex" ? 100 : 10);
+  expect(result.current.error).toBe("Later batch failed");
+  expect(result.current.busy).toBe(false);
+});
+
+it.each(["reindex", "retry"] as const)("retains the %s write error if refreshing committed status also fails", async (action) => {
+  const fixture = service(() => { throw new Error("Write outcome unavailable"); });
+  const changed = vi.fn().mockRejectedValue(new Error("Status unavailable"));
+  const { result } = renderHook(() => useMemoryMaintenance(fixture.api, changed));
+  await act(() => result.current.run(action));
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(result.current.error).toBe("Write outcome unavailable");
+  expect(result.current.busy).toBe(false);
+});

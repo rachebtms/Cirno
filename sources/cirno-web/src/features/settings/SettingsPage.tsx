@@ -64,11 +64,12 @@ export function SettingsPage(props: SettingsPageProps) {
         {loading && !sectionReady ? <SkeletonStatus className="settings-loading" label={t("settings.status.loading")}><Skeleton /><Skeleton /><Skeleton /></SkeletonStatus>
           : error && !sectionReady ? <Alert status="danger" role="alert"><Alert.Content>{error}</Alert.Content></Alert>
             : sectionReady ? <>
-              {error && (!ownerSection || settings !== null) && <Alert status="danger" role="alert"><Alert.Content>{error}</Alert.Content></Alert>}
+              {error && activeSection !== "models" && (!ownerSection || settings !== null) && <Alert status="danger" role="alert"><Alert.Content>{error}</Alert.Content></Alert>}
               {renderSection(activeSection)}
             </> : null}
       </SettingsLayout>
       {proxySetupOpen ? <SharedProxySetupDialog
+        client={controller.client}
         busy={controller.runtimeConfigState.saving !== null}
         onClose={() => setProxySetupOpen(false)}
         onSave={controller.runtimeConfigState.saveProxy}

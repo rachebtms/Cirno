@@ -5,15 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { parseQuotedUserMessage } from "@/lib/user-message-quote";
 import type { UIMessage, UserQuestion } from "@/lib/contracts/messages";
+import { useLifetime } from "@/ui/resources/useLifetime";
 
 type AnswerState = { answer: string; status: UIMessage["deliveryStatus"] };
-type ReplyContext = { questions: UserQuestion[]; answers: Map<string, AnswerState>; send?: (question: UserQuestion, answer: string) => boolean | Promise<boolean> };
-const QuestionReplies = createContext<ReplyContext>({ questions: [], answers: new Map() });
+type ReplyContext = { questions: UserQuestion[]; answers: Map<string, AnswerState>; epoch: number; send?: (question: UserQuestion, answer: string) => boolean | Promise<boolean> };
+const QuestionReplies = createContext<ReplyContext>({ questions: [], answers: new Map(), epoch: 0 });
+const EMPTY_ACCEPTED = new Map<string, string>();
 
-export function QuestionReplyProvider({ messages, send, children }: {
-  messages: UIMessage[]; send: ReplyContext["send"]; children: ReactNode;
+export function QuestionReplyProvider({ messages, send, children, owner }: {
+  messages: UIMessage[]; send: ReplyContext["send"]; children: ReactNode; owner?: unknown;
 }) {
-  const [accepted, setAccepted] = useState(new Map<string, string>());
+  const isCurrent = useLifetime(owner);
+  const scope = useRef({ owner, epoch: 0 });
+  if (scope.current.owner !== owner) scope.current = { owner, epoch: scope.current.epoch + 1 };
+  const [acknowledgements, setAccepted] = useState({ owner, values: new Map<string, string>() });
+  const accepted = acknowledgements.owner === owner ? acknowledgements.values : EMPTY_ACCEPTED;
   const questions = useMemo(() => {
     const cancelled = new Set(messages.flatMap(message => message.questionCancellation ? [message.questionCancellation.id] : []));
     return [...new Map(messages.filter(message => message.userQuestion && !cancelled.has(message.userQuestion.id))
@@ -24,7 +30,7 @@ export function QuestionReplyProvider({ messages, send, children }: {
     for (const message of messages) {
       if (message.role !== "user") continue;
       const quote = parseQuotedUserMessage(message.content);
-      if (quote.questionId) result.set(quote.questionId, { answer: quote.content, status: message.deliveryStatus });
+      if (quote.questionId && quote.content.trim()) result.set(quote.questionId, { answer: quote.content, status: message.deliveryStatus });
     }
     return result;
   }, [messages]);
@@ -34,9 +40,10 @@ export function QuestionReplyProvider({ messages, send, children }: {
     if ([...accepted.keys()].some(confirmed)) {
       // Acknowledgements bridge optimistic delivery only. Once history owns
       // the answer, rewinding that history must make the question pending again.
-      setAccepted(previous => new Map([...previous].filter(([id]) => !confirmed(id))));
+      setAccepted(previous => previous.owner === owner
+        ? { owner, values: new Map([...previous.values].filter(([id]) => !confirmed(id))) } : previous);
     }
-  }, [accepted, historyAnswers]);
+  }, [accepted, historyAnswers, owner]);
   const answers = useMemo(() => {
     const result = new Map(historyAnswers);
     for (const [id, answer] of accepted) {
@@ -45,11 +52,16 @@ export function QuestionReplyProvider({ messages, send, children }: {
     return result;
   }, [historyAnswers, accepted]);
   const submit: ReplyContext["send"] = useMemo(() => send ? async (question, answer) => {
+    if (!isCurrent()) return false;
     const delivered = await send(question, answer);
-    if (delivered) setAccepted(previous => new Map(previous).set(question.id, answer));
+    if (!isCurrent()) return false;
+    if (delivered) setAccepted(previous => ({ owner, values: new Map<string, string>(
+      previous.owner === owner ? previous.values : undefined,
+    ).set(question.id, answer) }));
     return delivered;
-  } : undefined, [send]);
-  const value = useMemo(() => ({ questions, answers, send: submit }), [questions, answers, submit]);
+  } : undefined, [send, owner, isCurrent]);
+  const epoch = scope.current.epoch;
+  const value = useMemo(() => ({ questions, answers, send: submit, epoch }), [questions, answers, submit, epoch]);
   return <QuestionReplies.Provider value={value}>{children}</QuestionReplies.Provider>;
 }
 
@@ -98,7 +110,7 @@ export function UserQuestionQueue({ children, isStreaming = false, onStop }: {
   children: ReactNode; isStreaming?: boolean; onStop?: () => void;
 }) {
   const { t } = useTranslation();
-  const { questions, answers } = useContext(QuestionReplies);
+  const { questions, answers, epoch } = useContext(QuestionReplies);
   const pending = questions.filter(question => {
     const answer = answers.get(question.id);
     return !answer || answer.status === "sending" || answer.status === "failed";
@@ -125,7 +137,7 @@ export function UserQuestionQueue({ children, isStreaming = false, onStop }: {
   return <div data-testid="user-question-queue" className="min-w-0">
     {active && <>
       {minimized && <Button type="button" variant="ghost" className="mb-2 h-auto min-h-9 w-full justify-between gap-2 px-3 py-2 text-left text-sm" aria-label={t("userQuestion.showQuestions", { count: pending.length })} onClick={() => setMinimized(false)}><span className="flex min-w-0 items-center gap-2"><CircleHelp className="size-4 shrink-0" aria-hidden /><span className="whitespace-normal">{count}</span></span><ChevronUp className="size-4 shrink-0" aria-hidden /></Button>}
-      <div hidden={minimized}><UserQuestionCard key={active.id} question={active} header={header} /></div>
+      <div hidden={minimized}><UserQuestionCard key={`${epoch}:${active.id}`} question={active} header={header} /></div>
     </>}
     <div ref={composerRef} hidden={Boolean(active) && !minimized}>{children}</div>
   </div>;

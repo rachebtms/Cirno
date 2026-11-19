@@ -54,8 +54,11 @@ export interface ThreadRead {
   lineage: number;
   before: string | null;
   empty: boolean;
+  historyGeneration: string | null;
 }
 export interface ThreadTranscriptSnapshot extends ThreadCheckpoint {
+  historyGeneration?: string | null;
+  retiredGenerations?: string[];
   units: Unit[];
   installed: Members;
   textCoverage: TextSource[];
@@ -141,12 +144,17 @@ export class ThreadTranscript {
   private knownTurns = new Set<string>();
   private revision = 0;
   private order = 0;
+  historyGeneration: string | null = null;
+  historyOwner: object = {};
+  private retiredGenerations = new Set<string>();
 
   constructor(messages: UIMessage[] = [], saved?: ThreadTranscriptSnapshot, received = false) {
     const checkpoint = saved ? copyThreadCheckpoint(saved) : createThreadCheckpoint(messages);
     this.projection = checkpoint.projection;
     this.sideChannelTurnIds = checkpoint.sideChannelTurnIds;
     if (saved) {
+      this.historyGeneration = saved.historyGeneration ?? null;
+      this.retiredGenerations = new Set(saved.retiredGenerations);
       this.installed = copyMembers(saved.installed);
       this.textCoverage = saved.textCoverage.map(copyText);
       this.boundaries = new Map(saved.boundaries);
@@ -365,7 +373,7 @@ export class ThreadTranscript {
     this.paging = { ...this.paging,
       [kind === "older" ? "loadingOlder" : "loading"]: kind === "older" || this.paging.version === 0,
       [kind === "older" ? "olderError" : "error"]: null };
-    return { kind, revision: this.revision, lineage: this.paging.lineage,
+    return { kind, revision: this.revision, lineage: this.paging.lineage, historyGeneration: this.historyGeneration,
       before: this.paging.beforeCursor, empty: this.messages.length === 0 };
   }
 
@@ -384,11 +392,20 @@ export class ThreadTranscript {
   }
 
   accept(body: WebuiThreadPersistedPayload | null, read: ThreadRead): boolean {
+    const generation = typeof body?.history_generation === "string" && body.history_generation
+      ? body.history_generation : null;
+    const generationChanged = generation !== null && this.historyGeneration !== null && generation !== this.historyGeneration;
+    if (generation !== null && (this.retiredGenerations.has(generation)
+      || generationChanged && (read.kind === "older" || read.historyGeneration !== this.historyGeneration))) {
+      this.finishRead(read);
+      return false;
+    }
     if (read.kind === "older" && (read.lineage !== this.paging.lineage || read.before !== this.paging.beforeCursor)) return false;
     if (read.kind === "older" && !body?.page) {
       this.finishRead(read, "Earlier history did not include a page cursor");
       return false;
     }
+    if (generationChanged) this.replaceGeneration(body!, read);
     const candidate = new ThreadTranscript();
     for (const [index, event] of (body?.events ?? []).entries()) candidate.project(event,
       { createId: () => `history-${index}`, now: 0, persisted: true });
@@ -410,7 +427,7 @@ export class ThreadTranscript {
       && this.byRow.get(row.id)!.introduced > read.revision);
     const appendedTurns = new Set(appendedInputs.map((row) => row.turnId!));
     const appendedInputUnits = new Set(appendedInputs.map((row) => this.byRow.get(row.id)!));
-    const reset = read.kind === "latest" && overlaps.size === 0
+    const reset = generationChanged || read.kind === "latest" && overlaps.size === 0
       && !body?.page?.truncated_oversized_turn
       && protectedUnits.every((unit) => unit.introduced > read.revision
         && (appendedInputUnits.has(unit) || (unit.members.size > 0
@@ -614,7 +631,44 @@ export class ThreadTranscript {
         activeTurnId: body?.active_turn_id ?? null,
       }),
     };
+    if (generation !== null) this.historyGeneration = generation;
     return true;
+  }
+
+  private replaceGeneration(body: WebuiThreadPersistedPayload, read: ThreadRead): void {
+    const canonical = persistedCanonicalRunState(body);
+    const retained = new Set(canonical.snapshot.hasPendingToolCalls ? canonical.snapshot.observedTurnIds : []);
+    if (canonical.snapshot.activeTurnId) retained.add(canonical.snapshot.activeTurnId);
+    for (const row of this.messages) if (row.role === "user" && row.turnId
+      && (row.deliveryStatus === "sending" || this.byRow.get(row.id)!.introduced > read.revision)) retained.add(row.turnId);
+    const rows = new Map(this.messages.map(row => [row.id, row]));
+    const keep = Array.from(this.units).filter(unit => Array.from(unit.rows).some(id => {
+      const turn = rows.get(id)?.turnId;
+      return turn !== undefined && retained.has(turn);
+    }));
+    this.units.clear(); this.byRow.clear(); this.bySource.clear();
+    for (const unit of keep) this.installUnit(unit);
+    const messages = this.messages.filter(row => this.byRow.has(row.id));
+    const ids = new Set(messages.map(row => row.id));
+    const active = this.projection.activeAssistantId !== null && ids.has(this.projection.activeAssistantId);
+    this.projection = { ...this.projection, messages,
+      activeAssistantId: active ? this.projection.activeAssistantId : null,
+      mergeReasoning: active && this.projection.mergeReasoning,
+      activitySegmentId: null, fileEditSegmentId: null, suppressUntilTurnEnd: false,
+      closedTurnIds: new Set([...this.projection.closedTurnIds].filter(id => retained.has(id))),
+      closedAssistantIds: new Set([...this.projection.closedAssistantIds].filter(id => ids.has(id))),
+      closedAnswerStreamIds: new Set([...this.projection.closedAnswerStreamIds].filter(key => retained.has(JSON.parse(key)[0]))),
+      turnAliases: new Map([...this.projection.turnAliases].filter(([id, alias]) => retained.has(id) && retained.has(alias))),
+    };
+    this.installed = new Map([...this.installed].filter(([id]) => retained.has(id)));
+    this.textCoverage = this.textCoverage.filter(text => retained.has(text.turn));
+    this.knownTurns = new Set([...this.knownTurns].filter(id => retained.has(id)));
+    this.sideChannelTurnIds = new Set([...this.sideChannelTurnIds].filter(id => retained.has(id)));
+    this.boundaries = new Map([...this.boundaries].filter(([key]) => retained.has(JSON.parse(key)[0])));
+    this.retiredGenerations.add(this.historyGeneration!);
+    while (this.retiredGenerations.size > 64) this.retiredGenerations.delete(this.retiredGenerations.values().next().value!);
+    this.historyOwner = {};
+    this.paging = { ...emptyPaging(), version: this.paging.version, lineage: this.paging.lineage + 1 };
   }
 
   finishRead(read: ThreadRead, error: string | null = null): void {
@@ -638,6 +692,7 @@ export class ThreadTranscript {
 
   save(): ThreadTranscriptSnapshot {
     return { ...copyThreadCheckpoint(this),
+      historyGeneration: this.historyGeneration, retiredGenerations: [...this.retiredGenerations],
       units: Array.from(this.units, (unit) => ({ ...unit, rows: new Set(unit.rows), sources: new Set(unit.sources),
         members: copyMembers(unit.members), text: unit.text.map(copyText) })),
       installed: copyMembers(this.installed), textCoverage: this.textCoverage.map(copyText),

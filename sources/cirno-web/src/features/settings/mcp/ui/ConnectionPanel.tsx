@@ -10,7 +10,8 @@ import { formatTransport } from "../model/tools";
 export function ConnectionPanel({ options, model }: { options: McpManagementDialogProps; model: McpManagementModel }) {
   const { t } = useTranslation();
   const { preset, configEditor } = options;
-  const connectLabel = t(model.connected ? "settings.mcp.reconnect" : "settings.mcp.setup");
+  const connectLabel = t(model.connected && model.fieldsDirty && preset.auth !== "oauth"
+    ? "settings.mcp.applyChanges" : model.connected ? "settings.mcp.reconnect" : "settings.mcp.setup");
   return <div className="mcp-fields">
     <Card><Card.Content className="mcp-fields">
       {preset.connection_summary && <div><p className="mcp-description">{t(preset.transport === "stdio" ? "settings.mcp.command" : "settings.mcp.endpointLabel")}</p><code className="mcp-endpoint">{preset.connection_summary}</code></div>}

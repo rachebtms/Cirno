@@ -58,7 +58,7 @@ export function createRuntimeSections(bindings: SettingsComposition): SectionRen
           onToggleKeyEditing={() => {
             capabilityState.setWebSearchKeyEditing((editing) => !editing);
             capabilityState.setWebSearchKeyVisible(false);
-            capabilityState.setWebSearchForm((prev) => ({ ...prev, apiKey: "" }));
+            capabilityState.setWebSearchForm((prev) => ({ ...prev, apiKey: undefined }));
           }}
           onReset={capabilityActions.resetWebSearchDraft}
           onSave={capabilityActions.saveWebSearch}

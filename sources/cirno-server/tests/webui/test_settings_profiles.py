@@ -18,6 +18,81 @@ def test_profile_edit_preserves_home_scope_and_detects_a_new_revision(tmp_path):
         profile_payload("../../outside")
 
 
+@pytest.mark.parametrize("operation", ["read", "update"])
+def test_profile_removed_during_read_is_missing_or_a_revision_conflict(monkeypatch, operation):
+    from pathlib import Path
+
+    from cirno_core.utils.atomic_file import read_atomic_bytes
+    from cirno_server.webui.settings import profiles
+
+    path = get_home_path() / "SOUL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Original profile", encoding="utf-8")
+    before = profile_payload("soul")
+    open_path = Path.open
+    removed = False
+
+    def disappearing_file(target, *args, **kwargs):
+        nonlocal removed
+        if target == path and not removed:
+            path.unlink()
+            removed = True
+        return open_path(target, *args, **kwargs)
+
+    def disappearing_snapshot(target):
+        nonlocal removed
+        if target == path and not removed:
+            path.unlink()
+            removed = True
+        return read_atomic_bytes(target)
+
+    monkeypatch.setattr(Path, "open", disappearing_file)
+    monkeypatch.setattr(profiles, "read_atomic_bytes", disappearing_snapshot, raising=False)
+    if operation == "update":
+        with pytest.raises(WebUISettingsError) as error:
+            update_profile("soul", "Stale browser edit", before["revision"])
+        assert error.value.status == 409
+        assert not path.exists()
+    else:
+        result = profile_payload("soul")
+        assert result["content"] == ""
+        assert result["revision"] != before["revision"]
+
+
+def test_profile_snapshot_preserves_universal_newline_revisions():
+    path = get_home_path() / "SOUL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"First\r\nSecond\rThird\n")
+    result = profile_payload("soul")
+    assert result["content"] == "First\nSecond\nThird\n"
+    saved = update_profile("soul", result["content"], result["revision"])
+    assert saved["revision"] == result["revision"]
+
+
+@pytest.mark.parametrize("file_type", ["directory", "fifo"])
+def test_non_regular_profile_is_rejected_before_opening(monkeypatch, file_type):
+    import stat
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from cirno_server.webui.settings import profiles
+
+    path = get_home_path() / "SOUL.md"
+    real_stat = Path.stat
+
+    def special_stat(target, *args, **kwargs):
+        if target == path:
+            return SimpleNamespace(st_mode=stat.S_IFDIR if file_type == "directory" else stat.S_IFIFO)
+        return real_stat(target, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", special_stat)
+    monkeypatch.setattr(profiles, "read_atomic_bytes", lambda target: pytest.fail("Opened a non-regular Home resource"))
+    with pytest.raises(WebUISettingsError) as error:
+        profile_payload("soul")
+    assert error.value.status == 400
+    assert "regular file" in str(error.value)
+
+
 def test_maintenance_and_model_connection_settings_reach_the_runtime():
     config = Config()
     config.agents.defaults.provider = "custom"

@@ -23,7 +23,7 @@ async def search(context: SearchContext, query: str, n: int) -> str:
                 "https://api.tavily.com/search",
                 headers={"Authorization": f"Bearer {api_key}", "User-Agent": context.user_agent},
                 json={"query": query, "max_results": n},
-                timeout=15.0,
+                timeout=float(context.config.timeout),
             )
             r.raise_for_status()
         return _format_results(query, r.json().get("results", []), n)

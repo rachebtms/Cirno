@@ -2,10 +2,15 @@
 
 # pyright: reportPrivateUsage=false
 
+import os
+from collections.abc import Iterator
+from pathlib import Path
+from threading import Event
 from typing import Any
 
 from cirno_core.agent.tools.base import ToolResult, tool_parameters
 from cirno_core.agent.tools.filesystem.base import FileTool
+from cirno_core.agent.tools.filesystem.workers import run_file_operation
 from cirno_core.agent.tools.schema import (
     BooleanSchema,
     IntegerSchema,
@@ -69,6 +74,38 @@ class ListDirTool(FileTool):
         max_entries: int | None = None,
         **kwargs: Any,
     ) -> str:
+        return await run_file_operation(lambda cancelled: self._execute_sync(
+            path=path, recursive=recursive, max_entries=max_entries, cancelled=cancelled,
+        ))
+
+    def _entries(self, directory: Path, cancelled: Event) -> list[tuple[Path, bool, bool]]:
+        children: list[tuple[Path, bool, bool]] = []
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if cancelled.is_set():
+                    raise InterruptedError("Directory listing cancelled")
+                if entry.name in self._IGNORE_DIRS:
+                    continue
+                children.append((Path(entry.path), entry.is_dir(), entry.is_dir(follow_symlinks=False)))
+        return sorted(children)
+
+    def _walk(self, root: Path, *, recursive: bool, cancelled: Event) -> Iterator[tuple[Path, bool]]:
+        pending = [iter(self._entries(root, cancelled))]
+        while pending:
+            if cancelled.is_set():
+                raise InterruptedError("Directory listing cancelled")
+            try:
+                path, is_dir, descend = next(pending[-1])
+            except StopIteration:
+                pending.pop()
+                continue
+            yield path, is_dir
+            if recursive and descend:
+                pending.append(iter(self._entries(path, cancelled)))
+
+    def _execute_sync(
+        self, *, path: str | None, recursive: bool, max_entries: int | None, cancelled: Event,
+    ) -> str:
         try:
             if path is None:
                 raise ValueError("Unknown path")
@@ -82,22 +119,16 @@ class ListDirTool(FileTool):
             items: list[str] = []
             total = 0
 
-            if recursive:
-                for item in sorted(dp.rglob("*")):
+            for item, is_dir in self._walk(dp, recursive=recursive, cancelled=cancelled):
+                total += 1
+                if len(items) >= cap:
+                    continue
+                if recursive:
                     rel = item.relative_to(dp)
-                    if any(p in self._IGNORE_DIRS for p in rel.parts):
-                        continue
-                    total += 1
-                    if len(items) < cap:
-                        items.append(f"{rel}/" if item.is_dir() else str(rel))
-            else:
-                for item in sorted(dp.iterdir()):
-                    if item.name in self._IGNORE_DIRS:
-                        continue
-                    total += 1
-                    if len(items) < cap:
-                        pfx = "📁 " if item.is_dir() else "📄 "
-                        items.append(f"{pfx}{item.name}")
+                    items.append(f"{rel}/" if is_dir else str(rel))
+                else:
+                    pfx = "📁 " if is_dir else "📄 "
+                    items.append(f"{pfx}{item.name}")
 
             if not items and total == 0:
                 return f"Directory {path} is empty"

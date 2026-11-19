@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import Any
+from typing import Any, Literal
 
 from cirno_core.agent.tools.base import ToolResult
 from cirno_core.agent.tools.context import ToolContext
@@ -46,15 +46,24 @@ class RgTool(ExecTool):
             "description": "Native rg arguments, with each argument as one array element",
         }
         schema["required"] = ["args"]
+        properties["stdin"] = {
+            "type": "string", "enum": ["closed", "pipe"],
+            "description": "Defaults to closed so pathless searches use the working directory. "
+            "Use pipe only to intentionally search stdin or read patterns from it via shell.session.",
+        }
         return schema
 
     def command_for_approval(self, params: dict[str, Any]) -> list[str] | None:
         args = params.get("args")
         return ["rg", *args] if args else None
 
-    async def execute(self, args: list[str], **kwargs: Any) -> str:
+    async def execute(
+        self, args: list[str], stdin: Literal["closed", "pipe"] = "closed", **kwargs: Any,
+    ) -> str:
         if not args:
             return ToolResult.error("Error: Provide rg arguments, such as --help or --files.")
+        if stdin not in ("closed", "pipe"):
+            return ToolResult.error("Error: stdin must be 'closed' or 'pipe'.")
         for name in ("command", "cmd", "shell", "login"):
             kwargs.pop(name, None)
-        return await super().execute(command=["rg", *args], **kwargs)
+        return await super().execute(command=["rg", *args], stdin=stdin, **kwargs)

@@ -128,7 +128,10 @@ async def recording_mcp_proxy(tmp_path, monkeypatch: pytest.MonkeyPatch):
     for name in _PROXY_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(security_network, "getproxies", getproxies_environment)
-    monkeypatch.setattr("cirno_core.agent.tools.mcp_oauth.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        "cirno_core.agent.tools.mcp_oauth_storage._store_path",
+        lambda config_path=None: tmp_path / "auth" / "mcp.json",
+    )
     previous_whitelist = [str(cidr) for cidr in security_network._allowed_networks]
     security_network.configure_ssrf_whitelist(["127.0.0.1/32"])
     fixture = _RecordingMCPProxy()

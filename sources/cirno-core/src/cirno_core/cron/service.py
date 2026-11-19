@@ -9,6 +9,9 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Literal
 
+from filelock import FileLock
+from loguru import logger
+
 from cirno_core.cron.binding import CronBinding, CronBindingError, binding_revision
 from cirno_core.cron.repository import encode_store, load_jobs
 from cirno_core.cron.scheduling import next_run, resume_next_run, validate_schedule
@@ -23,14 +26,12 @@ from cirno_core.cron.types import (
     CronStore,
 )
 from cirno_core.runtime.admission import RuntimeAdmission
-from cirno_core.runtime.context import RUNTIME_CONTEXT_INPUT_META
+from cirno_core.session.automation_metadata import automation_origin_metadata
 from cirno_core.storage.records import RecordStoreError
 from cirno_core.utils.atomic_file import atomic_write_text
 from cirno_core.utils.run_records import (
     write_run_record as write_automation_run_record,
 )
-from filelock import FileLock
-from loguru import logger
 
 
 class CronJobSkippedError(Exception):
@@ -45,7 +46,7 @@ def _now_ms() -> int:
 def _persistable_origin_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """Return a detached JSON-safe routing snapshot for a cron payload."""
     return json.loads(json.dumps(
-        {key: value for key, value in metadata.items() if key != RUNTIME_CONTEXT_INPUT_META},
+        automation_origin_metadata(metadata),
         ensure_ascii=False, allow_nan=False,
     ))
 
@@ -503,6 +504,9 @@ class CronService:
         """Add a new job."""
         validate_schedule(schedule)
         now = _now_ms()
+        next_run_at_ms = next_run(schedule, now)
+        if next_run_at_ms is None:
+            raise ValueError("Schedule has no future occurrence; choose a future execution time")
 
         job = CronJob(
             id=str(uuid.uuid4())[:8],
@@ -517,7 +521,7 @@ class CronService:
                 origin_chat_id=origin_chat_id,
                 origin_metadata=origin_metadata or {},
             ),
-            state=CronJobState(next_run_at_ms=next_run(schedule, now)),
+            state=CronJobState(next_run_at_ms=next_run_at_ms),
             created_at_ms=now,
             updated_at_ms=now,
             delete_after_run=delete_after_run,
@@ -545,8 +549,9 @@ class CronService:
             if existing is not None and existing.enabled and existing.schedule == job.schedule
             else None
         )
-        job.state = CronJobState(next_run_at_ms=resume_next_run(job.schedule, persisted_ms, now))
-        job.created_at_ms = now
+        job.state = deepcopy(existing.state) if existing is not None else CronJobState()
+        job.state.next_run_at_ms = resume_next_run(job.schedule, persisted_ms, now)
+        job.created_at_ms = existing.created_at_ms if existing is not None else now
         job.updated_at_ms = now
         store.jobs = [j for j in store.jobs if j.id != job.id]
         store.jobs.append(job)
@@ -597,13 +602,21 @@ class CronService:
         store = self._load_store()
         for job in store.jobs:
             if job.id == job_id:
+                if job.enabled == enabled and (enabled or job.state.next_run_at_ms is None):
+                    return job
+                next_run_at_ms = next_run(job.schedule, _now_ms()) if enabled else None
+                if enabled and next_run_at_ms is None:
+                    raise ValueError(
+                        "Schedule has no future occurrence; update its time before enabling"
+                    )
                 job.enabled = enabled
                 job.updated_at_ms = _now_ms()
+                # A state transition establishes a new occurrence, even with
+                # identical schedule fields. An older running callback must
+                # not overwrite it (or delete a newly re-enabled one-shot).
+                job.schedule = replace(job.schedule)
                 self._enforce_agent_binding(job)
-                if job.enabled:
-                    job.state.next_run_at_ms = next_run(job.schedule, _now_ms())
-                else:
-                    job.state.next_run_at_ms = None
+                job.state.next_run_at_ms = next_run_at_ms if job.enabled else None
                 if self._should_persist_store():
                     self._save_store()
                     self._arm_timer()
@@ -635,9 +648,18 @@ class CronService:
             return "protected"
 
         schedule_changed = schedule is not None and schedule != job.schedule
+        next_run_at_ms = job.state.next_run_at_ms
         if schedule is not None:
             validate_schedule(schedule)
             if schedule_changed:
+                # Syntax alone cannot establish that a cron expression has
+                # a next occurrence. Compute it before mutating the live job,
+                # which may also be owned by an executing callback.
+                next_run_at_ms = next_run(schedule, _now_ms())
+                if next_run_at_ms is None:
+                    raise ValueError(
+                        "Schedule has no future occurrence; choose a future execution time"
+                    )
                 job.schedule = replace(schedule)
         if name is not None:
             job.name = name
@@ -652,7 +674,7 @@ class CronService:
         if not job.enabled:
             job.state.next_run_at_ms = None
         elif schedule_changed:
-            job.state.next_run_at_ms = next_run(job.schedule, _now_ms())
+            job.state.next_run_at_ms = next_run_at_ms
 
         if self._should_persist_store():
             self._save_store()

@@ -1,13 +1,51 @@
 """Editing task instructions must not postpone or drop an existing occurrence."""
 
 import asyncio
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
 
 from cirno_core.cron.service import CronService
 from cirno_core.cron.types import CronJob, CronSchedule
+
+
+async def test_nonrunnable_schedule_edit_does_not_mutate_an_executing_job(tmp_path):
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def execute(job):
+        entered.set()
+        await release.wait()
+
+    service = CronService(tmp_path / "cron" / "jobs.json", on_job=execute)
+    job = service.add_job(
+        name="Report", schedule=CronSchedule(kind="every", every_ms=60_000),
+        message="Keep this instruction", session_key="websocket:report",
+        origin_channel="websocket", origin_chat_id="report",
+    )
+    running = asyncio.create_task(service.run_job(job.id))
+    try:
+        async with asyncio.timeout(2):
+            await entered.wait()
+            current = service.get_job(job.id)
+            assert current is not None
+            before = asdict(current)
+            with pytest.raises(ValueError):
+                service.update_job(
+                    job.id, name="Rejected name", message="Rejected instruction",
+                    schedule=CronSchedule(kind="cron", expr="0 0 31 2 *", tz="UTC"),
+                )
+            assert asdict(current) == before
+            release.set()
+            assert await running
+    finally:
+        release.set()
+        await asyncio.gather(running, return_exceptions=True)
+    saved = CronService(service.store_path).get_job(job.id)
+    assert saved is not None and saved.name == "Report"
+    assert saved.payload.message == "Keep this instruction"
+    assert saved.state.last_status == "ok"
+    assert len(saved.state.run_history) == 1
 
 
 @pytest.mark.parametrize("kind", ["every", "cron", "at"])

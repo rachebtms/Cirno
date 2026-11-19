@@ -95,6 +95,10 @@ materialization, manifests, catalog projection, custom configuration parsing,
 persistence, settings actions and connection inspection. Inspection and runtime
 reconnection share the same connection-close owner. Configuration failures reach
 the caller; a failed inspection cleanup cannot report success.
+Core `agent/tools/mcp_oauth.py` owns SDK/browser authentication flows and keeps
+its public storage exports compatible. `mcp_oauth_storage.py` owns the MCP token
+file, config-instance identity, write generations, authorization claims and
+refresh leases. Provider OAuth retains its separate lifecycle and storage policy.
 
 The browser's `features/conversations/catalog/` owns the Conversations tab and
 explicit Project sections. `features/conversations/shared/` owns selection,
@@ -202,6 +206,13 @@ the history operations.
 Socket callbacks and authorization refreshes belong to one connection generation;
 closing or replacing it revokes that generation. `cirno-client.ts` composes this
 transport with delivery receipts, conversation subscriptions and the run ledger.
+`client-message-delivery.ts` owns text, attachment and shell acceptance waits and
+their rejection receipts. Their replay policies remain distinct: shell commands
+are never queued, attachment upload is bound to its starting socket, and expired
+text is removed from the queue. `client-notifications.ts` owns the typed observer
+channels and status/run snapshot subscriptions. `client-run-observation.ts`
+projects run-ledger observations without owning a connection. Existing client
+methods and exported message types remain available through `cirno-client.ts`.
 `client-mutations.ts` owns correlated mutation results, deadlines and exact-frame
 replay. `client-chat-requests.ts` owns creation/fork correlation and removes expired
 commands from the unsent queue. `client-listeners.ts` isolates and diagnoses UI
@@ -217,6 +228,14 @@ reads retain one opened snapshot and settle their worker before releasing it on
 cancellation. The handshake parser handles WebSocket upgrades and ordinary API reads.
 
 The server's `webui/settings/providers/` owns provider connections, balance configuration, authorization and connection payloads. `webui/settings/models/` owns presets, request overrides, upstream catalogs and model selection. Their transport coordinator is `settings/connections.py`; callers import domain helpers from their owners.
+
+`webui/settings/system.py` coordinates system requests and retains channel
+connector lifetimes. Its injected operations live in `system_contracts.py`.
+`feature_settings.py` owns feature actions, pending channel restarts and runtime
+receipts. `channel_values.py` owns authoritative channel field coercion and its
+configuration transaction. Channel defaults, draft validation and settings saves
+share nested-field assignment through `channels/field_values.py`; draft coercion
+remains best-effort and does not replace authoritative save validation.
 
 `channels/delivery/publish.py` admits outbound messages, records their history
 and mirrors Router replies to the verified Telegram owner. Binding storage reads

@@ -51,6 +51,18 @@ def test_concurrent_external_change_is_not_overwritten(tmp_path):
     assert path.read_text() == "agent changed this"
 
 
+def test_invalid_text_is_rejected_before_replacing_the_file(tmp_path):
+    scope = build_workspace_scope(tmp_path, "restricted")
+    path = tmp_path / "notes.md"
+    path.write_text("keep my notes")
+    revision = read_workspace_file(str(path), scope=scope)["revision"]
+    with pytest.raises(WebUIFilePreviewError) as error:
+        save_workspace_file(str(path), "text\0binary", revision, scope=scope)
+    assert error.value.status == 415
+    assert path.read_text() == "keep my notes"
+    assert read_workspace_file(str(path), scope=scope)["revision"] == revision
+
+
 @pytest.mark.parametrize("kind", ["file", "directory"])
 def test_create_never_overwrites_existing_entries(tmp_path, kind):
     scope = build_workspace_scope(tmp_path, "restricted")

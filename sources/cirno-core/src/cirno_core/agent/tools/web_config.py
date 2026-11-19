@@ -17,6 +17,7 @@ class WebSearchConfig(Base):
 class WebFetchConfig(Base):
     """Web fetch tool configuration."""
     use_jina_reader: bool = True
+    max_response_mb: int = Field(default=16, ge=1, strict=True)
 
 
 class WebToolsConfig(Base):

@@ -13,6 +13,7 @@ from cirno_core.providers.catalog.contracts import ProviderModelSpec, ProviderSp
 from cirno_core.providers.oauth_model_catalog import (
     get_oauth_model_catalog,
 )
+
 from cirno_server.webui.settings.connection_contracts import (
     HttpGet,
     ProviderModelMetadataPayload,
@@ -327,9 +328,11 @@ def provider_models_payload(
             "fetched_at": catalog.fetched_at,
         }
 
-    api_base = _resolve_env_placeholders(provider_config.api_base) or spec.default_api_base
-    if spec.name == "openai" and not api_base:
-        api_base = "https://api.openai.com/v1"
+    api_base = _resolve_env_placeholders(provider_config.api_base)
+    if not (provider_config.api_base or "").strip():
+        api_base = spec.default_api_base
+        if spec.name == "openai" and not api_base:
+            api_base = "https://api.openai.com/v1"
     if not api_base:
         return {
             **base_payload,
@@ -338,7 +341,7 @@ def provider_models_payload(
         }
 
     api_key = _resolve_env_placeholders(provider_config.api_key)
-    if provider_requires_api_key(spec) and not api_key:
+    if not api_key and (provider_requires_api_key(spec) or (provider_config.api_key or "").strip()):
         return {
             **base_payload,
             "status": "not_configured",
@@ -363,7 +366,8 @@ def provider_models_payload(
             headers=headers,
             timeout=10.0,
             follow_redirects=False,
-            **({"proxy": proxy, "trust_env": False} if proxy else {}),
+            trust_env=False,
+            **({"proxy": proxy} if proxy else {}),
         )
         response.raise_for_status()
         rows = _extract_model_rows(response.json(), spec=spec)
@@ -380,11 +384,11 @@ def provider_models_payload(
             "status": "error",
             "message": f"Model list request failed with HTTP {status}.",
         }
-    except (httpx.HTTPError, ValueError) as exc:
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError):
         return {
             **base_payload,
             "status": "error",
-            "message": f"Could not load models: {exc}",
+            "message": "Could not load models. Check the provider URL, shared proxy and catalog response format.",
         }
 
     return {

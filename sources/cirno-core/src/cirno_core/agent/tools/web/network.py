@@ -2,12 +2,36 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
+
 from cirno_core.agent.tools.web.constants import MAX_REDIRECTS
 from cirno_core.agent.tools.web.safety import _url_carries_credentials
+
+
+class ResponseTooLargeError(ValueError):
+    """A response exceeded the configured fetch budget before extraction."""
+
+
+async def _read_response_bounded(response: httpx.Response, max_bytes: int) -> bytes:
+    """Count decoded streaming bytes, including when Content-Length is absent."""
+    if max_bytes < 1:
+        raise ValueError("response byte limit must be positive")
+    try:
+        announced = int(response.headers.get("content-length", ""))
+    except ValueError:
+        announced = 0
+    if announced > max_bytes:
+        raise ResponseTooLargeError(f"Web response exceeds the configured {max_bytes:,}-byte limit")
+    body = bytearray()
+    async for chunk in response.aiter_bytes(chunk_size=min(64 * 1024, max_bytes + 1)):
+        if len(body) + len(chunk) > max_bytes:
+            raise ResponseTooLargeError(f"Web response exceeds the configured {max_bytes:,}-byte limit")
+        body.extend(chunk)
+    return bytes(body)
 
 
 def _validate_url(url: str) -> tuple[bool, str]:
@@ -67,11 +91,27 @@ async def _get_with_safe_redirects(
     client: httpx.AsyncClient,
     url: str,
     headers: dict[str, str] | None = None,
+    *, max_response_bytes: int | None = None,
 ) -> tuple[httpx.Response | None, str | None]:
     """GET a URL while validating every redirect target before requesting it."""
+    if max_response_bytes is not None:
+        response, stream, error, _ = await _stream_with_safe_redirects(client, url, headers)
+        if response is None or stream is None:
+            return None, error
+        try:
+            body = await _read_response_bounded(response, max_response_bytes)
+            # aiter_bytes already decoded Content-Encoding. Retain type/charset,
+            # but never ask the reconstructed response to decompress it again.
+            decoded_headers = response.headers.copy()
+            decoded_headers.pop("content-encoding", None)
+            decoded_headers.pop("content-length", None)
+            return httpx.Response(response.status_code, headers=decoded_headers, content=body,
+                                  request=response.request, extensions=response.extensions), None
+        finally:
+            await stream.__aexit__(None, None, None)
     current_url = url
     for _ in range(MAX_REDIRECTS + 1):
-        is_valid, error_msg, _ = _resolve_url_safe(current_url)
+        is_valid, error_msg, _ = await asyncio.to_thread(_resolve_url_safe, current_url)
         if not is_valid:
             return None, f"Redirect blocked: {error_msg}"
 
@@ -90,13 +130,16 @@ async def _get_with_safe_redirects(
         if not location:
             return response, None
 
-        next_url = urljoin(str(response.url), location)
-        is_valid, error_msg = _validate_url_safe(next_url)
-        if not is_valid:
+        try:
+            next_url = urljoin(str(response.url), location)
+            is_valid, error_msg = await asyncio.to_thread(_validate_url_safe, next_url)
+        except ValueError:
+            return None, "Redirect blocked: invalid redirect URL"
+        finally:
             await response.aclose()
+        if not is_valid:
             return None, f"Redirect blocked: {error_msg}"
 
-        await response.aclose()
         current_url = next_url
 
     return None, f"Too many redirects: exceeded limit of {MAX_REDIRECTS}"
@@ -111,7 +154,7 @@ async def _stream_with_safe_redirects(
     current_url = url
     chain_carries_credentials = _url_carries_credentials(url)
     for _ in range(MAX_REDIRECTS + 1):
-        is_valid, error_msg, _ = _resolve_url_safe(current_url)
+        is_valid, error_msg, _ = await asyncio.to_thread(_resolve_url_safe, current_url)
         if not is_valid:
             return None, None, f"Redirect blocked: {error_msg}", chain_carries_credentials
 
@@ -141,14 +184,17 @@ async def _stream_with_safe_redirects(
         if not location:
             return response, stream, None, chain_carries_credentials
 
-        next_url = urljoin(str(response.url), location)
-        chain_carries_credentials = chain_carries_credentials or _url_carries_credentials(next_url)
-        is_valid, error_msg = _validate_url_safe(next_url)
-        if not is_valid:
+        try:
+            next_url = urljoin(str(response.url), location)
+            chain_carries_credentials = chain_carries_credentials or _url_carries_credentials(next_url)
+            is_valid, error_msg = await asyncio.to_thread(_validate_url_safe, next_url)
+        except ValueError:
+            return None, None, "Redirect blocked: invalid redirect URL", chain_carries_credentials
+        finally:
             await stream.__aexit__(None, None, None)
+        if not is_valid:
             return None, None, f"Redirect blocked: {error_msg}", chain_carries_credentials
 
-        await stream.__aexit__(None, None, None)
         current_url = next_url
 
     return (

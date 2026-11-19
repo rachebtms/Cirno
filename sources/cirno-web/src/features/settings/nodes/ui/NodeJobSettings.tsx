@@ -1,5 +1,5 @@
 import { Alert, Description, Input, Label, TextField } from "@heroui/react";
-import { useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CirnoClient } from "@/lib/cirno-client";
 import { useLifetime } from "@/ui/resources/useLifetime";
@@ -14,22 +14,28 @@ export function NodeJobSettings({ nodes, client }: { nodes: NodesController; cli
   const [draft, setDraft] = useState<Partial<Record<keyof Policy, string>>>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const pending = useRef(false);
+  const pending = useMemo(() => ({ value: false }), [client]);
+  const [stateClient, setStateClient] = useState(client);
+  if (stateClient !== client) {
+    setStateClient(client);
+    setDraft({}); setError(""); setSaving(false);
+  }
   const commit = async (field: keyof Policy) => {
+    if (!current()) return;
     const submitted = draft[field];
-    if (submitted === undefined || pending.current) return;
+    if (submitted === undefined || pending.value) return;
     const value = Number(submitted);
     if (!/^\d+$/.test(submitted.trim()) || !Number.isSafeInteger(value) || value < 0) {
       setError(t("features.nodeJobInteger")); return;
     }
-    pending.current = true; setSaving(true); setError("");
+    pending.value = true; setSaving(true); setError("");
     try {
       await nodes.saveJobSettings({ [field]: value });
       if (current()) setDraft(previous => previous[field] === submitted ? { ...previous, [field]: undefined } : previous);
     } catch (reason) {
       if (current()) setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      pending.current = false;
+      pending.value = false;
       if (current()) setSaving(false);
     }
   };

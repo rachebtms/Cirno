@@ -7,6 +7,7 @@ from typing import Any
 
 from cirno_core.agent.tools.filesystem.edit_io import (
     MAX_PATCH_BYTES,
+    EditText,
     check_edit_size,
     read_edit_snapshot,
 )
@@ -15,9 +16,10 @@ from cirno_core.utils.file_transactions import file_write_transaction
 
 
 def _append(content: str, edit: dict[str, Any]) -> str:
-    extra = edit["new_text"].replace("\r\n", "\n")
-    if content and extra and not content.endswith("\n") and not extra.startswith("\n"):
-        content += "\n"
+    snapshot = EditText(content)
+    extra = snapshot.replacement(edit["new_text"], len(snapshot.text)) if content else edit["new_text"]
+    if content and extra and not content.endswith("\n") and not extra.startswith(("\n", "\r\n")):
+        content += snapshot.line_ending(len(snapshot.text))
     return content + extra
 
 
@@ -26,12 +28,13 @@ def _replace(content: str, edit: dict[str, Any]) -> str:
     if not isinstance(old, str) or not old:
         raise ValueError("old_text required for replace")
     old = old.replace("\r\n", "\n")
-    pos = content.find(old)
+    snapshot = EditText(content)
+    pos = snapshot.text.find(old)
     if pos < 0:
         raise ValueError("old_text not found")
-    if content.find(old, pos + 1) >= 0:
+    if snapshot.text.find(old, pos + 1) >= 0:
         raise ValueError("old_text appears multiple times")
-    return content[:pos] + edit["new_text"].replace("\r\n", "\n") + content[pos + len(old) :]
+    return snapshot.slice(0, pos) + snapshot.replacement(edit["new_text"], pos) + snapshot.slice(pos + len(old))
 
 
 _EDIT_ACTIONS = {"add": _append, "replace": _replace}
@@ -62,13 +65,12 @@ class PatchPlan:
 
         content = self.writes.get(source, self.originals[source] or "")
         try:
-            updated = _EDIT_ACTIONS[action](content.replace("\r\n", "\n"), edit)
+            updated = _EDIT_ACTIONS[action](content, edit)
         except ValueError as exc:
             raise ValueError(f"{exc} in {source}") from exc
         if updated and not updated.endswith("\n"):
-            updated += "\n"
-        if "\r\n" in content:
-            updated = updated.replace("\n", "\r\n")
+            snapshot = EditText(updated)
+            updated += snapshot.line_ending(len(snapshot.text))
         check_edit_size(updated, source)
         previous_size = len(self.writes.get(source, "").encode("utf-8"))
         self._write_bytes += len(updated.encode("utf-8")) - previous_size

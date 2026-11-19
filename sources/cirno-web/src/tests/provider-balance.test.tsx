@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,25 @@ import {
 
 describe("independent provider balance settings", () => {
   installSettingsViewTestHooks();
+  it("locks the balance draft while an explicit save is pending", async () => {
+    const payload = settingsPayload();
+    payload.providers = [{ id: "deepseek", name: "DeepSeek", configured: true,
+      balance: { endpoint: "https://billing.example/account", format: "json", amount_path: "/balance", currency: "USD", api_key: null },
+    }];
+    let finish!: (value: typeof payload) => void;
+    requestMutationMock.mockReturnValueOnce(new Promise<typeof payload>(resolve => { finish = resolve; }));
+    renderSettingsView({ initialSettings: payload, initialSection: "providers" });
+    fireEvent.click(screen.getByRole("button", { name: "Account balance: DeepSeek" }));
+    const endpoint = screen.getByRole("textbox", { name: "Balance API URL" });
+    expect(endpoint).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(1));
+    const locked = endpoint.closest("fieldset")?.disabled;
+    await act(async () => { finish(payload); });
+    expect(locked).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("saves a separate endpoint and credential, queries only on refresh, and can disable it", async () => {
     const user = userEvent.setup();
     const payload = settingsPayload();

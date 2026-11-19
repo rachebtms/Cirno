@@ -13,8 +13,10 @@ from typing import Any, cast
 
 from aiohttp import web
 from aiohttp.web_protocol import RequestHandler
-from cirno_server.channels.websocket.attachment_policy import UPLOAD_REQUEST_TIMEOUT_SECONDS
+from cirno_core.utils.cancellation import shield_and_drain
 from websockets.asyncio.server import ServerConnection
+
+from cirno_server.channels.websocket.attachment_policy import UPLOAD_REQUEST_TIMEOUT_SECONDS
 
 _HTTP_HEADER_TIMEOUT_S = 75.0
 _HTTP_CONNECTION_TIMEOUT_S = UPLOAD_REQUEST_TIMEOUT_SECONDS
@@ -32,15 +34,23 @@ class BinaryHTTPBridge:
     """
 
     def __init__(self, handler: Callable[[web.BaseRequest], Awaitable[web.StreamResponse]]) -> None:
+        self._requests: set[asyncio.Task[Any]] = set()
+
         async def request_started(request: web.BaseRequest) -> web.StreamResponse:
-            if request.transport is not None:
-                # This bridge remains the transport protocol while delegating
-                # HTTP parsing to RequestHandler on the same transport.
-                connection = cast(_BridgeConnection, request.transport.get_protocol())
-                connection.request_started(
-                    long_transfer=request.path.startswith(("/v0/backups/", "/v0/media/", "/v0/traces/"))
-                )
-            return await handler(request)
+            task = asyncio.current_task()
+            assert task is not None
+            self._requests.add(task)
+            try:
+                if request.transport is not None:
+                    # This bridge remains the transport protocol while delegating
+                    # HTTP parsing to RequestHandler on the same transport.
+                    connection = cast(_BridgeConnection, request.transport.get_protocol())
+                    connection.request_started(
+                        long_transfer=request.path.startswith(("/v0/backups/", "/v0/media/", "/v0/traces/"))
+                    )
+                return await handler(request)
+            finally:
+                self._requests.discard(task)
 
         self.http_server = web.Server(request_started, auto_decompress=False, keepalive_timeout=5)
         self.pending_connections: set[_BridgeConnection] = set()
@@ -54,9 +64,24 @@ class BinaryHTTPBridge:
         self.connection_factory: type[ServerConnection] = Connection
 
     async def shutdown(self) -> None:
-        for connection in tuple(self.pending_connections):
-            connection.transport.close()
-        await self.http_server.shutdown(timeout=1)
+        caller = asyncio.current_task()
+
+        async def finish():
+            try:
+                for connection in tuple(self.pending_connections):
+                    connection.transport.close()
+                await self.http_server.shutdown(timeout=1)
+            finally:
+                # aiohttp's grace period can expire while an accepted disk
+                # worker is still settling. Retain those handlers before the
+                # listener owner clears upload state or releases its files.
+                requests = tuple(task for task in self._requests if task is not caller)
+                for task in requests:
+                    task.cancel()
+                if requests:
+                    await asyncio.gather(*requests, return_exceptions=True)
+
+        await shield_and_drain(finish())
 
 
 class _BridgeConnection(ServerConnection):

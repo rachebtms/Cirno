@@ -128,6 +128,18 @@ class MemoryArchiver:
         on_model_request: Callable[[], None] | None = None,
     ) -> str | None:
         """Generate a replacement checkpoint and optionally persist it."""
+        from cirno_vault.redaction import tool_history
+
+        private_sources = tool_history(source_messages)
+        if private_sources is not source_messages:
+            provider_state = None
+        source_messages = private_sources
+        if history is not None:
+            private_history = tool_history(history)
+            if private_history is not history:
+                # A native payload may also replay the secret: rebuild only this sensitive request.
+                provider_state = None
+            history = private_history
         # Match the immutable evidence writer's message numbering; instruction
         # prefixes stay in the request for caching, not in the source transcript.
         source_messages = [message for message in source_messages

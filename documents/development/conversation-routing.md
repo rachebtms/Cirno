@@ -11,11 +11,60 @@ Stop is a priority command for the selected conversation. It cancels its active 
 A failed status write or child cleanup does not skip the remaining cleanup.
 The server reports the original failures after those operations settle.
 
+Web search and network settings saves run their configuration transactions in
+workers, using the same process and file locks as other settings mutations.
+Waiting for a configuration lock or disk write does not block chat processing;
+the response still reports the committed payload or the original validation
+error. Failed validation does not save a partial configuration.
+
 The Router’s clear button asks for confirmation and uses `/clear`. Reset stops the current execution, starts a new session generation and removes the old transcript, Goal and report state while keeping the conversation identity and saved memory. Empty persisted conversations and the new-conversation page share the same composer presentation.
 
 Server-created providers use the configured `network.requestTimeoutS` and `network.streamIdleTimeoutS`, both 120 seconds by default, and `network.providerMaxRetries`, default three with a minimum of three. Manage these under Settings → Network & retries and restart when required. Provider-constructor environment variables are lower-level defaults and do not override those saved server settings. The request timeout covers connection setup and non-streaming response waits. Streaming reads use their separate inactivity timeout; a continuously active stream has no total-duration cutoff. These values reach native adapters as well as Chat Completions, Responses HTTP and Responses WebSocket transports. Cancellation stops retry waits. Blocking SDK operations settle within their configured network timeouts before their resources are released.
 
+Provider construction applies saved runtime settings through one factory path,
+including the setup-only provider used before credentials are configured.
+`LLMProvider` can inherit a configured `runtime_source`: mutable retry and timeout
+policies are copied, while immutable generation and media settings can be shared.
+It initializes generation without invoking a subclass's forwarding setter.
+`FallbackProvider` uses this path instead of resetting and restoring its primary;
+explicit generation changes still forward to that primary. The wrapper does not
+reload environment defaults over an already configured runtime. Transport clients,
+observers and executors retain their own lifecycle; a runtime copy is not a
+transport or credential clone.
+
+Streaming and non-streaming retry entry points resolve generation parameters
+through the same helper. Omitted values use one current generation snapshot;
+explicit `None` for token limit or temperature also uses that snapshot, while
+explicit `None` for reasoning effort clears the preset effort. Zero temperature
+is an explicit override. This resolution does not mutate transcript messages or
+construct transport clients.
+
+The commit, cancellation and draft-acknowledgement contracts are maintained in
+[Cancellation and settlement](../architecture/async-settlement.md).
+
 The server owns work; the frontend projects conversation state.
+
+Durable completion IDs settle their matching runs even when a newer run prevents
+adoption of the entire history page. A newer owner retains its own activity and
+timer. A running status without a start timestamp still means running; missing
+timing metadata does not complete a turn. History pages rejected by the active
+transcript are not published to the shared replay cache. Reconnection applies
+explicit older completions separately from deciding whether an active page is
+current enough to cache.
+
+HTTP history also carries a stable generation identity. If a browser missed a
+reset or edit notification while disconnected, a replacement generation removes
+discarded messages, local question acknowledgements and run owners. New live
+work represented in the replacement and unconfirmed user sends are retained.
+Late pages from retired generations cannot restore removed history or Working
+state, including in inactive conversations recovered after reconnect. Ordinary
+appends retain the generation and the normal merge/cache path. These checks add
+no model requests or model concurrency and do not change the model prompt prefix.
+The server likewise selects running owners by the current history generation
+for HTTP replay, reconnect status hydration and workspace-change admission. A
+discarded owner cannot keep the replacement conversation marked as running or
+prevent its workspace settings from being changed; a current running owner
+still prevents those changes.
 
 ## Editing saved messages and mobile input
 
@@ -48,6 +97,12 @@ one failure boundary with model execution. A failed accepted input emits its
 terminal result and releases automation waiters. A delegated conversation records
 the failed stage through the same work-report service as model failures. A failed
 input does not stop the main bus loop or the next input in its conversation.
+
+Startup recovery reads existing histories without creating missing candidates.
+A delete, reset or newer recovery decision can invalidate the draft being
+examined. That conflict discards the obsolete recovery result, including an
+obsolete failure result, and scanning continues with the other conversations.
+The replacement history and its pending inputs are retained.
 
 Session privacy controls diagnostic tracebacks, including failures before context
 restoration or after cache eviction. Temporary conversations keep their in-memory

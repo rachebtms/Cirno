@@ -72,9 +72,9 @@ function providerRequestOptionEnabled(
 function updateProviderRequestOption(
   option: ProviderRequestOption,
   enabled: boolean,
-  form: ProviderForm,
+  body: Record<string, unknown>,
 ): Partial<ProviderForm> {
-  const extraBody = { ...(parseProviderObject(form.extraBody) ?? {}) };
+  const extraBody = { ...body };
   if (option.kind === "priority") {
     if (enabled) extraBody.service_tier = "priority";
     else if (extraBody.service_tier === "priority") delete extraBody.service_tier;
@@ -113,13 +113,14 @@ export function ProviderRequestOptions({
   const options = (PROVIDER_REQUEST_OPTIONS[providerName] ?? [])
     .filter((option) => !option.forceResponses || apiConfigurable);
   if (options.length === 0) return null;
-  const extraBody = parseProviderObject(form.extraBody) ?? {};
+  const extraBody = parseProviderObject(form.extraBody);
 
   const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
 
   return <div className="provider-fields">{options.map(option => {
     const title = tx(option.titleKey, option.title);
-    return <ToggleField key={option.titleKey} label={title} description={tx(option.helpKey, option.help)} selected={providerRequestOptionEnabled(option, extraBody)}
-      onChange={enabled => onChange(updateProviderRequestOption(option, enabled, form))} />;
+    return <ToggleField key={option.titleKey} label={title} description={tx(option.helpKey, option.help)} selected={providerRequestOptionEnabled(option, extraBody ?? {})}
+      disabled={extraBody === null}
+      onChange={enabled => { if (extraBody) onChange(updateProviderRequestOption(option, enabled, extraBody)); }} />;
   })}</div>;
 }

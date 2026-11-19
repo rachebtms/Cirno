@@ -37,9 +37,20 @@ def _excerpt(text: str, needle: str, limit: int, *, compact_whitespace: bool = T
     compact = " ".join(text.split()) if compact_whitespace else text
     if len(compact) <= limit:
         return compact
-    index = compact.casefold().find(needle)
+    folded = compact.casefold()
+    display_needle = " ".join(needle.split()) if compact_whitespace else needle
+    index = folded.find(display_needle)
     if index < 0:
         return compact[: limit - 1].rstrip() + "…"
+    if len(folded) != len(compact):
+        # Full Unicode case folding can expand a character (e.g. ß -> ss).
+        # Convert the matching offset back before slicing the original text.
+        folded_offset = 0
+        for original_index, character in enumerate(compact):
+            folded_offset += len(character.casefold())
+            if folded_offset > index:
+                index = original_index
+                break
     start = max(0, index - limit // 3)
     end = min(len(compact), start + limit)
     start = max(0, end - limit)

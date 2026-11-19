@@ -16,8 +16,16 @@ def is_direct_openai_base(api_base: str | None) -> bool:
     """Return whether the endpoint matches the direct OpenAI routing rule."""
     if not api_base:
         return True
-    normalized = api_base.strip().lower().rstrip("/")
-    return "api.openai.com" in normalized and "openrouter" not in normalized
+    try:
+        parsed = urlsplit(api_base.strip())
+        port = parsed.port
+        return (
+            parsed.scheme in {"http", "https"}
+            and (parsed.hostname or "").lower().rstrip(".") == "api.openai.com"
+            and port != 0
+        )
+    except ValueError:
+        return False
 
 
 def _api_base_identity(api_base: str) -> tuple[str, str | None, int | None, str]:

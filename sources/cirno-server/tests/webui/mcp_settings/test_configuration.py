@@ -295,3 +295,51 @@ def test_custom_mcp_edit_roundtrip_preserves_connection_fields(tmp_path, server)
     assert after == before.model_copy(update={"tool_timeout": 120})
     with pytest.raises(McpPresetError, match="unknown custom MCP server"):
         custom_mcp_config_payload("missing", config_path=path)
+
+
+@pytest.mark.parametrize('field', ['enabledTools', 'enabled_tools'])
+@pytest.mark.parametrize('invalid', ['read_only', {'read': True}, [1], ['read', False], None])
+def test_import_invalid_tool_scope_never_expands_to_all_capabilities(tmp_path, monkeypatch, field, invalid):
+    _use_config(tmp_path, monkeypatch)
+    original = (tmp_path / 'config.json').read_text()
+    servers = {'valid-first': {'command': 'fixture', 'enabledTools': ['read']},
+               'invalid-scope': {'command': 'fixture', field: invalid}}
+    with pytest.raises(McpPresetError, match='enabledTools must be a string array'):
+        custom_mcp_action('import', {'config': [json.dumps({'mcpServers': servers})]})
+    assert (tmp_path / 'config.json').read_text() == original
+    assert load_config().tools.mcp_servers == {}
+
+
+@pytest.mark.parametrize('action', ['custom', 'import'])
+def test_connection_edit_without_tool_scope_retains_existing_restrictions(tmp_path, monkeypatch, action):
+    from cirno_core.config.tools import MCPServerConfig
+
+    _use_config(tmp_path, monkeypatch)
+    config = load_config()
+    config.tools.mcp_servers['docs'] = MCPServerConfig(command='old-command', enabled_tools=['read'])
+    save_config(config)
+    if action == 'custom':
+        query = {'name': ['docs'], 'command': ['new-command']}
+    else:
+        query = {'config': [json.dumps({'mcpServers': {'docs': {'command': 'new-command'}}})]}
+    custom_mcp_action(action, query)
+    saved = load_config().tools.mcp_servers['docs']
+    assert saved.command == 'new-command'
+    assert saved.enabled_tools == ['read']
+
+
+@pytest.mark.parametrize('action', ['custom', 'import'])
+@pytest.mark.parametrize('scope', [[], ['*'], ['different-read']])
+def test_connection_edit_respects_an_explicit_tool_scope(tmp_path, monkeypatch, action, scope):
+    from cirno_core.config.tools import MCPServerConfig
+
+    _use_config(tmp_path, monkeypatch)
+    config = load_config()
+    config.tools.mcp_servers['docs'] = MCPServerConfig(command='old-command', enabled_tools=['read'])
+    save_config(config)
+    if action == 'custom':
+        query = {'name': ['docs'], 'command': ['new-command'], 'enabled_tools': [json.dumps(scope)]}
+    else:
+        query = {'config': [json.dumps({'mcpServers': {'docs': {'command': 'new-command', 'enabledTools': scope}}})]}
+    custom_mcp_action(action, query)
+    assert load_config().tools.mcp_servers['docs'].enabled_tools == scope

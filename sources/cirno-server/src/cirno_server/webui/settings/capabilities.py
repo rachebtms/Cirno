@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 from cirno_core.agent.tools.web.catalog import SEARCH_PROVIDER_OPTIONS
 from cirno_core.config.schema import Config
+from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.webui.settings.connection_contracts import OAuthStatusReader
 from cirno_server.webui.settings.contracts import (
     QueryParams,
@@ -192,7 +195,7 @@ def network_safety_payload(config: Config) -> dict[str, Any]:
     """Return the network-related fields embedded in the advanced DTO."""
     return {
         "webui_allow_local_service_access": config.tools.webui_allow_local_service_access,
-        "webui_default_access_mode": read_webui_default_access_mode(),
+        "webui_default_access_mode": read_webui_default_access_mode(state_dir=config.runtime_data_dir),
         "private_service_protection_enabled": True,
         "ssrf_whitelist_count": len(config.tools.ssrf_whitelist),
     }
@@ -214,7 +217,9 @@ class CapabilitySettingsHandler:
             return SettingsRouteResult.failure(404, "unknown settings action")
         operation, section = mutation
         try:
-            payload = self.settings.mutate(operation, request.query)
+            payload = await shield_and_drain(asyncio.to_thread(
+                self.settings.mutate, operation, request.query,
+            ))
         except WebUISettingsError as exc:
             return SettingsRouteResult.failure(exc.status, exc.message)
         return SettingsRouteResult.success(payload, decorate_restart=True, restart_section=section)

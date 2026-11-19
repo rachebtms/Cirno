@@ -13,6 +13,7 @@ from cirno_core.processes.sessions.contracts import (
     SessionPoll,
 )
 from cirno_core.processes.sessions.manager import ExecSessionManager
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 @dataclass(slots=True)
@@ -41,33 +42,55 @@ async def observe_session(
     matched = False
     stdin_was_closed = False
 
-    while True:
-        remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
-        step_ms = min(MAX_YIELD_MS if until_exit else 500, remaining_ms)
-        poll = await manager.write(
-            session_id=session_id,
-            chars=input if first else None,
-            close_stdin=close_stdin if first else False,
-            terminate=False,
-            yield_time_ms=step_ms,
-            max_output_chars=MAX_OUTPUT_CHARS,
-            owner_session_key=owner_session_key,
-        )
-        first = False
-        stdin_was_closed = stdin_was_closed or poll.stdin_closed
-        upstream_truncated += poll.truncated_chars
-        if poll.output:
-            aggregate.append(poll.output)
-            if wait_for is not None:
-                searchable = search_overlap + poll.output
-                matched = wait_for in searchable
-                overlap_chars = len(wait_for) - 1
-                search_overlap = searchable[-overlap_chars:] if overlap_chars else ""
+    try:
+        while True:
+            remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
+            step_ms = min(MAX_YIELD_MS if until_exit else 500, remaining_ms)
+            poll = await manager.write(
+                session_id=session_id,
+                chars=input if first else None,
+                close_stdin=close_stdin if first else False,
+                terminate=False,
+                yield_time_ms=step_ms,
+                max_output_chars=MAX_OUTPUT_CHARS,
+                owner_session_key=owner_session_key,
+            )
+            first = False
+            stdin_was_closed = stdin_was_closed or poll.stdin_closed
+            upstream_truncated += poll.truncated_chars
+            if poll.output or poll.output_gaps:
+                aggregate.append(poll.output, gaps=poll.output_gaps)
+                if wait_for is not None:
+                    overlap_chars = len(wait_for) - 1
+                    start = 0
+                    # A retained head and tail are not adjacent in the real
+                    # stream. Only carry a suffix across contiguous pieces.
+                    for index, boundary in enumerate((*poll.output_gaps, len(poll.output))):
+                        if index:
+                            search_overlap = ""
+                        searchable = search_overlap + poll.output[start:boundary]
+                        matched = wait_for in searchable
+                        if matched:
+                            break
+                        search_overlap = searchable[-overlap_chars:] if overlap_chars else ""
+                        start = boundary
 
-        expired = time.monotonic() >= deadline
-        has_activity = wait_for is None and not until_exit and bool(poll.output)
-        if poll.done or matched or has_activity or expired:
-            poll.stdin_closed = stdin_was_closed
-            poll.output, aggregate_truncated = aggregate.drain()
-            poll.truncated_chars = upstream_truncated + aggregate_truncated
-            return SessionObservation(poll=poll, matched=matched, expired=expired)
+            expired = time.monotonic() >= deadline
+            has_activity = wait_for is None and not until_exit and bool(poll.output)
+            if poll.done or matched or has_activity or expired:
+                poll.stdin_closed = stdin_was_closed
+                poll.output, aggregate_truncated, poll.output_gaps = aggregate.drain_with_gaps()
+                poll.truncated_chars = upstream_truncated + aggregate_truncated
+                return SessionObservation(poll=poll, matched=matched, expired=expired)
+    except BaseException:
+        # Polling consumes the session buffer. A cancelled/failed multi-poll
+        # wait must not discard logs that never reached its caller.
+        output, dropped, gaps = aggregate.drain_with_gaps()
+        if output or upstream_truncated or dropped:
+            await shield_and_drain(manager.return_output(
+                session_id=session_id, output=output,
+                truncated_chars=upstream_truncated + dropped,
+                owner_session_key=owner_session_key,
+                output_gaps=gaps,
+            ))
+        raise

@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
+from cirno_core.config.loader import get_config_path
 from cirno_core.credentials.service import Credentials
+from cirno_core.storage.instance import InstanceData
+from cirno_core.utils.cancellation import shield_and_drain
 
 from cirno_server.webui.terminals import Terminals
 from cirno_server.webui.trace_api import TraceAPI
 
 
 class WorkbenchAPI:
-    def __init__(self, workspaces, sessions):
+    def __init__(self, workspaces, sessions, *, source_config_path: Path | None = None):
         self.workspaces, self.sessions = workspaces, sessions
-        self.terminals = Terminals()
+        source = source_config_path if source_config_path is not None else get_config_path()
+        self.state_dir = Path(source).expanduser().resolve(strict=False).parent / "state"
+        self.terminals = Terminals(state_dir=self.state_dir)
 
     async def action(self, payload: dict) -> dict:
         action = payload.get("action", "")
@@ -42,18 +48,21 @@ class WorkbenchAPI:
             if operation == "close":
                 return await self.terminals.close(identifier)
         if action.startswith("credentials."):
-            vault = await asyncio.to_thread(Credentials)
-            operation = action.removeprefix("credentials.")
-            if operation == "list":
-                return await asyncio.to_thread(vault.list)
-            if operation == "save":
-                return await asyncio.to_thread(vault.save, **values)
-            if operation == "describe":
-                return await asyncio.to_thread(vault.describe, values["id"])
-            if operation == "reveal":
-                return await asyncio.to_thread(vault.reveal, values["id"])
-            if operation == "delete":
-                return await asyncio.to_thread(vault.delete, values["id"])
+            def credentials():
+                vault = Credentials(InstanceData(self.state_dir))
+                operation = action.removeprefix("credentials.")
+                if operation == "list":
+                    return vault.list()
+                if operation == "save":
+                    return vault.save(**values)
+                if operation == "describe":
+                    return vault.describe(values["id"])
+                if operation == "reveal":
+                    return vault.reveal(values["id"])
+                if operation == "delete":
+                    return vault.delete(values["id"])
+                raise ValueError("Unknown workbench operation")
+            return await shield_and_drain(asyncio.to_thread(credentials))
         if action.startswith("trace."):
             return await TraceAPI().action(action.removeprefix("trace."), values)
         raise ValueError("Unknown workbench operation")

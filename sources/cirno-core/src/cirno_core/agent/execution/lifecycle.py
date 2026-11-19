@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 class AgentLifecycle:
     def __init__(self, agent: AgentLoop):
         self.agent = agent
+        self._closing = False
+
+    def check_admission(self) -> None:
+        if self._closing:
+            raise RuntimeMaintenanceError("cirno is stopping; no new Agent work was admitted.")
 
     async def expire_sessions(self) -> None:
         """Scan idle sessions without blocking the event loop."""
@@ -41,6 +46,7 @@ class AgentLifecycle:
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
+        self.check_admission()
         self.agent._running = True
         try:
             logger.info("Agent loop started")
@@ -137,6 +143,7 @@ class AgentLifecycle:
         phase in ``finally`` prevents a timed-out background task from leaving
         subprocess transports alive after the event loop closes.
         """
+        self._closing = True
         # The loop closes itself from ``run()`` while application shutdown also
         # performs a guaranteed final close. Serialize those owners so they cannot
         # tear down the same resources concurrently.
@@ -147,6 +154,7 @@ class AgentLifecycle:
             await self.close_resources()
 
     async def close_resources(self) -> None:
+        self._closing = True
         errors: list[BaseException] = []
         active_task_groups = getattr(self.agent, "_active_tasks", {})
         current_task = asyncio.current_task()
@@ -205,6 +213,7 @@ class AgentLifecycle:
     def schedule_background(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
         """Schedule a coroutine as a tracked background task (drained on shutdown)."""
         try:
+            self.check_admission()
             self.agent.bus.admission.check()
         except RuntimeMaintenanceError:
             coro.close()
@@ -216,5 +225,6 @@ class AgentLifecycle:
 
     def stop(self) -> None:
         """Stop the agent loop."""
+        self._closing = True
         self.agent._running = False
         logger.info("Agent loop stopping")

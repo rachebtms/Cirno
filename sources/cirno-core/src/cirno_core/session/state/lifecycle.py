@@ -12,7 +12,7 @@ from cirno_core.session.keys import is_dream_session
 from cirno_core.session.model import Session
 from cirno_core.session.recovery.contracts import PENDING_USER_TURN_KEY, TURN_STATE_METADATA_KEYS
 from cirno_core.session.sqlite_store import SessionConflictError
-from cirno_core.session.types import PARENT_SESSION_KEY
+from cirno_core.session.types import CHILD_SESSION_GENERATION_REQUIRED_KEY, PARENT_SESSION_KEY
 
 from .operations import SessionOperations
 from .repository import SessionRepository
@@ -82,6 +82,7 @@ class SessionLifecycle:
         key: str,
         *,
         expected_generation: str | None = None,
+        only_if_unused: bool = False,
     ) -> bool:
         def delete() -> tuple[bool, set[str]]:
             def write() -> tuple[bool, set[str]]:
@@ -90,6 +91,18 @@ class SessionLifecycle:
                     session is None or session.generation != expected_generation
                 ):
                     raise SessionConflictError("delete belongs to a replaced session")
+                if only_if_unused and session is not None and (
+                    session.messages
+                    # New persistent rows start at revision 1. A later metadata
+                    # save claims this session even before its first message.
+                    or (session.persisted and session.revision != 1)
+                    or session.provider_state is not None
+                    or any(session.metadata.get(name) for name in (
+                        *TURN_STATE_METADATA_KEYS, "goal_state", "thread_goal",
+                    ))
+                    or self.repository.store.has_content(key)
+                ):
+                    return False, set()
                 rows = self.repository.store.list_metadata()
                 with self.repository.lock:
                     rows.extend(
@@ -101,6 +114,8 @@ class SessionLifecycle:
                     parent = row["metadata"].get(PARENT_SESSION_KEY)
                     if isinstance(parent, str):
                         children.setdefault(parent, []).append(row["key"])
+                if only_if_unused and children.get(key):
+                    return False, set()
                 pending = [key]
                 removed: set[str] = set()
                 deleted = False
@@ -175,6 +190,7 @@ class SessionLifecycle:
                 if old is not None:
                     session.policy = old.policy
                     session.metadata = deepcopy(old.metadata)
+                session.metadata[CHILD_SESSION_GENERATION_REQUIRED_KEY] = True
                 for name in (
                     *TURN_STATE_METADATA_KEYS,
                     "webui_recovery",

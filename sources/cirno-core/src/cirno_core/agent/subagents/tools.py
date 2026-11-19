@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from cirno_core.agent.tools.context import ToolContext
 from cirno_core.agent.tools.file_state import FileStates
 from cirno_core.agent.tools.loader import ToolLoader
 from cirno_core.agent.tools.registry import ToolRegistry
+from cirno_core.config.home import get_home_path
+from cirno_core.config.loader import get_config_path
 from cirno_core.config.network import NetworkConfig
 from cirno_core.config.prompts import SystemPrompts
 from cirno_core.config.tools import ToolsConfig
@@ -26,6 +28,8 @@ class SubagentTools:
         restrict_to_workspace: bool,
         disabled_skills: set[str],
         always_skills: set[str] | None = None,
+        *,
+        source_config_path: Path | None = None,
     ):
         self.workspace = workspace
         self.config = config
@@ -33,16 +37,16 @@ class SubagentTools:
         self.restrict_to_workspace = restrict_to_workspace
         self.disabled_skills = disabled_skills
         self.always_skills = always_skills or set()
+        self.source_config_path = source_config_path
+        self.instance_config_path = Path(source_config_path if source_config_path is not None else get_config_path()).expanduser().resolve(strict=False)
+        self.home_path = get_home_path().expanduser().resolve(strict=False)
         self.system_prompts = SystemPrompts()
         self.system_prompts_loader: Callable[[], SystemPrompts] | None = None
 
     def configuration(self) -> ToolsConfig:
         """Build a ToolsConfig scoped for subagent use."""
-        return ToolsConfig(
-            exec=self.config.exec,
-            web=self.config.web,
-            file=self.config.file,
-            restrict_to_workspace=self.restrict_to_workspace,
+        return self.config.model_copy(
+            deep=True, update={"restrict_to_workspace": self.restrict_to_workspace},
         )
 
     def build(
@@ -62,6 +66,9 @@ class SubagentTools:
             workspace=str(root.resolve()),
             exec_session_manager=exec_manager,
             file_state_store=FileStates(),
+            source_config_path=self.source_config_path,
+            home_path=self.home_path,
+            instance_config_path=self.instance_config_path,
             workspace_sandbox=workspace_sandbox_status(
                 restrict_to_workspace=cfg.restrict_to_workspace,
                 workspace=root,
@@ -78,7 +85,7 @@ class SubagentTools:
         agent_workspace = self.workspace.expanduser().resolve()
         project_workspace = workspace.expanduser().resolve() if workspace else agent_workspace
         system_prompts = self.system_prompts_loader() if self.system_prompts_loader else self.system_prompts
-        catalog = SkillsLoader(self.workspace, disabled_skills=self.disabled_skills, always_skills=self.always_skills)
+        catalog = SkillsLoader(self.workspace, disabled_skills=self.disabled_skills, always_skills=self.always_skills, home=self.home_path, config_path=self.instance_config_path)
         skill_context = SkillContext(catalog)
         with catalog.snapshot():
             active = catalog.get_always_skills()
@@ -86,9 +93,7 @@ class SubagentTools:
             skills_summary = skill_context.build_skills_summary(exclude=set(active), workspace=project_workspace)
         if active_content:
             skills_summary = "# Active Skills\n\n" + active_content + "\n\n" + skills_summary
-        from cirno_core.config.home import get_home_path
-
-        agent_home = get_home_path().resolve()
+        agent_home = self.home_path
         history_log = (
             str(agent_home / "memory" / "history.jsonl")
             if agent_home != project_workspace

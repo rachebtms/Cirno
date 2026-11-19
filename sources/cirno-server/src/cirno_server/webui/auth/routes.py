@@ -12,7 +12,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from aiohttp import web
+from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.webui.auth.store import SESSION_SECONDS, AccountError, AccountStore
+
 from .router_identity import RouterIdentity
 
 COOKIE_NAME = "cirno_session"
@@ -51,6 +54,9 @@ class BrowserAuth:
         }
 
     async def account_status(self, headers: Any) -> dict[str, Any]:
+        return await shield_and_drain(self._account_status(headers))
+
+    async def _account_status(self, headers: Any) -> dict[str, Any]:
         status = await asyncio.to_thread(self.status, headers)
         if status["authenticated"] and self.router:
             identity = await self.router.read()
@@ -98,10 +104,13 @@ class BrowserAuth:
         if not isinstance(body, dict):
             raise AccountError("invalid_request")
 
+        # The bounded request has been accepted. Keep local writes and their
+        # identity/awakening settlement attached until caller cancellation ends.
+        return await shield_and_drain(self._execute(request, body))
+
+    async def _execute(self, request: web.BaseRequest, body: dict[str, Any]) -> web.Response:
         action = request.path.removeprefix("/v0/auth/")
         if action in {"logout", "complete"}:
-            if action == "complete" and not await asyncio.to_thread(self.authenticated, request.headers):
-                raise AccountError("unauthorized", 401)
             if action == "complete":
                 if "wake" in body and not isinstance(body["wake"], bool):
                     raise AccountError("invalid_request")
@@ -109,23 +118,26 @@ class BrowserAuth:
                 if not isinstance(language, str) or not 1 <= len(language) <= 32 or not all(c.isalnum() or c == "-" for c in language):
                     raise AccountError("invalid_request")
                 async with self._lock:
+                    if not await asyncio.to_thread(self.authenticated, request.headers):
+                        raise AccountError("unauthorized", 401)
                     if body.get("wake") is True:
                         if self.router is None:
                             raise AccountError("router_unavailable", 503)
                         await self.router.wake(language)
                     await asyncio.to_thread(self.store.complete_onboarding)
             else:
-                await asyncio.to_thread(self.store.logout, self.cookie(request.headers))
+                async with self._lock:
+                    await asyncio.to_thread(self.store.logout, self.cookie(request.headers))
             response = web.json_response({"ok": True})
             if action == "logout":
                 response.del_cookie(COOKIE_NAME, path="/", samesite="Strict", httponly=True)
             return response
         if action == "change-router-name":
-            if not await asyncio.to_thread(self.authenticated, request.headers):
-                raise AccountError("unauthorized", 401)
-            if self.router is None:
-                raise AccountError("router_unavailable", 503)
             async with self._lock:
+                if not await asyncio.to_thread(self.authenticated, request.headers):
+                    raise AccountError("unauthorized", 401)
+                if self.router is None:
+                    raise AccountError("router_unavailable", 503)
                 identity = await self.router.rename(body.get("router_handle"))
             return web.json_response(identity)
         if action not in {"register", "login", "change-password"}:

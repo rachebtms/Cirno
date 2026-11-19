@@ -121,7 +121,9 @@ async def maybe_generate_webui_title(
     if target_is_routed or target_session_key is None:
         target_session = routed_session
     else:
-        target_session = await sessions.state.get(target_session_key)
+        target_session = await sessions.state.read_header(target_session_key)
+        if target_session is None:
+            return False
     if (
         routed_session.metadata.get(WEBUI_SESSION_METADATA_KEY) is not True
         and target_session.metadata.get(WEBUI_SESSION_METADATA_KEY) is not True

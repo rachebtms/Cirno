@@ -166,7 +166,7 @@ def build_webui_thread_response(
         after=after,
         stats=replay_stats,
     )
-    if not lines and active_turn_started_at is None:
+    if not lines and active_turn_started_at is None and history.revision is None:
         return None
     session_turns: list[SessionBackfillTurn] | None = None
 
@@ -199,6 +199,7 @@ def build_webui_thread_response(
     payload: dict[str, Any] = {
         "schemaVersion": WEBUI_TRANSCRIPT_SCHEMA_VERSION,
         "sessionKey": session_key,
+        **({"history_generation": _history_generation(history)} if history.revision is not None else {}),
         "completed_turn_ids": completed_turn_ids(lines),
         "has_pending_tool_calls": has_pending_tool_calls(
             lines,

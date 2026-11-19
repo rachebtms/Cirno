@@ -5559,6 +5559,67 @@ async def test_idle_registry_stays_pending_until_turn_end_is_persisted(history,
 
 
 @pytest.mark.asyncio
+async def test_webui_thread_ignores_run_owners_from_replaced_history(history) -> None:
+    from urllib.parse import quote
+
+    from cirno_core.bus.events import InboundMessage
+    from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
+    from cirno_core.security.workspace_access import WorkspaceScopeError
+    from websockets.datastructures import Headers
+    from websockets.http11 import Request
+
+    chat_id = "replaced-owner"
+    key = f"websocket:{chat_id}"
+    old_header = await history.sessions.state.get_header(key)
+    bus = MagicMock()
+    bus.publish_outbound = AsyncMock()
+    old = InboundMessage(
+        channel="websocket", sender_id="u", chat_id=chat_id, content="old",
+        metadata={HISTORY_GENERATION_METADATA_KEY: old_header.generation,
+                  WEBSOCKET_TURN_OWNER_METADATA_KEY: "old-owner", "webui_turn_id": "old-turn"},
+    )
+    channel = _ch(bus, session_manager=history.sessions)
+    channel.gateway.tokens.api_tokens["tok"] = time.monotonic() + 300.0
+    enc = quote(key, safe="")
+    request = Request(f"/v0/sessions/{enc}/webui-thread", Headers([("Authorization", "Bearer tok")]))
+    try:
+        await wth_activity.publish_turn_run_status(bus, old, "running", started_at=100.0)
+        assert wth_activity.mark_websocket_turn_transcript_persistence_failed(chat_id, "old-owner")
+        await history.sessions.state.reset(key)
+        response = await channel.gateway.http.history_routes._handle_webui_thread_get_async(request, enc)
+        payload = json.loads(response.body.decode())
+        assert payload["events"] == []
+        assert payload["active_turn_id"] is None
+        assert payload["has_pending_tool_calls"] is False
+        hydrated = await channel.gateway.session_projection.hydration_events(key, chat_id)
+        assert not any(event["event"] == "goal_status" for event in hydrated)
+        scope = channel.gateway.workspaces.scope_for_session_key(key)
+        assert await channel.gateway.workspaces.stage_scope(chat_id, scope) == scope
+
+        header = await history.sessions.state.get_header(key)
+        current = InboundMessage(
+            channel="websocket", sender_id="u", chat_id=chat_id, content="new",
+            metadata={HISTORY_GENERATION_METADATA_KEY: header.generation,
+                      WEBSOCKET_TURN_OWNER_METADATA_KEY: "new-owner", "webui_turn_id": "new-turn"},
+        )
+        await wth_activity.publish_turn_run_status(bus, current, "running", started_at=200.0)
+        # A delayed old status must not become the current generation's owner.
+        await wth_activity.publish_turn_run_status(bus, old, "running", started_at=300.0)
+        response = await channel.gateway.http.history_routes._handle_webui_thread_get_async(request, enc)
+        payload = json.loads(response.body.decode())
+        assert payload["active_turn_id"] == "new-turn"
+        assert payload["has_pending_tool_calls"] is True
+        hydrated = await channel.gateway.session_projection.hydration_events(key, chat_id)
+        status = next(event for event in hydrated if event["event"] == "goal_status")
+        assert status["turn_id"] == "new-turn"
+        assert status["started_at"] == 200.0
+        with pytest.raises(WorkspaceScopeError, match="chat_running"):
+            await channel.gateway.workspaces.stage_scope(chat_id, scope)
+    finally:
+        wth_activity.clear_websocket_turns(chat_id)
+
+
+@pytest.mark.asyncio
 async def test_webui_thread_api_restores_older_owner_after_latest_completes(history, ) -> None:
     from urllib.parse import quote
 

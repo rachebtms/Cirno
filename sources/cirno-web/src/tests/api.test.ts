@@ -514,6 +514,16 @@ describe("webui API helpers", () => {
     );
   });
 
+  it.each(["cron", "local_trigger"] as const)("encodes a %s run ID separately from its timestamp", async kind => {
+    await fetchAutomationRunResult("tok", "task/id", 1234, kind, undefined, "run:one/two+=");
+    const [url] = vi.mocked(fetch).mock.calls[0];
+    const query = new URL(String(url), "https://example.test").searchParams;
+    expect(query.get("id")).toBe("task/id");
+    expect(query.get("kind")).toBe(kind);
+    expect(query.get("run_at_ms")).toBe("1234");
+    expect(query.get("run_id")).toBe("run:one/two+=");
+  });
+
   it("serializes workspace automation actions", async () => {
     await runAutomationAction(mutationTransport, "disable", "job 1/2");
 

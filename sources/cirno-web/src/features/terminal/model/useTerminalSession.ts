@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CirnoClient } from "@/lib/cirno-client";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import { createTerminalRenderer, terminalPalette } from "./renderer";
 
 export type TerminalPhase = "idle" | "connecting" | "connected" | "failed" | "exited";
@@ -9,6 +10,8 @@ export function useTerminalSession({ client, terminalKey, cwd, nodeId, active, o
   client: CirnoClient; terminalKey: string; cwd?: string; nodeId: string; active: boolean;
   onCloseReady: (close: () => Promise<void>) => void; paletteRevision: unknown; exitedText: (code: number) => string;
 }) {
+  const context = useMemo(() => ({ client, terminalKey, cwd, nodeId, connecting: false }), [client, terminalKey, cwd, nodeId]);
+  const currentContext = useLifetime(context);
   const host = useRef<HTMLDivElement>(null);
   const renderer = useRef<ReturnType<typeof createTerminalRenderer> | null>(null);
   const closeRef = useRef<(() => Promise<void>) | null>(null);
@@ -17,26 +20,37 @@ export function useTerminalSession({ client, terminalKey, cwd, nodeId, active, o
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<TerminalPhase>("idle");
   const [errors, setErrors] = useState<Partial<Record<Operation, string>>>({});
-  const connecting = useRef(false);
+  const [stateContext, setStateContext] = useState(context);
+  if (stateContext !== context) {
+    setStateContext(context);
+    setAttempt(0);
+    setPhase("idle");
+    setErrors({});
+  }
   const report = (operation: Operation, reason?: unknown) => setErrors(old => {
+    if (!currentContext()) return old;
     const next = { ...old };
     if (reason === undefined) delete next[operation];
     else next[operation] = reason instanceof Error ? reason.message : String(reason);
     return next;
   });
   async function connect() {
-    if (connecting.current || phase === "connecting" || phase === "connected") return;
-    connecting.current = true; setPhase("connecting");
-    try { await closeRef.current?.(); setErrors({}); setAttempt(value => value + 1); }
-    catch (reason) { report("close", reason); setPhase("failed"); }
-    finally { connecting.current = false; }
+    if (!currentContext() || context.connecting || phase === "connecting" || phase === "connected") return;
+    context.connecting = true; setPhase("connecting");
+    try {
+      await closeRef.current?.();
+      if (!currentContext()) return;
+      setErrors({}); setAttempt(value => value + 1);
+    }
+    catch (reason) { if (currentContext()) { report("close", reason); setPhase("failed"); } }
+    finally { context.connecting = false; }
   }
   useLayoutEffect(() => {
     if (renderer.current && host.current) renderer.current.terminal.options.theme = terminalPalette(host.current);
   }, [paletteRevision]);
   useEffect(() => {
     if (!attempt || !host.current) return;
-    let disposed = false, closing = false, reading = false;
+    let disposed = false, closing = false, reading = false, exited = false;
     let identifier: string | null = null, cursor = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const current = createTerminalRenderer(host.current); renderer.current = current;
@@ -57,19 +71,20 @@ export function useTerminalSession({ client, terminalKey, cwd, nodeId, active, o
         closeRequest = null; closing = false;
         if (!disposed) {
           report("close", reason);
-          terminal.options.disableStdin = !identifier;
-          setPhase(identifier ? "connected" : "failed");
+          terminal.options.disableStdin = exited || !identifier;
+          if (currentContext()) setPhase(exited ? "exited" : identifier ? "connected" : "failed");
           clearTimeout(timer); void poll();
         }
         throw reason;
       });
       return closeRequest;
     };
-    closeRef.current = close; onCloseReady(close);
+    closeRef.current = close;
     const input = terminal.onData(data => {
-      if (closing || !identifier) return;
+      if (disposed || !currentContext() || closing || exited || !identifier) return;
       writes = writes.then(async () => {
-        if (!disposed && !closing && identifier) { await action("write", { id: identifier, data }); report("write"); }
+        // Input admitted before close belongs to this terminal and drains first.
+        if (identifier) { await action("write", { id: identifier, data }); report("write"); }
       }).catch(reason => { if (!disposed) report("write", reason); });
     });
     const resize = () => {
@@ -80,16 +95,17 @@ export function useTerminalSession({ client, terminalKey, cwd, nodeId, active, o
     const observer = new ResizeObserver(() => { if (activeRef.current) fit.fit(); });
     observer.observe(host.current);
     const poll = async () => {
-      if (disposed || closing || reading || !identifier) return;
+      if (disposed || !currentContext() || closing || exited || reading || !identifier) return;
       if (document.visibilityState !== "hidden") {
         reading = true;
         try {
           const body = await action<TerminalOutput>("read", { id: identifier, cursor });
-          if (disposed || closing) return;
+          if (disposed || !currentContext() || closing) return;
           if (body.reset) terminal.reset();
           if (body.data) terminal.write(body.data);
           cursor = body.cursor; report("read");
           if (body.exit_code !== null) {
+            exited = true;
             terminal.options.disableStdin = true; setPhase("exited");
             terminal.writeln(`\r\n[${exitLabel.current(body.exit_code)}]`); return;
           }
@@ -104,17 +120,20 @@ export function useTerminalSession({ client, terminalKey, cwd, nodeId, active, o
     document.addEventListener("visibilitychange", wake);
     void opening.then(body => {
       identifier = body.id;
-      if (disposed || closing) return;
+      if (disposed || !currentContext() || closing) return;
       terminal.options.disableStdin = false; setPhase("connected");
       fit.fit(); resize(); if (activeRef.current) terminal.focus();
       void poll();
-    }, reason => { if (!disposed && !closing) { report("create", reason); setPhase("failed"); } });
+    }, reason => { if (!disposed && currentContext() && !closing) { report("create", reason); setPhase("failed"); } });
     return () => {
       disposed = true; clearTimeout(timer); document.removeEventListener("visibilitychange", wake);
       input.dispose(); size.dispose(); observer.disconnect(); terminal.dispose();
       if (renderer.current === current) renderer.current = null;
       void close().catch(reason => console.error("Terminal cleanup failed", reason));
     };
-  }, [client, cwd, terminalKey, nodeId, onCloseReady, attempt]);
+  }, [context, attempt]);
+  useEffect(() => {
+    if (attempt && closeRef.current) onCloseReady(closeRef.current);
+  }, [onCloseReady, context, attempt]);
   return { host, phase, started: attempt > 0, errors: [...new Set(Object.values(errors))], connect };
 }

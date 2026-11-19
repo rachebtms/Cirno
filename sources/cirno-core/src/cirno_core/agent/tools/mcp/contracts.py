@@ -22,6 +22,8 @@ _ReconnectCallback = Callable[[str, str, Tool], Awaitable[Tool | None]]
 _MCPResultT = TypeVar("_MCPResultT")
 
 
+# Synchronous snapshot loaders run serially on the provider's I/O worker.
+# They must not depend on being called from an asyncio event-loop thread.
 MCPServerLoader = Callable[[], tuple[Mapping[str, "MCPServerConfig"], NetworkConfig]]
 
 

@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
+from cirno_core.config.errors import ConfigLoadError
 from cirno_core.config.loader import load_config, save_config
 from cirno_core.config.schema import Config
 from cirno_core.providers.factory import provider_signature
@@ -52,6 +53,39 @@ def test_unknown_provider_is_reported(tmp_path):
     with pytest.raises(WebUISettingsError) as error:
         provider_balance_payload({'provider_id': ['missing']}, config_path=path)
     assert error.value.status == 404
+
+
+def test_balance_environment_error_names_the_selected_config(tmp_path, monkeypatch):
+    path = tmp_path / 'billing-instance.json'
+    config = Config()
+    config.providers.deepseek.api_key = '${CIRNO_TEST_BALANCE_MISSING_KEY}'
+    save_config(config, path)
+    monkeypatch.delenv('CIRNO_TEST_BALANCE_MISSING_KEY', raising=False)
+    with pytest.raises(ConfigLoadError) as error:
+        provider_balance_payload({'provider_id': ['deepseek']}, config_path=path)
+    assert error.value.path == path
+
+
+@pytest.mark.parametrize('endpoint', [
+    'https://billing.example:65536', 'https://@billing.example',
+    'https://user:billing-secret@billing.example',
+])
+def test_balance_resolved_endpoint_is_validated_before_http(tmp_path, monkeypatch, endpoint):
+    import cirno_core.providers.balance as service
+    from cirno_core.config.balance import ProviderBalanceConfig
+    path = tmp_path / 'config.json'
+    config = Config()
+    config.providers.deepseek.balance = ProviderBalanceConfig(endpoint='${CIRNO_TEST_BALANCE_URL}', format='json')
+    save_config(config, path)
+    monkeypatch.setenv('CIRNO_TEST_BALANCE_URL', endpoint)
+    get = Mock(return_value=httpx.Response(200, json={'balance': '1.00'}, request=httpx.Request('GET', 'https://billing.example')))
+    original = service.query_balance
+    monkeypatch.setattr('cirno_server.webui.settings.balance.query_balance', lambda *args, **kwargs: original(*args, **kwargs, http_get=get))
+    with pytest.raises(WebUISettingsError) as error:
+        provider_balance_payload({'provider_id': ['deepseek']}, config_path=path)
+    assert error.value.status == 502
+    assert 'billing-secret' not in str(error.value)
+    get.assert_not_called()
 
 
 @pytest.mark.asyncio

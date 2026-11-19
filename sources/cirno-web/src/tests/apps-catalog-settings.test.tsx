@@ -45,6 +45,26 @@ const agentPlugin = {
 describe("Installed catalog settings", () => {
   installSettingsViewTestHooks();
 
+  it.each([false, true])("retries removed MCP cleanup through the scoped removal action (fails=%s)", async fails => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/v0/settings") return jsonResponse(settingsPayload());
+      if (String(input) === "/v0/settings/mcp-presets") return jsonResponse({ presets: [], installed_count: 0, cleanup_pending: ["fixture"] });
+      return jsonResponse({ apps: [], installed_count: 0 });
+    }));
+    if (fails) requestMutationMock.mockRejectedValueOnce(new Error("Connection was configured again"));
+    else requestMutationMock.mockResolvedValueOnce({ presets: [], installed_count: 0, cleanup_pending: [] });
+    renderSettingsView({ initialSection: "mcp" });
+    const retry = await screen.findByRole("button", { name: "Retry cleanup: fixture" });
+    await userEvent.setup().click(retry);
+    expect(requestMutationMock).toHaveBeenCalledWith("settings.mcp.remove", { name: "fixture", cleanup_only: "true" }, 20_000);
+    if (fails) {
+      expect(await screen.findByText("Connection was configured again")).toBeVisible();
+      expect(retry).toBeEnabled();
+    } else {
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Retry cleanup: fixture" })).not.toBeInTheDocument());
+    }
+  });
+
   it("keeps enabled Agent Plugins out of MCP composer attachments", () => {
     const enabled = { ...agentPlugin, enabled: true, available: true, status: "enabled" };
     expect(installedMcpPresetsFromPayload({ presets: [enabled], installed_count: 1 })).toEqual([]);

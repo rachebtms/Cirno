@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from cirno_core.bus.delivery import ChannelNotReadyError
+from cirno_core.config.paths import get_data_dir
+
 from cirno_server.channels.telegram.config import TelegramConfig
 from cirno_server.channels.telegram.formatting import (
     strip_md_block,
@@ -33,6 +37,7 @@ class TelegramStreams:
     overflow: TelegramStreamOverflow
     writer: TelegramStreamWriter
     config: TelegramConfig
+    state_dir: Path = field(default_factory=get_data_dir, kw_only=True)
     buffers: dict[str, StreamBuf] = field(default_factory=dict)
     finalizer: TelegramStreamFinalizer = field(init=False)
 
@@ -54,7 +59,7 @@ class TelegramStreams:
     ) -> None:
         """Stream a rich draft in private chats, then persist the final message."""
         meta = metadata or {}
-        int_chat_id = personal_chat_id(chat_id, meta)
+        int_chat_id = await asyncio.to_thread(personal_chat_id, chat_id, meta, state_dir=self.state_dir)
         app = await self.api.connection.wait_for_app()
         if app is None:
             raise ChannelNotReadyError("Telegram bot not running")
@@ -70,8 +75,9 @@ class TelegramStreams:
             if stream_id is not None and buf.stream_id is not None and buf.stream_id != stream_id:
                 return
             buf.require_deliverable()
-            if not buf.text or (buf.message_id is None and buf.draft_id is None):
-                return
+            # A definitively rejected preview has no message ID, but its
+            # buffered final text still needs delivery. Unknown submissions
+            # are rejected by require_deliverable() before reaching here.
             await self.finalizer.finish(chat_id, buf, meta)
             return
 
@@ -144,6 +150,7 @@ class TelegramStreams:
                         buf.draft_id,
                         buf.text,
                         stream_thread_kwargs,
+                        **({"line_continuation": True} if buf.line_continuation else {}),
                     ):
                         buf.last_edit = now
                         return
@@ -155,7 +162,7 @@ class TelegramStreams:
                     )
                     buf.last_edit = now
                     return
-                preview = strip_md_block(buf.text)
+                preview = strip_md_block(buf.text, line_continuation=buf.line_continuation)
                 await self.api.call_idempotent(
                     app.bot.edit_message_text,
                     chat_id=int_chat_id,

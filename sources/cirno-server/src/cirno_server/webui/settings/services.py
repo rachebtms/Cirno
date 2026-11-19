@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
+from cirno_core.config.home import get_home_path
 from cirno_core.config.loader import load_config, save_config
 from cirno_core.config.schema import Config
 from filelock import FileLock
@@ -198,6 +199,7 @@ class WebUISettingsServices:
     config: WebUISettingsConfig
     oauth_flows: WebUIOAuthFlowRegistry
     refresh_runtime_config: Callable[[], None] | None = None
+    home_path: Path = field(default_factory=lambda: get_home_path().expanduser().resolve(strict=False))
 
     @classmethod
     def create(
@@ -205,11 +207,13 @@ class WebUISettingsServices:
         config_path: Path,
         *,
         refresh_runtime_config: Callable[[], None] | None = None,
+        home_path: Path | None = None,
     ) -> WebUISettingsServices:
         return cls(
             config=WebUISettingsConfig(config_path),
             oauth_flows=WebUIOAuthFlowRegistry(),
             refresh_runtime_config=refresh_runtime_config,
+            home_path=(home_path if home_path is not None else get_home_path()).expanduser().resolve(strict=False),
         )
 
     def read(

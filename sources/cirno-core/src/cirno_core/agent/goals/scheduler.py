@@ -9,10 +9,12 @@ from loguru import logger
 
 from cirno_core.bus.events import InboundMessage
 from cirno_core.notifications.service_errors import report_service_error
-from cirno_core.session.goal_state import goal_state_raw, parse_goal_state
-from cirno_core.session.recovery.state import recovery_state_from_metadata
+from cirno_core.runtime.admission import RuntimeMaintenanceError
+from cirno_core.session.goal_state import goal_state_raw, parse_goal_state, pause_goal_at_limit
+from cirno_core.session.recovery.state import goal_recovery_pending
 from cirno_core.session.sqlite_store import SessionConflictError
 from cirno_core.session.turn_continuation import _goal_continuation_prompt
+from cirno_core.utils.cancellation import shield_and_drain
 
 
 async def wake_due_goals(loop) -> None:
@@ -24,6 +26,8 @@ async def wake_due_goals(loop) -> None:
         except SessionConflictError:
             # Deleting/replacing one conversation must not delay other Goals.
             logger.debug("Goal scheduler skipped a changed conversation: {}", row["key"])
+        except RuntimeMaintenanceError:
+            return  # Closing/maintenance is not a failed user task.
         except Exception as error:
             logger.exception("Goal processing failed for {}; other conversations will continue", row["key"])
             await asyncio.to_thread(report_service_error, None, "Goal scheduler", error, session_key=row["key"])
@@ -82,10 +86,7 @@ async def _wake_goal(loop, key, now):
         return
     # Restart recovery owns admission until an explicit Continue is committed.
     # Do not wake, pause at a round limit, or consume a continuation meanwhile.
-    if metadata.get("runtime_checkpoint") or metadata.get("pending_user_turn"):
-        return
-    recovery = recovery_state_from_metadata(metadata)
-    if recovery and recovery["status"] in {"awaiting_user", "failed", "resuming"}:
+    if goal_recovery_pending(metadata):
         return
     if goal.get("status") not in {"active", "waiting"}:
         return
@@ -93,55 +94,71 @@ async def _wake_goal(loop, key, now):
         wake_at = goal.get("wake_at")
         if not wake_at or datetime.fromisoformat(wake_at).timestamp() > now.timestamp():
             return
-    limit = goal.get("continuation_limit", loop.goal_continuation_limit)
-    rounds = metadata.get("_sustained_goal_continuation_rounds", 0)
-    if limit > 0 and rounds >= limit:
-
-        def pause_at_limit(current):
-            if parse_goal_state(goal_state_raw(current)) == goal:
-                current["goal_state"] = {
-                    **goal,
-                    "status": "paused",
-                    "recap": "Automatic continuation limit reached.",
-                }
-
-        await loop.sessions.state.mutate_metadata(key, pause_at_limit, expected_generation=session.generation)
-        return
     admitted = False
+    previous_goal = goal
+    reserved_rounds = 0
 
     def wake(current):
-        nonlocal admitted, goal
+        nonlocal admitted, goal, reserved_rounds
         if (
             parse_goal_state(goal_state_raw(current)) != goal
             or key in loop._pending_queues
             or key in loop._discarding_sessions
+            or goal_recovery_pending(current)
         ):
+            return
+        rounds = current.get("_sustained_goal_continuation_rounds", 0)
+        limit = goal.get("continuation_limit", loop.goal_continuation_limit)
+        if limit > 0 and rounds >= limit:
+            current["goal_state"] = pause_goal_at_limit(goal)
             return
         goal = {**goal, "status": "active"}
         goal.pop("wake_at", None)
         current["goal_state"] = goal
         current["_sustained_goal_continuation_rounds"] = rounds + 1
+        reserved_rounds = rounds
         admitted = True
 
-    await loop.sessions.state.mutate_metadata(key, wake, expected_generation=session.generation)
-    if not admitted:
-        return
-    channel, chat_id = key.split(":", 1)
-    await loop.dispatch.enqueue(
-        InboundMessage(
-            channel=channel,
-            chat_id=chat_id,
-            sender_id="system:goal",
-            content=_goal_continuation_prompt({"goal_state": goal}),
-            session_key_override=key,
-            require_existing_session=True,
-            session_generation=session.generation,
-            input_role="user",
-            metadata={
-                "_internal_continuation": True,
-                "_internal_continuation_kind": "sustained_goal",
-                "_skip_user_persist": True,
-                "_goal_id": goal.get("goal_id"),
-            },
+    try:
+        await loop.sessions.state.mutate_metadata(key, wake, expected_generation=session.generation)
+        if not admitted:
+            return
+        channel, chat_id = key.split(":", 1)
+        await loop.dispatch.enqueue(
+            InboundMessage(
+                channel=channel,
+                chat_id=chat_id,
+                sender_id="system:goal",
+                content=_goal_continuation_prompt({"goal_state": goal}),
+                session_key_override=key,
+                require_existing_session=True,
+                session_generation=session.generation,
+                input_role="user",
+                metadata={
+                    "_internal_continuation": True,
+                    "_internal_continuation_kind": "sustained_goal",
+                    "_skip_user_persist": True,
+                    "_goal_id": goal.get("goal_id"),
+                },
+            )
         )
-    )
+    except BaseException:
+        if not admitted:
+            raise
+        async def release_reservation():
+            def restore(current):
+                if (
+                    key not in loop._pending_queues
+                    and parse_goal_state(goal_state_raw(current)) == goal
+                    and current.get("_sustained_goal_continuation_rounds", 0) == reserved_rounds + 1
+                ):
+                    current["goal_state"] = previous_goal
+                    current["_sustained_goal_continuation_rounds"] = reserved_rounds
+            await loop.sessions.state.mutate_metadata(
+                key, restore, expected_generation=session.generation,
+            )
+        try:
+            await shield_and_drain(release_reservation())
+        except BaseException as cleanup_error:
+            logger.warning("Goal admission rollback for {} failed ({})", key, type(cleanup_error).__name__)
+        raise

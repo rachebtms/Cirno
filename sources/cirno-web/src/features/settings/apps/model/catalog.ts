@@ -10,7 +10,7 @@ export function appsTitle(item: AppsCatalogItem): string {
 }
 
 export function appsReady(item: AppsCatalogItem): boolean {
-  if (item.kind === "cli") return item.app.installed;
+  if (item.kind === "cli") return item.app.installed && item.app.available;
   if (item.preset.enabled !== undefined) return item.preset.enabled;
   return item.preset.installed &&
     item.preset.configured &&

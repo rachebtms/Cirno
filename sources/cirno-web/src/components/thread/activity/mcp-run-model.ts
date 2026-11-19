@@ -44,7 +44,7 @@ export function mcpRunFromToolName(
 }
 
 export function parseMcpRunTrace(line: string, status: ToolRunStatus = "running"): McpRunSummary | null {
-  const match = /^([a-z0-9_-]+)\((.*)\)$/i.exec(line.trim());
+  const match = /^([a-z0-9_-]+)\(([\s\S]*)\)$/i.exec(line.trim());
   if (!match || !MCP_TOOL_NAME_RE.test(match[1])) return null;
   const argsText = match[2].trim();
   let argsObject: unknown = {};
@@ -68,7 +68,11 @@ export function mcpRunFromEvent(event: ToolProgressEvent): McpRunSummary | null 
     status: toolRunStatusFromPhase(event.phase),
     error: toolProgressError(event.error),
   });
-  return run && { ...run, detailsText: toolActivityDetails(formatToolCallTrace(event) ?? name, event.result, toolProgressError(event.error)) };
+  const explicitIdentity = typeof event.mcp_server === "string" && event.mcp_server.trim()
+    && typeof event.mcp_tool === "string" && event.mcp_tool.trim()
+    ? { presetName: event.mcp_server.toLowerCase(), displayName: titleFromPresetName(event.mcp_server), toolName: event.mcp_tool }
+    : {};
+  return run && { ...run, ...explicitIdentity, detailsText: toolActivityDetails(formatToolCallTrace(event) ?? name, event.result, toolProgressError(event.error)) };
 }
 
 export function mcpRunMapByTraceLine(message: UIMessage): Map<string, McpRunSummary> {

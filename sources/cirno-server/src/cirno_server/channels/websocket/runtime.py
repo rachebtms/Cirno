@@ -15,6 +15,7 @@ from typing import Any, cast
 from cirno_core.bus.events import OutboundMessage
 from cirno_core.bus.queue import MessageBus
 from cirno_core.runtime.admission import RuntimeMaintenanceError
+from cirno_core.utils.cancellation import shield_and_drain
 from websockets.asyncio.server import Server, ServerConnection, serve, unix_serve
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response as WsResponse
@@ -143,6 +144,7 @@ class WebSocketChannel(BaseChannel):
             transcripts=gateway.transcripts,
             temporary_chats=gateway.temporary_chats,
             session_projection=gateway.session_projection,
+            workspaces=gateway.workspaces,
         )
         self._commands = WebUICommandRouter(self, gateway, outbound=self._outbound)
 
@@ -234,16 +236,19 @@ class WebSocketChannel(BaseChannel):
 
     async def _cleanup_connection(self, connection: ServerConnection) -> None:
         """Remove *connection* from every subscription set; safe to call multiple times."""
-        self._uploads.revoke(connection)
-        state = await self.writers.begin_cleanup(connection)
-        try:
-            await self._commands.cleanup_connection(connection)
-        finally:
-            for chat_id in tuple(self._conn_chats.get(connection, ())):
-                self._detach(connection, chat_id)
-            self._conn_default.pop(connection, None)
-            self.gateway.endpoint.discard_connection(connection)
-            self.writers.finish_cleanup(connection, state)
+        async def settle() -> None:
+            self._uploads.revoke(connection)
+            state = await self.writers.begin_cleanup(connection)
+            try:
+                await self._commands.cleanup_connection(connection)
+            finally:
+                for chat_id in tuple(self._conn_chats.get(connection, ())):
+                    self._detach(connection, chat_id)
+                self._conn_default.pop(connection, None)
+                self.gateway.endpoint.discard_connection(connection)
+                self.writers.finish_cleanup(connection, state)
+
+        await shield_and_drain(settle())
 
     async def _send_event(
         self,

@@ -9,13 +9,15 @@ from typing import Any, AsyncGenerator, cast
 
 import httpx
 from cirno_usage.types import LLMUsage
+from loguru import logger
+
 from cirno_core.providers.contracts import LLMResponse
+from cirno_core.providers.openai_responses.errors import ResponsesAPIError
 from cirno_core.providers.openai_responses.state import (
     REPLAYABLE_FINISH_REASONS,
     attach_responses_state,
 )
 from cirno_core.providers.tool_calls import ToolCallRequest, parse_tool_arguments
-from loguru import logger
 
 FINISH_REASON_MAP = {
     "completed": "stop",
@@ -584,8 +586,7 @@ async def consume_responses_events(
                         await on_reasoning_delta(summary)
             break
         elif event_type in {"error", "response.failed"}:
-            detail = event.get("error") or event.get("message") or event
-            raise RuntimeError(f"Response failed: {str(detail)[:500]}")
+            raise ResponsesAPIError(event, usage=_usage_from_response_obj(event.get("response")) or usage)
 
     if finish_reason is None:
         raise ConnectionError("Model stream ended before a terminal response event was received")
@@ -627,6 +628,8 @@ def parse_response_output(
 ) -> LLMResponse:
     """Parse an SDK ``Response`` object into an ``LLMResponse``."""
     response_object = _response_object(response) or {}
+    if response_object.get("status") in {"failed", "cancelled"}:
+        raise ResponsesAPIError({"response": response_object}, usage=_usage_from_response_obj(response_object))
 
     output = _response_object_list(response_object.get("output"))
     content_parts: list[str] = []
@@ -690,15 +693,35 @@ def parse_response_output(
 
 async def iter_sdk_events(stream: AsyncIterable[object]) -> AsyncGenerator[dict[str, Any], None]:
     """Normalize SDK models at the transport boundary before protocol handling."""
-    async for raw in stream:
-        event = _response_object(raw)
-        if event is None:
-            raise ConnectionError("Invalid Responses SDK event")
-        event = dict(event)
-        for key in ("item", "response"):
-            if key in event:
-                event[key] = _response_object(event[key])
-        yield event
+    from openai import APIError
+
+    try:
+        async for raw in stream:
+            event = _response_object(raw)
+            if event is None:
+                raise ConnectionError("Invalid Responses SDK event")
+            event = dict(event)
+            for key in ("item", "response"):
+                if key in event:
+                    event[key] = _response_object(event[key])
+            yield event
+    except APIError as exc:
+        # The SDK consumes some data.error frames itself instead of yielding them.
+        # Transport exceptions without an error body keep their original type.
+        body = _response_object(exc.body)
+        if body is None and not isinstance(exc.body, str):
+            raise
+        response = getattr(exc, "response", None)
+        event = (
+            {**body} if body is not None and "error" in body
+            else {"error": body if body is not None else exc.body}
+        )
+        event["type"] = "error"
+        if (status_code := getattr(exc, "status_code", None)) is not None:
+            event["status_code"] = status_code
+        if headers := getattr(response, "headers", None):
+            event["headers"] = headers
+        raise ResponsesAPIError(event) from None
 
 
 async def consume_sdk_stream(

@@ -8,6 +8,7 @@ from contextlib import suppress
 from typing import Any
 
 import httpx
+
 from cirno_core.agent.tools.mcp.errors import _redact_url
 from cirno_core.security.network import (
     PinnedDNSAsyncTransport,
@@ -36,7 +37,7 @@ async def _probe_http_url(url: str, timeout: float = 3.0, *, proxy: str | None =
     port = parsed.port
     if not port:
         port = 443 if parsed.scheme == "https" else 80
-    ok, _, resolved_ips = resolve_url_target(url)
+    ok, _, resolved_ips = await asyncio.to_thread(resolve_url_target, url)
     if not ok:
         return False
     if proxy or env_proxy_applies_to_url(url):
@@ -68,7 +69,7 @@ def _pinned_transport_kwargs(proxy: str | None = None) -> dict[str, Any]:
 
 async def _validate_mcp_request_url(request: httpx.Request) -> None:
     """Validate each outgoing MCP HTTP request, including redirect targets."""
-    ok, error = validate_url_target(str(request.url))
+    ok, error = await asyncio.to_thread(validate_url_target, str(request.url))
     if not ok:
         raise httpx.RequestError(
             f"Blocked unsafe MCP URL {_redact_url(str(request.url))} ({error})",

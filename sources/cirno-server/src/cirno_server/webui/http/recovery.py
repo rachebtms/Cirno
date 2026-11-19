@@ -7,13 +7,15 @@ from typing import TYPE_CHECKING
 
 from cirno_core.agent.subagents.contracts import SubagentControlError
 from cirno_core.agent.subagents.status import SubagentSessionError
+from cirno_core.security.workspace_access import WorkspaceScopeError
 from cirno_core.session.recovery.contracts import RecoveryActionError
 from cirno_core.session.session_identity import is_webui_session_key
 from cirno_core.session.transcript import build_session_thread_response
-from cirno_server.webui.http_utils import http_error as _http_error
-from cirno_server.webui.http_utils import http_json_response as _http_json_response
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
+
+from cirno_server.webui.http_utils import http_error as _http_error
+from cirno_server.webui.http_utils import http_json_response as _http_json_response
 
 from .shared import (
     _NO_STORE_HEADERS,
@@ -109,7 +111,10 @@ class RecoveryRoutes:
             return _http_error(404, "task unavailable")
         except (OSError, SubagentSessionError):
             return _http_error(503, "task history unavailable")
-        scope = self.server.workspaces.scope_for_session_key(session_key)
+        try:
+            scope = self.server.workspaces.scope_for_session_key(session_key)
+        except WorkspaceScopeError as exc:
+            return _http_error(exc.status, exc.message)
         data = build_session_thread_response(
             child,
             active=status.state in {"queued", "running", "stopping"},

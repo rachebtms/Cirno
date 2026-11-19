@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, TypeAlias, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeAlias, get_args, runtime_checkable
 
 from cirno_core.runtime.context import RuntimeContextBlock, wrap_runtime_context_lines
 from cirno_core.security.workspace_access import (
@@ -104,6 +104,7 @@ class RuntimeControl(Protocol):
         name: str,
         *,
         session_key: str | None,
+        expected_generation: str | None = None,
     ) -> LLMRuntime: ...
 
     def set_max_iterations(self, value: int) -> None: ...
@@ -151,12 +152,16 @@ class _RuntimeControlTarget(Protocol):
 
     def set_runtime_max_iterations(self, value: int) -> None: ...
 
+    def set_runtime_max_tool_result_chars(self, value: int) -> None: ...
+
     def set_model_preset(self, name: str | None) -> LLMRuntime: ...
 
     async def set_session_model_preset(
         self,
         session_key: str,
         name: str,
+        *,
+        expected_generation: str | None = None,
     ) -> LLMRuntime: ...
 
 
@@ -229,8 +234,13 @@ class AgentRuntimeControl:
         name: str,
         *,
         session_key: str | None,
+        expected_generation: str | None = None,
     ) -> LLMRuntime:
         if session_key is not None:
+            if expected_generation is not None:
+                return await self.__target.set_session_model_preset(
+                    session_key, name, expected_generation=expected_generation,
+                )
             return await self.__target.set_session_model_preset(session_key, name)
         return self.__target.set_model_preset(name)
 
@@ -241,15 +251,22 @@ class AgentRuntimeControl:
         return self.__target.set_runtime_context_window(value)
 
     def set_provider_retry_mode(self, value: str) -> None:
+        from cirno_core.config.agents import AgentDefaults
+
+        allowed = get_args(AgentDefaults.model_fields["provider_retry_mode"].annotation)
+        if value not in allowed:
+            raise ValueError("provider_retry_mode must be " + " or ".join(allowed))
         self.__target.provider_retry_mode = value
 
     def set_max_tool_result_chars(self, value: int) -> None:
-        self.__target.max_tool_result_chars = value
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("max_tool_result_chars must be a positive integer")
+        self.__target.set_runtime_max_tool_result_chars(value)
 
     def set_scratchpad(self, key: str, value: JsonValue, *, max_keys: int) -> None:
         if key not in self.__scratchpad and len(self.__scratchpad) >= max_keys:
             raise ValueError(f"scratchpad is full (max {max_keys} keys)")
-        self.__scratchpad[key] = value
+        self.__scratchpad[key] = _snapshot_json_value(value)
 
 
 def _snapshot_model_presets(

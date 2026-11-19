@@ -32,6 +32,7 @@ export function useMemoryMaintenance(service: MemoryService, onChanged: () => Pr
     flight.current = operation;
     setState({ service, phase: "running", scanned: 0, action, error: null });
     let scanned = 0;
+    let refreshStarted = false;
     try {
       let phase: Maintenance["phase"] = "idle";
       let retryError: string | null = null;
@@ -56,10 +57,19 @@ export function useMemoryMaintenance(service: MemoryService, onChanged: () => Pr
         }
       }
       if (flight.current !== operation) return;
+      refreshStarted = true;
       await onChanged();
       if (retryError) throw new Error(retryError);
       if (flight.current === operation) setState({ service, phase, scanned, action, error: null });
     } catch (reason) {
+      if (flight.current === operation && !refreshStarted) {
+        try {
+          // Earlier batches, or an unconfirmed current batch, may have committed.
+          await onChanged();
+        } catch {
+          // Keep the action's failure; status reads expose their own error.
+        }
+      }
       if (flight.current === operation)
         setState({
           service,

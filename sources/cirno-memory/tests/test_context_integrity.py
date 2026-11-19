@@ -1,13 +1,12 @@
 """Role profiles, immutable evidence, scope identity and bounded recall."""
 
+import hashlib
 from io import StringIO
 from pathlib import Path
-import hashlib
 
 import pytest
-
-from cirno_memory.paging import PAGE_CHARS, source_page
 from cirno_memory.config import MemoryConfig
+from cirno_memory.paging import PAGE_CHARS, source_page
 from cirno_memory.repository import MemoryRepository
 
 
@@ -177,7 +176,7 @@ def semantic_search(monkeypatch):
             return result
 
     monkeypatch.setattr(embedding, "EmbeddingWorker", Worker)
-    monkeypatch.setattr(embedding, "_fingerprint", lambda config: "test")
+    monkeypatch.setattr(embedding, "_fingerprint", lambda config, **_kwargs: "test")
 
     def search(repo, **access):
         return embedding.search(repo, "marker", MemoryConfig(embedding_enabled=True), mode="semantic", **access)
@@ -231,6 +230,19 @@ def test_checkpoints_follow_project_slots_and_reuse_visible_legacy_state(tmp_pat
     assert len({legacy_id, explicit["id"], private["id"]}) == 3
     assert "Unfiled task milestone" in repo.task_context("a")
     assert "New project milestone" not in repo.task_context("a")
+
+
+@pytest.mark.parametrize("checkpoint", [False, True])
+def test_expected_revision_cannot_create_a_missing_memory(tmp_path, checkpoint):
+    repo = MemoryRepository(tmp_path)
+    with pytest.raises(ValueError, match="no changes were saved"):
+        if checkpoint:
+            repo.checkpoint("a", "Stale progress from a former project", "test", project_id="new", expected_revision=4)
+        else:
+            repo.save("Stale replacement", source="test", session_key="a", memory_id="missing-record", expected_revision=4)
+    with repo.connect() as db:
+        assert db.execute("SELECT count(*) FROM memories").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM revisions").fetchone()[0] == 0
 
 
 def test_corrupt_dream_input_does_not_claim_or_consume_any_of_the_batch(tmp_path):

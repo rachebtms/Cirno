@@ -4,7 +4,7 @@ import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 export function fileRequest(
   client: CirnoClient,
   sessionKey: string | null,
-  scope?: WorkspaceScopePayload | null,
+  scope?: Pick<WorkspaceScopePayload, "project_path" | "access_mode"> | null,
 ) {
   const context = {
     session_key: sessionKey,

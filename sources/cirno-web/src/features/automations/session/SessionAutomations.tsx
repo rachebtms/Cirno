@@ -17,27 +17,31 @@ interface SessionAutomationsProps {
   title: string;
 }
 
-export function SessionAutomations({
+export function SessionAutomations(props: SessionAutomationsProps) {
+  return <OwnedSessionAutomations key={JSON.stringify([props.token, props.sessionKey])} {...props} />;
+}
+
+function OwnedSessionAutomations({
   client,
   sessionKey,
   token,
   title,
 }: SessionAutomationsProps) {
   const [surfacesOpen, setSurfacesOpen] = useState(false);
-  const { jobs, loading, loadError, now } = useSessionAutomationJobs(
+  const { jobs, loading, loadError, now, mutate } = useSessionAutomationJobs(
     surfacesOpen,
     token,
     sessionKey,
   );
   const act = useCallback(
-    async (action: AutomationAction, job: SessionAutomationJob) =>
-      (await runAutomationAction(client, action, job.id)).jobs,
-    [client],
+    (action: AutomationAction, job: SessionAutomationJob) =>
+      mutate(async () => (await runAutomationAction(client, action, job.id)).jobs),
+    [client, mutate],
   );
   const edit = useCallback(
-    async (job: SessionAutomationJob, values: AutomationUpdatePayload) =>
-      (await updateAutomation(client, job.id, values)).jobs,
-    [client],
+    (job: SessionAutomationJob, values: AutomationUpdatePayload) =>
+      mutate(async () => (await updateAutomation(client, job.id, values)).jobs),
+    [client, mutate],
   );
   return (
     <SessionAutomationsDialog

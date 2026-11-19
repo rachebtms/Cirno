@@ -11,12 +11,15 @@ from typing import TYPE_CHECKING
 from aiohttp import web
 from cirno_core.utils.atomic_file import open_atomic_snapshot
 from cirno_core.utils.cancellation import shield_and_drain
+
 from .ranges import parse_byte_range
 from .resources import MediaAccessError
 
 if TYPE_CHECKING:
-    from cirno_core.security.workspace_access import WorkspaceScope
     from collections.abc import Callable
+
+    from cirno_core.security.workspace_access import WorkspaceScope
+
     from cirno_server.webui.media_gateway import WebUIMediaServer
 
 MEDIA_CHUNK_BYTES = 64 * 1024
@@ -68,6 +71,12 @@ class MediaHTTP:
                 raise MediaAccessError(404, "attachment unavailable") from exc
             except PermissionError as exc:
                 raise MediaAccessError(403, str(exc)) from exc
+            if resource.borrowed:
+                current = self.media.authorize_media_reference(
+                    sig, payload, scope_for_session=self.scope_for_session
+                )
+                if current.scope != reference.scope:
+                    raise MediaAccessError(403, "attachment scope changed; reload the attachment")
             size = os.fstat(stream.fileno()).st_size
             headers = resource.headers
             start, end = 0, size - 1

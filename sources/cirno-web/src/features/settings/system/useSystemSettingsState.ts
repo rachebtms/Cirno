@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLifetime } from "@/ui/resources/useLifetime";
 
 import type { AutomationFilter } from "@/features/automations";
 import {
@@ -26,15 +27,26 @@ export function useSystemSettingsState() {
   const [mcpPresetsLoading, setMcpPresetsLoading] = useState(true);
   const [automationsLoading, setAutomationsLoading] = useState(true);
   const [cliAppsAction, setCliAppsAction] = useState<string | null>(null);
+  const cliAppsActionRef = useRef<string | null>(null);
+  const cliAppsRevisionRef = useRef(0);
   const [cirnoFeatureAction, setCirnoFeatureAction] = useState<string | null>(null);
   const cirnoFeatureActionRef = useRef<string | null>(null);
+  const cirnoFeaturesRevisionRef = useRef(0);
   const [cirnoFeatureConfirm, setCirnoFeatureConfirm] =
     useState<CirnoFeatureInstallRequest | null>(null);
   const [mcpPresetAction, setMcpPresetAction] = useState<string | null>(null);
+  const mcpActionRef = useRef<string | null>(null);
+  const mcpRevisionRef = useRef(0);
+  const mcpRefreshRef = useRef<(() => void) | null>(null);
   const [mcpOAuthFlow, setMcpOAuthFlow] = useState<McpOAuthFlowPayload | null>(null);
   const mcpOAuthFlowRef = useRef<McpOAuthFlowPayload | null>(null);
   const mcpOAuthPopupRef = useRef<Window | null>(null);
   const mcpOAuthNavigatedUrlRef = useRef<string | null>(null);
+  const mcpOAuthCompletingRef = useRef(false);
+  const mcpOAuthCancellingRef = useRef(false);
+  const mcpOAuthRevisionRef = useRef(0);
+  const mcpOAuthMonitorRef = useRef(0);
+  const mcpOAuthWaitRef = useRef<(() => void) | null>(null);
   const [mcpOAuthPopupBlocked, setMcpOAuthPopupBlocked] = useState(false);
   const [mcpOAuthCallbackUrl, setMcpOAuthCallbackUrl] = useState("");
   const [mcpOAuthCompleting, setMcpOAuthCompleting] = useState(false);
@@ -43,13 +55,47 @@ export function useSystemSettingsState() {
   const [automationsFilter, setAutomationsFilter] = useState<AutomationFilter>("all");
   const [cliAppsMessage, setCliAppsMessage] = useState<string | null>(null);
   const [cliAppsError, setCliAppsError] = useState<string | null>(null);
+  const [cliAppsReadError, setCliAppsReadError] = useState<string | null>(null);
   const [cirnoFeaturesError, setCirnoFeaturesError] = useState<string | null>(null);
+  const [cirnoFeaturesReadError, setCirnoFeaturesReadError] = useState<string | null>(null);
   const [cliAppsFocusName, setCliAppsFocusName] = useState<string | null>(null);
   const [appsKindFilter, setAppsKindFilter] = useState<AppsKindFilter>("cli");
   const [mcpMessage, setMcpMessage] = useState<string | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
   const [automationsError, setAutomationsError] = useState<string | null>(null);
   const [automationAction, setAutomationAction] = useState<string | null>(null);
+  const automationActionRef = useRef<string | null>(null);
+  const automationsRevisionRef = useRef(0);
+  const systemSettingsOwner = useMemo(() => Symbol("system settings"), []);
+  const isSystemSettingsCurrent = useLifetime(systemSettingsOwner);
+  const publishCirnoFeatures = useCallback((payload: CirnoFeaturesPayload) => {
+    if (!isSystemSettingsCurrent()) return;
+    cirnoFeaturesRevisionRef.current += 1;
+    setCirnoFeatures(payload);
+    setCirnoFeaturesLoading(false);
+    setCirnoFeaturesReadError(null);
+    setCirnoFeaturesError(null);
+  }, [isSystemSettingsCurrent]);
+  const automationRefreshTimersRef = useRef(new Set<number>());
+  useEffect(() => {
+    const timers = automationRefreshTimersRef.current;
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+      timers.clear();
+      mcpOAuthFlowRef.current = null;
+      mcpOAuthRevisionRef.current += 1;
+      mcpOAuthMonitorRef.current += 1;
+      mcpOAuthWaitRef.current?.();
+      const popup = mcpOAuthPopupRef.current;
+      mcpOAuthPopupRef.current = null;
+      mcpOAuthNavigatedUrlRef.current = null;
+      try {
+        if (popup && !popup.closed) popup.close();
+      } catch {
+        // A cross-origin authorization page can restrict its WindowProxy.
+      }
+    };
+  }, []);
   const [automationPendingDelete, setAutomationPendingDelete] =
     useState<SessionAutomationJob | null>(null);
   const [automationPendingEdit, setAutomationPendingEdit] =
@@ -62,6 +108,10 @@ export function useSystemSettingsState() {
     appsKindFilter,
     appsQuery,
     automationAction,
+    automationActionRef,
+    automationsRevisionRef,
+    isSystemSettingsCurrent,
+    automationRefreshTimersRef,
     automationPendingDelete,
     automationPendingEdit,
     automations,
@@ -70,7 +120,9 @@ export function useSystemSettingsState() {
     automationsLoading,
     cliApps,
     cliAppsAction,
-    cliAppsError,
+    cliAppsActionRef,
+    cliAppsRevisionRef,
+    cliAppsError: cliAppsError ?? cliAppsReadError,
     cliAppsFocusName,
     cliAppsLoading,
     cliAppsMessage,
@@ -85,16 +137,25 @@ export function useSystemSettingsState() {
     mcpOAuthFlow,
     mcpOAuthFlowRef,
     mcpOAuthNavigatedUrlRef,
+    mcpOAuthCompletingRef,
+    mcpOAuthCancellingRef,
+    mcpOAuthRevisionRef,
+    mcpOAuthMonitorRef,
+    mcpOAuthWaitRef,
     mcpOAuthPopupBlocked,
     mcpOAuthPopupRef,
     mcpPresetAction,
+    mcpActionRef,
+    mcpRevisionRef,
+    mcpRefreshRef,
     mcpPresets,
     mcpPresetsLoading,
     cirnoFeatureAction,
     cirnoFeatureActionRef,
+    cirnoFeaturesRevisionRef,
     cirnoFeatureConfirm,
     cirnoFeatures,
-    cirnoFeaturesError,
+    cirnoFeaturesError: cirnoFeaturesError ?? cirnoFeaturesReadError,
     cirnoFeaturesLoading,
     setAppsKindFilter,
     setAppsQuery,
@@ -108,6 +169,7 @@ export function useSystemSettingsState() {
     setCliApps,
     setCliAppsAction,
     setCliAppsError,
+    setCliAppsReadError,
     setCliAppsFocusName,
     setCliAppsLoading,
     setCliAppsMessage,
@@ -127,7 +189,9 @@ export function useSystemSettingsState() {
     setCirnoFeatureAction,
     setCirnoFeatureConfirm,
     setCirnoFeatures,
+    publishCirnoFeatures,
     setCirnoFeaturesError,
+    setCirnoFeaturesReadError,
     setCirnoFeaturesLoading,
   };
 }

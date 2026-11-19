@@ -31,6 +31,7 @@ from cirno_core.session import turn_continuation
 from cirno_core.session.goal_state import (
     goal_state_raw,
     parse_goal_state,
+    pause_goal_at_limit,
 )
 from cirno_core.session.model import Session
 from cirno_core.session.roles import conversation_role
@@ -69,6 +70,7 @@ class TurnProcessor:
         session: Session | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
+        self.agent.lifecycle.check_admission()
         from cirno_core.runtime.heartbeat import discard_paused_heartbeat
         if await discard_paused_heartbeat(self.agent.sessions, msg):
             return None
@@ -343,27 +345,32 @@ class TurnProcessor:
         ctx.usage = result.usage
         ctx.delivery.record_usage(result.round_usages)
         if ctx.kind is TurnKind.USER:
-            current = await self.agent.sessions.state.read_metadata(ctx.session_key)
-            metadata = current["metadata"] if current else {}
-            goal = parse_goal_state(goal_state_raw(metadata)) or {}
-            limit = int(goal.get("continuation_limit", self.agent.goal_continuation_limit))
-            rounds = int(metadata.get("_sustained_goal_continuation_rounds", 0))
-            if goal.get("status") == "active" and limit > 0 and rounds >= limit:
-                await self.agent.sessions.state.update_metadata(
-                    ctx.session_key,
-                    {
-                        "goal_state": {
-                            **goal,
-                            "status": "paused",
-                            "recap": "Automatic continuation limit reached.",
-                        }
-                    },
-                )
-                current = await self.agent.sessions.state.read_metadata(ctx.session_key)
-            ctx.delivery.continuation_pending = await turn_continuation.maybe_continue_turn(
-                ctx,
-                session_metadata=current["metadata"] if current else {},
+            await self._continue_goal(ctx)
+
+    async def _continue_goal(self, ctx: TurnContext) -> None:
+        """Commit a limit pause against current state before any next segment."""
+        current = await self.agent.sessions.state.read_metadata(ctx.session_key)
+        metadata = current["metadata"] if current else {}
+        goal = parse_goal_state(goal_state_raw(metadata)) or {}
+        limit = int(goal.get("continuation_limit", self.agent.goal_continuation_limit))
+        rounds = int(metadata.get("_sustained_goal_continuation_rounds", 0))
+        if goal.get("status") == "active" and limit > 0 and rounds >= limit:
+            def pause_at_limit(current_metadata):
+                if (
+                    parse_goal_state(goal_state_raw(current_metadata)) == goal
+                    and int(current_metadata.get("_sustained_goal_continuation_rounds", 0)) >= limit
+                ):
+                    current_metadata["goal_state"] = pause_goal_at_limit(goal)
+
+            await self.agent.sessions.state.mutate_metadata(
+                ctx.session_key, pause_at_limit,
+                expected_generation=ctx.session.generation if ctx.session else None,
             )
+            current = await self.agent.sessions.state.read_metadata(ctx.session_key)
+        ctx.delivery.continuation_pending = await turn_continuation.maybe_continue_turn(
+            ctx,
+            session_metadata=current["metadata"] if current else {},
+        )
 
     async def prepare_outbound(self, ctx: TurnContext) -> None:
         ctx.delivery.record_stop_reason(

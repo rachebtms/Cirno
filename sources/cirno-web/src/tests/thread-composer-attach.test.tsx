@@ -373,6 +373,21 @@ describe("ThreadComposer — attachments", () => {
     expect(encodeImage).not.toHaveBeenCalled();
   });
 
+  it("keeps accompanying paste text without inspecting it as a second attachment path", async () => {
+    const pasted = pdfFile("pasted.pdf");
+    const inspect = vi.fn().mockRejectedValue(new Error("unexpected path inspection"));
+    render(<ThreadComposer onSend={vi.fn()} onInspectAttachment={inspect} />);
+    const textarea = screen.getByLabelText(/message input/i);
+    const event = createEvent.paste(textarea, { clipboardData: {
+      items: [{ kind: "file", getAsFile: () => pasted }],
+      getData: (type: string) => type === "text/plain" ? "/tmp/notes.pdf" : "",
+    } });
+    await act(async () => { fireEvent(textarea, event); });
+    expect(await screen.findByRole("button", { name: "pasted.pdf" })).toBeVisible();
+    expect(event.defaultPrevented).toBe(false);
+    expect(inspect).not.toHaveBeenCalled();
+  });
+
   it("blocks send while an image is still encoding", async () => {
     const file = pngFile("slow.png");
     let resolveEncode: (r: EncodeResponse) => void = () => {};

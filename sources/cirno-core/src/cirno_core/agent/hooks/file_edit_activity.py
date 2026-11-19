@@ -11,9 +11,10 @@ from cirno_core.agent.hook import (
     AgentRunHookContext,
     AgentTurnHookContext,
 )
+from cirno_core.agent.tools.filesystem.workers import run_file_operation
 from cirno_core.agent.tools.naming import implementation_name
-from cirno_core.bus.outbound_events import FileEditEvent
 from cirno_core.bus.agent_events import EventSink
+from cirno_core.bus.outbound_events import FileEditEvent
 from cirno_core.providers.tool_calls import ToolCallRequest
 from cirno_core.utils.file_edit_events import (
     FileEditResult,
@@ -52,13 +53,13 @@ class FileEditActivityHook(AgentHook):
         if self._publish is None or not isinstance(params, dict):
             return
         typed_params = cast(dict[str, Any], params)
-        trackers = prepare_file_edit_trackers(
+        trackers = await run_file_operation(lambda _cancelled: prepare_file_edit_trackers(
             call_id=tool_call.id,
             tool_name=implementation_name(tool_call.name),
             tool=tool,
             workspace=self._workspace,
             params=typed_params,
-        )
+        ))
         if not trackers:
             return
         self._trackers_by_call[self._tool_call_key(tool_call)] = trackers
@@ -78,11 +79,12 @@ class FileEditActivityHook(AgentHook):
         key = self._tool_call_key(tool_call)
         trackers = self._trackers_by_call.get(key, [])
         if trackers:
-            diffs = result.file_diffs if isinstance(result, FileEditResult) else {}
-            await self._emit([
+            diffs = dict(result.file_diffs) if isinstance(result, FileEditResult) else {}
+            events = await run_file_operation(lambda _cancelled: [
                 build_file_edit_end_event(tracker, diff=diffs.pop(tracker.path, None))
                 for tracker in trackers
             ])
+            await self._emit(events)
             self._trackers_by_call.pop(key, None)
 
     async def on_execute_tool_error(

@@ -92,6 +92,7 @@
   "tools.restrict_to_workspace",
   "tools.ssrf_whitelist",
   "tools.web.enable",
+  "tools.web.fetch.max_response_mb",
   "tools.web.use_proxy",
   "tools.web.user_agent"
 ]

@@ -13,6 +13,7 @@ import time
 from aiohttp import web
 from cirno_core.runtime.admission import RuntimeBusyError, RuntimeMaintenanceError
 from cirno_core.utils.cancellation import shield_and_drain
+
 from cirno_server.backup.archive import Backups
 
 
@@ -138,15 +139,17 @@ class BackupHTTP:
                     )
                 return web.json_response(result)
             if action == "cancel":
-                identifier = values.get("id")
-                plan_path = self.archive.store / "restore-plan.json"
-                plan = json.loads(plan_path.read_text()) if plan_path.exists() else None
-                if identifier:
-                    stage = self.archive._stage(identifier)
-                    if plan and plan["id"] == identifier:
-                        plan_path.unlink()
-                    await asyncio.to_thread(shutil.rmtree, stage)
-                else:
-                    plan_path.unlink(missing_ok=True)
+                await shield_and_drain(asyncio.to_thread(self._cancel, values.get("id")))
                 return web.json_response({"ok": True})
         raise web.HTTPNotFound()
+
+    def _cancel(self, identifier):
+        plan_path = self.archive.store / "restore-plan.json"
+        plan = json.loads(plan_path.read_text()) if plan_path.exists() else None
+        if identifier is not None:
+            stage = self.archive._stage(identifier)
+            if plan and plan["id"] == identifier:
+                plan_path.unlink()
+            shutil.rmtree(stage)
+        else:
+            plan_path.unlink(missing_ok=True)

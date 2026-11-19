@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { createSettingsReadGate } from "./createSettingsReadGate";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { SettingsSectionKey } from "@/features/settings/contracts";
 import {
@@ -32,43 +33,69 @@ export function useSystemSettingsEffects({
     setAutomations,
     setAutomationsError,
     setAutomationsLoading,
+    automationActionRef,
+    automationsRevisionRef,
+    isSystemSettingsCurrent,
     setCliApps,
-    setCliAppsError,
+    cliAppsActionRef,
+    cliAppsRevisionRef,
+    setCliAppsReadError,
     setCliAppsLoading,
     setMcpError,
     setMcpPresets,
     setMcpPresetsLoading,
+    mcpActionRef,
+    mcpRevisionRef,
+    mcpRefreshRef,
     setCirnoFeatures,
-    setCirnoFeaturesError,
+    setCirnoFeaturesReadError,
     setCirnoFeaturesLoading,
+    cirnoFeatureActionRef,
+    cirnoFeaturesRevisionRef,
   } = state;
+  const automationSurfaceRef = useRef({ activeSection, pageVisible });
+  automationSurfaceRef.current = { activeSection, pageVisible };
 
   useEffect(() => {
-    if (!["apps", "mcp"].includes(activeSection)) return;
+    if (!pageVisible || !["apps", "mcp"].includes(activeSection)) return;
     let cancelled = false;
     let retry: number | null = null;
     let retryCount = 0;
+    const scheduleRetry = () => {
+      if (cancelled || retry !== null) return;
+      retry = window.setTimeout(() => {
+        retry = null;
+        loadCliApps(false);
+      }, CLI_APPS_REFRESH_RETRY_MS);
+    };
+    const beginRead = createSettingsReadGate({
+      isCurrent: () => !cancelled && isSystemSettingsCurrent(),
+      actionRef: cliAppsActionRef, revisionRef: cliAppsRevisionRef, getToken,
+    });
     const loadCliApps = (showLoading: boolean) => {
+      if (cancelled || !isSystemSettingsCurrent()) return;
+      if (cliAppsActionRef.current) {
+        scheduleRetry();
+        return;
+      }
+      const read = beginRead();
+      if (!read) return;
       if (showLoading) setCliAppsLoading(true);
-      fetchCliApps(getToken())
+      fetchCliApps(read.token)
         .then((payload) => {
-          if (cancelled) return;
+          if (!read.isCurrent()) return;
           if (payload.catalog_refresh_pending && retryCount < CLI_APPS_REFRESH_MAX_RETRIES) {
             retryCount += 1;
-            retry = window.setTimeout(() => {
-              retry = null;
-              loadCliApps(false);
-            }, CLI_APPS_REFRESH_RETRY_MS);
+            scheduleRetry();
           }
           setCliApps(payload);
-          setCliAppsError(null);
-          setCliAppsLoading(false);
+          setCliAppsReadError(null);
         })
         .catch((err) => {
-          if (!cancelled) {
-            setCliAppsError((err as Error).message);
-            setCliAppsLoading(false);
-          }
+          if (read.isCurrent()) setCliAppsReadError((err as Error).message);
+        })
+        .finally(() => {
+          if (read.isLatest()) setCliAppsLoading(false);
         });
     };
     loadCliApps(true);
@@ -76,7 +103,7 @@ export function useSystemSettingsEffects({
       cancelled = true;
       if (retry !== null) window.clearTimeout(retry);
     };
-  }, [activeSection, getToken]);
+  }, [activeSection, getToken, pageVisible, cliAppsActionRef, cliAppsRevisionRef, isSystemSettingsCurrent]);
 
   useEffect(() => {
     if (
@@ -87,22 +114,28 @@ export function useSystemSettingsEffects({
     }
     let cancelled = false;
     let refreshing = false;
+    const beginRead = createSettingsReadGate({
+      isCurrent: () => !cancelled && isSystemSettingsCurrent(),
+      actionRef: cirnoFeatureActionRef, revisionRef: cirnoFeaturesRevisionRef, getToken,
+    });
     const refresh = async (showLoading = false): Promise<void> => {
       if (refreshing) return;
+      const read = beginRead();
+      if (!read) return;
       refreshing = true;
       if (showLoading) setCirnoFeaturesLoading(true);
       try {
-        const payload = await fetchCirnoFeatures(getToken());
-        if (!cancelled) {
+        const payload = await fetchCirnoFeatures(read.token);
+        if (read.isCurrent()) {
           setCirnoFeatures(payload);
-          setCirnoFeaturesError(null);
+          setCirnoFeaturesReadError(null);
         }
       } catch (err) {
         const message = (err as Error).message;
-        if (!cancelled && message !== "HTTP 404") setCirnoFeaturesError(message);
+        if (read.isCurrent() && message !== "HTTP 404") setCirnoFeaturesReadError(message);
       } finally {
         refreshing = false;
-        if (!cancelled && showLoading) setCirnoFeaturesLoading(false);
+        if (read.isLatest()) setCirnoFeaturesLoading(false);
       }
     };
     void refresh(true);
@@ -122,54 +155,85 @@ export function useSystemSettingsEffects({
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnFocus);
     };
-  }, [activeSection, getToken, pageVisible]);
+  }, [activeSection, getToken, pageVisible, cirnoFeatureActionRef, cirnoFeaturesRevisionRef, isSystemSettingsCurrent]);
 
   useEffect(() => {
     if (!["apps", "mcp"].includes(activeSection) || !pageVisible) return;
     let cancelled = false;
     let retry: number | null = null;
+    const scheduleRefresh = () => {
+      if (cancelled || retry !== null) return;
+      retry = window.setTimeout(() => {
+        retry = null;
+        loadMcpPresets(false);
+      }, MCP_RUNTIME_STATUS_REFRESH_MS);
+    };
+    const beginRead = createSettingsReadGate({
+      isCurrent: () => !cancelled && isSystemSettingsCurrent(),
+      actionRef: mcpActionRef, revisionRef: mcpRevisionRef, getToken,
+    });
     const loadMcpPresets = (showLoading: boolean) => {
+      if (cancelled || !isSystemSettingsCurrent()) return;
+      if (mcpActionRef.current) {
+        scheduleRefresh();
+        return;
+      }
+      const read = beginRead();
+      if (!read) return;
       if (showLoading) setMcpPresetsLoading(true);
-      fetchMcpPresets(getToken())
+      fetchMcpPresets(read.token)
         .then((payload) => {
-          if (cancelled) return;
+          if (!read.isCurrent()) return;
           setMcpPresets(payload);
           setMcpError(null);
-          if (payload.presets.some((preset) => preset.runtime_status === "connecting")) {
-            retry = window.setTimeout(() => {
-              retry = null;
-              loadMcpPresets(false);
-            }, MCP_RUNTIME_STATUS_REFRESH_MS);
-          }
+          if (payload.presets.some((preset) => preset.runtime_status === "connecting")) scheduleRefresh();
         })
         .catch((err) => {
-          if (!cancelled) setMcpError((err as Error).message);
+          if (read.isCurrent()) setMcpError((err as Error).message);
         })
         .finally(() => {
-          if (!cancelled && showLoading) setMcpPresetsLoading(false);
+          if (read.isLatest()) setMcpPresetsLoading(false);
         });
     };
+    mcpRefreshRef.current = scheduleRefresh;
     loadMcpPresets(true);
     return () => {
       cancelled = true;
       if (retry !== null) window.clearTimeout(retry);
+      if (mcpRefreshRef.current === scheduleRefresh) mcpRefreshRef.current = null;
     };
-  }, [activeSection, getToken, pageVisible]);
+  }, [activeSection, getToken, pageVisible, mcpActionRef, mcpRevisionRef, mcpRefreshRef, isSystemSettingsCurrent]);
 
-  const refreshAutomations = useCallback(
-    async (showLoading = false) => {
+  const loadAutomations = useCallback(
+    async (showLoading = false, isActive: () => boolean = isSystemSettingsCurrent) => {
+      const beginRead = createSettingsReadGate({
+        isCurrent: () => isSystemSettingsCurrent() && isActive(),
+        actionRef: automationActionRef, revisionRef: automationsRevisionRef, getToken,
+      });
+      const read = beginRead();
+      if (!read) return;
       if (showLoading) setAutomationsLoading(true);
       try {
-        const payload = await fetchAutomations(getToken());
+        const payload = await fetchAutomations(read.token);
+        if (!read.isCurrent()) return;
         setAutomations(payload);
         setAutomationsError(null);
       } catch (err) {
-        setAutomationsError((err as Error).message);
+        if (read.isCurrent()) setAutomationsError((err as Error).message);
       } finally {
-        if (showLoading) setAutomationsLoading(false);
+        if (read.isLatest()) setAutomationsLoading(false);
       }
     },
-    [getToken],
+    [getToken, automationActionRef, automationsRevisionRef, isSystemSettingsCurrent,
+      setAutomations, setAutomationsError, setAutomationsLoading],
+  );
+  const refreshAutomations = useCallback(
+    async (showLoading = false, automatic = false) => {
+      if (automatic && (!automationSurfaceRef.current.pageVisible
+        || automationSurfaceRef.current.activeSection !== "automations")) return;
+      await loadAutomations(showLoading);
+    },
+    [loadAutomations],
   );
 
   useEffect(() => {
@@ -177,19 +241,12 @@ export function useSystemSettingsEffects({
     let cancelled = false;
     let refreshing = false;
     const refresh = async (showLoading = false) => {
-      if (cancelled || refreshing) return;
+      if (cancelled || refreshing || automationActionRef.current) return;
       refreshing = true;
-      if (showLoading) setAutomationsLoading(true);
       try {
-        const payload = await fetchAutomations(getToken());
-        if (cancelled) return;
-        setAutomations(payload);
-        setAutomationsError(null);
-      } catch (err) {
-        if (!cancelled) setAutomationsError((err as Error).message);
+        await loadAutomations(showLoading, () => !cancelled);
       } finally {
         refreshing = false;
-        if (!cancelled && showLoading) setAutomationsLoading(false);
       }
     };
     void refresh(true);
@@ -201,7 +258,7 @@ export function useSystemSettingsEffects({
       window.clearInterval(interval);
       window.removeEventListener("focus", refreshOnFocus);
     };
-  }, [activeSection, getToken, pageVisible]);
+  }, [activeSection, pageVisible, automationActionRef, loadAutomations]);
 
   return { refreshAutomations };
 }

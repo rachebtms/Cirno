@@ -84,6 +84,7 @@ export function useWorkspaceState() {
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const topicSessions = sessions;
   const [pendingDelete, setPendingDelete] = useState<{
+    owner: typeof client;
     items: ConversationDeleteItem[];
     automations?: SessionAutomationJob[];
     onDecision?: ConversationDeleteDecision;

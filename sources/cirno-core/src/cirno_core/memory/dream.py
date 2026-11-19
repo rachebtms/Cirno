@@ -27,7 +27,10 @@ class DreamMemory:
     _DREAM_CONTENT_PATHS = ("SOUL.md", "WORKER.md", "USER.md", "memory/MEMORY.md")
 
     def __init__(self, store: MemoryStore):
+        from cirno_core.config.loader import get_config_path
+
         self.store = store
+        self.source_config_path = get_config_path().expanduser().resolve(strict=False)
         self.run_lock = asyncio.Lock()
         self._dream_prompt_oversize_logged = False
         self.batch_token: str | None = None
@@ -95,7 +98,7 @@ class DreamMemory:
                 entry.get("source_refs"),
                 timestamp=entry.get("timestamp"),
             )
-        config = load_config().agents.defaults.dream
+        config = load_config(self.source_config_path).agents.defaults.dream
         batch = repo.pending(
             limit=min(max_entries, config.batch_entries), max_chars=config.batch_chars
         )
@@ -155,7 +158,7 @@ class DreamMemory:
                 from cirno_core.notifications.inbox import NotificationInbox
 
                 try:
-                    NotificationInbox().record(
+                    NotificationInbox(state_dir=self.source_config_path.parent / "state").record(
                         "dream:" + token,
                         "system",
                         "dream",
@@ -203,13 +206,15 @@ class DreamMemory:
         tools = ToolRegistry()
         from cirno_core.agent.tools.instance_features import InspectSkillTool, MemoryTool
 
-        tools.register(InspectSkillTool())
+        tools.register(InspectSkillTool(home_path=self.store.workspace))
         tools.register(
             MemoryTool(
                 maintenance=True,
                 owner_access=self._dream_owner,
                 evidence_ids=self._dream_evidence_ids,
                 batch_token=self.batch_token,
+                home_path=self.store.workspace,
+                source_config_path=self.source_config_path,
             )
         )
         file_states = FileStates()

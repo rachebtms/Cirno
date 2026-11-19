@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
 import type { SettingsPayload } from "@/lib/contracts/settings";
@@ -16,6 +16,37 @@ import {
 
 describe("Settings models", () => {
   installSettingsViewTestHooks();
+  it("keeps a newer existing-preset draft editable while its previous autosave completes", async () => {
+    const payload = settingsPayload();
+    const saved: SettingsPayload = {
+      ...payload,
+      model_presets: payload.model_presets.map(row => ({ ...row, name: "First rename" })),
+    };
+    let finish!: (value: SettingsPayload) => void;
+    requestMutationMock.mockReturnValueOnce(new Promise<SettingsPayload>(resolve => { finish = resolve; }));
+    renderSettingsView({ initialSection: "models", initialSettings: payload });
+    await togglePresetEditor();
+    const name = screen.getByRole("textbox", { name: /^Preset name/ });
+    fireEvent.focus(name);
+    fireEvent.change(name, { target: { value: "First rename" } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(1));
+    expect(name).toBeEnabled();
+    fireEvent.focus(name);
+    fireEvent.change(name, { target: { value: "Still typing" } });
+    await act(async () => { finish(saved); });
+    expect(name).toHaveValue("Still typing");
+    expect(requestMutationMock).toHaveBeenCalledTimes(1);
+    requestMutationMock.mockResolvedValueOnce({
+      ...saved, model_presets: saved.model_presets.map(row => ({ ...row, name: "Still typing" })),
+    });
+    fireEvent.blur(name);
+    await waitFor(() => expect(requestMutationMock).toHaveBeenCalledTimes(2));
+    expect(requestMutationMock).toHaveBeenLastCalledWith(
+      "settings.model_configuration.update", { id: "primary", name: "Still typing" }, 20_000,
+    );
+  });
+
   it("edits the display name independently of the stable model ID", async () => {
     const payload = settingsPayload();
     payload.model_presets[0] = {

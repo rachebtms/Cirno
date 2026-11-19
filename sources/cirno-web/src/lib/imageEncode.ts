@@ -61,9 +61,9 @@ function newId(): string {
   return `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-/** Encode ``file`` off the main thread when possible. Always resolves — errors
- * are returned as ``{ok: false, reason}`` — so callers can render inline
- * validation without wrapping in try/catch. */
+/** Encode ``file`` off the main thread when possible. Validation/decode failures
+ * return ``{ok: false, reason}``; Worker crashes or message-post failures reject
+ * the promise. Callers must handle both outcomes for inline attachment errors. */
 export async function encodeImage(file: File): Promise<EncodeResponse> {
   const id = newId();
   const w = bootWorker();

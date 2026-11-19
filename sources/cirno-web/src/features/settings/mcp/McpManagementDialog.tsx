@@ -10,6 +10,10 @@ import "./mcp.css";
 export type { McpConfigEditor, McpManagementTab } from "./model/contracts";
 
 export function McpManagementDialog(options: McpManagementDialogProps) {
+  return <McpManagementContent key={options.preset.name} {...options} />;
+}
+
+function McpManagementContent(options: McpManagementDialogProps) {
   const { t } = useTranslation();
   const model = useMcpManagement(options);
   const { preset, tab } = options;
@@ -29,6 +33,6 @@ export function McpManagementDialog(options: McpManagementDialogProps) {
         <Tabs.Panel id="connection"><ConnectionPanel options={options} model={model} /></Tabs.Panel>
       </Tabs>
       {tab === "tools" && model.toolsDirty && <Modal.Footer><Button isPending={model.toolsBusy} isDisabled={model.busy || !model.toolNames.length} onPress={model.applyTools}><Check size={16} />{t("settings.mcp.applyChanges")}</Button></Modal.Footer>}
-      {tab === "connection" && preset.installed && model.proxyDirty && <Modal.Footer><Button isDisabled={model.busy} onPress={model.applyProxy}>{t("settings.mcp.applyChanges")}</Button></Modal.Footer>}
+      {tab === "connection" && preset.installed && model.proxyDirty && !model.fieldsDirty && <Modal.Footer><Button isDisabled={model.busy} onPress={model.applyProxy}>{t("settings.mcp.applyChanges")}</Button></Modal.Footer>}
     </Modal.Dialog></Modal.Container></Modal.Backdrop>;
 }

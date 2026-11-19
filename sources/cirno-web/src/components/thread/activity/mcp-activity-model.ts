@@ -71,7 +71,8 @@ function describe(
 }
 
 function matches(name: string, ...actions: string[]): boolean {
-  return actions.some((action) => name === action || name.endsWith(`_${action}`));
+  return actions.some((action) => name === action
+    || ["_", ".", "-"].some(separator => name.endsWith(`${separator}${action}`)));
 }
 
 function elementTarget(args: unknown): string | undefined {

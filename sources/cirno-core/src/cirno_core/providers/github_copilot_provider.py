@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 import threading
 import time
@@ -15,6 +14,8 @@ from contextlib import suppress
 from typing import Any, cast
 
 import httpx
+from oauth_cli_kit.models import OAuthToken
+
 from cirno_core.providers.catalog.contracts import ProviderModelSpec
 from cirno_core.providers.contracts import LLMResponse, ProviderCallContext
 from cirno_core.providers.model_api import ModelAPICapabilities, RequestAPI
@@ -22,11 +23,11 @@ from cirno_core.providers.oauth_catalog_cache import (
     OAuthCatalogAuthRequiredError,
     OAuthModelCatalog,
     OAuthModelCatalogSnapshot,
+    oauth_catalog_identity,
 )
 from cirno_core.providers.oauth_storage import InstanceOAuthStorage, token_storage
 from cirno_core.providers.openai_compat_provider import OpenAICompatProvider
 from cirno_core.providers.registry import find_by_name
-from oauth_cli_kit.models import OAuthToken
 
 DEFAULT_GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code"
 DEFAULT_GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -83,6 +84,7 @@ def login_github_copilot(
     cancelled: threading.Event | None = None,
     open_browser: bool = True,
     persist: bool = True,
+    proxy: str | None = None,
 ) -> OAuthToken:
     """Run GitHub device flow and persist the GitHub OAuth token used for Copilot."""
     del prompt_fn
@@ -106,7 +108,8 @@ def login_github_copilot(
     access_token_url = _resolve("CIRNO_GITHUB_ACCESS_TOKEN_URL", DEFAULT_GITHUB_ACCESS_TOKEN_URL)
     user_url = _resolve("CIRNO_GITHUB_USER_URL", DEFAULT_GITHUB_USER_URL)
 
-    with httpx.Client(timeout=timeout, follow_redirects=True, trust_env=True) as client:
+    check_cancelled()
+    with httpx.Client(timeout=timeout, follow_redirects=True, proxy=proxy, trust_env=False) as client:
         response = client.post(
             device_code_url,
             headers={"Accept": "application/json", "User-Agent": USER_AGENT},
@@ -175,6 +178,7 @@ def login_github_copilot(
         else:
             raise RuntimeError("GitHub device flow timed out.")
 
+        check_cancelled()
         user = client.get(
             user_url,
             headers={
@@ -209,6 +213,7 @@ class GitHubCopilotProvider(OpenAICompatProvider):
         *,
         provider_name: str = "github_copilot",
         model_api: ModelAPICapabilities | None = None,
+        proxy: str | None = None,
     ):
         self._copilot_access_token: str | None = None
         self._copilot_expires_at: float = 0.0
@@ -225,6 +230,7 @@ class GitHubCopilotProvider(OpenAICompatProvider):
             spec=find_by_name("github_copilot"),
             provider_name=provider_name,
             model_api=model_api,
+            proxy=proxy,
         )
 
     def _model_api_capabilities(
@@ -257,7 +263,7 @@ class GitHubCopilotProvider(OpenAICompatProvider):
 
             timeout = httpx.Timeout(20.0, connect=20.0)
             async with httpx.AsyncClient(
-                timeout=timeout, follow_redirects=True, trust_env=True
+                timeout=timeout, follow_redirects=True, proxy=self._proxy, trust_env=False
             ) as client:
                 response = await client.get(
                     _resolve("CIRNO_COPILOT_TOKEN_URL", DEFAULT_COPILOT_TOKEN_URL),
@@ -361,7 +367,7 @@ def get_github_copilot_model_catalog(
 def _copilot_catalog_cache_key(proxy: str | None = None) -> str:
     storage = get_storage()
     token = storage.load()
-    account_key = _catalog_account_key(getattr(token, "account_id", None))
+    account_key = oauth_catalog_identity(token)
     return (
         f"{storage.get_token_path()}\0{account_key}\0"
         f"{_resolve('CIRNO_COPILOT_BASE_URL', DEFAULT_COPILOT_BASE_URL)}\0{proxy or ''}"
@@ -383,7 +389,7 @@ def _fetch_github_copilot_models(proxy: str | None) -> tuple[ProviderModelSpec, 
         "Editor-Version": EDITOR_VERSION,
         "Editor-Plugin-Version": EDITOR_PLUGIN_VERSION,
     }
-    client_kwargs: dict[str, Any] = {"timeout": 20.0, "follow_redirects": True}
+    client_kwargs: dict[str, Any] = {"timeout": 20.0, "follow_redirects": True, "trust_env": False}
     if proxy:
         client_kwargs.update(proxy=proxy, trust_env=False)
     with httpx.Client(**client_kwargs) as client:
@@ -489,11 +495,6 @@ def _oauth_fallback_models(provider_name: str) -> tuple[ProviderModelSpec, ...]:
     spec = find_by_name(provider_name)
     assert spec is not None
     return spec.builtin_models
-
-
-def _catalog_account_key(account_id: object) -> str:
-    value = account_id if isinstance(account_id, str) else ""
-    return hashlib.sha256(value.encode()).hexdigest()[:16] if value else "anonymous"
 
 
 def _catalog_mapping(value: Any) -> dict[str, Any]:

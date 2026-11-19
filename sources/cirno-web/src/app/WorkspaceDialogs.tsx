@@ -12,17 +12,18 @@ export function WorkspaceDialogs({
 >) {
   const {
     pendingDelete,
-    setPendingDelete,
+    client,
     restartToast,
   } = workspaceState;
   const {
     onConfirmDelete,
+    onCancelDelete,
     deleteBusy,
     deleteError,
   } = navigationActions;
   return (
     <>
-      {pendingDelete ? (
+      {pendingDelete && pendingDelete.owner === client ? (
         <Suspense fallback={null}>
           <DeleteConfirm
             open
@@ -31,10 +32,7 @@ export function WorkspaceDialogs({
             automations={pendingDelete.automations}
             busy={deleteBusy}
             error={deleteError}
-            onCancel={() => {
-              pendingDelete.onDecision?.(false);
-              setPendingDelete(null);
-            }}
+            onCancel={onCancelDelete}
             onConfirm={onConfirmDelete}
           />
         </Suspense>

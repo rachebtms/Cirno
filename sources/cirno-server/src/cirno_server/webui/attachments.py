@@ -5,9 +5,11 @@ from __future__ import annotations
 import mimetypes
 import os
 import stat
+from pathlib import Path
 from typing import Literal, TypedDict
 
 from cirno_core.security.workspace_access import WorkspaceScope
+
 from cirno_server.channels.websocket.attachment_policy import (
     AttachmentIngressLimits,
     validate_attachment_batch,
@@ -34,9 +36,10 @@ _MIME_BY_SUFFIX = {
 
 def inspect_local_attachment(
     path: str, *, scope: WorkspaceScope, limits: AttachmentIngressLimits,
+    media_root: Path | None = None,
 ) -> LocalAttachment:
     """Check accessibility and metadata without reading or copying the file body."""
-    resolved = resolve_file_path(path, scope=scope, literal=True)
+    resolved = resolve_file_path(path, scope=scope, literal=True, media_root=media_root)
     try:
         fd = os.open(resolved, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
         try:

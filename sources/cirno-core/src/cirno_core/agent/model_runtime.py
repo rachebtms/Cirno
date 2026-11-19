@@ -11,8 +11,8 @@ from types import MappingProxyType
 from typing import cast
 
 from cirno_core.agent import model_presets as preset_helpers
-from cirno_core.config.schema import Config
 from cirno_core.config.models import ModelPresetConfig
+from cirno_core.config.schema import Config
 from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.factory import (
     ProviderSnapshot,
@@ -23,6 +23,7 @@ from cirno_core.providers.factory import (
     validate_provider_setup,
 )
 from cirno_core.providers.request_overrides import isolate_request_overrides
+from cirno_core.utils.cancellation import shield_and_drain
 from cirno_core.utils.llm_runtime import LLMRuntime, runtime_from_provider_snapshot
 
 
@@ -166,7 +167,9 @@ class ModelRuntimeResolver:
         """Close all admitted providers, including runtimes replaced by configuration reloads."""
         self._recent_override = None
         providers, self._providers = self._providers, set()
-        results = await asyncio.gather(*(provider.aclose() for provider in providers), return_exceptions=True)
+        results = await shield_and_drain(asyncio.gather(
+            *(provider.aclose() for provider in providers), return_exceptions=True,
+        ))
         errors = [result for result in results if isinstance(result, BaseException)]
         if errors:
             raise BaseExceptionGroup("failed to close model providers", errors)

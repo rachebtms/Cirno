@@ -23,7 +23,10 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToke
 
 
 def _use_data_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("cirno_core.agent.tools.mcp_oauth.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        "cirno_core.agent.tools.mcp_oauth_storage._store_path",
+        lambda config_path=None: tmp_path / "auth" / "mcp.json",
+    )
 
 
 def _oauth_metadata() -> OAuthMetadata:
@@ -91,6 +94,39 @@ async def test_mcp_oauth_storage_isolates_name_and_server_url(
     payload = json.loads((tmp_path / "auth" / "mcp.json").read_text(encoding="utf-8"))
     assert "https://mcp.example.com/mcp" not in str(payload)
     assert "access-secret" in str(payload)
+
+
+@pytest.mark.parametrize("field", ["tokens", "client_info", "oauth_metadata"])
+async def test_invalid_stored_oauth_field_preserves_other_credentials(
+    tmp_path, monkeypatch, field,
+):
+    _use_data_dir(tmp_path, monkeypatch)
+    storage = MCPOAuthStorage("fixture", "https://fixture.test/mcp")
+    await storage.set_tokens(OAuthToken(access_token="fixture-access"))
+    await storage.set_client_info(OAuthClientInformationFull(
+        redirect_uris=["https://fixture.test/callback"], client_id="fixture-client",
+    ))
+    await storage.set_oauth_metadata(_oauth_metadata())
+    expected = await storage.get_snapshot()
+    path = tmp_path / "auth" / "mcp.json"
+    payload = json.loads(path.read_text())
+    payload["servers"]["fixture"][field] = {
+        "access_token": ["invalid-secret"],
+        "redirect_uris": 7,
+        "issuer": ["invalid-secret"],
+    }
+    path.write_text(json.dumps(payload))
+    before = path.read_bytes()
+    warnings = MagicMock()
+    monkeypatch.setattr("cirno_core.agent.tools.mcp_oauth_storage.logger.warning", warnings)
+
+    snapshot = await storage.get_snapshot()
+
+    for name in ("tokens", "client_info", "oauth_metadata"):
+        assert getattr(snapshot, name) == (None if name == field else getattr(expected, name))
+    assert path.read_bytes() == before, "A corrupt field must not erase other saved credentials"
+    warnings.assert_called_once()
+    assert "invalid-secret" not in str(warnings.call_args)
 
 
 @pytest.mark.asyncio

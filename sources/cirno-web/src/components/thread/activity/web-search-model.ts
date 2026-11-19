@@ -53,7 +53,7 @@ export function webSearchRunsByTraceLine(
   return runs;
 }
 
-function webSearchRunFromEvent(event: ToolProgressEvent): WebSearchRunModel | null {
+export function webSearchRunFromEvent(event: ToolProgressEvent): WebSearchRunModel | null {
   const name = compactToolName(toolEventName(event));
   if (name !== "web_search" && name !== "x_search") return null;
 

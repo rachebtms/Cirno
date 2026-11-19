@@ -22,6 +22,8 @@ These guides describe the current Cirno implementation. The Python service owns 
 - [Programmatic tool calling](architecture/ptc.md): PTC execution and conversation reply delivery.
 - [Operation review](architecture/access-review.md): permission modes, independent AI review and owner decisions.
 - [Tool namespaces](architecture/tools.md): logical names, native function names and role selection.
+- [Frontend resources](architecture/frontend-resources.md): view ownership, local state and asynchronous reads/writes.
+- [Cancellation and settlement](architecture/async-settlement.md): admitted I/O, commit acknowledgements and durable receipts.
 - [Conversation routing and Stop](development/conversation-routing.md): isolation and cancellation.
 
 ## Develop Cirno
@@ -34,6 +36,8 @@ These guides describe the current Cirno implementation. The Python service owns 
 Historical reviews, benchmark runs and earlier implementations are local archive material under ignored `references/`. They are not current product documentation or bundled Agent guidance. Third-party license text remains in its original form.
 
 ## Release notes
+
+- [0.2.20](releases/0.2.20.md): shared cancellation and persistence boundaries, settings and browser resource ownership, tool/provider reliability, and Markdown notification bodies.
 
 - [0.2.19](releases/0.2.19.md): long-context checkpoint boundaries, background execution ownership and reconnect state, current-turn report questions and nonblocking settings navigation.
 

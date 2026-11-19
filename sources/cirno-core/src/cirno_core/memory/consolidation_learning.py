@@ -90,16 +90,24 @@ class ConsolidationLearning:
                 if any(p.parent.name in text for text in texts)
             ]
         for path in paths:
+            if remaining <= 0:
+                break
             if path.is_symlink() or not path.resolve().is_relative_to(self.home):
                 continue
-            text = path.read_text(encoding="utf-8") if path.exists() else ""
+            if path.exists():
+                with path.open(encoding="utf-8") as stream:
+                    text = stream.read(remaining + 1)
+                if len(text) > remaining:
+                    continue
+            else:
+                text = ""
             relative = path.relative_to(self.home).as_posix()
             block = json.dumps({"path": relative, "content": text}, ensure_ascii=False)
-            if len(block) > remaining:
+            if len(block) + 1 > remaining:
                 continue  # Never offer a partially read file for replacement.
             self.documents[relative] = text
             sections.append(block)
-            remaining -= len(block)
+            remaining -= len(block) + 1
         pending = self.repo.consolidation_inputs(
             self.session_key,
             self.project_id,
@@ -119,16 +127,20 @@ class ConsolidationLearning:
                 },
                 ensure_ascii=False,
             )
-            if len(block) <= remaining:
+            if len(block) + 1 <= remaining:
                 self.inputs[record["id"]] = record
                 self.sources["input:" + record["id"]] = {"memory_id": record["id"], "quote": record["content"][:1000]}
                 sections.append(block)
-                remaining -= len(block)
+                remaining -= len(block) + 1
         records = self.repo.search(
             session_key=self.session_key, project_id=self.project_id, layer="knowledge", limit=20
         )["memories"]
         for record in records:
-            content = self.repo.body_content(record)
+            if remaining <= 0:
+                break
+            content = self.repo.body_content_within(record, remaining)
+            if content is None:
+                continue
             block = json.dumps(
                 {
                     "memory_id": record["id"],
@@ -138,11 +150,11 @@ class ConsolidationLearning:
                 },
                 ensure_ascii=False,
             )
-            if len(block) > remaining:
+            if len(block) + 1 > remaining:
                 continue
             self.known[record["id"]] = record
             sections.append(block)
-            remaining -= len(block)
+            remaining -= len(block) + 1
         return "\n".join(sections) or "(no additional reference material)"
 
     def _evidence(self, refs, *, user_only=False) -> None:

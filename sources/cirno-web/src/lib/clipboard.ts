@@ -17,6 +17,12 @@ function copyTextWithTextarea(text: string): boolean {
     return false;
   }
 
+  const focused = document.activeElement;
+  const input = focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement
+    ? focused : null;
+  const selection = input && input.selectionStart !== null && input.selectionEnd !== null
+    ? { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection ?? "none" }
+    : null;
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.setAttribute("readonly", "");
@@ -26,15 +32,20 @@ function copyTextWithTextarea(text: string): boolean {
   textarea.style.opacity = "0";
 
   document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  textarea.setSelectionRange(0, textarea.value.length);
 
   try {
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
     return document.execCommand("copy");
   } catch {
     return false;
   } finally {
+    const restoreFocus = document.activeElement === textarea;
     document.body.removeChild(textarea);
+    if (restoreFocus && focused instanceof HTMLElement && focused.isConnected) {
+      focused.focus({ preventScroll: true });
+      if (input && selection) input.setSelectionRange(selection.start, selection.end, selection.direction);
+    }
   }
 }

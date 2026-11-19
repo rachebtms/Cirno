@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from cirno_memory.atomic import ensure_directory, publish_file
 from cirno_memory.paging import source_chunks
 from cirno_memory.checkpoints import checkpoint_id
 from cirno_memory.errors import MemoryRevisionConflict
@@ -73,11 +75,14 @@ def _hash(content: str) -> str:
 
 
 def _atomic(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory(path.parent)
     temp = path.with_name(path.name + "." + uuid4().hex + ".tmp")
     try:
-        temp.write_text(content, encoding="utf-8")
-        temp.replace(path)
+        with temp.open("w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        publish_file(temp, path)
     finally:
         temp.unlink(missing_ok=True)
 
@@ -105,6 +110,18 @@ class MemoryRepository:
 
     def body_content(self, record: dict) -> str:
         content = self._body_path(record).read_text(encoding="utf-8")
+        if _hash(content) != record["content_hash"]:
+            raise ValueError(f"Memory {record['id']} revision {record['revision']} body differs from its saved hash")
+        return content
+
+    def body_content_within(self, record: dict, max_chars: int) -> str | None:
+        """Return a complete verified body, or skip it without an unbounded read."""
+        if max_chars <= 0:
+            return None
+        with self._body_path(record).open(encoding="utf-8") as stream:
+            content = stream.read(max_chars + 1)
+        if len(content) > max_chars:
+            return None
         if _hash(content) != record["content_hash"]:
             raise ValueError(f"Memory {record['id']} revision {record['revision']} body differs from its saved hash")
         return content
@@ -169,6 +186,12 @@ class MemoryRepository:
             db.execute("BEGIN IMMEDIATE")
             existing = db.execute("SELECT body FROM memories WHERE id=?", (memory_id,)).fetchone()
             old = json.loads(existing[0]) if existing else None
+            if old is None and expected_revision is not None:
+                raise ValueError(
+                    "Memory does not exist at the expected revision; no changes were saved. "
+                    "Check the memory ID and conversation/project scope. Omit expected_revision "
+                    "only when intentionally creating a new memory or checkpoint."
+                )
             if old:
                 if not maintenance and not self.visible(old, access_session, access_project):
                     raise PermissionError("Memory is outside the current scope")
@@ -492,8 +515,8 @@ class MemoryRepository:
         records, size = [], 0
         for row in rows:
             record = json.loads(row[0])
-            content = self.body_content(record)
-            if size + len(content) > max_chars:
+            content = self.body_content_within(record, max_chars - size)
+            if content is None:
                 continue
             records.append({**record, "content": content})
             size += len(content)

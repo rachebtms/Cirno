@@ -89,7 +89,7 @@ def _tool_event_arguments(tool_call: Any) -> dict[str, Any]:
     return tool_arguments(getattr(tool_call, "name", ""), arguments) if isinstance(arguments, dict) else {}
 
 
-def build_tool_event_start_payload(tool_call: Any) -> dict[str, Any]:
+def build_tool_event_start_payload(tool_call: Any, *, activity: dict[str, str] | None = None) -> dict[str, Any]:
     return {
         "version": 1,
         "phase": "start",
@@ -100,6 +100,7 @@ def build_tool_event_start_payload(tool_call: Any) -> dict[str, Any]:
         "error": None,
         "files": [],
         "embeds": [],
+        **(activity or {}),
     }
 
 
@@ -115,11 +116,13 @@ def tool_event_result_extras(result: Any) -> tuple[list[Any], list[Any]]:
 
 
 def build_tool_event_finish_payloads(context: AgentHookContext) -> list[dict[str, Any]]:
+    from cirno_vault.redaction import tool_result
+
     payloads: list[dict[str, Any]] = []
     count = min(len(context.tool_calls), len(context.tool_results), len(context.tool_events))
     for idx in range(count):
         tool_call = context.tool_calls[idx]
-        result = context.tool_results[idx]
+        result = tool_result(tool_call.name, context.tool_results[idx], tool_call.arguments)
         event = context.tool_events[idx]
         status = event.get("status")
         phase = "end" if status == "ok" else "error"
@@ -134,6 +137,7 @@ def build_tool_event_finish_payloads(context: AgentHookContext) -> list[dict[str
             "error": None,
             "files": files,
             "embeds": embeds,
+            **context.tool_activity.get(tool_call.id, {}),
         }
         if phase == "error":
             if isinstance(result, str) and result.strip():

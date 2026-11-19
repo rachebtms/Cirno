@@ -135,13 +135,13 @@ async def test_scan_loads_only_sessions_that_need_webui_recovery(
 
     coordinator, _, restarted = _coordinator(tmp_path)
     loaded: list[str] = []
-    get_or_create = restarted.state.get
+    read = restarted.state.read
 
-    async def tracked_get_or_create(key: str) -> Session:
+    async def tracked_read(key: str) -> Session | None:
         loaded.append(key)
-        return await get_or_create(key)
+        return await read(key)
 
-    monkeypatch.setattr(restarted.state, "get", tracked_get_or_create)
+    monkeypatch.setattr(restarted.state, "read", tracked_read)
     monkeypatch.setattr(
         "cirno_core.session.transcript.has_unfinished_transcript_tail",
         lambda _key, **_kwargs: False,

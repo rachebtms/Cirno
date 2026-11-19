@@ -7,6 +7,7 @@ import hashlib
 import time
 from typing import TYPE_CHECKING, Any, cast
 
+from cirno_core.security.workspace_access import WorkspaceScopeError
 from cirno_core.session.display_history import HistoryReader
 from cirno_core.session.transcript import (
     TranscriptReplayStats,
@@ -14,6 +15,9 @@ from cirno_core.session.transcript import (
     build_webui_trace_detail_response,
     webui_transcript_revision,
 )
+from websockets.http11 import Request as WsRequest
+from websockets.http11 import Response
+
 from cirno_server.webui.http_utils import case_insensitive_header as _case_insensitive_header
 from cirno_server.webui.http_utils import combined_list_header as _combined_list_header
 from cirno_server.webui.http_utils import http_error as _http_error
@@ -21,8 +25,6 @@ from cirno_server.webui.http_utils import http_json_response as _http_json_respo
 from cirno_server.webui.http_utils import http_response as _http_response
 from cirno_server.webui.http_utils import parse_query as _parse_query
 from cirno_server.webui.http_utils import query_first as _query_first
-from websockets.http11 import Request as WsRequest
-from websockets.http11 import Response
 
 from .shared import (
     _NO_STORE_HEADERS,
@@ -226,7 +228,10 @@ class HistoryRoutes:
             return _http_error(404, "session not found")
         if diagnostics is not None:
             diagnostics.session_hash = hashlib.sha256(decoded_key.encode("utf-8")).hexdigest()[:12]
-        scope = self.server.workspaces.scope_for_session_key(decoded_key)
+        try:
+            scope = self.server.workspaces.scope_for_session_key(decoded_key)
+        except WorkspaceScopeError as exc:
+            return _http_error(exc.status, exc.message)
 
         query = _parse_query(request.path)
         raw_limit = _query_first(query, "limit")
@@ -252,13 +257,12 @@ class HistoryRoutes:
                 or decode_transcript_cursor(after) is None
             ):
                 return _http_error(400, "invalid navigation cursor")
-        from cirno_core.session.webui_turns.activity import websocket_turn_id, websocket_turn_transcript_persistence_failed, websocket_turn_wall_started_at
+        from cirno_core.session.webui_turns.activity import websocket_turn_snapshot
 
         chat_id = decoded_key.split(":", 1)[1]
-        active_turn_started_at = websocket_turn_wall_started_at(chat_id)
-        active_turn_id = websocket_turn_id(chat_id)
-        active_turn_transcript_persistence_failed = websocket_turn_transcript_persistence_failed(
-            chat_id
+        history_revision = history.revision
+        active_turn_started_at, active_turn_id, active_turn_transcript_persistence_failed = websocket_turn_snapshot(
+            chat_id, history_generation=history_revision[0] if history_revision is not None else None,
         )
         revision_variant = {
             "active_turn_id": active_turn_id,

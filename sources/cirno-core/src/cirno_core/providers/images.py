@@ -14,6 +14,8 @@ from typing import Any, cast
 from loguru import logger
 from PIL import Image, ImageOps
 
+from cirno_core.utils.cancellation import shield_and_drain
+
 # A soft transport target, including base64 expansion, rather than an API size limit.
 INLINE_IMAGE_BYTE_BUDGET = 1_000_000
 _SMALL_IMAGE_BYTES = 64_000
@@ -88,7 +90,7 @@ async def prepare_inline_images(body: dict[str, Any]) -> dict[str, Any]:
     total_bytes = sum(len(image.url) for image in _inline_images(body))
     if total_bytes <= INLINE_IMAGE_BYTE_BUDGET:
         return body
-    return await asyncio.to_thread(_prepare_copies, body, total_bytes)
+    return await shield_and_drain(asyncio.to_thread(_prepare_copies, body, total_bytes))
 
 
 async def prepare_message_images(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

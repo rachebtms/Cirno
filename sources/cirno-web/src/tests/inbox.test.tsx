@@ -16,7 +16,8 @@ const requestMutation = vi.fn(async (_action: string, payload: Record<string, un
   if (payload.action === "inbox.open") return { session_key: rows.find((item) => item.id === values.id)?.session_key ?? null };
   if (payload.action === "inbox.read") {
     rows = rows.map((item) => (!values.ids || values.ids.includes(item.id)) && (!values.category || item.category === values.category) ? { ...item, read_at: Date.now() } : item);
-    return { ok: true };
+    return { ok: true, read_at: Date.now(),
+      unread: Object.fromEntries(["operations", "conversations", "system"].map((name) => [name, rows.filter((item) => item.category === name && !item.read_at).length])) };
   }
   if (fail) throw new Error("Notification storage unavailable");
   return { items: rows.filter((item) => !values.category || item.category === values.category),
@@ -39,6 +40,39 @@ beforeEach(async () => {
   vi.clearAllMocks();
 });
 afterEach(() => { cleanup(); });
+
+it("renders notification Markdown as formatted content", async () => {
+  rows = [notice(1, "conversations", "message", [
+    "## Research update",
+    "",
+    "**Ready** with `pytest`.",
+    "",
+    "- First result",
+    "- Second result",
+    "",
+    "| Check | Result |",
+    "| --- | --- |",
+    "| Tests | Pass |",
+    "",
+    "[Read report](https://example.com/report)",
+    "",
+    "```text",
+    "pytest -q",
+    "```",
+  ].join("\n"))];
+  view();
+
+  const heading = await screen.findByRole("heading", { name: "Research update", level: 2 });
+  const card = heading.closest(".inbox-notice") as HTMLElement;
+  expect(within(card).getByText("Ready").tagName).toBe("STRONG");
+  expect(within(card).getByText("pytest").tagName).toBe("CODE");
+  expect(within(card).getAllByRole("listitem")).toHaveLength(2);
+  expect(within(card).getByRole("table")).toHaveTextContent("TestsPass");
+  expect(within(card).getByRole("link", { name: "Read report" }))
+    .toHaveAttribute("href", "https://example.com/report");
+  expect(card.querySelector("pre code")).toHaveTextContent("pytest -q");
+  expect(heading.parentElement?.closest("p")).toBeNull();
+});
 
 it("shows three category pages and marks read without resolving a question", async () => {
   const select = vi.fn();

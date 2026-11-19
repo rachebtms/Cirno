@@ -5,6 +5,7 @@ import type { WorkspaceScopePayload } from "@/lib/contracts/workspaces";
 import { createTemporaryChatSession } from "@/lib/temporary-chat";
 import { scopeWithAccessMode } from "@/lib/workspace";
 import { useCallback, useEffect } from "react";
+import { useLifetime } from "@/ui/resources/useLifetime";
 import type { useConversationProjection } from "./useConversationProjection";
 import type { useConversationState } from "./useConversationState";
 import type { useWorkspaceState } from "./useWorkspaceState";
@@ -49,16 +50,17 @@ export function useConversationLifecycle({
     activeWorkspaceScope,
   } = conversationState;
   const { navigate } = conversationProjection;
+  const currentOwner = useLifetime(client);
   useEffect(() => {
     return client.onError((error) => {
-      if (error.kind !== "workspace_scope_rejected") return;
+      if (!currentOwner() || error.kind !== "workspace_scope_rejected") return;
       if (error.chatId && error.chatId !== activeChatIdRef.current) return;
       setWorkspaceError(t("errors.workspaceScopeRejected.body"));
       void refreshWorkspaces();
     });
-  }, [client, refreshWorkspaces, t]);
+  }, [client, refreshWorkspaces, t, currentOwner]);
   useEffect(() => {
-    if (loading) return;
+    if (!currentOwner() || loading) return;
     const activeRunIds = sessions
       .filter((session) => typeof session.runStartedAt === "number")
       .map((session) => session.chatId);
@@ -67,9 +69,10 @@ export function useConversationLifecycle({
     for (const chatId of activeRunIds) {
       client.attach(chatId);
     }
-  }, [client, loading, sessions]);
+  }, [client, loading, sessions, currentOwner]);
   const applyWorkspaceScope = useCallback(
     (scope: WorkspaceScopePayload) => {
+      if (!currentOwner()) return;
       const next = normalizeWorkspaceScope(scope);
       setWorkspaceError(null);
       if (activeChatId) {
@@ -88,7 +91,7 @@ export function useConversationLifecycle({
       }
       setDraftWorkspaceScope(next);
     },
-    [activeChatId, activeChatRunning, activeKey, client, temporaryChatActive],
+    [activeChatId, activeChatRunning, activeKey, client, temporaryChatActive, currentOwner],
   );
   const onCreateChat = useCallback(
     async (
@@ -96,6 +99,7 @@ export function useConversationLifecycle({
       _initialMessage?: string,
       modelPreset?: string | null,
     ) => {
+      if (!currentOwner()) return null;
       try {
         const scope = workspaceScope ?? activeWorkspaceScope;
         const chatId = await createChat(
@@ -104,6 +108,7 @@ export function useConversationLifecycle({
           draftProjectId,
           ptcModeEnabled,
         );
+        if (!currentOwner()) return null;
         const key = `websocket:${chatId}`;
         pendingCreatedSessionKeyRef.current = key;
         navigate({
@@ -119,6 +124,7 @@ export function useConversationLifecycle({
         }
         return chatId;
       } catch (e) {
+        if (!currentOwner()) return null;
         if (
           e instanceof Error &&
           e.message.startsWith("workspace_scope_rejected:")
@@ -136,6 +142,7 @@ export function useConversationLifecycle({
       draftProjectId,
       assignProject,
       ptcModeEnabled,
+      currentOwner,
     ],
   );
   const onStartAutomationChat = useCallback(
@@ -145,12 +152,13 @@ export function useConversationLifecycle({
       options?: SendOptions,
       modelPreset?: string | null,
     ) => {
+      if (!currentOwner()) return false;
       const chatId = await onCreateChat(
         options?.workspaceScope ?? activeWorkspaceScope,
         content,
         modelPreset,
       );
-      if (!chatId) return false;
+      if (!currentOwner() || !chatId) return false;
       setPendingAutomationMessage({
         id: crypto.randomUUID(),
         chatId,
@@ -160,21 +168,24 @@ export function useConversationLifecycle({
       });
       return true;
     },
-    [activeWorkspaceScope, onCreateChat],
+    [activeWorkspaceScope, onCreateChat, currentOwner],
   );
   const onPendingAutomationMessageConsumed = useCallback((id: string) => {
+    if (!currentOwner()) return;
     setPendingAutomationMessage((current) =>
       current?.id === id ? null : current,
     );
-  }, []);
+  }, [currentOwner]);
   const onCreateTemporaryChat = useCallback(
     async (
       workspaceScope?: WorkspaceScopePayload | null,
       initialMessage?: string,
       modelPreset?: string | null,
     ) => {
+      if (!currentOwner()) return null;
       try {
         const chatId = await client.newTemporaryChat(5_000, ptcModeEnabled);
+        if (!currentOwner()) return null;
         const session = createTemporaryChatSession(chatId);
         const restrictedScope = workspaceScope
           ? normalizeWorkspaceScope(
@@ -204,14 +215,16 @@ export function useConversationLifecycle({
         });
         return nextSession.chatId;
       } catch (error) {
+        if (!currentOwner()) return null;
         setWorkspaceError(error instanceof Error ? error.message : String(error));
         return null;
       }
     },
-    [client, navigate, ptcModeEnabled],
+    [client, navigate, ptcModeEnabled, currentOwner],
   );
   const onForkChat = useCallback(
     async (sourceChatId: string, beforeUserIndex: number) => {
+      if (!currentOwner()) return null;
       try {
         const sourceSession = sessions.find(
           (session) => session.chatId === sourceChatId,
@@ -228,6 +241,7 @@ export function useConversationLifecycle({
           beforeUserIndex,
           t("chat.forkTitle", { title: sourceTitle }),
         );
+        if (!currentOwner()) return null;
         navigate({
           view: "chat",
           activeKey: `websocket:${chatId}`,
@@ -235,11 +249,12 @@ export function useConversationLifecycle({
         });
         return chatId;
       } catch (e) {
+        if (!currentOwner()) return null;
         setWorkspaceError(e instanceof Error ? e.message : String(e));
         return null;
       }
     },
-    [forkChat, navigate, sessions, sidebarState.title_overrides, t],
+    [forkChat, navigate, sessions, sidebarState.title_overrides, t, currentOwner],
   );
   return {
     onCreateTemporaryChat,
