@@ -18,23 +18,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  checks:
+  web-checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Configure CI package repositories
+        run: bash sources/deployment/configure-ci-repositories.sh
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: sources/cirno-web/package-lock.json
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.12'
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: '**/pyproject.toml'
       - name: Verify Web UI
         working-directory: sources/cirno-web
         run: |
@@ -43,6 +38,13 @@ jobs:
           npm run lint
           npm test
           npm run build
+      - name: Retain verified Web UI for wheel checks
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: webui-dist
+          path: build/webui
+          if-no-files-found: error
+          retention-days: 1
       - name: Verify affected browser flows in Chromium and WebKit
         working-directory: sources/cirno-web
         run: |
@@ -50,6 +52,19 @@ jobs:
           npx tsc -p tsconfig.browser.json
           npx playwright test browser/history-hydration.spec.ts browser/tab-scroll.spec.ts browser/tab-visibility.spec.ts browser/settings-rebuild.spec.ts --workers=2
           npx playwright test browser/history-hydration.spec.ts browser/tab-scroll.spec.ts browser/tab-visibility.spec.ts browser/settings-rebuild.spec.ts --browser=webkit --workers=2
+
+  backend-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: '**/pyproject.toml'
       - name: Install backend and channel test dependencies
         env:
           CIRNO_SKIP_WEBUI_BUILD: '1'
@@ -62,11 +77,40 @@ jobs:
         run: |
           python -m ruff check sources/cirno-setup sources/cirno-memory sources/cirno-usage sources/cirno-vault sources/cirno-core sources/cirno-server --exclude '**/tests/**' --exclude '**/conftest.py' --select F
           python sources/development/check_import_boundaries.py
-          python -m pytest -q -n 2
+          python -m pytest -vv -n 2 --maxfail=20 -o faulthandler_timeout=120 --ignore=sources/cirno-server/tests/deployment/test_release_wheels.py
+
+  package-checks:
+    needs: web-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: '**/pyproject.toml'
+      - name: Restore verified Web UI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: webui-dist
+          path: build/webui
+      - name: Install backend and channel test dependencies
+        env:
+          CIRNO_SKIP_WEBUI_BUILD: '1'
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e sources/cirno-setup -e sources/cirno-memory -e sources/cirno-usage -e sources/cirno-vault -e sources/cirno-core -e sources/cirno-server -e '.[dev]'
+          .venv/bin/python sources/deployment/install_channel_dependencies.py --all-channels
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Verify installed release wheels
+        run: python -m pytest -vv sources/cirno-server/tests/deployment/test_release_wheels.py
 
   container:
     name: Container (${{ matrix.arch }})
-    needs: checks
+    needs: [web-checks, backend-checks, package-checks]
     strategy:
       fail-fast: false
       matrix:
@@ -84,12 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Configure CI package-repository DNS
-        run: |
-          interface=$(ip -o -4 route show to default | awk 'NR == 1 { print $5 }')
-          sudo resolvectl dns "$interface" 1.1.1.1 1.0.0.1
-          sudo resolvectl flush-caches
-          getent ahostsv4 archive.ubuntu.com
-          getent ahostsv4 ports.ubuntu.com
+        run: bash sources/deployment/configure-ci-repositories.sh
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         with:
           buildkitd-config-inline: |
