@@ -5,6 +5,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { McpManagementDialog, type McpManagementTab } from "@/features/settings/mcp/McpManagementDialog";
 import { SharedProxySetupDialog } from "@/features/settings/shared/SharedProxySetupDialog";
 import type { McpPresetInfo } from "@/lib/contracts/mcp";
+import type { CirnoClient } from "@/lib/cirno-client";
+
+const fixtureClient = {} as CirnoClient;
 
 const initial: McpPresetInfo = {
   name: "research", display_name: "Research library", category: "research", description: "Search and maintain a shared research library.",
@@ -28,6 +31,6 @@ export function McpSettingsFixture() {
       onConfigureProxy={() => setProxy(true)} configEditor={{ load: async () => JSON.stringify({ url: "https://example.com/mcp", toolTimeout: 120 }), save: async () => {
         if (++saves.current === 1) throw new Error("Configuration save failed");
       } }} />}
-    {proxy && <SharedProxySetupDialog busy={false} onClose={() => setProxy(false)} onSave={async () => {}} />}
+    {proxy && <SharedProxySetupDialog client={fixtureClient} busy={false} onClose={() => setProxy(false)} onSave={async () => {}} />}
   </main>;
 }
