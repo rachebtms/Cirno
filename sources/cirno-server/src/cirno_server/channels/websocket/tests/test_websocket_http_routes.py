@@ -222,11 +222,13 @@ def _stub_matrix_feature(
     )
     monkeypatch.setattr("cirno_server.features.service.extra_installed", lambda _name, _deps: installed)
     if install_calls is not None:
-        monkeypatch.setattr(
-            "cirno_server.features.service.install_extra",
-            lambda name, _deps, *, runner: install_calls.append(name)
-            or InstallResult(True, f"{name} support", ["python", "-m", "pip", "install", name]),
-        )
+        def install(name, _deps, *, runner):
+            nonlocal installed
+            install_calls.append(name)
+            installed = True
+            return InstallResult(True, f"{name} support", ["uv", "pip", "install", name])
+
+        monkeypatch.setattr("cirno_server.features.service.install_extra", install)
 
 
 @pytest.mark.asyncio

@@ -18,7 +18,7 @@ from cirno_core.providers.base import LLMProvider
 from cirno_core.providers.contracts import LLMResponse
 from cirno_core.runtime.context import public_history_message
 from cirno_core.session.manager import SessionManager
-from cirno_core.session.webui_turns.activity import clear_websocket_turns
+from cirno_core.session.webui_turns.activity import clear_websocket_turns, websocket_turn_snapshot
 from cirno_server.channels.manager import ChannelManager
 from cirno_server.channels.websocket.runtime import WebSocketChannel
 
@@ -122,7 +122,7 @@ async def test_replaced_execution_session_rejects_accepted_input(
     assert remaining is None or remaining.messages == []
 
 
-async def test_failed_transport_admission_removes_new_sessions(
+async def test_failed_dispatch_retains_journaled_input_without_running_turn(
     runtime: _Runtime, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def reject(message: InboundMessage) -> None:
@@ -131,7 +131,14 @@ async def test_failed_transport_admission_removes_new_sessions(
     monkeypatch.setattr(runtime.bus, "publish_inbound", reject)
     with pytest.raises(RuntimeError, match="queue unavailable"):
         await runtime.message("chat-rejected")
-    assert await runtime.sessions.state.list_sessions() == []
+    key = "websocket:chat-rejected"
+    assert [row["key"] for row in await runtime.sessions.state.list_sessions()] == [key]
+    facts = await runtime.sessions.state.project_history(key, lambda reader: reader.read_entries(0))
+    assert len(facts) == 1
+    assert facts[0][1].content["text"] == "hello"
+    assert websocket_turn_snapshot("chat-rejected")[0] is None
+    assert runtime.bus.inbound_size == 0
+    assert runtime.provider.calls == 0
 
 
 async def test_temporary_chat_retains_its_own_generation(history, runtime: _Runtime) -> None:

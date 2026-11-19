@@ -50,14 +50,14 @@ def _delivery(history, tmp_path) -> tuple[WebUIOutboundDelivery, _RecordingTrans
 
 
 @pytest.mark.asyncio
-async def test_subscribe_hydration_is_quiet_when_no_turn_active(history, tmp_path):
+async def test_subscribe_hydration_clears_goal_without_injecting_idle_turn(history, tmp_path):
     """Subscribe hydration must not inject an idle event into normal message order."""
     outbound, transport = _delivery(history, tmp_path)
 
     with patch("cirno_server.webui.session_projection.websocket_turn_wall_started_at", return_value=None):
         await outbound.hydrate("test-chat")
 
-    assert transport.frames == []
+    assert transport.frames == [{"event": "goal_state", "chat_id": "test-chat", "goal_state": {"active": False}}]
 
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_subscribe_hydration_pushes_running_when_turn_active(history, tmp_
     ):
         await outbound.hydrate("test-chat")
 
-    assert transport.frames == [{
+    assert transport.frames == [{"event": "goal_state", "chat_id": "test-chat", "goal_state": {"active": False}}, {
         "event": "goal_status",
         "chat_id": "test-chat",
         "status": "running",
