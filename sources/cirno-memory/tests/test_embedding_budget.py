@@ -112,3 +112,20 @@ def test_cached_vector_scoring_obeys_the_whole_search_deadline(tmp_path, monkeyp
     assert result["warning_code"] == "unavailable"
     assert "time budget" in result["warning"]
     assert len(scored) == 1
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Local pipe selector backend requires POSIX")
+def test_rss_probe_timeout_uses_embedding_fallback_error(monkeypatch):
+    instance = worker("import time; time.sleep(10)")
+
+    def stalled_probe(command, **kwargs):
+        assert command[0] == "ps"
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr("cirno_memory.embedding.subprocess.run", stalled_probe)
+    try:
+        with pytest.raises(TimeoutError, match="RSS check exceeded its time budget; using BM25"):
+            instance.request(["query"])
+    finally:
+        instance.__exit__()
+    assert instance.process.poll() is not None

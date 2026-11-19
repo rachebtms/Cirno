@@ -55,7 +55,10 @@ class EmbeddingWorker:
                 remaining = self.budget.remaining()
                 # Monitor the whole child RSS, including imports and ONNX initialization.
                 if os.name == "posix":
-                    measured = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True, timeout=min(2, remaining))
+                    try:
+                        measured = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True, timeout=min(2, remaining))
+                    except subprocess.TimeoutExpired as exc:
+                        raise TimeoutError("Embedding worker RSS check exceeded its time budget; using BM25") from exc
                     rss = float(measured.stdout.strip() or 0) / 1024
                     self.peak_mb = max(self.peak_mb, rss)
                     if rss > self.config.embedding_max_rss_mb:
