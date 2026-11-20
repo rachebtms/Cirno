@@ -18,6 +18,7 @@ from cirno_core.security.workspace_access import WORKSPACE_SCOPE_METADATA_KEY, W
 from cirno_core.session.display_history import HISTORY_GENERATION_METADATA_KEY
 from cirno_core.session.manager import SessionManager
 from cirno_core.session.recovery.contracts import RECOVERY_INBOUND_METADATA_KEY
+from cirno_core.session.session_messages import SESSION_MESSAGE_METADATA_KEY
 from cirno_core.session.transcript import WebUITranscriptRecorder
 from cirno_core.session.transport_metadata import WEBSOCKET_TURN_OWNER_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 from cirno_core.session.turn_continuation import INTERNAL_CONTINUATION_META, SKIP_USER_PERSIST_META
@@ -36,6 +37,13 @@ def _creating_turn(generation, project):
         RECOVERY_INBOUND_METADATA_KEY: "old-recovery",
         DELIVERY_RUN_META: "creating-delivery",
         WORKSPACE_SCOPE_METADATA_KEY: {"project_path": str(project), "access_mode": "full"},
+        SESSION_MESSAGE_METADATA_KEY: {
+            "message_id": "creating-message", "created_at_ms": 1, "expect_reply": False,
+            "source_handle": "cirno", "source_session_key": "websocket:router",
+            "target_session_key": "websocket:reminder",
+        },
+        "_work_report": {"state": "ready"},
+        "_hidden_history": {"kind": "work_report"},
         "message_thread_id": 42,
     }
 
@@ -61,6 +69,9 @@ async def test_old_automation_payload_gets_the_current_history_lifetime(tmp_path
         assert not message.metadata.get(INTERNAL_CONTINUATION_META)
         assert not message.metadata.get(SKIP_USER_PERSIST_META)
         assert RECOVERY_INBOUND_METADATA_KEY not in message.metadata
+        assert SESSION_MESSAGE_METADATA_KEY not in message.metadata
+        assert "_work_report" not in message.metadata
+        assert "_hidden_history" not in message.metadata
         assert message.metadata.get(DELIVERY_RUN_META) != "creating-delivery"
         delivery = await factory.create(message, key)
         await delivery.bind_session_generation(replacement.generation)

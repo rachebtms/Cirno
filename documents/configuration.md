@@ -547,6 +547,17 @@ The corresponding configuration keys are `agents.defaults.system_prompts.shared`
 
 The Router conversation header includes **Pause heartbeat** / **Resume heartbeat**. Pause takes effect without a service restart and persists across restarts and browser sessions. It prevents new scheduled heartbeats and retires queued heartbeat inputs before model execution. A turn already running can finish. Owner messages, worker reports and separate automations keep their normal behavior. The global Heartbeat switch and interval remain in Settings; disabling that switch also disables the header control.
 
+## Scheduled and local-trigger inputs
+
+Saved automations retain their destination conversation and channel routing, but
+not the coordination message identity or work-report markers of the input that
+created them. Each cron invocation or local-trigger delivery has its own identity,
+so repeated reminder text does not collide with the creating message's receipt.
+This normalization also applies when dispatching older saved tasks; recreating
+them or changing their reminder text is unnecessary. Previously failed executions
+remain in history and are not automatically replayed. Genuine duplicate
+coordination messages retain their existing deduplication behavior.
+
 ## Command duration
 
 Settings → Shell execution separates the default command duration from **Maximum requested command duration**. Zero in the default means no time limit for commands without an explicit duration. Zero in the maximum removes the ceiling on requested durations, and allows an explicit zero for no time limit. A positive maximum still restricts explicit model requests to 1 through that maximum. These values survive automatic saves and reloads. Local `shell.exec` and remote `nodes.execute` share `tools.exec.max_runtime` (default 3600 seconds) and `tools.exec.max_runtime_limit` (default 86400 seconds). Restart Cirno after changing these settings. Both tools accept `max_runtime` for a single call, with `timeout` as a mutually exclusive compatibility alias. The Nodes command dialog uses the same configured default and waits for the server result instead of imposing a separate 130-second browser deadline. Silence detection, local sandbox/environment settings and `shell.session` are local Shell features; SSH connection timeouts, job polling and detached `nodes.start` jobs retain their own lifecycle. The Router's cumulative small-task tool budget remains separate; increasing command runtime does not extend that delegation boundary.

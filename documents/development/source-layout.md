@@ -80,6 +80,12 @@ execution. System payloads select handlers by fixed job ID; ordinary jobs keep
 their conversation binding regardless of their display name. Context consolidation runs inline within its owning task, with no separate scheduled model job. Heartbeat file reads run on workers and only a
 missing file is skipped.
 
+Core `session/automation_metadata.py` normalizes saved cron and local-trigger
+addresses both at creation and at delivery, including legacy payloads. Channel
+routing survives; the creating turn's coordination envelope, work-report markers
+and execution ownership do not. Each invocation uses its own automation identity
+without reusing or clearing the creating message's durable delivery receipt.
+
 `channels/websocket/writers.py` owns ordered, bounded physical writes for each
 connection and retirement of slow or failed peers. Connection cleanup settles
 its writer before releasing subscriptions; closing a connection prevents queued

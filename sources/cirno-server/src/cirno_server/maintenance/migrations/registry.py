@@ -49,6 +49,7 @@ MIGRATIONS: dict[str, Migration] = {
         ConfigVersionUpgrade("0.2.18", "0.2.19"),
         ConfigVersionUpgrade("0.2.19", "0.2.20"),
         ConfigVersionUpgrade("0.2.20", "0.2.21"),
+        ConfigVersionUpgrade("0.2.21", "0.2.22"),
     )
 }
 
